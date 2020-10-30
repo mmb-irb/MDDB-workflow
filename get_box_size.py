@@ -1,7 +1,8 @@
 # This script is used to find out the box size (x, y and z) in a pdb topology
 # This process is carried by Gromacs
 
-from subprocess import run, PIPE
+import os
+from subprocess import run, PIPE, Popen
 
 # Set the box analysis filename
 # This analysis is used here to mine the box size data
@@ -23,24 +24,26 @@ def get_box_size (
         # Generate the box analysis
         # WARNING: Do not use the first_frame here instead of the trajectory
         # In modified topologies the first frame pdb may have lost box size data
-        logs = run([
+        p = Popen([
             "echo",
             "System",
-            "|",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "traj",
             "-s",
             input_topology_filename,
             "-f",
-            input_trajectory_filenames,
-            '-o',
+            input_trajectory_filename,
+            '-ob',
             box_analysis,
             '-b',
             '0',
             '-e',
             '0',
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
     # Read the box analysis and get the desired data
     with open(box_analysis,'r') as file:

@@ -60,10 +60,12 @@ def analyze_project (project : str, directory : str, url = 'https://bioexcel-cv1
     os.chdir(directory)
     # Download the topology file if it does not exists
     if os.path.exists(topology_filename) == False :
+        print('Downloading topology')
         topology_url = url + '/api/rest/current/projects/' + project + '/files/' + topology_filename
         urllib.request.urlretrieve (topology_url, topology_filename)
     # Download the trajectory file if it does not exists
     if os.path.exists(trajectory_filename) == False :
+        print('Downloading trajectory')
         trajectory_url = url + '/api/rest/current/projects/' + project + '/files/' + trajectory_filename
         urllib.request.urlretrieve (trajectory_url, trajectory_filename)
     # Run the analyses
@@ -82,6 +84,8 @@ def run_analyses ():
 
     # Preprocessing ---------------------------------------------------------------------------------
     
+    print('Preprocessing')
+
     # Process the topology and or trajectory files using VMD
     # Files are converted to supported formats and trajectory pieces are merged into a single file
     # In addition, some irregularities in the topology may be fixed by VMD
@@ -97,7 +101,7 @@ def run_analyses ():
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
     # Fit the trajectory by removing the translation and rotation if it is required
-    preprocess_protocol = inputs.preprocess_protocol
+    preprocess_protocol = inputs['preprocess_protocol']
     if preprocess_protocol > 0:
         image_and_fit(topology_filename, trajectory_filename, trajectory_filename, preprocess_protocol)
 
@@ -114,11 +118,13 @@ def run_analyses ():
         get_first_frame(topology_filename, topology_filename, first_frame)
 
     # Get the sumarized trajectory
-    summarized_trajectory = 'md.imaged.rot.100.xtc
+    summarized_trajectory = 'md.imaged.rot.100.xtc'
     if required(summarized_trajectory):
         get_summarized_trajectory(topology_filename, trajectory_filename, summarized_trajectory)
 
     # Metadata mining --------------------------------------------------------------------------
+
+    print('Mining metadata')
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(topology_filename, trajectory_filename)
@@ -127,9 +133,50 @@ def run_analyses ():
     (systats, protats, prot, dppc, sol, na, cl) = get_atoms_count(topology_filename)
 
     # Write the metadata file
-    
+    metadata = {
+        'pdbId': inputs['pdbId'],
+        'name': inputs['name'],
+        'unit': inputs['unit'],
+        'description': inputs['description'],
+        'authors': inputs['authors'],
+        'program': inputs['program'],
+        'version': inputs['version'],
+        'license': inputs['license'],
+        'linkcense': inputs['linkcense'],
+        'citation': inputs['citation'],
+        'length': inputs['length'],
+        'timestep': inputs['timestep'],
+        'snapshots': inputs['snapshots'],
+        'frequency': inputs['frequency'],
+        'ff': inputs['ff'],
+        'temp': inputs['temp'],
+        'wat': inputs['wat'],
+        'boxType': inputs['boxtype'],
+        'boxSizeX': boxsizex,
+        'boxSizeY': boxsizey,
+        'boxSizeZ': boxsizez,
+        'ensemble': inputs['ensemble'],
+        'pcoupling': inputs['pcoupling'],
+        'membrane': inputs['membrane'],
+        'systats': systats,
+        'protats': protats,
+        'prot': prot,
+        'dppc': dppc,
+        'sol': sol,
+        'na': na,
+        'cl': cl,
+        'ligands': inputs['ligands'],
+        'domains': inputs['domains'],
+        'interfaces': inputs['interfaces'],
+        'chainnames': inputs['chainnames'],
+    }
+    metadata_filename = 'metadata.json'
+    with open(metadata_filename, 'w') as file:
+        json.dump(metadata, file)
 
     # Analyses ---------------------------------------------------------------------------------
+
+    print('Running analyses')
 
     # Set the RMSd per resiude analysis file name
     rmsd_perres_analysis = 'md.rmsd.perres.xvg'

@@ -18,9 +18,6 @@ from collections import OrderedDict
 import prody
 import pytraj as pt
 
-# Set the path to the 'addChains' script
-add_chains_script = '/home/dbeltran_local/Escritorio/spellbook/addChainCV19.pl'
-
 # DANI: Hay que comprobar que no haya residuos de número repetido sin icode
 # DANI: Si esto sucede ProDy no verá los residuos y pytraj sí
 # DANI: Análisis de pytraj fallarán por este baile de números (e.g. rmsd-perres)
@@ -63,21 +60,6 @@ class TopologyReference:
         #print(dir(self.topology))
         # Get chains
         self.chains = list(self.topology.iterChains())
-        # Check if chains are missing. If so, create a new chainned topology and set it as the reference
-        # DANI: Hay que revisarlo. Esto lo hace un script de perl que solo se ha provado en una topología
-        no_chains = len(self.chains) == 1 and self.chains[0].getChid() == ' '
-        if no_chains:
-            print('Default chains are missing')
-            chainned_topology = topology_filename.replace('.pdb','.chn.pdb')
-            logs = run([
-                "perl",
-                add_chains_script,
-                topology_filename,
-                chainned_topology,
-            ], stdout=PIPE).stdout.decode()
-            self.topology_filename = chainned_topology
-            self.topology = parsePDB(chainned_topology)
-            self.chains = list(self.topology.iterChains())
         # Get residues
         self.residues = list(self.topology.iterResidues())
         # Get pytraj residues

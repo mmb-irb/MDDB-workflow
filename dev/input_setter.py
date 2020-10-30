@@ -20,12 +20,27 @@ original_trajectory_filename = 'spike_mutant_prot_glyc_amarolab_4.dcd'
 # 4 - Two interacting proteins
 preprocess_protocol = 0
 
-# Set if this is the ACE2, the RBD, both...
-unit = 'Spike'
-
 # Chain names
+# e.g. { 'A':'Protein', 'B':'Protein', 'G':'Glycans' }
 # EXPERIMENTAL INPUT
 chainnames = { 'A':'Spike', 'B':'Spike', 'C':'Spike', 'G':'Glycans', 'H':'Glycans', 'I':'Glycans' }
+
+# Set the ligand name, DrugBank code and NGL selection
+# e.g. { 'name': drug, 'accession': drugbank, 'chembl': chembl, 'ngl_selection': ':L', 'prody_selection': 'chain L' }
+# EXPERIMENTAL INPUT
+ligands = []
+
+# Set which topology regions (residues selection) are interesting and thus must have an independent highlight system
+# EXPERIMENTAL INPUT
+domains = []
+
+# Set which are the interesting interfaces
+# A set of interface analyses will be run for each interface
+# EXPERIMENTAL INPUT
+interfaces = []
+
+# Set if this is the ACE2, the RBD, both...
+unit = 'Spike'
 
 # Set the membrane type as the name of membrane resiudes in the pdb file
 # Set the membrane as 'No' if there is no membrane
@@ -67,7 +82,7 @@ citation = ('D. E. Shaw Research,(br)"Molecular Dynamics Simulations Related to 
 # Metadata
 # These inputs may be automatically mined from the topology and trajectory files
 # However they also may be forced here
-# DANI: Todo mentira. El minado de metadata no funciona casi nunca para estos valores
+# DANI: Todo mentira. El minado de metadata para estos valores no funciona casi nunca
 # DANI: Dejé de mantenerlo hace tiempo y hay que poner todos los valores a mano
 
 # Length is an important value since it is used in many graph axes in the web client
@@ -77,40 +92,29 @@ snapshots = 4117
 frequency = '100' # In picoseconds (ps)
 temp = 310 # In Kelvin (K)
 ensemble = 'NPT'
-timestep = '2' # In fs
+timestep = '2' # In fs (fs/step)
 pcoupling = 'Isotropic'
 ff = 'CHARMM36 All-atom additive'
 wat = 'TIP3P'
-boxType = 'Triclinic'
+boxtype = 'Triclinic'
 
 # ------------------------------------------------------------------------------
 
-# Join all inputs in a single object
-inputs = {
-    'original_topology_filename': original_topology_filename,
-    'original_trajectory_filename': original_trajectory_filename,
-    'unit' : unit,
-    'chainnames' : chainnames,
-    'membrane' : membrane,
-    'pdbId' : pdbId,
-    'name' : name,
-    'description' : description,
-    'authors' : authors,
-    'program' : program,
-    'version' : version,
-    'license' : license,
-    'linkcense' : linkcense,
-    'citation' : citation,
-    'length' : length,
-    'snapshots' : snapshots,
-    'frequency' : frequency,
-    'temp' : temp,
-    'ensemble' : ensemble,
-    'timestep' : timestep,
-    'pcoupling' : pcoupling,
-    'ff' : ff,
-    'wat': wat,
-}
+# Join all declared variables in a single inputs object
+# This is done by capturing all local variables and removing the defaults
+inputs = {}
+inputs.update(locals())
+del inputs['__name__']
+del inputs['__doc__']
+del inputs['__package__']
+del inputs['__loader__']
+del inputs['__spec__']
+del inputs['__annotations__']
+del inputs['__builtins__']
+del inputs['__file__']
+del inputs['__cached__']
+del inputs['json']
+del inputs['inputs']
 
 # Export it to json
 inputs_filename = 'inputs.json'

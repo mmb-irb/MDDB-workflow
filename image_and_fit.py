@@ -2,7 +2,7 @@
 # This process is carried by Gromacs
 
 import os
-from subprocess import run, PIPE
+from subprocess import run, PIPE, Popen
 
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb and .tpr
@@ -22,10 +22,11 @@ def image_and_fit (
 
     indexes = 'indexes.ndx'
     if required(indexes):
-        logs = run([
+        p = Popen([
             "echo",
-            "'!\"Water_and_ions\"\nq'",
-            "|",
+            "!\"Water_and_ions\"\nq",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "make_ndx",
             "-f",
@@ -33,7 +34,8 @@ def image_and_fit (
             '-o',
             indexes,
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
     # Imaging --------------------------------------------------------------------------------------
 
@@ -45,11 +47,12 @@ def image_and_fit (
         # Output only non water and non ion atoms
         # '-pbc nojump' sets atoms to dont jump across the box
         # Use this for a protein inside a membrane
-        logs = run([
+        p = Popen([
             "echo",
-            "'Protein'",
-            "'!Water_and_ions'",
-            "|",
+            "Protein",
+            "!Water_and_ions",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "trjconv",
             "-s",
@@ -61,15 +64,17 @@ def image_and_fit (
             "-n",
             indexes,
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
         # SECOND STEP
         # Adapt the topology to the new reduced trayectory
         # Create the new reduced topology as the current 'topology'
-        logs = run([
+        p = Popen([
             "echo",
-            "'!Water_and_ions'",
-            "|",
+            "!Water_and_ions",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "convert-tpr",
             "-s",
@@ -79,7 +84,8 @@ def image_and_fit (
             "-n",
             indexes,
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
         
     # Protein inside membrane
     elif preprocess_protocol == 3:
@@ -89,11 +95,12 @@ def image_and_fit (
         # Output only non water and non ion atoms
         # '-pbc nojump' sets atoms to dont jump across the box
         # Use this for a protein inside a membrane
-        logs = run([
+        p = Popen([
             "echo",
-            "'Protein'",
-            "'!Water_and_ions'",
-            "|",
+            "Protein",
+            "!Water_and_ions",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "trjconv",
             "-s",
@@ -108,15 +115,17 @@ def image_and_fit (
             'nojump',
             '-center',
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
         # SECOND STEP
         # Adapt the topology to the new reduced trayectory
         # Create the new reduced topology as the current 'topology'
-        logs = run([
+        p = Popen([
             "echo",
-            "'!Water_and_ions'",
-            "|",
+            "!Water_and_ions",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "convert-tpr",
             "-s",
@@ -126,16 +135,18 @@ def image_and_fit (
             "-n",
             indexes,
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
         # FURTHER STEPS
         # '-pbc mol' sets the type of periodic boundary condition treatment and puts the center of mass of molecules in the box
         # '-ur compact' sets the unit cell representation and puts all atoms at the closest distance from the center of the box
-        logs = run([
+        p = Popen([
             "echo",
-            "'Protein'",
-            "'System'",
-            "|",
+            "Protein",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "trjconv",
             "-s",
@@ -152,7 +163,8 @@ def image_and_fit (
             '-ur',
             'compact',
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
     # Two interacting proteins
     elif preprocess_protocol == 4:
@@ -160,10 +172,11 @@ def image_and_fit (
         # FIRST STEP
         # Translate all atoms inside the box so the contact zone between both proteins is in the box center
         # WARNING: The vector in the '-trans' option may be different among different trajectories
-        logs = run([
+        p = Popen([
             "echo",
-            "'!Water_and_ions'",
-            "|",
+            "!Water_and_ions",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "trjconv",
             "-s",
@@ -183,14 +196,16 @@ def image_and_fit (
             '-ur',
             'compact',
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
         # SECOND STEP
         # Adapt the topology to the new reduced trayectory
-        logs = run([
+        p = Popen([
             "echo",
-            "'!Water_and_ions'",
-            "|",
+            "!Water_and_ions",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "convert-tpr",
             "-s",
@@ -200,7 +215,8 @@ def image_and_fit (
             "-n",
             indexes,
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
         # FURTHER STEPS
         # New topology must me created to conserve the atoms translation before uing the '-pbc nojump' option
@@ -212,10 +228,11 @@ def image_and_fit (
         pivot_topology = 'topology.gro'
 
         # Select the first frame of the recently centered trayectory as the new topology
-        logs = run([
+        p = Popen([
             "echo",
-            "'System'",
-            "|",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "trjconv",
             "-s",
@@ -227,13 +244,15 @@ def image_and_fit (
             '-dump',
             '0',
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
         # Finally, perform the '-pbc nojump' to avoid non-sense jumping of any protein or atom
-        logs = run([
+        p = Popen([
             "echo",
-            "'System'",
-            "|",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
             "gmx",
             "trjconv",
             "-s",
@@ -245,7 +264,8 @@ def image_and_fit (
             '-pbc',
             'nojump',
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
     # Fitting --------------------------------------------------------------------------------------
 
@@ -256,11 +276,12 @@ def image_and_fit (
         trajectroy_to_fit = input_trajectory_filename
 
     # Run Gromacs
-    logs = run([
+    p = Popen([
         "echo",
         "Protein",
         "System",
-        "|",
+    ], stdout=PIPE)
+    logs = run([
         "gmx",
         "trjconv",
         "-s",
@@ -272,7 +293,8 @@ def image_and_fit (
         '-fit',
         'rot+trans',
         '-quiet'
-    ], stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
 
     # ----------------------------------------------------------------------------------------------
 

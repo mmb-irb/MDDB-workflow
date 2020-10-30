@@ -1,11 +1,18 @@
+from pathlib import Path
 import prody
+from subprocess import run, PIPE
 from collections import Counter
+
+# Set the path to the 'addChains' script
+repo_path = str(Path(__file__).parent)
+add_chains_script = repo_path + '/aux/addChainCV19.pl'
 
 # Analyze the topology looking for irregularities and then modify the topology to standarize the format
 # Both analysis and modifications are carried by Prody
 # 
 # Supported cases:
 # 
+# * Missing chains -> Chains are added through an external script
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * (Not supported yet) Hyrdogens are placed at the end ->
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
@@ -22,6 +29,31 @@ def topology_corrector (
 
     # Import the topology to prody
     test = prody.parsePDB(input_topology_filename)
+
+    # ------------------------------------------------------------------------------------------
+    # Missing chains --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Check if chains are missing. If so, create a new chainned topology and set it as the reference
+    # DANI: Hay que revisarlo. Esto lo hace un script de perl que solo se ha provado en una topología
+    chains = list(test.iterChains())
+    no_chains = len(chains) == 1 and chains[0].getChid() == ' '
+    if no_chains:
+        modified = True
+        print('WARNING: Default chains are missing')
+        chainned_topology = 'chainned_topology.pdb'
+        run([
+            "perl",
+            add_chains_script,
+            input_topology_filename,
+            chainned_topology,
+        ], stdout=PIPE).stdout.decode()
+        test = prody.parsePDB(chainned_topology)
+        run([
+            "rm",
+            chainned_topology,
+        ], stdout=PIPE).stdout.decode()
+        logs.append('- Chains have been asigned automatically')
 
     # ------------------------------------------------------------------------------------------
     # Repeated chains --------------------------------------------------------------------------
@@ -109,33 +141,38 @@ def topology_corrector (
     # ATOM      1  C   UNK L   0   -->   ATOM      1  C2  UNK L   0
     # ATOM      1  C   UNK L   0   -->   ATOM      1  C3  UNK L   0
 
-    # Iterate over all atoms and change all their names
-    atoms = test.iterAtoms()
     reporter = 0 # Just count how many atoms have been renamed for the report
-    counter = Counter()
-    current = None
-    for atom in atoms:
-        # Find the chain, residue number and icode where this atom belongs to
-        chainLetter = atom.getChid()
-        residueNumber = atom.getResnum()
-        icode = atom.getIcode()
-        label = chainLetter + str(residueNumber) + icode
-        # If this is a new resiude reset the counter
-        if label != current:
-            counter = Counter()
-            current = label
-        # We set the name of the atom as the element letter + the count of this element
-        element = atom.getElement()
-        counter[element] += 1
-        reporter += 1
-        atom.setName(element + str(counter[element]))
+    residues = test.iterResidues()
+    for r in residues:
+        # Iterate over the residue atoms and change all their names
+        counter = Counter()
+        atoms = r.iterAtoms()
+        for atom in atoms:
+            # We check if the atom name already exists. If not, go to the next atom
+            name = atom.getName()
+            if counter[name] == 0:
+                counter[name] += 1
+                continue
+            reporter += 1
+            # We set the name of the atom as the element letter + the count of this element
+            # If element is missing take the first character of the atom name
+            initial = atom.getElement()
+            if not initial or initial == ' ':
+                initial = name[0]
+            number = counter[initial] + 1
+            new_name = initial + str(number)
+            while counter[new_name] > 0:
+                number += 1
+                new_name = initial + str(number)
+            counter[new_name] += 1
+            atom.setName(new_name)
+            #print(str(atom.getIndex() + 1) + ' / ' + r.getResname() + ': ' + name + ' -> ' + new_name)
 
     # Check if were there repetaed residues
-    reps = reporter
-    if reps > 0:
+    if reporter > 0:
         modified = True
         logs.append('- Some repeated atoms have been renamed')
-        print('WARNING! There are ' + str(reps) + ' repated atoms')
+        print('WARNING! There are ' + str(reporter) + ' repated atoms')
 
     # ------------------------------------------------------------------------------------------
     # Final output -----------------------------------------------------------------------------
@@ -145,8 +182,8 @@ def topology_corrector (
     if modified:
         # Print all stored logs
         print('The topology file has been modificated:')
-        for l in logs:
-            print(l)
+        for log in logs:
+            print(log)
         prody.writePDB(output_topology_filename, test)
 
 

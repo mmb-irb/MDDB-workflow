@@ -1,7 +1,7 @@
 # This script is used to get the first trajectory frame
 # This process is carried by Gromacs
 
-from subprocess import run, PIPE
+from subprocess import run, PIPE, Popen
 
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb and .tpr
@@ -16,22 +16,24 @@ def get_first_frame (
     ) -> str:
 
     # Run Gromacs
-    logs = run([
+    p = Popen([
         "echo",
         "System",
-        "|",
+    ], stdout=PIPE)
+    logs = run([
         "gmx",
         "trjconv",
         "-s",
         input_topology_filename,
         "-f",
-        input_trajectory_filenames,
+        input_trajectory_filename,
         '-o',
         first_frame_filename,
         '-dump',
         '0',
         '-quiet'
-    ], stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
 
     # Return gromacs logs
     return logs
