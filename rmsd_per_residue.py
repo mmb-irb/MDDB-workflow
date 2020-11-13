@@ -10,14 +10,16 @@ def rmsd_per_residue (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     topology_reference ):
-
+    
     # Load the trajectory to pytraj and set a reduced trajectory
     pytrajectory = pt.iterload(input_trajectory_filename, input_topology_filename)
     reduced_pytrajectory = pytrajectory[0:2000:10]
-
+    
     # Run the analysis in pytraj
+    # DANI: Esto devuelve "Error: Range::SetRange(None): Range is -1 for None"
+    # DANI: No se por que pasa pero aparentemente funciona bien
     data = pt.rmsd_perres(reduced_pytrajectory)
-
+    
     # Write the output to a new filename in a standarized format
     with open(output_analysis_filename,'w') as file:
 

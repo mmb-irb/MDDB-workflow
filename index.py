@@ -17,6 +17,7 @@ from get_box_size import get_box_size
 from get_atoms_count import get_atoms_count
 
 # Import analyses
+from generic_analyses import rmsd, rmsf, rgyr
 from rmsd_per_residue import rmsd_per_residue
 
 # General inputs ----------------------------------------------------------------------------
@@ -133,42 +134,43 @@ def run_analyses ():
     (systats, protats, prot, dppc, sol, na, cl) = get_atoms_count(topology_filename)
 
     # Write the metadata file
+    # Metadata keys must be in caps, as they are in the client
     metadata = {
-        'pdbId': inputs['pdbId'],
-        'name': inputs['name'],
-        'unit': inputs['unit'],
-        'description': inputs['description'],
-        'authors': inputs['authors'],
-        'program': inputs['program'],
-        'version': inputs['version'],
-        'license': inputs['license'],
-        'linkcense': inputs['linkcense'],
-        'citation': inputs['citation'],
-        'length': inputs['length'],
-        'timestep': inputs['timestep'],
-        'snapshots': inputs['snapshots'],
-        'frequency': inputs['frequency'],
-        'ff': inputs['ff'],
-        'temp': inputs['temp'],
-        'wat': inputs['wat'],
-        'boxType': inputs['boxtype'],
-        'boxSizeX': boxsizex,
-        'boxSizeY': boxsizey,
-        'boxSizeZ': boxsizez,
-        'ensemble': inputs['ensemble'],
-        'pcoupling': inputs['pcoupling'],
-        'membrane': inputs['membrane'],
-        'systats': systats,
-        'protats': protats,
-        'prot': prot,
-        'dppc': dppc,
-        'sol': sol,
-        'na': na,
-        'cl': cl,
-        'ligands': inputs['ligands'],
-        'domains': inputs['domains'],
-        'interfaces': inputs['interfaces'],
-        'chainnames': inputs['chainnames'],
+        'PDBID': inputs['pdbId'],
+        'NAME': inputs['name'],
+        'UNIT': inputs['unit'],
+        'DESCRIPTION': inputs['description'],
+        'AUTHORS': inputs['authors'],
+        'PROGRAM': inputs['program'],
+        'VERSION': inputs['version'],
+        'LICENSE': inputs['license'],
+        'LINKCENSE': inputs['linkcense'],
+        'CITATION': inputs['citation'],
+        'LENGTH': inputs['length'],
+        'TIMESTEP': inputs['timestep'],
+        'SNAPSHOTS': inputs['snapshots'],
+        'FREQUENCY': inputs['frequency'],
+        'FF': inputs['ff'],
+        'TEMP': inputs['temp'],
+        'WAT': inputs['wat'],
+        'BOXTYPE': inputs['boxtype'],
+        'BOXSIZEX': boxsizex,
+        'BOXSIZEY': boxsizey,
+        'BOXSIZEZ': boxsizez,
+        'ENSEMBLE': inputs['ensemble'],
+        'PCOUPLING': inputs['pcoupling'],
+        'MEMBRANE': inputs['membrane'],
+        'SYSTATS': systats,
+        'PROTATS': protats,
+        'PROT': prot,
+        'DPPC': dppc,
+        'SOL': sol,
+        'NA': na,
+        'CL': cl,
+        'LIGANDS': inputs['ligands'],
+        'DOMAINS': inputs['domains'],
+        'INTERFACES': inputs['interfaces'],
+        'CHAINNAMES': inputs['chainnames'],
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
@@ -178,10 +180,25 @@ def run_analyses ():
 
     print('Running analyses')
 
-    # Set the RMSd per resiude analysis file name
+    # Set the RMSd analysis file name and run the analysis
+    rmsd_analysis = 'md.rmsd.xvg'
+    if required(rmsd_analysis):
+        rmsd(first_frame, trajectory_filename, rmsd_analysis)
+
+    # Set the fluctuation analysis file name and run the analysis
+    rmsf_analysis = 'md.rmsf.xvg'
+    if required(rmsf_analysis):
+        rmsf(topology_filename, trajectory_filename, rmsf_analysis)
+
+    # Set the RMSd per resiude analysis file name and run the analysis
+    rgyr_analysis = 'md.rgyr.xvg'
+    if required(rgyr_analysis):
+        rgyr(topology_filename, trajectory_filename, rgyr_analysis)
+
+    # Set the RMSd per resiude analysis file name and run the analysis
     rmsd_perres_analysis = 'md.rmsd.perres.xvg'
     if required(rmsd_perres_analysis):
-        rmsd_per_residue(topology_filename, topology_filename, rmsd_perres_analysis, topology_reference)
+        rmsd_per_residue(topology_filename, trajectory_filename, rmsd_perres_analysis, topology_reference)
 
     print('Done!')
 
