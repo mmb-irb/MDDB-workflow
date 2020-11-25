@@ -66,7 +66,7 @@ class TopologyReference:
         self.pytraj_residues = list(self.pytraj_topology.residues)
     
     # Transform a topology residue number to the pytraj residue numeration (1, 2, ... n)
-    def source2pytraj (self, source):
+    def source2pytraj (self, source : sourceResidue) -> int:
         residx = None
         # Search all reference residues till we find the one that matches our number
         for index, residue in enumerate(self.residues):
@@ -99,7 +99,7 @@ class TopologyReference:
         return None
 
     # Transform a pytraj residue numeration (1, 2, ... n) to the topology residue number
-    def pytraj2source (self, pytraj):
+    def pytraj2source (self, pytraj : int) -> sourceResidue:
         index = pytraj - 1
         pytrajResidue = self.pytraj_residues[index]
         expectedNumber = pytrajResidue.original_resid

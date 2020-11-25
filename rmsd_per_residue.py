@@ -1,24 +1,21 @@
 # RMSD per resiude analysis
 # 
-# Perform the RMSD analysis for each residue, which is carried by pytraj
+# Perform the RMSD analysis for each residue
+# The analysis is carried by pytraj
 
 import pytraj as pt
 import re
 
+# The pytraj trajectory may be reduced
 def rmsd_per_residue (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
+    pytraj_trajectory,
     output_analysis_filename : str,
     topology_reference ):
-    
-    # Load the trajectory to pytraj and set a reduced trajectory
-    pytrajectory = pt.iterload(input_trajectory_filename, input_topology_filename)
-    reduced_pytrajectory = pytrajectory[0:2000:10]
     
     # Run the analysis in pytraj
     # DANI: Esto devuelve "Error: Range::SetRange(None): Range is -1 for None"
     # DANI: No se por que pasa pero aparentemente funciona bien
-    data = pt.rmsd_perres(reduced_pytrajectory)
+    data = pt.rmsd_perres(pytraj_trajectory)
     
     # Write the output to a new filename in a standarized format
     with open(output_analysis_filename,'w') as file:
