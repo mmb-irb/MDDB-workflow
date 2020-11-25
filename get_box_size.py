@@ -18,32 +18,29 @@ def get_box_size (
     input_trajectory_filename : str,
     ) -> tuple:
 
-    # Check if the box analysis is required
-    if required(box_analysis):
-
-        # Generate the box analysis
-        # WARNING: Do not use the first_frame here instead of the trajectory
-        # In modified topologies the first frame pdb may have lost box size data
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "traj",
-            "-s",
-            input_topology_filename,
-            "-f",
-            input_trajectory_filename,
-            '-ob',
-            box_analysis,
-            '-b',
-            '0',
-            '-e',
-            '0',
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    # Generate the box analysis
+    # WARNING: Do not use the first_frame here instead of the trajectory
+    # In modified topologies the first frame pdb may have lost box size data
+    p = Popen([
+        "echo",
+        "System",
+    ], stdout=PIPE)
+    logs = run([
+        "gmx",
+        "traj",
+        "-s",
+        input_topology_filename,
+        "-f",
+        input_trajectory_filename,
+        '-ob',
+        box_analysis,
+        '-b',
+        '0',
+        '-e',
+        '0',
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
 
     # Read the box analysis and get the desired data
     with open(box_analysis,'r') as file:
@@ -70,10 +67,3 @@ def get_box_size (
 
     # Return gromacs logs
     return (boxsizex, boxsizey, boxsizez)
-
-# Set a function to check if a process must be run (True) or skipped (False)
-# i.e. check if the output file already exists and reapeated analyses must be skipped
-def required (analysis_filename : str):
-    if os.path.exists(analysis_filename) and skip_repeats:
-        return False
-    return True

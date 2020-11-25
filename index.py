@@ -25,7 +25,8 @@ from get_atoms_count import get_atoms_count
 from generic_analyses import rmsd, rmsf, rgyr
 from pca import pca
 from rmsd_per_residue import rmsd_per_residue
-from rmsd_pairwise import rmsd_pairwise
+#from rmsd_pairwise import rmsd_pairwise
+from energies import energies
 
 # General inputs ----------------------------------------------------------------------------
 
@@ -36,15 +37,12 @@ topology_filename = "md.imaged.rot.dry.pdb"
 trajectory_filename = "md.imaged.rot.xtc"
 
 # Set the inputs filename
+# This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
 inputs_filename = "inputs.json"
 
 # Set this workflow to skip steps where the ouput file already exist
 # Change it to False if you want all steps to be done anyway
 skip_repeats = True
-
-# Set this workflow to display 3D molecular representations and analysis graphs
-# Change it to False to skip renders making the workflow faster and memory cheaper
-displayResults = True
 
 # ------------------------------------------------------------------------------------------
 
@@ -153,6 +151,7 @@ def run_analyses ():
 
     # Extract some additional metadata from the inputs file which is required further
     interfaces = inputs['interfaces']
+    ligands = inputs['ligands']
 
     # Write the metadata file
     # Metadata keys must be in caps, as they are in the client
@@ -234,9 +233,14 @@ def run_analyses ():
         rmsd_per_residue(reduced_pytraj_trajectory, rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
-    rmsd_pairwise_analysis = 'md.rmsd.pairwise.xvg'
-    if required(rmsd_pairwise_analysis):
-        rmsd_pairwise(reduced_pytraj_trajectory, rmsd_pairwise_analysis, interfaces)
+    #rmsd_pairwise_analysis = 'md.rmsd.pairwise.xvg'
+    #if required(rmsd_pairwise_analysis):
+    #    rmsd_pairwise(reduced_pytraj_trajectory, rmsd_pairwise_analysis, interfaces)
+
+    # Set the energies analysis filename and run the analysis
+    energies_analysis = 'md.energies.xvg'
+    if required(energies_analysis):
+        energies(topology_filename, trajectory_filename, energies_analysis, topology_reference, snapshots, ligands)
 
     print('Done!')
 
