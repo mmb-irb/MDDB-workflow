@@ -25,24 +25,24 @@ import pytraj as pt
 # This is composed of chain, residue number and optionally an icode
 class sourceResidue:
     
-    def __init__ (self, chainLetter: str, residueNumber: int, icode: str = ''):
-        self.chainLetter = chainLetter
-        self.residueNumber = residueNumber
+    def __init__ (self, chain_letter: str, residue_number: int, icode: str = ''):
+        self.chain_letter = chain_letter
+        self.residue_number = residue_number
         self.icode = self.valid_icode(icode)
     
     def __str__ (self):
-        return self.chainLetter + ':' + str(self.residueNumber) + self.icode
+        return self.chain_letter + ':' + str(self.residue_number) + self.icode
     
     def __repr__ (self):
-        return self.chainLetter + ':' + str(self.residueNumber) + self.icode
+        return self.chain_letter + ':' + str(self.residue_number) + self.icode
     
     def __eq__ (self, other):
-        return (self.chainLetter == other.chainLetter and 
-                self.residueNumber == other.residueNumber and
+        return (self.chain_letter == other.chain_letter and 
+                self.residue_number == other.residue_number and
                 self.icode == other.icode)
     
     def __hash__(self):
-        return hash((self.chainLetter, self.residueNumber, self.icode))
+        return hash((self.chain_letter, self.residue_number, self.icode))
     
     # Replace the default emtpy icode (' ') by an empty string ('')
     def valid_icode (self, icode):
@@ -71,8 +71,8 @@ class TopologyReference:
         # Search all reference residues till we find the one that matches our number
         for index, residue in enumerate(self.residues):
             #print(str(index) + ' -> ' + str(residue.getResnum()) + ':' + residue.getChid())
-            if (residue.getResnum() == source.residueNumber and
-                residue.getChid() == source.chainLetter and
+            if (residue.getResnum() == source.residue_number and
+                residue.getChid() == source.chain_letter and
                 residue.getIcode() == source.icode):
                 residx = index
         
@@ -82,17 +82,17 @@ class TopologyReference:
 
         # Otherwise, get data from the recently found index residue
         residue = self.residues[residx]
-        residueNumber = residue.getResnum()
-        residueName = residue.getResname()[0:3]
+        residue_number = residue.getResnum()
+        residue_name = residue.getResname()[0:3]
         
         # And check that this residue data matches the pytraj residues data
         ptres = self.pytraj_residues[residx]
-        if (residueNumber == ptres.original_resid and residueName == ptres.name):
+        if (residue_number == ptres.original_resid and residue_name == ptres.name):
             return residx + 1
             
         # If not, we must iterate over all pytraj residues to find a match
         for index, ptres in enumerate(self.pytraj_residues):
-            if (residueNumber == ptres.original_resid and residueName == ptres.name):
+            if (residue_number == ptres.original_resid and residue_name == ptres.name):
                 return index + 1
         
         # Return None if there is no match
@@ -124,8 +124,9 @@ class TopologyReference:
         # Return None if there are no results    
         return None
 
-    # Get the standarized residue array from a string selection
-    def topologySelection (self, selection, form = 'source'):
+    # Get the standarized residue array from a prody string selection
+    # Residues in the array are in 'sourceResidue' format
+    def topology_selection (self, selection : str) -> list:
         
         # Each ATOM in the selection
         sel = self.topology.select(selection)
@@ -134,32 +135,32 @@ class TopologyReference:
         chains = sel.getChids()
 
         # Getting residue nums
-        residueNumbers = sel.getResnums()
+        residue_numbers = sel.getResnums()
 
         # Getting icodes
         icodes = sel.getIcodes()
 
         # Joining chains and nums
-        residues = [sourceResidue(i,j,k) for i, j, k in zip(chains, residueNumbers, icodes)]
+        residues = [sourceResidue(i,j,k) for i, j, k in zip(chains, residue_numbers, icodes)]
         
         # Get only the unique residues
         residues = list(set(residues))
         
         # Sort residues by chain letter and residue number
-        def byResidue(num):
-            return num.residueNumber
-        def byChain(num):
-            return num.chainLetter
+        def by_residue(num):
+            return num.residue_number
+        def by_chain(num):
+            return num.chain_letter
         
-        residues.sort(key = byResidue)
-        residues.sort(key = byChain)
+        residues.sort(key = by_residue)
+        residues.sort(key = by_chain)
         
         return residues
 
     # Set a function to find the absolute atom index in the corrected topology
-    def getAtomIndex (self, source, atom_name):
-        chain = source.chainLetter
-        residue = source.residueNumber
+    def get_atom_index (self, source, atom_name):
+        chain = source.chain_letter
+        residue = source.residue_number
         icode = source.icode
         for atom in self.topology.iterAtoms():
             if (atom.getChid() == chain

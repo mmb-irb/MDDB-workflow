@@ -8,15 +8,16 @@ import re
 
 import json
 
-# The pytraj trajectory may be reduced
-# DANI: Todavía no está acabado
+# Perform an analysis for the overall structure and then one more analysis for each interface
+# The 'interfaces' input is mandatory but it may be an empty list (i.e. there are no interfaces)
+# The pytraj trajectory ('pt_trajectory') may be reduced
 def rmsd_pairwise (
-    pytraj_trajectory,
+    pt_trajectory,
     output_analysis_filename : str,
-    interfaces ):
+    interfaces : list ):
 
     # Run the analysis
-    data = pt.pairwise_rmsd(pytraj_trajectory, '@CA')
+    data = pt.pairwise_rmsd(pt_trajectory, '@CA')
     # Convert data to a normal list, since numpy ndarrays are not json serializable
     data = data.tolist()
 
@@ -30,11 +31,23 @@ def rmsd_pairwise (
 
     # Repeat the analysis for each seletion of interface residues
     for interface in interfaces:
-        # Hay que ver en que formato vienen las interfaces
-        print(interface)
+        
+        # Select all interface residues in pytraj notation
+        pt_interface = interface['pt_interface_1'] + interface['pt_interface_2']
+        pt_selection = ':' + ','.join(map(str, pt_interface)) + ' @CA'
+        
+        # Run the analysis
+        data = pt.pairwise_rmsd(pt_trajectory, pt_selection)
+        # Convert data to a normal list, since numpy ndarrays are not json serializable
+        data = data.tolist()
 
+        output_analysis.append(
+            {
+                'name': interface['name'],
+                'data': data,
+            }
+        )
 
-    return
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump(output_analysis, file)

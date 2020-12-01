@@ -25,8 +25,10 @@ from get_atoms_count import get_atoms_count
 from generic_analyses import rmsd, rmsf, rgyr
 from pca import pca
 from rmsd_per_residue import rmsd_per_residue
-#from rmsd_pairwise import rmsd_pairwise
+from rmsd_pairwise import rmsd_pairwise
+from hydrogen_bonds import hydrogen_bonds
 from energies import energies
+from pockets import pockets
 
 # General inputs ----------------------------------------------------------------------------
 
@@ -136,6 +138,54 @@ def run_analyses ():
     if required(summarized_trajectory):
         get_summarized_trajectory(topology_filename, trajectory_filename, summarized_trajectory)
 
+    # Interfaces definition --------------------------------------------------------------------
+
+    print('Processing interfaces')
+
+    # Read the defined interfaces from the inputs file
+    interfaces = inputs['interfaces']
+
+    # Find out all residues and interface residues for each interface 'agent'
+    # Interface residues are defined as by a cuttoff distance in Angstroms
+    cutoff_distance = 5
+    for interface in interfaces:
+        # residues_1 is the list of all residues in agent_1
+        interface['residues_1'] = topology_reference.topology_selection(
+            interface['agent_1']
+        )
+        # residues_2 is the list of all residues in agent_2
+        interface['residues_2'] = topology_reference.topology_selection(
+            interface['agent_2']
+        )
+        # interface_1 is the list of residues from agent_1 which are close to the agent_2
+        interface['interface_1'] = topology_reference.topology_selection(
+            interface['agent_1'] +
+            ' and same residue as exwithin ' +
+            str(cutoff_distance) + 
+            ' of ' + 
+            interface['agent_2'])
+        # interface_2 is the list of residues from agent_2 which are close to the agent_1
+        interface['interface_2'] = topology_reference.topology_selection(
+            interface['agent_2'] +
+            ' and same residue as exwithin ' +
+            str(cutoff_distance) + 
+            ' of ' + 
+            interface['agent_1'])
+
+        # Set a paralel pytraj interfaces dict
+        # These values are used along the workflow but not added to metadata
+        # Translate all selections to pytraj residue notation
+        interface.update(
+            {
+                'pt_residues_1': list(map(topology_reference.source2pytraj, interface['residues_1'])),
+                'pt_residues_2': list(map(topology_reference.source2pytraj, interface['residues_2'])),
+                'pt_interface_1': list(map(topology_reference.source2pytraj, interface['interface_1'])),
+                'pt_interface_2': list(map(topology_reference.source2pytraj, interface['interface_2'])),
+            }
+        )
+
+        print('1 -> ' + str(interface['interface_1'] + interface['interface_2']))
+
     # Metadata mining --------------------------------------------------------------------------
 
     print('Mining metadata')
@@ -150,8 +200,13 @@ def run_analyses ():
     (systats, protats, prot, dppc, sol, na, cl) = get_atoms_count(topology_filename)
 
     # Extract some additional metadata from the inputs file which is required further
-    interfaces = inputs['interfaces']
     ligands = inputs['ligands']
+
+    # Set the metadata interfaces
+    metadata_interfaces = [{
+        'name': interface['name'],
+        'interface': str(interface['interface_1'] + interface['interface_2']),
+    } for interface in interfaces]
 
     # Write the metadata file
     # Metadata keys must be in caps, as they are in the client
@@ -189,7 +244,7 @@ def run_analyses ():
         'CL': cl,
         'LIGANDS': inputs['ligands'],
         'DOMAINS': inputs['domains'],
-        'INTERFACES': interfaces,
+        'INTERFACES': metadata_interfaces,
         'CHAINNAMES': inputs['chainnames'],
     }
     metadata_filename = 'metadata.json'
@@ -224,23 +279,33 @@ def run_analyses ():
         pca(topology_filename, trajectory_filename, eigenvalues_filename, eigenvectors_filename, snapshots)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
-    pytraj_trajectory = pt.iterload(trajectory_filename, topology_filename)
-    reduced_pytraj_trajectory = pytraj_trajectory[0:2000:10]
+    pt_trajectory = pt.iterload(trajectory_filename, topology_filename)
+    reduced_pt_trajectory = pt_trajectory[0:2000:10]
 
     # Set the RMSd per resiude analysis file name and run the analysis
     rmsd_perres_analysis = 'md.rmsd.perres.xvg'
     if required(rmsd_perres_analysis):
-        rmsd_per_residue(reduced_pytraj_trajectory, rmsd_perres_analysis, topology_reference)
+        rmsd_per_residue(reduced_pt_trajectory, rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
-    #rmsd_pairwise_analysis = 'md.rmsd.pairwise.xvg'
-    #if required(rmsd_pairwise_analysis):
-    #    rmsd_pairwise(reduced_pytraj_trajectory, rmsd_pairwise_analysis, interfaces)
+    rmsd_pairwise_analysis = 'md.rmsd.pairwise.json'
+    if required(rmsd_pairwise_analysis):
+        rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interfaces)
+
+    # Set the hydrogen bonds analysis file name and run the analysis
+    hbonds_analysis = 'md.hbonds.json'
+    if required(hbonds_analysis) and len(interfaces) > 0:
+        hydrogen_bonds(reduced_pt_trajectory, hbonds_analysis, topology_reference, interfaces)
 
     # Set the energies analysis filename and run the analysis
-    energies_analysis = 'md.energies.xvg'
-    if required(energies_analysis):
+    energies_analysis = 'md.energies.json'
+    if required(energies_analysis) and len(ligands) > 0:
         energies(topology_filename, trajectory_filename, energies_analysis, topology_reference, snapshots, ligands)
+
+    # Set the pockets analysis filename and run the analysis
+    pockets_analysis = 'md.pockets.json'
+    if required(pockets_analysis):
+        pockets(topology_filename, trajectory_filename, pockets_analysis, topology_reference, snapshots)
 
     print('Done!')
 
