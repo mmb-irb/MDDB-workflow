@@ -258,7 +258,7 @@ def run_analyses ():
     # Set the RMSd analysis file name and run the analysis
     rmsd_analysis = 'md.rmsd.xvg'
     if required(rmsd_analysis):
-        rmsd(first_frame, trajectory_filename, rmsd_analysis)
+        rmsd(first_frame_filename, trajectory_filename, rmsd_analysis)
 
     # Set the fluctuation analysis file name and run the analysis
     rmsf_analysis = 'md.rmsf.xvg'
