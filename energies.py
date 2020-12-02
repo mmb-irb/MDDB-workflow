@@ -34,6 +34,7 @@ test_source = repo_path + '/aux/test.in'
 vdw_source = repo_path + '/aux/vdwprm'
 
 # Perform the electrostatic and vdw energies analysis for each ligand
+# DANI: En principio soporta casos en que hay multiples ligandos, pero no se ha provado
 def energies (
     input_topology_filename : str,
     input_trajectory_filename : str,
@@ -231,7 +232,7 @@ def energies (
                             [a+b for a,b in zip(energies, residues[residue])])
                     else:
                         residues[residue] = energies
-            # DANI: No está acabado el soporte a casos en que hay multiples ligandos!! (Teníamos prisa)
+            
             ligand_data.append(residues)
 
         return ligand_data

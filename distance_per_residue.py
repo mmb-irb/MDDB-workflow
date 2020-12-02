@@ -29,7 +29,6 @@ def distance_per_residue (
         for i, r2 in enumerate(interface['pt_residues_2']):
             for j, r1 in enumerate(interface['pt_residues_1']):
                 txt = ":" + str(r2) + " " + ":" + str(r1)
-                print(txt)
                 ptdist = pt.distance(pt_trajectory, txt)
                 mean = numpy.mean(ptdist)
                 stdv = numpy.std(ptdist)

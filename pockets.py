@@ -1,8 +1,22 @@
 # Pockets analysis
 # 
-# Perform the pockets analysis along the whole trajectory
-# Find all available pockets and their propierties (volume, drugability score, etc.) at each frame
-# The analysis is carried by mdpocket
+# The pockets analysis is carried by the 'Fpocket' software. Fpocket is a fast open source protein 
+# pocket (cavity) detection algorithm based on Voronoi tessellation.
+#
+# The analysis is performed over 100 frames selected along the trajectory. First of all, an 'MDpocket'
+# analysis is run over these frames thus generating an output grid file. This grid contains a measure 
+# of frequency of how many times the pocket was open during the trajectory. The most stable and wide 
+# pockets are selected from this grid and then analyzed again with MDpocket individually. This second 
+# run returns dynamic data of the pocket volume and drugability score, among others.
+#
+# Vincent Le Guilloux, Peter Schmidtke and Pierre Tuffery, “Fpocket: An open source platform for ligand 
+# pocket detection”, BMC Bioinformatics 2009, 10:168
+#
+# Peter Schmidtke & Xavier Barril “Understanding and predicting druggability. A high-throughput method 
+# for detection of drug binding sites.”, J Med Chem, 2010, 53(15):5858-67
+#
+# Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, “MDpocket: open-source cavity detection 
+# and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 import re
 import collections
@@ -254,11 +268,14 @@ def pockets (
                     data[entries[i]].append(value)
 
         # Format the mined data and append it to the output data
+        # NEVER FORGET: The 'data' object contains a lot of additional data, not only pocket volumes
+        # DANI: Habría que sentarnos un día a ver que otros valores queremos quedarnos
         output = {
             'name': pocket_name,
+            'volumes': list(map(float, data['pock_volume'])),
         }
-        for entry in data.keys():
-            output[entry] = ' '.join(data[entry])
+        #for entry in data.keys():
+        #    output[entry] = data[entry]
         output_analysis.append(output)
 
     # Export the analysis in json format

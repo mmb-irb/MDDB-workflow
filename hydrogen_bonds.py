@@ -1,8 +1,13 @@
 # Hydrogen bonds analysis
-# 
-# Perform the hydrogen bonds analysis along the different trajectory frames
-# Track when an hydrogen bond is expected to be formed between each pair of candidate residues
-# The analysis is carried by pytraj
+
+# The pytraj 'hbond' analysis finds possible hydrogen bonds interactions between closer atoms and 
+# calculates the percent of frames where the hydrogen bond would happen according to the distance 
+# between two atoms and the bond angle.
+#
+# This analysis will return the residue number, residue type and atom name of each pair of bonded 
+# atoms. WARNING: In irregular pdb topologies, there may be atoms with identical residue number, 
+# residue type and atom name. This makes impossible to know the real resulted atom. For this reason 
+# topology has been corrected previously and duplicated atoms have been renamed
 
 import pytraj as pt
 import numpy
@@ -74,7 +79,9 @@ def hydrogen_bonds (
                     acceptor_atom_index_list.append(get_atom_index(acceptor, acceptor_atom))
                     donor_atom_index_list.append(get_atom_index(donor, donor_atom))
                     hydrogen_atom_index_list.append(get_atom_index(donor, hydrogen_atom))
-                    hbond_values.append(' '.join(map(str, d0.values)))
+                    # List 'd0.values' because it is a ndarray, which is not JSON serializable
+                    #hbond_values.append(' '.join(map(str, d0.values)))
+                    hbond_values.append(list(map(int, d0.values))) 
 
         # Write 
         output_analysis.append(

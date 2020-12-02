@@ -288,18 +288,23 @@ def run_analyses ():
     reduced_pt_trajectory = pt_trajectory[0:2000:10]
 
     # Set the RMSd per resiude analysis file name and run the analysis
-    rmsd_perres_analysis = 'md.rmsd.perres.xvg'
+    # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
+    # WARNING: However, the output file size depends on the trajectory size. It may be pretty big
+    rmsd_perres_analysis = 'md.rmsd.perres.json'
     if required(rmsd_perres_analysis):
         print('- RMSd per residue')
-        rmsd_per_residue(pt_trajectory, rmsd_perres_analysis, topology_reference)
+        rmsd_per_residue(reduced_pt_trajectory, rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
+    # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
+    # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge 
     rmsd_pairwise_analysis = 'md.rmsd.pairwise.json'
     if required(rmsd_pairwise_analysis):
         print('- RMSd pairwise')
-        rmsd_pairwise(pt_trajectory, rmsd_pairwise_analysis, interfaces)
+        rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interfaces)
 
     # Set the distance per residue analysis file name and run the analysis
+    # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     distance_perres_analysis = 'md.dist.perres.json'
     if required(distance_perres_analysis):
         print('- Distance per residue')
