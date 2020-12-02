@@ -33,8 +33,8 @@ def rmsd_per_residue (
                 
             file.write("@ key " + tag + "\n")
 
-        for i in range(reduced_pytrajectory.n_frames):
-            line = str(reduced_pytrajectory[i].time) + '    '
+        for i in range(pt_trajectory.n_frames):
+            line = str(pt_trajectory[i].time) + '    '
             for d in data:
                 line = line + str(d[i]) + '    '
             file.write(line + "\n")
