@@ -13,10 +13,12 @@ box_analysis = 'box.xvg'
 # Tested supported formats are .pdb and .tpr
 # input_trajectory_filename - The name string of the input trajectory file (path)
 # Tested supported formats are .trr and .xtc
-def get_box_size (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    ) -> tuple:
+
+
+def get_box_size(
+    input_topology_filename: str,
+    input_trajectory_filename: str,
+) -> tuple:
 
     # Generate the box analysis
     # WARNING: Do not use the first_frame here instead of the trajectory
@@ -43,9 +45,10 @@ def get_box_size (
     p.stdout.close()
 
     # Read the box analysis and get the desired data
-    with open(box_analysis,'r') as file:
+    boxsizex, boxsizey, boxsizez = "", "", ""
+    with open(box_analysis, 'r') as file:
         for line in file:
-            if line.startswith(("#","@")) == False:
+            if line.startswith(("#", "@")) == False:
 
                 # Simulation box 'x' size
                 boxsizex = float(line.split()[1])
@@ -57,7 +60,8 @@ def get_box_size (
                 boxsizez = float(line.split()[3])
 
     # Display it
-    print ('Box size: (' + str(boxsizex) + ',' + str(boxsizey) + ',' + str(boxsizez) + ')')
+    print('Box size: (' + str(boxsizex) + ',' +
+          str(boxsizey) + ',' + str(boxsizez) + ')')
 
     # Remove the box analysis
     run([
