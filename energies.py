@@ -34,37 +34,45 @@ vdw_source = repo_path + '/aux/vdwprm'
 
 
 def mine_cmip_output(logs):
-    host_atoms, size, density, origin, center = 0, (), (), (), ()
-    host_atoms_exp = "^\s*Host:\s+(\d+) atom"
-    grid_size_exp = "^\s*Grid Size:\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)"
-    grid_density_exp = "^\s*Grid density:\s+([-]*\d+)\s+([-]*\d+)\s+([-]*\d+)"
-    grid_origin_exp = "^\s*Grid origin:\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)"
-    grid_center_exp = "^\s*Grid center:\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)"
+    center, density, units = (), (), ()
+    grid_density_exp = r"^\s*Grid density:\s+([-]*\d+)\s+([-]*\d+)\s+([-]*\d+)"
+    grid_center_exp = r"^\s*Grid center:\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)"
+    grid_units_exp = r"^\s*Grid units:\s+(\d+.\d+)\s+(\d+.\d+)\s+(\d+.\d+)"
     for line in logs:
-        host_atoms_group = re.match(host_atoms_exp, line)
-        grid_size_groups = re.match(grid_size_exp, line)
-        grid_origin_groups = re.match(grid_origin_exp, line)
         grid_center_groups = re.match(grid_center_exp, line)
         grid_density_groups = re.match(grid_density_exp, line)
-        if host_atoms_group:
-            host_atoms = int(host_atoms_group.group(1))
-        if grid_size_groups:
-            size = tuple(float(grid_size_groups.group(i)) for i in (1, 2, 3))
+        grid_units_groups = re.match(grid_units_exp, line)
         if grid_density_groups:
             density = tuple(float(grid_density_groups.group(i))
                             for i in (1, 2, 3))
-        if grid_origin_groups:
-            origin = tuple(float(grid_origin_groups.group(i))
-                           for i in (1, 2, 3))
         if grid_center_groups:
             center = tuple(float(grid_center_groups.group(i))
                            for i in (1, 2, 3))
-    return host_atoms, size, density, origin, center
+        if grid_units_groups:
+            units = tuple(float(grid_units_groups.group(i))
+                          for i in (1, 2, 3))
+    return center, density, units
 
 
-def weighted_average(arr_a, arr_b, w_a, w_b):
-    return [(i * w_a + j * w_b) / (w_a + w_b)
-            for i, j in zip(arr_a, arr_b)]
+def compute_new_grid(
+        prot_center,
+        prot_density,
+        prot_units,
+        lig_center,
+        lig_density,
+        lig_units):
+    new_center = [(i + j) / 2 for i, j in zip(prot_center, lig_center)]
+    new_density = []
+    for k in range(3):
+        min_prot = prot_center[k] - prot_density[k] * prot_units[k]
+        min_lig = lig_center[k] - lig_density[k] * lig_units[k]
+        min_new = min(min_prot, min_lig)
+        max_prot = prot_center[k] + prot_density[k] * prot_units[k]
+        max_lig = lig_center[k] + lig_density[k] * lig_units[k]
+        max_new = max(max_prot, max_lig)
+        dnew = int(abs(max_new - min_new))
+        new_density.append(dnew)
+    return new_center, new_density
 
 
 def write_CMIP_input(test_input_file, weighted_center, weighted_density):
@@ -274,7 +282,7 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            host_atoms, _, host_density, _, host_center = mine_cmip_output(
+            prot_center, prot_density, prot_units = mine_cmip_output(
                 cmip_logs_host.split("\n"))
 
             cmip_logs_guest = run([
@@ -290,27 +298,22 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            guest_atoms, _, guest_density, _, guest_center = mine_cmip_output(
+            lig_center, lig_density, lig_units = mine_cmip_output(
                 cmip_logs_guest.split("\n"))
 
-            # calculate protein+ligand grid center
-            weighted_center = weighted_average(
-                guest_center,
-                host_center,
-                guest_atoms,
-                host_atoms)
-            # calculate protein+ligand grid density
-            weighted_density = weighted_average(
-                guest_density,
-                host_density,
-                guest_atoms,
-                host_atoms)
+            new_center, new_density = compute_new_grid(
+                prot_center,
+                prot_density,
+                prot_units,
+                lig_center,
+                lig_density,
+                lig_units)
 
             test_input_file = repo_path + '/aux/input.in'
             write_CMIP_input(
                 test_input_file,
-                weighted_center,
-                weighted_density)
+                new_center,
+                new_density)
 
             # Run the cmip software to get the desired energies
             cmip_output = 'protein-' + name + '.energy.pdb'
