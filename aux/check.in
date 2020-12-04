@@ -1,0 +1,9 @@
+Electrostatic + VdW Interaction energy calculation. 
+&cntrl 
+CHECKONLY = 1
+tipcalc=3,irest=0 
+ebyatom = 1
+calcgrid=1,readgrid=2
+coorfmt=2
+fvdw=0.8
+&end
