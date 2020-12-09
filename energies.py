@@ -1,5 +1,5 @@
 # Energies
-#
+# 
 # The energies analysis is carried by ACPYPE and a locally developed tool: CMIP.
 # ACPYPE is a tool based in Python to use Antechamber to generate topologies for chemical compounds and to interface with others python applications.
 # CMIP stands for Classical Molecular Interaction Potential and it is usefull to predict electrostatic and Van der Waals potentials.
@@ -24,6 +24,8 @@ import numpy
 import math
 from subprocess import run, PIPE, Popen
 
+import json
+
 # Set the path to auxiliar files required for this analysis
 repo_path = str(Path(__file__).parent)
 source_reslib = repo_path + '/aux/res.lib'
@@ -31,7 +33,6 @@ preppdb_source = repo_path + '/aux/preppdb.pl'
 check_source = repo_path + '/aux/check.in'
 test_source = repo_path + '/aux/test.in'
 vdw_source = repo_path + '/aux/vdwprm'
-
 
 def mine_cmip_output(logs):
     center, density, units = (), (), ()
@@ -52,7 +53,6 @@ def mine_cmip_output(logs):
             units = tuple(float(grid_units_groups.group(i))
                           for i in (1, 2, 3))
     return center, density, units
-
 
 def compute_new_grid(
         prot_center,
@@ -101,34 +101,31 @@ def write_CMIP_input(test_input_file, weighted_center, weighted_density):
 
 # Perform the electrostatic and vdw energies analysis for each ligand
 # DANI: En principio soporta casos en que hay multiples ligandos, pero no se ha provado
-def energies(
-        input_topology_filename: str,
-        input_trajectory_filename: str,
-        output_analysis_filename: str,
-        reference,
-        snapshots: int,
-        ligands: dict):
+def energies (
+    input_topology_filename : str,
+    input_trajectory_filename : str,
+    output_analysis_filename : str,
+    reference,
+    snapshots : int,
+    ligands : dict ):
 
     # Change elements in a prody topology to meet the CMIP requirements
     # Hydrogens bonded to carbons remain as 'H'
     # Hydrogens bonded to oxygen are renamed as 'HO'
     # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-    def correctOrphanAtoms(prody_topology, prody_selection):
+    def correct_orphan_atoms (prody_topology, prody_selection):
         selection = prody_topology.select(prody_selection)
         # Get all atoms and atom coordinates
         selection_coords = selection.getCoords()
         selection_atoms = list(selection.iterAtoms())
         # Set functions to find the closest atom of a specified atom
-
-        def getDistance(coords1, coords2):
+        def get_distance (coords1, coords2):
             squared_distance = numpy.sum((coords1 - coords2)**2, axis=0)
             distance = numpy.sqrt(squared_distance)
             return distance
-
-        def findClosestAtom(atom):
+        def find_closest_atom (atom):
             current_coords = atom.getCoords()
-            distances = [getDistance(current_coords, c)
-                         for c in selection_coords]
+            distances = [get_distance(current_coords, c) for c in selection_coords]
             sorted_distances = [d for d in distances]
             sorted_distances.sort()
             # We take the second minimum, since the first minimum will be always 0
@@ -139,15 +136,15 @@ def energies(
         # Update the element of each hydrogen according to CMIP needs
         for atom in selection_atoms:
             if atom.getName() == 'H':
-                bondedHeavyAtom = findClosestAtom(atom).getElement()
+                bonded_heavy_atom = find_closest_atom(atom).getElement()
                 # Hydrogens bonded to carbons remain as 'H'
-                if bondedHeavyAtom == 'C':
+                if bonded_heavy_atom == 'C':
                     continue
                 # Hydrogens bonded to oxygen are renamed as 'HO'
-                if bondedHeavyAtom == 'O':
+                if bonded_heavy_atom == 'O':
                     atom.setElement('HO')
                 # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-                if bondedHeavyAtom == 'N' or bondedHeavyAtom == 'S':
+                if bonded_heavy_atom == 'N' or bonded_heavy_atom == 'S':
                     atom.setElement('HN')
                 if atom.getName() == 'CL':
                     atom.setElement('Cl')
@@ -158,7 +155,7 @@ def energies(
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
-    def getEnergies(frame_pdb):
+    def get_frames_energy (frame_pdb):
         # Parse the pdb file to prody format and the correct it
         original_topology = prody.parsePDB(frame_pdb)
         # Add chains according to the reference topology, since gromacs has deleted chains
@@ -167,8 +164,7 @@ def energies(
         # Hydrogens bonded to oxygen or nitrogen or sulfur must be renamed as HO or HN
         # CMIP uses atom names to set the atom radius so this step is important
         for ligand in ligands:
-            original_topology = correctOrphanAtoms(
-                original_topology, ligand['prody_selection'])
+            original_topology = correct_orphan_atoms(original_topology, ligand['prody_selection'])
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
 
@@ -189,6 +185,7 @@ def energies(
         ], stdout=PIPE).stdout.decode()
 
         # Prepare the ligand files for each ligand
+        ligand_data = []
         for ligand in ligands:
 
             # Create a new pdb only with the current ligand
@@ -198,13 +195,13 @@ def energies(
             prody.writePDB(ligand_pdb, selection)
 
             # Calculate the energies with acpype and then mine them
-            # test = !obabel -ipdb $ligand_pdb -omol2 whatever
+            #test = !obabel -ipdb $ligand_pdb -omol2 whatever
             acpype_logs = run([
                 "acpype",
                 "-i",
                 ligand_pdb,
-                # "-n",
-                # "0",
+                #"-n",
+                #"0",
             ], stdout=PIPE).stdout.decode()
 
             energies_file = name + '.acpype/' + name + '.mol2'
@@ -229,8 +226,7 @@ def energies(
 
             # Check the number of atoms matches the number of energies
             if len(list(selection.iterAtoms())) != len(energies):
-                raise SystemExit(
-                    "Stop!! The number of atoms and energies does not match :/")
+                raise SystemExit("Stop!! The number of atoms and energies does not match :/")
 
             # Copy the 'res.lib' file in the local path and open it to 'a'ppend new text
             reslib_filename = name + '_res.lib'
@@ -331,19 +327,20 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
+            #print(cmip_logs)
 
             # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
             # Group the results by reidues adding their values
             residues = {}
-            with open(cmip_output, 'r') as file:
-                data = file.readlines()
+            with open(cmip_output,'r') as file:
+                lines = list(file)
                 # If this file is empty it means something went wrong with CMIP
                 # We print its logs and exit
-                if len(data) == 0:
+                if len(lines) == 0:
                     for line in cmip_logs:
                         print(line)
                     raise SystemExit('ERROR: Something went wrong with CMIP!')
-                for line in data:
+                for line in lines:
                     chain = line[21:22]
                     residue_id = line[22:28]
                     residue = chain + ':' + str(int(residue_id))
@@ -352,35 +349,35 @@ def energies(
                     both = float(line[72:83])
                     # Values greater than 100 are represented as 0
                     # This step is performed to filter 'infinity' values
-                    energies = (vdw, es, both) if both < 100 else (0, 0, 0)
+                    energies =  (vdw, es, both) if both < 100 else (0, 0, 0)
                     if residue in residues:
                         residues[residue] = tuple(
-                            [a+b for a, b in zip(energies, residues[residue])])
+                            [a+b for a,b in zip(energies, residues[residue])])
                     else:
                         residues[residue] = energies
-
+            
             ligand_data.append(residues)
 
-            # DANI: No está acabado el soporte a casos en que hay multiples ligandos!! (Teníamos prisa)
-            return residues
+        return ligand_data
+        
 
     # Set the number of frames where we extract energies to calculate the average
     frames_number = 100
     frames = None
-    if snapshots > 100:
-        frames = [f * math.floor(snapshots / frames_number)
-                  for f in range(1, frames_number + 1)]
+    if snapshots > frames_number:
+        frames = [f * math.floor(snapshots / frames_number) for f in range(1, frames_number + 1)]
     else:
         frames = range(1, snapshots + 1)
 
     # Extract the energies for each frame
-    data = []
+    #data = []
+    ligands_data = [[] for l in ligands]
     for f in frames:
         # Extract the current frame
         current_frame = 'frame' + str(f) + '.pdb'
         # The frame selection input in gromacs works with a 'ndx' file
         frames_ndx = 'frames.ndx'
-        with open(frames_ndx, 'w') as file:
+        with open(frames_ndx,'w') as file:
             file.write('[frames]\n' + str(f))
         p = Popen([
             "echo",
@@ -401,7 +398,10 @@ def energies(
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
         # Run the main analysis over the current frame
-        data.append(getEnergies(current_frame))
+        # Append the result data for each ligand
+        energies_data = get_frames_energy(current_frame)
+        for i, data in enumerate(energies_data):
+            ligands_data[i].append(data)
         # Delete current frame files before going for the next frame
         run([
             "rm",
@@ -409,79 +409,82 @@ def energies(
             frames_ndx,
         ], stdout=PIPE).stdout.decode()
 
-    # Now calculated residue average values through all frames
-    # First, reorder data by residues and energies
-    residues_number = len(data[0])
-    residues_labels = [residue for residue in data[0]]
+    # Now calculated residue average values through all frames for each ligand
+    output_analysis = []
+    for i, ligand in enumerate(ligands):
 
-    residues_vdw_values = [[] for n in range(residues_number)]
-    residues_es_values = [[] for n in range(residues_number)]
-    residues_both_values = [[] for n in range(residues_number)]
-    for frame in data:
-        for r, residue in enumerate(frame):
-            values = frame[residue]
-            residues_vdw_values[r].append(values[0])
-            residues_es_values[r].append(values[1])
-            residues_both_values[r].append(values[2])
+        # Get the main data
+        data = ligands_data[i]
 
-    # Calculate the residue averages from each energy
-    residues_vdw_avg = [sum(v) / len(v) for v in residues_vdw_values]
-    residues_es_avg = [sum(v) / len(v) for v in residues_es_values]
-    residues_both_avg = [sum(v) / len(v) for v in residues_both_values]
+        # First, reorder data by residues and energies
+        residues_number = len(data[0])
+        residues_labels = [residue for residue in data[0]]
 
-    # Calculate the residue averages from each energy at the beginig and end of the trajectory
-    # We take the initial 20% and the final 20% of frames to calculate each respectively
-    p20 = round(frames_number*0.2)
+        residues_vdw_values = [[] for n in range(residues_number)]
+        residues_es_values = [[] for n in range(residues_number)]
+        residues_both_values = [[] for n in range(residues_number)]
+        for frame in data:
+            for r, residue in enumerate(frame):
+                values = frame[residue]
+                residues_vdw_values[r].append(values[0])
+                residues_es_values[r].append(values[1])
+                residues_both_values[r].append(values[2])
 
-    # Initials
-    residues_vdw_values_initial = [[] for n in range(residues_number)]
-    residues_es_values_initial = [[] for n in range(residues_number)]
-    residues_both_values_initial = [[] for n in range(residues_number)]
-    for frame in data[:p20]:
-        for r, residue in enumerate(frame):
-            values = frame[residue]
-            residues_vdw_values_initial[r].append(values[0])
-            residues_es_values_initial[r].append(values[1])
-            residues_both_values_initial[r].append(values[2])
+        # Calculate the residue averages from each energy
+        residues_vdw_avg = [sum(v) / len(v) for v in residues_vdw_values]
+        residues_es_avg = [sum(v) / len(v) for v in residues_es_values]
+        residues_both_avg = [sum(v) / len(v) for v in residues_both_values]
 
-    residues_vdw_avg_initial = [sum(v) / len(v)
-                                for v in residues_vdw_values_initial]
-    residues_es_avg_initial = [sum(v) / len(v)
-                               for v in residues_es_values_initial]
-    residues_both_avg_initial = [sum(v) / len(v)
-                                 for v in residues_both_values_initial]
+        # Calculate the residue averages from each energy at the beginig and end of the trajectory
+        # We take the initial 20% and the final 20% of frames to calculate each respectively
+        p20 = round(frames_number*0.2)
 
-    # Finals
-    residues_vdw_values_final = [[] for n in range(residues_number)]
-    residues_es_values_final = [[] for n in range(residues_number)]
-    residues_both_values_final = [[] for n in range(residues_number)]
-    for frame in data[-p20:]:
-        for r, residue in enumerate(frame):
-            values = frame[residue]
-            residues_vdw_values_final[r].append(values[0])
-            residues_es_values_final[r].append(values[1])
-            residues_both_values_final[r].append(values[2])
+        # Initials
+        residues_vdw_values_initial = [[] for n in range(residues_number)]
+        residues_es_values_initial = [[] for n in range(residues_number)]
+        residues_both_values_initial = [[] for n in range(residues_number)]
+        for frame in data[:p20]:
+            for r, residue in enumerate(frame):
+                values = frame[residue]
+                residues_vdw_values_initial[r].append(values[0])
+                residues_es_values_initial[r].append(values[1])
+                residues_both_values_initial[r].append(values[2])
 
-    residues_vdw_avg_final = [sum(v) / len(v)
-                              for v in residues_vdw_values_final]
-    residues_es_avg_final = [sum(v) / len(v) for v in residues_es_values_final]
-    residues_both_avg_final = [sum(v) / len(v)
-                               for v in residues_both_values_final]
+        residues_vdw_avg_initial = [sum(v) / len(v) for v in residues_vdw_values_initial]
+        residues_es_avg_initial = [sum(v) / len(v) for v in residues_es_values_initial]
+        residues_both_avg_initial = [sum(v) / len(v) for v in residues_both_values_initial]
 
-    # Write averages to the energies analysis file
+        # Finals
+        residues_vdw_values_final = [[] for n in range(residues_number)]
+        residues_es_values_final = [[] for n in range(residues_number)]
+        residues_both_values_final = [[] for n in range(residues_number)]
+        for frame in data[-p20:]:
+            for r, residue in enumerate(frame):
+                values = frame[residue]
+                residues_vdw_values_final[r].append(values[0])
+                residues_es_values_final[r].append(values[1])
+                residues_both_values_final[r].append(values[2])
+
+        residues_vdw_avg_final = [sum(v) / len(v) for v in residues_vdw_values_final]
+        residues_es_avg_final = [sum(v) / len(v) for v in residues_es_values_final]
+        residues_both_avg_final = [sum(v) / len(v) for v in residues_both_values_final]
+
+        # Format the results data and append it to the output data
+        output = {
+            'name': ligand['name'],
+            'labels': residues_labels,
+            'vdw': residues_vdw_avg,
+            'es': residues_es_avg,
+            'both': residues_both_avg,
+            'ivdw': residues_vdw_avg_initial,
+            'ies': residues_es_avg_initial,
+            'iboth': residues_both_avg_initial,
+            'fvdw': residues_vdw_avg_final,
+            'fes': residues_es_avg_final,
+            'fboth': residues_both_avg_final,
+        }
+        output_analysis.append(output)
+
+    # Finally, export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-
-        for values, name in [
-            (residues_labels, 'residues_labels'),
-            (residues_vdw_avg, 'residues_vdw_avg'),
-            (residues_es_avg, 'residues_es_avg'),
-            (residues_both_avg, 'residues_both_avg'),
-            (residues_vdw_avg_initial, 'residues_vdw_avg_initial'),
-            (residues_es_avg_initial, 'residues_es_avg_initial'),
-            (residues_both_avg_initial, 'residues_both_avg_initial'),
-            (residues_vdw_avg_final, 'residues_vdw_avg_final'),
-            (residues_es_avg_final, 'residues_es_avg_final'),
-            (residues_both_avg_final, 'residues_both_avg_final'),
-        ]:
-
-            file.write("@ column " + name + '\n' + ' '.join(map(str, values)))
+        json.dump(output_analysis, file)

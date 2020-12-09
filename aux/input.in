@@ -1,0 +1,17 @@
+Electrostatic + VdW Interaction energy calculation. 
+&cntrl 
+ tipcalc=3,irest=0 
+ ebyatom = 1 
+ readgrid=0 
+ cenx=2.6 
+ ceny=1.3 
+ cenz=-7.0 
+ dimx=174 
+ dimy=143 
+ dimz=188 
+ intz=0.5 
+ intz=0.5 
+ intz=0.5 
+ coorfmt=2 
+ fvdw=0.8 
+&end 
