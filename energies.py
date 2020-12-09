@@ -98,9 +98,9 @@ def write_CMIP_input(test_input_file, weighted_center, weighted_density):
         for line in test_in_file:
             f.write(line)
 
-# Perform the electrostatic and vdw energies analysis
 
-
+# Perform the electrostatic and vdw energies analysis for each ligand
+# DANI: En principio soporta casos en que hay multiples ligandos, pero no se ha provado
 def energies(
         input_topology_filename: str,
         input_trajectory_filename: str,
@@ -358,6 +358,8 @@ def energies(
                             [a+b for a, b in zip(energies, residues[residue])])
                     else:
                         residues[residue] = energies
+
+            ligand_data.append(residues)
 
             # DANI: No está acabado el soporte a casos en que hay multiples ligandos!! (Teníamos prisa)
             return residues

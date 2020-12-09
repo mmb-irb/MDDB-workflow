@@ -6,6 +6,8 @@
 import pytraj as pt
 import re
 
+import json
+
 # The pytraj trajectory may be reduced
 def rmsd_per_residue (
     pt_trajectory,
@@ -13,30 +15,35 @@ def rmsd_per_residue (
     topology_reference ):
     
     # Run the analysis in pytraj
+    # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
+    # This class has keys but its attributes can not be accessed through the key
+    # They must be accessed thorugh the index
     # DANI: Esto devuelve "Error: Range::SetRange(None): Range is -1 for None"
     # DANI: No se por que pasa pero aparentemente funciona bien
     data = pt.rmsd_perres(pt_trajectory)
+
+    # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
+    del data[0]
+
+    # Mine the analysis data
+    output_analysis = []
+    for residue in data:
+        # Convert pytraj residue keys to source notation
+        # Key format: SER:1, TYR:2, ...
+        match = re.match('(.*):(.*)', residue.key)
+        id = match.groups(0)[1]
+        residue_tag = str(topology_reference.pytraj2source(int(id)))
+        # Write data to the output file
+        # The 'residue' DataArray contains numeric values (rmsds) and it is not JSON serializable
+        output_analysis.append(
+            {
+                'name': residue_tag,
+                'rmsds': list(residue),
+            }
+        )
+
+    # Export the analysis in json format
+    with open(output_analysis_filename, 'w') as file:
+        json.dump(output_analysis, file)
     
-    # Write the output to a new filename in a standarized format
-    with open(output_analysis_filename,'w') as file:
-
-        for d in data:
-            # Key format: SER:1, TYR:2, ...
-            key = d.key
-            #print(key)
-            tag = key
-            match = re.match('(.*):(.*)', key)
-            if match != None:
-                #print(key)
-                id = match.groups(0)[1]
-                tag = str(topology_reference.pytraj2source(int(id)))
-                
-            file.write("@ key " + tag + "\n")
-
-        for i in range(reduced_pytrajectory.n_frames):
-            line = str(reduced_pytrajectory[i].time) + '    '
-            for d in data:
-                line = line + str(d[i]) + '    '
-            file.write(line + "\n")
-
-    # It is not possible to represent the rmsd per residue with a classical graph
+    # It is not possible to represent the whole rmsd per residue with a classical graph

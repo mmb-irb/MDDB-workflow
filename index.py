@@ -26,6 +26,7 @@ from generic_analyses import rmsd, rmsf, rgyr
 from pca import pca
 from rmsd_per_residue import rmsd_per_residue
 from rmsd_pairwise import rmsd_pairwise
+from distance_per_residue import distance_per_residue
 from hydrogen_bonds import hydrogen_bonds
 from energies import energies
 from pockets import pockets
@@ -258,16 +259,19 @@ def run_analyses ():
     # Set the RMSd analysis file name and run the analysis
     rmsd_analysis = 'md.rmsd.xvg'
     if required(rmsd_analysis):
+        print('- RMSd')
         rmsd(first_frame_filename, trajectory_filename, rmsd_analysis)
 
     # Set the fluctuation analysis file name and run the analysis
     rmsf_analysis = 'md.rmsf.xvg'
     if required(rmsf_analysis):
+        print('- Fluctuation')
         rmsf(topology_filename, trajectory_filename, rmsf_analysis)
 
     # Set the RMSd per resiude analysis file name and run the analysis
     rgyr_analysis = 'md.rgyr.xvg'
     if required(rgyr_analysis):
+        print('- Radius of gyration')
         rgyr(topology_filename, trajectory_filename, rgyr_analysis)
 
     # Set the pca output filenames and run the analysis
@@ -276,6 +280,7 @@ def run_analyses ():
     eigenvalues_filename = 'pca.eigenval.xvg'
     eigenvectors_filename = 'eigenvec.trr'
     if required(eigenvalues_filename) or required(eigenvectors_filename):
+        print('- PCA')
         pca(topology_filename, trajectory_filename, eigenvalues_filename, eigenvectors_filename, snapshots)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
@@ -283,28 +288,44 @@ def run_analyses ():
     reduced_pt_trajectory = pt_trajectory[0:2000:10]
 
     # Set the RMSd per resiude analysis file name and run the analysis
-    rmsd_perres_analysis = 'md.rmsd.perres.xvg'
+    # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
+    # WARNING: However, the output file size depends on the trajectory size. It may be pretty big
+    rmsd_perres_analysis = 'md.rmsd.perres.json'
     if required(rmsd_perres_analysis):
+        print('- RMSd per residue')
         rmsd_per_residue(reduced_pt_trajectory, rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
+    # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
+    # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge 
     rmsd_pairwise_analysis = 'md.rmsd.pairwise.json'
     if required(rmsd_pairwise_analysis):
+        print('- RMSd pairwise')
         rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interfaces)
+
+    # Set the distance per residue analysis file name and run the analysis
+    # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
+    distance_perres_analysis = 'md.dist.perres.json'
+    if required(distance_perres_analysis):
+        print('- Distance per residue')
+        distance_per_residue(reduced_pt_trajectory, distance_perres_analysis, interfaces)
 
     # Set the hydrogen bonds analysis file name and run the analysis
     hbonds_analysis = 'md.hbonds.json'
     if required(hbonds_analysis) and len(interfaces) > 0:
-        hydrogen_bonds(reduced_pt_trajectory, hbonds_analysis, topology_reference, interfaces)
+        print('- Hydrogen bonds')
+        hydrogen_bonds(pt_trajectory, hbonds_analysis, topology_reference, interfaces)
 
     # Set the energies analysis filename and run the analysis
     energies_analysis = 'md.energies.json'
     if required(energies_analysis) and len(ligands) > 0:
+        print('- Energies')
         energies(topology_filename, trajectory_filename, energies_analysis, topology_reference, snapshots, ligands)
 
     # Set the pockets analysis filename and run the analysis
     pockets_analysis = 'md.pockets.json'
     if required(pockets_analysis):
+        print('- Pockets')
         pockets(topology_filename, trajectory_filename, pockets_analysis, topology_reference, snapshots)
 
     print('Done!')
