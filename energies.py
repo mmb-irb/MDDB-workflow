@@ -487,4 +487,4 @@ def energies (
 
     # Finally, export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump(output_analysis, file)
+        json.dump({ 'data': output_analysis }, file)

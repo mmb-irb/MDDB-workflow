@@ -44,6 +44,6 @@ def rmsd_per_residue (
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump(output_analysis, file)
+        json.dump({ 'data': output_analysis }, file)
     
     # It is not possible to represent the whole rmsd per residue with a classical graph
