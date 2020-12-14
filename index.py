@@ -1,5 +1,5 @@
 # This is the starter script
-
+# test lucia
 # Import python libraries
 import os
 from pathlib import Path
@@ -24,6 +24,7 @@ from get_atoms_count import get_atoms_count
 # Import local analyses
 from generic_analyses import rmsd, rmsf, rgyr
 from pca import pca
+from pca_contacts import pca_contacts
 from rmsd_per_residue import rmsd_per_residue
 from rmsd_pairwise import rmsd_pairwise
 from distance_per_residue import distance_per_residue
@@ -38,6 +39,7 @@ from pockets import pockets
 # i.e. update the api, client and already loaded projects in the database at least
 topology_filename = "md.imaged.rot.dry.pdb"
 trajectory_filename = "md.imaged.rot.xtc"
+trajectory_filename = "md.trr"
 
 # Set the inputs filename
 # This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
@@ -51,7 +53,9 @@ skip_repeats = True
 
 # To analyze a local directory which is meant to include the topology and trajetory files
 # 'directory' is the string path to the working directory. e.g. '/home/dbeltran/Desktop/my_directory/'
-def analyze_directory (directory : str):
+
+
+def analyze_directory(directory: str):
     # Move to the specified directory
     os.chdir(directory)
     # Run the analyses
@@ -61,27 +65,33 @@ def analyze_directory (directory : str):
 # Also the directory where both the downloaded files and the produced files will be stored
 # 'project' is a string code to the project to analyze. e.g. 'MCV1900002' or '5e95cc9466d570732286ef90'
 # 'directory' is the string path to the working directory. e.g. '/home/dbeltran/Desktop/my_directory/'
-def analyze_project (project : str, directory : str, url = 'https://bioexcel-cv19.bsc.es'):
+
+
+def analyze_project(project: str, directory: str, url='https://bioexcel-cv19.bsc.es'):
     # Create the directory if it does not exists
-    if os.path.exists(directory) == False :
+    if os.path.exists(directory) == False:
         Path(directory).mkdir(parents=True, exist_ok=True)
     # Move to the specified directory
     os.chdir(directory)
     # Download the topology file if it does not exists
-    if os.path.exists(topology_filename) == False :
+    if os.path.exists(topology_filename) == False:
         print('Downloading topology')
-        topology_url = url + '/api/rest/current/projects/' + project + '/files/' + topology_filename
-        urllib.request.urlretrieve (topology_url, topology_filename)
+        topology_url = url + '/api/rest/current/projects/' + \
+            project + '/files/' + topology_filename
+        urllib.request.urlretrieve(topology_url, topology_filename)
     # Download the trajectory file if it does not exists
-    if os.path.exists(trajectory_filename) == False :
+    if os.path.exists(trajectory_filename) == False:
         print('Downloading trajectory')
-        trajectory_url = url + '/api/rest/current/projects/' + project + '/files/' + trajectory_filename
-        urllib.request.urlretrieve (trajectory_url, trajectory_filename)
+        trajectory_url = url + '/api/rest/current/projects/' + \
+            project + '/files/' + trajectory_filename
+        urllib.request.urlretrieve(trajectory_url, trajectory_filename)
     # Run the analyses
     run_analyses()
 
 # Run all analyses with the provided topology and trajectory files
-def run_analyses ():
+
+
+def run_analyses():
 
     # Load the inputs file
     with open(inputs_filename, 'r') as file:
@@ -92,7 +102,7 @@ def run_analyses ():
     original_trajectory_filename = inputs['original_trajectory_filename']
 
     # Preprocessing ---------------------------------------------------------------------------------
-    
+
     print('Preprocessing')
 
     # Process the topology and or trajectory files using VMD
@@ -112,11 +122,12 @@ def run_analyses ():
     # Fit the trajectory by removing the translation and rotation if it is required
     preprocess_protocol = inputs['preprocess_protocol']
     if preprocess_protocol > 0:
-        image_and_fit(topology_filename, trajectory_filename, trajectory_filename, preprocess_protocol)
+        image_and_fit(topology_filename, trajectory_filename,
+                      trajectory_filename, preprocess_protocol)
 
     # Examine and correct the topology file using ProDy
     topology_corrector(topology_filename, topology_filename)
-    
+
     # Create an object with the topology data in both ProDy and Pytraj formats
     # This object also include functions to convert residue numeration from one format to another
     topology_reference = TopologyReference(topology_filename)
@@ -125,7 +136,8 @@ def run_analyses ():
     # It is used further in the RMSd analysis
     first_frame_filename = 'firstFrame.pdb'
     if required(first_frame_filename):
-        get_first_frame(topology_filename, topology_filename, first_frame_filename)
+        get_first_frame(topology_filename, topology_filename,
+                        first_frame_filename)
 
     # Get the backbone structure
     # It is further loaded to database and used to represent PCA projections
@@ -137,7 +149,8 @@ def run_analyses ():
     # It is used further in some trajectory analyses
     summarized_trajectory = 'md.imaged.rot.100.xtc'
     if required(summarized_trajectory):
-        get_summarized_trajectory(topology_filename, trajectory_filename, summarized_trajectory)
+        get_summarized_trajectory(
+            topology_filename, trajectory_filename, summarized_trajectory)
 
     # Interfaces definition --------------------------------------------------------------------
 
@@ -162,15 +175,15 @@ def run_analyses ():
         interface['interface_1'] = topology_reference.topology_selection(
             interface['agent_1'] +
             ' and same residue as exwithin ' +
-            str(cutoff_distance) + 
-            ' of ' + 
+            str(cutoff_distance) +
+            ' of ' +
             interface['agent_2'])
         # interface_2 is the list of residues from agent_2 which are close to the agent_1
         interface['interface_2'] = topology_reference.topology_selection(
             interface['agent_2'] +
             ' and same residue as exwithin ' +
-            str(cutoff_distance) + 
-            ' of ' + 
+            str(cutoff_distance) +
+            ' of ' +
             interface['agent_1'])
 
         # Set a paralel pytraj interfaces dict
@@ -185,7 +198,8 @@ def run_analyses ():
             }
         )
 
-        print('1 -> ' + str(interface['interface_1'] + interface['interface_2']))
+        print(
+            '1 -> ' + str(interface['interface_1'] + interface['interface_2']))
 
     # Metadata mining --------------------------------------------------------------------------
 
@@ -195,10 +209,12 @@ def run_analyses ():
     snapshots = get_frames_count(trajectory_filename)
 
     # Find out the box size (x, y and z)
-    (boxsizex, boxsizey, boxsizez) = get_box_size(topology_filename, trajectory_filename)
+    (boxsizex, boxsizey, boxsizez) = get_box_size(
+        topology_filename, trajectory_filename)
 
     # Count different type of atoms and residues
-    (systats, protats, prot, dppc, sol, na, cl) = get_atoms_count(topology_filename)
+    (systats, protats, prot, dppc, sol, na,
+     cl) = get_atoms_count(topology_filename)
 
     # Extract some additional metadata from the inputs file which is required further
     ligands = inputs['ligands']
@@ -281,7 +297,17 @@ def run_analyses ():
     eigenvectors_filename = 'eigenvec.trr'
     if required(eigenvalues_filename) or required(eigenvectors_filename):
         print('- PCA')
-        pca(topology_filename, trajectory_filename, eigenvalues_filename, eigenvectors_filename, snapshots)
+        pca(topology_filename, trajectory_filename,
+            eigenvalues_filename, eigenvectors_filename, snapshots)
+
+    contacts_pca_filename = 'contacts_PCA.json'
+    if required(contacts_pca_filename):
+        print('- PCA on residue contacts')
+        pca_contacts(
+            trajectory_filename,
+            topology_filename,
+            (interface["pt_residues_1"], interface["pt_residues_2"]),
+            contacts_pca_filename)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
     pt_trajectory = pt.iterload(trajectory_filename, topology_filename)
@@ -293,46 +319,54 @@ def run_analyses ():
     rmsd_perres_analysis = 'md.rmsd.perres.json'
     if required(rmsd_perres_analysis):
         print('- RMSd per residue')
-        rmsd_per_residue(reduced_pt_trajectory, rmsd_perres_analysis, topology_reference)
+        rmsd_per_residue(reduced_pt_trajectory,
+                         rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
-    # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge 
+    # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge
     rmsd_pairwise_analysis = 'md.rmsd.pairwise.json'
     if required(rmsd_pairwise_analysis):
         print('- RMSd pairwise')
-        rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interfaces)
+        rmsd_pairwise(reduced_pt_trajectory,
+                      rmsd_pairwise_analysis, interfaces)
 
     # Set the distance per residue analysis file name and run the analysis
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     distance_perres_analysis = 'md.dist.perres.json'
     if required(distance_perres_analysis):
         print('- Distance per residue')
-        distance_per_residue(reduced_pt_trajectory, distance_perres_analysis, interfaces)
+        distance_per_residue(reduced_pt_trajectory,
+                             distance_perres_analysis, interfaces)
 
     # Set the hydrogen bonds analysis file name and run the analysis
     hbonds_analysis = 'md.hbonds.json'
     if required(hbonds_analysis) and len(interfaces) > 0:
         print('- Hydrogen bonds')
-        hydrogen_bonds(pt_trajectory, hbonds_analysis, topology_reference, interfaces)
+        hydrogen_bonds(pt_trajectory, hbonds_analysis,
+                       topology_reference, interfaces)
 
     # Set the energies analysis filename and run the analysis
     energies_analysis = 'md.energies.json'
     if required(energies_analysis) and len(ligands) > 0:
         print('- Energies')
-        energies(topology_filename, trajectory_filename, energies_analysis, topology_reference, snapshots, ligands)
+        energies(topology_filename, trajectory_filename,
+                 energies_analysis, topology_reference, snapshots, ligands)
 
     # Set the pockets analysis filename and run the analysis
     pockets_analysis = 'md.pockets.json'
     if required(pockets_analysis):
         print('- Pockets')
-        pockets(topology_filename, trajectory_filename, pockets_analysis, topology_reference, snapshots)
+        pockets(topology_filename, trajectory_filename,
+                pockets_analysis, topology_reference, snapshots)
 
     print('Done!')
 
 # Set a function to check if a process must be run (True) or skipped (False)
 # i.e. check if the output file already exists and reapeated analyses must be skipped
-def required (analysis_filename : str):
+
+
+def required(analysis_filename: str):
     if os.path.exists(analysis_filename) and skip_repeats:
         return False
     return True
