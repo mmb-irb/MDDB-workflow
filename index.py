@@ -139,53 +139,52 @@ def run_analyses ():
     if required(summarized_trajectory):
         get_summarized_trajectory(topology_filename, trajectory_filename, summarized_trajectory)
 
-    # Interfaces definition --------------------------------------------------------------------
+    # Interactions setup --------------------------------------------------------------------
 
-    print('Processing interfaces')
+    print('Processing interactions')
 
-    # Read the defined interfaces from the inputs file
-    interfaces = inputs['interfaces']
+    # Read the defined interactions from the inputs file
+    interactions = inputs['interactions']
 
-    # Find out all residues and interface residues for each interface 'agent'
+    # Find out all residues and interface residues for each interaction 'agent'
     # Interface residues are defined as by a cuttoff distance in Angstroms
     cutoff_distance = 5
-    for interface in interfaces:
+    for interaction in interactions:
         # residues_1 is the list of all residues in agent_1
-        interface['residues_1'] = topology_reference.topology_selection(
-            interface['agent_1']
+        interaction['residues_1'] = topology_reference.topology_selection(
+            interaction['agent_1']
         )
         # residues_2 is the list of all residues in agent_2
-        interface['residues_2'] = topology_reference.topology_selection(
-            interface['agent_2']
+        interaction['residues_2'] = topology_reference.topology_selection(
+            interaction['agent_2']
         )
         # interface_1 is the list of residues from agent_1 which are close to the agent_2
-        interface['interface_1'] = topology_reference.topology_selection(
-            interface['agent_1'] +
+        interaction['interface_1'] = topology_reference.topology_selection(
+            interaction['agent_1'] +
             ' and same residue as exwithin ' +
             str(cutoff_distance) + 
             ' of ' + 
-            interface['agent_2'])
+            interaction['agent_2'])
         # interface_2 is the list of residues from agent_2 which are close to the agent_1
-        interface['interface_2'] = topology_reference.topology_selection(
-            interface['agent_2'] +
+        interaction['interface_2'] = topology_reference.topology_selection(
+            interaction['agent_2'] +
             ' and same residue as exwithin ' +
             str(cutoff_distance) + 
             ' of ' + 
-            interface['agent_1'])
+            interaction['agent_1'])
 
-        # Set a paralel pytraj interfaces dict
+        # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
-        # Translate all selections to pytraj residue notation
-        interface.update(
+        interaction.update(
             {
-                'pt_residues_1': list(map(topology_reference.source2pytraj, interface['residues_1'])),
-                'pt_residues_2': list(map(topology_reference.source2pytraj, interface['residues_2'])),
-                'pt_interface_1': list(map(topology_reference.source2pytraj, interface['interface_1'])),
-                'pt_interface_2': list(map(topology_reference.source2pytraj, interface['interface_2'])),
+                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
+                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
+                'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
+                'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
             }
         )
 
-        print('1 -> ' + str(interface['interface_1'] + interface['interface_2']))
+        print('1 -> ' + str(interaction['interface_1'] + interaction['interface_2']))
 
     # Metadata mining --------------------------------------------------------------------------
 
@@ -203,11 +202,14 @@ def run_analyses ():
     # Extract some additional metadata from the inputs file which is required further
     ligands = inputs['ligands']
 
-    # Set the metadata interfaces
-    metadata_interfaces = [{
-        'name': interface['name'],
-        'interface': str(interface['interface_1'] + interface['interface_2']),
-    } for interface in interfaces]
+    # Set the metadata interactions
+    metadata_interactions = [ {
+        'name': interaction['name'],
+        'residues_1': str(interaction['residues_1']),
+        'residues_2': str(interaction['residues_2']),
+        'interface_1': str(interaction['interface_1']),
+        'interface_2': str(interaction['interface_2']),
+    } for interaction in interactions ]
 
     # Write the metadata file
     # Metadata keys must be in caps, as they are in the client
@@ -245,7 +247,7 @@ def run_analyses ():
         'CL': cl,
         'LIGANDS': inputs['ligands'],
         'DOMAINS': inputs['domains'],
-        'INTERFACES': metadata_interfaces,
+        'INTERACTIONS': metadata_interactions,
         'CHAINNAMES': inputs['chainnames'],
     }
     metadata_filename = 'metadata.json'
@@ -301,20 +303,20 @@ def run_analyses ():
     rmsd_pairwise_analysis = 'md.rmsd.pairwise.json'
     if required(rmsd_pairwise_analysis):
         print('- RMSd pairwise')
-        rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interfaces)
+        rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interactions)
 
     # Set the distance per residue analysis file name and run the analysis
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     distance_perres_analysis = 'md.dist.perres.json'
     if required(distance_perres_analysis):
         print('- Distance per residue')
-        distance_per_residue(reduced_pt_trajectory, distance_perres_analysis, interfaces)
+        distance_per_residue(reduced_pt_trajectory, distance_perres_analysis, interactions)
 
     # Set the hydrogen bonds analysis file name and run the analysis
     hbonds_analysis = 'md.hbonds.json'
-    if required(hbonds_analysis) and len(interfaces) > 0:
+    if required(hbonds_analysis) and len(interactions) > 0:
         print('- Hydrogen bonds')
-        hydrogen_bonds(pt_trajectory, hbonds_analysis, topology_reference, interfaces)
+        hydrogen_bonds(pt_trajectory, hbonds_analysis, topology_reference, interactions)
 
     # Set the energies analysis filename and run the analysis
     energies_analysis = 'md.energies.json'

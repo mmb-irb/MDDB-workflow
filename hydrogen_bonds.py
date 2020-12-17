@@ -15,17 +15,17 @@ import re
 
 import json
 
-# Perform an hydrogen bonds analysis for each interface
-# The 'interfaces' input may be an empty list (i.e. there are no interfaces)
-# In case there are no interfaces the analysis stops
+# Perform an hydrogen bonds analysis for each interaction interface
+# The 'interactions' input may be an empty list (i.e. there are no interactions)
+# In case there are no interactions the analysis stops
 def hydrogen_bonds (
     pt_trajectory,
     output_analysis_filename : str,
     topology_reference,
-    interfaces : list ):
+    interactions : list ):
 
-    # Return before doing anything if there are no interfaces
-    if len(interfaces) == 0:
+    # Return before doing anything if there are no interactions
+    if len(interactions) == 0:
         return
 
     # Save the reference function to get an absolue atom index from a pytraj atom index
@@ -36,18 +36,18 @@ def hydrogen_bonds (
     # Sabe each analysis to a dict which will be parsed to json
     output_analysis = []
 
-    for interface in interfaces:
+    for interaction in interactions:
         
         # Select all interface residues in pytraj notation
-        pt_interface = interface['pt_interface_1'] + interface['pt_interface_2']
+        pt_interface = interaction['pt_interface_1'] + interaction['pt_interface_2']
         pt_selection = ':' + ','.join(map(str, pt_interface)) + ' @CA'
 
         # Run the analysis
         hbonds = pt.hbond(pt_trajectory, mask=pt_selection)
 
-        # Get residues in each interface agent
-        interface_1 = interface['interface_1']
-        interface_2 = interface['interface_2']
+        # Get residues in each interaction agent interface
+        interface_1 = interaction['interface_1']
+        interface_2 = interaction['interface_2']
 
         acceptor_atom_index_list = []
         donor_atom_index_list = []
@@ -71,7 +71,7 @@ def hydrogen_bonds (
                 donor = pytraj2source(int(donor_resnum))
                 
                 # WARNING: The analysis may return hydrogen bonds between residues from the same agent
-                # Accept the hydrogen bond only if its residues belong to different interface agents
+                # Accept the hydrogen bond only if its residues belong to different interaction agents
                 if ((acceptor in interface_1 and donor in interface_2)
                 or (acceptor in interface_2 and donor in interface_1)):
                     
@@ -86,7 +86,7 @@ def hydrogen_bonds (
         # Write 
         output_analysis.append(
             {
-                'name': interface['name'],
+                'name': interaction['name'],
                 'acceptors': acceptor_atom_index_list,
                 'donors': donor_atom_index_list,
                 'hydrogens': hydrogen_atom_index_list,

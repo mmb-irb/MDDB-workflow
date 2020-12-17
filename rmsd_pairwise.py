@@ -8,13 +8,13 @@ import re
 
 import json
 
-# Perform an analysis for the overall structure and then one more analysis for each interface
-# The 'interfaces' input is mandatory but it may be an empty list (i.e. there are no interfaces)
+# Perform an analysis for the overall structure and then one more analysis for each interaction
+# The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
 # The pytraj trajectory ('pt_trajectory') may be reduced
 def rmsd_pairwise (
     pt_trajectory,
     output_analysis_filename : str,
-    interfaces : list ):
+    interactions : list ):
 
     # Run the analysis
     data = pt.pairwise_rmsd(pt_trajectory, '@CA')
@@ -29,11 +29,11 @@ def rmsd_pairwise (
         }
     ]
 
-    # Repeat the analysis for each seletion of interface residues
-    for interface in interfaces:
+    # Repeat the analysis with the interface residues of each interaction
+    for interaction in interactions:
         
         # Select all interface residues in pytraj notation
-        pt_interface = interface['pt_interface_1'] + interface['pt_interface_2']
+        pt_interface = interaction['pt_interface_1'] + interaction['pt_interface_2']
         pt_selection = ':' + ','.join(map(str, pt_interface)) + ' @CA'
         
         # Run the analysis
@@ -43,7 +43,7 @@ def rmsd_pairwise (
 
         output_analysis.append(
             {
-                'name': interface['name'],
+                'name': interaction['name'],
                 'data': data,
             }
         )
