@@ -25,8 +25,8 @@ def distance_per_residue (
         # Contact Matrix -- Initialization
         # Create 2 lists filled with 0s with the length of the residue number arrays respectively
         h,w = len(interface['residues_2']), len(interface['residues_1'])
-        mat_mean = [[0 for x in range(w)] for y in range(h)]
-        mat_stdv = [[0 for x in range(w)] for y in range(h)]
+        means_matrix = [[0 for x in range(w)] for y in range(h)]
+        stdvs_matrix = [[0 for x in range(w)] for y in range(h)]
 
         # Contact Matrix -- Calculation
         for i, r2 in enumerate(interface['pt_residues_2']):
@@ -35,15 +35,13 @@ def distance_per_residue (
                 ptdist = pt.distance(pt_trajectory, txt)
                 mean = numpy.mean(ptdist)
                 stdv = numpy.std(ptdist)
-                mat_mean[i][j] = mean
-                mat_stdv[i][j] = stdv
+                means_matrix[i][j] = mean
+                stdvs_matrix[i][j] = stdv
 
         output = {
             'name': interface['name'],
-            'xLabels': list(map(str, interface['residues_1'])),
-            'yLabels': list(map(str, interface['residues_2'])),
-            'mean': mat_mean,
-            'stdv': mat_stdv,
+            'means': means_matrix,
+            'stdvs': stdvs_matrix,
         }
         output_analysis.append(output)
 
