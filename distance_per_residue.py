@@ -8,13 +8,16 @@ import numpy
 
 import json
 
-# Perform an hydrogen bonds analysis for each interface
-# The 'interfaces' input may be an empty list (i.e. there are no interfaces)
-# In case there are no interfaces the analysis stops
+# Perform a distance per residue over all residues from different interface agents
+# Note that the distances are calculated for all residues in the agent, not only the interface residues
 def distance_per_residue (
     pt_trajectory,
     output_analysis_filename : str,
     interfaces : list ):
+
+    # Return before doing anything if there are no interfaces
+    if len(interfaces) == 0:
+        return
 
     output_analysis = []
     for interface in interfaces:
