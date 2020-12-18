@@ -150,28 +150,28 @@ def run_analyses ():
     # Interface residues are defined as by a cuttoff distance in Angstroms
     cutoff_distance = 5
     for interaction in interactions:
-        # residues_1 is the list of all residues in agent_1
+        # residues_1 is the list of all residues in the first agent
         interaction['residues_1'] = topology_reference.topology_selection(
-            interaction['agent_1']
+            interaction['selection_1']
         )
-        # residues_2 is the list of all residues in agent_2
+        # residues_2 is the list of all residues in the second agent
         interaction['residues_2'] = topology_reference.topology_selection(
-            interaction['agent_2']
+            interaction['selection_2']
         )
-        # interface_1 is the list of residues from agent_1 which are close to the agent_2
+        # interface_1 is the list of residues from the agent 1 which are close to the agent 2
         interaction['interface_1'] = topology_reference.topology_selection(
-            interaction['agent_1'] +
+            interaction['selection_1'] +
             ' and same residue as exwithin ' +
             str(cutoff_distance) + 
             ' of ' + 
-            interaction['agent_2'])
-        # interface_2 is the list of residues from agent_2 which are close to the agent_1
+            interaction['selection_2'])
+        # interface_2 is the list of residues from agent 2 which are close to the agent 1
         interaction['interface_2'] = topology_reference.topology_selection(
-            interaction['agent_2'] +
+            interaction['selection_2'] +
             ' and same residue as exwithin ' +
             str(cutoff_distance) + 
             ' of ' + 
-            interaction['agent_1'])
+            interaction['selection_1'])
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
@@ -205,6 +205,8 @@ def run_analyses ():
     # Set the metadata interactions
     metadata_interactions = [ {
         'name': interaction['name'],
+        'agent_1' : interaction['agent_1'],
+        'agent_2' : interaction['agent_2'],
         'residues_1': str(interaction['residues_1']),
         'residues_2': str(interaction['residues_2']),
         'interface_1': str(interaction['interface_1']),
@@ -212,7 +214,7 @@ def run_analyses ():
     } for interaction in interactions ]
 
     # Write the metadata file
-    # Metadata keys must be in caps, as they are in the client
+    # Metadata keys must be in CAPS, as they are in the client
     metadata = {
         'PDBID': inputs['pdbId'],
         'NAME': inputs['name'],
