@@ -242,6 +242,8 @@ def analysis_prep(
         'name': interaction['name'],
         'agent_1' : interaction['agent_1'],
         'agent_2' : interaction['agent_2'],
+        'selection_1' : interaction['selection_1'],
+        'selection_2' : interaction['selection_2'],
         'residues_1': str(interaction['residues_1']),
         'residues_2': str(interaction['residues_2']),
         'interface_1': str(interaction['interface_1']),
