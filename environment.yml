@@ -1,0 +1,17 @@
+name: model_workflow
+channels:
+  - bioconda
+  - anaconda
+  - insilichem
+  - ambermd
+  - conda-forge
+dependencies:
+  - python=3.6
+  - acpype
+  - cmip
+  - gromacs
+  - pytraj
+  - mdtraj
+  - numpy 
+  - prody
+  - scikit-learn
