@@ -41,12 +41,13 @@ from pockets import pockets
 # trajectory_filename = "md.imaged.rot.xtc"
 # trajectory_filename = "md.trr"
 
-# # Set the inputs filename
-# # This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
+# Set the inputs filename
+# This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
+# Alternatively, it may be downloaded from a database project with the API endpoint 'project/inputs'
 # inputs_filename = "inputs.json"
 
-# # Set this workflow to skip steps where the ouput file already exist
-# # Change it to False if you want all steps to be done anyway
+# Set this workflow to skip steps where the ouput file already exist
+# Change it to False if you want all steps to be done anyway
 skip_repeats = True
 
 # ------------------------------------------------------------------------------------------
@@ -62,54 +63,49 @@ def required(analysis_filename: str, skip_repeats=True):
 
 # ------------------------------------------------------------------------------------------
 
-# To analyze a local directory which is meant to include the topology and trajetory files
-# 'directory' is the string path to the working directory. e.g. '/home/dbeltran/Desktop/my_directory/'
+# The OUTPUT filenames. They are not customizable since the loader uses these names
+# Thus, these are also the MoDEL names of the files in the database
+topology_filename = "md.imaged.rot.dry.pdb"
+trajectory_filename = "md.imaged.rot.xtc"
 
-
-def analyze_directory(
-        directory: str,
-        topology_filename="md.imaged.rot.dry.pdb",
-        trajectory_filename="md.imaged.rot.xtc"):
-    # Move to the specified directory
-    os.chdir(directory)
-    # Run the analyses
-    run_analyses(topology_filename, trajectory_filename)
-
-# To download topology and trajectory files from an already uploaded project
-# Also the directory where both the downloaded files and the produced files will be stored
-# 'project' is a string code to the project to analyze. e.g. 'MCV1900002' or '5e95cc9466d570732286ef90'
-# 'directory' is the string path to the working directory. e.g. '/home/dbeltran/Desktop/my_directory/'
-
-
-def analyze_project(
-        project: str,
-        directory: str,
-        url='https://bioexcel-cv19.bsc.es',
-        topology_filename="md.imaged.rot.dry.pdb",
-        trajectory_filename="md.imaged.rot.xtc"):
+current_directory = os.getcwd()
+def start (
+    directory: str = current_directory,
+    project: str = None,
+    url: str = 'https://bioexcel-cv19-dev.bsc.es',
+    # The inputs filename is input and output at the same time
+    # Input filename if it is already in the directory
+    # Output filename if you download it from MoDEL
+    inputs_filename : str = 'inputs.json',
+):
     # Create the directory if it does not exists
     if not os.path.exists(directory):
         Path(directory).mkdir(parents=True, exist_ok=True)
     # Move to the specified directory
     os.chdir(directory)
-    # Download the topology file if it does not exists
-    if not os.path.exists(topology_filename):
-        print('Downloading topology')
-        topology_url = url + '/api/rest/current/projects/' + \
-            project + '/files/' + topology_filename
-        urllib.request.urlretrieve(topology_url, topology_filename)
-    # Download the trajectory file if it does not exists
-    if not os.path.exists(trajectory_filename):
-        print('Downloading trajectory')
-        trajectory_url = url + '/api/rest/current/projects/' + \
-            project + '/files/' + trajectory_filename
-        urllib.request.urlretrieve(trajectory_url, trajectory_filename)
+    if project:
+        # Download the topology file if it does not exists
+        if not os.path.exists(topology_filename):
+            print('Downloading topology')
+            topology_url = url + '/api/rest/current/projects/' + \
+                project + '/files/' + topology_filename
+            urllib.request.urlretrieve(topology_url, topology_filename)
+        # Download the trajectory file if it does not exists
+        if not os.path.exists(trajectory_filename):
+            print('Downloading trajectory')
+            trajectory_url = url + '/api/rest/current/projects/' + \
+                project + '/files/' + trajectory_filename
+            urllib.request.urlretrieve(trajectory_url, trajectory_filename)
+        # Download the inputs json file if it does not exists
+        if not os.path.exists(inputs_filename):
+            print('Downloading inputs')
+            inputs_url = url + '/api/rest/current/projects/' + \
+                project + '/inputs/'
+            urllib.request.urlretrieve(inputs_url, inputs_filename)
     # Run the analyses
-    run_analyses(topology_filename, trajectory_filename)
+    run_analyses()
 
 # Run all analyses with the provided topology and trajectory files
-
-
 def analysis_prep(
         topology_filename="md.imaged.rot.dry.pdb",
         trajectory_filename="md.imaged.rot.xtc",
@@ -153,6 +149,8 @@ def analysis_prep(
     # Create an object with the topology data in both ProDy and Pytraj formats
     # This object also include functions to convert residue numeration from one format to another
     topology_reference = TopologyReference(topology_filename)
+
+    # Additional refinement --------------------------------------------------------------------
 
     # Get the first trajectory frame
     # It is used further in the RMSd analysis

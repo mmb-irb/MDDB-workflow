@@ -62,7 +62,7 @@ def sigmoid(x):
 def pca_contacts(
         trajectory: str,
         topology: str,
-        interfaces: list,
+        interactions: list,
         output_analysis_filename: str,
         use_pytraj=True,
         n_components=2,
@@ -71,8 +71,8 @@ def pca_contacts(
         smooth=5.0):
 
     output_analysis = []
-    for interface in interfaces:
-        residue_lists = interface["residues"]
+    for interaction in interactions:
+        residue_lists = interaction["residues_1"] + interaction["residues_2"]
         # get list of residue pairs and pairwise minimal distances
         if use_pytraj:
             traj = pt.load(trajectory, top=topology)
@@ -129,14 +129,14 @@ def pca_contacts(
             f"ordered_residues_{i+1}": list(most_important_contacts[i])
             for i in range(n_components)}
 
-        # residues that are part of both interface groups used for the analysis
-        interface_residues = {
-            f"interface_residues": residue_lists}
+        # residues that are part of both interaction groups used for the analysis
+        interaction_residues = {
+            f"interaction_residues": residue_lists}
 
         output_analysis.append(transformed_dists)
         output_analysis.append(components_values)
         output_analysis.append(ordered_residues)
-        output_analysis.append(interface_residues)
+        output_analysis.append(interaction_residues)
 
     if output_analysis:
         # Export the analysis in json format
