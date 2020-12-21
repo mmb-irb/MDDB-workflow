@@ -37,17 +37,28 @@ from pockets import pockets
 # Main topology and trajectory output file names
 # WARNING: Changing these names here means making changes in all the project
 # i.e. update the api, client and already loaded projects in the database at least
-topology_filename = "md.imaged.rot.dry.pdb"
-trajectory_filename = "md.imaged.rot.xtc"
-trajectory_filename = "md.trr"
+# topology_filename = "md.imaged.rot.dry.pdb"
+# trajectory_filename = "md.imaged.rot.xtc"
+# trajectory_filename = "md.trr"
 
-# Set the inputs filename
-# This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
-inputs_filename = "inputs.json"
+# # Set the inputs filename
+# # This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
+# inputs_filename = "inputs.json"
 
-# Set this workflow to skip steps where the ouput file already exist
-# Change it to False if you want all steps to be done anyway
+# # Set this workflow to skip steps where the ouput file already exist
+# # Change it to False if you want all steps to be done anyway
 skip_repeats = True
+
+# ------------------------------------------------------------------------------------------
+
+# Set a function to check if a process must be run (True) or skipped (False)
+# i.e. check if the output file already exists and reapeated analyses must be skipped
+
+
+def required(analysis_filename: str, skip_repeats=True):
+    if os.path.exists(analysis_filename) and skip_repeats:
+        return False
+    return True
 
 # ------------------------------------------------------------------------------------------
 
@@ -55,11 +66,14 @@ skip_repeats = True
 # 'directory' is the string path to the working directory. e.g. '/home/dbeltran/Desktop/my_directory/'
 
 
-def analyze_directory(directory: str):
+def analyze_directory(
+        directory: str,
+        topology_filename="md.imaged.rot.dry.pdb",
+        trajectory_filename="md.imaged.rot.xtc"):
     # Move to the specified directory
     os.chdir(directory)
     # Run the analyses
-    run_analyses()
+    run_analyses(topology_filename, trajectory_filename)
 
 # To download topology and trajectory files from an already uploaded project
 # Also the directory where both the downloaded files and the produced files will be stored
@@ -67,32 +81,40 @@ def analyze_directory(directory: str):
 # 'directory' is the string path to the working directory. e.g. '/home/dbeltran/Desktop/my_directory/'
 
 
-def analyze_project(project: str, directory: str, url='https://bioexcel-cv19.bsc.es'):
+def analyze_project(
+        project: str,
+        directory: str,
+        url='https://bioexcel-cv19.bsc.es',
+        topology_filename="md.imaged.rot.dry.pdb",
+        trajectory_filename="md.imaged.rot.xtc"):
     # Create the directory if it does not exists
-    if os.path.exists(directory) == False:
+    if not os.path.exists(directory):
         Path(directory).mkdir(parents=True, exist_ok=True)
     # Move to the specified directory
     os.chdir(directory)
     # Download the topology file if it does not exists
-    if os.path.exists(topology_filename) == False:
+    if not os.path.exists(topology_filename):
         print('Downloading topology')
         topology_url = url + '/api/rest/current/projects/' + \
             project + '/files/' + topology_filename
         urllib.request.urlretrieve(topology_url, topology_filename)
     # Download the trajectory file if it does not exists
-    if os.path.exists(trajectory_filename) == False:
+    if not os.path.exists(trajectory_filename):
         print('Downloading trajectory')
         trajectory_url = url + '/api/rest/current/projects/' + \
             project + '/files/' + trajectory_filename
         urllib.request.urlretrieve(trajectory_url, trajectory_filename)
     # Run the analyses
-    run_analyses()
+    run_analyses(topology_filename, trajectory_filename)
 
 # Run all analyses with the provided topology and trajectory files
 
 
-def run_analyses():
-
+def analysis_prep(
+        topology_filename="md.imaged.rot.dry.pdb",
+        trajectory_filename="md.imaged.rot.xtc",
+        inputs_filename="inputs.json",
+        interface_cutoff_distance=5):
     # Load the inputs file
     with open(inputs_filename, 'r') as file:
         inputs = json.load(file)
@@ -161,7 +183,6 @@ def run_analyses():
 
     # Find out all residues and interface residues for each interface 'agent'
     # Interface residues are defined as by a cuttoff distance in Angstroms
-    cutoff_distance = 5
     for interface in interfaces:
         # residues_1 is the list of all residues in agent_1
         interface['residues_1'] = topology_reference.topology_selection(
@@ -175,14 +196,14 @@ def run_analyses():
         interface['interface_1'] = topology_reference.topology_selection(
             interface['agent_1'] +
             ' and same residue as exwithin ' +
-            str(cutoff_distance) +
+            str(interface_cutoff_distance) +
             ' of ' +
             interface['agent_2'])
         # interface_2 is the list of residues from agent_2 which are close to the agent_1
         interface['interface_2'] = topology_reference.topology_selection(
             interface['agent_2'] +
             ' and same residue as exwithin ' +
-            str(cutoff_distance) +
+            str(interface_cutoff_distance) +
             ' of ' +
             interface['agent_1'])
 
@@ -223,6 +244,7 @@ def run_analyses():
     metadata_interfaces = [{
         'name': interface['name'],
         'interface': str(interface['interface_1'] + interface['interface_2']),
+        'residues': (interface["pt_residues_1"], interface["pt_residues_2"]),
     } for interface in interfaces]
 
     # Write the metadata file
@@ -268,11 +290,22 @@ def run_analyses():
     with open(metadata_filename, 'w') as file:
         json.dump(metadata, file)
 
-    # Analyses ---------------------------------------------------------------------------------
+    return metadata, topology_reference, interfaces
+
+
+# All analyses ---------------------------------------------------------------------------------
+def run_analyses(
+        topology_filename="md.imaged.rot.dry.pdb",
+        trajectory_filename="md.imaged.rot.xtc"):
+
+    metadata, topology_reference, interfaces = analysis_prep(
+        topology_filename,
+        trajectory_filename)
 
     print('Running analyses')
 
     # Set the RMSd analysis file name and run the analysis
+    first_frame_filename = 'firstFrame.pdb'
     rmsd_analysis = 'md.rmsd.xvg'
     if required(rmsd_analysis):
         print('- RMSd')
@@ -298,7 +331,7 @@ def run_analyses():
     if required(eigenvalues_filename) or required(eigenvectors_filename):
         print('- PCA')
         pca(topology_filename, trajectory_filename,
-            eigenvalues_filename, eigenvectors_filename, snapshots)
+            eigenvalues_filename, eigenvectors_filename, metadata["SNAPSHOTS"])
 
     contacts_pca_filename = 'contacts_PCA.json'
     if required(contacts_pca_filename):
@@ -306,7 +339,7 @@ def run_analyses():
         pca_contacts(
             trajectory_filename,
             topology_filename,
-            (interface["pt_residues_1"], interface["pt_residues_2"]),
+            metadata["INTERFACES"],
             contacts_pca_filename)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
@@ -348,25 +381,16 @@ def run_analyses():
 
     # Set the energies analysis filename and run the analysis
     energies_analysis = 'md.energies.json'
-    if required(energies_analysis) and len(ligands) > 0:
+    if required(energies_analysis) and len(metadata["LIGANDS"]) > 0:
         print('- Energies')
         energies(topology_filename, trajectory_filename,
-                 energies_analysis, topology_reference, snapshots, ligands)
+                 energies_analysis, topology_reference, metadata["SNAPSHOTS"], metadata["LIGANDS"])
 
     # Set the pockets analysis filename and run the analysis
     pockets_analysis = 'md.pockets.json'
     if required(pockets_analysis):
         print('- Pockets')
         pockets(topology_filename, trajectory_filename,
-                pockets_analysis, topology_reference, snapshots)
+                pockets_analysis, topology_reference, metadata["SNAPSHOTS"])
 
     print('Done!')
-
-# Set a function to check if a process must be run (True) or skipped (False)
-# i.e. check if the output file already exists and reapeated analyses must be skipped
-
-
-def required(analysis_filename: str):
-    if os.path.exists(analysis_filename) and skip_repeats:
-        return False
-    return True
