@@ -2,6 +2,7 @@
 # test lucia
 # Import python libraries
 import os
+import math
 from pathlib import Path
 import urllib.request
 import json
@@ -349,7 +350,26 @@ def run_analyses(
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
     pt_trajectory = pt.iterload(trajectory_filename, topology_filename)
-    reduced_pt_trajectory = pt_trajectory[0:2000:10]
+    trajectory_frames = pt_trajectory.n_frames
+
+    # Set a reduced trajectory used for heavy analyses
+    reduced_pt_trajectory = None
+    # First, set the maximum number of frames for the reduced trajectory
+    reduced_trajectory_frames = 200
+    # If the current trajectory has already less frames than the maximum then use it also as reduced
+    if trajectory_frames < reduced_trajectory_frames:
+        reduced_pt_trajectory = pt_trajectory
+        # Add a step value which will be required later
+        reduced_pt_trajectory.step = 1
+    # Otherwise, create a reduced trajectory with as much frames as specified above
+    # These frames are picked along the trajectory
+    else:
+        # Calculate how many frames we must jump between each reduced frame to never exceed the limit
+        # The '- 1' is because the first frame is 0 (you have to do the math to understand)
+        step = math.floor(trajectory_frames / (reduced_trajectory_frames - 1))
+        reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
+        # Add the step value to the reduced trajectory explicitly. It will be required later
+        reduced_pt_trajectory.step = step
 
     # Set the RMSd per resiude analysis file name and run the analysis
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
@@ -357,8 +377,7 @@ def run_analyses(
     rmsd_perres_analysis = 'md.rmsd.perres.json'
     if required(rmsd_perres_analysis):
         print('- RMSd per residue')
-        rmsd_per_residue(reduced_pt_trajectory,
-                         rmsd_perres_analysis, topology_reference)
+        rmsd_per_residue(reduced_pt_trajectory, rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
