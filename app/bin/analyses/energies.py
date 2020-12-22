@@ -1,5 +1,5 @@
 # Energies
-# 
+#
 # The energies analysis is carried by ACPYPE and a locally developed tool: CMIP.
 # ACPYPE is a tool based in Python to use Antechamber to generate topologies for chemical compounds and to interface with others python applications.
 # CMIP stands for Classical Molecular Interaction Potential and it is usefull to predict electrostatic and Van der Waals potentials.
@@ -27,12 +27,13 @@ from subprocess import run, PIPE, Popen
 import json
 
 # Set the path to auxiliar files required for this analysis
-repo_path = str(Path(__file__).parent)
-source_reslib = repo_path + '/aux/res.lib'
-preppdb_source = repo_path + '/aux/preppdb.pl'
-check_source = repo_path + '/aux/check.in'
-test_source = repo_path + '/aux/test.in'
-vdw_source = repo_path + '/aux/vdwprm'
+resources = str(Path(__file__).parent.parent / "lib" / "resources")
+source_reslib = resources + '/res.lib'
+preppdb_source = resources + '/preppdb.pl'
+check_source = resources + '/check.in'
+test_source = resources + '/test.in'
+vdw_source = resources + '/vdwprm'
+
 
 def mine_cmip_output(logs):
     center, density, units = (), (), ()
@@ -53,6 +54,7 @@ def mine_cmip_output(logs):
             units = tuple(float(grid_units_groups.group(i))
                           for i in (1, 2, 3))
     return center, density, units
+
 
 def compute_new_grid(
         prot_center,
@@ -101,31 +103,34 @@ def write_CMIP_input(test_input_file, weighted_center, weighted_density):
 
 # Perform the electrostatic and vdw energies analysis for each ligand
 # DANI: En principio soporta casos en que hay multiples ligandos, pero no se ha provado
-def energies (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
-    reference,
-    snapshots : int,
-    ligands : dict ):
+def energies(
+        input_topology_filename: str,
+        input_trajectory_filename: str,
+        output_analysis_filename: str,
+        reference,
+        snapshots: int,
+        ligands: dict):
 
     # Change elements in a prody topology to meet the CMIP requirements
     # Hydrogens bonded to carbons remain as 'H'
     # Hydrogens bonded to oxygen are renamed as 'HO'
     # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-    def correct_orphan_atoms (prody_topology, prody_selection):
+    def correct_orphan_atoms(prody_topology, prody_selection):
         selection = prody_topology.select(prody_selection)
         # Get all atoms and atom coordinates
         selection_coords = selection.getCoords()
         selection_atoms = list(selection.iterAtoms())
         # Set functions to find the closest atom of a specified atom
-        def get_distance (coords1, coords2):
+
+        def get_distance(coords1, coords2):
             squared_distance = numpy.sum((coords1 - coords2)**2, axis=0)
             distance = numpy.sqrt(squared_distance)
             return distance
-        def find_closest_atom (atom):
+
+        def find_closest_atom(atom):
             current_coords = atom.getCoords()
-            distances = [get_distance(current_coords, c) for c in selection_coords]
+            distances = [get_distance(current_coords, c)
+                         for c in selection_coords]
             sorted_distances = [d for d in distances]
             sorted_distances.sort()
             # We take the second minimum, since the first minimum will be always 0
@@ -155,7 +160,7 @@ def energies (
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
-    def get_frames_energy (frame_pdb):
+    def get_frames_energy(frame_pdb):
         # Parse the pdb file to prody format and the correct it
         original_topology = prody.parsePDB(frame_pdb)
         # Add chains according to the reference topology, since gromacs has deleted chains
@@ -164,7 +169,8 @@ def energies (
         # Hydrogens bonded to oxygen or nitrogen or sulfur must be renamed as HO or HN
         # CMIP uses atom names to set the atom radius so this step is important
         for ligand in ligands:
-            original_topology = correct_orphan_atoms(original_topology, ligand['prody_selection'])
+            original_topology = correct_orphan_atoms(
+                original_topology, ligand['prody_selection'])
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
 
@@ -195,13 +201,13 @@ def energies (
             prody.writePDB(ligand_pdb, selection)
 
             # Calculate the energies with acpype and then mine them
-            #test = !obabel -ipdb $ligand_pdb -omol2 whatever
+            # test = !obabel -ipdb $ligand_pdb -omol2 whatever
             acpype_logs = run([
                 "acpype",
                 "-i",
                 ligand_pdb,
-                #"-n",
-                #"0",
+                # "-n",
+                # "0",
             ], stdout=PIPE).stdout.decode()
 
             energies_file = name + '.acpype/' + name + '.mol2'
@@ -226,7 +232,8 @@ def energies (
 
             # Check the number of atoms matches the number of energies
             if len(list(selection.iterAtoms())) != len(energies):
-                raise SystemExit("Stop!! The number of atoms and energies does not match :/")
+                raise SystemExit(
+                    "Stop!! The number of atoms and energies does not match :/")
 
             # Copy the 'res.lib' file in the local path and open it to 'a'ppend new text
             reslib_filename = name + '_res.lib'
@@ -305,7 +312,7 @@ def energies (
                 lig_density,
                 lig_units)
 
-            test_input_file = repo_path + '/aux/input.in'
+            test_input_file = resources + '/input.in'
             write_CMIP_input(
                 test_input_file,
                 new_center,
@@ -327,12 +334,12 @@ def energies (
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            #print(cmip_logs)
+            # print(cmip_logs)
 
             # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
             # Group the results by reidues adding their values
             residues = {}
-            with open(cmip_output,'r') as file:
+            with open(cmip_output, 'r') as file:
                 lines = list(file)
                 # If this file is empty it means something went wrong with CMIP
                 # We print its logs and exit
@@ -349,23 +356,23 @@ def energies (
                     both = float(line[72:83])
                     # Values greater than 100 are represented as 0
                     # This step is performed to filter 'infinity' values
-                    energies =  (vdw, es, both) if both < 100 else (0, 0, 0)
+                    energies = (vdw, es, both) if both < 100 else (0, 0, 0)
                     if residue in residues:
                         residues[residue] = tuple(
-                            [a+b for a,b in zip(energies, residues[residue])])
+                            [a+b for a, b in zip(energies, residues[residue])])
                     else:
                         residues[residue] = energies
-            
+
             ligand_data.append(residues)
 
         return ligand_data
-        
 
     # Set the number of frames where we extract energies to calculate the average
     frames_number = 100
     frames = None
     if snapshots > frames_number:
-        frames = [f * math.floor(snapshots / frames_number) for f in range(1, frames_number + 1)]
+        frames = [f * math.floor(snapshots / frames_number)
+                  for f in range(1, frames_number + 1)]
     else:
         frames = range(1, snapshots + 1)
 
@@ -377,7 +384,7 @@ def energies (
         current_frame = 'frame' + str(f) + '.pdb'
         # The frame selection input in gromacs works with a 'ndx' file
         frames_ndx = 'frames.ndx'
-        with open(frames_ndx,'w') as file:
+        with open(frames_ndx, 'w') as file:
             file.write('[frames]\n' + str(f))
         p = Popen([
             "echo",
@@ -450,9 +457,12 @@ def energies (
                 residues_es_values_initial[r].append(values[1])
                 residues_both_values_initial[r].append(values[2])
 
-        residues_vdw_avg_initial = [sum(v) / len(v) for v in residues_vdw_values_initial]
-        residues_es_avg_initial = [sum(v) / len(v) for v in residues_es_values_initial]
-        residues_both_avg_initial = [sum(v) / len(v) for v in residues_both_values_initial]
+        residues_vdw_avg_initial = [sum(v) / len(v)
+                                    for v in residues_vdw_values_initial]
+        residues_es_avg_initial = [sum(v) / len(v)
+                                   for v in residues_es_values_initial]
+        residues_both_avg_initial = [sum(v) / len(v)
+                                     for v in residues_both_values_initial]
 
         # Finals
         residues_vdw_values_final = [[] for n in range(residues_number)]
@@ -465,9 +475,12 @@ def energies (
                 residues_es_values_final[r].append(values[1])
                 residues_both_values_final[r].append(values[2])
 
-        residues_vdw_avg_final = [sum(v) / len(v) for v in residues_vdw_values_final]
-        residues_es_avg_final = [sum(v) / len(v) for v in residues_es_values_final]
-        residues_both_avg_final = [sum(v) / len(v) for v in residues_both_values_final]
+        residues_vdw_avg_final = [sum(v) / len(v)
+                                  for v in residues_vdw_values_final]
+        residues_es_avg_final = [sum(v) / len(v)
+                                 for v in residues_es_values_final]
+        residues_both_avg_final = [sum(v) / len(v)
+                                   for v in residues_both_values_final]
 
         # Format the results data and append it to the output data
         output = {
@@ -487,4 +500,4 @@ def energies (
 
     # Finally, export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
+        json.dump({'data': output_analysis}, file)

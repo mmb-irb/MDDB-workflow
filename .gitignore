@@ -1,2 +1,3 @@
-# Ignore python cache
+.gitignore
 __pycache__
+dev/.ipynb_checkpoints/

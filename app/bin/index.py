@@ -9,27 +9,27 @@ import json
 import pytraj as pt
 
 # Import local tools
-from vmd_processor import processor
-from image_and_fit import image_and_fit
-from topology_manager import TopologyReference
-from topology_corrector import topology_corrector
-from get_first_frame import get_first_frame
-from get_backbone import get_backbone
-from get_summarized_trajectory import get_summarized_trajectory
-from get_frames_count import get_frames_count
-from get_box_size import get_box_size
-from get_atoms_count import get_atoms_count
+from tools.vmd_processor import processor
+from tools.image_and_fit import image_and_fit
+from tools.topology_manager import TopologyReference
+from tools.topology_corrector import topology_corrector
+from tools.get_first_frame import get_first_frame
+from tools.get_backbone import get_backbone
+from tools.get_summarized_trajectory import get_summarized_trajectory
+from tools.get_frames_count import get_frames_count
+from tools.get_box_size import get_box_size
+from tools.get_atoms_count import get_atoms_count
 
 # Import local analyses
-from generic_analyses import rmsd, rmsf, rgyr
-from pca import pca
-from pca_contacts import pca_contacts
-from rmsd_per_residue import rmsd_per_residue
-from rmsd_pairwise import rmsd_pairwise
-from distance_per_residue import distance_per_residue
-from hydrogen_bonds import hydrogen_bonds
-from energies import energies
-from pockets import pockets
+from analyses.generic_analyses import rmsd, rmsf, rgyr
+from analyses.pca import pca
+from analyses.pca_contacts import pca_contacts
+from analyses.rmsd_per_residue import rmsd_per_residue
+from analyses.rmsd_pairwise import rmsd_pairwise
+from analyses.distance_per_residue import distance_per_residue
+from analyses.hydrogen_bonds import hydrogen_bonds
+from analyses.energies import energies
+from analyses.pockets import pockets
 
 # Set this workflow to skip steps where the ouput file already exist
 # Change it to False if you want all steps to be done anyway
@@ -39,6 +39,8 @@ skip_repeats = True
 
 # Set a function to check if a process must be run (True) or skipped (False)
 # i.e. check if the output file already exists and reapeated analyses must be skipped
+
+
 def required(analysis_filename: str, skip_repeats=True):
     if os.path.exists(analysis_filename) and skip_repeats:
         return False
@@ -103,7 +105,7 @@ def analysis_prep(
         inputs = json.load(file)
 
     # Set a function to retrieve 'inputs' values and handle missing keys
-    def getInput (input : str):
+    def getInput(input: str):
         return inputs.get(input, None)
 
     # Get the input topology and trajectory filenames
