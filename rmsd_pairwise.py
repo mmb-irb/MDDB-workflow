@@ -25,7 +25,7 @@ def rmsd_pairwise (
     output_analysis = [
         {
             'name': 'Overall',
-            'data': data,
+            'rmsds': data,
         }
     ]
 
@@ -44,11 +44,16 @@ def rmsd_pairwise (
         output_analysis.append(
             {
                 'name': interaction['name'],
-                'data': data,
+                'rmsds': data,
             }
         )
 
+    # Write in the analysis the starting frame and the step between frames
+    # By default the first frame in the reduced trajectory is the first frame (0)
+    start = 0
+    step = pt_trajectory.step
+
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
+        json.dump({ 'data': output_analysis, 'start': start, 'step': step }, file)
     
