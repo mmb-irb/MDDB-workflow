@@ -1,18 +1,20 @@
 # Principal component analysis (PCA)
-
+import math
 from subprocess import run, PIPE, Popen
- 
+
 # Perform the PCA of the trajectory
 # The PCA is performed with the whole trajectory when the size is reasonable
 # When the trajectory is larger than 5000 snapshots we reduce the trajectory
 # A new projection trajectory is made for each eigen vector with 1% or greater explained variance
 # WARNING: Projection trajectories are backbone only
-def pca (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_eigenvalues_filename : str,
-    output_eigenvectors_filename : str,
-    snapshots):
+
+
+def pca(
+        input_topology_filename: str,
+        input_trajectory_filename: str,
+        output_eigenvalues_filename: str,
+        output_eigenvectors_filename: str,
+        snapshots):
 
     # By default we set the whole trajectory as PCA trajectory
     pca_trajectory_filename = input_trajectory_filename
@@ -63,9 +65,9 @@ def pca (
 
     # Read the eigen values file and get an array with all eigen values
     values = []
-    with open(output_eigenvalues_filename,'r') as file:
+    with open(output_eigenvalues_filename, 'r') as file:
         for line in file:
-            if line.startswith(("#","@")):
+            if line.startswith(("#", "@")):
                 continue
             else:
                 values.append(float(line.split()[1]))
@@ -85,7 +87,7 @@ def pca (
             break
 
     # Now make a projection for each suitable eigen vector
-    for ev in range(1,greater+1):
+    for ev in range(1, greater+1):
         strev = str(ev)
         # Set the name of the new projection analysis
         projection = 'pca.proj' + strev + '.xvg'
@@ -93,7 +95,7 @@ def pca (
         projection_trajectory = 'md.pca-' + strev + '.xtc'
         # UNKNOWN USE
         pca_rmsf = 'pca.rmsf' + strev + '.xvg'
-        
+
         # Perform the projection alaysis through the 'anaeig' gromacs command
         p = Popen([
             "echo",
