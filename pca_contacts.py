@@ -72,7 +72,8 @@ def pca_contacts(
 
     output_analysis = []
     for interaction in interactions:
-        residue_lists = interaction["residues_1"] + interaction["residues_2"]
+        residue_lists = (interaction["pt_residues_1"],
+                         interaction["pt_residues_2"])
         # get list of residue pairs and pairwise minimal distances
         if use_pytraj:
             traj = pt.load(trajectory, top=topology)

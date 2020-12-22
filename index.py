@@ -1,5 +1,4 @@
 # This is the starter script
-# test lucia
 # Import python libraries
 import os
 from pathlib import Path
@@ -32,20 +31,6 @@ from hydrogen_bonds import hydrogen_bonds
 from energies import energies
 from pockets import pockets
 
-# General inputs ----------------------------------------------------------------------------
-
-# Main topology and trajectory output file names
-# WARNING: Changing these names here means making changes in all the project
-# i.e. update the api, client and already loaded projects in the database at least
-# topology_filename = "md.imaged.rot.dry.pdb"
-# trajectory_filename = "md.imaged.rot.xtc"
-# trajectory_filename = "md.trr"
-
-# Set the inputs filename
-# This file may be easily generated using the 'input_setter' notebook in the 'dev' directory
-# Alternatively, it may be downloaded from a database project with the API endpoint 'project/inputs'
-# inputs_filename = "inputs.json"
-
 # Set this workflow to skip steps where the ouput file already exist
 # Change it to False if you want all steps to be done anyway
 skip_repeats = True
@@ -63,21 +48,24 @@ def required(analysis_filename: str, skip_repeats=True):
 
 # ------------------------------------------------------------------------------------------
 
+
 # The OUTPUT filenames. They are not customizable since the loader uses these names
 # Thus, these are also the MoDEL names of the files in the database
 topology_filename = "md.imaged.rot.dry.pdb"
 trajectory_filename = "md.imaged.rot.xtc"
+# trajectory_filename = "md.trr"
 
 current_directory = os.getcwd()
-def start (
-    directory: str = current_directory,
-    project: str = None,
-    url: str = 'https://bioexcel-cv19-dev.bsc.es',
-    # The inputs filename is input and output at the same time
-    # Input filename if it is already in the directory
-    # Output filename if you download it from MoDEL
-    inputs_filename : str = 'inputs.json',
-):
+
+
+# The inputs filename is input and output at the same time
+# Input filename if it is already in the directory
+# Output filename if you download it from MoDEL
+def start(
+        directory: str = current_directory,
+        project: str = None,
+        url: str = 'https://bioexcel-cv19-dev.bsc.es',
+        inputs_filename: str = 'inputs.json'):
     # Create the directory if it does not exists
     if not os.path.exists(directory):
         Path(directory).mkdir(parents=True, exist_ok=True)
@@ -95,6 +83,7 @@ def start (
             print('Downloading trajectory')
             trajectory_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + trajectory_filename
+            print(trajectory_url)
             urllib.request.urlretrieve(trajectory_url, trajectory_filename)
         # Download the inputs json file if it does not exists
         if not os.path.exists(inputs_filename):
@@ -102,10 +91,10 @@ def start (
             inputs_url = url + '/api/rest/current/projects/' + \
                 project + '/inputs/'
             urllib.request.urlretrieve(inputs_url, inputs_filename)
-    # Run the analyses
-    run_analyses()
 
 # Run all analyses with the provided topology and trajectory files
+
+
 def analysis_prep(
         topology_filename="md.imaged.rot.dry.pdb",
         trajectory_filename="md.imaged.rot.xtc",
@@ -195,15 +184,15 @@ def analysis_prep(
         interaction['interface_1'] = topology_reference.topology_selection(
             interaction['selection_1'] +
             ' and same residue as exwithin ' +
-            str(cutoff_distance) + 
-            ' of ' + 
+            str(cutoff_distance) +
+            ' of ' +
             interaction['selection_2'])
         # interface_2 is the list of residues from agent 2 which are close to the agent 1
         interaction['interface_2'] = topology_reference.topology_selection(
             interaction['selection_2'] +
             ' and same residue as exwithin ' +
-            str(cutoff_distance) + 
-            ' of ' + 
+            str(cutoff_distance) +
+            ' of ' +
             interaction['selection_1'])
 
         # Translate all residues selections to pytraj notation
@@ -217,7 +206,8 @@ def analysis_prep(
             }
         )
 
-        print('1 -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+        print(
+            '1 -> ' + str(interaction['interface_1'] + interaction['interface_2']))
 
     # Metadata mining --------------------------------------------------------------------------
 
@@ -238,17 +228,17 @@ def analysis_prep(
     ligands = inputs['ligands']
 
     # Set the metadata interactions
-    metadata_interactions = [ {
+    metadata_interactions = [{
         'name': interaction['name'],
-        'agent_1' : interaction['agent_1'],
-        'agent_2' : interaction['agent_2'],
-        'selection_1' : interaction['selection_1'],
-        'selection_2' : interaction['selection_2'],
+        'agent_1': interaction['agent_1'],
+        'agent_2': interaction['agent_2'],
+        'selection_1': interaction['selection_1'],
+        'selection_2': interaction['selection_2'],
         'residues_1': str(interaction['residues_1']),
         'residues_2': str(interaction['residues_2']),
         'interface_1': str(interaction['interface_1']),
         'interface_2': str(interaction['interface_2']),
-    } for interaction in interactions ]
+    } for interaction in interactions]
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
@@ -293,7 +283,7 @@ def analysis_prep(
     with open(metadata_filename, 'w') as file:
         json.dump(metadata, file)
 
-    return metadata, topology_reference, interfaces
+    return metadata, topology_reference, interactions
 
 
 # All analyses ---------------------------------------------------------------------------------
@@ -301,7 +291,7 @@ def run_analyses(
         topology_filename="md.imaged.rot.dry.pdb",
         trajectory_filename="md.imaged.rot.xtc"):
 
-    metadata, topology_reference, interfaces = analysis_prep(
+    metadata, topology_reference, interactions = analysis_prep(
         topology_filename,
         trajectory_filename)
 
@@ -342,7 +332,7 @@ def run_analyses(
         pca_contacts(
             trajectory_filename,
             topology_filename,
-            metadata["INTERFACES"],
+            metadata["INTERACTIONS"],
             contacts_pca_filename)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
@@ -364,20 +354,23 @@ def run_analyses(
     rmsd_pairwise_analysis = 'md.rmsd.pairwise.json'
     if required(rmsd_pairwise_analysis):
         print('- RMSd pairwise')
-        rmsd_pairwise(reduced_pt_trajectory, rmsd_pairwise_analysis, interactions)
+        rmsd_pairwise(reduced_pt_trajectory,
+                      rmsd_pairwise_analysis, interactions)
 
     # Set the distance per residue analysis file name and run the analysis
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     distance_perres_analysis = 'md.dist.perres.json'
     if required(distance_perres_analysis):
         print('- Distance per residue')
-        distance_per_residue(reduced_pt_trajectory, distance_perres_analysis, interactions)
+        distance_per_residue(reduced_pt_trajectory,
+                             distance_perres_analysis, interactions)
 
     # Set the hydrogen bonds analysis file name and run the analysis
     hbonds_analysis = 'md.hbonds.json'
     if required(hbonds_analysis) and len(interactions) > 0:
         print('- Hydrogen bonds')
-        hydrogen_bonds(pt_trajectory, hbonds_analysis, topology_reference, interactions)
+        hydrogen_bonds(pt_trajectory, hbonds_analysis,
+                       topology_reference, interactions)
 
     # Set the energies analysis filename and run the analysis
     energies_analysis = 'md.energies.json'
