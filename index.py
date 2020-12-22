@@ -293,7 +293,7 @@ def analysis_prep(
     with open(metadata_filename, 'w') as file:
         json.dump(metadata, file)
 
-    return metadata, topology_reference, interfaces
+    return metadata, topology_reference, interactions
 
 
 # All analyses ---------------------------------------------------------------------------------
@@ -301,7 +301,7 @@ def run_analyses(
         topology_filename="md.imaged.rot.dry.pdb",
         trajectory_filename="md.imaged.rot.xtc"):
 
-    metadata, topology_reference, interfaces = analysis_prep(
+    metadata, topology_reference, interactions = analysis_prep(
         topology_filename,
         trajectory_filename)
 
@@ -342,7 +342,7 @@ def run_analyses(
         pca_contacts(
             trajectory_filename,
             topology_filename,
-            metadata["INTERFACES"],
+            metadata["INTERACTIONS"],
             contacts_pca_filename)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
