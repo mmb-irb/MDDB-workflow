@@ -54,8 +54,6 @@ skip_repeats = True
 
 # Set a function to check if a process must be run (True) or skipped (False)
 # i.e. check if the output file already exists and reapeated analyses must be skipped
-
-
 def required(analysis_filename: str, skip_repeats=True):
     if os.path.exists(analysis_filename) and skip_repeats:
         return False
@@ -115,9 +113,13 @@ def analysis_prep(
     with open(inputs_filename, 'r') as file:
         inputs = json.load(file)
 
+    # Set a function to retrieve 'inputs' values and handle missing keys
+    def getInput (input : str):
+        return inputs.get(input, None)
+
     # Get the input topology and trajectory filenames
-    original_topology_filename = inputs['original_topology_filename']
-    original_trajectory_filename = inputs['original_trajectory_filename']
+    original_topology_filename = getInput('original_topology_filename')
+    original_trajectory_filename = getInput('original_trajectory_filename')
 
     # Preprocessing ---------------------------------------------------------------------------------
 
@@ -138,7 +140,7 @@ def analysis_prep(
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
     # Fit the trajectory by removing the translation and rotation if it is required
-    preprocess_protocol = inputs['preprocess_protocol']
+    preprocess_protocol = getInput('preprocess_protocol')
     if preprocess_protocol > 0:
         image_and_fit(topology_filename, trajectory_filename,
                       trajectory_filename, preprocess_protocol)
@@ -177,7 +179,7 @@ def analysis_prep(
     print('Processing interactions')
 
     # Read the defined interactions from the inputs file
-    interactions = inputs['interactions']
+    interactions = getInput('interactions')
 
     # Find out all residues and interface residues for each interaction 'agent'
     # Interface residues are defined as by a cuttoff distance in Angstroms
@@ -235,7 +237,7 @@ def analysis_prep(
      cl) = get_atoms_count(topology_filename)
 
     # Extract some additional metadata from the inputs file which is required further
-    ligands = inputs['ligands']
+    ligands = getInput('ligands')
 
     # Set the metadata interactions
     metadata_interactions = [ {
@@ -253,30 +255,30 @@ def analysis_prep(
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
-        'PDBID': inputs['pdbId'],
-        'NAME': inputs['name'],
-        'UNIT': inputs['unit'],
-        'DESCRIPTION': inputs['description'],
-        'AUTHORS': inputs['authors'],
-        'PROGRAM': inputs['program'],
-        'VERSION': inputs['version'],
-        'LICENSE': inputs['license'],
-        'LINKCENSE': inputs['linkcense'],
-        'CITATION': inputs['citation'],
-        'LENGTH': inputs['length'],
-        'TIMESTEP': inputs['timestep'],
+        'PDBID': getInput('pdbId'),
+        'NAME': getInput('name'),
+        'UNIT': getInput('unit'),
+        'DESCRIPTION': getInput('description'),
+        'AUTHORS': getInput('authors'),
+        'PROGRAM': getInput('program'),
+        'VERSION': getInput('version'),
+        'LICENSE': getInput('license'),
+        'LINKCENSE': getInput('linkcense'),
+        'CITATION': getInput('citation'),
+        'LENGTH': getInput('length'),
+        'TIMESTEP': getInput('timestep'),
         'SNAPSHOTS': snapshots,
-        'FREQUENCY': inputs['frequency'],
-        'FF': inputs['ff'],
-        'TEMP': inputs['temp'],
-        'WAT': inputs['wat'],
-        'BOXTYPE': inputs['boxtype'],
+        'FREQUENCY': getInput('frequency'),
+        'FF': getInput('ff'),
+        'TEMP': getInput('temp'),
+        'WAT': getInput('wat'),
+        'BOXTYPE': getInput('boxtype'),
         'BOXSIZEX': boxsizex,
         'BOXSIZEY': boxsizey,
         'BOXSIZEZ': boxsizez,
-        'ENSEMBLE': inputs['ensemble'],
-        'PCOUPLING': inputs['pcoupling'],
-        'MEMBRANE': inputs['membrane'],
+        'ENSEMBLE': getInput('ensemble'),
+        'PCOUPLING': getInput('pcoupling'),
+        'MEMBRANE': getInput('membrane'),
         'SYSTATS': systats,
         'PROTATS': protats,
         'PROT': prot,
@@ -284,10 +286,10 @@ def analysis_prep(
         'SOL': sol,
         'NA': na,
         'CL': cl,
-        'LIGANDS': inputs['ligands'],
-        'DOMAINS': inputs['domains'],
+        'LIGANDS': getInput('ligands'),
+        'DOMAINS': getInput('domains'),
         'INTERACTIONS': metadata_interactions,
-        'CHAINNAMES': inputs['chainnames'],
+        'CHAINNAMES': getInput('chainnames'),
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
