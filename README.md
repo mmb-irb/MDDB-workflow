@@ -2,21 +2,17 @@
 
 
 
-## How to make the workflow executable
+## Installation
 
-change permissions for `model_wf.py` file by doing
+It is recommended to create a virtual environment. You can do this using Conda and the `environment.yml` file, with:
 
-```chmod +x model_wf.py```
+```conda env create --file environment.yml```
 
-then, create a symlink
+From the workflow's directory then execute the following:
 
-```ln -s model_wf.py model_wf```
+```python setup.py install```
 
-finally, add directory that contains the symlink to `PATH`
-
-```export PATH=$(pwd):$PATH```
-
-and you're done!
+This will add the package directory to `PATH` and create the entry point `mwf` to be used when executing the workflow.
 
 ---
 
@@ -24,41 +20,31 @@ and you're done!
 
 print help message:
 
-```model_wf --help```
+```mwf --help```
+
+or  ```mwf -h```
 
 **actions**
 
-* run analysis on directory which contains topology, trajectory and input files
+* run analysis on current directory, which is asumed to contain topology, trajectory and input files
 
-```model_wf -analyze_directory <directory path>```
+```mwf```
 
-you can also specify the trajectory filename with `-topology_filename` and the topology filename with `-topology_filename` (they must be located in the directory path specified).
+you can also specify a different directory with the input files using the `-dir` or `--working_dir` options.
 
 * run analysis from already uploaded project
 
-```model_wf -analyze_project <project name> <directory name> <URL (optional)>```
+```model_wf -p <project name>```
 
-you can again specify trajectory and topology filenames.
+By default the data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
 
 * run single analysis from workflow
 
-```model_wf -single_analysis <analysis name>```
-
-you can specify the directory with all the needed files with `-working_dir`, otherwise it will use the current directory. Topology and trajectory files can be specified like previously mentioned. 
+```model_wf -a <analysis name>```
 
 Analysis name choices: `{rmsd,rmsf,rgyr,pca,pca_contacts,rmsd_per_residue,rmsd_pairwise,distance_per_residue,hydrogen_bonds,energies,pockets}`
 
 _Other options:_
 
-`-output_analysis_filename`: output filename for the analysis.
-
-`-pca_eigenval_file/-pca_eigenvec_file`: eigenvalue and eigenvector filenames for PCA analysis.
-
-`--analysis_prep`: if used, before the specified analysis it will run preparation where it generates metadata, computes interfaces, etc. 
-
-`-interface_cutoff_distance`: cut-off distance to be used when computing interfaces.
-
-`-inputs_filename`: input data filename.
-
-`-metadata_filename`: metadata filename.
+`-in`: input filename for the analysis. Default: `inputs.json`
 

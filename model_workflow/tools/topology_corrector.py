@@ -5,21 +5,23 @@ from collections import Counter
 
 # Set the path to the 'addChains' script
 repo_path = str(Path(__file__).parent)
-add_chains_script = repo_path + '/aux/addChainCV19.pl'
+add_chains_script = repo_path + '/utils/resources/addChainCV19.pl'
 
 # Analyze the topology looking for irregularities and then modify the topology to standarize the format
 # Both analysis and modifications are carried by Prody
-# 
+#
 # Supported cases:
-# 
+#
 # * Missing chains -> Chains are added through an external script
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * (Not supported yet) Hyrdogens are placed at the end ->
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
-def topology_corrector (
-    input_topology_filename : str,
-    output_topology_filename : str ):
+
+
+def topology_corrector(
+        input_topology_filename: str,
+        output_topology_filename: str):
 
     # Store some messages for the final logs
     logs = []
@@ -87,7 +89,8 @@ def topology_corrector (
             # Set the new chain
             chain_letters.append(last_chain)
             r.getChain().setChid(last_chain)
-            logs.append('- One of the repeated chains "' + last_repeated_chain + '" has been renamed as "' + last_chain + '"')
+            logs.append('- One of the repeated chains "' + last_repeated_chain +
+                        '" has been renamed as "' + last_chain + '"')
         # If is not repeated add it to the list
         else:
             last_chain = chain
@@ -97,7 +100,8 @@ def topology_corrector (
     reps = len(repeated_chains)
     if reps > 0:
         modified = True
-        print('WARNING! There are ' + str(reps) + ' repated chains (e.g. ' + repeated_chains[0] + ')')
+        print('WARNING! There are ' + str(reps) +
+              ' repated chains (e.g. ' + repeated_chains[0] + ')')
 
     # ------------------------------------------------------------------------------------------
     # Repeated residues ------------------------------------------------------------------------
@@ -129,8 +133,9 @@ def topology_corrector (
     if reps > 0:
         modified = True
         logs.append('- Some repeated residues have been re-numerated')
-        print('WARNING! There are ' + str(reps) + ' repated residues (e.g. ' + repeated_residues[0] + ')')
-        
+        print('WARNING! There are ' + str(reps) +
+              ' repated residues (e.g. ' + repeated_residues[0] + ')')
+
     # ------------------------------------------------------------------------------------------
     # Repeated atoms --------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
@@ -141,7 +146,7 @@ def topology_corrector (
     # ATOM      1  C   UNK L   0   -->   ATOM      1  C2  UNK L   0
     # ATOM      1  C   UNK L   0   -->   ATOM      1  C3  UNK L   0
 
-    reporter = 0 # Just count how many atoms have been renamed for the report
+    reporter = 0  # Just count how many atoms have been renamed for the report
     residues = test.iterResidues()
     for r in residues:
         # Iterate over the residue atoms and change all their names
@@ -188,7 +193,7 @@ def topology_corrector (
 
 
 # Set a function to get the next letter from an input letter in alphabetic order
-def get_next_letter (letter : str):
+def get_next_letter(letter: str):
     if letter == 'z' or letter == 'Z':
         raise SystemExit("Limit of chain letters has been reached")
     next_letter = chr(ord(letter) + 1)

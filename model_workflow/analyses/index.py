@@ -10,27 +10,27 @@ import json
 import pytraj as pt
 
 # Import local tools
-from tools.vmd_processor import processor
-from tools.image_and_fit import image_and_fit
-from tools.topology_manager import TopologyReference
-from tools.topology_corrector import topology_corrector
-from tools.get_first_frame import get_first_frame
-from tools.get_backbone import get_backbone
-from tools.get_summarized_trajectory import get_summarized_trajectory
-from tools.get_frames_count import get_frames_count
-from tools.get_box_size import get_box_size
-from tools.get_atoms_count import get_atoms_count
+from model_workflow.tools.vmd_processor import processor
+from model_workflow.tools.image_and_fit import image_and_fit
+from model_workflow.tools.topology_manager import TopologyReference
+from model_workflow.tools.topology_corrector import topology_corrector
+from model_workflow.tools.get_first_frame import get_first_frame
+from model_workflow.tools.get_backbone import get_backbone
+from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
+from model_workflow.tools.get_frames_count import get_frames_count
+from model_workflow.tools.get_box_size import get_box_size
+from model_workflow.tools.get_atoms_count import get_atoms_count
 
 # Import local analyses
-from analyses.generic_analyses import rmsd, rmsf, rgyr
-from analyses.pca import pca
-from analyses.pca_contacts import pca_contacts
-from analyses.rmsd_per_residue import rmsd_per_residue
-from analyses.rmsd_pairwise import rmsd_pairwise
-from analyses.distance_per_residue import distance_per_residue
-from analyses.hydrogen_bonds import hydrogen_bonds
-from analyses.energies import energies
-from analyses.pockets import pockets
+from model_workflow.analyses.generic_analyses import rmsd, rmsf, rgyr
+from model_workflow.analyses.pca import pca
+from model_workflow.analyses.pca_contacts import pca_contacts
+from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
+from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
+from model_workflow.analyses.distance_per_residue import distance_per_residue
+from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
+from model_workflow.analyses.energies import energies
+from model_workflow.analyses.pockets import pockets
 
 # Set this workflow to skip steps where the ouput file already exist
 # Change it to False if you want all steps to be done anyway
@@ -369,7 +369,8 @@ def run_analyses(
     rmsd_perres_analysis = 'md.rmsd.perres.json'
     if required(rmsd_perres_analysis):
         print('- RMSd per residue')
-        rmsd_per_residue(reduced_pt_trajectory, rmsd_perres_analysis, topology_reference)
+        rmsd_per_residue(reduced_pt_trajectory,
+                         rmsd_perres_analysis, topology_reference)
 
     # Set the RMSd pairwise analysis file name and run the analysis
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one

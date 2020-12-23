@@ -1,0 +1,3 @@
+[console_scripts]
+mwf = model_workflow.mwf:main
+

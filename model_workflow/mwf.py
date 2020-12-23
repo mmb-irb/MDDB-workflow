@@ -2,21 +2,22 @@
 
 from pathlib import Path
 
+import math
 import argparse
 
 import pytraj as pt
 
-import index as model_index
+import model_workflow.analyses.index as model_index
 
-from analyses.generic_analyses import rmsd, rmsf, rgyr
-from analyses.pca import pca
-from analyses.pca_contacts import pca_contacts
-from analyses.rmsd_per_residue import rmsd_per_residue
-from analyses.rmsd_pairwise import rmsd_pairwise
-from analyses.distance_per_residue import distance_per_residue
-from analyses.hydrogen_bonds import hydrogen_bonds
-from analyses.energies import energies
-from analyses.pockets import pockets
+from model_workflow.analyses.generic_analyses import rmsd, rmsf, rgyr
+from model_workflow.analyses.pca import pca
+from model_workflow.analyses.pca_contacts import pca_contacts
+from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
+from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
+from model_workflow.analyses.distance_per_residue import distance_per_residue
+from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
+from model_workflow.analyses.energies import energies
+from model_workflow.analyses.pockets import pockets
 
 
 def required_length(nmin, nmax):
@@ -61,20 +62,25 @@ def execute_workflow(args):
         reduced_pt_trajectory = None
         # First, set the maximum number of frames for the reduced trajectory
         reduced_trajectory_frames = 200
-        # If the current trajectory has already less frames than the maximum then use it also as reduced
+        # If the current trajectory has already less frames
+        # than the maximum then use it also as reduced
         if trajectory_frames < reduced_trajectory_frames:
             reduced_pt_trajectory = pt_trajectory
             # Add a step value which will be required later
             reduced_pt_trajectory.step = 1
-        # Otherwise, create a reduced trajectory with as much frames as specified above
+        # Otherwise, create a reduced trajectory with
+        # as much frames as specified above
         # These frames are picked along the trajectory
         else:
-            # Calculate how many frames we must jump between each reduced frame to never exceed the limit
-            # The '- 1' is because the first frame is 0 (you have to do the math to understand)
+            # Calculate how many frames we must jump between each
+            # reduced frame to never exceed the limit
+            # The '- 1' is because the first frame is 0
+            # (you have to do the math to understand)
             step = math.floor(trajectory_frames /
                               (reduced_trajectory_frames - 1))
             reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
-            # Add the step value to the reduced trajectory explicitly. It will be required later
+            # Add the step value to the reduced trajectory explicitly.
+            # It will be required later
             reduced_pt_trajectory.step = step
 
         analysis_functions = {
@@ -153,49 +159,49 @@ def execute_workflow(args):
     print("\nDone!")
 
 
-if __name__ == "__main__":
-    # define arguments
-    parser = argparse.ArgumentParser(description="MoDEL Workflow")
+# define arguments
+parser = argparse.ArgumentParser(description="MoDEL Workflow")
 
-    # optional args
-    parser.add_argument(
-        "-dir", "--working_dir",
-        default=Path.cwd(),
-        help="directory where to perform analysis. "
-        "If empty, will use current directory.")
+# optional args
+parser.add_argument(
+    "-dir", "--working_dir",
+    default=Path.cwd(),
+    help="directory where to perform analysis. "
+    "If empty, will use current directory.")
 
-    parser.add_argument(
-        "-p", "--project",
-        default=None,
-        help="If given a project name, trajectory and "
-        "topology files will be downloaded from remote server.")
+parser.add_argument(
+    "-p", "--project",
+    default=None,
+    help="If given a project name, trajectory and "
+    "topology files will be downloaded from remote server.")
 
-    parser.add_argument(
-        "-url",
-        default="https://bioexcel-cv19-dev.bsc.es",
-        help="URL from where to download project")
+parser.add_argument(
+    "-url",
+    default="https://bioexcel-cv19-dev.bsc.es",
+    help="URL from where to download project")
 
-    parser.add_argument(
-        "-in", "--inputs_filename",
-        default="inputs.json",
-        help="path to inputs filename")
+parser.add_argument(
+    "-in", "--inputs_filename",
+    default="inputs.json",
+    help="path to inputs filename")
 
-    parser.add_argument(
-        "-a", "--single_analysis",
-        choices=[
-            "rmsd",
-            "rmsf",
-            "rgyr",
-            "pca",
-            "pca_contacts",
-            "rmsd_per_residue",
-            "rmsd_pairwise",
-            "distance_per_residue",
-            "hydrogen_bonds",
-            "energies",
-            "pockets"
-        ],
-        help="Indicate single analysis to perform.")
+parser.add_argument(
+    "-a", "--single_analysis",
+    choices=[
+        "rmsd",
+        "rmsf",
+        "rgyr",
+        "pca",
+        "pca_contacts",
+        "rmsd_per_residue",
+        "rmsd_pairwise",
+        "distance_per_residue",
+        "hydrogen_bonds",
+        "energies",
+        "pockets"],
+    help="Indicate single analysis to perform.")
 
+
+def main():
     args = parser.parse_args()
     execute_workflow(args)

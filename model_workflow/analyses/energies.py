@@ -27,7 +27,7 @@ from subprocess import run, PIPE, Popen
 import json
 
 # Set the path to auxiliar files required for this analysis
-resources = str(Path(__file__).parent.parent / "lib" / "resources")
+resources = str(Path(__file__).parent / "utils" / "resources")
 source_reslib = resources + '/res.lib'
 preppdb_source = resources + '/preppdb.pl'
 check_source = resources + '/check.in'
