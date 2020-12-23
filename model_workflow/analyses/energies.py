@@ -170,7 +170,7 @@ def energies(
         # CMIP uses atom names to set the atom radius so this step is important
         for ligand in ligands:
             original_topology = correct_orphan_atoms(
-                original_topology, ligand['prody_selection'])
+                original_topology, ligand['prody'])
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
 
@@ -197,7 +197,7 @@ def energies(
             # Create a new pdb only with the current ligand
             name = ligand['name']
             ligand_pdb = name + '.pdb'
-            selection = original_topology.select(ligand['prody_selection'])
+            selection = original_topology.select(ligand['prody'])
             prody.writePDB(ligand_pdb, selection)
 
             # Calculate the energies with acpype and then mine them
