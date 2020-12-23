@@ -27,7 +27,7 @@ from subprocess import run, PIPE, Popen
 import json
 
 # Set the path to auxiliar files required for this analysis
-resources = str(Path(__file__).parent / "utils" / "resources")
+resources = str(Path(__file__).parent.parent / "utils" / "resources")
 source_reslib = resources + '/res.lib'
 preppdb_source = resources + '/preppdb.pl'
 check_source = resources + '/check.in'
@@ -160,7 +160,7 @@ def energies(
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
-    def get_frames_energy(frame_pdb):
+    def get_frame_energy(frame_pdb):
         # Parse the pdb file to prody format and the correct it
         original_topology = prody.parsePDB(frame_pdb)
         # Add chains according to the reference topology, since gromacs has deleted chains
@@ -180,7 +180,8 @@ def energies(
         selection = original_topology.select('protein')
         prody.writePDB(protein_pdb, selection)
 
-        # Get the 'cmip' input file
+        print('hola')
+        # Get the cmip protein input file
         protein_cmip = 'protein.cmip.pdb'
         run([
             "perl",
@@ -189,6 +190,7 @@ def energies(
             protein_pdb,
             protein_cmip,
         ], stdout=PIPE).stdout.decode()
+        print('adios')
 
         # Prepare the ligand files for each ligand
         ligand_data = []
@@ -259,7 +261,8 @@ def energies(
                     line = residue + atomname + element + energy
                     reslib.write(line + '\n')
 
-            # Get the cmip input file
+            # Get the cmip ligand input file
+            print('hola 2')
             ligand_cmip = name + '.cmip.pdb'
             run([
                 "perl",
@@ -268,6 +271,7 @@ def energies(
                 ligand_pdb,
                 ligand_cmip,
             ], stdout=PIPE).stdout.decode()
+            print('adios 2')
 
             cmip_output = 'protein-' + name + '.energy.pdb'
 
@@ -406,7 +410,7 @@ def energies(
         p.stdout.close()
         # Run the main analysis over the current frame
         # Append the result data for each ligand
-        energies_data = get_frames_energy(current_frame)
+        energies_data = get_frame_energy(current_frame)
         for i, data in enumerate(energies_data):
             ligands_data[i].append(data)
         # Delete current frame files before going for the next frame

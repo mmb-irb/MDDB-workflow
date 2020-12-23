@@ -279,7 +279,7 @@ def analysis_prep(
         'SOL': sol,
         'NA': na,
         'CL': cl,
-        'LIGANDS': getInput('ligands'),
+        'LIGANDS': ligands,
         'DOMAINS': getInput('domains'),
         'INTERACTIONS': metadata_interactions,
         'CHAINNAMES': getInput('chainnames'),
@@ -288,7 +288,7 @@ def analysis_prep(
     with open(metadata_filename, 'w') as file:
         json.dump(metadata, file)
 
-    return metadata, topology_reference, interactions
+    return topology_reference, interactions, ligands, snapshots
 
 
 # All analyses ---------------------------------------------------------------------------------
@@ -296,7 +296,7 @@ def run_analyses(
         topology_filename="md.imaged.rot.dry.pdb",
         trajectory_filename="md.imaged.rot.xtc"):
 
-    metadata, topology_reference, interactions = analysis_prep(
+    topology_reference, interactions, ligands, snapshots = analysis_prep(
         topology_filename,
         trajectory_filename)
 
@@ -329,7 +329,7 @@ def run_analyses(
     if required(eigenvalues_filename) or required(eigenvectors_filename):
         print('- PCA')
         pca(topology_filename, trajectory_filename,
-            eigenvalues_filename, eigenvectors_filename, metadata["SNAPSHOTS"])
+            eigenvalues_filename, eigenvectors_filename, snapshots)
 
     contacts_pca_filename = 'contacts_PCA.json'
     if required(contacts_pca_filename):
@@ -398,16 +398,16 @@ def run_analyses(
 
     # Set the energies analysis filename and run the analysis
     energies_analysis = 'md.energies.json'
-    if required(energies_analysis) and len(metadata["LIGANDS"]) > 0:
+    if required(energies_analysis) and len(ligands) > 0:
         print('- Energies')
         energies(topology_filename, trajectory_filename,
-                 energies_analysis, topology_reference, metadata["SNAPSHOTS"], metadata["LIGANDS"])
+                 energies_analysis, topology_reference, snapshots, ligands)
 
     # Set the pockets analysis filename and run the analysis
     pockets_analysis = 'md.pockets.json'
     if required(pockets_analysis):
         print('- Pockets')
         pockets(topology_filename, trajectory_filename,
-                pockets_analysis, topology_reference, metadata["SNAPSHOTS"])
+                pockets_analysis, topology_reference, snapshots)
 
     print('Done!')

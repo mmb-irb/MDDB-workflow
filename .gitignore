@@ -2,3 +2,4 @@
 __pycache__
 dev/.ipynb_checkpoints/
 model_workflow.egg-info
+model_workflow/utils/resources/input.in
