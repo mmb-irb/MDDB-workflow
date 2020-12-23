@@ -10,6 +10,12 @@ It is recommended to create a virtual environment. You can do this using Conda a
 
 From the workflow's directory then execute the following:
 
+In DEVELOPMENT:
+
+```pip install -e .```
+
+In PRODUCTION:
+
 ```python setup.py install```
 
 This will install the package and create the entry point `mwf` to be used when executing the workflow.
