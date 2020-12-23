@@ -219,7 +219,7 @@ def analysis_prep(
     print('Mining metadata')
 
     # Count the number of snapshots
-    snapshots = get_frames_count(trajectory_filename)
+    snapshots = get_frames_count(topology_filename, trajectory_filename)
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
