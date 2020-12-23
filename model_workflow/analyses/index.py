@@ -337,7 +337,7 @@ def run_analyses(
         pca_contacts(
             trajectory_filename,
             topology_filename,
-            metadata["INTERACTIONS"],
+            interactions,
             contacts_pca_filename)
 
     # Set the pytraj trayectory, which is further used in all pytraj analyses
