@@ -12,7 +12,7 @@ From the workflow's directory then execute the following:
 
 ```python setup.py install```
 
-This will add the package directory to `PATH` and create the entry point `mwf` to be used when executing the workflow.
+This will install the package and create the entry point `mwf` to be used when executing the workflow.
 
 ---
 
