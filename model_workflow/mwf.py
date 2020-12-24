@@ -50,7 +50,7 @@ def execute_workflow(args):
             topology_filename, trajectory_filename)
     else:
         # run analysis prep
-        metadata, topology_reference, interactions = model_index.analysis_prep(
+        topology_reference, interactions, ligands, snapshots = model_index.analysis_prep(
             inputs_filename=args.inputs_filename)
 
         # get reduced trajectory
@@ -105,7 +105,7 @@ def execute_workflow(args):
                 "input_trajectory_filename": trajectory_filename,
                 "output_eigenvalues_filename": "pca.eigenval.xvg",
                 "output_eigenvectors_filename": "eigenvec.trr",
-                "snapshots": metadata["SNAPSHOTS"]
+                "snapshots": snapshots
             }),
             "pca_contacts": (pca_contacts, {
                 "trajectory": trajectory_filename,
@@ -139,15 +139,15 @@ def execute_workflow(args):
                 "input_trajectory_filename": trajectory_filename,
                 "output_analysis_filename": "md.energies.json",
                 "reference": topology_reference,
-                "snapshots": metadata["SNAPSHOTS"],
-                "ligands": metadata["LIGANDS"]
+                "snapshots": snapshots,
+                "ligands": ligands
             }),
             "pockets": (pockets, {
                 "input_topology_filename": topology_filename,
                 "input_trajectory_filename": trajectory_filename,
                 "output_analysis_filename": "md.pockets.json",
                 "topology_reference": topology_reference,
-                "snapshots": metadata["SNAPSHOTS"]
+                "snapshots":ligands
             })
         }
 
