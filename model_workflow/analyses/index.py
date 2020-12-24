@@ -84,7 +84,6 @@ def start(
             print('Downloading trajectory')
             trajectory_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + trajectory_filename
-            print(trajectory_url)
             urllib.request.urlretrieve(trajectory_url, trajectory_filename)
         # Download the inputs json file if it does not exists
         if not os.path.exists(inputs_filename):
