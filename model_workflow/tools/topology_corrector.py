@@ -4,7 +4,7 @@ from subprocess import run, PIPE
 from collections import Counter
 
 # Set the path to the 'addChains' script
-repo_path = str(Path(__file__).parent)
+repo_path = str(Path(__file__).parent.parent)
 add_chains_script = repo_path + '/utils/resources/addChainCV19.pl'
 
 # Analyze the topology looking for irregularities and then modify the topology to standarize the format
