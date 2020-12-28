@@ -129,7 +129,7 @@ def execute_workflow(args):
                 "interactions": interactions
             }),
             "hydrogen_bonds": (hydrogen_bonds, {
-                "pt_trajectory": pt_trajectory,
+                "pt_trajectory": reduced_pt_trajectory,
                 "output_analysis_filename": "md.hbonds.json",
                 "topology_reference": topology_reference,
                 "interactions": interactions

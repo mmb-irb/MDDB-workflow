@@ -389,10 +389,17 @@ def run_analyses(
                              distance_perres_analysis, interactions)
 
     # Set the hydrogen bonds analysis file name and run the analysis
+    # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
+    # WARNING: However, the output file size depends on the trajectory
+    # WARNING: Files have no limit, but analyses must be no heavier than 16Mb in BSON format
+    # WARNING: In case of large surface interaction the output analysis may be larger than the limit
+    # DANI: Esto no puede quedar así
+    # DANI: Me sabe muy mal perder resolución con este análisis, porque en cáculo es muy rápido
+    # DANI: Hay que crear un sistema de carga en mongo alternativo para análisis pesados
     hbonds_analysis = 'md.hbonds.json'
     if required(hbonds_analysis) and len(interactions) > 0:
         print('- Hydrogen bonds')
-        hydrogen_bonds(pt_trajectory, hbonds_analysis,
+        hydrogen_bonds(reduced_pt_trajectory, hbonds_analysis,
                        topology_reference, interactions)
 
     # Set the energies analysis filename and run the analysis
