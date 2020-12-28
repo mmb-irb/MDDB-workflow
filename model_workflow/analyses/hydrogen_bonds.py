@@ -80,8 +80,11 @@ def hydrogen_bonds (
                     donor_atom_index_list.append(get_atom_index(donor, donor_atom))
                     hydrogen_atom_index_list.append(get_atom_index(donor, hydrogen_atom))
                     # List 'd0.values' because it is a ndarray, which is not JSON serializable
+                    # Then convert the 0s and 1s into trues and falses
+                    # This is because booleans are lighter once parsed in hte database
+                    values = list( map(bool, (map(int, d0.values))) )
                     #hbond_values.append(' '.join(map(str, d0.values)))
-                    hbond_values.append(list(map(int, d0.values))) 
+                    hbond_values.append(values) 
 
         # Write 
         output_analysis.append(
