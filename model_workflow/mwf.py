@@ -114,17 +114,17 @@ def execute_workflow(args):
                 "output_analysis_filename": "contacts_PCA.json"
             }),
             "rmsd_per_residue": (rmsd_per_residue, {
-                "pt_trajectory": pt_trajectory,
+                "pt_trajectory": reduced_pt_trajectory,
                 "output_analysis_filename": "md.rmsd.perres.json",
                 "topology_reference": topology_reference
             }),
             "rmsd_pairwise": (rmsd_pairwise, {
-                "pt_trajectory": pt_trajectory,
+                "pt_trajectory": reduced_pt_trajectory,
                 "output_analysis_filename": "md.rmsd.pairwise.json",
                 "interactions": interactions
             }),
             "distance_per_residue": (distance_per_residue, {
-                "pt_trajectory": pt_trajectory,
+                "pt_trajectory": reduced_pt_trajectory,
                 "output_analysis_filename": "md.dist.perres.json",
                 "interactions": interactions
             }),
