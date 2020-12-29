@@ -180,7 +180,6 @@ def energies(
         selection = original_topology.select('protein')
         prody.writePDB(protein_pdb, selection)
 
-        print('hola')
         # Get the cmip protein input file
         protein_cmip = 'protein.cmip.pdb'
         run([
@@ -190,7 +189,6 @@ def energies(
             protein_pdb,
             protein_cmip,
         ], stdout=PIPE).stdout.decode()
-        print('adios')
 
         # Prepare the ligand files for each ligand
         ligand_data = []
@@ -262,7 +260,6 @@ def energies(
                     reslib.write(line + '\n')
 
             # Get the cmip ligand input file
-            print('hola 2')
             ligand_cmip = name + '.cmip.pdb'
             run([
                 "perl",
@@ -271,7 +268,6 @@ def energies(
                 ligand_pdb,
                 ligand_cmip,
             ], stdout=PIPE).stdout.decode()
-            print('adios 2')
 
             cmip_output = 'protein-' + name + '.energy.pdb'
 
