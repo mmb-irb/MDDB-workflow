@@ -152,7 +152,7 @@ def execute_workflow(args):
         }
 
         # execute single analysis function
-        print(f"\nExecuting analys function {args.single_analysis}...")
+        print(f"\nExecuting analysis function {args.single_analysis}...")
         analysis_func, analysis_args = analysis_functions[args.single_analysis]
         analysis_func(**analysis_args)
 
