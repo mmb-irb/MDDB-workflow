@@ -147,7 +147,7 @@ def execute_workflow(args):
                 "input_trajectory_filename": trajectory_filename,
                 "output_analysis_filename": "md.pockets.json",
                 "topology_reference": topology_reference,
-                "snapshots":ligands
+                "snapshots": snapshots,
             })
         }
 
