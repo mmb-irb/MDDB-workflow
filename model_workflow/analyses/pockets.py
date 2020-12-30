@@ -170,9 +170,11 @@ def pockets (
                 pockets[index] = pockets_count
 
     # Get the first 10 pockets with more points
+    pockets_number = 10
+
     # Exclude the first result which will always be 0 and it stands for no-pocket points
     biggest_pockets = collections.Counter(pockets).most_common()
-    if len(biggest_pockets) > 10:
+    if len(biggest_pockets) > pockets_number:
         biggest_pockets = collections.Counter(pockets).most_common()[1:11]
 
     # First of all, get all header lines from the original grid file
@@ -196,6 +198,7 @@ def pockets (
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
     for i, p in enumerate(biggest_pockets):
         pocket_name = "p" + str(i+1)
+        print('Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
         # Create the new grid for this pocket, where all values from other pockets are set to 0
         pocket_value = p[0]
         new_grid_values = [str(v).ljust(5,'0') if pockets[i] == pocket_value else '0.000' for i, v in enumerate(grid_values)]
@@ -254,28 +257,44 @@ def pockets (
             new_pdb_filename,
         ], stdout=PIPE).stdout.decode()
 
-        # Mine data from the mdpocket output file
+        # Mine data from the mdpocket 'descriptors' output file
+        descriptors_data = {}
         mdpocket_descriptors_filename = pocket_output + '_descriptors.txt'
-        data = {}
         with open(mdpocket_descriptors_filename,'r') as file:
             # The '[:-1]' is to remove the break line at the end of each line
             entries = re.split("[ ]+", next(file)[:-1])
             for entry in entries:
-                data[entry] = []
+                descriptors_data[entry] = []
             for line in file:
                 line_data = re.split("[ ]+", line[:-1])
                 for i, value in enumerate(line_data):
-                    data[entries[i]].append(value)
+                    descriptors_data[entries[i]].append(value)
+
+        # Mine the atoms implicated in each pocket each frame
+        # In this file atoms are listed for each frame, but they are always the same
+        # For this reason, we mine only atoms in the first frame
+        atoms = []
+        atoms_filename = pocket_output + '_mdpocket_atoms.pdb'
+        with open(atoms_filename,'r') as file:
+            for line in file:
+                line_data = re.split("[ ]+", line[:-1])
+                if line_data[0] == 'MODEL':
+                    continue
+                if line_data[0] == 'ATOM':
+                    atoms.append(int(line_data[1]))
+                if line_data[0] == 'ENDMDL':
+                    break
 
         # Format the mined data and append it to the output data
-        # NEVER FORGET: The 'data' object contains a lot of additional data, not only pocket volumes
+        # NEVER FORGET: The 'descriptors_data' object contains a lot of data, not only pocket volumes
+        # (e.g. drugability score)
         # DANI: Habría que sentarnos un día a ver que otros valores queremos quedarnos
         output = {
             'name': pocket_name,
-            'volumes': list(map(float, data['pock_volume'])),
+            'volumes': list(map(float, descriptors_data['pock_volume'])),
+            'atoms': atoms,
         }
-        #for entry in data.keys():
-        #    output[entry] = data[entry]
+
         output_analysis.append(output)
 
     # Export the analysis in json format
