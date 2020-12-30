@@ -138,23 +138,33 @@ def energies(
             index = distances.index(smallest_distance)
             closest_atom = selection_atoms[index]
             return closest_atom
+            
         # Update the element of each hydrogen according to CMIP needs
         for atom in selection_atoms:
-            if atom.getName() == 'H':
+            if atom.getElement() == 'H':
                 bonded_heavy_atom = find_closest_atom(atom).getElement()
                 # Hydrogens bonded to carbons remain as 'H'
                 if bonded_heavy_atom == 'C':
                     continue
                 # Hydrogens bonded to oxygen are renamed as 'HO'
-                if bonded_heavy_atom == 'O':
+                elif bonded_heavy_atom == 'O':
                     atom.setElement('HO')
                 # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-                if bonded_heavy_atom == 'N' or bonded_heavy_atom == 'S':
+                elif bonded_heavy_atom == 'N' or bonded_heavy_atom == 'S':
                     atom.setElement('HN')
+                else:
+                    raise SystemExit('ERROR: Hydrogen bonded to not supported heavy atom')
+                # Update other elements naming
                 if atom.getName() == 'CL':
                     atom.setElement('Cl')
                 if atom.getName() == 'BR':
                     atom.setElement('Br')
+                if atom.getName() == 'ZN':
+                    atom.setElement('Zn')
+                if atom.getName() == 'NA':
+                    atom.setElement('Na')
+                if atom.getName() == 'MG':
+                    atom.setElement('Mg')
         # Return the corrected prody topology
         return prody_topology
 
