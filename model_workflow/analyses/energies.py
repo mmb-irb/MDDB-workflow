@@ -17,6 +17,7 @@
 # Gelpí, J.L., Kalko, S.G., Barril, X., Cirera, J., de la Cruz, X., Luque, F.J. and Orozco, M. (2001), Classical molecular interaction potentials: Improved setup procedure in molecular dynamics simulations of proteins. Proteins, 45: 428-437. doi:10.1002/prot.1159
 
 # Imports libraries
+import os
 from pathlib import Path
 import prody
 import re
@@ -111,12 +112,12 @@ def energies(
         snapshots: int,
         ligands: dict):
 
-    # Change elements in a prody topology to meet the CMIP requirements
+    # Change elements in a prody selection to meet the CMIP requirements
     # Hydrogens bonded to carbons remain as 'H'
     # Hydrogens bonded to oxygen are renamed as 'HO'
     # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-    def correct_orphan_atoms(prody_topology, prody_selection):
-        selection = prody_topology.select(prody_selection)
+    # Some heavy atom elements may be also modified (e.g. 'CL' -> 'Cl')
+    def adapt_cmip_atoms(selection):
         # Get all atoms and atom coordinates
         selection_coords = selection.getCoords()
         selection_atoms = list(selection.iterAtoms())
@@ -141,6 +142,8 @@ def energies(
             
         # Update the element of each hydrogen according to CMIP needs
         for atom in selection_atoms:
+            # Find hydrogens by element
+            # WARNING: Avoid finding hydrogens by name. It is very risky
             if atom.getElement() == 'H':
                 bonded_heavy_atom = find_closest_atom(atom).getElement()
                 # Hydrogens bonded to carbons remain as 'H'
@@ -166,7 +169,7 @@ def energies(
                 if atom.getName() == 'MG':
                     atom.setElement('Mg')
         # Return the corrected prody topology
-        return prody_topology
+        return selection
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
@@ -175,12 +178,7 @@ def energies(
         original_topology = prody.parsePDB(frame_pdb)
         # Add chains according to the reference topology, since gromacs has deleted chains
         original_topology.setChids(reference.topology.getChids())
-        # Correct posible 'orphan' hydrogens in each ligand by renaming them
-        # Hydrogens bonded to oxygen or nitrogen or sulfur must be renamed as HO or HN
-        # CMIP uses atom names to set the atom radius so this step is important
-        for ligand in ligands:
-            original_topology = correct_orphan_atoms(
-                original_topology, ligand['prody'])
+
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
 
@@ -216,15 +214,23 @@ def energies(
                 "acpype",
                 "-i",
                 ligand_pdb,
-                # "-n",
-                # "0",
+                #"-n",
+                #"0",
             ], stdout=PIPE).stdout.decode()
 
             energies_file = name + '.acpype/' + name + '.mol2'
+            # Check if the output file exists. If not, send error and print acpype logs
+            if not os.path.exists(energies_file):
+                print(acpype_logs)
+                raise SystemExit(
+                    "ERROR: Something was wrong with ACPYPE")
             # Write all lines but the last line: 'END'
             with open(energies_file, "r") as file:
                 energies_lines = file.readlines()
 
+            # Mine the energies in the acpype output file
+            # These energies are used by CMIP as a reference
+            # Count how many lines are energy 0
             energies = []
             zero_count = 0
             for line in energies_lines:
@@ -234,16 +240,26 @@ def energies(
                     if float(energy_value) == 0:
                         zero_count += 1
                     energies.append(energy_value)
-            # print(energies)
 
+            # If all lines are energy 0 return here
             if zero_count == len(energies):
                 raise SystemExit(
-                    "All energies are zero! Check files and try again.")
+                    "All energies are zero! Check files and try again")
 
             # Check the number of atoms matches the number of energies
             if len(list(selection.iterAtoms())) != len(energies):
                 raise SystemExit(
                     "Stop!! The number of atoms and energies does not match :/")
+
+            # Adapt atom elements to match what CMIP expects to find
+            # Hydrogens bonded to oxygen or nitrogen or sulfur must be renamed as HO or HN
+            # CMIP uses atom names to set the atom radius so this step is critical
+            # Overwrite the previous 'selection' value and the ligand pdb file
+            # WARNING: It is very important to make the CMIP adaptation in this specific place!!
+            # WARNING: If it is done before running ACPYPE then ACPYPE will fail
+            # WARNING: It is is done after editing the reslib file then elements will not match
+            selection = adapt_cmip_atoms(selection)
+            prody.writePDB(ligand_pdb, selection)
 
             # Copy the 'res.lib' file in the local path and open it to 'a'ppend new text
             reslib_filename = name + '_res.lib'
