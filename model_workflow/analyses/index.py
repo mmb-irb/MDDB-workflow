@@ -214,6 +214,9 @@ def analysis_prep(
             print(
                 '1 -> ' + str(interaction['interface_1'] + interaction['interface_2']))
 
+    else:
+        interactions = []
+
     # Metadata mining --------------------------------------------------------------------------
 
     print('Mining metadata')
@@ -231,6 +234,9 @@ def analysis_prep(
 
     # Extract some additional metadata from the inputs file which is required further
     ligands = getInput('ligands')
+
+    if not ligands:
+        ligands = []
 
     # Set the metadata interactions
     metadata_interactions = [{

@@ -70,6 +70,10 @@ def pca_contacts(
         frequency_threshold=0.05,
         smooth=5.0):
 
+    # Return before doing anything if there are no interactions
+    if len(interactions) == 0:
+        return
+
     output_analysis = []
     for interaction in interactions:
         residue_lists = (interaction["pt_residues_1"],
