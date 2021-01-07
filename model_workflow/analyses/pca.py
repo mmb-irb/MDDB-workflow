@@ -4,7 +4,7 @@ from subprocess import run, PIPE, Popen
 
 # Perform the PCA of the trajectory
 # The PCA is performed with the whole trajectory when the size is reasonable
-# When the trajectory is larger than 5000 snapshots we reduce the trajectory
+# When the trajectory is larger than 2000 snapshots we reduce the trajectory
 # A new projection trajectory is made for each eigen vector with 1% or greater explained variance
 # WARNING: Projection trajectories are backbone only
 
@@ -19,9 +19,10 @@ def pca(
     # By default we set the whole trajectory as PCA trajectory
     pca_trajectory_filename = input_trajectory_filename
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
-    if snapshots > 5000:
+    frames_limit = 2000
+    if snapshots > frames_limit:
         pca_trajectory_filename = 'pca.trajectory.xtc'
-        skip = int(math.ceil(snapshots / 5000))
+        skip = int(math.ceil(snapshots / frames_limit))
         # Run Gromacs
         p = Popen([
             "echo",
