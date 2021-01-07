@@ -245,10 +245,10 @@ def analysis_prep(
         'agent_2': interaction['agent_2'],
         'selection_1': interaction['selection_1'],
         'selection_2': interaction['selection_2'],
-        'residues_1': str(interaction['residues_1']),
-        'residues_2': str(interaction['residues_2']),
-        'interface_1': str(interaction['interface_1']),
-        'interface_2': str(interaction['interface_2']),
+        'residues_1': [ str(residue) for residue in interaction['residues_1'] ],
+        'residues_2': [ str(residue) for residue in interaction['residues_2'] ],
+        'interface_1': [ str(residue) for residue in interaction['interface_1'] ],
+        'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
     } for interaction in interactions]
 
     # Write the metadata file
@@ -353,6 +353,7 @@ def run_analyses(
     # Set a reduced trajectory used for heavy analyses
     reduced_pt_trajectory = None
     # First, set the maximum number of frames for the reduced trajectory
+    # WARNING: The final number of frames in some analyses may be +1
     reduced_trajectory_frames = 200
     # If the current trajectory has already less frames than the maximum then use it also as reduced
     if trajectory_frames < reduced_trajectory_frames:
@@ -366,6 +367,8 @@ def run_analyses(
         # The '- 1' is because the first frame is 0 (you have to do the math to understand)
         step = math.floor(trajectory_frames / (reduced_trajectory_frames - 1))
         reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
+        # DANI: hay que chequear, porque sis siempre son 201 frames el -1 de arriba no tiene sentido
+        #print(reduced_pt_trajectory.n_frames)
         # Add the step value to the reduced trajectory explicitly. It will be required later
         reduced_pt_trajectory.step = step
 
