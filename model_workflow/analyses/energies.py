@@ -157,27 +157,30 @@ def energies(
                     atom.setElement('HN')
                 else:
                     raise SystemExit('ERROR: Hydrogen bonded to not supported heavy atom')
-                # Update other elements naming
-                if atom.getName() == 'CL':
-                    atom.setElement('Cl')
-                if atom.getName() == 'BR':
-                    atom.setElement('Br')
-                if atom.getName() == 'ZN':
-                    atom.setElement('Zn')
-                if atom.getName() == 'NA':
-                    atom.setElement('Na')
-                if atom.getName() == 'MG':
-                    atom.setElement('Mg')
+            # Update other elements naming
+            if atom.getElement() == 'CL':
+                atom.setElement('Cl')
+            if atom.getElement() == 'BR':
+                atom.setElement('Br')
+            if atom.getElement() == 'ZN':
+                atom.setElement('Zn')
+            if atom.getElement() == 'NA':
+                atom.setElement('Na')
+            if atom.getElement() == 'MG':
+                atom.setElement('Mg')
         # Return the corrected prody topology
         return selection
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
     def get_frame_energy(frame_pdb):
-        # Parse the pdb file to prody format and the correct it
+        # Parse the pdb file to prody format and then correct it
         original_topology = prody.parsePDB(frame_pdb)
         # Add chains according to the reference topology, since gromacs has deleted chains
         original_topology.setChids(reference.topology.getChids())
+        # Set element names according to the reference topology
+        # Gromacs may mess some element names with two letters (e.g. 'CL')
+        original_topology.setElements(reference.topology.getElements())
 
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
@@ -203,6 +206,7 @@ def energies(
         for ligand in ligands:
 
             # Create a new pdb only with the current ligand
+            # Adapt this topology to ACPYPE by changing some element names
             name = ligand['name']
             ligand_pdb = name + '.pdb'
             selection = original_topology.select(ligand['prody'])
