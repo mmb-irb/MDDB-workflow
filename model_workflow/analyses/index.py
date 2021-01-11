@@ -338,7 +338,9 @@ def run_analyses(
             eigenvalues_filename, eigenvectors_filename, snapshots)
 
     contacts_pca_filename = 'contacts_PCA.json'
-    if required(contacts_pca_filename):
+    # DANI: Intenta usar mucha memoria, hay que revisar
+    # DANI: De momento me lo salto
+    if required(contacts_pca_filename) and False:
         print('- PCA on residue contacts')
         pca_contacts(
             trajectory_filename,
