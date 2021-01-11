@@ -207,7 +207,8 @@ def energies(
 
             # Create a new pdb only with the current ligand
             # Adapt this topology to ACPYPE by changing some element names
-            name = ligand['name']
+            # WARNING: Name spaces must be replaced by underscore or processes will fail
+            name = ligand['name'].replace(' ','_')
             ligand_pdb = name + '.pdb'
             selection = original_topology.select(ligand['prody'])
             prody.writePDB(ligand_pdb, selection)
