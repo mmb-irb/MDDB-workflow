@@ -16,6 +16,7 @@ from model_workflow.tools.topology_manager import TopologyReference
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_backbone import get_backbone
+from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_box_size import get_box_size
@@ -112,6 +113,34 @@ def analysis_prep(
     original_topology_filename = getInput('original_topology_filename')
     original_trajectory_filename = getInput('original_trajectory_filename')
 
+    # Pytraj setup ---------------------------------------------------------------------------------
+
+    # Set the pytraj trayectory, which is further used in all pytraj analyses
+    pt_trajectory = pt.iterload(trajectory_filename, topology_filename)
+    trajectory_frames = pt_trajectory.n_frames
+
+    # Set a reduced trajectory used for heavy analyses
+    reduced_pt_trajectory = None
+    # First, set the maximum number of frames for the reduced trajectory
+    # WARNING: The final number of frames in some analyses may be +1
+    reduced_trajectory_frames = 200
+    # If the current trajectory has already less frames than the maximum then use it also as reduced
+    if trajectory_frames < reduced_trajectory_frames:
+        reduced_pt_trajectory = pt_trajectory
+        # Add a step value which will be required later
+        reduced_pt_trajectory.step = 1
+    # Otherwise, create a reduced trajectory with as much frames as specified above
+    # These frames are picked along the trajectory
+    else:
+        # Calculate how many frames we must jump between each reduced frame to never exceed the limit
+        # The '- 1' is because the first frame is 0 (you have to do the math to understand)
+        step = math.floor(trajectory_frames / (reduced_trajectory_frames - 1))
+        reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
+        # DANI: hay que chequear, porque sis siempre son 201 frames el -1 de arriba no tiene sentido
+        #print(reduced_pt_trajectory.n_frames)
+        # Add the step value to the reduced trajectory explicitly. It will be required later
+        reduced_pt_trajectory.step = step
+
     # Preprocessing ---------------------------------------------------------------------------------
 
     print('Preprocessing')
@@ -158,12 +187,11 @@ def analysis_prep(
     if required(backbone_filename):
         get_backbone(topology_reference, backbone_filename)
 
-    # Get the sumarized trajectory
-    # It is used further in some trajectory analyses
-    summarized_trajectory = 'md.imaged.rot.100.xtc'
-    if required(summarized_trajectory):
-        get_summarized_trajectory(
-            topology_filename, trajectory_filename, summarized_trajectory)
+    # Get the average structure in frame format
+    # It is further loaded to database and used to represent pockets
+    average_filename = 'average.xtc'
+    if required(average_filename):
+        get_average(pt_trajectory, average_filename)
 
     # Interactions setup --------------------------------------------------------------------
 
@@ -347,32 +375,6 @@ def run_analyses(
             topology_filename,
             interactions,
             contacts_pca_filename)
-
-    # Set the pytraj trayectory, which is further used in all pytraj analyses
-    pt_trajectory = pt.iterload(trajectory_filename, topology_filename)
-    trajectory_frames = pt_trajectory.n_frames
-
-    # Set a reduced trajectory used for heavy analyses
-    reduced_pt_trajectory = None
-    # First, set the maximum number of frames for the reduced trajectory
-    # WARNING: The final number of frames in some analyses may be +1
-    reduced_trajectory_frames = 200
-    # If the current trajectory has already less frames than the maximum then use it also as reduced
-    if trajectory_frames < reduced_trajectory_frames:
-        reduced_pt_trajectory = pt_trajectory
-        # Add a step value which will be required later
-        reduced_pt_trajectory.step = 1
-    # Otherwise, create a reduced trajectory with as much frames as specified above
-    # These frames are picked along the trajectory
-    else:
-        # Calculate how many frames we must jump between each reduced frame to never exceed the limit
-        # The '- 1' is because the first frame is 0 (you have to do the math to understand)
-        step = math.floor(trajectory_frames / (reduced_trajectory_frames - 1))
-        reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
-        # DANI: hay que chequear, porque sis siempre son 201 frames el -1 de arriba no tiene sentido
-        #print(reduced_pt_trajectory.n_frames)
-        # Add the step value to the reduced trajectory explicitly. It will be required later
-        reduced_pt_trajectory.step = step
 
     # Set the RMSd per resiude analysis file name and run the analysis
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
