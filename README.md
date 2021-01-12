@@ -14,6 +14,10 @@ In DEVELOPMENT:
 
 ```pip install -e .```
 
+To make notebooks operative use:
+
+```conda install -c conda-forge notebook```
+
 In PRODUCTION:
 
 ```python setup.py install```

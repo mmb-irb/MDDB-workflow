@@ -2,7 +2,6 @@ name: mwf
 channels:
   - bioconda
   - anaconda
-  - insilichem
   - ambermd
   - conda-forge
 dependencies:
