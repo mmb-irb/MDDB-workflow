@@ -3,6 +3,9 @@
 # Humphrey, W., Dalke, A. and Schulten, K., "VMD - Visual Molecular Dynamics", J. Molec. Graphics, 1996, vol. 14, pp. 33-38. 
 # http://www.ks.uiuc.edu/Research/vmd/
 
+import os
+import glob
+
 from subprocess import run, PIPE
 
 # Set he path to a script with all commands needed for vmd to parse the topology file
@@ -23,7 +26,6 @@ def processor (
     output_topology_filename : str,
     output_trajectory_filename : str
     ) -> str:
-    #output = run(["echo", topology_filename], stdout=PIPE).stdout.decode()
 
     # Write all lines but the last line: 'END'
     with open(commands_filename, "w") as file:
@@ -33,16 +35,29 @@ def processor (
         file.write('$select writepdb ' + output_topology_filename + '\n')
         file.write('exit\n')
 
+    # The subprocess.run command does not deal with the '*' bash syntax to grab multiple files
+    # Instead, we have to do it manually
+    trajectory_filenames = [ input_trajectory_filenames ]
+    if '*' in input_trajectory_filenames:
+        trajectory_filenames_list = glob.glob(input_trajectory_filenames)
+        trajectory_filenames = sorted(trajectory_filenames_list)
+
     # Run VMD
     logs = run([
         "vmd",
         input_topology_filename,
-        input_trajectory_filenames,
-        '-e',
+        *trajectory_filenames,
+        "-e",
         commands_filename,
-        '-dispdev',
-        'none'
+        "-dispdev",
+        "none"
     ], stdout=PIPE).stdout.decode()
+
+    # Check the output files have been created
+    # Otherwise print logs and throw an error
+    if not ( os.path.exists(output_topology_filename) and os.path.exists(output_trajectory_filename) ) :
+        print(logs)
+        raise SystemExit("ERROR: Something was wrong with VMD")
 
     # Return VMD logs
     return logs
