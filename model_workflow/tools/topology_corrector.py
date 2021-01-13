@@ -3,6 +3,8 @@ import prody
 from subprocess import run, PIPE
 from collections import Counter
 
+import itertools
+
 # Set the path to the 'addChains' script
 repo_path = str(Path(__file__).parent.parent)
 add_chains_script = repo_path + '/utils/resources/addChainCV19.pl'
@@ -12,7 +14,7 @@ add_chains_script = repo_path + '/utils/resources/addChainCV19.pl'
 #
 # Supported cases:
 #
-# * Missing chains -> Chains are added through an external script
+# * (DEPRECATED) Missing chains -> Chains are added through an external script
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * (Not supported yet) Hyrdogens are placed at the end ->
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
@@ -37,7 +39,7 @@ def topology_corrector(
     # ------------------------------------------------------------------------------------------
 
     # Check if chains are missing. If so, create a new chainned topology and set it as the reference
-    # DANI: Hay que revisarlo. Esto lo hace un script de perl que solo se ha provado en una topología
+    # DEPRECATED: This should never happen, since missing chains are assigned from the vmd processor
     chains = list(test.iterChains())
     no_chains = len(chains) == 1 and chains[0].getChid() == ' '
     if no_chains:
@@ -198,3 +200,50 @@ def get_next_letter(letter: str):
         raise SystemExit("Limit of chain letters has been reached")
     next_letter = chr(ord(letter) + 1)
     return next_letter
+
+# Set atom radius according to their element in Angstroms
+# Radius from wikipedia
+radius = {
+    'H': 38,
+    'He': 52,
+    'Li': 134,
+    'Be': 90,
+    'B': 82,
+    'C': 77,
+    'N': 75,
+    'O': 73,
+    'F': 71,
+    'Ne': 69,
+    'Na': 154,
+    'Mg': 130,
+    'P': 106,
+    'S': 102,
+    'Cl': 100,
+    'Ar': 97,
+    'K': 196,
+    'Ca': 174,
+}
+
+def get_distance(coords1, coords2):
+    squared_distance = numpy.sum((coords1 - coords2)**2, axis=0)
+    distance = numpy.sqrt(squared_distance)
+    return distance
+
+# Guess bonds between atoms using the VMD formula
+def guess_bonds(prody_topology):
+
+    bonds = []
+
+    atoms = list(prody_topology.iterAtoms())
+    for atom1, atom2 in itertools.combinations(atoms, 2):
+
+        radii1 = radius.get([atom1.getElement()], 100)
+        radii2 = radius.get([atom2.getElement()], 100)
+        # Formula from https://www.ks.uiuc.edu/Research/vmd/vmd-1.7.1/ug/node23.html
+        max_distance = radii1 * radii2 * 0.6
+        distance = getDistance(atom_i.getCoords(), atom_j.getCoords())
+
+        if distance < max_distance:
+            bonds.append([atom1.getIndex(), atom2.getIndex()])
+
+    return bonds

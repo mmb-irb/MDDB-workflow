@@ -10,7 +10,7 @@ import json
 import pytraj as pt
 
 # Import local tools
-from model_workflow.tools.vmd_processor import processor
+from model_workflow.tools.vmd_processor import vmd_processor
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_manager import TopologyReference
 from model_workflow.tools.topology_corrector import topology_corrector
@@ -122,7 +122,7 @@ def analysis_prep(
     # In addition, some irregularities in the topology may be fixed by VMD
     # If the output topology and trajectory files already exists it is assumed they are already processed
     if required(topology_filename) or required(trajectory_filename):
-        logs = processor(
+        logs = vmd_processor(
             original_topology_filename,
             original_trajectory_filename,
             topology_filename,
@@ -322,7 +322,7 @@ def analysis_prep(
     with open(metadata_filename, 'w') as file:
         json.dump(metadata, file)
 
-    return topology_reference, interactions, ligands, snapshots
+    return topology_reference, pt_trajectory, reduced_pt_trajectory, interactions, ligands, snapshots
 
 
 # All analyses ---------------------------------------------------------------------------------
@@ -330,7 +330,7 @@ def run_analyses(
         topology_filename="md.imaged.rot.dry.pdb",
         trajectory_filename="md.imaged.rot.xtc"):
 
-    topology_reference, interactions, ligands, snapshots = analysis_prep(
+    topology_reference, pt_trajectory, reduced_pt_trajectory, interactions, ligands, snapshots = analysis_prep(
         topology_filename,
         trajectory_filename)
 
