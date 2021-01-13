@@ -21,21 +21,20 @@ def image_and_fit (
     # Create indexes file to select only specific topology regions
 
     indexes = 'indexes.ndx'
-    if required(indexes):
-        p = Popen([
-            "echo",
-            "!\"Water_and_ions\"\nq",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "make_ndx",
-            "-f",
-            input_topology_filename,
-            '-o',
-            indexes,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    p = Popen([
+        "echo",
+        "!\"Water_and_ions\"\nq",
+    ], stdout=PIPE)
+    logs = run([
+        "gmx",
+        "make_ndx",
+        "-f",
+        input_topology_filename,
+        '-o',
+        indexes,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
 
     # Imaging --------------------------------------------------------------------------------------
 
@@ -300,10 +299,3 @@ def image_and_fit (
 
     # Return the imaged and fitted trajectory filename
     return output_trajectory_filename
-
-# Set a function to check if a process must be run (True) or skipped (False)
-# i.e. check if the output file already exists and reapeated analyses must be skipped
-def required (analysis_filename : str):
-    if os.path.exists(analysis_filename) and skip_repeats:
-        return False
-    return True
