@@ -108,12 +108,26 @@ def pockets (
         # Next, mine the grid values
         grid_values = []
         grid_values_pattern = "^([.0-9]+) ([.0-9]+) ([.0-9]+) $"
+        # The last line of the grid may have less than 3 values
+        last_line_grid_values_pattern_1 = "^([.0-9]+) ([.0-9]+) $"
+        last_line_grid_values_pattern_2 = "^([.0-9]+) $" 
         for line in file:
             search = re.search(grid_values_pattern, line)
             if (search != None):
                 grid_values.append(float(search.group(1)))
                 grid_values.append(float(search.group(2)))
                 grid_values.append(float(search.group(3)))
+                continue
+            # This should only happend at the end
+            search = re.search(last_line_grid_values_pattern_1, line)
+            if (search != None):
+                grid_values.append(float(search.group(1)))
+                grid_values.append(float(search.group(2)))
+                continue
+            search = re.search(last_line_grid_values_pattern_2, line)
+            if (search != None):
+                grid_values.append(float(search.group(1)))
+                continue
 
     # Set a function to get the value of a given 'x, y, z' position
     # Grid values are disposed first in 'z' order, then 'y', and finally 'x'
