@@ -287,6 +287,7 @@ def analysis_prep(
         'UNIT': getInput('unit'),
         'DESCRIPTION': getInput('description'),
         'AUTHORS': getInput('authors'),
+        'GROUPS': getInput('groups'),
         'PROGRAM': getInput('program'),
         'VERSION': getInput('version'),
         'LICENSE': getInput('license'),
