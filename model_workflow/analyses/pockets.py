@@ -52,7 +52,7 @@ def pockets (
         for f in frames:
             file.write(str(f) + '\n')
     # Run gromacs to reducte the trajectory
-    reduced_trajectory = 'reduced.trajectory.xtc'
+    pockets_trajectory = 'pockets.trajectory.xtc'
     p = Popen([
         "echo",
         "System",
@@ -65,7 +65,7 @@ def pockets (
         "-f",
         input_trajectory_filename,
         '-o',
-        reduced_trajectory,
+        pockets_trajectory,
         '-fr',
         frames_ndx,
         '-quiet'
@@ -77,7 +77,7 @@ def pockets (
     logs = run([
         "mdpocket",
         "--trajectory_file",
-        reduced_trajectory,
+        pockets_trajectory,
         "--trajectory_format",
         "xtc",
         "-f",
@@ -260,7 +260,7 @@ def pockets (
         logs = run([
             "mdpocket",
             "--trajectory_file",
-            reduced_trajectory,
+            pockets_trajectory,
             "--trajectory_format",
             "xtc",
             "-f",
@@ -314,3 +314,9 @@ def pockets (
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({ 'data': output_analysis }, file)
+
+    # Finally remove the reduced trajectory since it is not required anymore
+    logs = run([
+        "rm",
+        pockets_trajectory,
+    ], stdout=PIPE).stdout.decode()
