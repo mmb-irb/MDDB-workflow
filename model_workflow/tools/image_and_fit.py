@@ -38,6 +38,28 @@ def image_and_fit (
 
     # Imaging --------------------------------------------------------------------------------------
 
+    # Only fitting
+    if preprocess_protocol == 1:
+        # Although only fitting is required, we must make sure atoms won't jump during the fitting
+        p = Popen([
+            "echo",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            input_topology_filename,
+            "-f",
+            input_trajectory_filename,
+            '-o',
+            output_trajectory_filename,
+            '-pbc',
+            'nojump',
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
+
     # Single protein
     if preprocess_protocol == 2:
 
@@ -271,7 +293,7 @@ def image_and_fit (
     # The trajectory to fit is the already imaged trajectory
     # However, if there was no imaging, the trajectory to fit is the input trajectory
     trajectroy_to_fit = output_trajectory_filename
-    if preprocess_protocol == 1:
+    if preprocess_protocol > 0:
         trajectroy_to_fit = input_trajectory_filename
 
     # Run Gromacs
