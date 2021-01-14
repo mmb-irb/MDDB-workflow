@@ -38,7 +38,7 @@ def pca(
             '-o',
             pca_trajectory_filename,
             '-skip',
-            '1',
+            str(skip),
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
