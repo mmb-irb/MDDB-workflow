@@ -21,6 +21,7 @@ from model_workflow.tools.get_summarized_trajectory import get_summarized_trajec
 from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
+from model_workflow.tools.remove_trash import remove_trash
 
 # Import local analyses
 from model_workflow.analyses.generic_analyses import rmsd, rmsf, rgyr
@@ -431,4 +432,6 @@ def run_analyses(
         pockets(topology_filename, trajectory_filename,
                 pockets_analysis, topology_reference, snapshots)
 
+    # Remove gromacs backups
+    remove_trash()
     print('Done!')
