@@ -398,7 +398,7 @@ def run_analyses(
     # Set the distance per residue analysis file name and run the analysis
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     distance_perres_analysis = 'md.dist.perres.json'
-    if required(distance_perres_analysis):
+    if required(distance_perres_analysis) and len(interactions) > 0:
         print('- Distance per residue')
         distance_per_residue(reduced_pt_trajectory,
                              distance_perres_analysis, interactions)
