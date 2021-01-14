@@ -97,7 +97,7 @@ def pca(
         # UNKNOWN USE
         pca_rmsf = 'pca.rmsf' + strev + '.xvg'
 
-        # Perform the projection alaysis through the 'anaeig' gromacs command
+        # Perform the projection analysis through the 'anaeig' gromacs command
         p = Popen([
             "echo",
             "Protein-H",
@@ -129,3 +129,9 @@ def pca(
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
+
+    # Finally remove the pca trajectory since it is not required anymore
+    logs = run([
+        "rm",
+        pca_trajectory_filename,
+    ], stdout=PIPE).stdout.decode()
