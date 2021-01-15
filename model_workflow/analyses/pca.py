@@ -131,7 +131,8 @@ def pca(
         p.stdout.close()
 
     # Finally remove the pca trajectory since it is not required anymore
-    logs = run([
-        "rm",
-        pca_trajectory_filename,
-    ], stdout=PIPE).stdout.decode()
+    if pca_trajectory_filename == 'pca.trajectory.xtc':
+        logs = run([
+            "rm",
+            pca_trajectory_filename,
+        ], stdout=PIPE).stdout.decode()
