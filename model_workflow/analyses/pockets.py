@@ -316,7 +316,8 @@ def pockets (
         json.dump({ 'data': output_analysis }, file)
 
     # Finally remove the reduced trajectory since it is not required anymore
-    logs = run([
-        "rm",
-        pockets_trajectory,
-    ], stdout=PIPE).stdout.decode()
+    if pockets_trajectory == 'pockets.trajectory.xtc':
+        logs = run([
+            "rm",
+            pockets_trajectory,
+        ], stdout=PIPE).stdout.decode()
