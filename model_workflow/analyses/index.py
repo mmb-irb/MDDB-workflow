@@ -216,18 +216,18 @@ def analysis_prep(
             )
             # interface_1 is the list of residues from the agent 1 which are close to the agent 2
             interaction['interface_1'] = topology_reference.topology_selection(
-                interaction['selection_1'] +
-                ' and same residue as exwithin ' +
+                '(' + interaction['selection_1'] +
+                ') and same residue as exwithin ' +
                 str(cutoff_distance) +
-                ' of ' +
-                interaction['selection_2'])
+                ' of (' +
+                interaction['selection_2'] + ')')
             # interface_2 is the list of residues from agent 2 which are close to the agent 1
             interaction['interface_2'] = topology_reference.topology_selection(
-                interaction['selection_2'] +
-                ' and same residue as exwithin ' +
+                '(' + interaction['selection_2'] +
+                ') and same residue as exwithin ' +
                 str(cutoff_distance) +
-                ' of ' +
-                interaction['selection_1'])
+                ' of (' +
+                interaction['selection_1'] + ')')
 
             # Translate all residues selections to pytraj notation
             # These values are used along the workflow but not added to metadata
