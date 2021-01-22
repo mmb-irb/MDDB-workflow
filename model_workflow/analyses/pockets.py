@@ -26,6 +26,8 @@ from subprocess import run, PIPE, Popen
 
 import json
 
+from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+
 # Perform the pockets analysis
 def pockets (
     input_topology_filename : str,
@@ -43,34 +45,19 @@ def pockets (
     ], stdout=PIPE).stdout.decode()
 
     # Set a reduced trajectory with only 100 frames
-    # Set the 'ndx' file to be passed to gromacs
+    # Get the step between frames of the new reduced trajectory, since it will be append to the output
+    pockets_trajectory = input_trajectory_filename
     frames_number = 100
-    frames = [f * math.floor(snapshots / frames_number) for f in range(1, frames_number)]
-    frames_ndx = mdpocket_folder + '/frames.ndx'
-    with open(frames_ndx,'w') as file:
-        file.write('[frames]\n')
-        for f in frames:
-            file.write(str(f) + '\n')
-    # Run gromacs to reducte the trajectory
-    pockets_trajectory = 'pockets.trajectory.xtc'
-    p = Popen([
-        "echo",
-        "System",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "trjconv",
-        "-s",
-        input_topology_filename,
-        "-f",
-        input_trajectory_filename,
-        '-o',
-        pockets_trajectory,
-        '-fr',
-        frames_ndx,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
+    step = 1
+    if snapshots > frames_number:
+        pockets_trajectory = 'pockets.trajectory.xtc'
+        step = get_reduced_trajectory(
+            input_topology_filename,
+            input_trajectory_filename,
+            pockets_trajectory,
+            snapshots,
+            frames_number,
+        )
 
     # Run the mdpocket analysis focusing in this specific pocket
     mdpocket_output = mdpocket_folder + '/mdpout'
@@ -311,9 +298,12 @@ def pockets (
 
         output_analysis.append(output)
 
+    # By default, the starting frame is always 0
+    start = 0
+
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
+        json.dump({ 'data': output_analysis, 'start': start, 'step': step }, file)
 
     # Finally remove the reduced trajectory since it is not required anymore
     if pockets_trajectory == 'pockets.trajectory.xtc':

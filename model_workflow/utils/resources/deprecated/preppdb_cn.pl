@@ -7,17 +7,20 @@ use strict;
 
 # Input Parameters.
 my $long=@ARGV;
-if ($long!=3){
-    print "Usage: perl $0 <reslib_file> <pdb_input_file> <pdb_output_file>\n";
+if ($long!=2){
+    print "Usage: perl $0 <pdb_input_file> <pdb_output_file>\n";
     exit(0);
 }
-my ($reslib,$pdb,$output)=@ARGV;
+my ($pdb,$output)=@ARGV;
+
+# CMIP Dat Directory.
+my $cmipDir = "/home/dbeltran_local/model/workflow/model_workflow/utils/resources";
 
 # Adding C and N terminals to pdb.
-&afegirCN4($pdb);
+&afegirCN($pdb);
 
 # Running script preppdb to add charges to each atom of the structure.
-&preppdb("$reslib","tmp.pdb","$output");
+&preppdb("$cmipDir/res.lib","tmp.pdb","$output");
 
 # Removing temporal files.
 #system ("rm tmp.pdb");
@@ -195,7 +198,7 @@ sub afegirCN3 {
 		$pdb{$ch}->{$nres}->{'line'} .= $_;
 		$pdb{$ch}->{$nres}->{'res'} = $res;
 		
-		if($at =~ /OXT/ or $at =~ /OC2/){
+		if($at =~ /OXT/){
 			# Residue with OXigen Terminal (OXT) marked as CTER.
 			# (Ending of a chain).			
 			$cter{$ch}->{$nres} = 1;
@@ -227,80 +230,3 @@ sub afegirCN3 {
 
     close OUT;
 }
-
-# AfegirCN4:
-# Adding C and N Terminals to Protein Chains.
-# Identifying final chain through OXT (AMBER) atom, OC2 (GMX) atom.
-sub afegirCN4 {
-	my $in = shift;
-
-	my %pdb;
-	my %cter;
-	my %nter;
-
-	# Fixing first residue NTER.
-	$nter{'@'}->{1} = 1;
-
-    my $nterminal = 0;	
-    my $first = 1;
-    open(APDB,"$in");
-    while(<APDB>){
-		next if !(/^ATOM/);
-
-		my $res = substr($_,17,3);
-		my $nres = substr($_,22,4);		
-		$nres += 0;
-		my $at = substr($_, 12, 5);
-		$at =~s/ //g;
-		my $ch = substr($_, 21, 1);
-		$ch =~s/ //g;
-		$ch = "@" if (!$ch);
-
-		# Using $nres as a key, because this script is only used
-		# with ptraj outputs, with no problems of residue indexes.
-		$pdb{$ch}->{$nres}->{'line'} .= $_;
-		$pdb{$ch}->{$nres}->{'res'} = $res;
-		
-		if ($first){
-			# Fixing first residue NTER.
-			$nter{$ch}->{$nres} = 1;
-			$first = 0;
-		}
-		elsif ($nterminal) {	
-			$nter{$ch}->{$nres} = 1;
-			$nterminal = 0;
-		}
-		elsif($at =~ /OXT/ or $at =~ /OC2/){
-			# Residue with OXigen Terminal (OXT) marked as CTER.
-			# (Ending of a chain).			
-			$cter{$ch}->{$nres} = 1;
-			
-			# Residue following OXigen Terminal (OXT) marked as NTER.
-			# (Beggining of a chain).
-			$nterminal =  1;
-			#$nter{$ch}->{$nres+1} = 1;
-		}
-    }	
-    close APDB;
-
-    open(OUT,">tmp.pdb");
-
-	foreach my $ch (sort keys %pdb){
-	foreach my $nres (sort { $a <=> $b } keys %{$pdb{$ch}}){
-	
-		my $line = $pdb{$ch}->{$nres}->{'line'};
-		my $res = $pdb{$ch}->{$nres}->{'res'};
-
-		if($nter{$ch}->{$nres}){
-			$line =~s/$res /${res}N/g;
-		}
-		elsif($cter{$ch}->{$nres}){
-			$line =~s/$res /${res}C/g;
-		}
-	    print OUT $line;		
-	}
-	}
-
-    close OUT;
-}
-

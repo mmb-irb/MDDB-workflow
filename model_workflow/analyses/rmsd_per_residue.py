@@ -32,7 +32,15 @@ def rmsd_per_residue (
         # Key format: SER:1, TYR:2, ...
         match = re.match('(.*):(.*)', residue.key)
         id = match.groups(0)[1]
-        residue_tag = str(topology_reference.pytraj2source(int(id)))
+        source_residue = topology_reference.pytraj2source(int(id))
+        # Residue tag may be not found in excepcional cases which Prody fails to handle:
+        # e.g. Residues repeated like: 1, 2, 2, 2, 3, ... (e.g. NMA and ACE residues)
+        # In this cases we just ignore the residue
+        # If this residue MUST be recorded then change the topology manually adding icodes
+        # e.g. Residues repeated like: 1, 2, 2A, 2B, 3, ...
+        if not source_residue:
+            continue
+        residue_tag = str(source_residue)
         # Write data to the output file
         # The 'residue' DataArray contains numeric values (rmsds) and it is not JSON serializable
         output_analysis.append(

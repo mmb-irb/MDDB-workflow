@@ -24,15 +24,16 @@ import re
 import numpy
 import math
 from subprocess import run, PIPE, Popen
-
 import json
+
+from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
-source_reslib = resources + '/res.lib'
-preppdb_source = resources + '/preppdb.pl'
+reslib_source = resources + '/res.lib'
+preppdb_source = resources + '/preppdb.pl' # For proteins
+old_preppdb_source = resources + '/old_preppdb.pl' # For ligands
 check_source = resources + '/check.in'
-test_source = resources + '/test.in'
 vdw_source = resources + '/vdwprm'
 
 
@@ -54,9 +55,15 @@ def mine_cmip_output(logs):
         if grid_units_groups:
             units = tuple(float(grid_units_groups.group(i))
                           for i in (1, 2, 3))
+    # If data mining fails there must be something wrong with the CMIP output
+    if center == () or density == () or units == ():
+        for line in logs:
+            print(line)
+        print('WARNING: CMIP output mining failed')
+        raise SystemExit('ERROR: Something was wrong with CMIP')
     return center, density, units
 
-
+# 
 def compute_new_grid(
         prot_center,
         prot_density,
@@ -121,12 +128,46 @@ def energies(
         # Get all atoms and atom coordinates
         selection_coords = selection.getCoords()
         selection_atoms = list(selection.iterAtoms())
-        # Set functions to find the closest atom of a specified atom
 
+        # Set functions to find the closest atom of a specified atom
         def get_distance(coords1, coords2):
             squared_distance = numpy.sum((coords1 - coords2)**2, axis=0)
             distance = numpy.sqrt(squared_distance)
             return distance
+
+        # Try to guess the atom element from the name of the atom
+        # This is used only when element is missing
+        cmip_supported_elements = ['Cl','Na','Zn','Mg','C','N','P','S',
+            'HW','HO','HN','H','F','OW','O','IP','IM','I']
+        def guess_name_element(name : str) -> str:
+            length = len(name)
+            next_character = None
+            for i, character in enumerate(name):
+                # Get the next character, since element may be formed by 2 letters
+                if i < length - 1:
+                    next_character = name[i+1]
+                    # If next character is not a string then ignore it
+                    if not next_character.isalpha():
+                        next_character = None
+                # Try to get all possible matches between the characters and the supported atoms
+                # First letter is always caps
+                character = character.upper()
+                # First try to match both letters together
+                if next_character:
+                    # Start with the second letter in caps
+                    next_character = next_character.upper()
+                    both = character + next_character
+                    if both in cmip_supported_elements:
+                        return both
+                    # Continue with the second letter in lowers
+                    next_character = next_character.lower()
+                    both = character + next_character
+                    if both in cmip_supported_elements:
+                        return both
+                # Finally, try with the first character alone
+                if character in cmip_supported_elements:
+                    return character
+                raise SystemExit("ERROR: Not recognized element in '" + name + "'")
 
         def find_closest_atom(atom):
             current_coords = atom.getCoords()
@@ -142,34 +183,98 @@ def energies(
             
         # Update the element of each hydrogen according to CMIP needs
         for atom in selection_atoms:
+            # First of all, correct tha name by removing numbers at the start
+            name = atom.getName()
+            for character in name:
+                if not character.isalpha():
+                    name = name[1:]
+                else:
+                    break
+            atom.setName(name)
+            # Then, correct the element
+            # If element is missing try to guess it from the name
+            element = atom.getElement()
+            if not element:
+                element = guess_name_element(name)
+                atom.setElement(element)
             # Find hydrogens by element
             # WARNING: Avoid finding hydrogens by name. It is very risky
-            if atom.getElement() == 'H':
+            if element == 'H':
                 bonded_heavy_atom = find_closest_atom(atom).getElement()
                 # Hydrogens bonded to carbons remain as 'H'
                 if bonded_heavy_atom == 'C':
                     continue
                 # Hydrogens bonded to oxygen are renamed as 'HO'
                 elif bonded_heavy_atom == 'O':
-                    atom.setElement('HO')
+                    element = 'HO'
                 # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
                 elif bonded_heavy_atom == 'N' or bonded_heavy_atom == 'S':
-                    atom.setElement('HN')
+                    element = 'HN'
                 else:
                     raise SystemExit('ERROR: Hydrogen bonded to not supported heavy atom')
             # Update other elements naming
-            if atom.getElement() == 'CL':
-                atom.setElement('Cl')
-            if atom.getElement() == 'BR':
-                atom.setElement('Br')
-            if atom.getElement() == 'ZN':
-                atom.setElement('Zn')
-            if atom.getElement() == 'NA':
-                atom.setElement('Na')
-            if atom.getElement() == 'MG':
-                atom.setElement('Mg')
+            if element == 'CL':
+                element = 'Cl'
+            if element == 'BR':
+                element = 'Br'
+            if element == 'ZN':
+                element = 'Zn'
+            if element == 'NA':
+                element = 'Na'
+            if element == 'MG':
+                element = 'Mg'
+            # Set the correct element
+            atom.setElement(element)   
         # Return the corrected prody topology
         return selection
+
+    protein_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS',
+        'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+
+    rna_residues = ['RA', 'RU', 'RC', 'RG']
+    
+    # Change residue names in a prody selection to meet the CMIP requirements
+    # Change terminal residue names by adding an 'N' or 'C'
+    def name_terminal_residues(selection):
+
+        # Set a new selection
+        new_selection = selection.toAtomGroup()
+
+        # Get all atoms and atom coordinates
+        chains = new_selection.iterChains()
+
+        for chain in chains:
+
+            residues = list(chain.iterResidues())
+
+            # Check if the first residue is tagged as a terminal residue
+            # If not, rename it
+            first_residue = residues[0]
+            first_residue_name = first_residue.getResname()
+            # In case it is a protein
+            if first_residue_name in protein_residues:
+                first_residue_name += 'N'
+                first_residue.setResname(first_residue_name)
+            # In case it is RNA
+            elif first_residue_name in rna_residues:
+                first_residue_name += '5'
+                first_residue.setResname(first_residue_name)
+
+            # Check if the last residue is tagged as 'C' terminal
+            # If not, rename it
+            last_residue = residues[-1]
+            last_residue_name = last_residue.getResname()
+            # In case it is a protein
+            if last_residue_name in protein_residues:
+                last_residue_name += 'C'
+                last_residue.setResname(last_residue_name)
+            # In case it is RNA
+            elif last_residue_name in rna_residues:
+                last_residue_name += '3'
+                last_residue.setResname(last_residue_name)
+        
+        # Return the corrected prody topology
+        return new_selection
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
@@ -189,6 +294,8 @@ def energies(
         # Create a new pdb only with the protein
         protein_pdb = 'protein.pdb'
         selection = original_topology.select('protein')
+        # Correct the protein by renaming residues according to if they are terminals
+        selection = name_terminal_residues(selection)
         prody.writePDB(protein_pdb, selection)
 
         # Get the cmip protein input file
@@ -196,7 +303,7 @@ def energies(
         run([
             "perl",
             preppdb_source,
-            source_reslib,
+            reslib_source,
             protein_pdb,
             protein_cmip,
         ], stdout=PIPE).stdout.decode()
@@ -211,50 +318,64 @@ def energies(
             name = ligand['name'].replace(' ','_')
             ligand_pdb = name + '.pdb'
             selection = original_topology.select(ligand['prody'])
+            # If no acpype is run it means the ligand is known by the default cmip reslib
+            # For this case, we better check the terminal residues to be well set
+            acpype_is_required = ligand['acpype']
+            if not acpype_is_required:
+                selection = name_terminal_residues(selection)
             prody.writePDB(ligand_pdb, selection)
 
+            # Set the source reslib file as the reslib to be used further by CMIP
+            # Then, if acpype is runned, we copy and modify the source reslib
+            reslib_filename = reslib_source
+
             # Calculate the energies with acpype and then mine them
-            # test = !obabel -ipdb $ligand_pdb -omol2 whatever
-            acpype_logs = run([
-                "acpype",
-                "-i",
-                ligand_pdb,
-                #"-n",
-                #"0",
-            ], stdout=PIPE).stdout.decode()
-
-            energies_file = name + '.acpype/' + name + '.mol2'
-            # Check if the output file exists. If not, send error and print acpype logs
-            if not os.path.exists(energies_file):
-                print(acpype_logs)
-                raise SystemExit(
-                    "ERROR: Something was wrong with ACPYPE")
-            # Write all lines but the last line: 'END'
-            with open(energies_file, "r") as file:
-                energies_lines = file.readlines()
-
-            # Mine the energies in the acpype output file
-            # These energies are used by CMIP as a reference
-            # Count how many lines are energy 0
+            # This process is done only if the ligand value 'acpype' is True
             energies = []
-            zero_count = 0
-            for line in energies_lines:
-                line = line.split()
-                if len(line) == 9:
-                    energy_value = line[-1]
-                    if float(energy_value) == 0:
-                        zero_count += 1
-                    energies.append(energy_value)
+                
+            if acpype_is_required:
 
-            # If all lines are energy 0 return here
-            if zero_count == len(energies):
-                raise SystemExit(
-                    "All energies are zero! Check files and try again")
+                # Run acpype
+                # test = !obabel -ipdb $ligand_pdb -omol2 whatever
+                acpype_logs = run([
+                    "acpype",
+                    "-i",
+                    ligand_pdb,
+                    #"-n",
+                    #"0",
+                ], stdout=PIPE).stdout.decode()
 
-            # Check the number of atoms matches the number of energies
-            if len(list(selection.iterAtoms())) != len(energies):
-                raise SystemExit(
-                    "Stop!! The number of atoms and energies does not match :/")
+                energies_file = name + '.acpype/' + name + '.mol2'
+                # Check if the output file exists. If not, send error and print acpype logs
+                if not os.path.exists(energies_file):
+                    print(acpype_logs)
+                    raise SystemExit(
+                        "ERROR: Something was wrong with ACPYPE")
+                # Write all lines but the last line: 'END'
+                with open(energies_file, "r") as file:
+                    energies_lines = file.readlines()
+
+                # Mine the energies in the acpype output file
+                # These energies are used by CMIP as a reference
+                # Count how many lines are energy 0
+                zero_count = 0
+                for line in energies_lines:
+                    line = line.split()
+                    if len(line) == 9:
+                        energy_value = line[-1]
+                        if float(energy_value) == 0:
+                            zero_count += 1
+                        energies.append(energy_value)
+
+                # If all lines are energy 0 return here
+                if zero_count == len(energies):
+                    raise SystemExit(
+                        "All energies are zero! Check files and try again")
+
+                # Check the number of atoms matches the number of energies
+                if len(list(selection.iterAtoms())) != len(energies):
+                    raise SystemExit(
+                        "Stop!! The number of atoms and energies does not match :/")
 
             # Adapt atom elements to match what CMIP expects to find
             # Hydrogens bonded to oxygen or nitrogen or sulfur must be renamed as HO or HN
@@ -266,44 +387,55 @@ def energies(
             selection = adapt_cmip_atoms(selection)
             prody.writePDB(ligand_pdb, selection)
 
-            # Copy the 'res.lib' file in the local path and open it to 'a'ppend new text
-            reslib_filename = name + '_res.lib'
-            #!cp $source_reslib ./$reslib_filename
-            run([
-                "cp",
-                source_reslib,
-                reslib_filename,
-            ], stdout=PIPE).stdout.decode()
+            if acpype_is_required:
 
-            with open(reslib_filename, "a") as reslib:
+                # Copy the 'res.lib' file in the local path and open it to 'a'ppend new text
+                reslib_filename = name + '_res.lib'
+                run([
+                    "cp",
+                    reslib_source,
+                    reslib_filename,
+                ], stdout=PIPE).stdout.decode()
 
-                # Prepare the standard formatted line for each atom
-                # Then write it into the 'res.lib' file
-                atoms = selection.iterAtoms()
-                for i, atom in enumerate(atoms):
-                    residue = atom.getResname().ljust(5)
-                    atomname = atom.getName().ljust(5)
-                    element = atom.getElement().ljust(6)
-                    energy = energies[i]
-                    if energy[0] != '-':
-                        energy = ' ' + energy
-                    line = residue + atomname + element + energy
-                    reslib.write(line + '\n')
+                with open(reslib_filename, "a") as reslib:
+
+                    # Prepare the standard formatted line for each atom
+                    # Then write it into the 'res.lib' file
+                    atoms = selection.iterAtoms()
+                    for i, atom in enumerate(atoms):
+                        residue = atom.getResname().ljust(5)
+                        atomname = atom.getName().ljust(5)
+                        element = atom.getElement().ljust(6)
+                        energy = energies[i]
+                        if energy[0] != '-':
+                            energy = ' ' + energy
+                        line = residue + atomname + element + energy
+                        reslib.write(line + '\n')
 
             # Get the cmip ligand input file
             ligand_cmip = name + '.cmip.pdb'
-            run([
+            logs = run([
                 "perl",
-                preppdb_source,
+                old_preppdb_source,
                 reslib_filename,
                 ligand_pdb,
                 ligand_cmip,
             ], stdout=PIPE).stdout.decode()
+            #print (logs)
+
+            # Remove the pdb header since sometimes it makes cmip failing
+            pdb_content = None
+            with open(ligand_cmip, 'r+') as file:
+                pdb_content = file.readlines()
+            with open(ligand_cmip, 'w') as file:
+                for line in pdb_content:
+                    if line[0:4] == 'ATOM':
+                        file.write(line)
 
             cmip_output = 'protein-' + name + '.energy.pdb'
 
-            # check host and guest dimensions to build grid
-            cmip_logs_host = run([
+            # check protein and ligand dimensions to build grid
+            cmip_logs_protein = run([
                 "cmip",
                 "-i",
                 check_source,
@@ -316,10 +448,12 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
+            #print('PROTEIN!')
+            #print(cmip_logs_protein)
             prot_center, prot_density, prot_units = mine_cmip_output(
-                cmip_logs_host.split("\n"))
+                cmip_logs_protein.split("\n"))
 
-            cmip_logs_guest = run([
+            cmip_logs_ligand = run([
                 "cmip",
                 "-i",
                 check_source,
@@ -332,8 +466,10 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
+            #print('LIAGND!')
+            #print(cmip_logs_ligand)
             lig_center, lig_density, lig_units = mine_cmip_output(
-                cmip_logs_guest.split("\n"))
+                cmip_logs_ligand.split("\n"))
 
             new_center, new_density = compute_new_grid(
                 prot_center,
@@ -355,7 +491,6 @@ def energies(
                 "cmip",
                 "-i",
                 test_input_file,
-                # test_source,
                 "-pr",
                 protein_cmip,
                 "-vdw",
@@ -365,7 +500,8 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            # print(cmip_logs)
+            #print('FINAL!')
+            #print(cmip_logs)
 
             # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
             # Group the results by reidues adding their values
@@ -398,23 +534,32 @@ def energies(
 
         return ligand_data
 
-    # Set the number of frames where we extract energies to calculate the average
+    # Set the frames where we extract energies to calculate the average
+    frames = range(1, snapshots)
+
+    # Set a maximum of frames
+    # If trajectory has more frames than the limit create a reduced trajectory
+    energies_trajectory_filename = input_trajectory_filename
     frames_number = 100
-    frames = None
     if snapshots > frames_number:
-        frames = [f * math.floor(snapshots / frames_number)
-                  for f in range(1, frames_number + 1)]
-    else:
-        frames = range(1, snapshots + 1)
+        energies_trajectory_filename = 'energies.trajectory.xtc'
+        get_reduced_trajectory(
+            input_topology_filename,
+            input_trajectory_filename,
+            energies_trajectory_filename,
+            snapshots,
+            frames_number,
+        )
+        frames = range(1, frames_number)
 
     # Extract the energies for each frame
     #data = []
+    frames_ndx = 'frames.ndx'
     ligands_data = [[] for l in ligands]
     for f in frames:
         # Extract the current frame
         current_frame = 'frame' + str(f) + '.pdb'
         # The frame selection input in gromacs works with a 'ndx' file
-        frames_ndx = 'frames.ndx'
         with open(frames_ndx, 'w') as file:
             file.write('[frames]\n' + str(f))
         p = Popen([
@@ -427,7 +572,7 @@ def energies(
             "-s",
             input_topology_filename,
             "-f",
-            input_trajectory_filename,
+            energies_trajectory_filename,
             '-o',
             current_frame,
             "-fr",
@@ -532,3 +677,10 @@ def energies(
     # Finally, export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({'data': output_analysis}, file)
+
+    # Finally remove the reduced trajectory since it is not required anymore
+    if energies_trajectory_filename == 'energies.trajectory.xtc':
+        logs = run([
+            "rm",
+            energies_trajectory_filename,
+        ], stdout=PIPE).stdout.decode()

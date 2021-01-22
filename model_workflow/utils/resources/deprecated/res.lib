@@ -967,8 +967,6 @@ ALAC HB3  H      0.0764
 ALAC C    C      0.7731
 ALAC O    O     -0.8055
 ALAC OXT  O     -0.8055
-ALAC OC1  O     -0.8055
-ALAC OC2  O     -0.8055
 GLYC N    N     -0.3821
 GLYC H    HN     0.2681
 GLYC CA   C     -0.2493
@@ -977,8 +975,6 @@ GLYC HA3  H      0.1056
 GLYC C    C      0.7231
 GLYC O    O     -0.7855
 GLYC OXT  O     -0.7855
-GLYC OC1  O     -0.7855
-GLYC OC2  O     -0.7855
 SERC N    N     -0.3821
 SERC H    HN     0.2681
 SERC CA   C     -0.2722
@@ -992,8 +988,6 @@ SERC HG   HO     0.4474
 SERC C    C      0.8113
 SERC O    O     -0.8132
 SERC OXT  O     -0.8132
-SERC OC1  O     -0.8132
-SERC OC2  O     -0.8132
 THRC N    N     -0.3821
 THRC H    HN     0.2681
 THRC CA   C     -0.2420
@@ -1009,8 +1003,6 @@ THRC HG1  HO     0.4119
 THRC C    C      0.7810
 THRC O    O     -0.8044
 THRC OXT  O     -0.8044
-THRC OC1  O     -0.8044
-THRC OC2  O     -0.8044
 LEUC N    N     -0.3821
 LEUC H    HN     0.2681
 LEUC CA   C     -0.2847
@@ -1032,6 +1024,7 @@ LEUC HD23 H      0.1038
 LEUC C    C      0.8326
 LEUC O    O     -0.8199
 LEUC OXT  O     -0.8199
+# DANI
 LEUC OC1  O     -0.8199
 LEUC OC2  O     -0.8199
 ILEC N    N     -0.3821
@@ -1054,8 +1047,6 @@ ILEC HD13 H      0.0196
 ILEC C    C      0.8343
 ILEC O    O     -0.8190
 ILEC OXT  O     -0.8190
-ILEC OC1  O     -0.8190
-ILEC OC2  O     -0.8190
 VALC N    N     -0.3821
 VALC H    HN     0.2681
 VALC CA   C     -0.3438
@@ -1073,8 +1064,6 @@ VALC HG23 H      0.0836
 VALC C    C      0.8350
 VALC O    O     -0.8173
 VALC OXT  O     -0.8173
-VALC OC1  O     -0.8173
-VALC OC2  O     -0.8173
 ASNC N    N     -0.3821
 ASNC H    HN     0.2681
 ASNC CA   C     -0.2080
@@ -1091,8 +1080,6 @@ ASNC HD22 HN     0.4150
 ASNC C    C      0.8050
 ASNC O    O     -0.8147
 ASNC OXT  O     -0.8147
-ASNC OC1  O     -0.8147
-ASNC OC2  O     -0.8147
 GLNC N    N     -0.3821
 GLNC H    HN     0.2681
 GLNC CA   C     -0.2248
@@ -1113,6 +1100,7 @@ GLNC HE22 HN     0.4304
 GLNC C    C      0.7775
 GLNC O    O     -0.8042
 GLNC OXT  O     -0.8042
+# DANI
 GLNC OC1  O     -0.8042
 GLNC OC2  O     -0.8042
 ARGC N    N     -0.3481
@@ -1143,8 +1131,6 @@ ARGC HH22 HN     0.4493
 ARGC C    C      0.8557
 ARGC O    O     -0.8266
 ARGC OXT  O     -0.8266
-ARGC OC1  O     -0.8266
-ARGC OC2  O     -0.8266
 HIDC N    N     -0.3821
 HIDC H    HN     0.2681
 HIDC CA   C     -0.1739
@@ -1164,8 +1150,6 @@ HIDC HD2  H      0.1241
 HIDC C    C      0.7615
 HIDC O    O     -0.8016
 HIDC OXT  O     -0.8016
-HIDC OC1  O     -0.8016
-HIDC OC2  O     -0.8016
 HIEC N    N     -0.3821
 HIEC H    HN     0.2681
 HIEC CA   C     -0.2699
@@ -1185,8 +1169,6 @@ HIEC HD2  H      0.1957
 HIEC C    C      0.7916
 HIEC O    O     -0.8065
 HIEC OXT  O     -0.8065
-HIEC OC1  O     -0.8065
-HIEC OC2  O     -0.8065
 HIPC N    N     -0.3481
 HIPC H    HN     0.2764
 HIPC CA   C     -0.1445
@@ -1207,8 +1189,6 @@ HIPC HD2  H      0.2336
 HIPC C    C      0.8032
 HIPC O    O     -0.8177
 HIPC OXT  O     -0.8177
-HIPC OC1  O     -0.8177
-HIPC OC2  O     -0.8177
 TRPC N    N     -0.3821
 TRPC H    HN     0.2681
 TRPC CA   C     -0.2084
@@ -1235,8 +1215,6 @@ TRPC CD2  C      0.1078
 TRPC C    C      0.7658
 TRPC O    O     -0.8011
 TRPC OXT  O     -0.8011
-TRPC OC1  O     -0.8011
-TRPC OC2  O     -0.8011
 PHEC N    N     -0.3821
 PHEC H    HN     0.2681
 PHEC CA   C     -0.1825
@@ -1259,8 +1237,6 @@ PHEC HD2  H      0.1408
 PHEC C    C      0.7660
 PHEC O    O     -0.8026
 PHEC OXT  O     -0.8026
-PHEC OC1  O     -0.8026
-PHEC OC2  O     -0.8026
 TYRC N    N     -0.3821
 TYRC H    HN     0.2681
 TYRC CA   C     -0.2015
@@ -1284,8 +1260,6 @@ TYRC HD2  H      0.1780
 TYRC C    C      0.7817
 TYRC O    O     -0.8070
 TYRC OXT  O     -0.8070
-TYRC OC1  O     -0.8070
-TYRC OC2  O     -0.8070
 GLUC N    N     -0.5192
 GLUC H    HN     0.3055
 GLUC CA   C     -0.2059
@@ -1304,8 +1278,6 @@ GLUC OE2  O     -0.8220
 GLUC C    C      0.7420
 GLUC O    O     -0.7930
 GLUC OXT  O     -0.7930
-GLUC OC1  O     -0.7930
-GLUC OC2  O     -0.7930
 ASPC N    N     -0.5192
 ASPC H    HN     0.3055
 ASPC CA   C     -0.1817
@@ -1320,8 +1292,6 @@ ASPC OD2  O     -0.8162
 ASPC C    C      0.7256
 ASPC O    O     -0.7887
 ASPC OXT  O     -0.7887
-ASPC OC1  O     -0.7887
-ASPC OC2  O     -0.7887
 LYSC N    N     -0.3481
 LYSC H    HN     0.2764
 LYSC CA   C     -0.2903
@@ -1349,8 +1319,6 @@ LYSC HZ3  HN     0.3374
 LYSC C    C      0.8488
 LYSC O    O     -0.8252
 LYSC OXT  O     -0.8252
-LYSC OC1  O     -0.8252
-LYSC OC2  O     -0.8252
 PROC N    N     -0.2802
 PROC CD   C      0.0434
 PROC HD1  H      0.0331
@@ -1369,8 +1337,6 @@ PROC HA   H      0.0776
 PROC C    C      0.6631
 PROC O    O     -0.7697
 PROC OXT  O     -0.7697
-PROC OC1  O     -0.7697
-PROC OC2  O     -0.7697
 CYSC N    N     -0.3821
 CYSC H    HN     0.2681
 CYSC CA   C     -0.1635
@@ -1384,8 +1350,6 @@ CYSC H G  HN     0.2068
 CYSC C    C      0.7497
 CYSC O    O     -0.7981
 CYSC OXT  O     -0.7981
-CYSC OC1  O     -0.7981
-CYSC OC2  O     -0.7981
 CYXC N    N     -0.3821
 CYXC H    HN     0.2681
 CYXC CA   C     -0.1318
@@ -1398,8 +1362,6 @@ CYXC SG   S     -0.0529
 CYXC C    C      0.7618
 CYXC O    O     -0.8041
 CYXC OXT  O     -0.8041
-CYXC OC1  O     -0.8041
-CYXC OC2  O     -0.8041
 METC N    N     -0.3821
 METC H    HN     0.2681
 METC CA   C     -0.2597
@@ -1420,8 +1382,6 @@ METC HE3  H      0.0625
 METC C    C      0.8013
 METC O    O     -0.8105
 METC OXT  O     -0.8105
-METC OC1  O     -0.8105
-METC OC2  O     -0.8105
 # AmiNO aCids N - TermiNus
 ALAN N    N      0.1414
 ALAN H1   HN     0.1997

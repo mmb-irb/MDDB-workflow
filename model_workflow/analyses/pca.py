@@ -2,13 +2,13 @@
 import math
 from subprocess import run, PIPE, Popen
 
+from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+
 # Perform the PCA of the trajectory
 # The PCA is performed with the whole trajectory when the size is reasonable
 # When the trajectory is larger than 2000 snapshots we reduce the trajectory
 # A new projection trajectory is made for each eigen vector with 1% or greater explained variance
 # WARNING: Projection trajectories are backbone only
-
-
 def pca(
         input_topology_filename: str,
         input_trajectory_filename: str,
@@ -22,26 +22,13 @@ def pca(
     frames_limit = 2000
     if snapshots > frames_limit:
         pca_trajectory_filename = 'pca.trajectory.xtc'
-        skip = int(math.ceil(snapshots / frames_limit))
-        # Run Gromacs
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
+        get_reduced_trajectory(
             input_topology_filename,
-            "-f",
             input_trajectory_filename,
-            '-o',
             pca_trajectory_filename,
-            '-skip',
-            str(skip),
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+            snapshots,
+            frames_limit,
+        )
 
     # Calculate eigen values and eigen vectors with Gromacs
     p = Popen([

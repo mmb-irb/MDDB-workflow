@@ -3,12 +3,12 @@ Electrostatic + VdW Interaction energy calculation.
  tipcalc=3,irest=0 
  ebyatom = 1 
  readgrid=0 
- cenx=1.6 
- ceny=3.6 
- cenz=-6.6 
- dimx=179 
- dimy=153 
- dimz=187 
+ cenx=78.6 
+ ceny=80.5 
+ cenz=85.5 
+ dimx=203 
+ dimy=179 
+ dimz=252 
  intz=0.5 
  intz=0.5 
  intz=0.5 
