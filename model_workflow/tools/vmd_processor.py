@@ -55,8 +55,8 @@ def vmd_processor (
         file.write('}\n')
         # Write the current trajectory in 'trr' format
         file.write('animate write trr ' + processed_trajectory + ' waitfor all sel $all\n')
-        file.write('$all frame first\n')
         # Write the current topology in 'pdb' format
+        file.write('$all frame first\n')
         file.write('$all writepdb ' + output_topology_filename + '\n')
         file.write('exit\n')
 
