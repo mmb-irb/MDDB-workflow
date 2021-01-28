@@ -19,6 +19,8 @@ def rmsds(
     ):
 
     output_analysis = []
+    start = None
+    step = None
 
     # Iterate over each reference and group
     for reference in rmsd_references:
@@ -32,14 +34,24 @@ def rmsds(
             rmsd(reference, trajectory_filename, group, rmsd_analysis)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis)
-            # Name the mined data and append it to the overall output
-            rmsd_data['reference'] = reference_name
-            rmsd_data['group'] = group_name
-            output_analysis.append(rmsd_data)
+            # Format the mined data and append it to the overall output
+            # Multiply by 10 since rmsd comes in nanometers (nm) and we want it in Ångstroms (Å)
+            rmsd_values = [ v*10 for v in rmsd_data['values'] ]
+            data = {
+                'values': rmsd_values,
+                'reference': reference_name,
+                'group': group_name
+            }
+            output_analysis.append(data)
+            # Capture the time start and step values
+            # All time values through the different rmsds are expected to be the same
+            if not start or not step:
+                start = rmsd_data['times'][0]
+                step = rmsd_data['times'][1] - start
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
+        json.dump({ 'start': start, 'step': step, 'data': output_analysis }, file)
 
 # Read and parse a xvg file
 # xvg file example:
@@ -64,7 +76,4 @@ def xvg_parse (filename : str):
             [time, value] = line.split()
             times.append(float(time))
             values.append(float(value))
-    # Finally set the output object
-    start = times[0]
-    step = times[1] - start
-    return { 'start': start, 'step': step, 'values': values }
+    return { 'times': times, 'values': values }
