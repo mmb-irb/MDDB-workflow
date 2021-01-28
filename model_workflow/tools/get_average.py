@@ -1,9 +1,8 @@
-# Get average
-
 import pytraj as pt
  
 # Get the average structure
 # This process is carried by pytraj, since the Gromacs average may be displaced
+# Output may be both pdb or xtc
 def get_average (
     pytraj_trajectory,
     output_average_filename : str):

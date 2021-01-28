@@ -8,21 +8,22 @@ from subprocess import run, PIPE, Popen
 # Perform the RMSd analysis 
 # Use the first trajectory frame in .pdb format as a reference
 def rmsd (
-    input_first_frame_filename : str,
+    input_reference_filename : str,
     input_trajectory_filename : str,
+    group_name : str,
     output_analysis_filename : str) -> str:
     
     # Run Gromacs
     p = Popen([
         "echo",
-        "Protein",
-        "Protein",
+        group_name, # Select group for least squares fit
+        group_name, # Select group for RMSD calculation
     ], stdout=PIPE)
     logs = run([
         "gmx",
         "rms",
         "-s",
-        input_first_frame_filename,
+        input_reference_filename,
         "-f",
         input_trajectory_filename,
         '-o',

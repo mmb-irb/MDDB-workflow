@@ -24,7 +24,8 @@ from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.remove_trash import remove_trash
 
 # Import local analyses
-from model_workflow.analyses.generic_analyses import rmsd, rmsf, rgyr
+from model_workflow.analyses.rmsds import rmsds
+from model_workflow.analyses.generic_analyses import rmsf, rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
@@ -190,9 +191,15 @@ def analysis_prep(
 
     # Get the average structure in frame format
     # It is further loaded to database and used to represent pockets
-    average_filename = 'average.xtc'
-    if required(average_filename):
-        get_average(pt_trajectory, average_filename)
+    average_structure_filename = 'average.pdb'
+    if required(average_structure_filename):
+        get_average(pt_trajectory, average_structure_filename)
+
+    # Get the average structure in frame format
+    # It is further loaded to database and used to represent pockets
+    average_frame_filename = 'average.xtc'
+    if required(average_frame_filename):
+        get_average(pt_trajectory, average_frame_filename)
 
     # Interactions setup --------------------------------------------------------------------
 
@@ -338,12 +345,12 @@ def run_analyses(
 
     print('Running analyses')
 
-    # Set the RMSd analysis file name and run the analysis
-    first_frame_filename = 'firstFrame.pdb'
-    rmsd_analysis = 'md.rmsd.xvg'
-    if required(rmsd_analysis):
-        print('- RMSd')
-        rmsd(first_frame_filename, trajectory_filename, rmsd_analysis)
+    # Run the RMSD analyses
+    rmsd_references = [first_frame_filename, average_structure_filename]
+    rmsds_analysis = 'md.rmsds.json'
+    if required(rmsds_analysis):
+        print('- RMSds analysis')
+        rmsds(trajectory_filename, rmsds_analysis, rmsd_references)
 
     # Set the fluctuation analysis file name and run the analysis
     rmsf_analysis = 'md.rmsf.xvg'
