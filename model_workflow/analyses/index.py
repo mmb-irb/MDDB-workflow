@@ -25,6 +25,7 @@ from model_workflow.tools.remove_trash import remove_trash
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
+from model_workflow.analyses.tmscores import tmscores
 from model_workflow.analyses.generic_analyses import rmsf, rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.pca_contacts import pca_contacts
@@ -180,7 +181,7 @@ def analysis_prep(
     # It is used further in the RMSd analysis
     first_frame_filename = 'firstFrame.pdb'
     if required(first_frame_filename):
-        get_first_frame(topology_filename, topology_filename,
+        get_first_frame(topology_filename, trajectory_filename,
                         first_frame_filename)
 
     # Get the backbone structure
@@ -351,6 +352,13 @@ def run_analyses(
     if required(rmsds_analysis):
         print('- RMSds analysis')
         rmsds(trajectory_filename, rmsds_analysis, rmsd_references)
+
+    # Run the TM score analyses
+    tmscore_references = [first_frame_filename, average_structure_filename]
+    tmscores_analysis = 'md.tmscores.json'
+    if required(tmscores_analysis):
+        print('- TM scores analysis')
+        tmscores(topology_filename, trajectory_filename, rmsds_analysis, snapshots, rmsd_references)
 
     # Set the fluctuation analysis file name and run the analysis
     rmsf_analysis = 'md.rmsf.xvg'

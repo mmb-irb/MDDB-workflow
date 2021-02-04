@@ -10,6 +10,7 @@ import pytraj as pt
 import model_workflow.analyses.index as model_index
 
 from model_workflow.analyses.rmsds import rmsds
+from model_workflow.analyses.tmscores import tmscores
 from model_workflow.analyses.generic_analyses import rmsf, rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.pca_contacts import pca_contacts
@@ -57,9 +58,16 @@ def execute_workflow(args):
         analysis_functions = {
             # "key": [func, args],
             "rmsds": (rmsds, {
-                "trajectory_filename": trajectory_filename,
+                "input_trajectory_filename": trajectory_filename,
                 "output_analysis_filename": 'md.rmsds.json',
                 "rmsd_references": ["firstFrame.pdb", "average.pdb"]
+            }),
+            "tmscores": (tmscores, {
+                "input_topology_filename": topology_filename,
+                "input_trajectory_filename": trajectory_filename,
+                "output_analysis_filename": 'md.tmscores.json',
+                "snapshots": snapshots,
+                "tmscore_references": ["firstFrame.pdb", "average.pdb"]
             }),
             "rmsf": (rmsf, {
                 "input_topology_filename": topology_filename,
@@ -160,6 +168,7 @@ parser.add_argument(
     "-a", "--single_analysis",
     choices=[
         "rmsds",
+        "tmscores",
         "rmsf",
         "rgyr",
         "pca",

@@ -1,5 +1,6 @@
 from model_workflow.analyses.generic_analyses import rmsd
 
+from subprocess import run, PIPE
 import json
 
 # Run multiple RMSD analyses
@@ -12,7 +13,7 @@ import json
 # - Backbone
 # - Alpha carbons
 def rmsds(
-    trajectory_filename : str,
+    input_trajectory_filename : str,
     output_analysis_filename : str,
     rmsd_references : list,
     rmsd_groups : list = ['Protein', 'Protein-H', 'Backbone', 'C-alpha'],
@@ -24,14 +25,15 @@ def rmsds(
 
     # Iterate over each reference and group
     for reference in rmsd_references:
+        # Get a standarized reference name
+        reference_name = reference[0:-4].lower()
         for group in rmsd_groups:
-            # Get standarized reference and group names
-            reference_name = reference[0:-4].lower()
+            # Get a standarized group name
             group_name = group.lower()
             # Set the analysis filename
             rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name + '.xvg'
             # Run the rmsd
-            rmsd(reference, trajectory_filename, group, rmsd_analysis)
+            rmsd(reference, input_trajectory_filename, group, rmsd_analysis)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis)
             # Format the mined data and append it to the overall output
@@ -48,6 +50,11 @@ def rmsds(
             if not start or not step:
                 start = rmsd_data['times'][0]
                 step = rmsd_data['times'][1] - start
+            # Remove the analysis xvg file since it is not required anymore
+            run([
+                "rm",
+                rmsd_analysis,
+            ], stdout=PIPE).stdout.decode()
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:

@@ -15,3 +15,7 @@ dependencies:
   - prody
   - scikit-learn
   - fpocket
+  - pip
+  - pip:
+    - tmscoring
+    - iminuit<2
