@@ -261,6 +261,12 @@ def analysis_prep(
     # Count the number of snapshots
     snapshots = get_frames_count(topology_filename, trajectory_filename)
 
+    # Calculate the frequency
+    # Divide the simulation time, which is in nanoseconds (ns) by the number of frames
+    # Multiply it by 1000 since we want the frequency in picoseconds (ps)
+    length = getInput('length')
+    frequency = (length / snapshots) * 1000
+
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
         topology_filename, trajectory_filename)
@@ -302,10 +308,10 @@ def analysis_prep(
         'LICENSE': getInput('license'),
         'LINKCENSE': getInput('linkcense'),
         'CITATION': getInput('citation'),
-        'LENGTH': getInput('length'),
+        'LENGTH': length,
         'TIMESTEP': getInput('timestep'),
         'SNAPSHOTS': snapshots,
-        'FREQUENCY': getInput('frequency'),
+        'FREQUENCY': frequency,
         'FF': getInput('ff'),
         'TEMP': getInput('temp'),
         'WAT': getInput('wat'),
