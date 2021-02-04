@@ -20,8 +20,11 @@ def rmsds(
     ):
 
     output_analysis = []
-    start = None
-    step = None
+    start = 0
+    # The step is always 1 since we are not using a reduced trajectory
+    # WARNING: This is the frames step, no the time step. The time step is calculated in the client
+    # WARNING: Do never mine the time step from a xvg file, since gromacs may have wrong times
+    step = 1
 
     # Iterate over each reference and group
     for reference in rmsd_references:
@@ -45,11 +48,6 @@ def rmsds(
                 'group': group_name
             }
             output_analysis.append(data)
-            # Capture the time start and step values
-            # All time values through the different rmsds are expected to be the same
-            if not start or not step:
-                start = rmsd_data['times'][0]
-                step = rmsd_data['times'][1] - start
             # Remove the analysis xvg file since it is not required anymore
             run([
                 "rm",
