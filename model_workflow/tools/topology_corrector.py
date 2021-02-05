@@ -45,19 +45,20 @@ def topology_corrector(
     if no_chains:
         modified = True
         print('WARNING: Default chains are missing')
-        chainned_topology = 'chainned_topology.pdb'
-        run([
-            "perl",
-            add_chains_script,
-            input_topology_filename,
-            chainned_topology,
-        ], stdout=PIPE).stdout.decode()
-        test = prody.parsePDB(chainned_topology)
-        run([
-            "rm",
-            chainned_topology,
-        ], stdout=PIPE).stdout.decode()
-        logs.append('- Chains have been asigned automatically')
+        raise SystemExit("ERROR: This system is deprecated. Use vmd processor")
+        #chainned_topology = 'chainned_topology.pdb'
+        #run([
+        #     "perl",
+        #     add_chains_script,
+        #     input_topology_filename,
+        #     chainned_topology,
+        # ], stdout=PIPE).stdout.decode()
+        # test = prody.parsePDB(chainned_topology)
+        # run([
+        #     "rm",
+        #     chainned_topology,
+        # ], stdout=PIPE).stdout.decode()
+        # logs.append('- Chains have been asigned automatically')
 
     # ------------------------------------------------------------------------------------------
     # Repeated chains --------------------------------------------------------------------------
