@@ -31,8 +31,8 @@ from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
 reslib_source = resources + '/res.lib'
-preppdb_source = resources + '/preppdb.pl' # For proteins
-old_preppdb_source = resources + '/old_preppdb.pl' # For ligands
+preppdb_source = resources + '/preppdb.pl'  # For proteins
+old_preppdb_source = resources + '/old_preppdb.pl'  # For ligands
 check_source = resources + '/check.in'
 vdw_source = resources + '/vdwprm'
 
@@ -63,16 +63,20 @@ def mine_cmip_output(logs):
         raise SystemExit('ERROR: Something was wrong with CMIP')
     return center, density, units
 
-# 
+#
+
+
 def compute_new_grid(
         prot_center,
         prot_density,
         prot_units,
         lig_center,
         lig_density,
-        lig_units):
-    new_center = [(i + j) / 2 for i, j in zip(prot_center, lig_center)]
+        lig_units,
+        extra_density=1):
+    new_center = []  # [(i + j) / 2 for i, j in zip(prot_center, lig_center)]
     new_density = []
+
     for k in range(3):
         min_prot = prot_center[k] - prot_density[k] * prot_units[k]
         min_lig = lig_center[k] - lig_density[k] * lig_units[k]
@@ -80,8 +84,11 @@ def compute_new_grid(
         max_prot = prot_center[k] + prot_density[k] * prot_units[k]
         max_lig = lig_center[k] + lig_density[k] * lig_units[k]
         max_new = max(max_prot, max_lig)
-        dnew = int(abs(max_new - min_new))
+
+        dnew = int(abs(max_new - min_new) + extra_density)
+        cnew = min_new + (dnew / 2)
         new_density.append(dnew)
+        new_center.append(cnew)
     return new_center, new_density
 
 
@@ -137,9 +144,10 @@ def energies(
 
         # Try to guess the atom element from the name of the atom
         # This is used only when element is missing
-        cmip_supported_elements = ['Cl','Na','Zn','Mg','C','N','P','S',
-            'HW','HO','HN','H','F','OW','O','IP','IM','I']
-        def guess_name_element(name : str) -> str:
+        cmip_supported_elements = ['Cl', 'Na', 'Zn', 'Mg', 'C', 'N', 'P', 'S',
+                                   'HW', 'HO', 'HN', 'H', 'F', 'OW', 'O', 'IP', 'IM', 'I']
+
+        def guess_name_element(name: str) -> str:
             length = len(name)
             next_character = None
             for i, character in enumerate(name):
@@ -167,7 +175,8 @@ def energies(
                 # Finally, try with the first character alone
                 if character in cmip_supported_elements:
                     return character
-                raise SystemExit("ERROR: Not recognized element in '" + name + "'")
+                raise SystemExit(
+                    "ERROR: Not recognized element in '" + name + "'")
 
         def find_closest_atom(atom):
             current_coords = atom.getCoords()
@@ -180,7 +189,7 @@ def energies(
             index = distances.index(smallest_distance)
             closest_atom = selection_atoms[index]
             return closest_atom
-            
+
         # Update the element of each hydrogen according to CMIP needs
         for atom in selection_atoms:
             # First of all, correct tha name by removing numbers at the start
@@ -211,7 +220,8 @@ def energies(
                 elif bonded_heavy_atom == 'N' or bonded_heavy_atom == 'S':
                     element = 'HN'
                 else:
-                    raise SystemExit('ERROR: Hydrogen bonded to not supported heavy atom')
+                    raise SystemExit(
+                        'ERROR: Hydrogen bonded to not supported heavy atom')
             # Update other elements naming
             if element == 'CL':
                 element = 'Cl'
@@ -224,15 +234,15 @@ def energies(
             if element == 'MG':
                 element = 'Mg'
             # Set the correct element
-            atom.setElement(element)   
+            atom.setElement(element)
         # Return the corrected prody topology
         return selection
 
     protein_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS',
-        'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+                        'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
 
     rna_residues = ['RA', 'RU', 'RC', 'RG']
-    
+
     # Change residue names in a prody selection to meet the CMIP requirements
     # Change terminal residue names by adding an 'N' or 'C'
     def name_terminal_residues(selection):
@@ -272,7 +282,7 @@ def energies(
             elif last_residue_name in rna_residues:
                 last_residue_name += '3'
                 last_residue.setResname(last_residue_name)
-        
+
         # Return the corrected prody topology
         return new_selection
 
@@ -315,7 +325,7 @@ def energies(
             # Create a new pdb only with the current ligand
             # Adapt this topology to ACPYPE by changing some element names
             # WARNING: Name spaces must be replaced by underscore or processes will fail
-            name = ligand['name'].replace(' ','_')
+            name = ligand['name'].replace(' ', '_')
             ligand_pdb = name + '.pdb'
             selection = original_topology.select(ligand['prody'])
             # If no acpype is run it means the ligand is known by the default cmip reslib
@@ -332,7 +342,7 @@ def energies(
             # Calculate the energies with acpype and then mine them
             # This process is done only if the ligand value 'acpype' is True
             energies = []
-                
+
             if acpype_is_required:
 
                 # Run acpype
@@ -341,8 +351,8 @@ def energies(
                     "acpype",
                     "-i",
                     ligand_pdb,
-                    #"-n",
-                    #"0",
+                    # "-n",
+                    # "0",
                 ], stdout=PIPE).stdout.decode()
 
                 energies_file = name + '.acpype/' + name + '.mol2'
@@ -448,8 +458,6 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            #print('PROTEIN!')
-            #print(cmip_logs_protein)
             prot_center, prot_density, prot_units = mine_cmip_output(
                 cmip_logs_protein.split("\n"))
 
@@ -466,8 +474,6 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            #print('LIAGND!')
-            #print(cmip_logs_ligand)
             lig_center, lig_density, lig_units = mine_cmip_output(
                 cmip_logs_ligand.split("\n"))
 
@@ -500,8 +506,6 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
-            #print('FINAL!')
-            #print(cmip_logs)
 
             # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
             # Group the results by reidues adding their values
@@ -532,6 +536,7 @@ def energies(
 
             ligand_data.append(residues)
 
+        raise SystemExit
         return ligand_data
 
     # Set the frames where we extract energies to calculate the average
@@ -550,7 +555,7 @@ def energies(
             snapshots,
             frames_number,
         )
-        frames = range(1, frames_number)
+        frames = range(1, frames_number)  # if frames_number > 1 else [1]
 
     # Extract the energies for each frame
     #data = []
