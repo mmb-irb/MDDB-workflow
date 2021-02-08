@@ -536,7 +536,6 @@ def energies(
 
             ligand_data.append(residues)
 
-        raise SystemExit
         return ligand_data
 
     # Set the frames where we extract energies to calculate the average
