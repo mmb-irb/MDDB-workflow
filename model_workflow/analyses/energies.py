@@ -33,7 +33,8 @@ resources = str(Path(__file__).parent.parent / "utils" / "resources")
 reslib_source = resources + '/res.lib'
 preppdb_source = resources + '/preppdb.pl'  # For proteins
 old_preppdb_source = resources + '/old_preppdb.pl'  # For ligands
-check_source = resources + '/check.in'
+cmip_inputs_checkonly_source = resources + '/check.in'
+cmip_inputs_source = resources + '/input.in'
 vdw_source = resources + '/vdwprm'
 
 
@@ -63,9 +64,8 @@ def mine_cmip_output(logs):
         raise SystemExit('ERROR: Something was wrong with CMIP')
     return center, density, units
 
-#
-
-
+# This function is used to create new grid parameters
+# The new grid is expected to cover both input grids: protein grid and ligand grid
 def compute_new_grid(
         prot_center,
         prot_density,
@@ -90,30 +90,6 @@ def compute_new_grid(
         new_density.append(dnew)
         new_center.append(cnew)
     return new_center, new_density
-
-
-def write_CMIP_input(test_input_file, weighted_center, weighted_density):
-    test_in_file = [
-        "Electrostatic + VdW Interaction energy calculation. \n",
-        "&cntrl \n",
-        " tipcalc=3,irest=0 \n",
-        " ebyatom = 1 \n",
-        " readgrid=0 \n",
-        f" cenx={weighted_center[0]:.1f} \n",
-        f" ceny={weighted_center[1]:.1f} \n",
-        f" cenz={weighted_center[2]:.1f} \n",
-        f" dimx={int(weighted_density[0])} \n",
-        f" dimy={int(weighted_density[1])} \n",
-        f" dimz={int(weighted_density[2])} \n",
-        " intz=0.5 \n",
-        " intz=0.5 \n",
-        " intz=0.5 \n",
-        " coorfmt=2 \n",
-        " fvdw=0.8 \n",
-        "&end \n"]
-    with open(test_input_file, "w") as f:
-        for line in test_in_file:
-            f.write(line)
 
 
 # Perform the electrostatic and vdw energies analysis for each ligand
@@ -362,6 +338,7 @@ def energies(
                     raise SystemExit(
                         "ERROR: Something was wrong with ACPYPE")
                 # Write all lines but the last line: 'END'
+                energies_lines = None
                 with open(energies_file, "r") as file:
                     energies_lines = file.readlines()
 
@@ -444,11 +421,12 @@ def energies(
 
             cmip_output = 'protein-' + name + '.energy.pdb'
 
-            # check protein and ligand dimensions to build grid
+            # Run CMIP in 'checkonly' mode and save the grid dimensions output
+            # First do it for the protein
             cmip_logs_protein = run([
                 "cmip",
                 "-i",
-                check_source,
+                cmip_inputs_checkonly_source,
                 "-pr",
                 ligand_cmip,
                 "-vdw",
@@ -458,13 +436,17 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
+
+            # Mine the grid dimensions from CMIP logs
             prot_center, prot_density, prot_units = mine_cmip_output(
                 cmip_logs_protein.split("\n"))
 
+            # Run CMIP in 'checkonly' mode and save the grid dimensions output
+            # Now do it for the ligand
             cmip_logs_ligand = run([
                 "cmip",
                 "-i",
-                check_source,
+                cmip_inputs_checkonly_source,
                 "-pr",
                 protein_cmip,
                 "-vdw",
@@ -474,9 +456,12 @@ def energies(
                 "-byat",
                 cmip_output,
             ], stdout=PIPE).stdout.decode()
+
+            # Mine the grid dimensions from CMIP logs
             lig_center, lig_density, lig_units = mine_cmip_output(
                 cmip_logs_ligand.split("\n"))
 
+            # Calculate grid dimensions for a new grid which contains both previous grids
             new_center, new_density = compute_new_grid(
                 prot_center,
                 prot_density,
@@ -485,18 +470,43 @@ def energies(
                 lig_density,
                 lig_units)
 
-            test_input_file = resources + '/input.in'
-            write_CMIP_input(
-                test_input_file,
-                new_center,
-                new_density)
+            # Copy the cmip inputs source file locally and write the new grid parameters on it
+            # Set the name for the local inputs file
+            cmip_inputs = 'cmip.in'
+            # Copy the source
+            logs = run([
+                "cp",
+                cmip_inputs_source,
+                cmip_inputs,
+            ], stdout=PIPE).stdout.decode()
+            # Set the new lines to be written in the local inputs file
+            grid_inputs = [
+                f" cenx={new_center[0]:.1f} \n",
+                f" ceny={new_center[1]:.1f} \n",
+                f" cenz={new_center[2]:.1f} \n",
+                f" dimx={int(new_density[0])} \n",
+                f" dimy={int(new_density[1])} \n",
+                f" dimz={int(new_density[2])} \n",
+                #" intx=0.5 \n",
+                #" inty=0.5 \n",
+                #" intz=0.5 \n",
+            ]
+            # Add previous lines to the local inputs file
+            with open(cmip_inputs, "r+") as file:
+                lines = file.readlines()
+                file.seek(0)
+                for line in lines:
+                    if line == '&end \n':
+                        for grid_input in grid_inputs:
+                            file.write(grid_input)
+                    file.write(line) 
 
             # Run the cmip software to get the desired energies
             cmip_output = 'protein-' + name + '.energy.pdb'
             cmip_logs = run([
                 "cmip",
                 "-i",
-                test_input_file,
+                cmip_inputs,
                 "-pr",
                 protein_cmip,
                 "-vdw",
