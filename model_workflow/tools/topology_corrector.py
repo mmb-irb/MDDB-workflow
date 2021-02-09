@@ -5,6 +5,9 @@ from collections import Counter
 
 import itertools
 
+# Import local tools
+from model_workflow.tools.vmd_processor import vmd_chainer
+
 # Set the path to the 'addChains' script
 repo_path = str(Path(__file__).parent.parent)
 add_chains_script = repo_path + '/utils/resources/addChainCV19.pl'
@@ -45,7 +48,14 @@ def topology_corrector(
     if no_chains:
         modified = True
         print('WARNING: Default chains are missing')
-        raise SystemExit("ERROR: This system is deprecated. Use vmd processor")
+
+        # Use VMD to set chains according to fragments
+        vmd_chainer(input_topology_filename, input_topology_filename)
+
+        # Reload the prody topology
+        test = prody.parsePDB(input_topology_filename)
+
+        # This system is deprecated. Use vmd processor
         #chainned_topology = 'chainned_topology.pdb'
         #run([
         #     "perl",

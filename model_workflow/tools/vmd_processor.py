@@ -9,7 +9,7 @@ import glob
 from subprocess import run, PIPE, Popen
 
 # Set he path to a script with all commands needed for vmd to parse the topology file
-commands_filename = 'parser.vmd'
+commands_filename = 'commands.vmd'
 
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .mae (WARNING: May not be fully compatible with the workflow), .psf and .pdb
@@ -107,6 +107,59 @@ def vmd_processor (
         "rm",
         processed_trajectory,
     ], stdout=PIPE).stdout.decode()
+
+    # Return VMD logs
+    return logs
+
+# An abbreviated version of the function above
+# Add chains to a given topology which is missing chains
+def vmd_chainer (
+    input_topology_filename : str,
+    output_topology_filename : str,
+    ) -> str:
+
+    # Prepare a script for the VMD to automate the data parsing. This is Tcl lenguage
+    # In addition, if chains are missing, this script asigns chains by fragment
+    # Fragments are atom groups which are not connected by any bond
+    with open(commands_filename, "w") as file:
+        # Select all atoms
+        file.write('set all [atomselect top "all"]\n')
+        # Get all different chain names
+        file.write('set chains_sample [lsort -unique [${all} get chain]]\n')
+        # If there are only 'X' chains it means there are no chains at all
+        # VMD asigns 'X' to missing chains by default
+        file.write('if {[string compare $chains_sample X] == 0} {\n')
+        # Set letters in alphabetic order
+        file.write('	set letters "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z"\n')
+        # Get the number of fragments
+        file.write('	set fragment_number [llength [lsort -unique -integer [${all} get fragment]]]\n')
+        # For each fragment, set the chain of all atoms which belong to this fragment alphabetically
+        # e.g. fragment 0 -> chain A, fragment 1 -> chain B, ...
+        file.write('	for {set i 0} {$i <= $fragment_number} {incr i} {\n')
+        file.write('		set fragment_atoms [atomselect top "fragment $i"]\n')
+        file.write('		$fragment_atoms set chain [lindex $letters $i]\n')
+        file.write('	}\n')
+        file.write('}\n')
+        # Write the current topology in 'pdb' format
+        file.write('$all frame first\n')
+        file.write('$all writepdb ' + output_topology_filename + '\n')
+        file.write('exit\n')
+
+    # Run VMD
+    logs = run([
+        "vmd",
+        input_topology_filename,
+        "-e",
+        commands_filename,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE).stdout.decode()
+
+    # Check the output files have been created
+    # Otherwise print logs and throw an error
+    if not os.path.exists(output_topology_filename) :
+        print(logs)
+        raise SystemExit("ERROR: Something was wrong with VMD")
 
     # Return VMD logs
     return logs
