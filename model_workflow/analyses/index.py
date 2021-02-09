@@ -350,6 +350,12 @@ def run_analyses(
         topology_filename,
         trajectory_filename)
 
+    # DANI: este es un hardcodeado que hay que deshacer cuando esté montado el sistema de dependencias
+    first_frame_filename = 'firstFrame.pdb'
+    backbone_filename = 'backbone.pdb'
+    average_structure_filename = 'average.pdb'
+    average_frame_filename = 'average.xtc'
+
     print('Running analyses')
 
     # Run the RMSD analyses
@@ -364,7 +370,7 @@ def run_analyses(
     tmscores_analysis = 'md.tmscores.json'
     if required(tmscores_analysis):
         print('- TM scores analysis')
-        tmscores(topology_filename, trajectory_filename, rmsds_analysis, snapshots, rmsd_references)
+        tmscores(topology_filename, trajectory_filename, tmscores_analysis, snapshots, tmscore_references)
 
     # Set the fluctuation analysis file name and run the analysis
     rmsf_analysis = 'md.rmsf.xvg'
