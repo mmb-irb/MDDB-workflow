@@ -4,6 +4,11 @@ from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
+# Set a name for the pca average file
+# If not specified, this file is create with the name 'average.pdb'
+# This name enters in conflict with the average filename so it must be changed
+pca_average_filename = 'pca.average.pdb'
+
 # Perform the PCA of the trajectory
 # The PCA is performed with the whole trajectory when the size is reasonable
 # When the trajectory is larger than 2000 snapshots we reduce the trajectory
@@ -47,6 +52,8 @@ def pca(
         output_eigenvalues_filename,
         '-v',
         output_eigenvectors_filename,
+        '-av',
+        pca_average_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
