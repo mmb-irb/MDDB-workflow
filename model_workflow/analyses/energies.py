@@ -262,6 +262,23 @@ def energies(
         # Return the corrected prody topology
         return new_selection
 
+    # Set all residue names as 'UNK' in a prody selection to meet the ACPYPE requirements
+    # ACPYPE will return error if there are more than one different residue name
+    def remove_residue_names(selection):
+
+        # Set a new selection
+        new_selection = selection.toAtomGroup()
+
+        # Get all residues
+        residues = new_selection.iterResidues()
+
+        # Change tehir names one by one
+        for residue in residues:
+            residue.setResname('UNK')
+
+        # Return the corrected prody topology
+        return new_selection
+
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
     def get_frame_energy(frame_pdb):
@@ -304,10 +321,13 @@ def energies(
             name = ligand['name'].replace(' ', '_')
             ligand_pdb = name + '.pdb'
             selection = original_topology.select(ligand['prody'])
+            # If acypype is required we remove all residue names to prevent duplicated residue names
             # If no acpype is run it means the ligand is known by the default cmip reslib
             # For this case, we better check the terminal residues to be well set
             acpype_is_required = ligand['acpype']
-            if not acpype_is_required:
+            if acpype_is_required:
+                selection = remove_residue_names(selection)
+            else:
                 selection = name_terminal_residues(selection)
             prody.writePDB(ligand_pdb, selection)
 
