@@ -271,7 +271,32 @@ def pockets (
                 for i, value in enumerate(line_data):
                     descriptors_data[entries[i]].append(value)
 
-        # Mine the atoms implicated in each pocket each frame
+        # Mine the Voronoi vertices which represent the pocket each frame
+        # Mine their positions and radius for each frame
+        # Example of lines in hte file to be mined:
+        # ATOM      0    O STP   105      79.352  75.486  84.079    0.00     4.25
+        # ATOM      1    C STP   105      79.735  75.228  84.482    0.00     4.13
+        # ATOM      2    C STP   105      79.624  74.251  84.263    0.00     4.52
+        vertices = []
+        vertices_filename = pocket_output + '_mdpocket.pdb'
+        with open(vertices_filename,'r') as file:
+            frame_vertices = []
+            for line in file:
+                line_data = re.split("[ ]+", line[:-1])
+                if line_data[0] == 'ATOM':
+                    frame_vertices.append({
+                        'e': line_data[2],
+                        'n': line_data[4],
+                        'x': line_data[5],
+                        'y': line_data[6],
+                        'z': line_data[7],
+                        'r': line_data[9],
+                    })
+                if line_data[0] == 'ENDMDL':
+                    vertices.append(frame_vertices)
+                    frame_vertices = []
+
+        # Mine the atoms implicated in each pocket
         # In this file atoms are listed for each frame, but they are always the same
         # For this reason, we mine only atoms in the first frame
         atoms = []
@@ -293,6 +318,7 @@ def pockets (
         output = {
             'name': pocket_name,
             'volumes': list(map(float, descriptors_data['pock_volume'])),
+            'vertices': vertices,
             'atoms': atoms,
         }
 
