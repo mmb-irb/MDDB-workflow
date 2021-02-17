@@ -44,7 +44,7 @@ def topology_corrector(
     # Check if chains are missing. If so, create a new chainned topology and set it as the reference
     # DEPRECATED: This should never happen, since missing chains are assigned from the vmd processor
     chains = list(test.iterChains())
-    no_chains = len(chains) == 1 and chains[0].getChid() == ' '
+    no_chains = len(chains) == 1 and ( chains[0].getChid() == ' ' or chains[0].getChid() == 'X' )
     if no_chains:
         modified = True
         print('WARNING: Default chains are missing')
