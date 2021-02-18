@@ -45,6 +45,16 @@ def hydrogen_bonds (
         # Run the analysis
         hbonds = pt.hbond(pt_trajectory, mask=pt_selection)
 
+        # Save appart hbond 'old keys' which are not accessible for each hb individually
+        # WARNING: These keys are internal pytraj keys but they are crucial
+        # e.g. current key: 'CYS44_O-THR25_OG1-HG1', old key: 'CYS_44@O-THR_25@OG1-HG1'
+        # WARNING: The fact that residue name and residue number is separated by '_' is critical
+        # Some topologies have residue names with different length (2 or 3 characters)
+        # Some topologies have residue names which end in numeric characters (e.g. 'P1', 'P2', etc.)
+        # For this reason we can not use current keys where residue name and number are merged
+        # This makes impossible to know what is the name and what is the number of the residue sometimes
+        hbond_keys = hbonds._old_keys
+
         # Get residues in each interaction agent interface
         interface_1 = interaction['interface_1']
         interface_2 = interaction['interface_2']
@@ -55,9 +65,12 @@ def hydrogen_bonds (
         hbond_values = []
         
         # Search all predicted hydrogen bonds
-        for d0 in hbonds:
-            # d0.key example: "ASN15_OD1-LEU373_N-H"
-            matchObj = re.match( r'\w{3}(\d*)_(.*)-\w{3}(\d*)_(.*)-(.*)', d0.key, re.M|re.I)
+        for i, hb in enumerate(hbonds):
+            key = hbond_keys[i]
+            # hb.key example: "ASN15_OD1-LEU373_N-H"
+            # matchObj = re.match( r'\w{3}(\d*)_(.*)-\w{3}(\d*)_(.*)-(.*)', hb.key, re.M|re.I)
+            # hb.key example: "ASN_15@OD1-LEU_373@N-H"
+            matchObj = re.match( r'\w*_(\d*)@(.*)-\w*_(\d*)@(.*)-(.*)', key, re.M|re.I)
             # Mine all data from the parsed results
             if matchObj is not None:
                 acceptor_resnum = matchObj.group(1)
@@ -79,11 +92,11 @@ def hydrogen_bonds (
                     acceptor_atom_index_list.append(get_atom_index(acceptor, acceptor_atom))
                     donor_atom_index_list.append(get_atom_index(donor, donor_atom))
                     hydrogen_atom_index_list.append(get_atom_index(donor, hydrogen_atom))
-                    # List 'd0.values' because it is a ndarray, which is not JSON serializable
+                    # List 'hb.values' because it is a ndarray, which is not JSON serializable
                     # Then convert the 0s and 1s into trues and falses
                     # This is because booleans are lighter once parsed in hte database
-                    values = list( map(bool, (map(int, d0.values))) )
-                    #hbond_values.append(' '.join(map(str, d0.values)))
+                    values = list( map(bool, (map(int, hb.values))) )
+                    #hbond_values.append(' '.join(map(str, hb.values)))
                     hbond_values.append(values) 
 
         # Write 
