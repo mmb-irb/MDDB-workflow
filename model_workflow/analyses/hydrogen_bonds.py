@@ -40,7 +40,7 @@ def hydrogen_bonds (
         
         # Select all interface residues in pytraj notation
         pt_interface = interaction['pt_interface_1'] + interaction['pt_interface_2']
-        pt_selection = ':' + ','.join(map(str, pt_interface)) + ' @CA'
+        pt_selection = ':' + ','.join(map(str, pt_interface))
 
         # Run the analysis
         hbonds = pt.hbond(pt_trajectory, mask=pt_selection)
