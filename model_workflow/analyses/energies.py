@@ -324,7 +324,7 @@ def energies(
             # If acypype is required we remove all residue names to prevent duplicated residue names
             # If no acpype is run it means the ligand is known by the default cmip reslib
             # For this case, we better check the terminal residues to be well set
-            acpype_is_required = ligand['acpype']
+            acpype_is_required = ligand.get('acpype', True)
             if acpype_is_required:
                 selection = remove_residue_names(selection)
             else:
