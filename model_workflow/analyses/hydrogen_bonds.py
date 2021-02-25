@@ -25,7 +25,8 @@ def hydrogen_bonds (
     interactions : list ):
 
     # Return before doing anything if there are no interactions
-    if len(interactions) == 0:
+    if not interactions or len(interactions) == 0:
+        print('No interactions were specified')
         return
 
     # Save the reference function to get an absolue atom index from a pytraj atom index

@@ -15,9 +15,12 @@ import json
 def rmsds(
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    rmsd_references : list,
+    first_frame_filename : str,
+    average_structure_filename : str,
     rmsd_groups : list = ['Protein', 'Protein-H', 'Backbone', 'C-alpha'],
     ):
+
+    rmsd_references = [first_frame_filename, average_structure_filename]
 
     output_analysis = []
     start = 0

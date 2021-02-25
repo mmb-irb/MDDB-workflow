@@ -17,7 +17,8 @@ def distance_per_residue (
     interactions : list ):
 
     # Return before doing anything if there are no interactions
-    if len(interactions) == 0:
+    if not interactions or len(interactions) == 0:
+        print('No interactions were specified')
         return
 
     output_analysis = []

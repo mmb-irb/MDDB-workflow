@@ -13,7 +13,10 @@ def tmscores (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     snapshots : int,
-    tmscore_references : list):
+    first_frame_filename : str,
+    average_structure_filename : str):
+
+    tmscore_references  = [first_frame_filename, average_structure_filename]
 
     start = 0
     step = None

@@ -100,7 +100,11 @@ def energies(
         output_analysis_filename: str,
         reference,
         snapshots: int,
-        ligands: dict):
+        ligands: list):
+
+    if not ligands or len(ligands) == 0:
+        print('No ligands were specified')
+        return
 
     # Change elements in a prody selection to meet the CMIP requirements
     # Hydrogens bonded to carbons remain as 'H'
