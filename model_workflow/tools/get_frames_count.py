@@ -1,8 +1,5 @@
 # Get frames count
 
-from subprocess import run, PIPE
-import re
-
 import pytraj as pt
 
 # Get the trajectory frames number using pytraj
