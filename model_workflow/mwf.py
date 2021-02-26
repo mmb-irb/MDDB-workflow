@@ -84,7 +84,10 @@ class Dependency:
         value = self._value
         if value:
             return value
-        value = self.calculate_value()
+        parsed_args = self.parse_args()
+        if self.alias:
+            print('Running "' + self.alias + '"')
+        value = self.func(**parsed_args)
         self._value = value # Save the result for possible further use
         return value
 
@@ -110,8 +113,9 @@ class File(Dependency):
         # If it has not 'func' it must be an input file
         if not self.func:
             raise SystemExit('ERROR: Missing input file "' + self.filename + '"')
+        parsed_args = self.parse_args()
         print('Generating "' + self.filename + '" file')
-        self.calculate_value()
+        self.func(**parsed_args)
         return self.filename
 
     value = property(get_value, None, None, "The dependency value")
@@ -430,14 +434,14 @@ def main():
         url=args.url,
         inputs_filename=args.inputs_filename )
 
-    if not args.single_analysis:
+    if not args.specific:
         for analysis in analyses:
             analysis.value
     else:
         # execute single analysis function
-        print(f"\nExecuting analysis function {args.single_analysis}...")
+        print(f"\nExecuting analysis function {args.specific}...")
         for dependency in analyses + tools:
-            if dependency.alias == args.single_analysis:
+            if dependency.alias == args.specific:
                 dependency.value
                 break
 
@@ -474,6 +478,6 @@ parser.add_argument(
     help="Path to inputs filename")
 
 parser.add_argument(
-    "-a", "--single_analysis",
+    "-s", "--specific",
     choices=[dependency.alias for dependency in analyses + tools],
-    help="Indicate single analysis to perform")
+    help="Indicate single analysis or tool to be run")
