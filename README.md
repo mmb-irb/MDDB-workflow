@@ -26,6 +26,41 @@ This will install the package and create the entry point `mwf` to be used when e
 
 ---
 
+## Installation in HPC
+
+In HPC clusters running conda may be a problem.
+For those cases there is a a library called 'conda-pack' which allows to run a local lite conda version.
+Conda-pack is installed with:
+
+```conda install conda-pack```
+
+First of all, you need the environment 'mwf' to be installed in yoor computer in PRODUCTION mode (see previous section).
+Once installed, pack the mwf environment with:
+
+```conda pack -n mwf```
+
+This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
+
+```mkdir mwf```
+```tar -xzf mwf.tar.gz -C mwf```
+
+At this point you can access python by runinng:
+
+```./mwf/bin/python```
+
+Activate the mwf environment:
+
+```source mwf/bin/activate```
+
+Now copy the whole workflow repository in the remote machine, same repository than before. The install it in develop mode with:
+
+```cd workflow```
+```../mwf/bin/python setup.py develop```
+
+At this point the workflow should be operative
+
+---
+
 ## How to use
 
 print help message:
@@ -34,25 +69,21 @@ print help message:
 
 or  ```mwf -h```
 
-**actions**
-
-* run analysis on current directory, which is asumed to contain topology, trajectory and input files
+run analysis on current directory, which is asumed to contain input files: topology, trajectory and 'inputs.json'
 
 ```mwf```
 
 you can also specify a different directory with the input files using the `-dir` or `--working_dir` options.
 
-* run analysis from already uploaded project
+download and use input files from already uploaded project
 
-```model_wf -p <project name>```
+```mwf -p <project id>```
 
 By default the data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
 
-* run single analysis from workflow
+run single analysis or tool from workflow
 
-```model_wf -a <analysis name>```
-
-Analysis name choices: `{rmsd,rmsf,rgyr,pca,pca_contacts,rmsd_per_residue,rmsd_pairwise,distance_per_residue,hydrogen_bonds,energies,pockets}`
+```mwf -s <analysis/tool name>```
 
 _Other options:_
 
