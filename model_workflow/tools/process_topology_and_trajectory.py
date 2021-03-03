@@ -20,8 +20,8 @@ def process_topology_and_trajectory (
     # If the output topology and trajectory files already exists it is assumed they are already processed
     if not os.path.exists(input_topology_filename) or not os.path.exists(input_trajectory_filenames):
         logs = vmd_processor(
-            original_topology_filename,
-            original_trajectory_filename,
+            input_topology_filename,
+            input_trajectory_filenames,
             output_topology_filename,
             output_trajectory_filename,
         )

@@ -182,7 +182,7 @@ vmd = Dependency(vmd_processor, {
 
 # Preprocessing
 # This is equivalent to running 'vmd', 'imaging' and 'corrector' together
-process_topology_and_trajectory = Dependency(vmd_processor, {
+process_topology_and_trajectory = Dependency(process_topology_and_trajectory, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filenames': original_trajectory_filename,
     'output_topology_filename': OUTPUT_topology_filename,
