@@ -12,11 +12,15 @@ From the workflow's directory then execute the following:
 
 In DEVELOPMENT:
 
-```pip install -e .```
+```python setup.py develop```
 
-To make notebooks operative use:
+To make notebooks fuly operative use:
 
 ```conda install -c conda-forge notebook```
+
+To uninstall the develop mode use:
+
+```python setup.py develop -u```
 
 In PRODUCTION:
 
@@ -34,7 +38,7 @@ Conda-pack is installed with:
 
 ```conda install conda-pack```
 
-First of all, you need the environment 'mwf' to be installed in yoor computer in PRODUCTION mode (see previous section).
+First of all, you need the environment 'mwf' to be installed in your computer in PRODUCTION mode (see previous section).
 Once installed, pack the mwf environment with:
 
 ```conda pack -n mwf```
@@ -42,6 +46,7 @@ Once installed, pack the mwf environment with:
 This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
 
 ```mkdir mwf```
+
 ```tar -xzf mwf.tar.gz -C mwf```
 
 At this point you can access python by runinng:
