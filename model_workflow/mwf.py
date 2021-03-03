@@ -434,9 +434,17 @@ def main():
         url=args.url,
         inputs_filename=args.inputs_filename )
 
+    # Run tools which must be run always
+    # They better be fast
+    imaging.value
+    corrector.value
+
+    # Run the requested analyses
+    # Run all analyses if none was specified
     if not args.specific:
         for analysis in analyses:
             analysis.value
+    # If specified, Run a specific analysis / tool
     else:
         # execute single analysis function
         print(f"\nExecuting analysis function {args.specific}...")

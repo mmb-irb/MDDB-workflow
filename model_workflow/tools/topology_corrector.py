@@ -17,7 +17,7 @@ add_chains_script = repo_path + '/utils/resources/addChainCV19.pl'
 #
 # Supported cases:
 #
-# * (DEPRECATED) Missing chains -> Chains are added through an external script
+# * Missing chains -> Chains are added through VMD
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * (Not supported yet) Hyrdogens are placed at the end ->
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
@@ -42,7 +42,6 @@ def topology_corrector(
     # ------------------------------------------------------------------------------------------
 
     # Check if chains are missing. If so, create a new chainned topology and set it as the reference
-    # DEPRECATED: This should never happen, since missing chains are assigned from the vmd processor
     chains = list(test.iterChains())
     no_chains = len(chains) == 1 and ( chains[0].getChid() == ' ' or chains[0].getChid() == 'X' )
     if no_chains:

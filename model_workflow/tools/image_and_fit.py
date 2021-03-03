@@ -18,6 +18,9 @@ def image_and_fit (
     preprocess_protocol : int,
     ) -> str:
 
+    if preprocess_protocol == 0:
+        return
+
     # Create indexes file to select only specific topology regions
 
     indexes = 'indexes.ndx'
@@ -293,7 +296,7 @@ def image_and_fit (
     # The trajectory to fit is the already imaged trajectory
     # However, if there was no imaging, the trajectory to fit is the input trajectory
     trajectroy_to_fit = output_trajectory_filename
-    if preprocess_protocol > 0:
+    if preprocess_protocol == 1:
         trajectroy_to_fit = input_trajectory_filename
 
     # Run Gromacs
@@ -316,8 +319,3 @@ def image_and_fit (
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
-
-    # ----------------------------------------------------------------------------------------------
-
-    # Return the imaged and fitted trajectory filename
-    return output_trajectory_filename
