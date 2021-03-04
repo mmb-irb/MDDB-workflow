@@ -15,6 +15,7 @@ dependencies:
   - prody
   - scikit-learn
   - fpocket
+  - vmd
   - pip
   - pip:
     - tmscoring

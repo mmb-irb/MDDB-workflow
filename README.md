@@ -4,6 +4,8 @@
 
 ## Installation
 
+This will install the package and create the entry point `mwf` to be used when executing the workflow.
+
 It is recommended to create a virtual environment. You can do this using Conda and the `environment.yml` file, with:
 
 ```conda env create --file environment.yml```
@@ -14,19 +16,23 @@ In DEVELOPMENT:
 
 ```python setup.py develop```
 
-To make notebooks fuly operative use:
-
-```conda install -c conda-forge notebook```
-
 To uninstall the develop mode use:
 
 ```python setup.py develop -u```
+
+To make notebooks fully operative use:
+
+```conda install -c conda-forge notebook```
 
 In PRODUCTION:
 
 ```python setup.py install```
 
-This will install the package and create the entry point `mwf` to be used when executing the workflow.
+To uninstall the production mode use:
+
+```python setup.py install --record filelist```
+
+```xargs rm -rf < filelist```
 
 ---
 
@@ -59,8 +65,7 @@ Activate the mwf environment:
 
 Now copy the whole workflow repository in the remote machine, same repository than before. The install it in develop mode with:
 
-```cd workflow```
-```../mwf/bin/python setup.py develop```
+```mwf/bin/python workflow/setup.py develop```
 
 At this point the workflow should be operative
 
