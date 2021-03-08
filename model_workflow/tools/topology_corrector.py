@@ -34,6 +34,9 @@ def topology_corrector(
     # Track if there has been any modification and then topology must be rewritten
     modified = False
 
+    # Remove all bytes which can not be decoded by utf-8 codec
+    purgeNonUtf8(input_topology_filename)
+
     # Import the topology to prody
     test = prody.parsePDB(input_topology_filename)
 
@@ -210,3 +213,14 @@ def get_next_letter(letter: str):
         raise SystemExit("Limit of chain letters has been reached")
     next_letter = chr(ord(letter) + 1)
     return next_letter
+
+# Remove all bytes which can not be decoded by utf-8 codec
+# This prevents the prody parsePDB function to return the following error:
+# UnicodeDecodeError: 'utf-8' codec can't decode byte ...
+def purgeNonUtf8 (filename : str):
+    with open(filename, mode="r+", encoding="utf-8", errors= 'ignore') as file:
+        lines = file.readlines()
+        file.seek(0)
+        for line in lines:
+            file.write(line)
+        file.truncate()
