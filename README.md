@@ -63,9 +63,18 @@ Activate the mwf environment:
 
 ```source mwf/bin/activate```
 
-Now copy the whole workflow repository in the remote machine, same repository than before. The install it in develop mode with:
+Now copy the whole workflow repository in the remote machine, same repository than before.
+Then install it in develop mode with:
 
 ```mwf/bin/python workflow/setup.py develop```
+
+Finally, some modifications may be required and they must be done by hand
+
+Find the vmd path and modify the vmd executable.
+
+```find ./mwf | grep vmd_LINUX``` (copy the path to the 'lib' directory)
+
+```vim ./mwf/bin/vmd``` (modify the 'defaultvmddir' path as the previous copied path)
 
 At this point the workflow should be operative
 
