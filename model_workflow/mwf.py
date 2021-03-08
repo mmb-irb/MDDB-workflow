@@ -213,7 +213,7 @@ imaging = Dependency(image_and_fit, {
 # Examine and correct the topology file using ProDy
 corrector = Dependency(topology_corrector, {
     'input_topology_filename': topology_filename,
-    'output_topology_filename': trajectory_filename
+    'output_topology_filename': topology_filename
 }, 'corrector')
 
 # Create an object with the topology data in both ProDy and Pytraj formats
