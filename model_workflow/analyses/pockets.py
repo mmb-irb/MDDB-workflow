@@ -18,6 +18,7 @@
 # Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, “MDpocket: open-source cavity detection 
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
+import os
 import re
 import collections
 import math
@@ -36,14 +37,6 @@ def pockets (
     topology_reference,
     snapshots : int ):
 
-    # This anlaysis produces many useless output files
-    # Create a new folder to store all ouput files so they do not overcrowd the main directory
-    mdpocket_folder = 'mdpocket'
-    logs = run([
-        "mkdir",
-        mdpocket_folder,
-    ], stdout=PIPE).stdout.decode()
-
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
     pockets_trajectory = input_trajectory_filename
@@ -51,30 +44,46 @@ def pockets (
     step = 1
     if snapshots > frames_number:
         pockets_trajectory = 'pockets.trajectory.xtc'
-        step = get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            pockets_trajectory,
-            snapshots,
-            frames_number,
-        )
+        if not os.path.exists(pockets_trajectory):
+            step = get_reduced_trajectory(
+                input_topology_filename,
+                input_trajectory_filename,
+                pockets_trajectory,
+                snapshots,
+                frames_number,
+            )
 
-    # Run the mdpocket analysis focusing in this specific pocket
+    # This anlaysis produces many useless output files
+    # Create a new folder to store all ouput files so they do not overcrowd the main directory
+    mdpocket_folder = 'mdpocket'
+    if not os.path.exists(mdpocket_folder):
+        logs = run([
+            "mkdir",
+            mdpocket_folder,
+        ], stdout=PIPE).stdout.decode()
+
+    # Run the mdpocket analysis to find new pockets
     mdpocket_output = mdpocket_folder + '/mdpout'
-    logs = run([
-        "mdpocket",
-        "--trajectory_file",
-        pockets_trajectory,
-        "--trajectory_format",
-        "xtc",
-        "-f",
-        input_topology_filename,
-        "-o",
-        mdpocket_output,
-    ], stdout=PIPE).stdout.decode()
+    # Set the filename of the fpocket output we are intereseted in
+    grid_filename = mdpocket_output + '_freq.dx'
+    # Skip this step if the output file already exists and is not empty
+    # WARNING: The file is created as soon as mdpocket starts to run
+    # WARNING: However the file remains empty until the end of mdpocket
+    if not os.path.exists(grid_filename) or os.path.getsize(grid_filename) == 0:
+        print('Searching new pockets')
+        logs = run([
+            "mdpocket",
+            "--trajectory_file",
+            pockets_trajectory,
+            "--trajectory_format",
+            "xtc",
+            "-f",
+            input_topology_filename,
+            "-o",
+            mdpocket_output,
+        ], stdout=PIPE).stdout.decode()
 
     # Read and harvest the gird file
-    grid_filename = mdpocket_output + '_freq.dx'
     with open(grid_filename,'r') as file:
 
         # First, mine the grid dimensions and origin
@@ -199,6 +208,16 @@ def pockets (
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
     for i, p in enumerate(biggest_pockets):
         pocket_name = "p" + str(i+1)
+        # Check if current pocket files already exist and are complete. If so, skip this pocket
+        # Output files:
+        # - pX.dx: it is created and completed at the begining by this workflow
+        # - pX_descriptors.txt: it is created at the begining and completed along the mdpocket progress
+        # - pX_mdpocket_atoms.pdb: it is completed at the begining but remains size 0 until the end of mdpocket
+        # - pX_mdpocket.pdb: it is completed at the begining but remains size 0 until the end of mdpocket
+        # Note that checking pX_mdpocket_atoms.pdb or pX_mdpocket.pdb is enought to know if mdpocket was completed
+        checking_filename = pocket_output + '_mdpocket.pdb'
+        if os.path.exists(checking_filename) and os.path.getsize(checking_filename) > 0:
+            continue
         print('Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
         # Create the new grid for this pocket, where all values from other pockets are set to 0
         pocket_value = p[0]
