@@ -3,3 +3,4 @@ __pycache__
 dev/.ipynb_checkpoints/
 model_workflow.egg-info
 model_workflow/utils/.ipynb_checkpoints
+mwf.tar.gz
