@@ -66,7 +66,9 @@ Activate the mwf environment:
 Now copy the whole workflow repository in the remote machine, same repository than before.
 Then install it in develop mode with:
 
-```mwf/bin/python workflow/setup.py develop```
+```cd workflow```
+
+```../mwf/bin/python setup.py develop```
 
 Finally, some modifications may be required and they must be done by hand
 
