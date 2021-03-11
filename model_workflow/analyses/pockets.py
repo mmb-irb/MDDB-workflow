@@ -208,6 +208,7 @@ def pockets (
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
     for i, p in enumerate(biggest_pockets):
         pocket_name = "p" + str(i+1)
+        pocket_output = mdpocket_folder + '/' + pocket_name
         # Check if current pocket files already exist and are complete. If so, skip this pocket
         # Output files:
         # - pX.dx: it is created and completed at the begining by this workflow
@@ -262,7 +263,6 @@ def pockets (
                 file.write(line)
 
         # Run the mdpocket analysis focusing in this specific pocket
-        pocket_output = mdpocket_folder + '/' + pocket_name
         logs = run([
             "mdpocket",
             "--trajectory_file",
