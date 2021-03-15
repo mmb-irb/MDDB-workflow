@@ -278,7 +278,7 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'processed_interactions': interactions,
     'snapshots': snapshots,
     'output_metadata_filename': OUTPUT_metadata_filename
-})
+}, 'metadata')
 
 # Pack up all tools which may be called directly from the console
 tools = [
@@ -383,6 +383,12 @@ analyses = [
     }, 'pockets'),
 ]
 
+# Set a list with all dependencies to be required if the whole workflow is run
+workflow = [ *analyses, metadata_filename ]
+
+# Set a list with all dependencies which may be requested independently
+requestables = [ *analyses, *tools, metadata_filename ]
+
 # Main ---------------------------------------------------------------------------------
 
 # Get current directory
@@ -442,13 +448,16 @@ def main():
     # Run the requested analyses
     # Run all analyses if none was specified
     if not args.specific:
-        for analysis in analyses:
-            analysis.value
+        for dep in workflow:
+            dep.value
     # If specified, Run a specific analysis / tool
     else:
+        # Set a unique requestable used to exit as soon as the setup is finished
+        if args.specific == 'setup':
+            return
         # execute single analysis function
         print(f"\nExecuting analysis function {args.specific}...")
-        for dependency in analyses + tools:
+        for dependency in requestables:
             if dependency.alias == args.specific:
                 dependency.value
                 break
@@ -485,7 +494,10 @@ parser.add_argument(
     default="inputs.json",
     help="Path to inputs filename")
 
+# Set a list with the alias of all requestable dependencies
+# Also add the 'setup' alias, which stands for none
+choices = ['setup'] + [ dependency.alias for dependency in requestables ]
 parser.add_argument(
     "-s", "--specific",
-    choices=[dependency.alias for dependency in analyses + tools],
+    choices=choices,
     help="Indicate single analysis or tool to be run")

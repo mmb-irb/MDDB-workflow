@@ -1,6 +1,7 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
 
+import json
 
 # Generate a JSON file with all the metadata
 def generate_metadata (
@@ -12,7 +13,9 @@ def generate_metadata (
     output_metadata_filename : str):
 
     # Set a function to retrieve 'inputs' values and handle missing keys
-    inputs = json.load(inputs_filename)
+    inputs = None
+    with open(inputs_filename, 'r') as file:
+        inputs = json.load(file)
     def getInput(input: str):
         return inputs.get(input, None)
 
@@ -47,7 +50,7 @@ def generate_metadata (
         'residues_2': [ str(residue) for residue in interaction['residues_2'] ],
         'interface_1': [ str(residue) for residue in interaction['interface_1'] ],
         'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
-    } for interaction in interactions]
+    } for interaction in processed_interactions]
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
