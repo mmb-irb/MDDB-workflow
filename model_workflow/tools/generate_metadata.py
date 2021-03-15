@@ -66,6 +66,7 @@ def generate_metadata (
         'LICENSE': getInput('license'),
         'LINKCENSE': getInput('linkcense'),
         'CITATION': getInput('citation'),
+        'THANKS': getInput('thanks'),
         'LENGTH': length,
         'TIMESTEP': getInput('timestep'),
         'SNAPSHOTS': snapshots,
