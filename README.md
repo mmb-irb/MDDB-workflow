@@ -21,6 +21,7 @@ To uninstall the develop mode use:
 ```python setup.py develop -u```
 
 To make notebooks fully operative use:
+WARNING: This may break the environment for using the mwf
 
 ```conda install -c conda-forge notebook```
 
