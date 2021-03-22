@@ -372,7 +372,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_energies_filename,
         "reference": topology_reference,
         "snapshots": snapshots,
-        "ligands": ligands
+        "interactions": interactions
     }, 'energies'),
     File(OUTPUT_pockets_filename, pockets, {
         "input_topology_filename": topology_filename,
@@ -445,22 +445,23 @@ def main():
     imaging.value
     corrector.value
 
+    # If setup is passed as True then exit as soon as the setup is finished
+    if args.setup:
+        return
+
     # Run the requested analyses
+    if args.include and len(args.include) > 0:
+        print(f"\nExecuting specific dependencies: " + str(args.include))
+        # Include only the specified dependencies
+        requested_dependencies = [ dep for dep in requestables if dep.alias in args.include ]
+        for dependency in requested_dependencies:
+            dependency.value
     # Run all analyses if none was specified
-    if not args.specific:
-        for dep in workflow:
-            dep.value
-    # If specified, Run a specific analysis / tool
     else:
-        # Set a unique requestable used to exit as soon as the setup is finished
-        if args.specific == 'setup':
-            return
-        # execute single analysis function
-        print(f"\nExecuting analysis function {args.specific}...")
-        for dependency in requestables:
-            if dependency.alias == args.specific:
-                dependency.value
-                break
+        # Include all non excluded dependencies
+        requested_dependencies = [ dep for dep in workflow if dep.alias not in args.exclude ]
+        for dependency in requested_dependencies:
+            dependency.value
 
     # Remove gromacs backups
     remove_trash()
@@ -494,10 +495,24 @@ parser.add_argument(
     default="inputs.json",
     help="Path to inputs filename")
 
-# Set a list with the alias of all requestable dependencies
-# Also add the 'setup' alias, which stands for none
-choices = ['setup'] + [ dependency.alias for dependency in requestables ]
 parser.add_argument(
-    "-s", "--specific",
+    "-s", "--setup",
+    action='store_true',
+    help="If passed, only download required files and run mandatory dependencies. Then exits.")
+
+# Set a list with the alias of all requestable dependencies
+choices = [ dependency.alias for dependency in requestables ]
+
+parser.add_argument(
+    "-i", "--include",
+    nargs='*',
     choices=choices,
-    help="Indicate single analysis or tool to be run")
+    help="Set the unique analyses or tools to be run. All other steps will be skipped")
+
+parser.add_argument(
+    "-e", "--exclude",
+    nargs='*',
+    choices=choices,
+    help=("Set the unique analyses or tools to be skipped. All other steps will be run.\n"
+        "If the 'include' argument is passed the 'exclude' argument will be ignored.\n"
+        "WARNING: If an excluded dependecy is required by others then it will be run anyway"))
