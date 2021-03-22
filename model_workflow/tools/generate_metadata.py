@@ -61,6 +61,7 @@ def generate_metadata (
         'DESCRIPTION': getInput('description'),
         'AUTHORS': getInput('authors'),
         'GROUPS': getInput('groups'),
+        'CONTACT': getInput('contact'),
         'PROGRAM': getInput('program'),
         'VERSION': getInput('version'),
         'LICENSE': getInput('license'),
