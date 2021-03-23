@@ -90,13 +90,13 @@ def energies(
 
             # Select the first agent, extract a pdb only with its atoms and parse it to CMIP
             # Run ACPYPE if required and then modify the res.lib file
-            agent1 = interaction['agent_1'].replace(' ', '_')
+            agent1 = interaction['agent_1'].replace(' ', '_').replace('/', '_')
             agent1_pdb = agent1 + '.pdb'
             agent1_selection = frame_structure.select(interaction['selection_1'])
             agent1_cmip = selection2cmip(agent1_selection, agent1, reslib_filename)
 
             # Repeat the process with agent 2
-            agent2 = interaction['agent_2'].replace(' ', '_')
+            agent2 = interaction['agent_2'].replace(' ', '_').replace('/', '_')
             agent2_pdb = agent2 + '.pdb'
             agent2_selection = frame_structure.select(interaction['selection_2'])
             agent2_cmip = selection2cmip(agent2_selection, agent2, reslib_filename)
