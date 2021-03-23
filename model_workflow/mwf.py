@@ -459,7 +459,9 @@ def main():
     # Run all analyses if none was specified
     else:
         # Include all non excluded dependencies
-        requested_dependencies = [ dep for dep in workflow if dep.alias not in args.exclude ]
+        requested_dependencies = workflow
+        if args.exclude and len(args.exclude) > 0:
+            requested_dependencies = [ dep for dep in workflow if dep.alias not in args.exclude ]
         for dependency in requested_dependencies:
             dependency.value
 
