@@ -5,6 +5,7 @@
 # Import python libraries
 import argparse
 import os
+import sys
 import math
 from pathlib import Path
 import urllib.request
@@ -69,14 +70,6 @@ class Dependency:
                 parsed_args[attr] = value
         return parsed_args
 
-    # Run the function with the parsed args to find the dependency value
-    def calculate_value(self):
-        parsed_args = self.parse_args()
-        if self.alias:
-            print('Running "' + self.alias + '"')
-        value = self.func(**parsed_args)
-        return value
-
     # Get the dependency value
     # Execute the corresponding function if we do not have the value yet
     # Once the value has been calculated save it as an internal variabel
@@ -86,7 +79,7 @@ class Dependency:
             return value
         parsed_args = self.parse_args()
         if self.alias:
-            print('Running "' + self.alias + '"')
+            sys.stdout.write('\nRunning "' + self.alias + '"')
         value = self.func(**parsed_args)
         self._value = value # Save the result for possible further use
         return value
@@ -114,7 +107,7 @@ class File(Dependency):
         if not self.func:
             raise SystemExit('ERROR: Missing input file "' + self.filename + '"')
         parsed_args = self.parse_args()
-        print('Generating "' + self.filename + '" file')
+        sys.stdout.write('\nGenerating "' + self.filename + '" file')
         self.func(**parsed_args)
         return self.filename
 
@@ -409,19 +402,19 @@ def setup(
     if project:
         # Download the topology file if it does not exists
         if not os.path.exists(OUTPUT_topology_filename):
-            print('Downloading topology')
+            sys.stdout.write('\nDownloading topology')
             topology_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + OUTPUT_topology_filename
             urllib.request.urlretrieve(topology_url, OUTPUT_topology_filename)
         # Download the trajectory file if it does not exists
         if not os.path.exists(OUTPUT_trajectory_filename):
-            print('Downloading trajectory')
+            sys.stdout.write('\nDownloading trajectory')
             trajectory_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + OUTPUT_trajectory_filename
             urllib.request.urlretrieve(trajectory_url, OUTPUT_trajectory_filename)
         # Download the inputs json file if it does not exists
         if not os.path.exists(inputs_filename):
-            print('Downloading inputs')
+            sys.stdout.write('\nDownloading inputs')
             inputs_url = url + '/api/rest/current/projects/' + \
                 project + '/inputs/'
             urllib.request.urlretrieve(inputs_url, inputs_filename)
@@ -451,7 +444,7 @@ def main():
 
     # Run the requested analyses
     if args.include and len(args.include) > 0:
-        print(f"\nExecuting specific dependencies: " + str(args.include))
+        sys.stdout.write(f"\nExecuting specific dependencies: " + str(args.include))
         # Include only the specified dependencies
         requested_dependencies = [ dep for dep in requestables if dep.alias in args.include ]
         for dependency in requested_dependencies:
@@ -468,7 +461,7 @@ def main():
     # Remove gromacs backups
     remove_trash()
 
-    print("\nDone!")
+    sys.stdout.write("\nDone!")
 
 
 # Define console arguments to call the workflow
