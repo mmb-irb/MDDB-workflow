@@ -1,4 +1,5 @@
 from model_workflow.analyses.generic_analyses import rmsd
+from model_workflow.tools.xvg_parse import xvg_parse
 
 from subprocess import run, PIPE
 import json
@@ -60,28 +61,3 @@ def rmsds(
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({ 'start': start, 'step': step, 'data': output_analysis }, file)
-
-# Read and parse a xvg file
-# xvg file example:
-# # This is a comment line
-# @ This is a comment line
-#    0.0000000    0.3644627
-#   10.0000000    0.3536768
-#   20.0000000    0.3509805
-def xvg_parse (filename : str):
-    times = []
-    values = []
-    # Read the specified file line per line
-    with open(filename, 'r') as file:
-        lines = list(file)
-        for line in lines:
-            # Skip comment lines
-            first_character = line[0]
-            if first_character in ['#','@']:
-                continue
-            # Useful lines are splitted by spaces
-            # Splits are saved in 2 columns: times and values
-            [time, value] = line.split()
-            times.append(float(time))
-            values.append(float(value))
-    return { 'times': times, 'values': values }

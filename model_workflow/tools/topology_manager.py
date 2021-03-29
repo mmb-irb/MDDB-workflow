@@ -29,12 +29,20 @@ class sourceResidue:
         self.chain_letter = chain_letter
         self.residue_number = residue_number
         self.icode = self.valid_icode(icode)
+
+    # Set the residue form the own prody residue
+    @classmethod
+    def from_prody(cls, residue):
+        chain_letter = residue.getChid()
+        residue_number = residue.getResnum()
+        icode = residue.getIcode()
+        return cls(chain_letter, residue_number, icode)
     
     def __str__ (self):
-        return self.chain_letter + ':' + str(self.residue_number) + self.icode
+        return self.tag()
     
     def __repr__ (self):
-        return self.chain_letter + ':' + str(self.residue_number) + self.icode
+        return self.tag()
     
     def __eq__ (self, other):
         return (self.chain_letter == other.chain_letter and 
@@ -50,6 +58,9 @@ class sourceResidue:
             return ''
         return icode
 
+    def tag (self):
+        return self.chain_letter + ':' + str(self.residue_number) + self.icode
+
 # Load the whole topology in a standarized and accessible format
 class TopologyReference:
     
@@ -64,6 +75,10 @@ class TopologyReference:
         self.residues = list(self.topology.iterResidues())
         # Get pytraj residues
         self.pytraj_residues = list(self.pytraj_topology.residues)
+
+    # Get the source formatted name of a specific prody residue
+    def get_residue_name (self, residue):
+        return sourceResidue.from_prody(residue).tag()
     
     # Transform a topology residue number to the pytraj residue numeration (1, 2, ... n)
     def source2pytraj (self, source : sourceResidue) -> int:

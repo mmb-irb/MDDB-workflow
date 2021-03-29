@@ -40,6 +40,7 @@ from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
 from model_workflow.analyses.distance_per_residue import distance_per_residue
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
+from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 
@@ -134,6 +135,7 @@ OUTPUT_rmsdperres_filename = 'md.rmsd.perres.json'
 OUTPUT_rmsdpairwise_filename = 'md.rmsd.pairwise.json'
 OUTPUT_distperres_filename = 'md.dist.perres.json'
 OUTPUT_hbonds_filename = 'md.hbonds.json'
+OUTPUT_sasa_filename = 'md.sasa.json'
 OUTPUT_energies_filename = 'md.energies.json'
 OUTPUT_pockets_filename = 'md.pockets.json'
 
@@ -359,6 +361,13 @@ analyses = [
         "topology_reference": topology_reference,
         "interactions": interactions
     }, 'hbonds'),
+    File(OUTPUT_sasa_filename, sasa, {
+        "input_topology_filename": topology_filename,
+        "input_trajectory_filename": trajectory_filename,
+        "output_analysis_filename": OUTPUT_sasa_filename,
+        "reference": topology_reference,
+        "snapshots": snapshots
+    }, 'sasa'),
     File(OUTPUT_energies_filename, energies, {
         "input_topology_filename": topology_filename,
         "input_trajectory_filename": trajectory_filename,
