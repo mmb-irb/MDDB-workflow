@@ -120,6 +120,15 @@ def energies(
 
             data.append({ 'agent1': agent1_data, 'agent2': agent2_data })
 
+            # Delete current agent pdb files before going for the next interaction
+            run([
+                "rm",
+                agent1_pdb,
+                agent2_pdb,
+                agent1_cmip,
+                agent2_cmip,
+            ], stdout=PIPE).stdout.decode()
+
         return data
 
     # Set the frames where we extract energies to calculate the average
@@ -210,6 +219,7 @@ def energies(
     if energies_trajectory_filename == 'energies.trajectory.xtc':
         logs = run([
             "rm",
+            energies_topology,
             energies_trajectory_filename,
         ], stdout=PIPE).stdout.decode()
 
@@ -616,6 +626,12 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
                 for grid_input in grid_inputs:
                     file.write(grid_input)
             file.write(line)
+
+    # Delete the 'ckeckonly' file
+    run([
+        "rm",
+        cmip_checkonly_output,
+    ], stdout=PIPE).stdout.decode()
 
 
 # Set all residue names as 'UNK' in a prody selection to meet the ACPYPE requirements
