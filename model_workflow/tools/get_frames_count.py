@@ -14,4 +14,5 @@ def get_frames_count (
 
     # Return the frames number
     frames = pt_trajectory.n_frames
+    print('Frames: ' + str(frames))
     return frames

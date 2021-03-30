@@ -280,6 +280,8 @@ tools = [
     vmd,
     imaging,
     corrector,
+    interactions,
+    snapshots
 ]
 
 # Define all analyses
