@@ -73,7 +73,7 @@ def sasa(
             "-s",
             current_frame,
             "-surface",
-            "group 0",
+            '0',
             '-or',
             current_frame_sasa,
             '-quiet'
