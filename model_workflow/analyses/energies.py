@@ -127,6 +127,8 @@ def energies(
                 agent2_pdb,
                 agent1_cmip,
                 agent2_cmip,
+                agent1_data,
+                agent2_data,
             ], stdout=PIPE).stdout.decode()
 
         return data
