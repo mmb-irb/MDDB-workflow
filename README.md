@@ -58,7 +58,7 @@ This will generate a file called 'mwf.tar.gz'. Copy this file in the remote mach
 
 At this point you can access python by runinng:
 
-```./mwf/bin/python```
+```mwf/bin/python```
 
 Activate the mwf environment:
 
@@ -91,23 +91,31 @@ print help message:
 
 or  ```mwf -h```
 
-run analysis on current directory, which is asumed to contain input files: topology, trajectory and 'inputs.json'
+Run the workflow:
 
 ```mwf```
 
-you can also specify a different directory with the input files using the `-dir` or `--working_dir` options.
+By default, the workflow is run on current directory which is asumed to contain input files: topology, trajectory and the 'inputs.json' file.
 
-download and use input files from already uploaded project
+A different directory may be specified with the `-dir` or `--working_dir` options.
+
+Input files may be download from an already uploaded project:
 
 ```mwf -p <project id>```
 
-By default the data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
+By default, data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
 
-run single analysis or tool from workflow
+By default, the workflow is run when all required stuff is already downloaded. The exit may be forced before running the workflow with the `-s` option.
 
-```mwf -s <analysis/tool name>```
+Run the workflow but include only specific analyses or tools:
+
+```mwf -i <some analysis> <some other analysis> <some tool> ...```
+
+Run the workflow but exlcude some specific analyses:
+
+```mwf -e <some analysis> <some other analysis> ...```
 
 _Other options:_
 
-`-in`: input filename for the analysis. Default: `inputs.json`
+`-in`: inputs filename. Default: `inputs.json`
 
