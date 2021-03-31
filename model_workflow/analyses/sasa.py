@@ -122,7 +122,7 @@ def sasa(
 
     # Finally remove the reduced trajectory since it is not required anymore
     if reduced_trajectory_filename == 'sasa.trajectory.xtc':
-    logs = run([
-        "rm",
-        reduced_trajectory_filename
-    ], stdout=PIPE).stdout.decode()
+        logs = run([
+            "rm",
+            reduced_trajectory_filename
+        ], stdout=PIPE).stdout.decode()
