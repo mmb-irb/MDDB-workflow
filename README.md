@@ -54,6 +54,7 @@ This will generate a file called 'mwf.tar.gz'. Copy this file in the remote mach
 
 ```mkdir mwf```
 
+
 ```tar -xzf mwf.tar.gz -C mwf```
 
 At this point you can access python by runinng:
