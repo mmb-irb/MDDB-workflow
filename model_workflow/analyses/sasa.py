@@ -92,6 +92,8 @@ def sasa(
 
     # Check that the number of sasa values per frame is the same that the number of residues
     if len(sasa_per_frame[0]) != len(reference.residues):
+        print('sasa residues: ' + str(len(sasa_per_frame[0])))
+        print('reference residues: ' + str(len(reference.residues)))
         raise SystemExit('ERROR: The number of residues does not match in SASA analysis')
 
     # Format output data
