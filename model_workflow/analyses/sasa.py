@@ -114,6 +114,13 @@ def sasa(
             'stdv': stdv
         })
 
-    # Finally, export the analysis in json format
+    # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({'data': data}, file)
+
+    # Finally remove the reduced trajectory since it is not required anymore
+    if reduced_trajectory_filename == 'sasa.trajectory.xtc':
+    logs = run([
+        "rm",
+        reduced_trajectory_filename
+    ], stdout=PIPE).stdout.decode()
