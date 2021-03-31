@@ -217,65 +217,66 @@ def pockets (
         # - pX_mdpocket.pdb: it is completed at the begining but remains size 0 until the end of mdpocket
         # Note that checking pX_mdpocket_atoms.pdb or pX_mdpocket.pdb is enought to know if mdpocket was completed
         checking_filename = pocket_output + '_mdpocket.pdb'
-        if os.path.exists(checking_filename) and os.path.getsize(checking_filename) > 0:
-            continue
-        print('Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
-        # Create the new grid for this pocket, where all values from other pockets are set to 0
-        pocket_value = p[0]
-        new_grid_values = [str(v).ljust(5,'0') if pockets[i] == pocket_value else '0.000' for i, v in enumerate(grid_values)]
-        new_grid_filename = mdpocket_folder + '/' + pocket_name + '.dx'
-        with open(new_grid_filename,'w') as file:
-            # Write the header lines
-            for line in header_lines:
-                file.write(line)
-            # Write values in lines of 3 values
-            count = 0
-            line = ''
-            for value in new_grid_values:
-                if count == 0:
-                    line = value
-                    count += 1
-                elif count == 1:
-                    line = line + ' ' + value
-                    count += 1
-                elif count == 2:
-                    line = line + ' ' + value + ' \n'
+        if not (os.path.exists(checking_filename) and os.path.getsize(checking_filename) > 0):
+
+            print('Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
+            
+            # Create the new grid for this pocket, where all values from other pockets are set to 0
+            pocket_value = p[0]
+            new_grid_values = [str(v).ljust(5,'0') if pockets[i] == pocket_value else '0.000' for i, v in enumerate(grid_values)]
+            new_grid_filename = mdpocket_folder + '/' + pocket_name + '.dx'
+            with open(new_grid_filename,'w') as file:
+                # Write the header lines
+                for line in header_lines:
                     file.write(line)
-                    count = 0
+                # Write values in lines of 3 values
+                count = 0
+                line = ''
+                for value in new_grid_values:
+                    if count == 0:
+                        line = value
+                        count += 1
+                    elif count == 1:
+                        line = line + ' ' + value
+                        count += 1
+                    elif count == 2:
+                        line = line + ' ' + value + ' \n'
+                        file.write(line)
+                        count = 0
 
-        # Convert the grid coordinates to pdb
-        new_pdb_lines = []
-        lines_count = 0
-        new_pdb_filename = pocket_name + '.pdb'
-        for i, v in enumerate(point_coordinates):
-            if pockets[i] == pocket_value:
-                lines_count += 1
-                atom_num = str(lines_count).rjust(6,' ')
-                x_coordinates = str(round((origin[0] + v[0]) * 1000) / 1000).rjust(8, ' ')
-                y_coordinates = str(round((origin[1] + v[1]) * 1000) / 1000).rjust(8, ' ')
-                z_coordinates = str(round((origin[2] + v[2]) * 1000) / 1000).rjust(8, ' ')
-                line = "ATOM "+ atom_num +"  C   PTH     1    "+ x_coordinates + y_coordinates + z_coordinates +"  0.00  0.00\n"
-                new_pdb_lines.append(line)
+            # Convert the grid coordinates to pdb
+            new_pdb_lines = []
+            lines_count = 0
+            new_pdb_filename = pocket_name + '.pdb'
+            for i, v in enumerate(point_coordinates):
+                if pockets[i] == pocket_value:
+                    lines_count += 1
+                    atom_num = str(lines_count).rjust(6,' ')
+                    x_coordinates = str(round((origin[0] + v[0]) * 1000) / 1000).rjust(8, ' ')
+                    y_coordinates = str(round((origin[1] + v[1]) * 1000) / 1000).rjust(8, ' ')
+                    z_coordinates = str(round((origin[2] + v[2]) * 1000) / 1000).rjust(8, ' ')
+                    line = "ATOM "+ atom_num +"  C   PTH     1    "+ x_coordinates + y_coordinates + z_coordinates +"  0.00  0.00\n"
+                    new_pdb_lines.append(line)
 
-        # Write the pdb file
-        with open(new_pdb_filename,'w') as file:
-            for line in new_pdb_lines:
-                file.write(line)
+            # Write the pdb file
+            with open(new_pdb_filename,'w') as file:
+                for line in new_pdb_lines:
+                    file.write(line)
 
-        # Run the mdpocket analysis focusing in this specific pocket
-        logs = run([
-            "mdpocket",
-            "--trajectory_file",
-            pockets_trajectory,
-            "--trajectory_format",
-            "xtc",
-            "-f",
-            input_topology_filename,
-            "-o",
-            pocket_output,
-            "--selected_pocket",
-            new_pdb_filename,
-        ], stdout=PIPE).stdout.decode()
+            # Run the mdpocket analysis focusing in this specific pocket
+            logs = run([
+                "mdpocket",
+                "--trajectory_file",
+                pockets_trajectory,
+                "--trajectory_format",
+                "xtc",
+                "-f",
+                input_topology_filename,
+                "-o",
+                pocket_output,
+                "--selected_pocket",
+                new_pdb_filename,
+            ], stdout=PIPE).stdout.decode()
 
         # Mine data from the mdpocket 'descriptors' output file
         descriptors_data = {}
