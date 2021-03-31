@@ -11,6 +11,12 @@ def get_pytraj_trajectory (
     
     # Set the pytraj trayectory and get the number of frames
     pt_trajectory = pt.iterload(input_trajectory_filename, input_topology_filename)
+    
+    # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
+    # This happens with some random pdbs which pytraj considers to have 0 Mols
+    # More info: https://github.com/Amber-MD/cpptraj/pull/820
+    # DANI: Cuando pytraj sea actualizado con la versión actual de cpptraj este error debería desaparecer
+    pt_trajectory.top.start_new_mol()
 
     return pt_trajectory
 
@@ -24,7 +30,9 @@ def get_reduced_pytraj_trajectory (
     input_trajectory_filename : str) -> int:
     
     # Set the pytraj trayectory and get the number of frames
-    pt_trajectory = pt.iterload(input_trajectory_filename, input_topology_filename)
+    pt_trajectory = get_pytraj_trajectory(input_topology_filename, input_trajectory_filename)
+
+    # Get the number of frames
     trajectory_frames = pt_trajectory.n_frames
 
     # Set a reduced trajectory used for heavy analyses
