@@ -80,7 +80,7 @@ class Dependency:
             return value
         parsed_args = self.parse_args()
         if self.alias:
-            sys.stdout.write('\nRunning "' + self.alias + '"')
+            sys.stdout.write('Running "' + self.alias + '"\n')
         value = self.func(**parsed_args)
         self._value = value # Save the result for possible further use
         return value
@@ -108,7 +108,7 @@ class File(Dependency):
         if not self.func:
             raise SystemExit('ERROR: Missing input file "' + self.filename + '"')
         parsed_args = self.parse_args()
-        sys.stdout.write('\nGenerating "' + self.filename + '" file')
+        sys.stdout.write('Generating "' + self.filename + '" file\n')
         self.func(**parsed_args)
         return self.filename
 
@@ -413,19 +413,19 @@ def setup(
     if project:
         # Download the topology file if it does not exists
         if not os.path.exists(OUTPUT_topology_filename):
-            sys.stdout.write('\nDownloading topology')
+            sys.stdout.write('Downloading topology\n')
             topology_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + OUTPUT_topology_filename
             urllib.request.urlretrieve(topology_url, OUTPUT_topology_filename)
         # Download the trajectory file if it does not exists
         if not os.path.exists(OUTPUT_trajectory_filename):
-            sys.stdout.write('\nDownloading trajectory')
+            sys.stdout.write('Downloading trajectory\n')
             trajectory_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + OUTPUT_trajectory_filename
             urllib.request.urlretrieve(trajectory_url, OUTPUT_trajectory_filename)
         # Download the inputs json file if it does not exists
         if not os.path.exists(inputs_filename):
-            sys.stdout.write('\nDownloading inputs')
+            sys.stdout.write('Downloading inputs\n')
             inputs_url = url + '/api/rest/current/projects/' + \
                 project + '/inputs/'
             urllib.request.urlretrieve(inputs_url, inputs_filename)
@@ -455,7 +455,7 @@ def main():
 
     # Run the requested analyses
     if args.include and len(args.include) > 0:
-        sys.stdout.write(f"\nExecuting specific dependencies: " + str(args.include))
+        sys.stdout.write(f"Executing specific dependencies: " + str(args.include) + '\n')
         # Include only the specified dependencies
         requested_dependencies = [ dep for dep in requestables if dep.alias in args.include ]
         for dependency in requested_dependencies:
@@ -472,7 +472,7 @@ def main():
     # Remove gromacs backups
     remove_trash()
 
-    sys.stdout.write("\nDone!")
+    sys.stdout.write("Done!\n")
 
 
 # Define console arguments to call the workflow
