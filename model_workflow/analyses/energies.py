@@ -134,7 +134,7 @@ def energies(
         return data
 
     # Set the frames where we extract energies to calculate the average
-    frames = range(1, snapshots)
+    frames = range(0, snapshots)
 
     # Set a maximum of frames
     # If trajectory has more frames than the limit create a reduced trajectory
@@ -142,7 +142,7 @@ def energies(
     frames_number = 100
     if snapshots > frames_number:
         energies_trajectory_filename = 'energies.trajectory.xtc'
-        frames = range(1, frames_number)  # if frames_number > 1 else [1]
+        frames = range(0, frames_number)  # if frames_number > 1 else [1]
         #if not os.path.exists(energies_trajectory_filename): # DANI: Esto es temporal
         get_reduced_trajectory(
             energies_topology,
