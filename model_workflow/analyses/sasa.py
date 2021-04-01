@@ -91,10 +91,32 @@ def sasa(
         ], stdout=PIPE).stdout.decode()
 
     # Check that the number of sasa values per frame is the same that the number of residues
-    if len(sasa_per_frame[0]) != len(reference.residues):
-        print('sasa residues: ' + str(len(sasa_per_frame[0])))
+    sasa_residues_count = len(sasa_per_frame[0])
+    if sasa_residues_count != len(reference.residues):
+        # If the number does not match we may have a problem
+        print('sasa residues: ' + str(sasa_residues_count))
         print('reference residues: ' + str(len(reference.residues)))
-        raise SystemExit('ERROR: The number of residues does not match in SASA analysis')
+        print('WARNING: The reference number of residues does not match the SASA analysis')
+        # Try to reconfigure the sasa residues to match the reference
+        print('Trying alternative residues configuration...')
+        gromacs_residues = get_gromacs_residues(input_topology_filename)
+        unique_gromacs_residues = list(set(gromacs_residues))
+        # If the new residues configuration neither matches the sasa analysis then surrender
+        if sasa_residues_count != len(gromacs_residues) or len(reference.residues) != len(unique_gromacs_residues):
+            print('gromacs residues: ' + str(len(gromacs_residues)))
+            raise SystemExit('ERROR: The number of residues does not match in SASA analysis')
+        print("It's OK")
+        # If the new residues configuration matches the sasa analysis
+        # Then add sasa values for identical residues
+        reconfigured_sasa_per_frame = []
+        for sasa in sasa_per_frame:
+            reconfigured_sasa = []
+            for unique_residue in unique_gromacs_residues:
+                sasa_values = [ value for i, value in enumerate(sasa) if gromacs_residues[i] == unique_residue ]
+                new_sasa_value = sum(sasa_values)
+                reconfigured_sasa.append(new_sasa_value)
+            reconfigured_sasa_per_frame.append(reconfigured_sasa)
+        sasa_per_frame = reconfigured_sasa_per_frame
 
     # Format output data
     # Sasa values must be separated by residue and then ordered by frame
@@ -126,3 +148,25 @@ def sasa(
             "rm",
             reduced_trajectory_filename
         ], stdout=PIPE).stdout.decode()
+
+# Read a pdb file and return the residues which gromacs would consider
+# This is used for those exotic topologies where the gromacs amout of residues does not match prody's
+def get_gromacs_residues (pdb_filename : str):
+    residues = []
+    # Read the topology line by line and get all residue data (name, chain, number and icode)
+    with open(pdb_filename, "r") as file:
+        lines = file.readlines()
+        last_residue = None
+        for line in lines:
+            # Skip non atom lines
+            if line[0:4] != 'ATOM':
+                continue
+            # Get the part of the line where the residue data is found
+            residue = line[17:31]
+            # If it is the same residue than the previous line then skip it
+            if residue == last_residue:
+                continue
+            # Otherwise, record it
+            residues.append(residue)
+            last_residue = residue
+    return residues
