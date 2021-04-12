@@ -573,7 +573,8 @@ def energies(
         return ligand_data
 
     # Set the frames where we extract energies to calculate the average
-    frames = range(0, snapshots)
+    # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
+    frames = range(1, snapshots +1)
 
     # Set a maximum of frames
     # If trajectory has more frames than the limit create a reduced trajectory
@@ -588,7 +589,8 @@ def energies(
             snapshots,
             frames_number,
         )
-        frames = range(0, frames_number)  # if frames_number > 1 else [1]
+        # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
+        frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
 
     # Extract the energies for each frame
     #data = []
