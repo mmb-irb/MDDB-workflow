@@ -268,6 +268,11 @@ snapshots = Dependency(get_frames_count, {
     'input_topology_filename': topology_filename,
     'input_trajectory_filename': trajectory_filename
 }, 'snapshots')
+# Count the number of snapshots specifically from the input trajectory
+input_snapshots = Dependency(get_frames_count, {
+    'input_topology_filename': original_topology_filename,
+    'input_trajectory_filename': original_trajectory_filename
+}, 'input-snapshots')
 
 # Prepare the metadata output file
 metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
@@ -285,7 +290,8 @@ tools = [
     imaging,
     corrector,
     interactions,
-    snapshots
+    snapshots,
+    input_snapshots
 ]
 
 # Define all analyses
