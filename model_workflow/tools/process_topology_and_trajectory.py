@@ -13,12 +13,11 @@ def process_topology_and_trajectory (
     output_trajectory_filename : str,
     preprocess_protocol : int
     ) -> None:
-
     # Process the topology and or trajectory files using VMD
     # Files are converted to supported formats and trajectory pieces are merged into a single file
     # In addition, some irregularities in the topology may be fixed by VMD
     # If the output topology and trajectory files already exists it is assumed they are already processed
-    if not os.path.exists(input_topology_filename) or not os.path.exists(input_trajectory_filenames):
+    if not os.path.exists(output_topology_filename) or not os.path.exists(output_trajectory_filename):
         logs = vmd_processor(
             input_topology_filename,
             input_trajectory_filenames,

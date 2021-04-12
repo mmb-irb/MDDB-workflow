@@ -3,7 +3,7 @@
 # This is the starter script
 
 # Import python libraries
-import argparse
+from argparse import ArgumentParser, RawTextHelpFormatter
 import os
 import sys
 import math
@@ -91,7 +91,7 @@ class File(Dependency):
     # The 'func' is the function to generate the file
     # If there is no func it means the file will be always there (i.e. it is an input file)
     # The 'args' are the arguments for the 'func'
-    def __init__ (self, filename : str, func = None, args = {}, alias = ''):
+    def __init__ (self, filename : str, func, args = {}, alias = ''):
         self.filename = filename
         super().__init__(func, args, alias)
 
@@ -104,9 +104,6 @@ class File(Dependency):
     def get_value(self):
         if self.exists():
             return self.filename
-        # If it has not 'func' it must be an input file
-        if not self.func:
-            raise SystemExit('ERROR: Missing input file "' + self.filename + '"')
         parsed_args = self.parse_args()
         sys.stdout.write('Generating "' + self.filename + '" file\n')
         self.func(**parsed_args)
@@ -143,22 +140,29 @@ OUTPUT_pockets_filename = 'md.pockets.json'
 # Dependencies are tools and files that are required by some analyses
 # They are only run/generated when some analysis requires them
 
-# Inputs file is a json file which must contain all parameters to run the workflow
-inputs_filename = File('inputs.json')
-# Load the inputs file
-def load_json(filename : str):
-    with open(filename, 'r') as file:
-        return json.load(file)
-inputs = Dependency(load_json, { 'filename': inputs_filename })
-
+# First of all define the inputs dict
+# This dict will be updated as soon as the workflow starts with the input filenames
+inputs = {}
 # Set a function to retrieve 'inputs' values and handle missing keys
 def getInput(input: str):
-    return inputs.value.get(input, None)
+    return inputs.get(input, None)
+# Set a function to load the inputs file
+def load_inputs(filename : str):
+    with open(filename, 'r') as file:
+        inputs.update(json.load(file))
 
-# Extract all input values which may be required for the different workflow steps
-original_topology_filename = Dependency(getInput, {'input': 'original_topology_filename'})
-original_trajectory_filename = Dependency(getInput, {'input': 'original_trajectory_filename'})
+# Get input filenames from the already updated inputs
+
+# The original topology and trajectory filenames are the input filenames
+original_topology_filename = Dependency(getInput, {'input': 'input_topology_filename'})
+original_trajectory_filename = Dependency(getInput, {'input': 'input_trajectory_filename'})
+# The 'inputs file' is a json file which must contain all parameters to run the workflow
+inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
+
+# Get also some input values which are passed through command line instead of the inputs file
 preprocess_protocol = Dependency(getInput, {'input': 'preprocess_protocol'})
+
+# Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
 ligands = Dependency(getInput, {'input': 'ligands'})
 
@@ -395,40 +399,39 @@ requestables = [ *analyses, *tools, metadata_filename ]
 
 # Main ---------------------------------------------------------------------------------
 
-# Get current directory
-current_directory = os.getcwd()
-
 # Manage the working directory
 # Download topology, trajectory and inputs files from MoDEL if a project is specified
 def setup(
-        directory: str = current_directory,
-        project: str = None,
-        url: str = 'https://bioexcel-cv19-dev.bsc.es',
-        inputs_filename: str = 'inputs.json'):
+        directory: str,
+        project: str,
+        url: str,
+        input_topology_filename: str,
+        input_trajectory_filename: str,
+        inputs_filename: str):
     # Create the directory if it does not exists
     if not os.path.exists(directory):
         Path(directory).mkdir(parents=True, exist_ok=True)
     # Move to the specified directory
     os.chdir(directory)
     if project:
-        # Download the topology file if it does not exists
-        if not os.path.exists(OUTPUT_topology_filename):
-            sys.stdout.write('Downloading topology\n')
-            topology_url = url + '/api/rest/current/projects/' + \
-                project + '/files/' + OUTPUT_topology_filename
-            urllib.request.urlretrieve(topology_url, OUTPUT_topology_filename)
-        # Download the trajectory file if it does not exists
-        if not os.path.exists(OUTPUT_trajectory_filename):
-            sys.stdout.write('Downloading trajectory\n')
-            trajectory_url = url + '/api/rest/current/projects/' + \
-                project + '/files/' + OUTPUT_trajectory_filename
-            urllib.request.urlretrieve(trajectory_url, OUTPUT_trajectory_filename)
         # Download the inputs json file if it does not exists
         if not os.path.exists(inputs_filename):
             sys.stdout.write('Downloading inputs\n')
             inputs_url = url + '/api/rest/current/projects/' + \
                 project + '/inputs/'
             urllib.request.urlretrieve(inputs_url, inputs_filename)
+        # Download the topology file if it does not exists
+        if not os.path.exists(input_topology_filename):
+            sys.stdout.write('Downloading topology\n')
+            topology_url = url + '/api/rest/current/projects/' + \
+                project + '/files/' + OUTPUT_topology_filename
+            urllib.request.urlretrieve(topology_url, input_topology_filename)
+        # Download the trajectory file if it does not exists
+        if not os.path.exists(input_trajectory_filename):
+            sys.stdout.write('Downloading trajectory\n')
+            trajectory_url = url + '/api/rest/current/projects/' + \
+                project + '/files/' + OUTPUT_trajectory_filename
+            urllib.request.urlretrieve(trajectory_url, input_trajectory_filename)
 
 
 # Main function
@@ -437,12 +440,31 @@ def main():
     # Parse input arguments from the console
     args = parser.parse_args()
 
+    # Set the command line inputs
+    inputs.update({
+        'input_topology_filename' : args.input_topology_filename,
+        'input_trajectory_filename' : args.input_trajectory_filename,
+        'inputs_filename' : args.inputs_filename,
+        'preprocess_protocol': args.preprocess_protocol
+    })
+
     # Manage the working directory and make the required downloads
     setup(
         directory=Path(args.working_dir).resolve(),
         project=args.project,
         url=args.url,
+        input_topology_filename=args.input_topology_filename,
+        input_trajectory_filename=args.input_trajectory_filename,
         inputs_filename=args.inputs_filename )
+
+    # At this moment all input files should be there
+    # Check it and send error if anyone is missing
+    for filename in [ args.input_topology_filename, args.input_trajectory_filename, args.inputs_filename ]:
+        if not os.path.exists(filename):
+            raise SystemExit('ERROR: Missing input file "' + filename + '"')
+
+    # Load the inputs file
+    load_inputs(args.inputs_filename)
 
     # Run tools which must be run always
     # They better be fast
@@ -476,12 +498,21 @@ def main():
 
 
 # Define console arguments to call the workflow
-parser = argparse.ArgumentParser(description="MoDEL Workflow")
+parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
+
+# Get current directory
+current_directory = Path.cwd()
+
+# Set default input filenames
+# They may be modified through console command arguments
+DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
+DEFAULT_input_trajectory_filename = 'md.imaged.rot.xtc'
+DEFAULT_inputs_filename = 'inputs.json'
 
 # Set optional arguments
 parser.add_argument(
     "-dir", "--working_dir",
-    default=Path.cwd(),
+    default=current_directory,
     help="Directory where to perform analysis. "
     "If empty, will use current directory.")
 
@@ -497,9 +528,33 @@ parser.add_argument(
     help="URL from where to download project")
 
 parser.add_argument(
+    "-top", "--input_topology_filename",
+    default=DEFAULT_input_topology_filename,
+    help="Path to topology filename")
+
+parser.add_argument(
+    "-traj", "--input_trajectory_filename",
+    default=DEFAULT_input_trajectory_filename,
+    help="Path to trajectory filename")
+
+parser.add_argument(
     "-in", "--inputs_filename",
-    default="inputs.json",
+    default=DEFAULT_inputs_filename,
     help="Path to inputs filename")
+
+parser.add_argument(
+    "-pr", "--preprocess_protocol",
+    default=0,
+    help=("Set how the trajectory must be imaged and fitted"
+        " (i.e. centered, without translation or rotation)\n"
+        "These protocolos may help in some situations, but the imaging step can not be fully automatized\n"
+        "If protocols do not work, the gromacs parameters must be modified manually\n"
+        "Available protocols:\n"
+        "0. No imaging, no fitting -> The trajectory is already imaged and fitted\n"
+        "1. No imaging, only fitting -> The trajectory is already imaged but not fitted\n"
+        "2. Single protein\n"
+        "3. Protein in membrane\n"
+        "4. Two interacting proteins"))
 
 parser.add_argument(
     "-s", "--setup",

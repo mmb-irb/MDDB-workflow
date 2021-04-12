@@ -117,5 +117,11 @@ Run the workflow but exlcude some specific analyses:
 
 _Other options:_
 
+`-top`: input topology filename. Default: `md.imaged.rot.dry.pdb`
+
+`-traj`: inputs filename. Default: `md.imaged.rot.xtc`
+
 `-in`: inputs filename. Default: `inputs.json`
+
+`-pr`: preprocess protocol. Default: 0
 
