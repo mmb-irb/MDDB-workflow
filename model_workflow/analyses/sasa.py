@@ -39,6 +39,23 @@ def sasa(
     else:
         frames_number = snapshots
 
+    # Set indexes to select the system without hydrogens
+    indexes = 'indexes.ndx'
+    p = Popen([
+        "echo",
+        "0 & !a H*\nq",
+    ], stdout=PIPE)
+    logs = run([
+        "gmx",
+        "make_ndx",
+        "-f",
+        input_topology_filename,
+        '-o',
+        indexes,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
+
     # Calculate the sasa for each frame
     frames_ndx = 'frames.ndx'
     sasa_per_frame = []
@@ -51,7 +68,7 @@ def sasa(
             file.write('[frames]\n' + str(f))
         p = Popen([
             "echo",
-            "System",
+            "System_&_!H*",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -64,6 +81,8 @@ def sasa(
             current_frame,
             "-fr",
             frames_ndx,
+            "-n",
+            indexes,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
