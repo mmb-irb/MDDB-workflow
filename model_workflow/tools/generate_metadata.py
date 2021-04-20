@@ -1,7 +1,13 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
+from model_workflow.tools.generate_map import generate_map
 
 import json
+from pathlib import Path
+
+# Set the path to stored topology references which are required for this analysis
+resources = str(Path(__file__).parent.parent / "utils" / "resources")
+toporefs_source = resources + '/toporefs.json'
 
 # Generate a JSON file with all the metadata
 def generate_metadata (
@@ -52,6 +58,26 @@ def generate_metadata (
         'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
     } for interaction in processed_interactions]
 
+    # Get the input topology reference
+    toporefs = getInput('toporefs')
+    # Load topology references stored in this workflow
+    stored_toporefs = None
+    with open(toporefs_source, 'r') as file:
+        stored_toporefs = json.load(file)
+
+    # For each input topology reference, align the reference sequence with the topology sequence
+    # Each metadata 'toporef' must include the input toporef name and the align map
+    metadata_toporefs = []
+    for toporef in toporefs:
+        # Find the corresponding stored topology reference and get its residues sequence
+        reference = next(st for st in stored_toporefs if st['name'] == toporef)
+        reference_sequence = reference['sequence']
+        reference_map = generate_map(reference_sequence, input_topology_filename)
+        metadata_toporefs.append({
+            'name': toporef,
+            'map': reference_map,
+        })
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -90,7 +116,8 @@ def generate_metadata (
         'NA': na,
         'CL': cl,
         'LIGANDS': ligands,
-        'DOMAINS': getInput('domains'),
+        'TOPOREFS': metadata_toporefs,
+        'CUSTOMS': getInput('customs'),
         'INTERACTIONS': metadata_interactions,
         'CHAINNAMES': getInput('chainnames'),
     }
