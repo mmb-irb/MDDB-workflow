@@ -115,8 +115,10 @@ def energies(
             adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
-            agent1_data = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1 + '.energy.pdb')
-            agent2_data = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2 + '.energy.pdb')
+            agent1_energy = agent1 + '.energy.pdb'
+            agent1_data = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1_energy)
+            agent2_energy = agent2 + '.energy.pdb'
+            agent2_data = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_energy)
 
             data.append({ 'agent1': agent1_data, 'agent2': agent2_data })
 
@@ -127,8 +129,8 @@ def energies(
                 agent2_pdb,
                 agent1_cmip,
                 agent2_cmip,
-                agent1_data,
-                agent2_data,
+                agent1_energy,
+                agent2_energy,
             ], stdout=PIPE).stdout.decode()
 
         return data
