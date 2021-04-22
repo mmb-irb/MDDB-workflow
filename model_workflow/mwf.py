@@ -149,7 +149,8 @@ def getInput(input: str):
 # Set a function to load the inputs file
 def load_inputs(filename : str):
     with open(filename, 'r') as file:
-        inputs.update(json.load(file))
+        inputs_data = json.load(file)
+        inputs.update(inputs_data)
 
 # Get input filenames from the already updated inputs
 
@@ -426,6 +427,12 @@ def setup(
             inputs_url = url + '/api/rest/current/projects/' + \
                 project + '/inputs/'
             urllib.request.urlretrieve(inputs_url, inputs_filename)
+            # Rewrite the inputs file in a pretty formatted way
+            with open(inputs_filename, 'r+') as file:
+                file_content = json.load(file)
+                file.seek(0)
+                json.dump(file_content, file, indent=4)
+                file.truncate()
         # Download the topology file if it does not exists
         if not os.path.exists(input_topology_filename):
             sys.stdout.write('Downloading topology\n')
