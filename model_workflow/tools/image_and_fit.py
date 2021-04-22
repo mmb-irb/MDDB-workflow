@@ -18,6 +18,8 @@ def image_and_fit (
     preprocess_protocol : int,
     ) -> str:
 
+    print(' Preprocess protocol: ' + str(preprocess_protocol))
+
     if preprocess_protocol == 0:
         return
 
