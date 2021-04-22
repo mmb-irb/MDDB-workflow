@@ -60,6 +60,7 @@ def generate_metadata (
 
     # Get the input topology reference
     toporefs = getInput('toporefs')
+
     # Load topology references stored in this workflow
     stored_toporefs = None
     with open(toporefs_source, 'r') as file:
@@ -70,11 +71,12 @@ def generate_metadata (
     metadata_toporefs = []
     for toporef in toporefs:
         # Find the corresponding stored topology reference and get its residues sequence
-        reference = next(st for st in stored_toporefs if st['name'] == toporef)
+        name = toporef['name']
+        reference = next(st for st in stored_toporefs if st['name'] == name)
         reference_sequence = reference['sequence']
         reference_map = generate_map(reference_sequence, input_topology_filename)
         metadata_toporefs.append({
-            'name': toporef,
+            'name': name,
             'map': reference_map,
         })
 
