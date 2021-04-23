@@ -868,9 +868,12 @@ MET  HG1  H      0.0440
 MET  HG2  H      0.0440
 MET  HN   HN     0.2719
 #
+ACE  H1   H      0.1123
 ACE  HH31 H      0.1123
 ACE  CH3  C     -0.3662
+ACE  H2   H      0.1123
 ACE  HH32 H      0.1123
+ACE  H3   H      0.1123
 ACE  HH33 H      0.1123
 ACE  C    C      0.5972
 ACE  O    O     -0.5679
