@@ -736,8 +736,11 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
         # If this file is empty it means something went wrong with CMIP
         # We print its logs and exit
         if len(lines) == 0:
-            for line in cmip_logs:
-                print(line)
+            if type(cmip_logs) == str:
+                print(cmip_logs)
+            else:
+                for line in cmip_logs:
+                    print(line)
             raise SystemExit('ERROR: Something went wrong with CMIP!')
         for line in lines:
             chain = line[21:22]
