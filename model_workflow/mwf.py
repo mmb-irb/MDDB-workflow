@@ -259,11 +259,6 @@ average_frame_filename = File(OUTPUT_average_frame_filename, get_average, {
 
 # Get additional metadata usedin the workflow which is not in the inputs
 
-# Find out residues and interface residues for each interaction
-interactions = Dependency(process_interactions, {
-    'interactions': input_interactions,
-    'topology_reference': topology_reference
-}, 'interactions')
 # Count the number of snapshots
 snapshots = Dependency(get_frames_count, {
     'input_topology_filename': topology_filename,
@@ -274,6 +269,15 @@ input_snapshots = Dependency(get_frames_count, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filename': original_trajectory_filename
 }, 'input-snapshots')
+
+# Find out residues and interface residues for each interaction
+interactions = Dependency(process_interactions, {
+    'topology_filename': topology_filename,
+    'trajectory_filename': trajectory_filename,
+    'interactions': input_interactions,
+    'topology_reference': topology_reference,
+    'snapshots': snapshots,
+}, 'interactions')
 
 # Prepare the metadata output file
 metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
