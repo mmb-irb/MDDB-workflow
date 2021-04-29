@@ -1,4 +1,4 @@
-from model_workflow.tools.xvg_parse import xvg_parse_3c
+from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
 import json
@@ -100,7 +100,7 @@ def sasa(
             '-quiet'
         ], stdout=PIPE).stdout.decode()
         # Mine the sasa results (.xvg file)
-        sasa = xvg_parse_3c(current_frame_sasa)
+        sasa = xvg_parse(current_frame_sasa, ['c1', 'c2', 'c3'])
         sasa_per_frame.append(sasa['c2'])
         # Delete current frame files before going for the next frame
         run([

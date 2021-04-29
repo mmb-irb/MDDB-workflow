@@ -42,7 +42,7 @@ def rmsds(
             # Run the rmsd
             rmsd(reference, input_trajectory_filename, group, rmsd_analysis)
             # Read and parse the output file
-            rmsd_data = xvg_parse(rmsd_analysis)
+            rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output
             # Multiply by 10 since rmsd comes in nanometers (nm) and we want it in Ångstroms (Å)
             rmsd_values = [ v*10 for v in rmsd_data['values'] ]

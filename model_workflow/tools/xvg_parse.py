@@ -6,10 +6,13 @@
 #   10.0000000    0.3536768
 #   20.0000000    0.3509805
 
-# 2 columns
-def xvg_parse (filename : str):
-    times = []
-    values = []
+# Columns is a list with the name of each column
+# It returns a dict with as many entries as columns specifided
+# Each entry has the column name as key and the mined data (list) as value
+# WARNING: If the xvg file has less columns than specified then the leftover entries will have empty lists
+# WARNING: If the xvg file has more columns than specified then it will fail
+def xvg_parse (filename : str, columns : list) -> dict:
+    data = [ [] for column in columns ]
     # Read the specified file line per line
     with open(filename, 'r') as file:
         lines = list(file)
@@ -19,29 +22,12 @@ def xvg_parse (filename : str):
             if first_character in ['#','@']:
                 continue
             # Useful lines are splitted by spaces
-            # Splits are saved in 2 columns: times and values
-            [time, value] = line.split()
-            times.append(float(time))
-            values.append(float(value))
-    return { 'times': times, 'values': values }
-
-# 3 columns
-def xvg_parse_3c (filename : str):
-    c1 = []
-    c2 = []
-    c3 = []
-    # Read the specified file line per line
-    with open(filename, 'r') as file:
-        lines = list(file)
-        for line in lines:
-            # Skip comment lines
-            first_character = line[0]
-            if first_character in ['#','@']:
-                continue
-            # Useful lines are splitted by spaces
-            # Splits are saved in 2 columns: times and values
-            [a, b, c] = line.split()
-            c1.append(float(a))
-            c2.append(float(b))
-            c3.append(float(c))
-    return { 'c1': c1, 'c2': c2, 'c3': c3 }
+            # Splits are saved in as many columns as specified
+            splits = line.split()
+            for s, split in enumerate(splits):
+                data[s].append(float(split))
+    # Create the formatted dict to be returned
+    results = {}
+    for c, column in enumerate(columns):
+        results[column] = data[c]
+    return results
