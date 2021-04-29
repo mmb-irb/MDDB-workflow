@@ -581,14 +581,15 @@ def energies(
     energies_trajectory_filename = input_trajectory_filename
     frames_number = 100
     if snapshots > frames_number:
-        energies_trajectory_filename = 'energies.trajectory.xtc'
-        get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            energies_trajectory_filename,
-            snapshots,
-            frames_number,
-        )
+        energies_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
+        if not os.path.exists(energies_trajectory_filename):
+            get_reduced_trajectory(
+                input_topology_filename,
+                input_trajectory_filename,
+                energies_trajectory_filename,
+                snapshots,
+                frames_number,
+            )
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
         frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
 
@@ -717,10 +718,3 @@ def energies(
     # Finally, export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({'data': output_analysis}, file)
-
-    # Finally remove the reduced trajectory since it is not required anymore
-    if energies_trajectory_filename == 'energies.trajectory.xtc':
-        logs = run([
-            "rm",
-            energies_trajectory_filename,
-        ], stdout=PIPE).stdout.decode()

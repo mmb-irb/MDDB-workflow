@@ -1,4 +1,5 @@
 # Principal component analysis (PCA)
+import os
 import math
 from subprocess import run, PIPE, Popen
 
@@ -26,14 +27,15 @@ def pca(
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     frames_limit = 2000
     if snapshots > frames_limit:
-        pca_trajectory_filename = 'pca.trajectory.xtc'
-        get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            pca_trajectory_filename,
-            snapshots,
-            frames_limit,
-        )
+        pca_trajectory_filename = 'f' + str(frames_limit) + '.trajectory.xtc'
+        if not os.path.exists(pca_trajectory_filename):
+            get_reduced_trajectory(
+                input_topology_filename,
+                input_trajectory_filename,
+                pca_trajectory_filename,
+                snapshots,
+                frames_limit,
+            )
 
     # Calculate eigen values and eigen vectors with Gromacs
     p = Popen([
@@ -123,10 +125,3 @@ def pca(
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
-
-    # Finally remove the pca trajectory since it is not required anymore
-    if pca_trajectory_filename == 'pca.trajectory.xtc':
-        logs = run([
-            "rm",
-            pca_trajectory_filename,
-        ], stdout=PIPE).stdout.decode()

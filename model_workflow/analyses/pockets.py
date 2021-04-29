@@ -43,7 +43,7 @@ def pockets (
     frames_number = 100
     step = 1
     if snapshots > frames_number:
-        pockets_trajectory = 'pockets.trajectory.xtc'
+        pockets_trajectory = 'f' + str(frames_number) + '.trajectory.xtc'
         if not os.path.exists(pockets_trajectory):
             step = get_reduced_trajectory(
                 input_topology_filename,
@@ -350,10 +350,3 @@ def pockets (
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({ 'data': output_analysis, 'start': start, 'step': step }, file)
-
-    # Finally remove the reduced trajectory since it is not required anymore
-    if pockets_trajectory == 'pockets.trajectory.xtc':
-        logs = run([
-            "rm",
-            pockets_trajectory,
-        ], stdout=PIPE).stdout.decode()

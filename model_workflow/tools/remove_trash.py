@@ -6,11 +6,19 @@ def remove_trash():
 
     # The subprocess.run command does not deal with the '*' bash syntax to grab multiple files
     # Instead, we have to do it this way
-    trash_files = glob.glob('#*')
+    gromacs_backups = glob.glob('#*')
+    reduced_trajectories = glob.glob('f*.trajectory.xtc')
 
-    if len(trash_files) > 0:
+    if len(gromacs_backups) > 0:
 
         logs = run([
             "rm",
-            *trash_files,
+            *gromacs_backups,
+        ], stdout=PIPE).stdout.decode()
+
+    if len(reduced_trajectories) > 0:
+
+        logs = run([
+            "rm",
+            *reduced_trajectories,
         ], stdout=PIPE).stdout.decode()

@@ -144,17 +144,17 @@ def energies(
     energies_trajectory_filename = input_trajectory_filename
     frames_number = 100
     if snapshots > frames_number:
-        energies_trajectory_filename = 'energies.trajectory.xtc'
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
         frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
-        #if not os.path.exists(energies_trajectory_filename): # DANI: Esto es temporal
-        get_reduced_trajectory(
-            energies_topology,
-            input_trajectory_filename,
-            energies_trajectory_filename,
-            snapshots,
-            frames_number,
-        )
+        energies_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
+        if not os.path.exists(energies_trajectory_filename):
+            get_reduced_trajectory(
+                energies_topology,
+                input_trajectory_filename,
+                energies_trajectory_filename,
+                snapshots,
+                frames_number,
+            )
     else:
         frames_number = snapshots
 
@@ -221,13 +221,11 @@ def energies(
     with open(output_analysis_filename, 'w') as file:
         json.dump({'data': output_analysis}, file)
 
-    # Finally remove the reduced trajectory since it is not required anymore
-    if energies_trajectory_filename == 'energies.trajectory.xtc':
-        logs = run([
-            "rm",
-            energies_topology,
-            energies_trajectory_filename,
-        ], stdout=PIPE).stdout.decode()
+    # Finally remove the reduced topology
+    logs = run([
+        "rm",
+        energies_topology,
+    ], stdout=PIPE).stdout.decode()
 
 # Save all unique residues in res.lib
 def get_reslib_residues(reslib_filename : str) -> list:

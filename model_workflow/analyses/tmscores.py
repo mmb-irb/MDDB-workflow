@@ -1,5 +1,6 @@
 import tmscoring
 
+import os
 from subprocess import run, PIPE, Popen
 import json
 
@@ -30,14 +31,15 @@ def tmscores (
     tmscore_trajectory_filename = input_trajectory_filename
     frames_number = 200
     if snapshots > frames_number:
-        tmscore_trajectory_filename = 'tmscore.trajectory.xtc'
-        step = get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            tmscore_trajectory_filename,
-            snapshots,
-            frames_number,
-        )
+        tmscore_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
+        if not os.path.exists(tmscore_trajectory_filename):
+            step = get_reduced_trajectory(
+                input_topology_filename,
+                input_trajectory_filename,
+                tmscore_trajectory_filename,
+                snapshots,
+                frames_number,
+            )
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
         frames = range(1, frames_number +1)
     
@@ -133,9 +135,3 @@ def tmscores (
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({ 'start': start, 'step': step, 'data': output_analysis }, file)
-
-    if tmscore_trajectory_filename == 'tmscore.trajectory.xtc':
-        run([
-            "rm",
-            tmscore_trajectory_filename,
-        ], stdout=PIPE).stdout.decode()

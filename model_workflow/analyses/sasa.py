@@ -1,6 +1,7 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
+import os
 import json
 import numpy
 from subprocess import run, PIPE, Popen
@@ -26,16 +27,17 @@ def sasa(
     reduced_trajectory_filename = input_trajectory_filename
     frames_number = 200
     if snapshots > frames_number:
-        reduced_trajectory_filename = 'sasa.trajectory.xtc'
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
         frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
-        get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            reduced_trajectory_filename,
-            snapshots,
-            frames_number,
-        )
+        reduced_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
+        if not os.path.exists(pockets_trajectory):
+            get_reduced_trajectory(
+                input_topology_filename,
+                input_trajectory_filename,
+                reduced_trajectory_filename,
+                snapshots,
+                frames_number,
+            )
     else:
         frames_number = snapshots
 
@@ -162,13 +164,6 @@ def sasa(
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({'data': data}, file)
-
-    # Finally remove the reduced trajectory since it is not required anymore
-    if reduced_trajectory_filename == 'sasa.trajectory.xtc':
-        logs = run([
-            "rm",
-            reduced_trajectory_filename
-        ], stdout=PIPE).stdout.decode()
 
 # Read a pdb file and return the residues which gromacs would consider
 # This is used for those exotic topologies where the gromacs amout of residues does not match prody's
