@@ -403,7 +403,7 @@ analyses = [
 ]
 
 # Set a list with all dependencies to be required if the whole workflow is run
-workflow = [ *analyses, metadata_filename ]
+workflow = [ metadata_filename, *analyses ]
 
 # Set a list with all dependencies which may be requested independently
 requestables = [ *analyses, *tools, metadata_filename ]
