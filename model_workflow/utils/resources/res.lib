@@ -1804,6 +1804,8 @@ LYSN HZ3  HN     0.3382
 LYSN C    C      0.7214
 LYSN O    O     -0.6013
 PRON N    N     -0.2020
+# La prolina tiene 2 H, pero a veces son H1, H2 y a veces son H2, H3
+PRON H1   HN     0.3120
 PRON H2   HN     0.3120
 PRON H3   HN     0.3120
 PRON CD   C     -0.0120
