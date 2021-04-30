@@ -30,7 +30,7 @@ def sasa(
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
         frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
         reduced_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
-        if not os.path.exists(pockets_trajectory):
+        if not os.path.exists(reduced_trajectory_filename):
             get_reduced_trajectory(
                 input_topology_filename,
                 input_trajectory_filename,
