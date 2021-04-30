@@ -54,7 +54,8 @@ def vmd_processor (
         file.write('	}\n')
         file.write('}\n')
         # Write the current trajectory in 'trr' format
-        file.write('animate write trr ' + processed_trajectory + ' waitfor all sel $all\n')
+        if not os.path.exists(output_trajectory_filename) :
+            file.write('animate write trr ' + processed_trajectory + ' waitfor all sel $all\n')
         # Write the current topology in 'pdb' format
         file.write('$all frame first\n')
         file.write('$all writepdb ' + output_topology_filename + '\n')
@@ -80,33 +81,35 @@ def vmd_processor (
 
     # Check the output files have been created
     # Otherwise print logs and throw an error
-    if not ( os.path.exists(output_topology_filename) and os.path.exists(processed_trajectory) ) :
+    if not ( os.path.exists(output_topology_filename) and ( os.path.exists(processed_trajectory) or os.path.exists(output_trajectory_filename) ) ) :
         print(logs)
         raise SystemExit("ERROR: Something was wrong with VMD")
 
     # Convert the output processed trajectory from 'trr' to 'xtc' format
-    p = Popen([
-        "echo",
-        "System",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "trjconv",
-        "-s",
-        output_topology_filename,
-        "-f",
-        processed_trajectory,
-        '-o',
-        output_trajectory_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
+    if not os.path.exists(output_trajectory_filename) and os.path.exists(processed_trajectory):
+        p = Popen([
+            "echo",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            output_topology_filename,
+            "-f",
+            processed_trajectory,
+            '-o',
+            output_trajectory_filename,
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
     # Remove the trajectory in 'trr' format to free up space
-    logs = run([
-        "rm",
-        processed_trajectory,
-    ], stdout=PIPE).stdout.decode()
+    if os.path.exists(processed_trajectory):
+        logs = run([
+            "rm",
+            processed_trajectory,
+        ], stdout=PIPE).stdout.decode()
 
     # Return VMD logs
     return logs
