@@ -15,6 +15,7 @@
 
 from subprocess import run, PIPE
 from collections import OrderedDict
+import re
 import prody
 import pytraj as pt
 
@@ -36,6 +37,17 @@ class sourceResidue:
         chain_letter = residue.getChid()
         residue_number = residue.getResnum()
         icode = residue.getIcode()
+        return cls(chain_letter, residue_number, icode)
+
+    # Set the residue form a tag (e.g. 'A:1')
+    @classmethod
+    def from_tag(cls, tag : str):
+        match = re.match(r'(\w):(\d*)(\w?)', tag)
+        if not match:
+            raise SystemExit("ERROR: Tag '" + tag + "' is not valid")
+        chain_letter = match.group(1)
+        residue_number = match.group(2)
+        icode = match.group(3)
         return cls(chain_letter, residue_number, icode)
     
     def __str__ (self):

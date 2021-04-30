@@ -3,10 +3,16 @@
 
 from subprocess import run, PIPE, Popen
 import os
+import json
 
+from model_workflow.tools.topology_manager import sourceResidue
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.xvg_parse import xvg_parse
 
+# Since interactions are heavy to calculate they are stored in a json file
+# This file is only a backup, which is not uploaded to the database
+# In addition, this file may be used to force interactions with custom interface residues manually
+interactions_backup = 'interactions.json'
 
 # The processing uses gromacs to find interface residues
 # Residues are filtered by minimum distance along the trajecotry
@@ -16,6 +22,17 @@ def process_interactions (
     interactions : list,
     topology_reference,
     snapshots : int) -> list:
+
+    # If there is a backup then use it
+    # Load the backup and return its content as it is
+    if os.path.exists(interactions_backup):
+        with open(interactions_backup, 'r') as file:
+            interactions = json.load(file)
+        # Parse the residues in string format to 'sourceResidue' format (e.g. 'A:1')
+        for interaction in interactions:
+            for key in ['residues_1','residues_2','interface_1','interface_2']:
+                interaction[key] = [ sourceResidue.from_tag(residue) for residue in interaction[key] ]
+        return interactions
 
     if not interactions or len(interactions) == 0:
         return []
@@ -47,6 +64,21 @@ def process_interactions (
 
         print(interaction['name'] +
             ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+
+    # Save a backup for interactions
+    with open(interactions_backup, 'w') as file:
+        # Create a new interactions object with all 'sourceResidue' values as string
+        # e.g. 'A:1'
+        serializable_interactions = []
+        for interaction in interactions:
+            serializable_interaction = {}
+            for key, value in interaction.items():
+                if type(value) == str:
+                    serializable_interaction[key] = value
+                else:
+                    serializable_interaction[key] = [ str(element) for element in value ]
+            serializable_interactions.append(serializable_interaction)
+        json.dump(serializable_interactions, file, indent=4)
 
     return interactions
 
