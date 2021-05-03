@@ -96,7 +96,8 @@ def align (ref_sequence : str, new_sequence : str) -> list:
             aligned_index += 1
             continue
         # Otherwise add the equivalent aligned index to the mapping
-        aligned_mapping.append(l)
+        # WARNING: Add +1 since uniprot residue counts start at 1, not 0
+        aligned_mapping.append(l + 1)
         aligned_index += 1
 
     return aligned_mapping
