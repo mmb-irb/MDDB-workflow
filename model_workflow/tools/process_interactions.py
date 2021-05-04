@@ -98,16 +98,13 @@ def get_interface_residues(
     cutoff_distance : float = 0.5) -> dict:
 
     # Use a reduced trajectory since this process is slow
-    frames_number = 100
-    reduced_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
-    if not os.path.exists(reduced_trajectory_filename):
-        get_reduced_trajectory(
-            topology_filename,
-            trajectory_filename,
-            reduced_trajectory_filename,
-            snapshots,
-            frames_number,
-        )
+    frames_limit = 100
+    reduced_trajectory_filename, step, frames = get_reduced_trajectory(
+        topology_filename,
+        trajectory_filename,
+        snapshots,
+        frames_limit,
+    )
 
     # First of all we must set up gromacs index to select each interacting agent separately
     # This is performed using the make_ndx gromacs command with specific commands

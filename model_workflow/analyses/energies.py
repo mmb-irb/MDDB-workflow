@@ -137,32 +137,30 @@ def energies(
 
     # Set the frames where we extract energies to calculate the average
     # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-    frames = range(1, snapshots +1)
+    frames_list = range(1, snapshots +1)
 
     # Set a maximum of frames
     # If trajectory has more frames than the limit create a reduced trajectory
     energies_trajectory_filename = input_trajectory_filename
-    frames_number = 100
-    if snapshots > frames_number:
+    frames_limit = 100
+    frames = None
+    if snapshots > frames_limit:
+        energies_trajectory_filename, step, frames = get_reduced_trajectory(
+            energies_topology,
+            input_trajectory_filename,
+            snapshots,
+            frames_limit,
+        )
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-        frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
-        energies_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
-        if not os.path.exists(energies_trajectory_filename):
-            get_reduced_trajectory(
-                energies_topology,
-                input_trajectory_filename,
-                energies_trajectory_filename,
-                snapshots,
-                frames_number,
-            )
+        frames_list = range(1, frames +1)  # if frames > 1 else [1]
     else:
-        frames_number = snapshots
+        frames = snapshots
 
     # Extract the energies for each frame
     frames_ndx = 'frames.ndx'
     interactions_data = [[] for i in interactions]
-    for f in frames:
-        print('Frame ' + str(f) + ' / ' + str(frames_number))
+    for f in frames_list:
+        print('Frame ' + str(f) + ' / ' + str(frames))
         # Extract the current frame
         current_frame = 'frame' + str(f) + '.pdb'
         # The frame selection input in gromacs works with a 'ndx' file
@@ -783,8 +781,8 @@ def format_data(data):
 
     # Calculate the residue averages from each energy at the beginig and end of the trajectory
     # We take the initial 20% and the final 20% of frames to calculate each respectively
-    frames_number = len(data)
-    p20 = round(frames_number*0.2)
+    p20_frames = len(data)
+    p20 = round(p20_frames*0.2)
 
     # Initials
     residues_vdw_values_initial = [[] for n in range(residues_number)]

@@ -20,26 +20,24 @@ def sasa(
 
     # Set the frames where we calculate the sasa
     # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-    frames = range(1, snapshots +1)
+    frames_list = range(1, snapshots +1)
 
     # Set a maximum of frames
     # If trajectory has more frames than the limit create a reduced trajectory
     reduced_trajectory_filename = input_trajectory_filename
-    frames_number = 200
-    if snapshots > frames_number:
+    frames_limit = 200
+    frames = None
+    if snapshots > frames_limit:
+        reduced_trajectory_filename, step, frames = get_reduced_trajectory(
+            input_topology_filename,
+            input_trajectory_filename,
+            snapshots,
+            frames_limit,
+        )
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-        frames = range(1, frames_number +1)  # if frames_number > 1 else [1]
-        reduced_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
-        if not os.path.exists(reduced_trajectory_filename):
-            get_reduced_trajectory(
-                input_topology_filename,
-                input_trajectory_filename,
-                reduced_trajectory_filename,
-                snapshots,
-                frames_number,
-            )
+        frames_list = range(1, frames +1)  # if frames > 1 else [1]
     else:
-        frames_number = snapshots
+        frames = snapshots
 
     # Set indexes to select the system without hydrogens
     indexes = 'indexes.ndx'
@@ -61,8 +59,8 @@ def sasa(
     # Calculate the sasa for each frame
     frames_ndx = 'frames.ndx'
     sasa_per_frame = []
-    for f in frames:
-        print('Frame ' + str(f) + ' / ' + str(frames_number))
+    for f in frames_list:
+        print('Frame ' + str(f) + ' / ' + str(frames))
         # Extract the current frame
         current_frame = 'frame' + str(f) + '.pdb'
         # The frame selection input in gromacs works with a 'ndx' file

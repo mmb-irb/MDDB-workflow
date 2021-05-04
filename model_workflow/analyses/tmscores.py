@@ -1,6 +1,5 @@
 import tmscoring
 
-import os
 from subprocess import run, PIPE, Popen
 import json
 
@@ -24,24 +23,21 @@ def tmscores (
 
     # Set the frames where we extract energies to calculate the average
     # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-    frames = range(1, snapshots +1)
+    frames_list = range(1, snapshots +1)
 
     # Set a maximum of frames
     # If trajectory has more frames than the limit create a reduced trajectory
     tmscore_trajectory_filename = input_trajectory_filename
-    frames_number = 200
-    if snapshots > frames_number:
-        tmscore_trajectory_filename = 'f' + str(frames_number) + '.trajectory.xtc'
-        if not os.path.exists(tmscore_trajectory_filename):
-            step = get_reduced_trajectory(
-                input_topology_filename,
-                input_trajectory_filename,
-                tmscore_trajectory_filename,
-                snapshots,
-                frames_number,
-            )
+    frames_limit = 200
+    if snapshots > frames_limit:
+        tmscore_trajectory_filename, step, frames = get_reduced_trajectory(
+            input_topology_filename,
+            input_trajectory_filename,
+            snapshots,
+            frames_limit,
+        )
         # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-        frames = range(1, frames_number +1)
+        frames_list = range(1, frames +1)
     
     output_analysis = []
 
@@ -82,7 +78,7 @@ def tmscores (
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
-        for f in frames:
+        for f in frames_list:
             # Extract the current frame
             current_frame = 'frame' + str(f) + '.pdb'
             # The frame selection input in gromacs works with a 'ndx' file

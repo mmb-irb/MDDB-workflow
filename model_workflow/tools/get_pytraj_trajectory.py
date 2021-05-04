@@ -45,12 +45,18 @@ def get_reduced_pytraj_trajectory (
     # Otherwise, create a reduced trajectory with as much frames as specified above
     # These frames are picked along the trajectory
     else:
-        # Calculate how many frames we must jump between each reduced frame to never exceed the limit
-        # The '- 1' is because the first frame is 0 (you have to do the math to understand)
-        step = math.floor(trajectory_frames / (reduced_trajectory_frames - 1))
+        # Calculate the step between frames in the reduced trajectory to match the final number of frames
+        # WARNING: Since the step must be an integer the thorical step must be rounded
+        # This means the specified final number of frames may not be accomplished, but it is okey
+        # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
+        # This means the final number of frames will be the specified or less
+        # CRITICAL WARNING:
+        # This formula is exactly the same that the client uses to request stepped frames to the API
+        # This means that the client and the workflow are coordinated and these formulas must not change
+        # If you decide to change this formula (in both workflow and client)...
+        # You will have to run again all the database analyses with reduced trajectories
+        step = math.floor(trajectory_frames / reduced_trajectory_frames)
         reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
-        # DANI: hay que chequear, porque sis siempre son 201 frames el -1 de arriba no tiene sentido
-        #print(reduced_pt_trajectory.n_frames)
         # Add the step value to the reduced trajectory explicitly. It will be required later
         reduced_pt_trajectory.step = step
 
