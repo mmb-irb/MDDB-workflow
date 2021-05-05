@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from Bio import pairwise2
+from Bio.pairwise2 import format_alignment
 from Bio.SubsMat import MatrixInfo
 
 # Load the reference for residue names and letters
@@ -57,6 +58,8 @@ def get_chain_sequences (topology_filename : str) -> dict:
 # e.g. 'ARG' -> 'R', 'WTF' -> 'X'
 def resname_2_letter(resname : str) -> str:
     ref = residues_reference.get(resname, False)
+    if not ref:
+        print('WTF? -> ' + resname)
     return ref if ref else 'X'
 
 # Align two aminoacid sequences
@@ -66,7 +69,12 @@ def align (ref_sequence : str, new_sequence : str) -> list:
 
     #print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
 
-    # Devuelve la segunda sequencia alineada lo mejor que puede y ya
+    # If the new sequence is all 'X' stop here, since this would make the alignment infinite
+    # Then an array filled with None is returned
+    if all([ letter == 'X' for letter in new_sequence ]):
+        return [ None for letter in new_sequence ]
+
+    # Return the new sequence as best aligned as possible with the reference sequence
     alignments = pairwise2.align.localds(ref_sequence, new_sequence, MatrixInfo.blosum62, -10, -0.5)
 
     # In case there are no alignments it means the current chain has nothing to do with this reference
@@ -74,10 +82,20 @@ def align (ref_sequence : str, new_sequence : str) -> list:
     if len(alignments) == 0:
         return [ None for letter in new_sequence ]
 
-    # DANI: En principio siempre hay solo 1, pero está dentro de una array. hay que hacer más pruebas
+    # Several alignments may be returned, specially when it is a difficult or impossible alignment
     # Output format example: '----VNLTT'
     aligned_sequence = alignments[0][1]
-    print(aligned_sequence)
+    print(format_alignment(*alignments[0]))
+    score = alignments[0][2]
+    normalized_score = score / len(aligned_sequence)
+    print('Normalized score: ' + str(normalized_score))
+
+    # If the normalized score does not reaches the minimum we consider the alignment is not valid
+    # It may happen when the reference goes for a specific chain but we must map all chains
+    # This 0.4 has been found experimentally
+    if normalized_score < 0.4:
+        print('Not valid alignment')
+        return [ None for letter in new_sequence ]
 
     # Match each residue
     aligned_mapping = []
