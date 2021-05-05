@@ -58,8 +58,6 @@ def get_chain_sequences (topology_filename : str) -> dict:
 # e.g. 'ARG' -> 'R', 'WTF' -> 'X'
 def resname_2_letter(resname : str) -> str:
     ref = residues_reference.get(resname, False)
-    if not ref:
-        print('WTF? -> ' + resname)
     return ref if ref else 'X'
 
 # Align two aminoacid sequences
