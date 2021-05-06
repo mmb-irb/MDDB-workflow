@@ -198,3 +198,14 @@ class TopologyReference:
             and atom.getIcode() == icode
             and atom.getName() == atom_name):
                 return atom.getIndex()
+
+    # Set a function to find the absolute residue index in the corrected topology
+    def get_residue_index (self, source):
+        chain = source.chain_letter
+        residue = source.residue_number
+        icode = source.icode
+        for r, res in enumerate(self.topology.iterResidues()):
+            if (res.getChid() == chain
+            and res.getResnum() == residue
+            and res.getIcode() == icode):
+                return r
