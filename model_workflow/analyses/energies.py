@@ -26,6 +26,7 @@ from subprocess import run, PIPE, Popen
 import json
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.get_topology_charges import get_topology_charges
 
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
@@ -40,6 +41,7 @@ vdw_source = resources + '/vdwprm'
 def energies(
         input_topology_filename: str,
         input_trajectory_filename: str,
+        input_charges_filename: str,
         output_analysis_filename: str,
         reference,
         snapshots: int,
@@ -55,6 +57,30 @@ def energies(
     energies_topology_prody = name_terminal_residues(energies_topology_prody)
     prody.writePDB(energies_topology, energies_topology_prody)
 
+    # If charges are passed, mine them
+    # Get the charge of each single atom
+    charges, elements = None, None
+    if input_charges_filename and os.path.exists(input_charges_filename):
+        charges, elements = get_topology_charges(input_charges_filename)
+
+    # Incase we have no charges we will have to guess them
+    # This is an alternative "emergency" way which is prone to fail
+    if not charges:
+        # We need to set a file with all atom charges in a specific format
+        reslib_filename = 'res.lib'
+        
+        # In case we do not have a topology file with charges we must use an alternative way
+        # Copy the source 'res.lib' file in the local directory if it does not exists yet
+        # If ACPYPE is used then the local res.lib will be modified
+        # The modified res.lib is conserved, so all frames will have same charges
+        # The modified res.lib is shared across interactions
+        if not os.path.exists(reslib_filename):
+            run([
+                "cp",
+                reslib_source,
+                reslib_filename,
+            ], stdout=PIPE).stdout.decode()
+
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
     def get_frame_energy(frame_pdb):
@@ -64,7 +90,10 @@ def energies(
         frame_structure.setChids(reference.topology.getChids())
         # Set element names according to the reference topology
         # Gromacs may mess some element names with two letters (e.g. 'CL')
-        frame_structure.setElements(reference.topology.getElements())
+        #frame_structure.setElements(reference.topology.getElements())
+        # Set charges and elements according to the charges topology mined data
+        frame_structure.setElements(elements)
+        frame_structure.setCharges(charges)
 
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
@@ -74,32 +103,23 @@ def energies(
         for interaction in interactions:
 
             name = interaction['name']
-            
-            # Copy the source 'res.lib' file in the local directory if it does not exists yet
-            # If ACPYPE is used then the local res.lib will be modified
-            # Theorically this should only happen once:
-            # - The modified res.lib is conserved, so further frames should not miss any residue
-            # - The modified res.lib is shared across interactions
-            reslib_filename = 'res.lib'
-            if not os.path.exists(reslib_filename):
-                run([
-                    "cp",
-                    reslib_source,
-                    reslib_filename,
-                ], stdout=PIPE).stdout.decode()
 
             # Select the first agent, extract a pdb only with its atoms and parse it to CMIP
             # Run ACPYPE if required and then modify the res.lib file
-            agent1 = interaction['agent_1'].replace(' ', '_').replace('/', '_')
-            agent1_pdb = agent1 + '.pdb'
+            agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
             agent1_selection = frame_structure.select(interaction['selection_1'])
-            agent1_cmip = selection2cmip(agent1_selection, agent1, reslib_filename)
+            if charges:
+                agent1_cmip = selection2cmip(agent1_name, agent1_selection)
+            else:
+                agent1_cmip = HARDselection2cmip(agent1_name, agent1_selection, reslib_filename)
 
             # Repeat the process with agent 2
-            agent2 = interaction['agent_2'].replace(' ', '_').replace('/', '_')
-            agent2_pdb = agent2 + '.pdb'
+            agent2_name = interaction['agent_2'].replace(' ', '_').replace('/', '_')
             agent2_selection = frame_structure.select(interaction['selection_2'])
-            agent2_cmip = selection2cmip(agent2_selection, agent2, reslib_filename)
+            if charges:
+                agent2_cmip = selection2cmip(agent2_name, agent2_selection)
+            else:
+                agent2_cmip = HARDselection2cmip(agent2_name, agent2_selection, reslib_filename)
 
             # Copy the source cmip inputs file in the local directory
             # Inputs will be modified to adapt the cmip grid to both agents together
@@ -115,10 +135,10 @@ def energies(
             adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
-            agent1_energy = agent1 + '.energy.pdb'
-            agent1_data = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1_energy)
-            agent2_energy = agent2 + '.energy.pdb'
-            agent2_data = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_energy)
+            agent1_output_energy = agent1_name + '.energy.pdb'
+            agent1_data = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1_output_energy)
+            agent2_output_energy = agent2_name + '.energy.pdb'
+            agent2_data = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_output_energy)
 
             data.append({ 'agent1': agent1_data, 'agent2': agent2_data })
 
@@ -129,8 +149,8 @@ def energies(
                 agent2_pdb,
                 agent1_cmip,
                 agent2_cmip,
-                agent1_energy,
-                agent2_energy,
+                agent1_output_energy,
+                agent2_output_energy,
             ], stdout=PIPE).stdout.decode()
 
         return data
@@ -236,13 +256,45 @@ def get_reslib_residues(reslib_filename : str) -> list:
     return list(set(residues))
 
 # Transform prody selection to a cmip input pdb, which includes charges
+# Charges have been previously taken from the charges topology and injected in prody
+def selection2cmip(agent_name : str, agent_selection : str) -> str:
+    
+    print('Setting ' + agent_name + ' charges')
+    atoms = agent_selection.iterAtoms()
+
+    # Write a special pdb which contains charges as CMIP expects to find them
+    output_filename = agent_name + '.cmip.pdb'
+    with open(output_filename, "w") as file:
+
+        for a, atom in enumerate(atoms):
+            
+            index = str(a).rjust(5)
+            name = atom.getName().ljust(4)
+            residue_name = atom.getResname().ljust(3)
+            chain = atom.getChid().rjust(1)
+            residue_number = str(atom.getResnum()).rjust(4)
+            icode = atom.getIcode().rjust(1)
+            coords = atom.getCoords()
+            x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
+            charge = "{:.4f}".format(atom.getCharge())
+            element = atom.getElement()
+            
+            atom_line = ('ATOM  ' + index + '  ' + name + residue_name + ' '
+                + chain + residue_number + icode + '   ' + x_coord + y_coord + z_coord
+                + ' ' + str(charge).rjust(7) + '  ' + element + '\n')
+            file.write(atom_line)
+
+    return output_filename
+
+# Transform prody selection to a cmip input pdb, which includes charges
 # Charges are taken from the 'reslib' provided file
 # Use ACPYPE to calculate charges which are not in the 'reslib' by default
 # Modify the 'reslib' if ACPYPE is used by adding the new charges
-def selection2cmip(input_selection, selection_name, reslib_filename) -> str:
-    print('Setting ' + selection_name + ' charges')
-    selection = input_selection
-    name = selection_name
+def HARDselection2cmip(agent_name : str, agent_selection : str, reslib_filename : str) -> str:
+
+    print('Setting ' + agent_name + ' charges (HARD WAY)')
+    name = agent_name
+    selection = agent_selection
 
     # Set a pdb filename to write the selection when required
     selection_filename = name + '.pdb'
@@ -378,6 +430,12 @@ def selection2cmip(input_selection, selection_name, reslib_filename) -> str:
             if line[0:4] == 'ATOM':
                 file.write(line)
         file.truncate()
+
+    # Delete current agent pdb files before going for the next interaction
+    run([
+        "rm",
+        selection_filename
+    ], stdout=PIPE).stdout.decode()
 
     return output_filename
 

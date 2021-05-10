@@ -16,6 +16,7 @@ import pytraj as pt
 
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_processor
+from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_topology_and_trajectory import process_topology_and_trajectory
@@ -168,6 +169,7 @@ def load_inputs(filename : str):
 # The original topology and trajectory filenames are the input filenames
 original_topology_filename = Dependency(getInput, {'input': 'input_topology_filename'})
 original_trajectory_filename = Dependency(getInput, {'input': 'input_trajectory_filename'})
+charges_filename = Dependency(getInput, {'input': 'input_charges_filename'})
 # The 'inputs file' is a json file which must contain all parameters to run the workflow
 inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
 
@@ -177,6 +179,7 @@ preprocess_protocol = Dependency(getInput, {'input': 'preprocess_protocol'})
 # Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
 ligands = Dependency(getInput, {'input': 'ligands'})
+exceptions = Dependency(getInput, {'input': 'exceptions'})
 
 # Define intermediate tools and files
 
@@ -210,6 +213,15 @@ topology_filename = File(OUTPUT_topology_filename,
 trajectory_filename = File(OUTPUT_trajectory_filename,
     process_topology_and_trajectory.func,
     process_topology_and_trajectory.args)
+
+# Filter atoms to remove water and ions
+# As an exception, some water and ions may be not removed if specified
+filtering = Dependency(filter_atoms, {
+    'topology_filename' : topology_filename,
+    'trajectory_filename' : trajectory_filename,
+    'charges_filename' : charges_filename,
+    'exceptions': exceptions,
+}, 'filter')
 
 # Image the trajectory if it is required
 # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
@@ -303,6 +315,7 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
 # Pack up all tools which may be called directly from the console
 tools = [
     vmd,
+    filtering,
     imaging,
     corrector,
     interactions,
@@ -399,6 +412,7 @@ analyses = [
     File(OUTPUT_energies_filename, energies, {
         "input_topology_filename": topology_filename,
         "input_trajectory_filename": trajectory_filename,
+        "input_charges_filename": charges_filename,
         "output_analysis_filename": OUTPUT_energies_filename,
         "reference": topology_reference,
         "snapshots": snapshots,
@@ -473,6 +487,7 @@ def main():
         'input_topology_filename' : args.input_topology_filename,
         'input_trajectory_filename' : args.input_trajectory_filename,
         'inputs_filename' : args.inputs_filename,
+        'input_charges_filename' : args.charges_filename,
         'preprocess_protocol': args.preprocess_protocol
     })
 
@@ -487,7 +502,12 @@ def main():
 
     # At this moment all input files should be there
     # Check it and send error if anyone is missing
-    for filename in [ args.input_topology_filename, args.input_trajectory_filename, args.inputs_filename ]:
+    essential_input_filenames = [
+        args.input_topology_filename,
+        args.input_trajectory_filename,
+        args.inputs_filename
+    ]
+    for filename in essential_input_filenames:
         if not os.path.exists(filename):
             raise SystemExit('ERROR: Missing input file "' + filename + '"')
 
@@ -496,6 +516,7 @@ def main():
 
     # Run tools which must be run always
     # They better be fast
+    filtering.value
     imaging.value
     corrector.value
 
@@ -569,6 +590,11 @@ parser.add_argument(
     "-in", "--inputs_filename",
     default=DEFAULT_inputs_filename,
     help="Path to inputs filename")
+
+parser.add_argument(
+    "-char", "--charges_filename",
+    default=None, # There is no default since many formats may be possible
+    help="Path to charges topology filename")
 
 parser.add_argument(
     "-pr", "--preprocess_protocol",

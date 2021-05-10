@@ -24,22 +24,23 @@ def image_and_fit (
         return
 
     # Create indexes file to select only specific topology regions
+    # DEPRECATED: Now this is done previously to the imaging process
 
-    indexes = 'indexes.ndx'
-    p = Popen([
-        "echo",
-        "!\"Water_and_ions\"\nq",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "make_ndx",
-        "-f",
-        input_topology_filename,
-        '-o',
-        indexes,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
+    # indexes = 'indexes.ndx'
+    # p = Popen([
+    #     "echo",
+    #     "!\"Water_and_ions\"\nq",
+    # ], stdout=PIPE)
+    # logs = run([
+    #     "gmx",
+    #     "make_ndx",
+    #     "-f",
+    #     input_topology_filename,
+    #     '-o',
+    #     indexes,
+    #     '-quiet'
+    # ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    # p.stdout.close()
 
     # Imaging --------------------------------------------------------------------------------------
 
@@ -76,7 +77,7 @@ def image_and_fit (
         p = Popen([
             "echo",
             "Protein",
-            "!Water_and_ions",
+            "System",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -87,8 +88,6 @@ def image_and_fit (
             input_trajectory_filename,
             '-o',
             output_trajectory_filename,
-            "-n",
-            indexes,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
@@ -98,7 +97,7 @@ def image_and_fit (
         # Create the new reduced topology as the current 'topology'
         p = Popen([
             "echo",
-            "!Water_and_ions",
+            "System",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -107,8 +106,6 @@ def image_and_fit (
             input_topology_filename,
             '-o',
             input_topology_filename,
-            "-n",
-            indexes,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
@@ -124,7 +121,7 @@ def image_and_fit (
         p = Popen([
             "echo",
             "Protein",
-            "!Water_and_ions",
+            "System",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -135,8 +132,6 @@ def image_and_fit (
             input_trajectory_filename,
             '-o',
             output_trajectory_filename,
-            "-n",
-            indexes,
             '-pbc',
             'nojump',
             '-center',
@@ -149,7 +144,7 @@ def image_and_fit (
         # Create the new reduced topology as the current 'topology'
         p = Popen([
             "echo",
-            "!Water_and_ions",
+            "System",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -158,8 +153,6 @@ def image_and_fit (
             input_topology_filename,
             '-o',
             input_topology_filename,
-            "-n",
-            indexes,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
@@ -181,8 +174,6 @@ def image_and_fit (
             output_trajectory_filename,
             '-o',
             output_trajectory_filename,
-            "-n",
-            indexes,
             '-pbc',
             'mol',
             '-center',
@@ -200,7 +191,7 @@ def image_and_fit (
         # WARNING: The vector in the '-trans' option may be different among different trajectories
         p = Popen([
             "echo",
-            "!Water_and_ions",
+            "System",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -211,8 +202,6 @@ def image_and_fit (
             input_trajectory_filename,
             '-o',
             output_trajectory_filename,
-            "-n",
-            indexes,
             '-trans',
             '0',
             '4',
@@ -229,7 +218,7 @@ def image_and_fit (
         # Adapt the topology to the new reduced trayectory
         p = Popen([
             "echo",
-            "!Water_and_ions",
+            "System",
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -238,8 +227,6 @@ def image_and_fit (
             input_topology_filename,
             '-o',
             input_topology_filename,
-            "-n",
-            indexes,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()

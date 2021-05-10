@@ -41,9 +41,11 @@ def generate_metadata (
 
     # Extract some additional metadata from the inputs file which is required further
     ligands = getInput('ligands')
-
     if not ligands:
         ligands = []
+    exceptions = getInput('exceptions')
+    if not exceptions:
+        exceptions = []
 
     # Set the metadata interactions
     metadata_interactions = [{
@@ -124,6 +126,7 @@ def generate_metadata (
         'CUSTOMS': getInput('customs'),
         'INTERACTIONS': metadata_interactions,
         'CHAINNAMES': getInput('chainnames'),
+        'EXCEPTIONS': exceptions,
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
