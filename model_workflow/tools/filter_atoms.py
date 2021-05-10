@@ -28,8 +28,9 @@ def filter_atoms (
     atoms_count = topology.n_atoms
 
     # Load the charges topology
-    charges_topology = pt.load_topology(filename=charges_filename)
-    charges_atoms_count = charges_topology.n_atoms
+    if charges_filename:
+        charges_topology = pt.load_topology(filename=charges_filename)
+        charges_atoms_count = charges_topology.n_atoms
 
     # Use pytraj to filter the charges topology
     # WARNING: It is saved in prmtop format by default
@@ -42,14 +43,15 @@ def filter_atoms (
     filtered_atoms_count = filtered_topology.n_atoms
 
     # Set the filtered charges topology
-    filtered_charges_topology = charges_topology[filter_string]
-    filtered_charges_atoms_count = filtered_charges_topology.n_atoms
+    if charges_filename:
+        filtered_charges_topology = charges_topology[filter_string]
+        filtered_charges_atoms_count = filtered_charges_topology.n_atoms
 
-    # Both filtered topologies must have the same number of atoms
-    if filtered_atoms_count != filtered_charges_atoms_count:
-        print('Base atoms: ' + str(filtered_atoms_count))
-        print('Charges atoms: ' + str(filtered_charges_atoms_count))
-        raise SystemExit('ERROR: Filtered atom counts in base and charges topologies does not match')
+        # Both filtered topologies must have the same number of atoms
+        if filtered_atoms_count != filtered_charges_atoms_count:
+            print('Base atoms: ' + str(filtered_atoms_count))
+            print('Charges atoms: ' + str(filtered_charges_atoms_count))
+            raise SystemExit('ERROR: Filtered atom counts in base and charges topologies does not match')
 
     # Check if both the normal and the filtered topologies have the same number of atoms
     # In not, filter the whole trajectory and overwrite both topologies and trajectory
@@ -58,17 +60,16 @@ def filter_atoms (
     if filtered_atoms_count < atoms_count:
         filtered_trajectory = trajectory[filter_string]
         pt.write_traj(trajectory_filename, filtered_trajectory)
+        # DANI: Esto podría cargarse la topología y convertirla en prmtop
         pt.write_parm(
             filename=topology_filename,
             top=filtered_topology,
-            #format='infer',
             overwrite=True
         )
-    if filtered_charges_atoms_count < charges_atoms_count:    
+    if charges_filename and filtered_charges_atoms_count < charges_atoms_count:    
         pt.write_parm(
             filename=charges_filename,
             top=filtered_charges_topology,
-            #format='infer',
             overwrite=True
         )
 
