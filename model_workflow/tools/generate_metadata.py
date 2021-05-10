@@ -60,6 +60,8 @@ def generate_metadata (
 
     # Get the input topology reference
     toporefs = getInput('toporefs')
+    if not toporefs:
+        toporefs = []
 
     # Load topology references stored in this workflow
     stored_toporefs = None
