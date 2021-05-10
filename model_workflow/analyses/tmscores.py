@@ -3,7 +3,7 @@ import tmscoring
 from subprocess import run, PIPE, Popen
 import json
 
-from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
 # TM scores
 # 
@@ -21,23 +21,8 @@ def tmscores (
     start = 0
     step = None
 
-    # Set the frames where we extract energies to calculate the average
-    # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-    frames_list = range(1, snapshots +1)
-
     # Set a maximum of frames
-    # If trajectory has more frames than the limit create a reduced trajectory
-    tmscore_trajectory_filename = input_trajectory_filename
     frames_limit = 200
-    if snapshots > frames_limit:
-        tmscore_trajectory_filename, step, frames = get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            snapshots,
-            frames_limit,
-        )
-        # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-        frames_list = range(1, frames +1)
     
     output_analysis = []
 
@@ -78,42 +63,13 @@ def tmscores (
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
-        for f in frames_list:
-            # Extract the current frame
-            current_frame = 'frame' + str(f) + '.pdb'
-            # The frame selection input in gromacs works with a 'ndx' file
-            with open(frames_ndx, 'w') as file:
-                file.write('[frames]\n' + str(f))
-            p = Popen([
-                "echo",
-                group,
-            ], stdout=PIPE)
-            logs = run([
-                "gmx",
-                "trjconv",
-                "-s",
-                reference,
-                "-f",
-                tmscore_trajectory_filename,
-                '-o',
-                current_frame,
-                "-fr",
-                frames_ndx,
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-            p.stdout.close()
+        frames, step, count = get_pdb_frames(reference, input_trajectory_filename, frames_limit)
+        for current_frame in frames:
 
             # Run the tmscoring over the current frame against the current reference
             # Append the result data for each ligand
             tmscore = tmscoring.get_tm(grouped_reference, current_frame)
             tmscores.append(tmscore)
-
-            # Delete current frame files before going for the next frame
-            run([
-                "rm",
-                current_frame,
-                frames_ndx,
-            ], stdout=PIPE).stdout.decode()
 
         # Save the tmscores in the output object
         data = {

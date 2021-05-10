@@ -1,5 +1,5 @@
 from model_workflow.tools.xvg_parse import xvg_parse
-from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
 import os
 import json
@@ -12,38 +12,25 @@ area_filename = 'area.xvg'
 
 # Perform the Solvent Accessible Surface Analysis
 def sasa(
-        input_topology_filename: str,
-        input_trajectory_filename: str,
-        output_analysis_filename: str,
-        reference,
-        snapshots: int):
-
-    # Set the frames where we calculate the sasa
-    # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-    frames_list = range(1, snapshots +1)
-
-    # Set a maximum of frames
-    # If trajectory has more frames than the limit create a reduced trajectory
-    reduced_trajectory_filename = input_trajectory_filename
-    frames_limit = 200
-    frames = None
-    if snapshots > frames_limit:
-        reduced_trajectory_filename, step, frames = get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            snapshots,
-            frames_limit,
-        )
-        # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-        frames_list = range(1, frames +1)  # if frames > 1 else [1]
-    else:
-        frames = snapshots
+    input_topology_filename: str,
+    input_trajectory_filename: str,
+    output_analysis_filename: str,
+    reference,
+    snapshots: int
+):
 
     # Set indexes to select the system without hydrogens
     indexes = 'indexes.ndx'
+
+    # Remove all groups but 0
+    remove_others = 'keep 0' + '\n'
+    selection_without_hydrogens = '0 & !a H*' + '\n'
+    remove_system = 'del 0' + '\n'
+    all_commands = remove_others + selection_without_hydrogens + remove_system + 'q'
+
     p = Popen([
         "echo",
-        "0 & !a H*\nq",
+        all_commands,
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -57,35 +44,11 @@ def sasa(
     p.stdout.close()
 
     # Calculate the sasa for each frame
-    frames_ndx = 'frames.ndx'
     sasa_per_frame = []
-    for f in frames_list:
-        print('Frame ' + str(f) + ' / ' + str(frames))
-        # Extract the current frame
-        current_frame = 'frame' + str(f) + '.pdb'
-        # The frame selection input in gromacs works with a 'ndx' file
-        with open(frames_ndx, 'w') as file:
-            file.write('[frames]\n' + str(f))
-        p = Popen([
-            "echo",
-            "System_&_!H*",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            input_topology_filename,
-            "-f",
-            reduced_trajectory_filename,
-            '-o',
-            current_frame,
-            "-fr",
-            frames_ndx,
-            "-n",
-            indexes,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    frames_limit = 200
+    frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
+    for f, current_frame in enumerate(frames):
+
         # Run the sasa analysis over the current frame
         current_frame_sasa = 'sasa' + str(f) + '.xvg'
         logs = run([
@@ -93,20 +56,21 @@ def sasa(
             "sasa",
             "-s",
             current_frame,
-            "-surface",
-            '0',
             '-or',
             current_frame_sasa,
+            "-n",
+            indexes,
+            "-surface",
+            "0",
             '-quiet'
         ], stdout=PIPE).stdout.decode()
+
         # Mine the sasa results (.xvg file)
         sasa = xvg_parse(current_frame_sasa, ['c1', 'c2', 'c3'])
         sasa_per_frame.append(sasa['c2'])
         # Delete current frame files before going for the next frame
         run([
             "rm",
-            frames_ndx,
-            current_frame,
             current_frame_sasa,
             area_filename,
         ], stdout=PIPE).stdout.decode()

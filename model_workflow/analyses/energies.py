@@ -25,7 +25,7 @@ import math
 from subprocess import run, PIPE, Popen
 import json
 
-from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.tools.get_topology_charges import get_topology_charges
 
 # Set the path to auxiliar files required for this analysis
@@ -155,66 +155,16 @@ def energies(
 
         return data
 
-    # Set the frames where we extract energies to calculate the average
-    # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-    frames_list = range(1, snapshots +1)
-
-    # Set a maximum of frames
-    # If trajectory has more frames than the limit create a reduced trajectory
-    energies_trajectory_filename = input_trajectory_filename
+    # Extract the energies for each frame in a reduced trajectory
     frames_limit = 100
-    frames = None
-    if snapshots > frames_limit:
-        energies_trajectory_filename, step, frames = get_reduced_trajectory(
-            energies_topology,
-            input_trajectory_filename,
-            snapshots,
-            frames_limit,
-        )
-        # WARNING: The gromacs '-fr' option counts frames starting at 1, not at 0
-        frames_list = range(1, frames +1)  # if frames > 1 else [1]
-    else:
-        frames = snapshots
-
-    # Extract the energies for each frame
-    frames_ndx = 'frames.ndx'
-    interactions_data = [[] for i in interactions]
-    for f in frames_list:
-        print('Frame ' + str(f) + ' / ' + str(frames))
-        # Extract the current frame
-        current_frame = 'frame' + str(f) + '.pdb'
-        # The frame selection input in gromacs works with a 'ndx' file
-        with open(frames_ndx, 'w') as file:
-            file.write('[frames]\n' + str(f))
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            energies_topology,
-            "-f",
-            energies_trajectory_filename,
-            '-o',
-            current_frame,
-            "-fr",
-            frames_ndx,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
+    for current_frame in frames:
+        
         # Run the main analysis over the current frame
         # Append the result data for each interaction
         frame_energies_data = get_frame_energy(current_frame)
         for i, data in enumerate(frame_energies_data):
             interactions_data[i].append(data)
-        # Delete current frame files before going for the next frame
-        run([
-            "rm",
-            current_frame,
-            frames_ndx,
-        ], stdout=PIPE).stdout.decode()
 
     # Now calculated residue average values through all frames for each pair of interaction agents
     output_analysis = []
