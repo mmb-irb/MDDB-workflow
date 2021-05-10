@@ -58,17 +58,28 @@ class Dependency:
         self.alias = alias
         self._value = None
 
-    # For each 'Dependency' instance in args, get the real value of it
-    # Getting the value means also calling its dependency function
+    # For each 'Dependency' instance in args call its dependency function
     def parse_args(self):
-        parsed_args = {}
-        for attr, value in self.args.items():
+
+        # For a given non Dependency instance, return the value as it is
+        # For a given Dependency instance, get the real value of it
+        # Getting the value means also calling its dependency function
+        def parse(value):
             # When it is a Dependency or an inheritor class
             if hasattr(value, '_depend'):
                 parsed_value = value.value
-                parsed_args[attr] = parsed_value
+                return parsed_value
+            return value
+        
+        # Now parse each arg
+        parsed_args = {}
+        for attr, value in self.args.items():
+            # If it is a list we must check each field
+            if type(value) == list:
+                parsed_args[attr] = [ parse(element) for element in value ]
+            # Otherwise, simply parse the value
             else:
-                parsed_args[attr] = value
+                parsed_args[attr] = parse(value)
         return parsed_args
 
     # Get the dependency value
