@@ -36,7 +36,7 @@ def filter_atoms (
     # WARNING: It is saved in prmtop format by default
     filter_string = filter_base
     for exception in exceptions:
-        filter_string += '|' + exception.selection
+        filter_string += '|' + exception['selection']
 
     # Set the filtered topology
     filtered_topology = topology[filter_string]
@@ -58,18 +58,21 @@ def filter_atoms (
     print('Total number of atoms: ' + str(atoms_count))
     print('Filtered number of atoms: ' + str(filtered_atoms_count))
     if filtered_atoms_count < atoms_count:
+        print('Filtering structure and trajectory...')
         filtered_trajectory = trajectory[filter_string]
-        pt.write_traj(trajectory_filename, filtered_trajectory)
-        # DANI: Esto podría cargarse la topología y convertirla en prmtop
-        pt.write_parm(
+        pt.write_traj(trajectory_filename, filtered_trajectory, overwrite=True)
+        pt.write_traj(
             filename=topology_filename,
-            top=filtered_topology,
+            # DANI: No he encontrado otra manera de exportar a pdb con pytraj
+            traj=filtered_trajectory[0:1],
             overwrite=True
         )
-    if charges_filename and filtered_charges_atoms_count < charges_atoms_count:    
+    if charges_filename and filtered_charges_atoms_count < charges_atoms_count:
+        print('Filtering charges topology...')
         pt.write_parm(
             filename=charges_filename,
             top=filtered_charges_topology,
+            format='amberparm',
             overwrite=True
         )
 
