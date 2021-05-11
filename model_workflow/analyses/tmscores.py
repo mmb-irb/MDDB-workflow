@@ -12,7 +12,6 @@ def tmscores (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    snapshots : int,
     first_frame_filename : str,
     average_structure_filename : str):
 

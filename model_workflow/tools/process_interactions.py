@@ -5,8 +5,9 @@ from subprocess import run, PIPE, Popen
 import os
 import json
 
-from model_workflow.tools.topology_manager import sourceResidue
+from model_workflow.tools.topology_manager import TopologyReference, sourceResidue
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.tools.xvg_parse import xvg_parse
 
 # Since interactions are heavy to calculate they are stored in a json file
@@ -14,14 +15,165 @@ from model_workflow.tools.xvg_parse import xvg_parse
 # In addition, this file may be used to force interactions with custom interface residues manually
 interactions_backup = 'interactions.json'
 
+# Residues are filtered by minimum distance along the trajectory
+# WARNING: The cutoff distance is in Ångstroms (Å)
+def process_interactions (
+    interactions : list,
+    topology_filename : str,
+    trajectory_filename : str,
+    topology_reference,
+    cutoff_distance : float = 5) -> list:
+
+    # If there is a backup then use it
+    # Load the backup and return its content as it is
+    if os.path.exists(interactions_backup):
+        with open(interactions_backup, 'r') as file:
+            interactions = json.load(file)
+        # Parse the residues in string format to 'sourceResidue' format (e.g. 'A:1')
+        for interaction in interactions:
+            for key in ['residues_1','residues_2','interface_1','interface_2']:
+                interaction[key] = [ sourceResidue.from_tag(residue) for residue in interaction[key] ]
+        return interactions
+
+    # If there are no interactions return an empty list
+    if not interactions or len(interactions) == 0:
+        return []
+    
+    for interaction in interactions:
+        # residues_1 is the list of all residues in the first agent
+        interaction['residues_1'] = topology_reference.topology_selection(
+            interaction['selection_1']
+        )
+        # residues_2 is the list of all residues in the second agent
+        interaction['residues_2'] = topology_reference.topology_selection(
+            interaction['selection_2']
+        )
+        # Get 100 frames (or less) along the trajectory
+        frames_limit = 100
+        frames, step, count = get_pdb_frames(topology_filename, trajectory_filename, frames_limit)
+        # Find out the interaction residues for each frame and save all residues as the overall interface
+        interface_1_residues = []
+        interface_2_residues = []
+        for current_frame in frames:
+            frame_structure = TopologyReference(current_frame)
+            # interface_1 is the list of residues from the agent 1 which are close to the agent 2
+            frame_interface_1 = frame_structure.topology_selection(
+                '(' + interaction['selection_1'] +
+                ') and same residue as exwithin ' +
+                str(cutoff_distance) +
+                ' of (' +
+                interaction['selection_2'] + ')')
+            interface_1_residues += frame_interface_1
+            # interface_2 is the list of residues from agent 2 which are close to the agent 1
+            frame_interface_2 = frame_structure.topology_selection(
+                '(' + interaction['selection_2'] +
+                ') and same residue as exwithin ' +
+                str(cutoff_distance) +
+                ' of (' +
+                interaction['selection_1'] + ')')
+            interface_2_residues += frame_interface_2
+        
+        # Remove duplicates
+        interaction['interface_1'] = list(set(interface_1_residues))
+        interaction['interface_2'] = list(set(interface_2_residues))
+
+        # Translate all residues selections to pytraj notation
+        # These values are used along the workflow but not added to metadata
+        interaction.update(
+            {
+                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
+                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
+                'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
+                'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
+            }
+        )
+
+        print(interaction['name'] +
+            ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+
+    # Save a backup for interactions
+    with open(interactions_backup, 'w') as file:
+        # Create a new interactions object with all 'sourceResidue' values as string
+        # e.g. 'A:1'
+        serializable_interactions = []
+        for interaction in interactions:
+            serializable_interaction = {}
+            for key, value in interaction.items():
+                if type(value) == str:
+                    serializable_interaction[key] = value
+                else:
+                    serializable_interaction[key] = [ str(element) for element in value ]
+            serializable_interactions.append(serializable_interaction)
+        json.dump(serializable_interactions, file, indent=4)
+
+    return interactions
+
+# The easy processing uses the cutoff in the topology / structure to set the interface residues
+# Interface residues are defined as by a cuttoff distance in Angstroms
+# DEPRECATED
+# DANI: El nuevo sistema hace lo mismo, pero en lugar de solo en la primera frame lo hace en varias
+# DANI: De manera que al final, cada residuo que ha salido en una frame como mínimo se considera apto
+def easy_process_interactions (
+    interactions : list,
+    topology_reference,
+    cutoff_distance : float = 5) -> list:
+
+    if not interactions or len(interactions) == 0:
+        return []
+    
+    for interaction in interactions:
+        # residues_1 is the list of all residues in the first agent
+        interaction['residues_1'] = topology_reference.topology_selection(
+            interaction['selection_1']
+        )
+        # residues_2 is the list of all residues in the second agent
+        interaction['residues_2'] = topology_reference.topology_selection(
+            interaction['selection_2']
+        )
+        # interface_1 is the list of residues from the agent 1 which are close to the agent 2
+        interaction['interface_1'] = topology_reference.topology_selection(
+            '(' + interaction['selection_1'] +
+            ') and same residue as exwithin ' +
+            str(cutoff_distance) +
+            ' of (' +
+            interaction['selection_2'] + ')')
+        # interface_2 is the list of residues from agent 2 which are close to the agent 1
+        interaction['interface_2'] = topology_reference.topology_selection(
+            '(' + interaction['selection_2'] +
+            ') and same residue as exwithin ' +
+            str(cutoff_distance) +
+            ' of (' +
+            interaction['selection_1'] + ')')
+
+        # Translate all residues selections to pytraj notation
+        # These values are used along the workflow but not added to metadata
+        interaction.update(
+            {
+                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
+                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
+                'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
+                'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
+            }
+        )
+
+        print(interaction['name'] +
+            ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+
+    return interactions
+
 # The processing uses gromacs to find interface residues
 # Residues are filtered by minimum distance along the trajecotry
-def process_interactions (
+# DEPRECATED
+# DANI: El problema de este sistema es que puede haber diferencias en la numeración de residuos
+# DANI: Gromacs puede contar residuos diferente que pytraj y prody (e.g. hidrógenos al final)
+# DANI: Pytraj y prody también pueden contar diferente, pero ya tengo funciones para parsear
+# DANI: Hacer estas funciones para parsear de gromacs a prody o pytraj no es banal
+# DANI: Esto se debe a que gromacs es mucho menos accesible que prody o pytraj
+def process_interactions_gromacs (
     topology_filename : str,
     trajectory_filename : str,
     interactions : list,
-    topology_reference,
-    snapshots : int) -> list:
+    topology_reference) -> list:
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
@@ -56,7 +208,7 @@ def process_interactions (
         )
         # Find out the interface resdiues for each agent
         # Update the interaction dict by adding both interfaces
-        get_interface_residues(topology_filename, trajectory_filename, interaction, snapshots)
+        get_interface_residues_gromacs(topology_filename, trajectory_filename, interaction)
         
         # Translate the residues selections back from pytraj notation
         interaction['interface_1'] = list(map(topology_reference.pytraj2source, interaction['pt_interface_1']))
@@ -90,11 +242,11 @@ residual_mindist_file = 'mindist.xvg'
 # Obtain minimum distances between each agents pair of residues and get the closer ones
 # This is powered by the gromacs command 'mindist' and the distance cutoff is 5 Angstroms
 # WARNING: The cutoff distance is in nanometers (nm)
-def get_interface_residues(
+# DEPRECATED
+def get_interface_residues_gromacs(
     topology_filename : str,
     trajectory_filename : str,
     interaction : dict,
-    snapshots : int,
     cutoff_distance : float = 0.5) -> dict:
 
     # Use a reduced trajectory since this process is slow
@@ -102,7 +254,6 @@ def get_interface_residues(
     reduced_trajectory_filename, step, frames = get_reduced_trajectory(
         topology_filename,
         trajectory_filename,
-        snapshots,
         frames_limit,
     )
 
@@ -240,54 +391,3 @@ def get_interface_residues(
     ], stdout=PIPE).stdout.decode()
 
     return interaction
-
-# The easy processing uses the cutoff in the topology / structure to set the interface residues
-# Interface residues are defined as by a cuttoff distance in Angstroms
-# DEPRECATED
-def easy_process_interactions (
-    interactions : list,
-    topology_reference,
-    cutoff_distance : float = 5) -> list:
-
-    if not interactions or len(interactions) == 0:
-        return []
-    
-    for interaction in interactions:
-        # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.topology_selection(
-            interaction['selection_1']
-        )
-        # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.topology_selection(
-            interaction['selection_2']
-        )
-        # interface_1 is the list of residues from the agent 1 which are close to the agent 2
-        interaction['interface_1'] = topology_reference.topology_selection(
-            '(' + interaction['selection_1'] +
-            ') and same residue as exwithin ' +
-            str(cutoff_distance) +
-            ' of (' +
-            interaction['selection_2'] + ')')
-        # interface_2 is the list of residues from agent 2 which are close to the agent 1
-        interaction['interface_2'] = topology_reference.topology_selection(
-            '(' + interaction['selection_2'] +
-            ') and same residue as exwithin ' +
-            str(cutoff_distance) +
-            ' of (' +
-            interaction['selection_1'] + ')')
-
-        # Translate all residues selections to pytraj notation
-        # These values are used along the workflow but not added to metadata
-        interaction.update(
-            {
-                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
-                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
-                'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
-                'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
-            }
-        )
-
-        print(interaction['name'] +
-            ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
-
-    return interactions

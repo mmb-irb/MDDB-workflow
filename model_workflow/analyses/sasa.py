@@ -16,7 +16,6 @@ def sasa(
     input_trajectory_filename: str,
     output_analysis_filename: str,
     reference,
-    snapshots: int
 ):
 
     # Set indexes to select the system without hydrogens

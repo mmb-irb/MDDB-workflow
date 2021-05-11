@@ -251,9 +251,11 @@ pt_trajectory = Dependency(get_pytraj_trajectory, {
     'input_trajectory_filename': trajectory_filename
 })
 # Set the reduced pytraj trayectory
+# By default this reduced trajectory is 200 frames long
 reduced_pt_trajectory = Dependency(get_reduced_pytraj_trajectory, {
     'input_topology_filename': topology_filename,
-    'input_trajectory_filename': trajectory_filename
+    'input_trajectory_filename': trajectory_filename,
+    'reduced_trajectory_frames_limit': 200,
 })
 
 # Get the first trajectory frame
@@ -299,7 +301,6 @@ interactions = Dependency(process_interactions, {
     'trajectory_filename': trajectory_filename,
     'interactions': input_interactions,
     'topology_reference': topology_reference,
-    'snapshots': snapshots,
 }, 'interactions')
 
 # Prepare the metadata output file
@@ -335,7 +336,6 @@ analyses = [
         "input_topology_filename": topology_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_tmscores_filename,
-        "snapshots": snapshots,
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
     }, 'tmscores'),
@@ -357,7 +357,6 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_eigenvalues_filename": OUTPUT_pca_filename,
         "output_eigenvectors_filename": "eigenvec.trr",
-        "snapshots": snapshots
     }, 'pca'),
     # DANI: Intenta usar mucha memoria, hay que revisar
     # DANI: Puede saltar un error de imposible alojar tanta memoria
@@ -407,7 +406,6 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_sasa_filename,
         "reference": topology_reference,
-        "snapshots": snapshots
     }, 'sasa'),
     File(OUTPUT_energies_filename, energies, {
         "input_topology_filename": topology_filename,
@@ -415,7 +413,6 @@ analyses = [
         "input_charges_filename": charges_filename,
         "output_analysis_filename": OUTPUT_energies_filename,
         "reference": topology_reference,
-        "snapshots": snapshots,
         "interactions": interactions
     }, 'energies'),
     File(OUTPUT_pockets_filename, pockets, {
@@ -423,7 +420,6 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_pockets_filename,
         "topology_reference": topology_reference,
-        "snapshots": snapshots,
     }, 'pockets'),
 ]
 

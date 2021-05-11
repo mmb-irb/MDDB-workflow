@@ -44,7 +44,6 @@ def energies(
         input_charges_filename: str,
         output_analysis_filename: str,
         reference,
-        snapshots: int,
         interactions: list):
 
     if not interactions or len(interactions) == 0:

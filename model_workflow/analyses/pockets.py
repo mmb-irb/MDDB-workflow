@@ -34,21 +34,18 @@ def pockets (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    topology_reference,
-    snapshots : int ):
+    topology_reference):
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
     pockets_trajectory = input_trajectory_filename
     frames_limit = 100
     step = 1
-    if snapshots > frames_limit:
-        pockets_trajectory, step, frames = get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            snapshots,
-            frames_limit,
-        )
+    pockets_trajectory, step, frames = get_reduced_trajectory(
+        input_topology_filename,
+        input_trajectory_filename,
+        frames_limit,
+    )
 
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory

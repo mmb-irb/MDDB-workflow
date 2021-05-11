@@ -7,7 +7,7 @@ import pytraj as pt
 # Get the whole trajectory
 def get_pytraj_trajectory (
     input_topology_filename : str,
-    input_trajectory_filename : str) -> int:
+    input_trajectory_filename : str):
     
     # Set the pytraj trayectory and get the number of frames
     pt_trajectory = pt.iterload(input_trajectory_filename, input_topology_filename)
@@ -20,14 +20,12 @@ def get_pytraj_trajectory (
 
     return pt_trajectory
 
-# Set the maximum number of frames for the reduced trajectory
-# WARNING: The final number of frames in some analyses may be +1
-reduced_trajectory_frames = 200
-
 # Get the reduced trajectory
+# WARNING: The final number of frames may be the specifided or less
 def get_reduced_pytraj_trajectory (
     input_topology_filename : str,
-    input_trajectory_filename : str) -> int:
+    input_trajectory_filename : str,
+    reduced_trajectory_frames_limit : int):
     
     # Set the pytraj trayectory and get the number of frames
     pt_trajectory = get_pytraj_trajectory(input_topology_filename, input_trajectory_filename)
@@ -37,8 +35,9 @@ def get_reduced_pytraj_trajectory (
 
     # Set a reduced trajectory used for heavy analyses
     reduced_pt_trajectory = None
-    # If the current trajectory has already less frames than the maximum then use it also as reduced
-    if trajectory_frames < reduced_trajectory_frames:
+    # If the current trajectory has already less or the same frames than the limit
+    # Then do nothing and use it also as reduced
+    if trajectory_frames <= reduced_trajectory_frames_limit:
         reduced_pt_trajectory = pt_trajectory
         # Add a step value which will be required later
         reduced_pt_trajectory.step = 1
@@ -55,7 +54,7 @@ def get_reduced_pytraj_trajectory (
         # This means that the client and the workflow are coordinated and these formulas must not change
         # If you decide to change this formula (in both workflow and client)...
         # You will have to run again all the database analyses with reduced trajectories
-        step = math.floor(trajectory_frames / reduced_trajectory_frames)
+        step = math.ceil(trajectory_frames / reduced_trajectory_frames_limit)
         reduced_pt_trajectory = pt_trajectory[0:trajectory_frames:step]
         # Add the step value to the reduced trajectory explicitly. It will be required later
         reduced_pt_trajectory.step = step

@@ -3,6 +3,8 @@ from subprocess import run, PIPE, Popen
 import os
 import math
 
+from model_workflow.tools.get_frames_count import get_frames_count
+
 # Get a reduced version of the provided trajectory
 # Frames are taken along the whole trajectory
 # Several analyses use this function since they use a reduced number of frames to work
@@ -13,15 +15,21 @@ import math
 def get_reduced_trajectory (
     input_topology_filename : str,
     input_trajectory_filename : str,
-    original_frames : int,
-    frames_limit : int,
+    reduced_trajectory_frames_limit : int,
     ) -> list:
 
-    if frames_limit >= original_frames:
-        raise SystemExit('ERROR: The trajectory to be reduced has already the final number of frames or less')
+    trajectory_frames = get_frames_count(input_topology_filename,input_trajectory_filename)
+
+    # if the trajectory already has the reduced number of frames or less return here
+    if reduced_trajectory_frames_limit >= trajectory_frames:
+        print('The trajectory to be reduced has already the final number of frames or less')
+        output_trajectory_filename = input_trajectory_filename
+        step = 1
+        frames = trajectory_frames
+        return output_trajectory_filename, step, frames
 
     # Set the reduced trajectory filename
-    output_trajectory_filename = 'f' + str(frames_limit) + '.trajectory.xtc'
+    output_trajectory_filename = 'f' + str(reduced_trajectory_frames_limit) + '.trajectory.xtc'
 
     # Calculate the step between frames in the reduced trajectory to match the final number of frames
     # WARNING: Since the step must be an integer the thorical step must be rounded
@@ -33,7 +41,7 @@ def get_reduced_trajectory (
     # This means that the client and the workflow are coordinated and these formulas must not change
     # If you decide to change this formula (in both workflow and client)...
     # You will have to run again all the database analyses with reduced trajectories
-    step = int(math.ceil(original_frames / frames_limit))
+    step = math.ceil(trajectory_frames / reduced_trajectory_frames_limit)
 
     # Create the reduced trajectory if it does not exist yet
     if not os.path.exists(output_trajectory_filename):
@@ -58,11 +66,11 @@ def get_reduced_trajectory (
         p.stdout.close()
 
     # Calculate also the final number of frames given the current step and return this value
-    # WARNING: It may seem that the final number of frames is math.floor(original_frames / step)
+    # WARNING: It may seem that the final number of frames is math.floor(trajectory_frames / step)
     # HOWEVER, the frame 0 also counts so it would be math.floor() + 1
-    # HOWEVER, when original_frames / step % 0, the last frame is not returned
+    # HOWEVER, when trajectory_frames / step % 0, the last frame is not returned
     # For this reason, the final number of frames is equal to the ceiling of the division
-    frames = math.ceil(original_frames / step)
+    frames = math.ceil(trajectory_frames / step)
 
     # Return gromacs logs
     return output_trajectory_filename, step, frames

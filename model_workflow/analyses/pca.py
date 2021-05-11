@@ -16,23 +16,21 @@ pca_average_filename = 'pca.average.pdb'
 # A new projection trajectory is made for each eigen vector with 1% or greater explained variance
 # WARNING: Projection trajectories are backbone only
 def pca(
-        input_topology_filename: str,
-        input_trajectory_filename: str,
-        output_eigenvalues_filename: str,
-        output_eigenvectors_filename: str,
-        snapshots):
+    input_topology_filename: str,
+    input_trajectory_filename: str,
+    output_eigenvalues_filename: str,
+    output_eigenvectors_filename: str,
+):
 
     # By default we set the whole trajectory as PCA trajectory
     pca_trajectory_filename = input_trajectory_filename
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     frames_limit = 2000
-    if snapshots > frames_limit:
-        pca_trajectory_filename, step, frames = get_reduced_trajectory(
-            input_topology_filename,
-            input_trajectory_filename,
-            snapshots,
-            frames_limit,
-        )
+    pca_trajectory_filename, step, frames = get_reduced_trajectory(
+        input_topology_filename,
+        input_trajectory_filename,
+        frames_limit,
+    )
 
     # Calculate eigen values and eigen vectors with Gromacs
     p = Popen([
