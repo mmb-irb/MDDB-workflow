@@ -2,6 +2,10 @@ from subprocess import run, PIPE, Popen
 
 import pytraj as pt
 
+# Set the standard raw charges filename
+raw_charges_filename = 'charges.txt'
+
+# Set the pytraj selection for not water and ions
 not_water = '!(:SOL,WAT)'
 not_ions = '!(@CL,Cl,Cl-,NA,Na,Na+,K,ZN,Zn)'
 filter_base = not_water + '&' + not_ions
@@ -27,8 +31,12 @@ def filter_atoms (
     topology = trajectory.topology
     atoms_count = topology.n_atoms
 
+    # Set if charges must be filtered
+    # i.e. they are not a raw charges filename
+    filtrable_charges = charges_filename and charges_filename != raw_charges_filename
+
     # Load the charges topology
-    if charges_filename:
+    if filtrable_charges:
         charges_topology = pt.load_topology(filename=charges_filename)
         charges_atoms_count = charges_topology.n_atoms
 
@@ -43,7 +51,7 @@ def filter_atoms (
     filtered_atoms_count = filtered_topology.n_atoms
 
     # Set the filtered charges topology
-    if charges_filename:
+    if filtrable_charges:
         filtered_charges_topology = charges_topology[filter_string]
         filtered_charges_atoms_count = filtered_charges_topology.n_atoms
 
@@ -67,7 +75,7 @@ def filter_atoms (
             traj=filtered_trajectory[0:1],
             overwrite=True
         )
-    if charges_filename and filtered_charges_atoms_count < charges_atoms_count:
+    if filtrable_charges and filtered_charges_atoms_count < charges_atoms_count:
         print('Filtering charges topology...')
         pt.write_parm(
             filename=charges_filename,

@@ -892,6 +892,10 @@ NMA  3HA  H      0.0976
 NMA  HA1  H      0.0976
 NMA  HA2  H      0.0976
 NMA  HA3  H      0.0976
+# DESRES
+ACE  1H   H      0.1123
+ACE  2H   H      0.1123
+ACE  3H   H      0.1123
 # Water
 HOH  H1   HW     0.4170
 HOH  O    OW    -0.8340

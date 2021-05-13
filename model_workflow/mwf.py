@@ -553,6 +553,7 @@ current_directory = Path.cwd()
 DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
 DEFAULT_input_trajectory_filename = 'md.imaged.rot.xtc'
 DEFAULT_inputs_filename = 'inputs.json'
+DEFAULT_charges_filename = 'charges.txt'
 
 # Set optional arguments
 parser.add_argument(
@@ -589,7 +590,7 @@ parser.add_argument(
 
 parser.add_argument(
     "-char", "--charges_filename",
-    default=None, # There is no default since many formats may be possible
+    default=DEFAULT_charges_filename, # There is no default since many formats may be possible
     help="Path to charges topology filename")
 
 parser.add_argument(

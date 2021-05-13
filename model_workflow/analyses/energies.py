@@ -19,6 +19,7 @@
 import os
 from pathlib import Path
 import prody
+import pytraj as pt
 import re
 import numpy
 import math
@@ -26,7 +27,7 @@ from subprocess import run, PIPE, Popen
 import json
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.tools.get_topology_charges import get_topology_charges
+from model_workflow.tools.get_charges import get_topology_charges, get_raw_charges, get_reslib_charges
 
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
@@ -36,6 +37,9 @@ preppdb_source = resources + '/old_preppdb.pl' # DANI: Este no renombra los term
 cmip_inputs_checkonly_source = resources + '/check.in'
 cmip_inputs_source = resources + '/input.in'
 vdw_source = resources + '/vdwprm'
+
+# Set the standard name for the input raw charges
+raw_charges_filename = 'charges.txt'
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies(
@@ -56,29 +60,43 @@ def energies(
     energies_topology_prody = name_terminal_residues(energies_topology_prody)
     prody.writePDB(energies_topology, energies_topology_prody)
 
-    # If charges are passed, mine them
-    # Get the charge of each single atom
-    charges, elements = None, None
+    # In case charges are passed, mine the charge of each single atom
+    # This is the canonical way to get charges
+    # WARNING: input_charges_filename is optional, so it may not exist
+    charges = None
     if input_charges_filename and os.path.exists(input_charges_filename):
-        charges, elements = get_topology_charges(input_charges_filename)
 
-    # Incase we have no charges we will have to guess them
+        print('Charges in the "' + input_charges_filename + '" file will be used')
+
+        # In some ocasions, charges may come inside a raw charges file
+        if input_charges_filename == raw_charges_filename:
+            charges = get_raw_charges(raw_charges_filename)
+        # In some ocasions, charges may come inside a topology
+        else:
+            charges = get_topology_charges(input_charges_filename)
+            generate_raw_energies_file(charges)
+
+        # Also, in case we already have charges, get each atom element in CMIP format
+        elements = get_topology_cmip_elements(input_topology_filename)
+
+    # In case we have no charges we will have to guess them
     # This is an alternative "emergency" way which is prone to fail
+    # Standard residues will use standard charges in a source file called 'res.lib'
+    # Other residues will use ACPYPE calculated charges
     if not charges:
+
+        print('WARNING: You have no atom charges. Atom charges will be guessed')
+        print('WARNING: This will not generate a "charges.txt" file')
+
         # We need to set a file with all atom charges in a specific format
         reslib_filename = 'res.lib'
-        
+
         # In case we do not have a topology file with charges we must use an alternative way
         # Copy the source 'res.lib' file in the local directory if it does not exists yet
         # If ACPYPE is used then the local res.lib will be modified
         # The modified res.lib is conserved, so all frames will have same charges
         # The modified res.lib is shared across interactions
-        if not os.path.exists(reslib_filename):
-            run([
-                "cp",
-                reslib_source,
-                reslib_filename,
-            ], stdout=PIPE).stdout.decode()
+        get_reslib_charges(input_topology_filename, reslib_filename)
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
@@ -87,12 +105,21 @@ def energies(
         frame_structure = prody.parsePDB(frame_pdb)
         # Add chains according to the reference topology, since gromacs has deleted chains
         frame_structure.setChids(reference.topology.getChids())
+
         # Set element names according to the reference topology
         # Gromacs may mess some element names with two letters (e.g. 'CL')
+        # DANI: Esto ya no debería hacer falta ya que ahora las frames vienen de pytraj, no de Gromacs
         #frame_structure.setElements(reference.topology.getElements())
-        # Set charges and elements according to the charges topology mined data
-        frame_structure.setElements(elements)
-        frame_structure.setCharges(charges)
+
+        # In case we already have charges:
+        # Set charges and elements according to the topology mined data
+        if charges:
+            frame_structure.setElements(elements)
+            frame_structure.setCharges(charges)
+
+        # In case we do not have charges yet:
+        # WARNING: Do not set CMIP elements yet, since we may require ACPYPE
+        # WARNING: ACPYPE needs normal elements
 
         # WARNING: At this point topology should be corrected
         # WARNING: Repeated atoms will make the analysis fail
@@ -103,8 +130,7 @@ def energies(
 
             name = interaction['name']
 
-            # Select the first agent, extract a pdb only with its atoms and parse it to CMIP
-            # Run ACPYPE if required and then modify the res.lib file
+            # Select the first agent and extract it in a CMIP friendly pdb format
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
             agent1_selection = frame_structure.select(interaction['selection_1'])
             if charges:
@@ -206,7 +232,7 @@ def get_reslib_residues(reslib_filename : str) -> list:
 
 # Transform prody selection to a cmip input pdb, which includes charges
 # Charges have been previously taken from the charges topology and injected in prody
-def selection2cmip(agent_name : str, agent_selection : str) -> str:
+def selection2cmip(agent_name : str, agent_selection) -> str:
     
     print('Setting ' + agent_name + ' charges')
     atoms = agent_selection.iterAtoms()
@@ -239,7 +265,7 @@ def selection2cmip(agent_name : str, agent_selection : str) -> str:
 # Charges are taken from the 'reslib' provided file
 # Use ACPYPE to calculate charges which are not in the 'reslib' by default
 # Modify the 'reslib' if ACPYPE is used by adding the new charges
-def HARDselection2cmip(agent_name : str, agent_selection : str, reslib_filename : str) -> str:
+def HARDselection2cmip(agent_name : str, agent_selection, reslib_filename : str) -> str:
 
     print('Setting ' + agent_name + ' charges (HARD WAY)')
     name = agent_name
@@ -268,7 +294,7 @@ def HARDselection2cmip(agent_name : str, agent_selection : str, reslib_filename 
             break
     
     # When required, calculate the energies with acpype and then mine them from the output file
-    energies = []
+    charges = []
     if acpype_is_required:
 
         # Remove all residue names to prevent duplicated residue names, which makes ACPYPE fail
@@ -287,47 +313,46 @@ def HARDselection2cmip(agent_name : str, agent_selection : str, reslib_filename 
             # "0",
         ], stdout=PIPE).stdout.decode()
 
-        energies_file = name + '.acpype/' + name + '.mol2'
+        charges_file = name + '.acpype/' + name + '.mol2'
         # Check if the output file exists. If not, send error and print acpype logs
-        if not os.path.exists(energies_file):
+        if not os.path.exists(charges_file):
             print(acpype_logs)
             raise SystemExit(
                 "ERROR: Something was wrong with ACPYPE")
         # Write all lines but the last line: 'END'
-        energies_lines = None
-        with open(energies_file, "r") as file:
-            energies_lines = file.readlines()
+        charges_lines = None
+        with open(charges_file, "r") as file:
+            charges_lines = file.readlines()
 
-        # Mine the energies in the acpype output file
-        # These energies are used by CMIP as a reference
+        # Mine the charges in the acpype output file
+        # These charges are used by CMIP as a reference
         # Count how many lines are energy 0
         zero_count = 0
-        for line in energies_lines:
+        for line in charges_lines:
             line = line.split()
             if len(line) == 9:
                 energy_value = line[-1]
                 if float(energy_value) == 0:
                     zero_count += 1
-                energies.append(energy_value)
+                charges.append(energy_value)
 
         # If all lines are energy 0 return here
-        if zero_count == len(energies):
+        if zero_count == len(charges):
             raise SystemExit(
-                "ERROR: All ACPYPE output energies are zero :/")
+                "ERROR: All ACPYPE output charges are zero :/")
 
-        # Check the number of atoms matches the number of energies
-        if len(list(selection.iterAtoms())) != len(energies):
+        # Check the number of atoms matches the number of charges
+        if len(list(selection.iterAtoms())) != len(charges):
             raise SystemExit(
-                "Stop!! The number of atoms and energies does not match :/")
+                "Stop!! The number of atoms and charges does not match :/")
 
     # Adapt atom elements to match what CMIP expects to find
-    # Hydrogens bonded to oxygen or nitrogen or sulfur must be renamed as HO or HN
     # CMIP uses atom names to set the atom radius so this step is critical
-    # Overwrite the previous 'selection' value and the selection pdb file
     # WARNING: It is very important to make the CMIP adaptation in this specific place!!
     # WARNING: If it is done before running ACPYPE then ACPYPE will fail
     # WARNING: It is is done after editing the reslib file then elements will not match
-    selection = adapt_cmip_atoms(selection)
+    elements = get_topology_cmip_elements(input_topology_filename)
+    selection.setElements(elements)
     prody.writePDB(selection_filename, selection)
 
     if acpype_is_required:
@@ -388,11 +413,65 @@ def HARDselection2cmip(agent_name : str, agent_selection : str, reslib_filename 
 
     return output_filename
 
+# Given a topology (e.g. pdb, prmtop), extract the atom elements in a CMIP friendly format
+def get_topology_cmip_elements (input_topology_filename : str):
+    
+    topology = pt.load_topology(filename=input_topology_filename)
+
+    # Set all supported elements
+    # This is required to transform element names (returned by pytraj) to element letters
+    standard_elements = {
+        'hydrogen': 'H',
+        'carbon': 'C',
+        'oxygen': 'O',
+        'nitrogen': 'N',
+        'sulfur': 'S',
+        'sodium': 'Na',
+        'chlorine': 'Cl',
+    }
+    # Iterate over each atom to save their CMIP element
+    elements = []
+    atoms = list(topology.atoms)
+    for a, atom in enumerate(atoms):
+        residue = atom.resname
+        # Skip this atom if we already found it
+        name = atom.name
+        element = standard_elements[atom.element]
+        # Adapt hydrogens element to CMIP requirements
+        if element == 'H':
+            # There should we always only 1 bond
+            # DANI: Error aquí
+            # ValueError: Buffer dtype mismatch, expected 'int' but got 'long'
+            bonded_heavy_atom_index = atom.bonded_indices()[0]
+            bonded_heavy_atom = atoms[bonded_heavy_atom_index]
+            bonded_heavy_atom_element = standard_elements[bonded_heavy_atom.element]
+            # Hydrogens bonded to carbons remain as 'H'
+            if bonded_heavy_atom_element == 'C':
+                pass
+            # Hydrogens bonded to oxygen are renamed as 'HO'
+            elif bonded_heavy_atom_element == 'O':
+                element = 'HO'
+            # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
+            elif bonded_heavy_atom_element == 'N' or bonded_heavy_atom_element == 'S':
+                element = 'HN'
+            else:
+                raise SystemExit(
+                    'ERROR: Hydrogen bonded to not supported heavy atom: ' + bonded_heavy_atom_element)
+        elements.append(element)
+    return elements
+
+# Write the raw charges file from a list of charges
+def generate_raw_energies_file(charges : list, filename : str = raw_charges_filename):
+    with open(filename, 'w') as file:
+        for charge in charges:
+            file.write("{:.6f}".format(charge) + '\n')
+
 # Change elements in a prody selection to meet the CMIP requirements
 # Hydrogens bonded to carbons remain as 'H'
 # Hydrogens bonded to oxygen are renamed as 'HO'
 # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
 # Some heavy atom elements may be also modified (e.g. 'CL' -> 'Cl')
+# DEPRECATED
 def adapt_cmip_atoms(selection):
 
     # Try to guess the atom element from the name of the atom
