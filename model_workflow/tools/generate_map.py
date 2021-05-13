@@ -7,6 +7,15 @@ from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
 from Bio.SubsMat import MatrixInfo
 
+# from Bio import Align
+# from Bio.Align import substitution_matrices
+
+# # Set the aligner
+# aligner = Align.PairwiseAligner(mode='local')
+# aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
+# aligner.open_gap_score = -10
+# aligner.extend_gap_score = -0.5
+
 # Load the reference for residue names and letters
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
 residues_source = resources + '/residues.json'
@@ -74,6 +83,10 @@ def align (ref_sequence : str, new_sequence : str) -> list:
 
     # Return the new sequence as best aligned as possible with the reference sequence
     alignments = pairwise2.align.localds(ref_sequence, new_sequence, MatrixInfo.blosum62, -10, -0.5)
+    # DANI: Habría que hacerlo de esta otra forma según el deprecation warning (arriba hay más código)
+    # DANI: El problema es que el output lo tiene todo menos la sequencia en formato alienada
+    # DANI: i.e. formato '----VNLTT', que es justo el que necesito
+    #alignments = aligner.align(ref_sequence, new_sequence)
 
     # In case there are no alignments it means the current chain has nothing to do with this reference
     # Then an array filled with None is returned
@@ -82,7 +95,8 @@ def align (ref_sequence : str, new_sequence : str) -> list:
 
     # Several alignments may be returned, specially when it is a difficult or impossible alignment
     # Output format example: '----VNLTT'
-    aligned_sequence = alignments[0][1]
+    best_alignment = alignments[0]
+    aligned_sequence = best_alignment[1]
     print(format_alignment(*alignments[0]))
     score = alignments[0][2]
     normalized_score = score / len(aligned_sequence)
