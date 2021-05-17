@@ -44,6 +44,10 @@ def get_box_size(
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
 
+    if not os.path.exists(box_analysis):
+        print(logs)
+        raise SystemExit('ERROR: Something went wrong with Gromacs')
+
     # Read the box analysis and get the desired data
     boxsizex, boxsizey, boxsizez = "", "", ""
     with open(box_analysis, 'r') as file:
