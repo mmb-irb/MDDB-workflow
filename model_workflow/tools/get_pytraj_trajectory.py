@@ -16,7 +16,7 @@ def get_pytraj_trajectory (
     # This happens with some random pdbs which pytraj considers to have 0 Mols
     # More info: https://github.com/Amber-MD/cpptraj/pull/820
     # DANI: Este es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
-    pt_trajectory.top.start_new_mol()
+    #pt_trajectory.top.start_new_mol()
 
     return pt_trajectory
 
