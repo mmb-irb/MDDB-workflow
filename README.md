@@ -71,15 +71,37 @@ Then install it in develop mode with:
 
 `../mwf/bin/python setup.py develop`
 
-Finally, some modifications may be required and they must be done by hand
+### Check everything works fine
+
+Sometimes, some tools in the packed environment may have wrong paths to their executables
+
+- Check VMD
+
+Activate the mwf enviornment and type `vmd`
+
+If an error similar to "/slgpfs/projects/bsc23/bsc23088/mwf/bin/vmd: line 505: /opt/anaconda1anaconda2anaconda3/lib/vmd_LINUX: No existe el fichero o el directorio" is return then do the following:
 
 Find the vmd path and modify the vmd executable.
 
-`find ./mwf | grep vmd_LINUX` (copy the path to the 'lib' directory)
+`find mwf | grep vmd_LINUX` (copy the path to the 'lib' directory, not to the vmd executable)
 
-`vim ./mwf/bin/vmd` (modify the 'defaultvmddir' path as the previous copied path)
+`vim mwf/bin/vmd` (modify the 'defaultvmddir' path as the previous copied path, relative to mwf)
 
 At this point the workflow should be operative
+
+- Check Gromacs
+
+Activate the mwf enviornment and type `gmx`
+
+If an error similar to "/opt/conda/conda-bld/gromacs_1618496378051/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_place/bin.SSE2/GMXRC: No existe el fichero o el directorio" is return then do the following:
+
+`find "$(pwd -P)" | grep GMXRC` (copy the path which contains all the bin."whatever" directories)
+
+`vim mwf/bin/gmx` (modify all wrong paths as the previous copied path, absolute)
+
+You may also have to modify the atom masses file to add elements typed with both upper case letters (e.g. 'ZN' in addition to 'Zn')
+
+`vim mwf/share/gromacs/top/atommass.dat`
 
 ---
 
