@@ -425,7 +425,6 @@ def get_topology_cmip_elements (input_topology_filename : str):
     except:
         print('The canonical elements mining failed. Retrying with alternative mining')
         elements = get_topology_cmip_elements_alternative(input_topology_filename)
-    print('FINAL ELEMENTS: ' + str(len(elements)))
     return elements
 
 # Use pytraj for this task
