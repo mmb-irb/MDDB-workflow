@@ -170,8 +170,6 @@ def energies(
             # Delete current agent pdb files before going for the next interaction
             run([
                 "rm",
-                agent1_pdb,
-                agent2_pdb,
                 agent1_cmip,
                 agent2_cmip,
                 agent1_output_energy,
@@ -183,6 +181,7 @@ def energies(
     # Extract the energies for each frame in a reduced trajectory
     frames_limit = 100
     frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
+    interactions_data = [[] for i in interactions]
     for current_frame in frames:
         
         # Run the main analysis over the current frame
@@ -413,8 +412,24 @@ def HARDselection2cmip(agent_name : str, agent_selection, reslib_filename : str)
 
     return output_filename
 
+
 # Given a topology (e.g. pdb, prmtop), extract the atom elements in a CMIP friendly format
+# Hydrogens bonded to carbons remain as 'H'
+# Hydrogens bonded to oxygen are renamed as 'HO'
+# Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
+# Some heavy atom elements may be also modified (e.g. 'CL' -> 'Cl')
+# There are two ways to do this: the canonical (faster) and the alternative (error proof)
 def get_topology_cmip_elements (input_topology_filename : str):
+    try:
+        elements = get_topology_cmip_elements_canonical(input_topology_filename)
+    except:
+        print('The canonical elements mining failed. Retrying with alternative mining')
+        elements = get_topology_cmip_elements_alternative(input_topology_filename)
+    print('FINAL ELEMENTS: ' + str(len(elements)))
+    return elements
+
+# Use pytraj for this task
+def get_topology_cmip_elements_canonical (input_topology_filename : str):
     
     topology = pt.load_topology(filename=input_topology_filename)
 
@@ -428,6 +443,7 @@ def get_topology_cmip_elements (input_topology_filename : str):
         'sulfur': 'S',
         'sodium': 'Na',
         'chlorine': 'Cl',
+        'zinc': 'Zn',
     }
     # Iterate over each atom to save their CMIP element
     elements = []
@@ -440,7 +456,7 @@ def get_topology_cmip_elements (input_topology_filename : str):
         # Adapt hydrogens element to CMIP requirements
         if element == 'H':
             # There should we always only 1 bond
-            # DANI: Error aquí
+            # If you have the error below you may need to updated the pytraj version or reintsall pytraj
             # ValueError: Buffer dtype mismatch, expected 'int' but got 'long'
             bonded_heavy_atom_index = atom.bonded_indices()[0]
             bonded_heavy_atom = atoms[bonded_heavy_atom_index]
@@ -461,18 +477,15 @@ def get_topology_cmip_elements (input_topology_filename : str):
     return elements
 
 # Write the raw charges file from a list of charges
-def generate_raw_energies_file(charges : list, filename : str = raw_charges_filename):
+def generate_raw_energies_file (charges : list, filename : str = raw_charges_filename):
     with open(filename, 'w') as file:
         for charge in charges:
             file.write("{:.6f}".format(charge) + '\n')
 
-# Change elements in a prody selection to meet the CMIP requirements
-# Hydrogens bonded to carbons remain as 'H'
-# Hydrogens bonded to oxygen are renamed as 'HO'
-# Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-# Some heavy atom elements may be also modified (e.g. 'CL' -> 'Cl')
-# DEPRECATED
-def adapt_cmip_atoms(selection):
+# Use prody for this task
+def get_topology_cmip_elements_alternative (input_topology_filename : str):
+
+    topology = prody.parsePDB(input_topology_filename)
 
     # Try to guess the atom element from the name of the atom
     # This is used only when element is missing
@@ -519,7 +532,7 @@ def adapt_cmip_atoms(selection):
     # Since this function is only used with hydrogen atoms we only search in the current atom residue
     def find_closest_atom(atom):
         atom_resnum = atom.getResnum()
-        residue = selection.select('resnum ' + str(atom_resnum))
+        residue = topology.select('resnum ' + str(atom_resnum))
         residue_atoms = list(residue.iterAtoms())
         residue_coords = residue.getCoords()
         current_coords = atom.getCoords()
@@ -533,8 +546,10 @@ def adapt_cmip_atoms(selection):
         closest_atom = residue_atoms[index]
         return closest_atom
 
+    # Harvest the element of each atom
     # Update the element of each hydrogen according to CMIP needs
-    for atom in selection.iterAtoms():
+    elements = []
+    for atom in topology.iterAtoms():
         # First of all, correct tha name by moving numbers from the start to the end
         # e.g. 1HD1 -> HD11
         name = atom.getName()
@@ -561,7 +576,7 @@ def adapt_cmip_atoms(selection):
                 bonded_heavy_atom.setElement(bonded_heavy_atom_element)
             # Hydrogens bonded to carbons remain as 'H'
             if bonded_heavy_atom_element == 'C':
-                continue
+                pass
             # Hydrogens bonded to oxygen are renamed as 'HO'
             elif bonded_heavy_atom_element == 'O':
                 element = 'HO'
@@ -582,10 +597,11 @@ def adapt_cmip_atoms(selection):
             element = 'Na'
         elif element == 'MG':
             element = 'Mg'
-        # Set the correct element
+        # Get the correct element
         atom.setElement(element)
+        elements.append(element)
     # Return the corrected prody topology
-    return selection
+    return elements
 
 protein_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS',
                     'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
@@ -827,7 +843,7 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
         for line in lines:
             chain = line[21:22]
             residue_id = line[22:28]
-            residue = chain + ':' + str(int(residue_id))
+            residue = chain + ':' + residue_id.strip() # strip removes white spaces
             vdw = float(line[42:53])
             es = float(line[57:68])
             both = float(line[72:83])
