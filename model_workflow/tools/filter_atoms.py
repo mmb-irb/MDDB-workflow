@@ -7,7 +7,7 @@ raw_charges_filename = 'charges.txt'
 
 # Set the pytraj selection for not water and ions
 not_water = '!(:SOL,WAT)'
-not_ions = '!(@CL,Cl,Cl-,NA,Na,Na+,K,ZN,Zn)'
+not_ions = '!(@CL,CL-,Cl,Cl-,NA,NA+,Na,Na+,K,ZN,Zn)'
 filter_base = not_water + '&' + not_ions
 
 # Filter atoms of all input topologies by remvoing atoms and ions
