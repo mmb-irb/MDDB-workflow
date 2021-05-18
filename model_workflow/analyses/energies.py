@@ -50,6 +50,9 @@ def energies(
         reference,
         interactions: list):
 
+    print('ENERGIES')
+    print(input_charges_filename)
+
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
@@ -422,7 +425,8 @@ def HARDselection2cmip(agent_name : str, agent_selection, reslib_filename : str)
 def get_topology_cmip_elements (input_topology_filename : str):
     try:
         elements = get_topology_cmip_elements_canonical(input_topology_filename)
-    except:
+    except Exception as err:
+        print(err)
         print('The canonical elements mining failed. Retrying with alternative mining')
         elements = get_topology_cmip_elements_alternative(input_topology_filename)
     return elements
@@ -443,6 +447,7 @@ def get_topology_cmip_elements_canonical (input_topology_filename : str):
         'sodium': 'Na',
         'chlorine': 'Cl',
         'zinc': 'Zn',
+        'fluorine': 'F',
     }
     # Iterate over each atom to save their CMIP element
     elements = []

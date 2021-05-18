@@ -4,9 +4,9 @@ from pathlib import Path
 
 # Given a topology which includes charges
 # Extract those charges and save them in a list to be returned
-# Supported formats (tested): prmtop, psf (standard psf, not from DESRES)
-# Supported formats (not tested): mol2, cif, tpr, sdf
-# Non supported formats: mae, pdb (has no charges)
+# Supported formats (tested): prmtop, top, psf (standard psf, not from DESRES)
+# Supported formats (not tested): mol2, cif, sdf
+# Non supported formats: mae, tpr, pdb (has no charges)
 def get_topology_charges (input_topology_filename : str):
     topology = pt.load_topology(filename=input_topology_filename)
     # WARNING: We must convert this numpy ndarray to a normal list

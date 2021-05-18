@@ -20,6 +20,7 @@ from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_topology_and_trajectory import process_topology_and_trajectory
+from model_workflow.tools.process_charges_topology import process_charges_topology, find_energies_filename
 from model_workflow.tools.topology_manager import TopologyReference
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
@@ -169,7 +170,7 @@ def load_inputs(filename : str):
 # The original topology and trajectory filenames are the input filenames
 original_topology_filename = Dependency(getInput, {'input': 'input_topology_filename'})
 original_trajectory_filename = Dependency(getInput, {'input': 'input_trajectory_filename'})
-charges_filename = Dependency(getInput, {'input': 'input_charges_filename'})
+original_charges_filename = Dependency(getInput, {'input': 'input_charges_filename'})
 # The 'inputs file' is a json file which must contain all parameters to run the workflow
 inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
 
@@ -213,6 +214,18 @@ topology_filename = File(OUTPUT_topology_filename,
 trajectory_filename = File(OUTPUT_trajectory_filename,
     process_topology_and_trajectory.func,
     process_topology_and_trajectory.args)
+
+# Rename the charges filename if necessary
+process_charges_topology = Dependency(process_charges_topology, {
+    'input_charges_filename': original_charges_filename,
+})
+
+# Charges filename
+# This may be created from the original charges filename
+# This file is used for the energies analysis
+charges_filename = Dependency(
+    process_charges_topology.func,
+    process_charges_topology.args)
 
 # Filter atoms to remove water and ions
 # As an exception, some water and ions may be not removed if specified
@@ -553,7 +566,7 @@ current_directory = Path.cwd()
 DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
 DEFAULT_input_trajectory_filename = 'md.imaged.rot.xtc'
 DEFAULT_inputs_filename = 'inputs.json'
-DEFAULT_charges_filename = 'charges.txt'
+DEFAULT_charges_filename = find_energies_filename()
 
 # Set optional arguments
 parser.add_argument(
