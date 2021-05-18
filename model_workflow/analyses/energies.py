@@ -50,9 +50,6 @@ def energies(
         reference,
         interactions: list):
 
-    print('ENERGIES')
-    print(input_charges_filename)
-
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
@@ -136,6 +133,9 @@ def energies(
             # Select the first agent and extract it in a CMIP friendly pdb format
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
             agent1_selection = frame_structure.select(interaction['selection_1'])
+            if not agent1_selection:
+                raise SystemExit('ERROR: Agent "' + interaction['agent_1'] + '" with selection "' + 
+                    interaction['selection_1'] + '" has no atoms')
             if charges:
                 agent1_cmip = selection2cmip(agent1_name, agent1_selection)
             else:
@@ -144,6 +144,9 @@ def energies(
             # Repeat the process with agent 2
             agent2_name = interaction['agent_2'].replace(' ', '_').replace('/', '_')
             agent2_selection = frame_structure.select(interaction['selection_2'])
+            if not agent2_selection:
+                raise SystemExit('ERROR: Agent "' + interaction['agent_2'] + '" with selection "' + 
+                    interaction['selection_2'] + '" has no atoms')
             if charges:
                 agent2_cmip = selection2cmip(agent2_name, agent2_selection)
             else:
@@ -448,6 +451,8 @@ def get_topology_cmip_elements_canonical (input_topology_filename : str):
         'chlorine': 'Cl',
         'zinc': 'Zn',
         'fluorine': 'F',
+        'magnesium': 'Mg',
+        'phosphorus': 'P',
     }
     # Iterate over each atom to save their CMIP element
     elements = []
