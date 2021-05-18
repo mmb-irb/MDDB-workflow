@@ -484,7 +484,7 @@ def main():
         'input_trajectory_filename' : args.input_trajectory_filename,
         'inputs_filename' : args.inputs_filename,
         'input_charges_filename' : args.charges_filename,
-        'preprocess_protocol': args.preprocess_protocol
+        'preprocess_protocol': int(args.preprocess_protocol)
     })
 
     # Manage the working directory and make the required downloads
