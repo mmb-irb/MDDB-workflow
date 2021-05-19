@@ -159,3 +159,30 @@ def vmd_chainer (
     # Return VMD logs
     return logs
 
+# Given a psf topology and a single frame, generate a pdb file
+def psf_to_pdb (
+    input_topology_filename : str,
+    input_frame_filename : str,
+    output_filename : str):
+
+    # Prepare a script for the VMD to automate the data parsing. This is Tcl lenguage
+    # In addition, if chains are missing, this script asigns chains by fragment
+    # Fragments are atom groups which are not connected by any bond
+    with open(commands_filename, "w") as file:
+        # Select all atoms
+        file.write('set all [atomselect top "all"]\n')
+        # Write the current topology in 'pdb' format
+        file.write('$all frame first\n')
+        file.write('$all writepdb ' + output_filename + '\n')
+        file.write('exit\n')
+
+    # Run VMD
+    logs = run([
+        "vmd",
+        input_topology_filename,
+        input_frame_filename,
+        "-e",
+        commands_filename,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE).stdout.decode()

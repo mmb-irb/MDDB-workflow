@@ -2,19 +2,32 @@
 
 import os
 
-from model_workflow.tools.gromacs_processor import tpr2pdb
-from model_workflow.tools.vmd_processor import vmd_processor
+from model_workflow.tools.gromacs_processor import tpr2pdb, merge_xtc_files, get_first_frame
+from model_workflow.tools.mdtraj_processor import merge_dcd_files
+from model_workflow.tools.vmd_processor import vmd_processor, psf_to_pdb
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 
 def is_pdb (filename : str) -> bool:
     return filename[-4:] == '.pdb'
 
+def is_psf (filename : str) -> bool:
+    return filename[-4:] == '.psf'
+
 def is_tpr (filename : str) -> bool:
     return filename[-4:] == '.tpr'
 
 def is_xtc (filename : str) -> bool:
     return filename[-4:] == '.xtc'
+
+def is_dcd (filename : str) -> bool:
+    return filename[-4:] == '.dcd'
+
+def are_xtc (filenames : list) -> bool:
+    return all([ is_xtc(filename) for filename in filenames ])
+
+def are_dcd (filenames : list) -> bool:
+    return all([ is_dcd(filename) for filename in filenames ])
 
 def process_topology_and_trajectory (
     input_topology_filename : str,
@@ -43,10 +56,28 @@ def process_topology_and_trajectory (
     ):
         os.rename(input_trajectory_filenames, output_trajectory_filename)
 
+    # In case the trajectory files are all xtc merge them using Gromacs trjcat
+    if not os.path.exists(output_trajectory_filename) and are_xtc(input_trajectory_filenames):
+        merge_xtc_files(input_trajectory_filenames, output_trajectory_filename)
+
+    # In case the trajectory files are all dcd merge them using MDtraj mdconvert
+    if not os.path.exists(output_trajectory_filename) and are_dcd(input_trajectory_filenames):
+        merge_dcd_files(input_trajectory_filenames, output_trajectory_filename)
+
+    # In case the topology is a psf file generate a pdb file from it using the first trajectory frame
+    if not os.path.exists(output_topology_filename) and is_psf(input_topology_filename):
+        if not os.path.exists(output_trajectory_filename):
+            # DANI: Si tienes este problema habrá que implementar más cosas para resolverlo
+            raise SystemExit('ERROR: I cannot convert psf to pdb if trajectories are not xtc or dcd')
+        single_frame_filename = 'frame.xtc'
+        get_first_frame(output_trajectory_filename, single_frame_filename)
+        psf_to_pdb(input_topology_filename, single_frame_filename, output_topology_filename)
+
     # Process the topology and or trajectory files using VMD
     # Files are converted to supported formats and trajectory pieces are merged into a single file
     # In addition, some irregularities in the topology may be fixed by VMD
     # If the output topology and trajectory files already exists it is assumed they are already processed
+    # WARNING: This is an emergency endpoint. VMD will "work" in many cases but it makes your RAM explode
     if not os.path.exists(output_topology_filename) or not os.path.exists(output_trajectory_filename):
         logs = vmd_processor(
             input_topology_filename,
