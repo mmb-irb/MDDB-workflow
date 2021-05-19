@@ -4,7 +4,6 @@
 # http://www.ks.uiuc.edu/Research/vmd/
 
 import os
-import glob
 
 from subprocess import run, PIPE, Popen
 
@@ -22,7 +21,7 @@ commands_filename = 'commands.vmd'
 # Tested supported format is .trr
 def vmd_processor (
     input_topology_filename : str,
-    input_trajectory_filenames : str,
+    input_trajectory_filenames : list,
     output_topology_filename : str,
     output_trajectory_filename : str
     ) -> str:
@@ -61,18 +60,11 @@ def vmd_processor (
         file.write('$all writepdb ' + output_topology_filename + '\n')
         file.write('exit\n')
 
-    # The subprocess.run command does not deal with the '*' bash syntax to grab multiple files
-    # Instead, we have to do it manually
-    trajectory_filenames = [ input_trajectory_filenames ]
-    if '*' in input_trajectory_filenames:
-        trajectory_filenames_list = glob.glob(input_trajectory_filenames)
-        trajectory_filenames = sorted(trajectory_filenames_list)
-
     # Run VMD
     logs = run([
         "vmd",
         input_topology_filename,
-        *trajectory_filenames,
+        *input_trajectory_filenames,
         "-e",
         commands_filename,
         "-dispdev",

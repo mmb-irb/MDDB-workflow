@@ -169,7 +169,7 @@ def load_inputs(filename : str):
 
 # The original topology and trajectory filenames are the input filenames
 original_topology_filename = Dependency(getInput, {'input': 'input_topology_filename'})
-original_trajectory_filename = Dependency(getInput, {'input': 'input_trajectory_filename'})
+original_trajectory_filenames = Dependency(getInput, {'input': 'input_trajectory_filenames'})
 original_charges_filename = Dependency(getInput, {'input': 'input_charges_filename'})
 # The 'inputs file' is a json file which must contain all parameters to run the workflow
 inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
@@ -190,7 +190,7 @@ exceptions = Dependency(getInput, {'input': 'exceptions'})
 # If the output topology and trajectory files already exists it is assumed they are already processed
 vmd = Dependency(vmd_processor, {
     'input_topology_filename': original_topology_filename,
-    'input_trajectory_filenames': original_trajectory_filename,
+    'input_trajectory_filenames': original_trajectory_filenames,
     'output_topology_filename': OUTPUT_topology_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
 }, 'vmd')
@@ -199,7 +199,7 @@ vmd = Dependency(vmd_processor, {
 # This is equivalent to running 'vmd', 'imaging' and 'corrector' together
 process_topology_and_trajectory = Dependency(process_topology_and_trajectory, {
     'input_topology_filename': original_topology_filename,
-    'input_trajectory_filenames': original_trajectory_filename,
+    'input_trajectory_filenames': original_trajectory_filenames,
     'output_topology_filename': OUTPUT_topology_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
@@ -302,11 +302,6 @@ snapshots = Dependency(get_frames_count, {
     'input_topology_filename': topology_filename,
     'input_trajectory_filename': trajectory_filename
 }, 'snapshots')
-# Count the number of snapshots specifically from the input trajectory
-input_snapshots = Dependency(get_frames_count, {
-    'input_topology_filename': original_topology_filename,
-    'input_trajectory_filename': original_trajectory_filename
-}, 'input-snapshots')
 
 # Find out residues and interface residues for each interaction
 interactions = Dependency(process_interactions, {
@@ -334,7 +329,6 @@ tools = [
     corrector,
     interactions,
     snapshots,
-    input_snapshots
 ]
 
 # Define all analyses
@@ -451,7 +445,7 @@ def setup(
         project: str,
         url: str,
         input_topology_filename: str,
-        input_trajectory_filename: str,
+        input_trajectory_filenames: str,
         inputs_filename: str):
     # Create the directory if it does not exists
     if not os.path.exists(directory):
@@ -473,16 +467,18 @@ def setup(
                 file.truncate()
         # Download the topology file if it does not exists
         if not os.path.exists(input_topology_filename):
-            sys.stdout.write('Downloading topology\n')
+            sys.stdout.write('Downloading topology (' + input_topology_filename + ')\n')
             topology_url = url + '/api/rest/current/projects/' + \
                 project + '/files/' + OUTPUT_topology_filename
             urllib.request.urlretrieve(topology_url, input_topology_filename)
-        # Download the trajectory file if it does not exists
-        if not os.path.exists(input_trajectory_filename):
-            sys.stdout.write('Downloading trajectory\n')
-            trajectory_url = url + '/api/rest/current/projects/' + \
-                project + '/files/' + OUTPUT_trajectory_filename
-            urllib.request.urlretrieve(trajectory_url, input_trajectory_filename)
+        # Iterate over requested trajectory files
+        for input_trajectory_filename in input_trajectory_filenames:
+            # Download the trajectory file if it does not exists
+            if not os.path.exists(input_trajectory_filename):
+                sys.stdout.write('Downloading trajectory (' + input_topology_filename + ')\n')
+                trajectory_url = url + '/api/rest/current/projects/' + \
+                    project + '/files/' + OUTPUT_trajectory_filename
+                urllib.request.urlretrieve(trajectory_url, input_trajectory_filename)
 
 
 # Main function
@@ -490,14 +486,19 @@ def main():
 
     # Parse input arguments from the console
     args = parser.parse_args()
+    input_topology_filename = args.input_topology_filename
+    input_trajectory_filenames = args.input_trajectory_filenames
+    inputs_filename =  args.inputs_filename
+    charges_filename = args.charges_filename
+    preprocess_protocol = int(args.preprocess_protocol)
 
     # Set the command line inputs
     inputs.update({
-        'input_topology_filename' : args.input_topology_filename,
-        'input_trajectory_filename' : args.input_trajectory_filename,
-        'inputs_filename' : args.inputs_filename,
-        'input_charges_filename' : args.charges_filename,
-        'preprocess_protocol': int(args.preprocess_protocol)
+        'input_topology_filename' : input_topology_filename,
+        'input_trajectory_filenames' : input_trajectory_filenames,
+        'inputs_filename' : inputs_filename,
+        'input_charges_filename' : charges_filename,
+        'preprocess_protocol': preprocess_protocol
     })
 
     # Manage the working directory and make the required downloads
@@ -505,23 +506,20 @@ def main():
         directory=Path(args.working_dir).resolve(),
         project=args.project,
         url=args.url,
-        input_topology_filename=args.input_topology_filename,
-        input_trajectory_filename=args.input_trajectory_filename,
-        inputs_filename=args.inputs_filename )
+        input_topology_filename=input_topology_filename,
+        input_trajectory_filenames=input_trajectory_filenames,
+        inputs_filename=inputs_filename )
 
-    # At this moment all input files should be there
-    # Check it and send error if anyone is missing
-    essential_input_filenames = [
-        args.input_topology_filename,
-        args.input_trajectory_filename,
-        args.inputs_filename
-    ]
-    for filename in essential_input_filenames:
-        if not os.path.exists(filename):
-            raise SystemExit('ERROR: Missing input file "' + filename + '"')
+    if not os.path.exists(input_topology_filename):
+        raise SystemExit('ERROR: Missing input topology file "' + input_topology_filename + '"')
+
+    for input_trajectory_filename in input_trajectory_filenames:
+        if not os.path.exists(input_trajectory_filename):
+            raise SystemExit('ERROR: Missing input trajectory file "' + input_trajectory_filename + '"')
 
     # Load the inputs file
-    load_inputs(args.inputs_filename)
+    if os.path.exists(inputs_filename):
+        load_inputs(inputs_filename)
 
     # Run tools which must be run always
     # They better be fast
@@ -564,7 +562,7 @@ current_directory = Path.cwd()
 # Set default input filenames
 # They may be modified through console command arguments
 DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
-DEFAULT_input_trajectory_filename = 'md.imaged.rot.xtc'
+DEFAULT_input_trajectory_filenames = ['md.imaged.rot.xtc']
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_charges_filename = find_energies_filename()
 
@@ -592,8 +590,10 @@ parser.add_argument(
     help="Path to topology filename")
 
 parser.add_argument(
-    "-traj", "--input_trajectory_filename",
-    default=DEFAULT_input_trajectory_filename,
+    "-traj", "--input_trajectory_filenames",
+    #type=argparse.FileType('r'),
+    nargs='*',
+    default=DEFAULT_input_trajectory_filenames,
     help="Path to trajectory filename")
 
 parser.add_argument(

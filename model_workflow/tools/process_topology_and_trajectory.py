@@ -33,11 +33,14 @@ def process_topology_and_trajectory (
     # This is done in first place since VMD does not handle tpr files
     if not os.path.exists(output_topology_filename) and is_tpr(input_topology_filename):
         pdb_filename = input_topology_filename[:-4] + '.pdb'
-        tpr2pdb(input_topology_filename, input_trajectory_filenames, pdb_filename)
+        tpr2pdb(input_topology_filename, input_trajectory_filenames[0], pdb_filename)
         input_topology_filename = pdb_filename
 
-    # In case the trajectory is a 'xtc' file just rename it
-    if not os.path.exists(output_trajectory_filename) and is_xtc(input_trajectory_filenames):
+    # In case the trajectory is a single 'xtc' file just rename it
+    if (not os.path.exists(output_trajectory_filename)
+        and len(input_trajectory_filenames) == 1
+        and is_xtc(input_trajectory_filenames[0])
+    ):
         os.rename(input_trajectory_filenames, output_trajectory_filename)
 
     # Process the topology and or trajectory files using VMD
