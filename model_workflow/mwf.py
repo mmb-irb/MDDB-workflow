@@ -446,18 +446,20 @@ def setup(
         url: str,
         input_topology_filename: str,
         input_trajectory_filenames: str,
+        input_charges_filename: str,
         inputs_filename: str):
     # Create the directory if it does not exists
     if not os.path.exists(directory):
         Path(directory).mkdir(parents=True, exist_ok=True)
     # Move to the specified directory
     os.chdir(directory)
+    # If there is a specified project...
     if project:
+        project_url = url + '/api/rest/current/projects/' + project
         # Download the inputs json file if it does not exists
         if not os.path.exists(inputs_filename):
-            sys.stdout.write('Downloading inputs\n')
-            inputs_url = url + '/api/rest/current/projects/' + \
-                project + '/inputs/'
+            sys.stdout.write('Downloading inputs (' + inputs_filename + ')\n')
+            inputs_url = project_url + '/inputs/'
             urllib.request.urlretrieve(inputs_url, inputs_filename)
             # Rewrite the inputs file in a pretty formatted way
             with open(inputs_filename, 'r+') as file:
@@ -468,18 +470,46 @@ def setup(
         # Download the topology file if it does not exists
         if not os.path.exists(input_topology_filename):
             sys.stdout.write('Downloading topology (' + input_topology_filename + ')\n')
-            topology_url = url + '/api/rest/current/projects/' + \
-                project + '/files/' + OUTPUT_topology_filename
+            topology_url = project_url + '/files/' + OUTPUT_topology_filename
             urllib.request.urlretrieve(topology_url, input_topology_filename)
         # Iterate over requested trajectory files
         for input_trajectory_filename in input_trajectory_filenames:
             # Download the trajectory file if it does not exists
             if not os.path.exists(input_trajectory_filename):
-                sys.stdout.write('Downloading trajectory (' + input_topology_filename + ')\n')
-                trajectory_url = url + '/api/rest/current/projects/' + \
-                    project + '/files/' + OUTPUT_trajectory_filename
+                sys.stdout.write('Downloading trajectory (' + input_trajectory_filename + ')\n')
+                trajectory_url = project_url + '/files/' + OUTPUT_trajectory_filename
                 urllib.request.urlretrieve(trajectory_url, input_trajectory_filename)
-
+        # Check which files are available for this project
+        files_url = project_url + '/files'
+        response = urllib.request.urlopen(files_url)
+        files = json.loads(response.read())
+        # In case there is no specified charges we must find out which is the charges filename
+        # It may be a topology with charges or it may be a raw charges text file
+        if not input_charges_filename:
+            # Check if there is any topology file (e.g. topology.prmtop, topology.top, ...)
+            charges_file = next(f for f in files if f['filename'][0:9] == 'topology.')
+            # In case there is no topology, check if there is raw charges (i.e. 'charges.txt')
+            if not charges_file:
+                charges_file = next(f for f in files if f['filename'] == 'charges.txt')
+            # In case there is neither raw charges we send a warning and stop here
+            if not charges_file:
+                print('WARNING: There are no charges in this project')
+            # In case we found a charges file set the input charges filename as this
+            input_charges_filename = charges_file['filename']
+        # Download the charges file
+        if input_charges_filename and not os.path.exists(input_charges_filename):
+            sys.stdout.write('Downloading charges (' + input_charges_filename + ')\n')
+            charges_url = project_url + '/files/' + input_charges_filename
+            urllib.request.urlretrieve(charges_url, input_charges_filename)
+            # In the special case that the topology is from Gromacs (i.e. 'topology.top')...
+            # We must also download all itp files, if any
+            if input_charges_filename == 'topology.top':
+                itp_filenames = [f['filename'] for f in files if f['filename'][-4:] == '.itp']
+                for itp_filename in itp_filenames:
+                    sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
+                    itp_url = project_url + '/files/' + itp_filename
+                    urllib.request.urlretrieve(itp_url, itp_filename)
+            
 
 # Main function
 def main():
@@ -489,7 +519,7 @@ def main():
     input_topology_filename = args.input_topology_filename
     input_trajectory_filenames = args.input_trajectory_filenames
     inputs_filename =  args.inputs_filename
-    charges_filename = args.charges_filename
+    input_charges_filename = args.input_charges_filename
     preprocess_protocol = int(args.preprocess_protocol)
 
     # Set the command line inputs
@@ -497,7 +527,7 @@ def main():
         'input_topology_filename' : input_topology_filename,
         'input_trajectory_filenames' : input_trajectory_filenames,
         'inputs_filename' : inputs_filename,
-        'input_charges_filename' : charges_filename,
+        'input_charges_filename' : input_charges_filename,
         'preprocess_protocol': preprocess_protocol
     })
 
@@ -508,6 +538,7 @@ def main():
         url=args.url,
         input_topology_filename=input_topology_filename,
         input_trajectory_filenames=input_trajectory_filenames,
+        input_charges_filename=input_charges_filename,
         inputs_filename=inputs_filename )
 
     if not os.path.exists(input_topology_filename):
@@ -564,7 +595,7 @@ current_directory = Path.cwd()
 DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
 DEFAULT_input_trajectory_filenames = ['md.imaged.rot.xtc']
 DEFAULT_inputs_filename = 'inputs.json'
-DEFAULT_charges_filename = find_energies_filename()
+DEFAULT_input_charges_filename = find_energies_filename()
 
 # Set optional arguments
 parser.add_argument(
@@ -602,8 +633,8 @@ parser.add_argument(
     help="Path to inputs filename")
 
 parser.add_argument(
-    "-char", "--charges_filename",
-    default=DEFAULT_charges_filename, # There is no default since many formats may be possible
+    "-char", "--input_charges_filename",
+    default=DEFAULT_input_charges_filename, # There is no default since many formats may be possible
     help="Path to charges topology filename")
 
 parser.add_argument(
