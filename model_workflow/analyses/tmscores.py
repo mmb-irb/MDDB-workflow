@@ -65,6 +65,24 @@ def tmscores (
         frames, step, count = get_pdb_frames(reference, input_trajectory_filename, frames_limit)
         for current_frame in frames:
 
+            # Filter atoms in the current frame
+            p = Popen([
+                "echo",
+                group,
+            ], stdout=PIPE)
+            logs = run([
+                "gmx",
+                "trjconv",
+                "-s",
+                current_frame,
+                "-f",
+                current_frame,
+                '-o',
+                current_frame,
+                '-quiet'
+            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+            p.stdout.close()
+
             # Run the tmscoring over the current frame against the current reference
             # Append the result data for each ligand
             tmscore = tmscoring.get_tm(grouped_reference, current_frame)
