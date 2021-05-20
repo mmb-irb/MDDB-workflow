@@ -112,8 +112,6 @@ def generate_metadata (
         'BOXSIZEY': boxsizey,
         'BOXSIZEZ': boxsizez,
         'ENSEMBLE': getInput('ensemble'),
-        'PCOUPLING': getInput('pcoupling'),
-        'MEMBRANE': getInput('membrane'),
         'SYSTATS': systats,
         'PROTATS': protats,
         'PROT': prot,
@@ -127,6 +125,7 @@ def generate_metadata (
         'INTERACTIONS': metadata_interactions,
         'CHAINNAMES': getInput('chainnames'),
         'EXCEPTIONS': exceptions,
+        'MEMBRANES': getInput('membranes'),
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
