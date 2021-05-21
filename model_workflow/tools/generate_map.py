@@ -105,7 +105,7 @@ def align (ref_sequence : str, new_sequence : str) -> list:
     # If the normalized score does not reaches the minimum we consider the alignment is not valid
     # It may happen when the reference goes for a specific chain but we must map all chains
     # This 0.4 has been found experimentally
-    if normalized_score < 0.4:
+    if normalized_score < 0.1:
         print('Not valid alignment')
         return [ None for letter in new_sequence ]
 
