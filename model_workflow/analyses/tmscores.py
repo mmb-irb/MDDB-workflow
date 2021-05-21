@@ -66,6 +66,7 @@ def tmscores (
         for current_frame in frames:
 
             # Filter atoms in the current frame
+            filtered_frame = 'f.' + current_frame
             p = Popen([
                 "echo",
                 group,
@@ -78,7 +79,7 @@ def tmscores (
                 "-f",
                 current_frame,
                 '-o',
-                current_frame,
+                filtered_frame,
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
@@ -87,6 +88,11 @@ def tmscores (
             # Append the result data for each ligand
             tmscore = tmscoring.get_tm(grouped_reference, current_frame)
             tmscores.append(tmscore)
+
+            run([
+                "rm",
+                filtered_frame,
+            ], stdout=PIPE).stdout.decode()
 
         # Save the tmscores in the output object
         data = {
