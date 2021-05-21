@@ -73,9 +73,9 @@ def process_interactions (
                 interaction['selection_1'] + ')')
             interface_2_residues += frame_interface_2
         
-        # Remove duplicates
-        interaction['interface_1'] = list(set(interface_1_residues))
-        interaction['interface_2'] = list(set(interface_2_residues))
+        # Remove duplicates and sorth residues
+        interaction['interface_1'] = sorted(list(set(interface_1_residues)))
+        interaction['interface_2'] = sorted(list(set(interface_2_residues)))
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata

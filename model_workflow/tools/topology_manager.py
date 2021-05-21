@@ -63,6 +63,11 @@ class sourceResidue:
     
     def __hash__(self):
         return hash((self.chain_letter, self.residue_number, self.icode))
+
+    def __lt__(self, other):
+        if self.chain_letter == other.chain_letter:
+            return self.residue_number < other.residue_number
+        return self.chain_letter < other.chain_letter
     
     # Replace the default emtpy icode (' ') by an empty string ('')
     def valid_icode (self, icode):
