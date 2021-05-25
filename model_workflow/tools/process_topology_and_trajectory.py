@@ -54,7 +54,7 @@ def process_topology_and_trajectory (
         and len(input_trajectory_filenames) == 1
         and is_xtc(input_trajectory_filenames[0])
     ):
-        os.rename(input_trajectory_filenames, output_trajectory_filename)
+        os.rename(input_trajectory_filenames[0], output_trajectory_filename)
 
     # In case the trajectory files are all xtc merge them using Gromacs trjcat
     if not os.path.exists(output_trajectory_filename) and are_xtc(input_trajectory_filenames):
