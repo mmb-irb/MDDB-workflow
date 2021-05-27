@@ -108,10 +108,15 @@ def sasa(
     for r, residue in enumerate(reference.residues):
         # Name the residue in the source format
         name = reference.get_residue_name(residue)
+        atom_count = residue.numAtoms()
         # Harvest its sasa along each frame
         saspf = []
         for frame in sasa_per_frame:
-            saspf.append(frame[r])
+            # IMPORTANT: The original SASA value is modified to be normalized
+            # We divide the value by the number of atoms
+            frame_sas = frame[r]
+            normalized_frame_sas = frame_sas / atom_count
+            saspf.append(normalized_frame_sas)
         # Calculate the mean and standard deviation of the residue sasa values
         mean = numpy.mean(saspf)
         stdv = numpy.std(saspf)
