@@ -1,5 +1,11 @@
-# This script is used to count different type of atoms and residues in a pdb topology
+import json
+from pathlib import Path
 
+# Load the reference for protein residue names
+resources = str(Path(__file__).parent.parent / "utils" / "resources")
+residues_source = resources + '/residues.json'
+
+# This script is used to count different type of atoms and residues in a pdb topology
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb
 def get_atoms_count (
@@ -27,50 +33,53 @@ def get_atoms_count (
     # Number of chlorine atoms
     cl = 0
 
+    # List all possible aminoacids
+    aminoacids = None
+    with open(residues_source, 'r') as file:
+        aminoacids = json.load(file)
+
     # Read the first frame pdb file and get the desired data
-    # Elements count in the pdb file is reset after element 9999
+    # Residue count in the pdb file is reset after residue 9999
     # Atoms count in the pdb file is reset after atom 99999
     with open(input_topology_filename, 'r') as file:
         
-        # Keep track of the current element
-        current_element = 0
-        
-        # List all possible aminoacids
-        aminoacids = ['ALA','ARG','ASN','ASP','CYS','GLU','GLN','GLY','HIS','ILE',
-        'LEU','LYS','MET','PHE','PRO','SER','THR','TRP','TYR','VAL']
+        # Keep track of the current residue
+        current_residue_number = 0
         
         for line in file:
             if(line.split()[0] == 'ATOM'):
                 systats += 1
                 
-                # Get the element number in this line
-                element = int(line[22:26])
+                # Get the residue number in this line
+                residue_number = int(line[22:26])
                 
-                # If the element in this line is different to the current element...
+                # If the residue number in this line is different to the current residue...
                 # Get its data and set it as the current
-                if(current_element != element):
-                    current_element = element
+                if(current_residue_number != residue_number):
+                    current_residue_number = residue_number
                     
-                    # Get the name of this element
-                    n = line[17:20]
+                    # Get the name of this residue
+                    residue_name = line[17:20].strip().upper()
                     
                     # If this is an aminoacid
-                    if (n in aminoacids):
+                    if (residue_name in aminoacids):
                         prot += 1
-                        n = 'PROT'
-                    elif(n == 'DPP'):
+                        residue_name = 'PROT'
+                    # DANI: Esto está fuertemente hardcodeado y fallará muchas veces
+                    # DANI: Habría que montar una librería con nombres de residuos de membrana
+                    elif(residue_name == 'DPP'):
                         dppc += 1
                         
-                if(n == 'PROT'):
+                if(residue_name == 'PROT'):
                     protats += 1
                     
-                if(n == 'SOL' or n == 'WAT'):
+                if(residue_name == 'SOL' or residue_name == 'WAT'):
                     sol += 1
                         
-                if(n == ' NA'):
+                if(residue_name == 'NA' or residue_name == 'NA+' or residue_name == 'K' or residue_name == 'K+'):
                     na += 1
                     
-                if(n == ' CL'):
+                if(residue_name == 'CL' or residue_name == 'CL-'):
                     cl += 1
 
     # Display it
