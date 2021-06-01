@@ -116,7 +116,9 @@ def sasa(
             # We divide the value by the number of atoms
             frame_sas = frame[r]
             normalized_frame_sas = frame_sas / atom_count
-            saspf.append(normalized_frame_sas)
+            # To make is standard with the rest of analyses we pass the results from nm² to A²
+            standard_frame_sas = normalized_frame_sas * 100
+            saspf.append(standard_frame_sas)
         # Calculate the mean and standard deviation of the residue sasa values
         mean = numpy.mean(saspf)
         stdv = numpy.std(saspf)
