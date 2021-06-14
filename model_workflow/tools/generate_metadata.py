@@ -16,6 +16,7 @@ def generate_metadata (
     inputs_filename : str,
     processed_interactions : list,
     snapshots : int,
+    charges: list,
     output_metadata_filename : str):
 
     # Set a function to retrieve 'inputs' values and handle missing keys
@@ -126,6 +127,7 @@ def generate_metadata (
         'CHAINNAMES': getInput('chainnames'),
         'EXCEPTIONS': exceptions,
         'MEMBRANES': getInput('membranes'),
+        'CHARGES': charges,
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:

@@ -1,22 +1,46 @@
 import pytraj as pt
 
+import os
 from pathlib import Path
+
+# Set the standard name for the input raw charges
+raw_charges_filename = 'charges.txt'
+
+# Extract charges from a source file
+def get_charges(charges_source_filename : str) -> list:
+    if not charges_source_filename or not os.path.exists(charges_source_filename):
+        return None
+    print('Charges in the "' + charges_source_filename + '" file will be used')
+    # In some ocasions, charges may come inside a raw charges file
+    if charges_source_filename == raw_charges_filename:
+        charges = get_raw_charges(raw_charges_filename)
+    # In some ocasions, charges may come inside a topology
+    else:
+        charges = get_topology_charges(charges_source_filename)
+        generate_raw_energies_file(charges)
+    return charges
 
 # Given a topology which includes charges
 # Extract those charges and save them in a list to be returned
 # Supported formats (tested): prmtop, top, psf (standard psf, not from DESRES)
 # Supported formats (not tested): mol2, cif, sdf
 # Non supported formats: mae, tpr, pdb (has no charges)
-def get_topology_charges (input_topology_filename : str):
+def get_topology_charges (input_topology_filename : str) -> list:
     topology = pt.load_topology(filename=input_topology_filename)
     # WARNING: We must convert this numpy ndarray to a normal list
     # Otherwise the search by index is extremly ineficient
     topology_charges = list(topology.charge)
     return topology_charges
 
+# Write the raw charges file from a list of charges
+def generate_raw_energies_file (charges : list, filename : str = raw_charges_filename):
+    with open(filename, 'w') as file:
+        for charge in charges:
+            file.write("{:.6f}".format(charge) + '\n')
+
 # Given a raw file with listed charges
 # Extract those charges and save them in a list to be returned
-def get_raw_charges (input_charges_filename : str):
+def get_raw_charges (input_charges_filename : str) -> list:
     charges = []
     with open(input_charges_filename, 'r') as file:
         lines = file.readlines()

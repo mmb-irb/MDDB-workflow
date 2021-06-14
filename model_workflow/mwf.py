@@ -30,6 +30,7 @@ from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.generate_metadata import generate_metadata
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_frames_count import get_frames_count
+from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 
 # Import local analyses
@@ -311,6 +312,11 @@ interactions = Dependency(process_interactions, {
     'topology_reference': topology_reference,
 }, 'interactions')
 
+# Find out residues and interface residues for each interaction
+charges = Dependency(get_charges, {
+    'charges_source_filename': charges_filename,
+}, 'charges')
+
 # Prepare the metadata output file
 metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'input_topology_filename': topology_filename,
@@ -318,6 +324,7 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'inputs_filename': inputs_filename,
     'processed_interactions': interactions,
     'snapshots': snapshots,
+    'charges': charges,
     'output_metadata_filename': OUTPUT_metadata_filename
 }, 'metadata')
 
@@ -329,6 +336,7 @@ tools = [
     corrector,
     interactions,
     snapshots,
+    charges,
 ]
 
 # Define all analyses
@@ -417,10 +425,10 @@ analyses = [
     File(OUTPUT_energies_filename, energies, {
         "input_topology_filename": topology_filename,
         "input_trajectory_filename": trajectory_filename,
-        "input_charges_filename": charges_filename,
         "output_analysis_filename": OUTPUT_energies_filename,
         "reference": topology_reference,
-        "interactions": interactions
+        "interactions": interactions,
+        'charges': charges,
     }, 'energies'),
     File(OUTPUT_pockets_filename, pockets, {
         "input_topology_filename": topology_filename,
