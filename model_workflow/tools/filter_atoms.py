@@ -6,7 +6,7 @@ import pytraj as pt
 raw_charges_filename = 'charges.txt'
 
 # Set the pytraj selection for not water and ions
-not_water = '!(:SOL,WAT)'
+not_water = '!(:SOL,WAT,HOH)'
 not_ions = '!(@CL,CL-,Cl,Cl-,NA,NA+,Na,Na+,K,K+)'
 filter_base = not_water + '&' + not_ions
 
