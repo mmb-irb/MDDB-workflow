@@ -3,7 +3,7 @@
 import os
 
 from model_workflow.tools.gromacs_processor import tpr2pdb, merge_xtc_files, get_first_frame
-from model_workflow.tools.mdtraj_processor import merge_dcd_files
+from model_workflow.tools.mdtraj_processor import merge_and_convert_traj
 from model_workflow.tools.vmd_processor import vmd_processor, psf_to_pdb
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
@@ -23,11 +23,17 @@ def is_xtc (filename : str) -> bool:
 def is_dcd (filename : str) -> bool:
     return filename[-4:] == '.dcd'
 
+def is_netcdf (filename : str) -> bool:
+    return filename[-3:] == '.nc'
+
 def are_xtc (filenames : list) -> bool:
     return all([ is_xtc(filename) for filename in filenames ])
 
 def are_dcd (filenames : list) -> bool:
     return all([ is_dcd(filename) for filename in filenames ])
+
+def are_netcdf (filenames : list) -> bool:
+    return all([ is_netcdf(filename) for filename in filenames ])
 
 def process_topology_and_trajectory (
     input_topology_filename : str,
@@ -41,6 +47,7 @@ def process_topology_and_trajectory (
     # This is done in first place since VMD does not handle tpr files
     if not os.path.exists(output_topology_filename) and is_pdb(input_topology_filename):
         os.rename(input_topology_filename, output_topology_filename)
+        input_topology_filename = output_topology_filename
 
     # In case the topology is a 'tpr' file convert it to pdb using gromacs
     # This is done in first place since VMD does not handle tpr files
@@ -62,7 +69,11 @@ def process_topology_and_trajectory (
 
     # In case the trajectory files are all dcd merge them using MDtraj mdconvert
     if not os.path.exists(output_trajectory_filename) and are_dcd(input_trajectory_filenames):
-        merge_dcd_files(input_trajectory_filenames, output_trajectory_filename)
+        merge_and_convert_traj(input_trajectory_filenames, output_trajectory_filename)
+
+    # In case the trajectory files are all netcdf merge them using MDtraj mdconvert
+    if not os.path.exists(output_trajectory_filename) and are_netcdf(input_trajectory_filenames):
+        merge_and_convert_traj(input_trajectory_filenames, output_trajectory_filename)
 
     # In case the topology is a psf file generate a pdb file from it using the first trajectory frame
     if not os.path.exists(output_topology_filename) and is_psf(input_topology_filename):

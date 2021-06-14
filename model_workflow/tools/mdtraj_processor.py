@@ -10,22 +10,17 @@ import mdtraj as mdt
 # Multiple files may be selected with bash syntax (e.g. *.dcd)
 # Tested supported input formats are .dcd
 # Tested supported output formats are .xtc
-def merge_dcd_files (
+def merge_and_convert_traj (
     input_filenames : list,
     output_filename : str
     ):
 
+    print('Converting: ' + str(input_filenames) + ' -> ' + output_filename)
+
     # Run MDtraj
-    logs = run([
+    run([
         "mdconvert",
         "-o",
         output_filename,
         *input_filenames,
-    ], stdout=PIPE).stdout.decode()
-
-# Get the first frame from a dcd file
-def get_dcd_first_frame (
-    input_filename : str,
-    output_filename : str):
-
-    mdt.iterload(input_filename)
+    ])
