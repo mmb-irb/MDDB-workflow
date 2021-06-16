@@ -495,10 +495,10 @@ def setup(
         # It may be a topology with charges or it may be a raw charges text file
         if not input_charges_filename:
             # Check if there is any topology file (e.g. topology.prmtop, topology.top, ...)
-            charges_file = next(f for f in files if f['filename'][0:9] == 'topology.')
+            charges_file = next(f for f in files if f['filename'][0:9] == 'topology.', None)
             # In case there is no topology, check if there is raw charges (i.e. 'charges.txt')
             if not charges_file:
-                charges_file = next(f for f in files if f['filename'] == 'charges.txt')
+                charges_file = next(f for f in files if f['filename'] == 'charges.txt', None)
             # In case there is neither raw charges we send a warning and stop here
             if not charges_file:
                 print('WARNING: There are no charges in this project')
