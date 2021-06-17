@@ -164,7 +164,8 @@ class TopologyReference:
         sel = self.topology.select(selection)
 
         if not sel:
-            raise SystemExit("ERROR: The selection '" + selection + "' matches no atom in the reference topology")
+            print("WARNING: The selection '" + selection + "' matches no atom in the reference topology")
+            return []
 
         # Getting residue chains
         chains = sel.getChids()
