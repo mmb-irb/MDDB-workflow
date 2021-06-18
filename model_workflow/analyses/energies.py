@@ -508,7 +508,33 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
         agent2_density,
         agent2_units)
 
-    # Set the new lines to be written in the local inputs file
+    # Here we must calculate how many grid points the new box would have
+    # In case the number of points exceeds a safe limit we must reduce it
+    # Otherwise CMIP could return the following error:
+    # ERROR when trying to allocate           -2092351636  bytes of memory
+
+    # Set the limit number of grid points
+    # It has been found experimentally: 65945880 Grid points -> OK, 68903412 Grid points -> ERROR
+    grid_points_limit = 65000000
+
+    # Set the default grid 'cells' size for all three dimensions
+    grid_unit_size = 0.5
+
+    # Calculate the amount of total points with current parameters
+    current_grid_points = (new_density[0] + 1) * (new_density[1] + 1) * (new_density[2] + 1)
+
+    # In case the current number of grid points exceeds the limit...
+    # Reduce all dimension densities in proportion and expand the grid units size to compensate
+    if current_grid_points > grid_points_limit:
+        print('WARNING: Grid points limit is exceeded (' + str(current_grid_points) + ')')
+        proportion = grid_points_limit / current_grid_points
+        new_density[0] = math.ceil(new_density[0] * proportion)
+        new_density[1] = math.ceil(new_density[1] * proportion)
+        new_density[2] = math.ceil(new_density[2] * proportion)
+        grid_unit_size = math.ceil(grid_unit_size / proportion * 1000) / 1000
+        print('WARNING: Grid resolution has been reduced -> unit size = ' + str(grid_unit_size))
+
+    # Set the new lines to be written in the local CMIP inputs file
     grid_inputs = [
         f" cenx={new_center[0]:.1f} \n",
         f" ceny={new_center[1]:.1f} \n",
@@ -516,9 +542,9 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
         f" dimx={int(new_density[0])} \n",
         f" dimy={int(new_density[1])} \n",
         f" dimz={int(new_density[2])} \n",
-        #" intx=0.5 \n",
-        #" inty=0.5 \n",
-        #" intz=0.5 \n",
+        f" intx={grid_unit_size} \n",
+        f" inty={grid_unit_size} \n",
+        f" intz={grid_unit_size} \n",
     ]
     # Add previous lines to the local inputs file
     with open(cmip_inputs, "r+") as file:
