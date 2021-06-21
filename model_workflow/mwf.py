@@ -502,8 +502,9 @@ def setup(
             # In case there is neither raw charges we send a warning and stop here
             if not charges_file:
                 print('WARNING: There are no charges in this project')
-            # In case we found a charges file set the input charges filename as this
-            input_charges_filename = charges_file['filename']
+            else:
+                # In case we found a charges file set the input charges filename as this
+                input_charges_filename = charges_file['filename']
         # Download the charges file
         if input_charges_filename and not os.path.exists(input_charges_filename):
             sys.stdout.write('Downloading charges (' + input_charges_filename + ')\n')
