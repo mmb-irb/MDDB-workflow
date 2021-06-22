@@ -77,7 +77,9 @@ def generate_metadata (
     for toporef in toporefs:
         # Find the corresponding stored topology reference and get its residues sequence
         name = toporef['name']
-        reference = next(st for st in stored_toporefs if st['name'] == name)
+        reference = next((st for st in stored_toporefs if st['name'] == name), None)
+        if not reference:
+            raise SystemExit('ERROR: The topology reference "' + name + '" is not defined in the workflow')
         reference_sequence = reference['sequence']
         reference_map = generate_map(reference_sequence, input_topology_filename)
         metadata_toporefs.append({
