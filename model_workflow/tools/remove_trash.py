@@ -28,7 +28,7 @@ def remove_trash():
 
     # Remove the 'restart' cmip file
     restart_filename = 'restart'
-    if os.path.exists(restart_file):
+    if os.path.exists(restart_filename):
 
         logs = run([
             "rm",
