@@ -99,13 +99,16 @@ def align (ref_sequence : str, new_sequence : str) -> list:
     aligned_sequence = best_alignment[1]
     print(format_alignment(*alignments[0]))
     score = alignments[0][2]
-    normalized_score = score / len(aligned_sequence)
+    # WARNING: Do not use 'aligned_sequence' length here since it has the total sequence length
+    normalized_score = score / len(new_sequence)
     print('Normalized score: ' + str(normalized_score))
 
     # If the normalized score does not reaches the minimum we consider the alignment is not valid
     # It may happen when the reference goes for a specific chain but we must map all chains
-    # This 0.4 has been found experimentally
-    if normalized_score < 0.1:
+    # This 1 has been found experimentally
+    # Non maching sequence may return a 0.1-0.3 normalized score
+    # Matching sequence may return >4 normalized score
+    if normalized_score < 1:
         print('Not valid alignment')
         return [ None for letter in new_sequence ]
 
