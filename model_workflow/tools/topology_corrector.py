@@ -161,7 +161,8 @@ def topology_corrector(
     # ATOM      1  C   UNK L   0   -->   ATOM      1  C2  UNK L   0
     # ATOM      1  C   UNK L   0   -->   ATOM      1  C3  UNK L   0
 
-    reporter = 0  # Just count how many atoms have been renamed for the report
+    reporter = 0  # Just count how many atoms have been renamed for the output logs
+    example = None # Just save an example of a renamed atom for the output logs
     residues = test.iterResidues()
     for r in residues:
         # Iterate over the residue atoms and change all their names
@@ -185,6 +186,8 @@ def topology_corrector(
                 number += 1
                 new_name = initial + str(number)
             counter[new_name] += 1
+            if not example:
+                example = '(' + str(atom.getIndex() + 1) + ') ' + name + ' -> ' + new_name
             atom.setName(new_name)
             #print(str(atom.getIndex() + 1) + ' / ' + r.getResname() + ': ' + name + ' -> ' + new_name)
 
@@ -193,6 +196,7 @@ def topology_corrector(
         modified = True
         logs.append('- Some repeated atoms have been renamed')
         print('WARNING! There are ' + str(reporter) + ' repated atoms')
+        print('e.g. ' + example)
 
     # ------------------------------------------------------------------------------------------
     # Final output -----------------------------------------------------------------------------
