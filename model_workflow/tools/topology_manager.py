@@ -46,7 +46,7 @@ class sourceResidue:
         if not match:
             raise SystemExit("ERROR: Tag '" + tag + "' is not valid")
         chain_letter = match.group(1)
-        residue_number = match.group(2)
+        residue_number = int(match.group(2))
         icode = match.group(3)
         return cls(chain_letter, residue_number, icode)
     
