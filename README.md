@@ -83,9 +83,13 @@ If an error similar to "/slgpfs/projects/bsc23/bsc23088/mwf/bin/vmd: line 505: /
 
 Find the vmd path and modify the vmd executable.
 
-`find mwf | grep vmd_LINUX` (copy the path to the 'lib' directory, not to the vmd executable)
+`find mwf | grep vmd_LINUX`
 
-`vim mwf/bin/vmd` (modify the 'defaultvmddir' path as the previous copied path, relative to mwf)
+Copy the ABSOLUTE path to the 'lib' directory (not to the vmd executable)
+
+`vim mwf/bin/vmd`
+
+Now modify the 'defaultvmddir' path as the previous copied path
 
 At this point the workflow should be operative
 
@@ -95,9 +99,13 @@ Activate the mwf enviornment and type `gmx`
 
 If an error similar to "/opt/conda/conda-bld/gromacs_1618496378051/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_place/bin.SSE2/GMXRC: No existe el fichero o el directorio" is return then do the following:
 
-`find "$(pwd -P)" | grep GMXRC` (copy the path which contains all the bin."whatever" directories)
+`find "$(pwd -P)" | grep GMXRC`
 
-`vim mwf/bin/gmx` (modify all wrong paths as the previous copied path, absolute)
+Copy the path which contains all the bin."whatever" directories
+
+`vim mwf/bin/gmx`
+
+Modify all wrong paths as the previous copied path, absolute
 
 You may also have to modify the atom masses file to add elements typed with both upper case letters (e.g. 'ZN' in addition to 'Zn')
 
