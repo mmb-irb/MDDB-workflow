@@ -2,13 +2,10 @@ from subprocess import run, PIPE, Popen
 
 import pytraj as pt
 
-# Set the standard raw charges filename
-raw_charges_filename = 'charges.txt'
+from model_workflow.tools.get_charges import get_raw_charges, raw_charges_filename
 
-# Set the pytraj selection for not water and ions
-not_water = '!(:SOL,WAT,HOH)'
-not_ions = '!(@CL,CL-,Cl,Cl-,NA,NA+,Na,Na+,K,K+)'
-filter_base = not_water + '&' + not_ions
+# Set the pytraj selection for not water
+not_water_mask = '!(:SOL,WAT,HOH)'
 
 # Filter atoms of all input topologies by remvoing atoms and ions
 # As an exception, some water and ions may be not removed if specified
@@ -41,9 +38,8 @@ def filter_atoms (
         charges_topology = pt.load_topology(filename=charges_filename)
         charges_atoms_count = charges_topology.n_atoms
 
-    # Use pytraj to filter the charges topology
-    # WARNING: It is saved in prmtop format by default
-    filter_string = filter_base
+    # Set the pytraj mask to filter the desired atoms
+    filter_string = '(' + not_water_mask + '&!(' + get_counter_ions_mask(topology_filename) + '))'
     for exception in exceptions:
         filter_string += '|' + exception['selection']
 
@@ -84,6 +80,42 @@ def filter_atoms (
             format='amberparm',
             overwrite=True
         )
+    # In case we have a raw charges file check the number of charges matches the number of fileterd atoms
+    if charges_filename and charges_filename == raw_charges_filename:
+        charges = get_raw_charges(charges_filename)
+        charges_count = len(charges)
+        if charges_count != filtered_atoms_count:
+            raise SystemExit("Charges count in '" + raw_charges_filename + "' does not match the number of filtered atoms: " + str(filtered_atoms_count))
+
+# Get a pytraj selection with all counter ions
+counter_ions = ['K', 'NA', 'CL']
+def get_counter_ions_mask (topology_filename : str) -> str:
+    pt_topology = pt.load_topology(filename=topology_filename)
+
+    # Get all atoms from single atom residues
+    single_atoms = []
+    for residue in pt_topology.residues:
+        if residue.n_atoms != 1:
+            continue
+        single_atoms.append(residue.first_atom_index)
+
+    # Get a list with all topology atoms
+    atoms = list(pt_topology.atoms)
+
+    # Get atoms whose name matches any counter ion names list
+    counter_ion_atoms = []
+    for atom_index in single_atoms:
+        atom = atoms[atom_index]
+        atom_name = atom.name.upper()
+        # Remove possible '+' and '-' signs by keeping only letters
+        simple_atom_name = ''.join(filter(str.isalpha, atom_name))
+        if simple_atom_name in counter_ions:
+            counter_ion_atoms.append(atom_index)
+            
+    # Return atoms in a pytraj mask format
+    counter_ions_mask = '@' + ','.join(counter_ion_atoms)
+    return counter_ions_mask
+
 
 
 # --------------------------------------------------------------------------------------------
