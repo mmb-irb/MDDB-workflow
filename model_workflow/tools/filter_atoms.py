@@ -4,6 +4,9 @@ import pytraj as pt
 
 from model_workflow.tools.get_charges import get_raw_charges, raw_charges_filename
 
+# Set the name for the group name in gromacs ndx file
+filter_group_name = "not_water_or_counter_ions"
+
 # Set the pytraj selection for not water
 not_water_mask = '!(:SOL,WAT,HOH)'
 
@@ -39,7 +42,10 @@ def filter_atoms (
         charges_atoms_count = charges_topology.n_atoms
 
     # Set the pytraj mask to filter the desired atoms
-    filter_string = '(' + not_water_mask + '&!(' + get_counter_ions_mask(topology_filename) + '))'
+    filter_string = not_water_mask
+    counter_ions_filter = get_counter_ions_mask(topology_filename)
+    if counter_ions_filter:
+        filter_string = '(' + not_water_mask + '&!(' + counter_ions_filter + '))'
     for exception in exceptions:
         filter_string += '|' + exception['selection']
 
@@ -64,14 +70,20 @@ def filter_atoms (
     print('Filtered number of atoms: ' + str(filtered_atoms_count))
     if filtered_atoms_count < atoms_count:
         print('Filtering structure and trajectory...')
-        filtered_trajectory = trajectory[filter_string]
-        pt.write_traj(trajectory_filename, filtered_trajectory, overwrite=True)
-        pt.write_traj(
-            filename=topology_filename,
-            # DANI: No he encontrado otra manera de exportar a pdb con pytraj
-            traj=filtered_trajectory[0:1],
-            overwrite=True
-        )
+        # Filter both topology and trajectory using Gromacs, since is more efficient than pytraj
+        # Set up an 'index.ndx' file with all atom indices manually
+        # As long as indices are for atoms and not residues there should never be any incompatibility
+        indexes_filename = 'filter.ndx'
+        pytraj_mask_2_gromacs_ndx(topology, { filter_group_name : filter_string }, indexes_filename)
+        gromacs_filter(topology_filename, trajectory_filename, topology_filename, trajectory_filename, indexes_filename)
+        #filtered_trajectory = trajectory[filter_string]
+        #pt.write_traj(trajectory_filename, filtered_trajectory, overwrite=True)
+        # pt.write_traj(
+        #     filename=topology_filename,
+        #     # DANI: No he encontrado otra manera de exportar a pdb con pytraj
+        #     traj=filtered_trajectory[0:1],
+        #     overwrite=True
+        # )
     if filtrable_charges and filtered_charges_atoms_count < charges_atoms_count:
         print('Filtering charges topology...')
         pt.write_parm(
@@ -110,42 +122,30 @@ def get_counter_ions_mask (topology_filename : str) -> str:
         # Remove possible '+' and '-' signs by keeping only letters
         simple_atom_name = ''.join(filter(str.isalpha, atom_name))
         if simple_atom_name in counter_ions:
-            counter_ion_atoms.append(atom_index)
-            
+            # Atom indices go from 0 to n-1
+            # Add +1 to the index since the mask selection syntax counts from 1 to n
+            counter_ion_atoms.append(str(atom_index +1))
+    
+    # Return None in case there are no counter ion atoms
+    if len(counter_ion_atoms) == 0:
+        return None
+    
     # Return atoms in a pytraj mask format
     counter_ions_mask = '@' + ','.join(counter_ion_atoms)
     return counter_ions_mask
 
 
-
 # --------------------------------------------------------------------------------------------
 
-# DANI: No se usa
+# Filter atoms in both a pdb and a xtc file
 def gromacs_filter(
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_topology_filename : str,
-    output_trajectory_filename : str
+    output_trajectory_filename : str,
+    indexes_filename : str
 ):
-    # First filter the base topology/structure (pdb) and the trajectory (xtc)
-
-    # Create indexes file to select only specific topology regions
-    indexes = 'indexes.ndx'
-    p = Popen([
-        "echo",
-        "!\"Water_and_ions\"\nq",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "make_ndx",
-        "-f",
-        input_topology_filename,
-        '-o',
-        indexes,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-
+    # First filter the base topology/structure (pdb) and then the trajectory (xtc)
     # Copy the original topology since we need it later to filter the trajectory
     # The original topology could be overwritten
     reference_topology = 'reference.topology.pdb'
@@ -158,7 +158,7 @@ def gromacs_filter(
     # Filter the topology
     p = Popen([
         "echo",
-        "!Water_and_ions",
+        filter_group_name,
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -170,16 +170,17 @@ def gromacs_filter(
         '-o',
         output_topology_filename,
         '-n',
-        indexes,
+        indexes_filename,
         '-dump',
-        '0'
+        '0',
+        '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
 
     # Filter the trajectory
     p = Popen([
         "echo",
-        "!Water_and_ions",
+        filter_group_name,
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -191,7 +192,8 @@ def gromacs_filter(
         '-o',
         output_trajectory_filename,
         '-n',
-        indexes
+        indexes_filename,
+        '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
 
@@ -200,3 +202,26 @@ def gromacs_filter(
         "rm",
         reference_topology
     ], stdout=PIPE).stdout.decode()
+
+# Use this function to create gromacs 'index.ndx' files to match pytraj mask selections in a given pytraj topology
+# Masks is a dict where each entry key will be the gromacs group name and each entry value is the mask string
+# e.g. { "my_solvent" : ":SOL,WAT,HOH", "my_ions" : "@17,18" }
+def pytraj_mask_2_gromacs_ndx (topology : 'Topology', masks : dict, output_filename : str = 'index.ndx'):
+    with open(output_filename, "w") as file:
+        for group_name, mask in masks.items():
+            # Find mask atom indices in the topology
+            atom_indices = list(topology.atom_indices(mask))
+            # Add a header with the name for each group
+            content = '[ ' + group_name + ' ]\n'
+            count = 0
+            for index in atom_indices:
+                # Add a breakline each 15 indices
+                count += 1
+                if count == 15:
+                    content += '\n'
+                    count = 0
+                # Add a space between indices
+                # Atom indices go from 0 to n-1
+                # Add +1 to the index since gromacs counts from 1 to n
+                content += str(index + 1) + ' '
+            file.write(content + '\n')
