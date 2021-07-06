@@ -35,11 +35,15 @@ def filter_atoms (
     # Set if charges must be filtered
     # i.e. they are not a raw charges filename
     filtrable_charges = charges_filename and charges_filename != raw_charges_filename
+    no_filtrable_charges = charges_filename and charges_filename == raw_charges_filename
 
     # Load the charges topology
     if filtrable_charges:
         charges_topology = pt.load_topology(filename=charges_filename)
         charges_atoms_count = charges_topology.n_atoms
+    elif no_filtrable_charges:
+        charges = get_raw_charges(charges_filename)
+        charges_atoms_count = len(charges)
 
     # Set the pytraj mask to filter the desired atoms
     filter_string = not_water_mask
@@ -84,6 +88,8 @@ def filter_atoms (
         #     traj=filtered_trajectory[0:1],
         #     overwrite=True
         # )
+    if charges_filename:
+        print ('Total number of charges: ' + str(charges_atoms_count))
     if filtrable_charges and filtered_charges_atoms_count < charges_atoms_count:
         print('Filtering charges topology...')
         pt.write_parm(
@@ -93,11 +99,9 @@ def filter_atoms (
             overwrite=True
         )
     # In case we have a raw charges file check the number of charges matches the number of fileterd atoms
-    if charges_filename and charges_filename == raw_charges_filename:
-        charges = get_raw_charges(charges_filename)
-        charges_count = len(charges)
+    if no_filtrable_charges and filtered_charges_atoms_count < charges_atoms_count:
         if charges_count != filtered_atoms_count:
-            raise SystemExit("Charges count in '" + raw_charges_filename + "' does not match the number of filtered atoms: " + str(filtered_atoms_count))
+            raise SystemExit("Charges count in '" + raw_charges_filename + "' does not match the number of filtered atoms: " + str(charges_atoms_count))
 
 # Get a pytraj selection with all counter ions
 counter_ions = ['K', 'NA', 'CL']
