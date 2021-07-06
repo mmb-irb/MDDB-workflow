@@ -14,6 +14,7 @@ from subprocess import run, PIPE, Popen
 def image_and_fit (
     input_topology_filename : str,
     input_trajectory_filename : str,
+    output_topology_filename : str,
     output_trajectory_filename : str,
     preprocess_protocol : int,
     ) -> str:
@@ -22,25 +23,6 @@ def image_and_fit (
 
     if preprocess_protocol == 0:
         return
-
-    # Create indexes file to select only specific topology regions
-    # DEPRECATED: Now this is done previously to the imaging process
-
-    # indexes = 'indexes.ndx'
-    # p = Popen([
-    #     "echo",
-    #     "!\"Water_and_ions\"\nq",
-    # ], stdout=PIPE)
-    # logs = run([
-    #     "gmx",
-    #     "make_ndx",
-    #     "-f",
-    #     input_topology_filename,
-    #     '-o',
-    #     indexes,
-    #     '-quiet'
-    # ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    # p.stdout.close()
 
     # Imaging --------------------------------------------------------------------------------------
 
@@ -204,7 +186,7 @@ def image_and_fit (
             output_trajectory_filename,
             '-trans',
             '0',
-            '4',
+            '3',
             '0',
             '-pbc',
             'atom', # 'residue' may work also
@@ -214,33 +196,7 @@ def image_and_fit (
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
 
-        # SECOND STEP
-        # Adapt the topology to the new reduced trayectory
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "convert-tpr",
-            "-s",
-            input_topology_filename,
-            '-o',
-            input_topology_filename,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-
-        # FURTHER STEPS
-        # New topology must me created to conserve the atoms translation before uing the '-pbc nojump' option
-        # Otherwise, the initial position of the topology would be used and the translation would be ignored
-        
-        # Set the new centered topolgy file name
-        # The format of the new topology must be .gro, since .tpr is not allowed and .pdb won't work
-        # This "temporal" topology is used only in the next steps and it is not required further
-        pivot_topology = 'topology.gro'
-
-        # Select the first frame of the recently centered trayectory as the new topology
+        # Select the first frame of the recently translated trayectory as the new topology
         p = Popen([
             "echo",
             "System",
@@ -253,7 +209,7 @@ def image_and_fit (
             "-f",
             output_trajectory_filename,
             '-o',
-            pivot_topology,
+            output_topology_filename,
             '-dump',
             '0',
             '-quiet'
@@ -269,7 +225,7 @@ def image_and_fit (
             "gmx",
             "trjconv",
             "-s",
-            pivot_topology,
+            output_topology_filename,
             "-f",
             output_trajectory_filename,
             '-o',

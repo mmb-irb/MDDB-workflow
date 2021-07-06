@@ -103,7 +103,8 @@ def process_topology_and_trajectory (
     # Fit the trajectory by removing the translation and rotation if it is required
     if preprocess_protocol > 0:
         image_and_fit(output_topology_filename, output_trajectory_filename,
-                      output_trajectory_filename, preprocess_protocol)
+                      output_topology_filename, output_trajectory_filename, 
+                      preprocess_protocol)
 
     # Examine and correct the topology file using ProDy
     topology_corrector(output_topology_filename, output_topology_filename)

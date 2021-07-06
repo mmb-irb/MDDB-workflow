@@ -243,6 +243,7 @@ filtering = Dependency(filter_atoms, {
 imaging = Dependency(image_and_fit, {
     'input_topology_filename': topology_filename,
     'input_trajectory_filename': trajectory_filename,
+    'output_topology_filename': topology_filename,
     'output_trajectory_filename': trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
 }, 'imaging')
