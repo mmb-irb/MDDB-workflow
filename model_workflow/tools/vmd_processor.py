@@ -156,6 +156,12 @@ def vmd_chainer (
         print(logs)
         raise SystemExit("ERROR: Something was wrong with VMD")
 
+    # Remove the commands file
+    run([
+        "rm",
+        commands_filename,
+    ], stdout=PIPE).stdout.decode()
+
     # Return VMD logs
     return logs
 
