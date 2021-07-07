@@ -19,8 +19,7 @@ from model_workflow.tools.vmd_processor import vmd_processor
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
-from model_workflow.tools.process_topology_and_trajectory import process_topology_and_trajectory
-from model_workflow.tools.process_charges_topology import process_charges_topology, find_energies_filename
+from model_workflow.tools.process_input_files import process_input_files, find_charges_filename, get_output_charges_filename
 from model_workflow.tools.topology_manager import TopologyReference
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
@@ -132,6 +131,7 @@ class File(Dependency):
 # WARNING: Thus, these are also the filenames in the database, API, and client
 OUTPUT_topology_filename = 'md.imaged.rot.dry.pdb'
 OUTPUT_trajectory_filename = 'md.imaged.rot.xtc'
+OUTPUT_charges_filename = get_output_charges_filename()
 OUTPUT_first_frame_filename = 'firstFrame.pdb'
 OUTPUT_backbone_filename = 'backbone.pdb'
 OUTPUT_average_structure_filename = 'average.pdb'
@@ -198,60 +198,63 @@ vmd = Dependency(vmd_processor, {
 
 # Preprocessing
 # This is equivalent to running 'vmd', 'imaging' and 'corrector' together
-process_topology_and_trajectory = Dependency(process_topology_and_trajectory, {
+process_input_files = Dependency(process_input_files, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filenames': original_trajectory_filenames,
+    'input_charges_filename': original_charges_filename,
     'output_topology_filename': OUTPUT_topology_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
+    'exceptions' : exceptions,
 })
 
 # Main topology and trajectory files
 # These may be created from the original topology and trajectory files after some processing
 # These files are then widely used along the workflow
 topology_filename = File(OUTPUT_topology_filename,
-    process_topology_and_trajectory.func,
-    process_topology_and_trajectory.args)
+    process_input_files.func,
+    process_input_files.args)
 trajectory_filename = File(OUTPUT_trajectory_filename,
-    process_topology_and_trajectory.func,
-    process_topology_and_trajectory.args)
-
-# Rename the charges filename if necessary
-process_charges_topology = Dependency(process_charges_topology, {
-    'input_charges_filename': original_charges_filename,
-})
+    process_input_files.func,
+    process_input_files.args)
 
 # Charges filename
 # This may be created from the original charges filename
 # This file is used for the energies analysis
-charges_filename = Dependency(
-    process_charges_topology.func,
-    process_charges_topology.args)
+charges_filename = File(OUTPUT_charges_filename,
+    process_input_files.func,
+    process_input_files.args)
 
 # Filter atoms to remove water and ions
 # As an exception, some water and ions may be not removed if specified
+# WARNING: This is the independent call for this function
+# WARNING: In the canonical workflow, this function is called inside 'process_input_files'
 filtering = Dependency(filter_atoms, {
-    'topology_filename' : topology_filename,
-    'trajectory_filename' : trajectory_filename,
-    'charges_filename' : charges_filename,
+    'topology_filename' : original_topology_filename,
+    'trajectory_filename' : original_trajectory_filenames,
+    'charges_filename' : original_charges_filename,
     'exceptions': exceptions,
 }, 'filter')
 
 # Image the trajectory if it is required
 # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
 # Fit the trajectory by removing the translation and rotation if it is required
+# WARNING: This is the independent call for this function
+# WARNING: In the canonical workflow, this function is called inside 'process_input_files'
 imaging = Dependency(image_and_fit, {
-    'input_topology_filename': topology_filename,
-    'input_trajectory_filename': trajectory_filename,
-    'output_topology_filename': topology_filename,
-    'output_trajectory_filename': trajectory_filename,
+    'input_topology_filename': original_topology_filename,
+    'input_trajectory_filename': original_trajectory_filenames,
+    'output_topology_filename': original_topology_filename,
+    'output_trajectory_filename': original_trajectory_filenames,
     'preprocess_protocol': preprocess_protocol,
 }, 'imaging')
 
 # Examine and correct the topology file using ProDy
+# WARNING: This is the independent call for this function
+# WARNING: In the canonical workflow, this function is called inside 'process_input_files'
 corrector = Dependency(topology_corrector, {
-    'input_topology_filename': topology_filename,
-    'output_topology_filename': topology_filename
+    'input_topology_filename': original_topology_filename,
+    'output_topology_filename': original_trajectory_filenames
 }, 'corrector')
 
 # Create an object with the topology data in both ProDy and Pytraj formats
@@ -479,14 +482,14 @@ def setup(
         # Download the topology file if it does not exists
         if not os.path.exists(input_topology_filename):
             sys.stdout.write('Downloading topology (' + input_topology_filename + ')\n')
-            topology_url = project_url + '/files/' + OUTPUT_topology_filename
+            topology_url = project_url + '/files/' + input_topology_filename
             urllib.request.urlretrieve(topology_url, input_topology_filename)
         # Iterate over requested trajectory files
         for input_trajectory_filename in input_trajectory_filenames:
             # Download the trajectory file if it does not exists
             if not os.path.exists(input_trajectory_filename):
                 sys.stdout.write('Downloading trajectory (' + input_trajectory_filename + ')\n')
-                trajectory_url = project_url + '/files/' + OUTPUT_trajectory_filename
+                trajectory_url = project_url + '/files/' + input_trajectory_filename
                 urllib.request.urlretrieve(trajectory_url, input_trajectory_filename)
         # Check which files are available for this project
         files_url = project_url + '/files'
@@ -564,9 +567,10 @@ def main():
 
     # Run tools which must be run always
     # They better be fast
-    filtering.value
-    imaging.value
-    corrector.value
+    process_input_files.value
+    # filtering.value
+    # imaging.value
+    # corrector.value
 
     # If setup is passed as True then exit as soon as the setup is finished
     if args.setup:
@@ -605,7 +609,7 @@ current_directory = Path.cwd()
 DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
 DEFAULT_input_trajectory_filenames = ['md.imaged.rot.xtc']
 DEFAULT_inputs_filename = 'inputs.json'
-DEFAULT_input_charges_filename = find_energies_filename()
+DEFAULT_input_charges_filename = find_charges_filename()
 
 # Set optional arguments
 parser.add_argument(
