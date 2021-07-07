@@ -75,19 +75,16 @@ def filter_atoms (
     if filtered_atoms_count < atoms_count:
         print('Filtering structure and trajectory...')
         # Filter both topology and trajectory using Gromacs, since is more efficient than pytraj
-        # Set up an 'index.ndx' file with all atom indices manually
+        # Set up an index file with all atom indices manually
         # As long as indices are for atoms and not residues there should never be any incompatibility
-        indexes_filename = 'filter.ndx'
-        pytraj_mask_2_gromacs_ndx(topology, { filter_group_name : filter_string }, indexes_filename)
-        gromacs_filter(topology_filename, trajectory_filename, topology_filename, trajectory_filename, indexes_filename)
-        #filtered_trajectory = trajectory[filter_string]
-        #pt.write_traj(trajectory_filename, filtered_trajectory, overwrite=True)
-        # pt.write_traj(
-        #     filename=topology_filename,
-        #     # DANI: No he encontrado otra manera de exportar a pdb con pytraj
-        #     traj=filtered_trajectory[0:1],
-        #     overwrite=True
-        # )
+        index_filename = 'filter.ndx'
+        pytraj_mask_2_gromacs_ndx(topology, { filter_group_name : filter_string }, index_filename)
+        gromacs_filter(topology_filename, trajectory_filename, topology_filename, trajectory_filename, index_filename)
+        # Remove the index file
+        run([
+            "rm",
+            index_filename,
+        ], stdout=PIPE).stdout.decode()
     if charges_filename:
         print ('Total number of charges: ' + str(charges_atoms_count))
     if filtrable_charges and filtered_charges_atoms_count < charges_atoms_count:
@@ -147,7 +144,7 @@ def gromacs_filter(
     input_trajectory_filename : str,
     output_topology_filename : str,
     output_trajectory_filename : str,
-    indexes_filename : str
+    index_filename : str
 ):
     # First filter the base topology/structure (pdb) and then the trajectory (xtc)
     # Copy the original topology since we need it later to filter the trajectory
@@ -174,7 +171,7 @@ def gromacs_filter(
         '-o',
         output_topology_filename,
         '-n',
-        indexes_filename,
+        index_filename,
         '-dump',
         '0',
         '-quiet'
@@ -196,7 +193,7 @@ def gromacs_filter(
         '-o',
         output_trajectory_filename,
         '-n',
-        indexes_filename,
+        index_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
