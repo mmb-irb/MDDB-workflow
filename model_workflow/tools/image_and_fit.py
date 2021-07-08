@@ -26,39 +26,16 @@ def image_and_fit (
 
     # Imaging --------------------------------------------------------------------------------------
 
-    # Only fitting
-    if preprocess_protocol == 1:
-        # Although only fitting is required, we must make sure atoms won't jump during the fitting
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            input_topology_filename,
-            "-f",
-            input_trajectory_filename,
-            '-o',
-            output_trajectory_filename,
-            '-pbc',
-            'nojump',
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    # Only fitting (protocol 1) has nothing to do here
 
     # Single protein
     if preprocess_protocol == 2:
 
-        # FIRST STEP
-        # Process the trajectory to center the protein in the simulation
-        # Output only non water and non ion atoms
-        # '-pbc nojump' sets atoms to dont jump across the box
-        # Use this for a protein inside a membrane
+        # Basic imaging
+        # '-pbc mol' sets atoms in the same molecule to stay together
         p = Popen([
             "echo",
-            "Protein",
+            "System",
             "System",
         ], stdout=PIPE)
         logs = run([
@@ -68,92 +45,6 @@ def image_and_fit (
             input_topology_filename,
             "-f",
             input_trajectory_filename,
-            '-o',
-            output_trajectory_filename,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-
-        # SECOND STEP
-        # Adapt the topology to the new reduced trayectory
-        # Create the new reduced topology as the current 'topology'
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "convert-tpr",
-            "-s",
-            input_topology_filename,
-            '-o',
-            input_topology_filename,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-        
-    # Protein inside membrane
-    elif preprocess_protocol == 3:
-
-        # FIRST STEP
-        # Process the trajectory to center the protein in the simulation
-        # Output only non water and non ion atoms
-        # '-pbc nojump' sets atoms to dont jump across the box
-        # Use this for a protein inside a membrane
-        p = Popen([
-            "echo",
-            "Protein",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            input_topology_filename,
-            "-f",
-            input_trajectory_filename,
-            '-o',
-            output_trajectory_filename,
-            '-pbc',
-            'nojump',
-            '-center',
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-
-        # SECOND STEP
-        # Adapt the topology to the new reduced trayectory
-        # Create the new reduced topology as the current 'topology'
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "convert-tpr",
-            "-s",
-            input_topology_filename,
-            '-o',
-            input_topology_filename,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-
-        # FURTHER STEPS
-        # '-pbc mol' sets the type of periodic boundary condition treatment and puts the center of mass of molecules in the box
-        # '-ur compact' sets the unit cell representation and puts all atoms at the closest distance from the center of the box
-        p = Popen([
-            "echo",
-            "Protein",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            input_topology_filename,
-            "-f",
-            output_trajectory_filename,
             '-o',
             output_trajectory_filename,
             '-pbc',
@@ -165,8 +56,50 @@ def image_and_fit (
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
 
-    # Two interacting proteins
-    elif preprocess_protocol == 4:
+        # Select the first frame of the recently translated trayectory as the new topology
+        p = Popen([
+            "echo",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            input_topology_filename,
+            "-f",
+            output_trajectory_filename,
+            '-o',
+            output_topology_filename,
+            '-dump',
+            '0',
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
+
+        # Basic imaging
+        # '-pbc mol' sets atoms in the same molecule to stay together
+        p = Popen([
+            "echo",
+            "System",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            output_topology_filename,
+            "-f",
+            output_trajectory_filename,
+            '-o',
+            output_trajectory_filename,
+            '-pbc',
+            'nojump',
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
+
+    # Two interacting proteins, which may need to be translated
+    elif preprocess_protocol == 3:
 
         # FIRST STEP
         # Translate all atoms inside the box so the contact zone between both proteins is in the box center
@@ -186,7 +119,7 @@ def image_and_fit (
             output_trajectory_filename,
             '-trans',
             '0',
-            '3',
+            '4',
             '0',
             '-pbc',
             'atom', # 'residue' may work also
@@ -216,25 +149,31 @@ def image_and_fit (
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
 
-        # Finally, perform the '-pbc nojump' to avoid non-sense jumping of any protein or atom
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            output_topology_filename,
-            "-f",
-            output_trajectory_filename,
-            '-o',
-            output_trajectory_filename,
-            '-pbc',
-            'nojump',
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    else:
+        raise ValueError('There is no process protocol ' + str(preprocess_protocol))
+
+    # -----------------------------------------------------------------------------------------------
+
+    # Perform the '-pbc nojump' to avoid non-sense jumping of any protein or atom
+    # This step is mandatory for all protocols
+    p = Popen([
+        "echo",
+        "System",
+    ], stdout=PIPE)
+    logs = run([
+        "gmx",
+        "trjconv",
+        "-s",
+        output_topology_filename,
+        "-f",
+        output_trajectory_filename,
+        '-o',
+        output_trajectory_filename,
+        '-pbc',
+        'nojump',
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
 
     # Fitting --------------------------------------------------------------------------------------
 
