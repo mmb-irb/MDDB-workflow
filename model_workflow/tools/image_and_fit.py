@@ -48,10 +48,8 @@ def image_and_fit (
             '-o',
             output_trajectory_filename,
             '-pbc',
-            'mol',
+            'atom',
             '-center',
-            '-ur',
-            'compact',
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
@@ -72,28 +70,6 @@ def image_and_fit (
             output_topology_filename,
             '-dump',
             '0',
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-
-        # Basic imaging
-        # '-pbc mol' sets atoms in the same molecule to stay together
-        p = Popen([
-            "echo",
-            "System",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            output_topology_filename,
-            "-f",
-            output_trajectory_filename,
-            '-o',
-            output_trajectory_filename,
-            '-pbc',
-            'nojump',
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
