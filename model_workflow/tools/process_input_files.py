@@ -2,7 +2,7 @@
 
 import os
 
-from model_workflow.tools.gromacs_processor import tpr2pdb, merge_xtc_files, get_first_frame
+from model_workflow.tools.gromacs_processor import topology_to_pdb, merge_xtc_files, get_first_frame
 from model_workflow.tools.mdtraj_processor import merge_and_convert_traj
 from model_workflow.tools.vmd_processor import vmd_processor, psf_to_pdb
 from model_workflow.tools.filter_atoms import filter_atoms
@@ -19,6 +19,9 @@ def is_psf (filename : str) -> bool:
 
 def is_tpr (filename : str) -> bool:
     return filename[-4:] == '.tpr'
+
+def is_gro (filename : str) -> bool:
+    return filename[-4:] == '.gro'
 
 # Trajectory file formats
 
@@ -74,12 +77,11 @@ def process_input_files (
         os.rename(input_topology_filename, output_topology_filename)
         input_topology_filename = output_topology_filename
 
-    # In case the topology is a 'tpr' file convert it to pdb using gromacs
+    # In case the topology is a 'tpr' or a 'gro' file convert it to pdb using gromacs
     # This is done in first place since VMD does not handle tpr files
-    if not os.path.exists(output_topology_filename) and is_tpr(input_topology_filename):
-        pdb_filename = input_topology_filename[:-4] + '.pdb'
-        tpr2pdb(input_topology_filename, input_trajectory_filenames[0], pdb_filename)
-        input_topology_filename = pdb_filename
+    if not os.path.exists(output_topology_filename) and ( is_tpr(input_topology_filename) or is_gro(input_topology_filename)):
+        topology_to_pdb(input_topology_filename, input_trajectory_filenames[0], output_topology_filename)
+        input_topology_filename = output_topology_filename
 
     # In case the trajectory is a single 'xtc' file just rename it
     if (not os.path.exists(output_trajectory_filename)
