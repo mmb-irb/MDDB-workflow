@@ -135,7 +135,9 @@ Input files may be download from an already uploaded project:
 
 By default, data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
 
-By default, the workflow is run when all required stuff is already downloaded. The exit may be forced before running the workflow with the `-s` option.
+By default, the whole workflow is run.
+The exit may be forced after downloading input files with the `-d` option.
+The exit may be forced after downloading input files and/or running mandatory input files processing with the `-s` option.
 
 Run the workflow but include only specific analyses or tools:
 

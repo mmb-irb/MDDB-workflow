@@ -452,7 +452,7 @@ requestables = [ *analyses, *tools, metadata_filename ]
 
 # Manage the working directory
 # Download topology, trajectory and inputs files from MoDEL if a project is specified
-def setup(
+def download_input_files(
         directory: str,
         project: str,
         url: str,
@@ -545,7 +545,7 @@ def main():
     })
 
     # Manage the working directory and make the required downloads
-    setup(
+    download_input_files(
         directory=Path(args.working_dir).resolve(),
         project=args.project,
         url=args.url,
@@ -553,6 +553,10 @@ def main():
         input_trajectory_filenames=input_trajectory_filenames,
         input_charges_filename=input_charges_filename,
         inputs_filename=inputs_filename )
+
+    # If download is passed as True then exit as soon as the setup is finished
+    if args.download:
+        return
 
     if not os.path.exists(input_topology_filename):
         raise SystemExit('ERROR: Missing input topology file "' + input_topology_filename + '"')
@@ -568,9 +572,6 @@ def main():
     # Run tools which must be run always
     # They better be fast
     process_input_files.value
-    # filtering.value
-    # imaging.value
-    # corrector.value
 
     # If setup is passed as True then exit as soon as the setup is finished
     if args.setup:
@@ -664,6 +665,11 @@ parser.add_argument(
         "2. Single protein\n"
         "3. Protein in membrane\n"
         "4. Two interacting proteins"))
+
+parser.add_argument(
+    "-d", "--download",
+    action='store_true',
+    help="If passed, only download required files. Then exits.")
 
 parser.add_argument(
     "-s", "--setup",
