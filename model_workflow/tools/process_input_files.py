@@ -2,60 +2,13 @@
 
 import os
 
+from model_workflow.tools.formats import is_pdb, is_psf, is_tpr, is_gro, is_xtc, is_dcd, is_netcdf, are_xtc, are_dcd, are_netcdf, is_raw, is_prmtop, is_top, is_psf, raw_charges_filename
 from model_workflow.tools.gromacs_processor import topology_to_pdb, merge_xtc_files, get_first_frame
 from model_workflow.tools.mdtraj_processor import merge_and_convert_traj
 from model_workflow.tools.vmd_processor import vmd_processor, psf_to_pdb
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
-
-# Topology file formats
-
-def is_pdb (filename : str) -> bool:
-    return filename[-4:] == '.pdb'
-
-def is_psf (filename : str) -> bool:
-    return filename[-4:] == '.psf'
-
-def is_tpr (filename : str) -> bool:
-    return filename[-4:] == '.tpr'
-
-def is_gro (filename : str) -> bool:
-    return filename[-4:] == '.gro'
-
-# Trajectory file formats
-
-def is_xtc (filename : str) -> bool:
-    return filename[-4:] == '.xtc'
-
-def is_dcd (filename : str) -> bool:
-    return filename[-4:] == '.dcd'
-
-def is_netcdf (filename : str) -> bool:
-    return filename[-3:] == '.nc'
-
-def are_xtc (filenames : list) -> bool:
-    return all([ is_xtc(filename) for filename in filenames ])
-
-def are_dcd (filenames : list) -> bool:
-    return all([ is_dcd(filename) for filename in filenames ])
-
-def are_netcdf (filenames : list) -> bool:
-    return all([ is_netcdf(filename) for filename in filenames ])
-
-# Charges file formats
-raw_charges_filename = 'charges.txt'
-def is_raw (filename : str) -> bool:
-    return filename == raw_charges_filename
-
-def is_prmtop (filename : str) -> bool:
-    return filename[-7:] == '.prmtop'
-
-def is_top (filename : str) -> bool:
-    return filename[-4:] == '.top'
-
-def is_psf (filename : str) -> bool:
-    return filename[-4:] == '.psf'
 
 # Process input files: topology, trajectory and charges
 # These files must be processed all together since they depend on each other
@@ -127,6 +80,7 @@ def process_input_files (
 
     # Process charges file
     # Rename it according to standards
+    output_charges_filename = None
     if input_charges_filename and os.path.exists(input_charges_filename):
         # If it is a 'charges.txt' then we do not have to rename it
         if is_raw(input_charges_filename):
@@ -138,6 +92,10 @@ def process_input_files (
             output_charges_filename = 'topology.top'
         elif is_psf(input_charges_filename):
             output_charges_filename = 'topology.psf'
+        elif is_tpr(input_charges_filename):
+            output_charges_filename = 'topology.tpr'
+        else:
+            raise ValueError('Charges file is in a non supported format')
         
         if not os.path.exists(output_charges_filename):
             os.rename(input_charges_filename, output_charges_filename)
@@ -171,6 +129,8 @@ def get_output_charges_filename():
             return 'topology.top'
         elif is_psf(filename):
             return 'topology.psf'
+        elif is_tpr(filename):
+            return 'topology.tpr'
     return None
 
 # Find out if there is any of the standard topology filenames in the current directory
@@ -184,6 +144,7 @@ def find_charges_filename():
         'topology.prmtop',
         'topology.top',
         'topology.psf',
+        'topology.tpr',
     ]
 
     # Return the first existing standard filename

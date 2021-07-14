@@ -2,6 +2,10 @@ import pytraj as pt
 
 import os
 from pathlib import Path
+from subprocess import Popen, PIPE
+import re
+
+from model_workflow.tools.formats import is_raw, is_prmtop, is_top, is_psf, is_tpr
 
 # Set the standard name for the input raw charges
 raw_charges_filename = 'charges.txt'
@@ -12,12 +16,17 @@ def get_charges(charges_source_filename : str) -> list:
         return None
     print('Charges in the "' + charges_source_filename + '" file will be used')
     # In some ocasions, charges may come inside a raw charges file
-    if charges_source_filename == raw_charges_filename:
+    if is_raw(charges_source_filename):
         charges = get_raw_charges(raw_charges_filename)
-    # In some ocasions, charges may come inside a topology
-    else:
+    # In some ocasions, charges may come inside a topology which can be parsed through pytraj
+    elif is_prmtop(charges_source_filename) or is_top(charges_source_filename) or is_psf(charges_source_filename):
         charges = get_topology_charges(charges_source_filename)
-        generate_raw_energies_file(charges)
+        # DANI: De momento ya no generaré más charges.txt ahora que las cargas estan en la metadata
+        #generate_raw_energies_file(charges)
+    elif is_tpr(charges_source_filename):
+        charges = get_tpr_charges(charges_source_filename)
+    else:
+        raise ValueError('Charges file is in a non supported format')
     return charges
 
 # Given a topology which includes charges
@@ -46,6 +55,29 @@ def get_raw_charges (input_charges_filename : str) -> list:
         lines = file.readlines()
         for line in lines:
             charges.append(float(line))
+    return charges
+
+# Given a tpr file, extract charges in a list
+def get_tpr_charges (input_charges_filename : str) -> list:
+    charges = []
+    # Read the tpr file making a 'dump'
+    readable_tpr = Popen([
+        "gmx",
+        "dump",
+        "-s",
+        input_charges_filename,
+        "-quiet"
+    ], stdout=PIPE).stdout
+    # Mine the atomic charges
+    for line in readable_tpr:
+        line = line.decode()
+        # Skip everything which is not atomic charges data
+        if line[0:16] != '            atom':
+            continue
+        # Parse the line to get only charges
+        search = re.search(r"q=([0-9e+-. ]*),", line)
+        if search:
+            charges.append(float(search[1]))
     return charges
 
 # Set the path to the source res.lib file
