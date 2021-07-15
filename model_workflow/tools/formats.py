@@ -45,3 +45,7 @@ def is_top (filename : str) -> bool:
 
 def is_psf (filename : str) -> bool:
     return filename[-4:] == '.psf'
+
+# Extra formats logic
+def is_pytraj_supported (filename : str) -> bool:
+    return is_prmtop(filename) or is_top(filename) or is_psf(filename)

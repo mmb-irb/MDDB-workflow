@@ -5,7 +5,7 @@ from pathlib import Path
 from subprocess import Popen, PIPE
 import re
 
-from model_workflow.tools.formats import is_raw, is_prmtop, is_top, is_psf, is_tpr
+from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr
 
 # Set the standard name for the input raw charges
 raw_charges_filename = 'charges.txt'
@@ -19,7 +19,7 @@ def get_charges(charges_source_filename : str) -> list:
     if is_raw(charges_source_filename):
         charges = get_raw_charges(raw_charges_filename)
     # In some ocasions, charges may come inside a topology which can be parsed through pytraj
-    elif is_prmtop(charges_source_filename) or is_top(charges_source_filename) or is_psf(charges_source_filename):
+    elif is_pytraj_supported(charges_source_filename):
         charges = get_topology_charges(charges_source_filename)
         # DANI: De momento ya no generaré más charges.txt ahora que las cargas estan en la metadata
         #generate_raw_energies_file(charges)
