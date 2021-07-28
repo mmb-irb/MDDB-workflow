@@ -71,6 +71,8 @@ def vmd_processor (
         "none"
     ], stdout=PIPE).stdout.decode()
 
+    os.remove(commands_filename)
+
     # Check the output files have been created
     # Otherwise print logs and throw an error
     if not ( os.path.exists(output_topology_filename) and ( os.path.exists(processed_trajectory) or os.path.exists(output_trajectory_filename) ) ) :
@@ -156,11 +158,7 @@ def vmd_chainer (
         print(logs)
         raise SystemExit("ERROR: Something was wrong with VMD")
 
-    # Remove the commands file
-    run([
-        "rm",
-        commands_filename,
-    ], stdout=PIPE).stdout.decode()
+    os.remove(commands_filename)
 
     # Return VMD logs
     return logs
@@ -192,3 +190,5 @@ def psf_to_pdb (
         "-dispdev",
         "none"
     ], stdout=PIPE).stdout.decode()
+
+    os.remove(commands_filename)

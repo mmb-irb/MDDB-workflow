@@ -64,6 +64,7 @@ def process_input_files (
         single_frame_filename = 'frame.xtc'
         get_first_frame(output_trajectory_filename, single_frame_filename)
         psf_to_pdb(input_topology_filename, single_frame_filename, output_topology_filename)
+        os.remove(single_frame_filename)
 
     # Process the topology and or trajectory files using VMD
     # Files are converted to supported formats and trajectory pieces are merged into a single file
