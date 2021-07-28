@@ -27,9 +27,11 @@ def image_and_fit (
     # Imaging --------------------------------------------------------------------------------------
 
     # Only fitting (protocol 1) has nothing to do here
+    if preprocess_protocol == 1:
+        pass
 
     # Single protein
-    if preprocess_protocol == 2:
+    elif preprocess_protocol == 2:
 
         # Basic imaging
         # '-pbc mol' sets atoms in the same molecule to stay together
