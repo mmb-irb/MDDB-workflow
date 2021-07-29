@@ -47,5 +47,30 @@ def is_psf (filename : str) -> bool:
     return filename[-4:] == '.psf'
 
 # Extra formats logic
+
+# Check if a file may be read by pytraj according to its format
 def is_pytraj_supported (filename : str) -> bool:
     return is_prmtop(filename) or is_top(filename) or is_psf(filename)
+
+# From GitHub:
+# ParmFormatDict = {
+#     "AMBERPARM": AMBERPARM,
+#     "PDBFILE": PDBFILEPARM,
+#     "MOL2FILE": MOL2FILEPARM,
+#     "CHARMMPSF": CHARMMPSF,
+#     "CIFFILE": CIFFILE,
+#     "GMXTOP": GMXTOP,
+#     "SDFFILE": SDFFILE,
+#     "TINKER": TINKERPARM,
+#     "UNKNOWN_PARM": UNKNOWN_PARM,
+# }
+
+# Get the pytraj format key for the write_parm function for a specific file according to its format
+def get_pytraj_parm_format (filename : str) -> str:
+    if is_prmtop(filename):
+        return 'AMBERPARM'
+    if is_psf(filename):
+        return 'CHARMMPSF'
+    if is_top(filename):
+        return 'GMXTOP'
+    raise ValueError('The file ' + filename + ' format is not supported')

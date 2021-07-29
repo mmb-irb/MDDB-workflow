@@ -4,7 +4,7 @@ from subprocess import run, PIPE, Popen
 import pytraj as pt
 
 from model_workflow.tools.get_charges import get_raw_charges, raw_charges_filename, get_tpr_charges
-from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr
+from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr, get_pytraj_parm_format
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -80,11 +80,11 @@ def filter_atoms (
             filtered_charges_topology = charges_topology[filter_mask]
             filtered_charges_atoms_count = filtered_charges_topology.n_atoms
             # If there is a difference in atom counts then write the filtered topology
-            if filtered_charges_atoms_count > charges_atoms_count:
+            if filtered_charges_atoms_count < charges_atoms_count:
                 pt.write_parm(
                     filename=charges_filename,
                     top=filtered_charges_topology,
-                    format='amberparm',
+                    format=get_pytraj_parm_format(charges_filename),
                     overwrite=True
                 )
         # Gromacs format format
@@ -109,7 +109,7 @@ def filter_atoms (
         # Both filtered topology and charges must have the same number of atoms
         if filtered_atoms_count != filtered_charges_atoms_count:
             print('Filtered topology atoms: ' + str(filtered_atoms_count))
-            raise SystemExit('Filtered atom counts in topology and charges does not match')
+            raise ValueError('Filtered atom counts in topology and charges does not match')
 
     # Remove the index file in case it was created
     if os.path.exists(index_filename):
