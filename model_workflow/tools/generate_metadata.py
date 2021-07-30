@@ -90,7 +90,7 @@ def generate_metadata (
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
-        'PDBID': getInput('pdbId'),
+        'PDBIDS': getInput('pdbIds'),
         'NAME': getInput('name'),
         'UNIT': getInput('unit'),
         'DESCRIPTION': getInput('description'),
