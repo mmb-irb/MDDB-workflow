@@ -119,7 +119,7 @@ def filter_atoms (
         ], stdout=PIPE).stdout.decode()
 
 # Get a pytraj selection with all counter ions
-counter_ions = ['K', 'NA', 'CL']
+counter_ions = ['K', 'NA', 'CL', 'CLA', 'SOD']
 def get_counter_ions_mask (topology_filename : str) -> str:
     pt_topology = pt.load_topology(filename=topology_filename)
 
