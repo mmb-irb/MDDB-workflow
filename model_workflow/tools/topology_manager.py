@@ -90,6 +90,8 @@ class TopologyReference:
         self.chains = list(self.topology.iterChains())
         # Get residues
         self.residues = list(self.topology.iterResidues())
+        # Fet atoms
+        self.atoms = list(self.topology.iterAtoms())
         # Get pytraj residues
         self.pytraj_residues = list(self.pytraj_topology.residues)
 
@@ -215,3 +217,7 @@ class TopologyReference:
             and res.getResnum() == residue
             and res.getIcode() == icode):
                 return r
+
+    # Set a function to find the absolute residue index in the corrected topology from an absolute atom index
+    def get_atom_residue_index (self, atom_index : int) -> int:
+        return self.atoms[atom_index].getResindex()

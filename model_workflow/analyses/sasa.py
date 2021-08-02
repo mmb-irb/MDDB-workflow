@@ -49,13 +49,16 @@ def sasa(
     for f, current_frame in enumerate(frames):
 
         # Run the sasa analysis over the current frame
+        # WARNING: We want the SASA per residue, and this could be obtained replacing '-oa' per -'or'
+        # WARNING: However, residues are not enumerated the same in Gromacs and other tools (e.g. pytraj)
+        # For this reason we must always rely on atom numeration, which is the same along different tools
         current_frame_sasa = 'sasa' + str(f) + '.xvg'
         logs = run([
             "gmx",
             "sasa",
             "-s",
             current_frame,
-            '-or',
+            '-oa',
             current_frame_sasa,
             "-n",
             indexes,
@@ -65,42 +68,23 @@ def sasa(
         ], stdout=PIPE).stdout.decode()
 
         # Mine the sasa results (.xvg file)
-        sasa = xvg_parse(current_frame_sasa, ['c1', 'c2', 'c3'])
-        sasa_per_frame.append(sasa['c2'])
+        # Hydrogen areas are not recorded in the xvg file
+        sasa = xvg_parse(current_frame_sasa, ['n', 'area', 'sd'])
+        # Restructure data by adding all atoms sas per residue
+        atom_numbers = sasa['n']
+        atom_areas = sasa['area']
+        sas_per_residues = [0.0] * len(reference.residues)
+        for atom_number, atom_area in zip(atom_numbers, atom_areas):
+            atom_index = int(atom_number) - 1
+            residue_index = reference.get_atom_residue_index(atom_index)
+            sas_per_residues[residue_index] += atom_area
+        sasa_per_frame.append(sas_per_residues)
         # Delete current frame files before going for the next frame
         run([
             "rm",
             current_frame_sasa,
             area_filename,
         ], stdout=PIPE).stdout.decode()
-
-    # Check that the number of sasa values per frame is the same that the number of residues
-    sasa_residues_count = len(sasa_per_frame[0])
-    if sasa_residues_count != len(reference.residues):
-        # If the number does not match we may have a problem
-        print('sasa residues: ' + str(sasa_residues_count))
-        print('reference residues: ' + str(len(reference.residues)))
-        print('WARNING: The reference number of residues does not match the SASA analysis')
-        # Try to reconfigure the sasa residues to match the reference
-        print('Trying alternative residues configuration...')
-        gromacs_residues = get_gromacs_residues(input_topology_filename)
-        unique_gromacs_residues = list(set(gromacs_residues))
-        # If the new residues configuration neither matches the sasa analysis then surrender
-        if sasa_residues_count != len(gromacs_residues) or len(reference.residues) != len(unique_gromacs_residues):
-            print('gromacs residues: ' + str(len(gromacs_residues)))
-            raise SystemExit('ERROR: The number of residues does not match in SASA analysis')
-        print("It's OK")
-        # If the new residues configuration matches the sasa analysis
-        # Then add sasa values for identical residues
-        reconfigured_sasa_per_frame = []
-        for sasa in sasa_per_frame:
-            reconfigured_sasa = []
-            for unique_residue in unique_gromacs_residues:
-                sasa_values = [ value for i, value in enumerate(sasa) if gromacs_residues[i] == unique_residue ]
-                new_sasa_value = sum(sasa_values)
-                reconfigured_sasa.append(new_sasa_value)
-            reconfigured_sasa_per_frame.append(reconfigured_sasa)
-        sasa_per_frame = reconfigured_sasa_per_frame
 
     # Format output data
     # Sasa values must be separated by residue and then ordered by frame
@@ -134,23 +118,23 @@ def sasa(
         json.dump({'data': data}, file)
 
 # Read a pdb file and return the residues which gromacs would consider
-# This is used for those exotic topologies where the gromacs amout of residues does not match prody's
-def get_gromacs_residues (pdb_filename : str):
-    residues = []
-    # Read the topology line by line and get all residue data (name, chain, number and icode)
-    with open(pdb_filename, "r") as file:
-        lines = file.readlines()
-        last_residue = None
-        for line in lines:
-            # Skip non atom lines
-            if line[0:4] != 'ATOM':
-                continue
-            # Get the part of the line where the residue data is found
-            residue = line[17:31]
-            # If it is the same residue than the previous line then skip it
-            if residue == last_residue:
-                continue
-            # Otherwise, record it
-            residues.append(residue)
-            last_residue = residue
-    return residues
+# This is used for those exotic topologies where the gromacs amount of residues does not match prody's
+# def get_gromacs_residues (pdb_filename : str):
+#     residues = []
+#     # Read the topology line by line and get all residue data (name, chain, number and icode)
+#     with open(pdb_filename, "r") as file:
+#         lines = file.readlines()
+#         last_residue = None
+#         for line in lines:
+#             # Skip non atom lines
+#             if line[0:4] != 'ATOM':
+#                 continue
+#             # Get the part of the line where the residue data is found
+#             residue = line[17:31]
+#             # If it is the same residue than the previous line then skip it
+#             if residue == last_residue:
+#                 continue
+#             # Otherwise, record it
+#             residues.append(residue)
+#             last_residue = residue
+#     return residues
