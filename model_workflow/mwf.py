@@ -109,12 +109,16 @@ class File(Dependency):
         super().__init__(func, args, alias)
 
     def exists (self) -> bool:
+        if not self.filename:
+            return False
         return os.path.exists(self.filename)
 
     # Get the dependency value, which in file cases is the filename
     # Execute the corresponding function if we do not have the value yet
     # Once the value has been calculated save it as an internal variabel
     def get_value(self):
+        if not self.filename:
+            return None
         if self.exists():
             return self.filename
         parsed_args = self.parse_args()
