@@ -64,6 +64,10 @@ Activate the mwf environment:
 
 `source mwf/bin/activate`
 
+Make a conda unpack
+
+`conda-unpack`
+
 Now copy the whole workflow repository in the remote machine, same repository than before.
 Then install it in develop mode with:
 
@@ -71,45 +75,6 @@ Then install it in develop mode with:
 
 `../mwf/bin/python setup.py develop`
 
-### Check everything works fine
-
-Sometimes, some tools in the packed environment may have wrong paths to their executables
-
-- Check VMD
-
-Activate the mwf enviornment and type `vmd`
-
-If an error similar to "/slgpfs/projects/bsc23/bsc23088/mwf/bin/vmd: line 505: /opt/anaconda1anaconda2anaconda3/lib/vmd_LINUX: No existe el fichero o el directorio" is return then do the following:
-
-Find the vmd path and modify the vmd executable.
-
-`find mwf | grep vmd_LINUX`
-
-Copy the ABSOLUTE path to the 'lib' directory (not to the vmd executable)
-
-`vim mwf/bin/vmd`
-
-Now modify the 'defaultvmddir' path as the previous copied path
-
-At this point the workflow should be operative
-
-- Check Gromacs
-
-Activate the mwf enviornment and type `gmx`
-
-If an error similar to "/opt/conda/conda-bld/gromacs_1618496378051/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_place/bin.SSE2/GMXRC: No existe el fichero o el directorio" is return then do the following:
-
-`find "$(pwd -P)" | grep GMXRC`
-
-Copy the path which contains all the bin."whatever" directories
-
-`vim mwf/bin/gmx`
-
-Modify all wrong paths as the previous copied path, absolute
-
-You may also have to modify the atom masses file to add elements typed with both upper case letters (e.g. 'ZN' in addition to 'Zn')
-
-`vim mwf/share/gromacs/top/atommass.dat`
 
 ---
 
@@ -151,7 +116,9 @@ _Other options:_
 
 `-top`: input topology filename. Default: `md.imaged.rot.dry.pdb`
 
-`-traj`: inputs filename. Default: `md.imaged.rot.xtc`
+`-traj`: input trajectory filename. Default: `md.imaged.rot.xtc`
+
+`-char`: inputs charges filename. Default: `topology.XXX`
 
 `-in`: inputs filename. Default: `inputs.json`
 
