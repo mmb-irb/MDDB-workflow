@@ -12,7 +12,7 @@ index_filename = 'filter.ndx'
 filter_group_name = "not_water_or_counter_ions"
 
 # Set the pytraj selection for not water
-water_mask = '(:SOL,WAT,HOH)'
+water_mask = '(:SOL,WAT,HOH,TIP)'
 
 # Filter atoms of all input topologies by remvoing atoms and ions
 # As an exception, some water and ions may be not removed if specified
@@ -70,11 +70,13 @@ def filter_atoms (
             charges = get_raw_charges(charges_filename)
             # Nothing to do here. It better matches by defualt or we have a problem
             filtered_charges_atoms_count = len(charges)
+            print('Charges count: ' + str(filtered_charges_atoms_count))
         # Pytraj supported formats
         elif is_pytraj_supported(charges_filename):
             # Load the charges topology and count its atoms
             charges_topology = pt.load_topology(filename=charges_filename)
             charges_atoms_count = charges_topology.n_atoms
+            print('Charges count: ' + str(charges_atoms_count))
             # Filter the desired atoms using the mask and then count them
             filter_mask = get_filter_mask(charges_filename)
             filtered_charges_topology = charges_topology[filter_mask]
@@ -92,6 +94,7 @@ def filter_atoms (
             # Extract charges from the tpr file and count them
             charges = get_tpr_charges(charges_filename)
             charges_atoms_count = len(charges)
+            print('Charges count: ' + str(charges_atoms_count))
             # If the number of charges in greater than expected then filter the tpr file and extract charges again
             if charges_atoms_count > filtered_atoms_count:
                 if not os.path.exists(index_filename):

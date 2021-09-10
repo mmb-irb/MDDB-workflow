@@ -34,9 +34,9 @@ def merge_xtc_files(input_filenames : list, output_filename : str):
         "gmx",
         "trjcat",
         "-f",
-        *input_trajectory_filenames,
+        *input_filenames,
         "-o",
-        output_trajectory_filename,
+        output_filename,
     ], stdout=PIPE).stdout.decode()
 
 # Get the first frame from a trajectory
