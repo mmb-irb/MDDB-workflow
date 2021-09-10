@@ -6,6 +6,7 @@
 from argparse import ArgumentParser, RawTextHelpFormatter
 import os
 import sys
+import io
 import math
 from pathlib import Path
 import urllib.request
@@ -45,6 +46,13 @@ from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
+
+# Make the system output stream to not be buffered
+# This is useful to make prints work on time in Slurm
+# Otherwise, output logs are written after the script has fully run
+# Note that this fix affects all modules and built-ins
+unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
+sys.stdout = unbuffered
 
 # CLASSES -------------------------------------------------------------------------
 
