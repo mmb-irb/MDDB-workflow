@@ -3,6 +3,7 @@
 
 from subprocess import run, PIPE, Popen
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.xvg_parse import xvg_parse
 
 # RMSD
 # 
@@ -44,6 +45,53 @@ def rmsd (
     # Return gromacs logs
     return logs
 
+# Look for sudden raises of RMSd values from one frame to another
+def rmsd_check (
+    input_topology_filename : str,
+    input_trajectory_filename : str
+    ):
+
+    print('Checking trajectory intergity')
+
+    # Select the whole protein to check the RMSd
+    test_group = 'Protein'
+
+    # Set the name for the output of the test rmsd
+    test_filename = 'test.rmsd.xvg'
+
+    # Run Gromacs
+    p = Popen([
+        "echo",
+        test_group, # Select group for least squares fit
+        test_group, # Select group for RMSD calculation
+    ], stdout=PIPE)
+    logs = run([
+        "gmx",
+        "rms",
+        "-s",
+        input_topology_filename,
+        "-f",
+        input_trajectory_filename,
+        '-o',
+        test_filename,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    p.stdout.close()
+
+    # Read the output and do the check
+    test = xvg_parse(test_filename, ['Times', 'Values'])
+    values = test['Values']
+    previous = values[0]
+    for i, value in enumerate(values):
+        if abs(value - previous) > 1:
+            raise ValueError('There is something wrong with RMSd values. Check frame ' + str(i))
+        previous = value
+
+    # Remove the test xvg file since it is not required anymore
+    run([
+        "rm",
+        test_filename,
+    ], stdout=PIPE).stdout.decode()
 
 # Fluctuation
 # 

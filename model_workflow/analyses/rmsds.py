@@ -1,4 +1,4 @@
-from model_workflow.analyses.generic_analyses import rmsd
+from model_workflow.analyses.generic_analyses import rmsd, rmsd_check
 from model_workflow.tools.xvg_parse import xvg_parse
 
 from subprocess import run, PIPE
@@ -23,6 +23,10 @@ def rmsds(
     ):
 
     rmsd_references = [first_frame_filename, average_structure_filename]
+
+    # First of all, run an RMSd for the whole trajectory and check there are no sudden changes
+    # This RMSd is not saved, but this is only a test to check the inegrity of the simulation
+    rmsd_check(rmsd_references[0], input_trajectory_filename)
 
     output_analysis = []
     start = 0
