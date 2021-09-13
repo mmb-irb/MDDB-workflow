@@ -34,7 +34,6 @@ def get_reduced_pytraj_trajectory (
     trajectory_frames = pt_trajectory.n_frames
 
     # Set a reduced trajectory used for heavy analyses
-    reduced_pt_trajectory = None
     # If the current trajectory has already less or the same frames than the limit
     # Then do nothing and use it also as reduced
     if trajectory_frames <= reduced_trajectory_frames_limit:

@@ -8,15 +8,23 @@ import re
 
 import json
 
+from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+
 # Perform an analysis for the overall structure and then one more analysis for each interaction
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
 # The pytraj trajectory ('pt_trajectory') may be reduced
 
 
 def rmsd_pairwise(
-        pt_trajectory,
-        output_analysis_filename: str,
-        interactions: list):
+    input_topology_filename : str,
+    input_trajectory_filename : str,
+    output_analysis_filename : str,
+    interactions : list,
+    frames_limit : int):
+
+    # Parse the trajectory intro ptraj
+    # Reduce it in case it exceeds the frames limit
+    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
     # Run the analysis
     data = pt.pairwise_rmsd(pt_trajectory, '@CA')

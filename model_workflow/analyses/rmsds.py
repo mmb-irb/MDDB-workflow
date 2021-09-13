@@ -16,6 +16,7 @@ import json
 def rmsds(
     input_trajectory_filename : str,
     output_analysis_filename : str,
+    frames_limit : int,
     first_frame_filename : str,
     average_structure_filename : str,
     rmsd_groups : list = ['Protein', 'Protein-H', 'Backbone', 'C-alpha'],
@@ -40,7 +41,7 @@ def rmsds(
             # Set the analysis filename
             rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name + '.xvg'
             # Run the rmsd
-            rmsd(reference, input_trajectory_filename, group, rmsd_analysis)
+            rmsd(reference, input_trajectory_filename, group, rmsd_analysis, frames_limit)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output

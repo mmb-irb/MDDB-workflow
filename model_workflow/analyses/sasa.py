@@ -16,6 +16,7 @@ def sasa(
     input_trajectory_filename: str,
     output_analysis_filename: str,
     reference,
+    frames_limit : int,
 ):
 
     # Set indexes to select the system without hydrogens
@@ -44,7 +45,6 @@ def sasa(
 
     # Calculate the sasa for each frame
     sasa_per_frame = []
-    frames_limit = 200
     frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
     for f, current_frame in enumerate(frames):
 

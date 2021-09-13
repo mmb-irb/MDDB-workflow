@@ -15,26 +15,34 @@ import re
 
 import json
 
+from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+
 # Perform an hydrogen bonds analysis for each interaction interface
 # The 'interactions' input may be an empty list (i.e. there are no interactions)
 # In case there are no interactions the analysis stops
 def hydrogen_bonds (
-    pt_trajectory,
+    input_topology_filename : str,
+    input_trajectory_filename : str,
     output_analysis_filename : str,
     topology_reference,
-    interactions : list ):
+    interactions : list,
+    frames_limit : int):
 
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
 
+    # Parse the trajectory intro ptraj
+    # Reduce it in case it exceeds the frames limit
+    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
+
     # Save the reference function to get an absolue atom index from a pytraj atom index
     get_atom_index = topology_reference.get_atom_index
     # Save the reference function to get a source residue from a pytraj residue
     pytraj2source = topology_reference.pytraj2source
 
-    # Sabe each analysis to a dict which will be parsed to json
+    # Save each analysis to a dict which will be parsed to json
     output_analysis = []
 
     for interaction in interactions:

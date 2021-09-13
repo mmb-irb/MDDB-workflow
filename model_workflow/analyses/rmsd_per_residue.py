@@ -8,11 +8,19 @@ import re
 
 import json
 
+from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+
 # The pytraj trajectory may be reduced
 def rmsd_per_residue (
-    pt_trajectory,
+    input_topology_filename : str,
+    input_trajectory_filename : str,
     output_analysis_filename : str,
-    topology_reference ):
+    topology_reference,
+    frames_limit : int):
+
+    # Parse the trajectory intro ptraj
+    # Reduce it in case it exceeds the frames limit
+    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
     
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList

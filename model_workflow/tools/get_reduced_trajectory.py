@@ -18,11 +18,10 @@ def get_reduced_trajectory (
     reduced_trajectory_frames_limit : int,
     ) -> list:
 
-    trajectory_frames = get_frames_count(input_topology_filename,input_trajectory_filename)
+    trajectory_frames = get_frames_count(input_topology_filename, input_trajectory_filename)
 
     # if the trajectory already has the reduced number of frames or less return here
     if reduced_trajectory_frames_limit >= trajectory_frames:
-        print('The trajectory to be reduced has already the final number of frames or less')
         output_trajectory_filename = input_trajectory_filename
         step = 1
         frames = trajectory_frames
@@ -45,6 +44,7 @@ def get_reduced_trajectory (
 
     # Create the reduced trajectory if it does not exist yet
     if not os.path.exists(output_trajectory_filename):
+        print('Reducing trajectory from ' + str(trajectory_frames) + ' to less than ' + str(reduced_trajectory_frames_limit) + ' frames')
         # Run Gromacs
         p = Popen([
             "echo",

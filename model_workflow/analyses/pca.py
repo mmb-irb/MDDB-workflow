@@ -20,12 +20,12 @@ def pca(
     input_trajectory_filename: str,
     output_eigenvalues_filename: str,
     output_eigenvectors_filename: str,
+    frames_limit : int,
 ):
 
     # By default we set the whole trajectory as PCA trajectory
     pca_trajectory_filename = input_trajectory_filename
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
-    frames_limit = 2000
     pca_trajectory_filename, step, frames = get_reduced_trajectory(
         input_topology_filename,
         input_trajectory_filename,

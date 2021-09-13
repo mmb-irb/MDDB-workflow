@@ -44,7 +44,8 @@ def energies(
         output_analysis_filename: str,
         reference,
         interactions: list,
-        charges: list):
+        charges: list,
+        frames_limit : int):
 
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
@@ -134,7 +135,6 @@ def energies(
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames_limit = 100
     frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
     interactions_data = [[] for i in interactions]
     for current_frame in frames:

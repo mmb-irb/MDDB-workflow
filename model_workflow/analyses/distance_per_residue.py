@@ -8,18 +8,26 @@ import numpy
 
 import json
 
+from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+
 # Calculate the distance mean and standard deviation of each pair of residues*
 # * Where each residue is from a different agent
 # Note that the distances are calculated for all residues in the agent, not only the interface residues
 def distance_per_residue (
-    pt_trajectory,
+    input_topology_filename : str,
+    input_trajectory_filename : str,
     output_analysis_filename : str,
-    interactions : list ):
+    interactions : list,
+    frames_limit : int):
 
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
+
+    # Parse the trajectory intro ptraj
+    # Reduce it in case it exceeds the frames limit
+    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
     output_analysis = []
     for interaction in interactions:

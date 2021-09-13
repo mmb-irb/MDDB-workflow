@@ -34,7 +34,8 @@ def pockets (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    topology_reference):
+    topology_reference,
+    frames_limit : int):
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
