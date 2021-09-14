@@ -109,7 +109,7 @@ def process_input_files (
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
     # Fit the trajectory by removing the translation and rotation if it is required
     if preprocess_protocol > 0:
-        image_and_fit(output_topology_filename, output_trajectory_filename, input_charges_filename,
+        image_and_fit(output_topology_filename, output_trajectory_filename, output_charges_filename,
                       output_topology_filename, output_trajectory_filename, preprocess_protocol, translation)
 
     # Examine and correct the topology file using ProDy

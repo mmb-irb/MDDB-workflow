@@ -60,31 +60,40 @@ def get_raw_charges (input_charges_filename : str) -> list:
     return charges
 
 # Given a tpr file, extract charges in a list
-# DEPRECATED: In some tpr formats this function does not work. Now this is done with mdanalysis
-# def get_tpr_charges (input_charges_filename : str) -> list:
-#     charges = []
-#     # Read the tpr file making a 'dump'
-#     readable_tpr = Popen([
-#         "gmx",
-#         "dump",
-#         "-s",
-#         input_charges_filename,
-#         "-quiet"
-#     ], stdout=PIPE).stdout
-#     # Mine the atomic charges
-#     for line in readable_tpr:
-#         line = line.decode()
-#         # Skip everything which is not atomic charges data
-#         if line[0:16] != '            atom':
-#             continue
-#         # Parse the line to get only charges
-#         search = re.search(r"q=([0-9e+-. ]*),", line)
-#         if search:
-#             charges.append(float(search[1]))
-#     return charges
-
-# Given a tpr file, extract charges in a list
+# Try 2 different methods and 1 of them should work
 def get_tpr_charges (input_charges_filename : str) -> list:
+    try:
+        charges = get_tpr_charges_mdanalysis(input_charges_filename)
+    except:
+        print('WARNING: mdanalysis failed to extract charges. Using manual extraction...')
+        charges = get_tpr_charges_manual(input_charges_filename)
+    return charges
+
+# This works for the new tpr format (tested in 122)
+def get_tpr_charges_manual (input_charges_filename : str) -> list:
+    charges = []
+    # Read the tpr file making a 'dump'
+    readable_tpr = Popen([
+        "gmx",
+        "dump",
+        "-s",
+        input_charges_filename,
+        "-quiet"
+    ], stdout=PIPE).stdout
+    # Mine the atomic charges
+    for line in readable_tpr:
+        line = line.decode()
+        # Skip everything which is not atomic charges data
+        if line[0:16] != '            atom':
+            continue
+        # Parse the line to get only charges
+        search = re.search(r"q=([0-9e+-. ]*),", line)
+        if search:
+            charges.append(float(search[1]))
+    return charges
+
+# This works for the old tpr format (tested in 112)
+def get_tpr_charges_mdanalysis (input_charges_filename : str) -> list:
     parser = TPRParser(input_charges_filename)
     topology = parser.parse()
     charges = list(topology.charges.values)
