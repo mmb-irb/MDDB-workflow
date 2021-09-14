@@ -124,9 +124,6 @@ def topology_corrector(
                 last_chain_letter = get_next_letter(last_chain_letter)
             # Set the new chain letter
             chain_letters.append(last_chain_letter)
-            print('CHAINS')
-            print(chains)
-            print('INDEX: ' + str(a.getChindex()))
             chain = chains[a.getChindex()]
             chain.setChid(last_chain_letter)
             logs.append('- One of the repeated chains "' + last_repeated_chain_letter +
