@@ -189,6 +189,7 @@ inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
 
 # Get also some input values which are passed through command line instead of the inputs file
 preprocess_protocol = Dependency(getInput, {'input': 'preprocess_protocol'})
+translation = Dependency(getInput, {'input': 'translation'})
 
 # Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
@@ -217,6 +218,7 @@ process_input_files = Dependency(process_input_files, {
     'output_topology_filename': OUTPUT_topology_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
+    'translation': translation,
     'exceptions' : exceptions,
 })
 
@@ -256,9 +258,11 @@ filtering = Dependency(filter_atoms, {
 imaging = Dependency(image_and_fit, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filename': original_trajectory_filenames,
+    'input_tpr_filename' : original_charges_filename,
     'output_topology_filename': original_topology_filename,
     'output_trajectory_filename': original_trajectory_filenames,
     'preprocess_protocol': preprocess_protocol,
+    'translation': translation,
 }, 'imaging')
 
 # Examine and correct the topology file using ProDy
@@ -563,6 +567,7 @@ def main():
     inputs_filename =  args.inputs_filename
     input_charges_filename = args.input_charges_filename
     preprocess_protocol = int(args.preprocess_protocol)
+    translation = args.translation
 
     # Set the command line inputs
     inputs.update({
@@ -570,7 +575,8 @@ def main():
         'input_trajectory_filenames' : input_trajectory_filenames,
         'inputs_filename' : inputs_filename,
         'input_charges_filename' : input_charges_filename,
-        'preprocess_protocol': preprocess_protocol
+        'preprocess_protocol': preprocess_protocol,
+        'translation': translation
     })
 
     # Manage the working directory and make the required downloads
@@ -649,7 +655,7 @@ parser.add_argument(
     "If empty, will use current directory.")
 
 parser.add_argument(
-    "-p", "--project",
+    "-proj", "--project",
     default=None,
     help="If given a project name, trajectory and "
     "topology files will be downloaded from remote server.")
@@ -684,16 +690,26 @@ parser.add_argument(
 parser.add_argument(
     "-pr", "--preprocess_protocol",
     default=0,
-    help=("Set how the trajectory must be imaged and fitted"
-        " (i.e. centered, without translation or rotation)\n"
+    help=("Set how the trajectory must be imaged and fitted (i.e. centered, without translation or rotation)\n"
         "These protocolos may help in some situations, but the imaging step can not be fully automatized\n"
         "If protocols do not work, the gromacs parameters must be modified manually\n"
         "Available protocols:\n"
-        "0. No imaging, no fitting -> The trajectory is already imaged and fitted\n"
+        "0. Do nothing (default) -> The trajectory is already imaged and fitted\n"
         "1. No imaging, only fitting -> The trajectory is already imaged but not fitted\n"
-        "2. Single protein\n"
-        "3. Protein in membrane\n"
-        "4. Two interacting proteins"))
+        "2. Basic imaging -> Atoms are centered automatically\n"
+        "   Recommended for single molecules only\n"
+        "3. Translated imaging -> Manually translate everything before imaging\n"
+        "   Recommended for interacting molecules\n"
+        "4. Translated imaging (whole) -> Same as protocol 3 but -pbc is 'whole' instead of 'nojump'\n"
+        "   Recommended for membranes\n"
+        "   * Note that a .tpr topology is required in order to run protocol 4"))
+
+parser.add_argument(
+    "-trans", "--translation",
+    nargs='*',
+    default=[0,0,0],
+    help=("Set the x y z translation for the imaging process (only protocols 3 and 4)\n"
+        "e.g. -trans 0.5 -1 0"))
 
 parser.add_argument(
     "-d", "--download",

@@ -221,3 +221,20 @@ class TopologyReference:
     # Set a function to find the absolute residue index in the corrected topology from an absolute atom index
     def get_atom_residue_index (self, atom_index : int) -> int:
         return self.atoms[atom_index].getResindex()
+
+# Set a pair of independent functions to save and recover chains from a pdb file
+
+# Get a list with each atom chain from a pdb
+def get_chains (pdb_filename : str) -> list:
+    pdb = prody.parsePDB(pdb_filename)
+    atoms = list(pdb.iterAtoms())
+    chains = [ atom.getChid() for atom in atoms ]
+    return chains
+
+# Set each atom chain from a pdb from a list
+def set_chains (pdb_filename : str, chains : list):
+    pdb = prody.parsePDB(pdb_filename)
+    atoms = list(pdb.iterAtoms())
+    for a, atom in enumerate(atoms):
+        atom.setChid(chains[a])
+    prody.writePDB(pdb_filename, pdb)

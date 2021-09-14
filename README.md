@@ -96,7 +96,7 @@ A different directory may be specified with the `-dir` or `--working_dir` option
 
 Input files may be download from an already uploaded project:
 
-`mwf -p <project id>`
+`mwf -proj <project id>`
 
 By default, data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
 
@@ -124,3 +124,4 @@ _Other options:_
 
 `-pr`: preprocess protocol. Default: 0
 
+`-trans`: Imaging translation. Default: 0 0 0
