@@ -60,7 +60,10 @@ def filter_atoms (
         # Set up an index file with all atom indices manually
         # As long as indices are for atoms and not residues there should never be any incompatibility
         pytraj_mask_2_gromacs_ndx(topology, { filter_group_name : filter_mask }, index_filename)
-        gromacs_filter(topology_filename, trajectory_filename, topology_filename, trajectory_filename, index_filename)
+        # Filter the trajectory
+        xtc_filter(topology_filename, trajectory_filename, index_filename)
+        # Filter the topology
+        pdb_filter(topology_filename, index_filename)
 
     # Filter charges according to the file format
     if charges_filename and os.path.exists(charges_filename):
@@ -101,7 +104,7 @@ def filter_atoms (
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Charges number does not match the structure atoms and tpr files can not be filtered alone')
-                gromacs_tpr_filter(charges_filename, charges_filename, index_filename)
+                tpr_filter(charges_filename, index_filename)
                 charges = get_tpr_charges(charges_filename)
             filtered_charges_atoms_count = len(charges)
         else:
@@ -179,46 +182,36 @@ def pytraj_mask_2_gromacs_ndx (topology : 'Topology', masks : dict, output_filen
                 content += str(index + 1) + ' '
             file.write(content + '\n')
 
-# Filter atoms in both a pdb and a xtc file
-def gromacs_filter(
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_topology_filename : str,
-    output_trajectory_filename : str,
+# Filter atoms in a pdb file
+# This method conserves maximum resolution and chains
+def pdb_filter(
+    topology_filename : str,
     index_filename : str
 ):
-    # First filter the base topology/structure (pdb) and then the trajectory (xtc)
-    # Copy the original topology since we need it later to filter the trajectory
-    # The original topology could be overwritten
-    reference_topology = 'reference.topology.pdb'
-    run([
-        "cp",
-        input_topology_filename,
-        reference_topology
-    ], stdout=PIPE).stdout.decode()
-
-    # Filter the topology
+    # Filter the trajectory
     p = Popen([
         "echo",
         filter_group_name,
     ], stdout=PIPE)
     logs = run([
         "gmx",
-        "trjconv",
-        "-s",
-        reference_topology,
+        "editconf",
         "-f",
-        input_trajectory_filename,
+        topology_filename,
         '-o',
-        output_topology_filename,
+        topology_filename,
         '-n',
         index_filename,
-        '-dump',
-        '0',
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
 
+# Filter atoms in a xtc file
+def xtc_filter(
+    topology_filename : str,
+    trajectory_filename : str,
+    index_filename : str
+):
     # Filter the trajectory
     p = Popen([
         "echo",
@@ -228,27 +221,20 @@ def gromacs_filter(
         "gmx",
         "trjconv",
         "-s",
-        reference_topology,
+        topology_filename,
         "-f",
-        input_trajectory_filename,
+        trajectory_filename,
         '-o',
-        output_trajectory_filename,
+        trajectory_filename,
         '-n',
         index_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
 
-    # Remove the reference topology file
-    run([
-        "rm",
-        reference_topology
-    ], stdout=PIPE).stdout.decode()
-
 # Filter atoms in both a pdb and a xtc file
-def gromacs_tpr_filter(
-    input_topology_filename : str,
-    output_topology_filename : str,
+def tpr_filter(
+    topology_filename : str,
     index_filename : str
 ):
     # Filter the topology
@@ -260,9 +246,9 @@ def gromacs_tpr_filter(
         "gmx",
         "convert-tpr",
         "-s",
-        input_topology_filename,
+        topology_filename,
         '-o',
-        output_topology_filename,
+        topology_filename,
         '-n',
         index_filename,
         '-quiet'

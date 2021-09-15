@@ -223,6 +223,7 @@ class TopologyReference:
         return self.atoms[atom_index].getResindex()
 
 # Set a pair of independent functions to save and recover chains from a pdb file
+# WARNING: These functions must be used only when the pdb has not changed in number of atoms
 
 # Get a list with each atom chain from a pdb
 def get_chains (pdb_filename : str) -> list:

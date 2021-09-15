@@ -30,7 +30,7 @@ def image_and_fit (
         return
 
     # First of all save chains
-    # Gromacs will delete chain so we need to recover them after
+    # Gromacs will delete chains so we need to recover them after
     chains_backup = get_chains(input_topology_filename)
 
     # In order to run the imaging protocol 4 we need a .tpr file, not just the .pdb file
@@ -177,7 +177,7 @@ def image_and_fit (
         "gmx",
         "trjconv",
         "-s",
-        input_topology_filename,
+        output_topology_filename,
         "-f",
         trajectroy_to_fit,
         '-o',
@@ -189,7 +189,7 @@ def image_and_fit (
     p.stdout.close()
 
     # Recover chains
-    set_chains(input_topology_filename, chains_backup)
+    set_chains(output_topology_filename, chains_backup)
 
 
 # Get the first frame of a trajectory

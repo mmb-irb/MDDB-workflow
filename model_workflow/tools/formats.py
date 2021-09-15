@@ -73,4 +73,6 @@ def get_pytraj_parm_format (filename : str) -> str:
         return 'CHARMMPSF'
     if is_top(filename):
         return 'GMXTOP'
+    if is_pdb(filename):
+        return 'PDBFILE'
     raise ValueError('The file ' + filename + ' format is not supported')
