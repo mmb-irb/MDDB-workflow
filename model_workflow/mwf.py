@@ -194,6 +194,7 @@ translation = Dependency(getInput, {'input': 'translation'})
 # Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
 ligands = Dependency(getInput, {'input': 'ligands'})
+membranes = Dependency(getInput, {'input': 'membranes'})
 exceptions = Dependency(getInput, {'input': 'exceptions'})
 
 # Define intermediate tools and files
@@ -416,6 +417,7 @@ analyses = [
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_rmsdperres_filename,
         "topology_reference": topology_reference,
+        'membranes': membranes,
         'frames_limit': 200,
     }, 'rmsdperres'),
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one

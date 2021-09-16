@@ -16,11 +16,18 @@ def rmsd_per_residue (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     topology_reference,
+    membranes,
     frames_limit : int):
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
     pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
+
+    # We must exclude here membranes from the analysis
+    # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
+    prody_selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
+    pytraj_selection = topology_reference.get_pytraj_selection(prody_selection)
+    filtered_pt_trajectory = pt_trajectory[pytraj_selection]
     
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
@@ -28,7 +35,7 @@ def rmsd_per_residue (
     # They must be accessed thorugh the index
     # DANI: Esto devuelve "Error: Range::SetRange(None): Range is -1 for None"
     # DANI: No se por que pasa pero aparentemente funciona bien
-    data = pt.rmsd_perres(pt_trajectory)
+    data = pt.rmsd_perres(filtered_pt_trajectory)
 
     # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
     del data[0]

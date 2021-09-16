@@ -41,11 +41,11 @@ def process_interactions (
     
     for interaction in interactions:
         # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.topology_selection(
+        interaction['residues_1'] = topology_reference.residues_selection(
             interaction['selection_1']
         )
         # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.topology_selection(
+        interaction['residues_2'] = topology_reference.residues_selection(
             interaction['selection_2']
         )
         # Get 100 frames (or less) along the trajectory
@@ -57,7 +57,7 @@ def process_interactions (
         for current_frame in frames:
             frame_structure = TopologyReference(current_frame)
             # interface_1 is the list of residues from the agent 1 which are close to the agent 2
-            frame_interface_1 = frame_structure.topology_selection(
+            frame_interface_1 = frame_structure.residues_selection(
                 '(' + interaction['selection_1'] +
                 ') and same residue as exwithin ' +
                 str(cutoff_distance) +
@@ -65,7 +65,7 @@ def process_interactions (
                 interaction['selection_2'] + ')')
             interface_1_residues += frame_interface_1
             # interface_2 is the list of residues from agent 2 which are close to the agent 1
-            frame_interface_2 = frame_structure.topology_selection(
+            frame_interface_2 = frame_structure.residues_selection(
                 '(' + interaction['selection_2'] +
                 ') and same residue as exwithin ' +
                 str(cutoff_distance) +
@@ -123,22 +123,22 @@ def easy_process_interactions (
     
     for interaction in interactions:
         # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.topology_selection(
+        interaction['residues_1'] = topology_reference.residues_selection(
             interaction['selection_1']
         )
         # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.topology_selection(
+        interaction['residues_2'] = topology_reference.residues_selection(
             interaction['selection_2']
         )
         # interface_1 is the list of residues from the agent 1 which are close to the agent 2
-        interaction['interface_1'] = topology_reference.topology_selection(
+        interaction['interface_1'] = topology_reference.residues_selection(
             '(' + interaction['selection_1'] +
             ') and same residue as exwithin ' +
             str(cutoff_distance) +
             ' of (' +
             interaction['selection_2'] + ')')
         # interface_2 is the list of residues from agent 2 which are close to the agent 1
-        interaction['interface_2'] = topology_reference.topology_selection(
+        interaction['interface_2'] = topology_reference.residues_selection(
             '(' + interaction['selection_2'] +
             ') and same residue as exwithin ' +
             str(cutoff_distance) +
@@ -191,11 +191,11 @@ def process_interactions_gromacs (
     
     for interaction in interactions:
         # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.topology_selection(
+        interaction['residues_1'] = topology_reference.residues_selection(
             interaction['selection_1']
         )
         # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.topology_selection(
+        interaction['residues_2'] = topology_reference.residues_selection(
             interaction['selection_2']
         )
         # Translate the residues selections to pytraj notation

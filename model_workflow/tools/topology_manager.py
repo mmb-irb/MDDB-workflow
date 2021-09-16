@@ -160,7 +160,7 @@ class TopologyReference:
 
     # Get the standarized residue array from a prody string selection
     # Residues in the array are in 'sourceResidue' format
-    def topology_selection (self, selection : str) -> list:
+    def residues_selection (self, selection : str) -> list:
         
         # Each ATOM in the selection
         sel = self.topology.select(selection)
@@ -194,6 +194,25 @@ class TopologyReference:
         residues.sort(key = by_chain)
         
         return residues
+
+    # Get the a pytraj selection string with all atoms which correspond to a prody selection string
+    def get_pytraj_selection (self, selection : str) -> str:
+        
+        # Each ATOM in the selection
+        sel = self.topology.select(selection)
+
+        if not sel:
+            print("WARNING: The selection '" + selection + "' matches no atom in the reference topology")
+            return []
+
+        # Get atom indexes
+        atoms = list(sel.iterAtoms())
+        indexes = [ str(atom.getIndex() + 1) for atom in atoms ]
+
+        # Join all atoms in a single string with pytraj format
+        pytraj_selection = '@' + ','.join(indexes)
+        
+        return pytraj_selection
 
     # Set a function to find the absolute atom index in the corrected topology
     def get_atom_index (self, source, atom_name):
