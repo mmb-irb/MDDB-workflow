@@ -80,6 +80,7 @@ def image_and_fit (
         # WARNING: The vector in the '-trans' option may be different among different trajectories
         p = Popen([
             "echo",
+            "Protein",
             "System",
         ], stdout=PIPE)
         logs = run([
@@ -96,7 +97,8 @@ def image_and_fit (
             str(translation[1]),
             str(translation[2]),
             '-pbc',
-            'atom', # 'residue' may work also
+            'res', # 'atom' may work also
+            '-center', # DANI: Esto es experimental
             '-ur',
             'compact',
             '-quiet'
@@ -111,35 +113,10 @@ def image_and_fit (
 
     # -----------------------------------------------------------------------------------------------
 
-    # Perform the '-pbc nojump' to avoid non-sense jumping of any protein or atom
+    # Perform the '-pbc nojump' to avoid non-sense jumping of any molecule
     # This step is mandatory for all protocols but the protocol 4 (membranes)
     # Memebranes look better when their lipids jump across boundaries
-    # So we make a '-pbc whole' to make sure it is the whole lipid who jumps and not individual atoms
-    if preprocess_protocol == 4:
-
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "trjconv",
-            "-s",
-            input_tpr_filename,
-            "-f",
-            output_trajectory_filename,
-            '-o',
-            output_trajectory_filename,
-            '-pbc',
-            'whole',
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-    
-        # Select the first frame of the recently made whole trayectory as the new topology
-        reset_structure (input_topology_filename, output_trajectory_filename, output_topology_filename)
-
-    else:
+    if preprocess_protocol != 4:
         p = Popen([
             "echo",
             "System",
@@ -161,32 +138,37 @@ def image_and_fit (
 
     # Fitting --------------------------------------------------------------------------------------
 
-    # The trajectory to fit is the already imaged trajectory
-    # However, if there was no imaging, the trajectory to fit is the input trajectory
-    trajectroy_to_fit = output_trajectory_filename
-    if preprocess_protocol == 1:
-        trajectroy_to_fit = input_trajectory_filename
+    # Remove translation and rotation in the trajectory using the Protein as reference
+    # Simulations with membranes have the mebrane fixed so they do not require this step
+    # Actually, fitting the protein usually leads to sudden membrane movements which do not look good
+    if preprocess_protocol != 4:
 
-    # Run Gromacs
-    p = Popen([
-        "echo",
-        'Protein',
-        "System",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "trjconv",
-        "-s",
-        output_topology_filename,
-        "-f",
-        trajectroy_to_fit,
-        '-o',
-        output_trajectory_filename,
-        '-fit',
-        'rot+trans',
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
+        # The trajectory to fit is the already imaged trajectory
+        # However, if there was no imaging, the trajectory to fit is the input trajectory
+        trajectroy_to_fit = output_trajectory_filename
+        if preprocess_protocol == 1:
+            trajectroy_to_fit = input_trajectory_filename
+
+        # Run Gromacs
+        p = Popen([
+            "echo",
+            'Protein',
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            output_topology_filename,
+            "-f",
+            trajectroy_to_fit,
+            '-o',
+            output_trajectory_filename,
+            '-fit',
+            'rot+trans',
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
 
     # Recover chains
     set_chains(output_topology_filename, chains_backup)
