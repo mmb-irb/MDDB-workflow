@@ -13,7 +13,7 @@
 # 
 #     Selector to get residues from a string selection
 
-from subprocess import run, PIPE
+from subprocess import run, PIPE, Popen
 from collections import OrderedDict
 import re
 import prody
@@ -258,3 +258,52 @@ def set_chains (pdb_filename : str, chains : list):
     for a, atom in enumerate(atoms):
         atom.setChid(chains[a])
     prody.writePDB(pdb_filename, pdb)
+
+# Convert a prody selection to a Gromacs ndx file
+# If the append argument is passed the selections will be appended to the default Gromacs selections
+def prody_selection_to_ndx (
+    pdb_filename : str,
+    selections : dict,
+    output_filename : str = 'index.ndx',
+    append : bool = False):
+    # parse hte input topology
+    pdb = prody.parsePDB(pdb_filename)
+    # In case the append is true, create the default ndx file to append the new selection
+    if append:
+        p = Popen([
+            "echo",
+            'q',
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "make_ndx",
+            "-f",
+            pdb_filename,
+            '-o',
+            output_filename,
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
+    # Add each selection to the ndx file
+    with open(output_filename, "a" if append else "w") as file:
+        for group_name, selection in selections.items():
+            selected_pdb = pdb.select(selection)
+            if not selected_pdb:
+                print('WARNING: The fit center selection "' + selection + '" matches no atoms')
+                continue
+            selected_atoms = list(selected_pdb.iterAtoms())
+            selected_atom_indexes = [ atom.getIndex() for atom in selected_atoms ]
+            # Add a header with the name for each group
+            content = '[ ' + group_name + ' ]\n'
+            count = 0
+            for index in selected_atom_indexes:
+                # Add a breakline each 15 indices
+                count += 1
+                if count == 15:
+                    content += '\n'
+                    count = 0
+                # Add a space between indices
+                # Atom indices go from 0 to n-1
+                # Add +1 to the index since gromacs counts from 1 to n
+                content += str(index + 1) + ' '
+            file.write(content + '\n')
