@@ -29,6 +29,10 @@ import json
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
+# Get only the 10 first pockets since the analysis is quite slow by now
+# DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
+maximum_pockets_number = 10
+
 # Perform the pockets analysis
 def pockets (
     input_topology_filename : str,
@@ -174,13 +178,17 @@ def pockets (
                 pockets_count += 1
                 pockets[index] = pockets_count
 
-    # Get the first 10 pockets with more points
-    pockets_number = 10
-
     # Exclude the first result which will always be 0 and it stands for no-pocket points
     biggest_pockets = collections.Counter(pockets).most_common()
-    if len(biggest_pockets) > pockets_number:
-        biggest_pockets = collections.Counter(pockets).most_common()[1:11]
+    if len(biggest_pockets) == 1:
+        print('WARNING: No pockets were found')
+        return
+    biggest_pockets = biggest_pockets[1:-1]
+    pockets_number = len(biggest_pockets)
+    # If we have more than the maximum number of pockets then get the first pockets and discard the rest
+    if pockets_number > maximum_pockets_number:
+        biggest_pockets = biggest_pockets[0:10]
+        pockets_number = 10
 
     # First of all, get all header lines from the original grid file
     # We need them to write grid files further
