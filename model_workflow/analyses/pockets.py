@@ -183,7 +183,7 @@ def pockets (
     if len(biggest_pockets) == 1:
         print('WARNING: No pockets were found')
         return
-    biggest_pockets = biggest_pockets[1:-1]
+    biggest_pockets = biggest_pockets[1:]
     pockets_number = len(biggest_pockets)
     # If we have more than the maximum number of pockets then get the first pockets and discard the rest
     if pockets_number > maximum_pockets_number:
