@@ -131,6 +131,7 @@ def generate_metadata (
         'EXCEPTIONS': exceptions,
         'MEMBRANES': getInput('membranes'),
         'CHARGES': charges,
+        'LINKS': getInput('links'),
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
