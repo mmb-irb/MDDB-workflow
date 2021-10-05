@@ -702,15 +702,15 @@ parser.add_argument(
         "   Recommended for single molecules only\n"
         "3. Translated imaging -> Manually translate everything before imaging\n"
         "   Recommended for interacting molecules\n"
-        "4. Translated imaging (whole) -> Same as protocol 3 but -pbc is 'whole' instead of 'nojump'\n"
-        "   Recommended for membranes\n"
+        "4. Allowed jump imaging -> Residues are centered automatically. The 'nojump' and the fitting steps are skipped\n"
+        "   Recommended for proteins inside membranes\n"
         "   * Note that a .tpr topology is required in order to run protocol 4"))
 
 parser.add_argument(
     "-trans", "--translation",
     nargs='*',
     default=[0,0,0],
-    help=("Set the x y z translation for the imaging process (only protocols 3 and 4)\n"
+    help=("Set the x y z translation for the imaging process (only protocol 3)\n"
         "e.g. -trans 0.5 -1 0"))
 
 parser.add_argument(

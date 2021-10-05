@@ -34,7 +34,7 @@ def image_and_fit (
     chains_backup = get_chains(input_topology_filename)
 
     # In order to run the imaging protocol 4 we need a .tpr file, not just the .pdb file
-    # This is because there is a '-pbc whole' step which only works with a .tpr file
+    # This is because there is a '-pbc res' step which only works with a .tpr file
     if preprocess_protocol == 4 and not is_tpr(input_tpr_filename):
         raise ValueError('In order to run protocol 4 it is mandatory to provide a .tpr file')
 
@@ -44,10 +44,10 @@ def image_and_fit (
     if preprocess_protocol == 1:
         pass
 
-    # Single protein
+    # Basic imaging
     elif preprocess_protocol == 2:
 
-        # Basic imaging
+        # Run Gromacs
         p = Popen([
             "echo",
             "System",
@@ -73,14 +73,13 @@ def image_and_fit (
         reset_structure (input_topology_filename, output_trajectory_filename, output_topology_filename)
 
 
-    # Two interacting proteins, which may need to be translated
-    elif preprocess_protocol == 3 or preprocess_protocol == 4:
+    # Translated imaging
+    # The vector in the '-trans' option is passed as a console argument when launching the workflow
+    elif preprocess_protocol == 3:
 
-        # Translate all atoms inside the box so the contact zone between both proteins is in the box center
-        # WARNING: The vector in the '-trans' option may be different among different trajectories
+        # Run Gromacs
         p = Popen([
             "echo",
-            "Protein",
             "System",
         ], stdout=PIPE)
         logs = run([
@@ -97,8 +96,37 @@ def image_and_fit (
             str(translation[1]),
             str(translation[2]),
             '-pbc',
-            'res', # 'atom' may work also
-            '-center', # DANI: Esto es experimental
+            'atom',
+            '-ur',
+            'compact',
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
+
+        # Select the first frame of the recently translated and imaged trayectory as the new topology
+        reset_structure (input_topology_filename, output_trajectory_filename, output_topology_filename)
+
+    # Residues centered imaging (then the 'nojump' and the fitting steps are skipped)
+    elif preprocess_protocol == 4:
+
+        # Run Gromacs
+        p = Popen([
+            "echo",
+            "Protein",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            input_tpr_filename,
+            "-f",
+            input_trajectory_filename,
+            '-o',
+            output_trajectory_filename,
+            '-pbc',
+            'res', # Note that the 'res' option requires a tpr to be passed
+            '-center',
             '-ur',
             'compact',
             '-quiet'
