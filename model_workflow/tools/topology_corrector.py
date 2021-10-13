@@ -65,8 +65,9 @@ def topology_corrector(
 
     # Check if chains are missing. If so, create a new chainned topology and set it as the reference
     chains = list(test.iterChains())
-    no_chains = len(chains) == 1 and ( chains[0].getChid() == ' ' or chains[0].getChid() == 'X' )
-    if no_chains:
+    
+    # In case there are not chains at all
+    if len(chains) == 1 and ( chains[0].getChid() == ' ' or chains[0].getChid() == 'X' ):
         modified = True
         print('WARNING: chains are missing')
 
@@ -77,20 +78,18 @@ def topology_corrector(
         test = parsePDB(input_topology_filename)
         chains = list(test.iterChains())
 
-        # This system is deprecated. Use vmd processor
-        #chainned_topology = 'chainned_topology.pdb'
-        #run([
-        #     "perl",
-        #     add_chains_script,
-        #     input_topology_filename,
-        #     chainned_topology,
-        # ], stdout=PIPE).stdout.decode()
-        # test = parsePDB(chainned_topology)
-        # run([
-        #     "rm",
-        #     chainned_topology,
-        # ], stdout=PIPE).stdout.decode()
-        # logs.append('- Chains have been asigned automatically')
+    else:
+        # In case there are some missing chains
+        # Note that atoms with no chain are not a problem for the workflow but they are for the web client
+        unlettered_chain = next((chain for chain in chains if chain.getChid() == ' '), None)
+        if unlettered_chain:
+            current_letters = [ chain.getChid() for chain in chains ]
+            new_letter = get_new_letter(current_letters)
+            unlettered_chain.setChid(new_letter)
+            modified = True
+            logs.append('- Some missing chains have been added')
+            print('WARNING: Some missing chains -> Now chain ' + new_letter)
+        
 
     # ------------------------------------------------------------------------------------------
     # Repeated chains --------------------------------------------------------------------------
@@ -324,6 +323,15 @@ def get_next_letter(letter: str) -> str:
         raise SystemExit("Limit of chain letters has been reached")
     next_letter = chr(ord(letter) + 1)
     return next_letter
+
+# Set a function to get the next letter from an input letter in alphabetic order
+letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+def get_new_letter(current_letters : list) -> str:
+    new_letter = next((letter for letter in letters if letter not in current_letters), None)
+    if not new_letter:
+        raise SystemExit("There are no more letters")
+    return new_letter
 
 # Remove all bytes which can not be decoded by utf-8 codec
 # This prevents the prody parsePDB function to return the following error:
