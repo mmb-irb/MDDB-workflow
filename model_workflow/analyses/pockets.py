@@ -38,14 +38,12 @@ def pockets (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    topology_reference,
     frames_limit : int):
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
     pockets_trajectory = input_trajectory_filename
     frames_limit = 100
-    step = 1
     pockets_trajectory, step, frames = get_reduced_trajectory(
         input_topology_filename,
         input_trajectory_filename,
@@ -130,9 +128,6 @@ def pockets (
     def getIndex (x, y, z):
         index = x*yl*zl + y*zl + z
         return index
-    def getValue (x, y, z):
-        index = getIndex(x,y,z)
-        return grid_values[index]
 
     # Classify all non-zero values by 'pocket' groups according to if they are connected
     pockets = [0] * xl * yl * zl
@@ -151,8 +146,8 @@ def pockets (
                     continue
                 # If the value exists, save the coordinates
                 point_coordinates[index] = (x,y,z)
-                # Then look for connected values in previously searched values
-                # If any of these connected values is marked as a pocket we mark this value with the same number
+                # Then look for connected grid coordinates in previously searched coordinates
+                # If any of these connected coordinates is marked as a pocket we mark this value with the same number
                 pz = z - 1
                 if pz >= 0:
                     pIndex = getIndex(x,y,pz)
@@ -187,8 +182,8 @@ def pockets (
     pockets_number = len(biggest_pockets)
     # If we have more than the maximum number of pockets then get the first pockets and discard the rest
     if pockets_number > maximum_pockets_number:
-        biggest_pockets = biggest_pockets[0:10]
-        pockets_number = 10
+        biggest_pockets = biggest_pockets[0:maximum_pockets_number]
+        pockets_number = maximum_pockets_number
 
     # First of all, get all header lines from the original grid file
     # We need them to write grid files further

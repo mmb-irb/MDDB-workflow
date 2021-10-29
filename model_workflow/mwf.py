@@ -472,7 +472,6 @@ analyses = [
         "input_topology_filename": topology_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_pockets_filename,
-        "topology_reference": topology_reference,
         'frames_limit': 100,
     }, 'pockets'),
 ]
