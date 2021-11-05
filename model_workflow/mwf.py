@@ -36,7 +36,8 @@ from model_workflow.tools.remove_trash import remove_trash
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
 from model_workflow.analyses.tmscores import tmscores
-from model_workflow.analyses.generic_analyses import rmsf, rgyr
+from model_workflow.analyses.rmsf import rmsf
+from model_workflow.analyses.rgyr import rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
