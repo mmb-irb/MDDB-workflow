@@ -191,12 +191,12 @@ inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
 # Get also some input values which are passed through command line instead of the inputs file
 preprocess_protocol = Dependency(getInput, {'input': 'preprocess_protocol'})
 translation = Dependency(getInput, {'input': 'translation'})
+filter_selection = Dependency(getInput, {'input': 'filter_selection'})
 
 # Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
 ligands = Dependency(getInput, {'input': 'ligands'})
 membranes = Dependency(getInput, {'input': 'membranes'})
-exceptions = Dependency(getInput, {'input': 'exceptions'})
 
 # Define intermediate tools and files
 
@@ -221,7 +221,7 @@ process_input_files = Dependency(process_input_files, {
     'output_trajectory_filename': OUTPUT_trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
     'translation': translation,
-    'exceptions' : exceptions,
+    'filter_selection' : filter_selection,
 })
 
 # Main topology and trajectory files
@@ -249,7 +249,7 @@ filtering = Dependency(filter_atoms, {
     'topology_filename' : original_topology_filename,
     'trajectory_filename' : original_trajectory_filenames,
     'charges_filename' : original_charges_filename,
-    'exceptions': exceptions,
+    'filter_selection': filter_selection,
 }, 'filter')
 
 # Image the trajectory if it is required
@@ -570,6 +570,7 @@ def main():
     input_charges_filename = args.input_charges_filename
     preprocess_protocol = int(args.preprocess_protocol)
     translation = args.translation
+    filter_selection = args.filter_selection
 
     # Set the command line inputs
     inputs.update({
@@ -578,7 +579,8 @@ def main():
         'inputs_filename' : inputs_filename,
         'input_charges_filename' : input_charges_filename,
         'preprocess_protocol': preprocess_protocol,
-        'translation': translation
+        'translation': translation,
+        'filter_selection': filter_selection
     })
 
     # Manage the working directory and make the required downloads
@@ -712,6 +714,11 @@ parser.add_argument(
     default=[0,0,0],
     help=("Set the x y z translation for the imaging process (only protocol 3)\n"
         "e.g. -trans 0.5 -1 0"))
+
+parser.add_argument(
+    "-filt", "--filter_selection",
+    default=None,
+    help="Atoms selection to be filtered in VMD format")
 
 parser.add_argument(
     "-d", "--download",

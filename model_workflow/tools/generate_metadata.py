@@ -44,9 +44,6 @@ def generate_metadata (
     ligands = getInput('ligands')
     if not ligands:
         ligands = []
-    exceptions = getInput('exceptions')
-    if not exceptions:
-        exceptions = []
 
     # Set the metadata interactions
     metadata_interactions = [{
@@ -128,7 +125,6 @@ def generate_metadata (
         'CUSTOMS': getInput('customs'),
         'INTERACTIONS': metadata_interactions,
         'CHAINNAMES': getInput('chainnames'),
-        'EXCEPTIONS': exceptions,
         'MEMBRANES': getInput('membranes'),
         'CHARGES': charges,
         'LINKS': getInput('links'),

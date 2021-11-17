@@ -22,7 +22,7 @@ def process_input_files (
     output_trajectory_filename : str,
     preprocess_protocol : int,
     translation: list,
-    exceptions : list
+    filter_selection : str
     ) -> None:
 
     # In case the topology is a 'pdb' file just rename it
@@ -103,7 +103,7 @@ def process_input_files (
             os.rename(input_charges_filename, output_charges_filename)
 
     # Filter atoms in bot topology and trajectory in order to remove solvent and counter ions
-    filter_atoms(output_topology_filename, output_trajectory_filename, output_charges_filename, exceptions)
+    filter_atoms(output_topology_filename, output_trajectory_filename, output_charges_filename, filter_selection)
 
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole

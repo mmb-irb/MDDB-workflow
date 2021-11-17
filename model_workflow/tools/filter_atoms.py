@@ -11,9 +11,6 @@ index_filename = 'filter.ndx'
 # Set the name for the group name in gromacs ndx file
 filter_group_name = "not_water_or_counter_ions"
 
-# Set the pytraj selection for not water
-water_mask = '(:SOL,WAT,HOH,TIP)'
-
 # Filter atoms of all input topologies by remvoing atoms and ions
 # As an exception, some water and ions may be not removed if specified
 # At the end, all topologies must match in atoms count
@@ -21,22 +18,12 @@ def filter_atoms (
     topology_filename : str,
     trajectory_filename : str,
     charges_filename : str,
-    exceptions : list
+    filter_selection : str
 ):    
 
-    # Handle missing exceptions
-    if not exceptions:
-        exceptions = []
-
-    # Set the pytraj mask to filter the desired atoms from a specific topology
-    def get_filter_mask (source_topology_filename : str) -> str:
-        filter_mask = '!' + water_mask
-        counter_ions_mask = get_counter_ions_mask(source_topology_filename)
-        if counter_ions_mask:
-            filter_mask = '(!' + water_mask + '&!(' + counter_ions_mask + '))'
-        for exception in exceptions:
-            filter_mask += '|' + exception['selection']
-        return filter_mask
+    # Handle missing filter selection
+    if not filter_selection:
+        return
 
     # Load the topology and trajectory
     trajectory = pt.iterload(trajectory_filename, topology_filename)
@@ -44,7 +31,7 @@ def filter_atoms (
     atoms_count = topology.n_atoms
 
     # Set the pytraj mask to filter the desired atoms from the topology
-    filter_mask = get_filter_mask(topology_filename)
+    filter_mask = get_filter_mask(topology_filename, filter_selection)
 
     # Set the filtered topology
     filtered_topology = topology[filter_mask]
@@ -81,7 +68,7 @@ def filter_atoms (
             charges_atoms_count = charges_topology.n_atoms
             print('Charges count: ' + str(charges_atoms_count))
             # Filter the desired atoms using the mask and then count them
-            filter_mask = get_filter_mask(charges_filename)
+            filter_mask = get_filter_mask(charges_filename, filter_selection)
             filtered_charges_topology = charges_topology[filter_mask]
             filtered_charges_atoms_count = filtered_charges_topology.n_atoms
             # If there is a difference in atom counts then write the filtered topology
@@ -124,8 +111,70 @@ def filter_atoms (
             index_filename,
         ], stdout=PIPE).stdout.decode()
 
+# Set the pytraj mask to filter the desired atoms from a specific topology
+def get_filter_mask (source_topology_filename : str, filter_selection : str) -> str:
+    if (filter_selection == 'default'):
+        return get_default_filter_mask(source_topology_filename)
+    # The filter selection is meant to be in vmd selection format
+    filter_mask = vmd_selection_2_pytraj_mask(source_topology_filename, filter_selection)
+    return filter_mask
+
+# Set the pytraj selection for not water
+water_mask = '(:SOL,WAT,HOH,TIP)'
+# Set the pytraj mask to filter default atoms
+# i.e. water and counter ions with standard residue names
+def get_default_filter_mask (source_topology_filename : str) -> str:
+    filter_mask = '!' + water_mask
+    counter_ions_mask = get_counter_ions_mask(source_topology_filename)
+    if counter_ions_mask:
+        filter_mask = '(!' + water_mask + '&!(' + counter_ions_mask + '))'
+    return filter_mask
+
+# Escape all vmd reserved characters from the selection string, which may use regular expression characters
+vmd_reserved_characters = ['"','[',']']
+def escape_vmd (selection : str) -> str:
+    escaped_selection = selection
+    for character in vmd_reserved_characters:
+        escaped_selection = escaped_selection.replace(character, '\\' + character)
+    return escaped_selection
+
+# Set the vmd script filename
+commands_filename = 'commands.vmd'
+# Convert a vmd selection to a group of atom indices
+def vmd_selection_2_pytraj_mask (source_topology_filename : str, filter_selection : str) -> dict:
+
+    # Prepare a script for the VMD to geth a selection atom indices. This is Tcl lenguage
+    with open(commands_filename, "w") as file:
+        # Select the specified atoms and set the specified chain
+        file.write('set atoms [atomselect top "' + escape_vmd(filter_selection) + '"]\n')
+        file.write('$atoms list\n')
+        file.write('exit\n')
+
+    # Run VMD
+    vmd_logs = run([
+        "vmd",
+        source_topology_filename,
+        "-e",
+        commands_filename,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE).stdout.decode()
+
+    print(vmd_logs)
+
+    # Mine and parse the VMD logs into an atoms indices list
+    vmd_log_lines = vmd_logs.split('\n')
+    for l, line in enumerate(vmd_log_lines):
+        if line == 'atomselect0':
+            atom_indices_line = vmd_log_lines[l + 1]
+            break
+    # WARNING: Although pytraj atom indices goes from 0 to n-1, they go from 1 to n in the selection mask
+    atom_indices = [ str(int(index) + 1) for index in atom_indices_line.split(' ') ]
+    filter_mask = '@' + ','.join(atom_indices)
+    return filter_mask
+
 # Get a pytraj selection with all counter ions
-counter_ions = ['K', 'NA', 'CL', 'CLA', 'SOD']
+counter_ions = ['K', 'NA', 'CL', 'CLA', 'SOD', 'POT']
 def get_counter_ions_mask (topology_filename : str) -> str:
     pt_topology = pt.load_topology(filename=topology_filename)
 
@@ -160,13 +209,32 @@ def get_counter_ions_mask (topology_filename : str) -> str:
     return counter_ions_mask
 
 # Use this function to create gromacs 'index.ndx' files to match pytraj mask selections in a given pytraj topology
-# Masks is a dict where each entry key will be the gromacs group name and each entry value is the mask string
+# 'masks' is a dict where each entry key will be the gromacs group name and each entry value is the mask string
 # e.g. { "my_solvent" : ":SOL,WAT,HOH", "my_ions" : "@17,18" }
 def pytraj_mask_2_gromacs_ndx (topology : 'Topology', masks : dict, output_filename : str = 'index.ndx'):
+    # Parse the masks object into the a dict with atom indices
+    groups = pytraj_mask_2_atom_indices(topology, masks)
+    # Now generate the .ndx file
+    atom_indices_2_gromacs_ndx(groups, output_filename)
+
+# Convert groups of pytraj masks to atom indices
+# 'masks' is a dict where each entry key will be the gromacs group name and each entry value is the mask string
+# e.g. { "my_solvent" : ":SOL,WAT,HOH", "my_ions" : "@17,18" }
+def pytraj_mask_2_atom_indices (topology : 'Topology', masks : dict) -> dict:
+    # Parse the masks object into a dict with atom indices
+    groups = {}
+    for group_name, mask in masks.items():
+        # Find mask atom indices in the topology
+        atom_indices = list(topology.atom_indices(mask))
+        groups[group_name] = atom_indices
+    return groups
+
+# Use this function to create gromacs 'index.ndx' files from atom indexes
+# 'groups' is a dict where each entry key will be the gromacs group name and each entry value is the atoms integer list
+# e.g. { "my_solvent" : [1,2,3], "my_ions" : [4,5,6] }
+def atom_indices_2_gromacs_ndx (groups : dict, output_filename : str = 'index.ndx'):
     with open(output_filename, "w") as file:
-        for group_name, mask in masks.items():
-            # Find mask atom indices in the topology
-            atom_indices = list(topology.atom_indices(mask))
+        for group_name, atom_indices in groups.items():
             # Add a header with the name for each group
             content = '[ ' + group_name + ' ]\n'
             count = 0
