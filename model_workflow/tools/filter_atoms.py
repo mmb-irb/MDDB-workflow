@@ -160,8 +160,6 @@ def vmd_selection_2_pytraj_mask (source_topology_filename : str, filter_selectio
         "none"
     ], stdout=PIPE).stdout.decode()
 
-    print(vmd_logs)
-
     # Mine and parse the VMD logs into an atoms indices list
     vmd_log_lines = vmd_logs.split('\n')
     for l, line in enumerate(vmd_log_lines):
