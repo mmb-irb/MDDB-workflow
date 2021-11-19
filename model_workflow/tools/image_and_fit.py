@@ -97,8 +97,8 @@ def image_and_fit (
             str(translation[2]),
             '-pbc',
             'atom',
-            '-ur',
-            'compact',
+            #'-ur', # WARNING: This makes everything stay the same
+            #'compact', # WARNING: This makes everything stay the same
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
