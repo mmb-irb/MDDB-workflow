@@ -122,56 +122,76 @@ def pockets (
                 grid_values.append(float(search.group(1)))
                 continue
 
-    # Set a function to get the value of a given 'x, y, z' position
-    # Grid values are disposed first in 'z' order, then 'y', and finally 'x'
+    # Set a function to get the value of a given 'x, y, z' grid point
+    # Grid points are disposed first in 'z' order, then 'y', and finally 'x'
     xl, yl, zl = dimensions
-    def getIndex (x, y, z):
+    def get_index (x : int, y : int, z : int) -> int:
         index = x*yl*zl + y*zl + z
         return index
+
+    # Get the coordinates of the colliding points
+    # Set the x, y and z index limit (i.e. the limit - 1)
+    xil, yil, zil = (xl-1, yl-1, zl-1)
+    def get_colliding_points (point : tuple) -> 'Generator':
+        x, y, z = point[0], point[1], point[2]
+        if x > 0:
+            yield (x-1, y, z)
+        if x < xil:
+            yield (x+1, y, z)
+        if y > 0:
+            yield (x, y-1, z)
+        if y < yil:
+            yield (x, y+1 ,z)
+        if z > 0:
+            yield (x, y, z-1)
+        if z < zil:
+            yield (x, y, z+1)
+
+    # Set a cuttoff value to consider a point valid
+    cuttoff = 0.5
 
     # Classify all non-zero values by 'pocket' groups according to if they are connected
     pockets = [0] * xl * yl * zl
     pockets_count = 0
+
+    # Given a point which belongs to a pocket, find all points connected to it
+    # Tag all points with the same pocket number
+    def set_pocket (start_point : tuple, pocket_number : int):
+        points = [start_point]
+        for point in points:
+            # Get current point colliders
+            colliding_points = list(get_colliding_points(point))
+            # Filter only the pocket points
+            pocket_points = []
+            for point in colliding_points:
+                index = get_index(*point)
+                value = grid_values[index]
+                # If it is a pocket
+                if value >= cuttoff:
+                    # Tag it as the current pocket
+                    pockets[index] = pocket_number
+                    pocket_points.append(point)
+            # Filter points which are not in the pockets list already
+            new_points = [ point for point in pocket_points if point not in points ]
+            # Update the points list
+            points += new_points
+            
     # Save also each point coordinates
-    point_coordinates = [None] * xl * yl * zl
-    # Set a cuttoff value to consider a point valid
-    cuttoff = 0.5
     for x in range(xl):
         for y in range(yl):
             for z in range(zl):
-                index = getIndex(x,y,z)
+                index = get_index(x,y,z)
+                # If it is not a pocket then pass
                 value = grid_values[index]
-                # If it is lower than the cutoff then pass
-                if cuttoff and value < cuttoff:
+                if value < cuttoff:
                     continue
-                # If the value exists, save the coordinates
-                point_coordinates[index] = (x,y,z)
-                # Then look for connected grid coordinates in previously searched coordinates
-                # If any of these connected coordinates is marked as a pocket we mark this value with the same number
-                pz = z - 1
-                if pz >= 0:
-                    pIndex = getIndex(x,y,pz)
-                    pPocket = pockets[pIndex]
-                    if pPocket:
-                        pockets[index] = pPocket
-                        continue
-                py = y - 1
-                if py >= 0:
-                    pIndex = getIndex(x,py,z)
-                    pPocket = pockets[pIndex]
-                    if pPocket:
-                        pockets[index] = pPocket
-                        continue
-                px = x - 1
-                if px >= 0:
-                    pIndex = getIndex(px,y,z)
-                    pPocket = pockets[pIndex]
-                    if pPocket:
-                        pockets[index] = pPocket
-                        continue
+                # If it is a pocket but it has been already tagged then pass
+                pocket = pockets[index]
+                if pocket:
+                    continue
                 # If none of the previous values was marked as a pocket then we set a new pocket number
                 pockets_count += 1
-                pockets[index] = pockets_count
+                set_pocket(start_point=(x,y,z), pocket_number=pockets_count)
 
     # Exclude the first result which will always be 0 and it stands for no-pocket points
     biggest_pockets = collections.Counter(pockets).most_common()
@@ -242,19 +262,27 @@ def pockets (
                         file.write(line)
                         count = 0
 
+            # Set a function to get the 'x, y, z' coordinates of a given grid point index
+            def get_coordinates (index : int) -> tuple:
+                x, rem = divmod(index, yl*zl)
+                y, z = divmod(rem, zl)
+                return (x,y,z)
+
             # Convert the grid coordinates to pdb
             new_pdb_lines = []
             lines_count = 0
             new_pdb_filename = pocket_name + '.pdb'
-            for i, v in enumerate(point_coordinates):
-                if pockets[i] == pocket_value:
-                    lines_count += 1
-                    atom_num = str(lines_count).rjust(6,' ')
-                    x_coordinates = str(round((origin[0] + v[0]) * 1000) / 1000).rjust(8, ' ')
-                    y_coordinates = str(round((origin[1] + v[1]) * 1000) / 1000).rjust(8, ' ')
-                    z_coordinates = str(round((origin[2] + v[2]) * 1000) / 1000).rjust(8, ' ')
-                    line = "ATOM "+ atom_num +"  C   PTH     1    "+ x_coordinates + y_coordinates + z_coordinates +"  0.00  0.00\n"
-                    new_pdb_lines.append(line)
+            for i, pocket in enumerate(pockets):
+                if pocket != pocket_value:
+                    continue
+                x,y,z = get_coordinates(i)
+                lines_count += 1
+                atom_num = str(lines_count).rjust(6,' ')
+                x_coordinates = str(round((origin[0] + x) * 1000) / 1000).rjust(8, ' ')
+                y_coordinates = str(round((origin[1] + y) * 1000) / 1000).rjust(8, ' ')
+                z_coordinates = str(round((origin[2] + z) * 1000) / 1000).rjust(8, ' ')
+                line = "ATOM "+ atom_num +"  C   PTH     1    "+ x_coordinates + y_coordinates + z_coordinates +"  0.00  0.00\n"
+                new_pdb_lines.append(line)
 
             # Write the pdb file
             with open(new_pdb_filename,'w') as file:
