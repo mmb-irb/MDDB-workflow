@@ -307,3 +307,18 @@ def prody_selection_to_ndx (
                 # Add +1 to the index since gromacs counts from 1 to n
                 content += str(index + 1) + ' '
             file.write(content + '\n')
+
+# Convert a prody selection to list of atom indices
+# If the append argument is passed the selections will be appended to the default Gromacs selections
+def prody_selection_to_ndx (
+    pdb_filename : str,
+    selection : str,
+):
+    pdb = prody.parsePDB(pdb_filename)
+    selected_pdb = pdb.select(selection)
+    if not selected_pdb:
+        print('WARNING: The fit center selection "' + selection + '" matches no atoms')
+        return
+    selected_atoms = list(selected_pdb.iterAtoms())
+    selected_atom_indexes = [ atom.getIndex() for atom in selected_atoms ]
+    return selected_atom_indexes

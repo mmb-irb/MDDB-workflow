@@ -28,6 +28,7 @@ from subprocess import run, PIPE, Popen
 import json
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.filter_atoms import get_unmembraned_trajectory
 
 # Get only the 10 first pockets since the analysis is quite slow by now
 # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
@@ -38,7 +39,14 @@ def pockets (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
+    membranes : list,
     frames_limit : int):
+
+    # DANI: De momento, no se hacen pockets para simulaciones con membrana
+    # DANI: Estamos a la espera que los de mdpocket incluyan un flag para estos casos
+    # https://github.com/Discngine/fpocket/issues/77#issuecomment-974193129
+    if len(membranes) > 0:
+        return
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
@@ -49,6 +57,22 @@ def pockets (
         input_trajectory_filename,
         frames_limit,
     )
+
+    # We exclude the membrane
+    # DANI: Este es un arreglo temporal pero no es perfecto ya que pueden aparecer pockets donde se encuentra la membrana
+    pockets_topology = input_topology_filename
+    if len(membranes) > 0:
+        unmembraned_structure = 'pockets_unmembraned_structure.pdb'
+        unmembraned_trajectory = 'pockets_unmembraned_trajectory.xtc'
+        get_unmembraned_trajectory(
+            pockets_topology,
+            pockets_trajectory,
+            unmembraned_structure,
+            unmembraned_trajectory,
+            membranes
+        )
+        pockets_topology = unmembraned_structure
+        pockets_trajectory = unmembraned_trajectory
 
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
@@ -75,7 +99,7 @@ def pockets (
             "--trajectory_format",
             "xtc",
             "-f",
-            input_topology_filename,
+            pockets_topology,
             "-o",
             mdpocket_output,
         ], stdout=PIPE).stdout.decode()
@@ -297,7 +321,7 @@ def pockets (
                 "--trajectory_format",
                 "xtc",
                 "-f",
-                input_topology_filename,
+                pockets_topology,
                 "-o",
                 pocket_output,
                 "--selected_pocket",

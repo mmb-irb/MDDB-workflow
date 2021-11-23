@@ -5,6 +5,7 @@ import pytraj as pt
 
 from model_workflow.tools.get_charges import get_raw_charges, raw_charges_filename, get_tpr_charges
 from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr, get_pytraj_parm_format
+from model_workflow.tools.topology_manager import prody_selection_to_ndx
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -48,9 +49,9 @@ def filter_atoms (
         # As long as indices are for atoms and not residues there should never be any incompatibility
         pytraj_mask_2_gromacs_ndx(topology, { filter_group_name : filter_mask }, index_filename)
         # Filter the trajectory
-        xtc_filter(topology_filename, trajectory_filename, index_filename)
+        xtc_filter(topology_filename, trajectory_filename, trajectory_filename, index_filename)
         # Filter the topology
-        pdb_filter(topology_filename, index_filename)
+        pdb_filter(topology_filename, topology_filename, index_filename)
 
     # Filter charges according to the file format
     if charges_filename and os.path.exists(charges_filename):
@@ -91,7 +92,7 @@ def filter_atoms (
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Charges number does not match the structure atoms and tpr files can not be filtered alone')
-                tpr_filter(charges_filename, index_filename)
+                tpr_filter(charges_filename, charges_filename, index_filename)
                 charges = get_tpr_charges(charges_filename)
             filtered_charges_atoms_count = len(charges)
         else:
@@ -113,7 +114,7 @@ def filter_atoms (
 
 # Set the pytraj mask to filter the desired atoms from a specific topology
 def get_filter_mask (source_topology_filename : str, filter_selection : str) -> str:
-    if (filter_selection == 'default'):
+    if filter_selection == 'default':
         return get_default_filter_mask(source_topology_filename)
     # The filter selection is meant to be in vmd selection format
     filter_mask = vmd_selection_2_pytraj_mask(source_topology_filename, filter_selection)
@@ -251,7 +252,8 @@ def atom_indices_2_gromacs_ndx (groups : dict, output_filename : str = 'index.nd
 # Filter atoms in a pdb file
 # This method conserves maximum resolution and chains
 def pdb_filter(
-    topology_filename : str,
+    input_topology_filename : str,
+    output_topology_filename : str,
     index_filename : str
 ):
     # Filter the trajectory
@@ -263,9 +265,9 @@ def pdb_filter(
         "gmx",
         "editconf",
         "-f",
-        topology_filename,
+        input_topology_filename,
         '-o',
-        topology_filename,
+        output_topology_filename,
         '-n',
         index_filename,
         '-quiet'
@@ -275,7 +277,8 @@ def pdb_filter(
 # Filter atoms in a xtc file
 def xtc_filter(
     topology_filename : str,
-    trajectory_filename : str,
+    input_trajectory_filename : str,
+    output_trajectory_filename : str,
     index_filename : str
 ):
     # Filter the trajectory
@@ -289,9 +292,9 @@ def xtc_filter(
         "-s",
         topology_filename,
         "-f",
-        trajectory_filename,
+        input_trajectory_filename,
         '-o',
-        trajectory_filename,
+        output_trajectory_filename,
         '-n',
         index_filename,
         '-quiet'
@@ -300,7 +303,8 @@ def xtc_filter(
 
 # Filter atoms in both a pdb and a xtc file
 def tpr_filter(
-    topology_filename : str,
+    input_topology_filename : str,
+    output_topology_filename : str,
     index_filename : str
 ):
     # Filter the topology
@@ -312,11 +316,29 @@ def tpr_filter(
         "gmx",
         "convert-tpr",
         "-s",
-        topology_filename,
+        input_topology_filename,
         '-o',
-        topology_filename,
+        output_topology_filename,
         '-n',
         index_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+
+# Filter a structure and a trajectory file together
+def get_unmembraned_trajectory (
+    input_topology_filename : str,
+    input_trajectory_filename : str,
+    output_topology_filename : str,
+    output_trajectory_filename : str,
+    membranes : list
+):
+    # Set the .ndx file with the atom indices
+    prody_selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
+    atom_indices = prody_selection_to_ndx(input_topology_filename, prody_selection)
+    groups = { "my_selection" : atom_indices }
+    atom_indices_2_gromacs_ndx(groups, index_filename)
+    # Filter the trajectory
+    xtc_filter(input_topology_filename, input_trajectory_filename, output_trajectory_filename, index_filename)
+    # Filter the topology
+    pdb_filter(input_topology_filename, output_topology_filename, index_filename)
