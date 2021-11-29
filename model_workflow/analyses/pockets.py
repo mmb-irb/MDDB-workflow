@@ -156,20 +156,49 @@ def pockets (
     # Get the coordinates of the colliding points
     # Set the x, y and z index limit (i.e. the limit - 1)
     xil, yil, zil = (xl-1, yl-1, zl-1)
-    def get_colliding_points (point : tuple) -> 'Generator':
+    def get_colliding_points (point : tuple) -> list:
         x, y, z = point[0], point[1], point[2]
-        if x > 0:
-            yield (x-1, y, z)
-        if x < xil:
-            yield (x+1, y, z)
-        if y > 0:
-            yield (x, y-1, z)
-        if y < yil:
-            yield (x, y+1 ,z)
-        if z > 0:
-            yield (x, y, z-1)
-        if z < zil:
-            yield (x, y, z+1)
+        colliding_points = [
+            (x-1, y-1, z-1),
+            (x-1, y-1, z  ),
+            (x-1, y-1, z+1),
+            (x-1, y  , z-1),
+            (x-1, y  , z  ),
+            (x-1, y  , z+1),
+            (x-1, y+1, z-1),
+            (x-1, y+1, z  ),
+            (x-1, y+1, z+1),
+            (x  , y-1, z-1),
+            (x  , y-1, z  ),
+            (x  , y-1, z+1),
+            (x  , y  , z-1),
+            (x  , y  , z+1),
+            (x  , y+1, z-1),
+            (x  , y+1, z  ),
+            (x  , y+1, z+1),
+            (x+1, y-1, z-1),
+            (x+1, y-1, z  ),
+            (x+1, y-1, z+1),
+            (x+1, y  , z-1),
+            (x+1, y  , z  ),
+            (x+1, y  , z+1),
+            (x+1, y+1, z-1),
+            (x+1, y+1, z  ),
+            (x+1, y+1, z+1),
+        ]
+        if x <= 0:
+            colliding_points = [ point for point in colliding_points if point[0] != x-1 ]
+        if x >= xil:
+            colliding_points = [ point for point in colliding_points if point[0] != x+1 ]
+        if y <= 0:
+            colliding_points = [ point for point in colliding_points if point[1] != y-1 ]
+        if y >= yil:
+            colliding_points = [ point for point in colliding_points if point[1] != y+1 ]
+        if z <= 0:
+            colliding_points = [ point for point in colliding_points if point[2] != z-1 ]
+        if z >= zil:
+            colliding_points = [ point for point in colliding_points if point[2] != z+1 ]
+        return colliding_points
 
     # Set a cuttoff value to consider a point valid
     cuttoff = 0.5
@@ -178,27 +207,49 @@ def pockets (
     pockets = [0] * xl * yl * zl
     pockets_count = 0
 
-    # Given a point which belongs to a pocket, find all points connected to it
+    # Given a point which belongs to a pocket, find all pocket points connected to it
+    # This connection must be wide enought for a water molecule to fit in
+    # Grid points are 1 Ångstrom wide and a water molecule has a diameter of 2.75 Ångstroms aprox
+    # So, pocket points must be connected by a net of points at least 3 points wide in all dimensions (x,y,z)
     # Tag all points with the same pocket number
     def set_pocket (start_point : tuple, pocket_number : int):
         points = [start_point]
         for point in points:
             # Get current point colliders
-            colliding_points = list(get_colliding_points(point))
+            colliding_points = get_colliding_points(point)
             # Filter only the pocket points
             pocket_points = []
             for point in colliding_points:
                 index = get_index(*point)
                 value = grid_values[index]
-                # If it is a pocket
+                # If it is a pocket then set it as part of the current pocket
                 if value >= cuttoff:
                     # Tag it as the current pocket
                     pockets[index] = pocket_number
                     pocket_points.append(point)
+            # In case all its surrounding points are pockets add the points to the list so they can keep expanding the pocket
+            # This is done because if all surrounding points are pockets it means we have a wide enought region of the pocket
+            # It is a 3 x 3 x 3 region.
+            # Otherwise stop here since the surrounding points may not we wide enough to expand the pocket
+            if len(pocket_points) < 26:
+                continue
             # Filter points which are not in the pockets list already
             new_points = [ point for point in pocket_points if point not in points ]
             # Update the points list
             points += new_points
+
+    # Find out if a point is surrounded by all pocket points so it could be considered a pocket alone
+    def is_pocket_base (start_point : tuple) -> bool:
+        # Get current point colliders
+        colliding_points = get_colliding_points(start_point)
+        # Search if these points match the cutoff
+        # If only 1 point does not match then this is not a pocket base
+        for point in colliding_points:
+            index = get_index(*point)
+            value = grid_values[index]
+            if value < cuttoff:
+                return False
+        return True
             
     # Save also each point coordinates
     for x in range(xl):
@@ -213,9 +264,13 @@ def pockets (
                 pocket = pockets[index]
                 if pocket:
                     continue
+                # If it is not wide enought to start a pocket then pass
+                point = (x,y,z)
+                if not is_pocket_base(point):
+                    continue
                 # If none of the previous values was marked as a pocket then we set a new pocket number
                 pockets_count += 1
-                set_pocket(start_point=(x,y,z), pocket_number=pockets_count)
+                set_pocket(start_point=point, pocket_number=pockets_count)
 
     # Exclude the first result which will always be 0 and it stands for no-pocket points
     biggest_pockets = collections.Counter(pockets).most_common()
