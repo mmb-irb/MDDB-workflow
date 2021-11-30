@@ -158,6 +158,12 @@ def image_and_fit (
             output_trajectory_filename,
             '-o',
             output_trajectory_filename,
+            # Expanding the box may help in some situations
+            # However there are secondary effects for the trajectory
+            #'-box',
+            #'999',
+            #'999',
+            #'999',
             '-pbc',
             'nojump',
             '-quiet'
