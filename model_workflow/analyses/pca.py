@@ -72,8 +72,9 @@ def pca(
     # Count how many eigen values are greater than 1% of the total eigen value
     # Eigen values are ordered from greater to lower by default, so we stop at the first value lower than 1%
     greater = 0
+    cutoff = total / 100
     for value in values:
-        if(value >= total/100):
+        if value >= cutoff:
             greater += 1
         else:
             break
