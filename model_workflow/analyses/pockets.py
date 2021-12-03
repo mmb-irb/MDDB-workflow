@@ -45,7 +45,7 @@ def pockets (
     # DANI: De momento, no se hacen pockets para simulaciones con membrana
     # DANI: Estamos a la espera que los de mdpocket incluyan un flag para estos casos
     # https://github.com/Discngine/fpocket/issues/77#issuecomment-974193129
-    if len(membranes) > 0:
+    if membranes and len(membranes) > 0:
         return
 
     # Set a reduced trajectory with only 100 frames
@@ -61,7 +61,7 @@ def pockets (
     # We exclude the membrane
     # DANI: Este es un arreglo temporal pero no es perfecto ya que pueden aparecer pockets donde se encuentra la membrana
     pockets_topology = input_topology_filename
-    if len(membranes) > 0:
+    if membranes and len(membranes) > 0:
         unmembraned_structure = 'pockets_unmembraned_structure.pdb'
         unmembraned_trajectory = 'pockets_unmembraned_trajectory.xtc'
         get_unmembraned_trajectory(

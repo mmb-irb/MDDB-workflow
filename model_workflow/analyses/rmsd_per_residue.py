@@ -25,7 +25,7 @@ def rmsd_per_residue (
 
     # We must exclude here membranes from the analysis
     # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
-    if len(membranes) > 0:
+    if membranes and len(membranes) > 0:
         prody_selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
         pytraj_selection = topology_reference.get_pytraj_selection(prody_selection)
         filtered_pt_trajectory = pt_trajectory[pytraj_selection]
