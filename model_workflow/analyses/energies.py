@@ -85,6 +85,7 @@ def energies(
         for interaction in interactions:
 
             name = interaction['name']
+            strong_bonds = interaction['strong_bonds']
 
             # Select the first agent and extract it in a CMIP friendly pdb format
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
@@ -92,7 +93,7 @@ def energies(
             if not agent1_selection:
                 raise SystemExit('ERROR: Agent "' + interaction['agent_1'] + '" with selection "' + 
                     interaction['selection_1'] + '" has no atoms')
-            agent1_cmip = selection2cmip(agent1_name, agent1_selection)
+            agent1_cmip = selection2cmip(agent1_name, agent1_selection, strong_bonds)
 
             # Repeat the process with agent 2
             agent2_name = interaction['agent_2'].replace(' ', '_').replace('/', '_')
@@ -100,7 +101,7 @@ def energies(
             if not agent2_selection:
                 raise SystemExit('ERROR: Agent "' + interaction['agent_2'] + '" with selection "' + 
                     interaction['selection_2'] + '" has no atoms')
-            agent2_cmip = selection2cmip(agent2_name, agent2_selection)
+            agent2_cmip = selection2cmip(agent2_name, agent2_selection, strong_bonds)
 
             # Copy the source cmip inputs file in the local directory
             # Inputs will be modified to adapt the cmip grid to both agents together
@@ -113,6 +114,7 @@ def energies(
                 cmip_inputs,
             ], stdout=PIPE).stdout.decode()
 
+            # Set the CMIP box dimensions and densities to fit both the host and the guest
             adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
@@ -186,10 +188,14 @@ def get_reslib_residues(reslib_filename : str) -> list:
 
 # Transform prody selection to a cmip input pdb, which includes charges
 # Charges have been previously taken from the charges topology and injected in prody
-def selection2cmip(agent_name : str, agent_selection) -> str:
+def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : list) -> str:
     
     print('Setting ' + agent_name + ' charges')
     atoms = agent_selection.iterAtoms()
+
+    strong_bond_indexes = []
+    for bond in strong_bonds:
+        strong_bond_indexes += bond
 
     # Write a special pdb which contains charges as CMIP expects to find them
     output_filename = agent_name + '.cmip.pdb'
@@ -206,7 +212,11 @@ def selection2cmip(agent_name : str, agent_selection) -> str:
             coords = atom.getCoords()
             x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
             charge = "{:.4f}".format(atom.getCharge())
-            element = atom.getElement()
+            # In case this atom is making an strong bond between both interacting agents we add an 'X' before the element
+            # This way CMIP will ignore the atom. Otherwise it would return high non-sense Van der Waals values
+            real_index = atom.getIndex()
+            cmip_ignore_flag = 'X' if real_index in strong_bond_indexes else ''
+            element = cmip_ignore_flag + atom.getElement()
             
             atom_line = ('ATOM  ' + index + '  ' + name + residue_name + ' '
                 + chain + residue_number + icode + '   ' + x_coord + y_coord + z_coord

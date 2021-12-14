@@ -77,6 +77,11 @@ def process_interactions (
         interaction['interface_1'] = sorted(list(set(interface_1_residues)))
         interaction['interface_2'] = sorted(list(set(interface_2_residues)))
 
+        # Find strong bonds between residues in different interfaces
+        vmd_atom_selection_1 = topology_reference.get_prody_selection(interaction['selection_1']).to_vmd()
+        vmd_atom_selection_2 = topology_reference.get_prody_selection(interaction['selection_2']).to_vmd()
+        strong_bonds = get_strong_bonds(topology_filename, vmd_atom_selection_1, vmd_atom_selection_2)
+
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
         interaction.update(
@@ -85,6 +90,7 @@ def process_interactions (
                 'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
                 'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
                 'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
+                'strong_bonds': strong_bonds
             }
         )
 
@@ -99,10 +105,11 @@ def process_interactions (
         for interaction in interactions:
             serializable_interaction = {}
             for key, value in interaction.items():
-                if type(value) == str:
-                    serializable_interaction[key] = value
-                else:
+                sample = value[0]
+                if type(sample) == sourceResidue:
                     serializable_interaction[key] = [ str(element) for element in value ]
+                else:
+                    serializable_interaction[key] = value
             serializable_interactions.append(serializable_interaction)
         json.dump(serializable_interactions, file, indent=4)
 
@@ -225,10 +232,10 @@ def process_interactions_gromacs (
         for interaction in interactions:
             serializable_interaction = {}
             for key, value in interaction.items():
-                if type(value) == str:
-                    serializable_interaction[key] = value
-                else:
+                if type(value) == sourceResidue:
                     serializable_interaction[key] = [ str(element) for element in value ]
+                else:
+                    serializable_interaction[key] = value
             serializable_interactions.append(serializable_interaction)
         json.dump(serializable_interactions, file, indent=4)
 
@@ -391,3 +398,102 @@ def get_interface_residues_gromacs(
     ], stdout=PIPE).stdout.decode()
 
     return interaction
+
+
+# Set a function to retrieve strong bonds between 2 atom selections
+# Atom selections must be in VMD selection syntax
+def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_selection_2 : str) -> list:
+
+    # Prepare a script for the VMD to automate the commands. This is Tcl lenguage
+    commands_filename = 'commands.vmd'
+    output_index_1_file = 'index1.text'
+    output_index_2_file = 'index2.text'
+    output_bonds_file = 'bonds.text'
+    with open(commands_filename, "w") as file:
+        # Select the specified atoms in selection 1
+        file.write('set sel1 [atomselect top "' + atom_selection_1 + '"]\n')
+        # Save all atom index in the selection
+        file.write('set index1 [$sel1 list]\n')
+        # Write those index to a file
+        file.write('set indexfile1 [open ' + output_index_1_file + ' w]\n')
+        file.write('puts $indexfile1 $index1\n')
+        # Save all strong atoms in the selection
+        file.write('set bonds [$sel1 getbonds]\n')
+        # Write those bonds to a file
+        file.write('set bondsfile [open ' + output_bonds_file + ' w]\n')
+        file.write('puts $bondsfile $bonds\n')
+        # Select the specified atoms in selection 2
+        file.write('set sel2 [atomselect top "' + atom_selection_2 + '"]\n')
+        # Save all atom index in the selection
+        file.write('set index2 [$sel2 list]\n')
+        # Write those index to a file
+        file.write('set indexfile2 [open ' + output_index_2_file + ' w]\n')
+        file.write('puts $indexfile2 $index2\n')
+        file.write('exit\n')
+        
+    # Run VMD
+    logs = run([
+        "vmd",
+        structure_filename,
+        "-e",
+        commands_filename,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE).stdout.decode()
+    
+    # Read the VMD output
+    with open(output_index_1_file, 'r') as file:
+        raw_index_1 = file.read()
+    with open(output_bonds_file, 'r') as file:
+        raw_bonds = file.read()
+    with open(output_index_2_file, 'r') as file:
+        raw_index_2 = file.read()
+    
+    # Raw indexes is a string with all indexes separated by spaces
+    index_1 = [ int(i) for i in raw_index_1.split(' ') ]
+    index_2 = [ int(i) for i in raw_index_2.split(' ') ]
+    
+    # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
+    # Raw bonds format is '{index1, index2, index3 ...}' with the index of each atom connected
+    # or 'index' if there is only one connected atom
+    # for each atom in the selection
+    bonds_per_atom = []
+    last_atom_index = ''
+    last_atom_bonds = []
+    in_brackets = False
+    # Add a space at the end of the string to make it get the last character
+    for character in raw_bonds + ' ':
+        if character == ' ':
+            if len(last_atom_index) > 0:
+                if in_brackets:
+                    last_atom_bonds.append(int(last_atom_index))
+                else:
+                    bonds_per_atom.append([int(last_atom_index)])
+                last_atom_index = ''
+            continue
+        if character == '{':
+            in_brackets = True
+            continue
+        if character == '}':
+            last_atom_bonds.append(int(last_atom_index))
+            last_atom_index = ''
+            bonds_per_atom.append(last_atom_bonds)
+            last_atom_bonds = []
+            in_brackets = False
+            continue
+        last_atom_index += character
+        
+    # At this point indexes and bonds from the first selection should match in number
+    if len(index_1) != len(bonds_per_atom):
+        raise ValueError('Indexes (' + str(len(index)) + ') and atom bonds (' +  str(len(bonds)) + ') do not match in number')
+        
+    # Now get all strong bonds which include an index from the atom selection 2
+    crossed_bonds = []
+    for i, index in enumerate(index_1):
+        bonds = bonds_per_atom[i]
+        for bond in bonds:
+            if bond in index_2:
+                crossed_bond = (index, bond)
+                crossed_bonds.append(crossed_bond)
+                
+    return crossed_bonds

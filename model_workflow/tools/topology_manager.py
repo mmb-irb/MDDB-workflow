@@ -95,6 +95,14 @@ class TopologyReference:
         # Get pytraj residues
         self.pytraj_residues = list(self.pytraj_topology.residues)
 
+    # Get a selection from this topology
+    def get_indexes_selection (self, indexes : list):
+        return Selection(self, indexes)
+
+    # Get a selection from this topology
+    def get_prody_selection (self, selection : str):
+        return Selection.from_prody(self, selection)
+
     # Get the source formatted name of a specific prody residue
     def get_residue_name (self, residue):
         return sourceResidue.from_prody(residue).tag()
@@ -240,6 +248,23 @@ class TopologyReference:
     # Set a function to find the absolute residue index in the corrected topology from an absolute atom index
     def get_atom_residue_index (self, atom_index : int) -> int:
         return self.atoms[atom_index].getResindex()
+
+class Selection:
+
+    def __init__ (self, topology_reference : TopologyReference, atom_indexes : list):
+        self.topology_reference = topology_reference
+        self.atom_indexes = atom_indexes
+
+    @classmethod
+    def from_prody (cls, topology_reference : TopologyReference, selection_string : str):
+        prody_selection = topology_reference.topology.select(selection_string)
+        indexes = [ atom.getIndex() for atom in prody_selection.iterAtoms() ]
+        return cls(topology_reference, indexes)
+
+    def to_vmd (self):
+        return 'index ' + ' '.join([ str(index) for index in self.atom_indexes ])
+
+
 
 # Set a pair of independent functions to save and recover chains from a pdb file
 # WARNING: These functions must be used only when the pdb has not changed in number of atoms
