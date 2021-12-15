@@ -8,6 +8,7 @@ import json
 from model_workflow.tools.topology_manager import TopologyReference, sourceResidue
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.tools.get_last_frame import get_last_frame
 from model_workflow.tools.xvg_parse import xvg_parse
 
 # Since interactions are heavy to calculate they are stored in a json file
@@ -78,9 +79,12 @@ def process_interactions (
         interaction['interface_2'] = sorted(list(set(interface_2_residues)))
 
         # Find strong bonds between residues in different interfaces
+        # Use the last trajectory frame to find them
+        last_frame_filename = 'last_frame.pdb'
+        get_last_frame(topology_filename, trajectory_filename, last_frame_filename)
         vmd_atom_selection_1 = topology_reference.get_prody_selection(interaction['selection_1']).to_vmd()
         vmd_atom_selection_2 = topology_reference.get_prody_selection(interaction['selection_2']).to_vmd()
-        strong_bonds = get_strong_bonds(topology_filename, vmd_atom_selection_1, vmd_atom_selection_2)
+        strong_bonds = get_strong_bonds(last_frame_filename, vmd_atom_selection_1, vmd_atom_selection_2)
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
