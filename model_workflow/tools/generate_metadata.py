@@ -56,6 +56,7 @@ def generate_metadata (
         'residues_2': [ str(residue) for residue in interaction['residues_2'] ],
         'interface_1': [ str(residue) for residue in interaction['interface_1'] ],
         'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
+        'strong_bonds': interaction['strong_bonds'],
     } for interaction in processed_interactions]
 
     # Get the input topology reference
