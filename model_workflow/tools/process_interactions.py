@@ -109,6 +109,8 @@ def process_interactions (
         for interaction in interactions:
             serializable_interaction = {}
             for key, value in interaction.items():
+                if len(value) == 0:
+                    continue
                 sample = value[0]
                 if type(sample) == sourceResidue:
                     serializable_interaction[key] = [ str(element) for element in value ]

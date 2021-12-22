@@ -18,19 +18,20 @@
 # Imports libraries
 import os
 from pathlib import Path
-import prody
-import pytraj as pt
 import re
 import numpy
 import math
 from subprocess import run, PIPE, Popen
 import json
+from typing import Optional
+
+import prody
+import pytraj as pt
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
-reslib_source = resources + '/res.lib'
 #preppdb_source = resources + '/preppdb.pl'
 preppdb_source = resources + '/old_preppdb.pl' # DANI: Este no renombra los terminales
 cmip_inputs_checkonly_source = resources + '/check.in'
@@ -85,7 +86,7 @@ def energies(
         for interaction in interactions:
 
             name = interaction['name']
-            strong_bonds = interaction['strong_bonds']
+            strong_bonds = interaction.get('strong_bonds', None)
 
             # Select the first agent and extract it in a CMIP friendly pdb format
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
@@ -176,26 +177,17 @@ def energies(
         energies_topology,
     ], stdout=PIPE).stdout.decode()
 
-# Save all unique residues in res.lib
-def get_reslib_residues(reslib_filename : str) -> list:
-    residues = []
-    with open(reslib_filename, 'r') as file:
-        lines = file.readlines()
-        for line in lines:
-            resname = line[0:4].strip()
-            residues.append(resname)
-    return list(set(residues))
-
 # Transform prody selection to a cmip input pdb, which includes charges
 # Charges have been previously taken from the charges topology and injected in prody
-def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : list) -> str:
+def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : Optional[list]) -> str:
     
     print('Setting ' + agent_name + ' charges')
     atoms = agent_selection.iterAtoms()
 
     strong_bond_indexes = []
-    for bond in strong_bonds:
-        strong_bond_indexes += bond
+    if strong_bonds:
+        for bond in strong_bonds:
+            strong_bond_indexes += bond
 
     # Write a special pdb which contains charges as CMIP expects to find them
     output_filename = agent_name + '.cmip.pdb'
