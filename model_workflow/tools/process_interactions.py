@@ -454,21 +454,29 @@ def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_sel
         raw_bonds = file.read()
     with open(output_index_2_file, 'r') as file:
         raw_index_2 = file.read()
+
+    # Remove vmd files since they are no longer usefull
+    for f in [ commands_filename, output_index_1_file, output_index_2_file, output_bonds_file ]:
+        os.remove(f)
+
+    # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
+    # Add a space at the end of the string to make the parser get the last character
+    raw_bonds = raw_bonds.replace('\n', '') + ' '
     
     # Raw indexes is a string with all indexes separated by spaces
     index_1 = [ int(i) for i in raw_index_1.split(' ') ]
     index_2 = [ int(i) for i in raw_index_2.split(' ') ]
     
     # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
-    # Raw bonds format is '{index1, index2, index3 ...}' with the index of each atom connected
-    # or 'index' if there is only one connected atom
-    # for each atom in the selection
+    # Raw bonds format is (for each atom in the selection):
+    # '{index1, index2, index3 ...}' with the index of each connected atom
+    # 'index' if there is only one connected atom
+    # '{}' if there are no connected atoms
     bonds_per_atom = []
     last_atom_index = ''
     last_atom_bonds = []
     in_brackets = False
-    # Add a space at the end of the string to make it get the last character
-    for character in raw_bonds + ' ':
+    for character in raw_bonds:
         if character == ' ':
             if len(last_atom_index) > 0:
                 if in_brackets:
@@ -481,6 +489,10 @@ def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_sel
             in_brackets = True
             continue
         if character == '}':
+            if last_atom_index == '':
+                bonds_per_atom.append([])
+                in_brackets = False
+                continue
             last_atom_bonds.append(int(last_atom_index))
             last_atom_index = ''
             bonds_per_atom.append(last_atom_bonds)
@@ -491,7 +503,7 @@ def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_sel
         
     # At this point indexes and bonds from the first selection should match in number
     if len(index_1) != len(bonds_per_atom):
-        raise ValueError('Indexes (' + str(len(index)) + ') and atom bonds (' +  str(len(bonds)) + ') do not match in number')
+        raise ValueError('Indexes (' + str(len(index_1)) + ') and atom bonds (' +  str(len(bonds_per_atom)) + ') do not match in number')
         
     # Now get all strong bonds which include an index from the atom selection 2
     crossed_bonds = []
