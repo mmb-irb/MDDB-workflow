@@ -38,6 +38,10 @@ cmip_inputs_checkonly_source = resources + '/check.in'
 cmip_inputs_source = resources + '/input.in'
 vdw_source = resources + '/vdwprm'
 
+# Set a folder to be created in order to store residual output files from this analysis
+current_directory = str(Path().absolute())
+energies_folder = current_directory + '/energies'
+
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies(
         input_topology_filename: str,
@@ -56,8 +60,13 @@ def energies(
         print('No charges were passed')
         return
 
+    # This anlaysis produces many residual output files
+    # Create a new folder to store all ouput files so they do not overcrowd the main directory
+    if not os.path.exists(energies_folder):
+        os.mkdir(energies_folder)
+
     # Correct the topology by renaming residues according to if they are terminals
-    energies_topology = 'energies.pdb'
+    energies_topology = energies_folder + '/energies.pdb'
     energies_topology_prody = prody.parsePDB(input_topology_filename)
     energies_topology_prody = name_terminal_residues(energies_topology_prody)
     prody.writePDB(energies_topology, energies_topology_prody)
@@ -108,20 +117,16 @@ def energies(
             # Inputs will be modified to adapt the cmip grid to both agents together
             # Note than modified inputs file is not conserved along frames
             # Structures may change along trajectory thus requiring a different grid size
-            cmip_inputs = 'cmip.in'
-            logs = run([
-                "cp",
-                cmip_inputs_source,
-                cmip_inputs,
-            ], stdout=PIPE).stdout.decode()
+            cmip_inputs = energies_folder + '/cmip.in'
+            run([ "cp", cmip_inputs_source, cmip_inputs ], stdout=PIPE)
 
             # Set the CMIP box dimensions and densities to fit both the host and the guest
             adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
-            agent1_output_energy = agent1_name + '.energy.pdb'
+            agent1_output_energy = energies_folder + '/' + agent1_name + '.energy.pdb'
             agent1_data = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1_output_energy)
-            agent2_output_energy = agent2_name + '.energy.pdb'
+            agent2_output_energy = energies_folder + '/' + agent2_name + '.energy.pdb'
             agent2_data = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_output_energy)
 
             data.append({ 'agent1': agent1_data, 'agent2': agent2_data })
@@ -190,7 +195,7 @@ def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : Optio
             strong_bond_indexes += bond
 
     # Write a special pdb which contains charges as CMIP expects to find them
-    output_filename = agent_name + '.cmip.pdb'
+    output_filename = energies_folder + '/' + agent_name + '.cmip.pdb'
     with open(output_filename, "w") as file:
 
         for a, atom in enumerate(atoms):
@@ -457,9 +462,13 @@ def name_terminal_residues(selection):
 # Finally, modify the provided 'cmip_inputs' with the new grid parameters
 def adapt_cmip_grid(agent1, agent2, cmip_inputs):
     print('Adapting grid')
+
     # Set a name for the checkonly CMIP outputs
     # This name is not important, since the data we want is in the CMIP logs
-    cmip_checkonly_output = 'checkonly.energy.pdb'
+    cmip_checkonly_output = energies_folder + '/checkonly.energy.pdb'
+
+    # Move to the energies folder for a moment for the residual cmip files to get generated inside of it
+    os.chdir(energies_folder)
 
     # Run CMIP in 'checkonly' mode and save the grid dimensions output
     # First do it for the agent 1
@@ -500,6 +509,9 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
     # Mine the grid dimensions from CMIP logs
     agent2_center, agent2_density, agent2_units = mine_cmip_output(
         cmip_logs_agent2.split("\n"))
+
+    # Get back to the main folder
+    os.chdir("..")
 
     # Calculate grid dimensions for a new grid which contains both previous grids
     new_center, new_density = compute_new_grid(
@@ -620,6 +632,8 @@ def compute_new_grid(
 # Run the CMIP software to get the desired energies
 def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
     print('Calculating energies')
+    # Move to the energies folder for a moment for the residual cmip files to get generated inside of it
+    os.chdir(energies_folder)
     # Run cmip
     cmip_logs = run([
         "cmip",
@@ -634,6 +648,8 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
         "-byat",
         cmip_output,
     ], stdout=PIPE).stdout.decode()
+    # Get back to the main folder
+    os.chdir("..")
 
     # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
     # Group the results by reidues adding their values

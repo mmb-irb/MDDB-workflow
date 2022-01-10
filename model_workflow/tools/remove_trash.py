@@ -26,11 +26,7 @@ def remove_trash():
             *reduced_trajectories,
         ], stdout=PIPE).stdout.decode()
 
-    # Remove the 'restart' cmip file
-    restart_filename = 'restart'
-    if os.path.exists(restart_filename):
-
-        logs = run([
-            "rm",
-            restart_filename,
-        ], stdout=PIPE).stdout.decode()
+    # Remove the last frame file
+    last_frame_filename = 'last_frame.pdb'
+    if os.path.exists(last_frame_filename):
+        os.remove(last_frame_filename)
