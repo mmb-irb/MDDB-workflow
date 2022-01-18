@@ -96,20 +96,19 @@ def topology_corrector(
     # ------------------------------------------------------------------------------------------
 
     # Save the string letters of each chain
-    # Find repeated chains which would give problems further if topology is not modified:
+    # Find repeated chains which would give problems further if topology if not modified:
     chain_letters = []
     last_chain_letter = None
     repeated_chain_letters = []
     last_repeated_chain_letter = None
 
-    # DANI: No se ha provado con iterAtoms
-    for a in test.iterAtoms():
-        chain_letter = a.getChid()
+    for atom in test.iterAtoms():
+        chain_letter = atom.getChid()
         if chain_letter == last_chain_letter:
             continue
         if chain_letter == last_repeated_chain_letter:
-            chain = chains[a.getChindex()]
-            chain.setChid(last_chain_letter)
+            #chain = chains[atom.getChindex()]
+            atom.setChid(last_chain_letter)
             continue
         # When a new chain letter is found
         last_repeated_chain_letter = None
@@ -123,8 +122,8 @@ def topology_corrector(
                 last_chain_letter = get_next_letter(last_chain_letter)
             # Set the new chain letter
             chain_letters.append(last_chain_letter)
-            chain = chains[a.getChindex()]
-            chain.setChid(last_chain_letter)
+            #chain = chains[atom.getChindex()]
+            atom.setChid(last_chain_letter)
             logs.append('- One of the repeated chains "' + last_repeated_chain_letter +
                         '" has been renamed as "' + last_chain_letter + '"')
         # If is not repeated add it to the list
