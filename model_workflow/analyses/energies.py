@@ -200,8 +200,9 @@ def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : Optio
 
         for a, atom in enumerate(atoms):
             
-            index = str(a).rjust(5)
-            name = atom.getName().ljust(4)
+            index = str(a+1).rjust(5)
+            atomname = atom.getName()
+            name =  ' ' + atomname.ljust(3) if len(atomname) < 4 else atomname
             residue_name = atom.getResname().ljust(3)
             chain = atom.getChid().rjust(1)
             residue_number = str(atom.getResnum()).rjust(4)
@@ -215,7 +216,7 @@ def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : Optio
             cmip_ignore_flag = 'X' if real_index in strong_bond_indexes else ''
             element = cmip_ignore_flag + atom.getElement()
             
-            atom_line = ('ATOM  ' + index + '  ' + name + residue_name + ' '
+            atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name + ' '
                 + chain + residue_number + icode + '   ' + x_coord + y_coord + z_coord
                 + ' ' + str(charge).rjust(7) + '  ' + element + '\n')
             file.write(atom_line)
