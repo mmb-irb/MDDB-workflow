@@ -653,7 +653,7 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
     os.chdir("..")
 
     # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
-    # Group the results by reidues adding their values
+    # Group the results by residues adding their values
     residues = {}
     with open(cmip_output, 'r') as file:
         lines = list(file)
@@ -675,7 +675,10 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
             both = float(line[72:83])
             # Values greater than 100 are represented as 0
             # This step is performed to filter 'infinity' values
-            energies = (vdw, es, both) if both < 100 else (0, 0, 0)
+            energies = (vdw, es, both)
+            if both > 100:
+                print('WARNING: We have extremly high values in energies which are beeing discarded')
+                energies = (0, 0, 0)
             if residue in residues:
                 residues[residue] = tuple(
                     [a+b for a, b in zip(energies, residues[residue])])
