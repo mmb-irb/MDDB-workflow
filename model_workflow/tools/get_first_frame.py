@@ -1,6 +1,7 @@
 # This script is used to get the first trajectory frame
 # This process is carried by Gromacs
 
+import os
 from subprocess import run, PIPE, Popen
 
 # input_topology_filename - The name string of the input topology file (path)
@@ -13,7 +14,11 @@ def get_first_frame (
     input_topology_filename : str,
     input_trajectory_filename : str,
     first_frame_filename : str
-    ) -> str:
+    ):
+
+    # Stop here in case the file already exists
+    if os.path.exists(first_frame_filename):
+        return
 
     # Run Gromacs
     p = Popen([
@@ -34,6 +39,3 @@ def get_first_frame (
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
-
-    # Return gromacs logs
-    return logs
