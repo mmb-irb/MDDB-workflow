@@ -113,7 +113,7 @@ def rmsd_check (
     input_trajectory_filename : str
     ):
 
-    print('Checking trajectory intergity')
+    print('Checking trajectory integrity')
 
     # Select the whole protein to check the RMSd
     test_group = 'Protein'
