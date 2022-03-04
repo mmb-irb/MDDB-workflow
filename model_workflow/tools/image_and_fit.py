@@ -35,8 +35,8 @@ def image_and_fit (
 
     # In order to run the imaging protocol 4 we need a .tpr file, not just the .pdb file
     # This is because there is a '-pbc res' step which only works with a .tpr file
-    if preprocess_protocol == 4 and not is_tpr(input_tpr_filename):
-        raise ValueError('In order to run protocol 4 it is mandatory to provide a .tpr file')
+    if preprocess_protocol == 4 and not ( input_tpr_filename and is_tpr(input_tpr_filename) ):
+        raise SystemExit('In order to run protocol 4 it is mandatory to provide a .tpr file')
 
     # Imaging --------------------------------------------------------------------------------------
 
