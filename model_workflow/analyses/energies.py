@@ -714,6 +714,8 @@ def format_data(data):
     # We take the initial 20% and the final 20% of frames to calculate each respectively
     p20_frames = len(data)
     p20 = round(p20_frames*0.2)
+    if p20 == 0:
+        p20 = 1
 
     # Initials
     residues_vdw_values_initial = [[] for n in range(residues_number)]
