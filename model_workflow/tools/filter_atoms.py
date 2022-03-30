@@ -162,11 +162,17 @@ def vmd_selection_2_pytraj_mask (source_topology_filename : str, filter_selectio
     ], stdout=PIPE).stdout.decode()
 
     # Mine and parse the VMD logs into an atoms indices list
+    atom_indices_line = None
     vmd_log_lines = vmd_logs.split('\n')
     for l, line in enumerate(vmd_log_lines):
         if line == 'atomselect0':
             atom_indices_line = vmd_log_lines[l + 1]
             break
+
+    if atom_indices_line == None:
+        print(vmd_logs)
+        raise SystemExit('Something went wrong with VMD')
+
     # WARNING: Although pytraj atom indices goes from 0 to n-1, they go from 1 to n in the selection mask
     atom_indices = [ str(int(index) + 1) for index in atom_indices_line.split(' ') ]
     filter_mask = '@' + ','.join(atom_indices)
