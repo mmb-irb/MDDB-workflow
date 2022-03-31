@@ -464,8 +464,8 @@ def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_sel
     raw_bonds = raw_bonds.replace('\n', '') + ' '
     
     # Raw indexes is a string with all indexes separated by spaces
-    index_1 = [ int(i) for i in raw_index_1.split(' ') ]
-    index_2 = [ int(i) for i in raw_index_2.split(' ') ]
+    index_1 = [ int(i) for i in raw_index_1.split() ]
+    index_2 = [ int(i) for i in raw_index_2.split() ]
     
     # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
     # Raw bonds format is (for each atom in the selection):
