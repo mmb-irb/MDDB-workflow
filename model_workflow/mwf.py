@@ -192,6 +192,8 @@ inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
 preprocess_protocol = Dependency(getInput, {'input': 'preprocess_protocol'})
 translation = Dependency(getInput, {'input': 'translation'})
 filter_selection = Dependency(getInput, {'input': 'filter_selection'})
+pca_fit_selection = Dependency(getInput, {'input': 'pca_fit_selection'})
+pca_selection = Dependency(getInput, {'input': 'pca_selection'})
 
 # Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
@@ -400,6 +402,8 @@ analyses = [
         "output_eigenvalues_filename": OUTPUT_pca_filename,
         "output_eigenvectors_filename": "eigenvec.trr",
         'frames_limit': 2000,
+        'pca_fit_selection': pca_fit_selection,
+        'pca_selection': pca_selection,
     }, 'pca'),
     # DANI: Intenta usar mucha memoria, hay que revisar
     # DANI: Puede saltar un error de imposible alojar tanta memoria
@@ -569,20 +573,10 @@ def main():
     input_trajectory_filenames = args.input_trajectory_filenames
     inputs_filename =  args.inputs_filename
     input_charges_filename = args.input_charges_filename
-    preprocess_protocol = int(args.preprocess_protocol)
-    translation = args.translation
-    filter_selection = args.filter_selection
 
     # Set the command line inputs
-    inputs.update({
-        'input_topology_filename' : input_topology_filename,
-        'input_trajectory_filenames' : input_trajectory_filenames,
-        'inputs_filename' : inputs_filename,
-        'input_charges_filename' : input_charges_filename,
-        'preprocess_protocol': preprocess_protocol,
-        'translation': translation,
-        'filter_selection': filter_selection
-    })
+    # The vars function converts the args object to a dictionary
+    inputs.update(vars(args))
 
     # Manage the working directory and make the required downloads
     download_input_files(
@@ -720,6 +714,16 @@ parser.add_argument(
     "-filt", "--filter_selection",
     default=None,
     help="Atoms selection to be filtered in VMD format")
+
+parser.add_argument(
+    "-pcafit", "--pca_fit_selection",
+    default='Protein-H',
+    help="Group selection for the pca fit in GROMACS format")
+
+parser.add_argument(
+    "-pcasel", "--pca_selection",
+    default='Backbone',
+    help="Group selection for pca in GROMACS format")
 
 parser.add_argument(
     "-d", "--download",

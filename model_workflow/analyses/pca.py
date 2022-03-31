@@ -21,6 +21,8 @@ def pca(
     output_eigenvalues_filename: str,
     output_eigenvectors_filename: str,
     frames_limit : int,
+    pca_fit_selection : str = 'Protein-H',
+    pca_selection : str = 'Backbone'
 ):
 
     # By default we set the whole trajectory as PCA trajectory
@@ -35,8 +37,8 @@ def pca(
     # Calculate eigen values and eigen vectors with Gromacs
     p = Popen([
         "echo",
-        "Protein-H",
-        "Backbone",
+        pca_fit_selection,
+        pca_selection,
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -54,6 +56,10 @@ def pca(
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+
+    if not os.path.exists(output_eigenvalues_filename):
+        print(logs)
+        raise SystemExit('Something went wrong with GROMACS')
 
     # Read the eigen values file and get an array with all eigen values
     values = []
@@ -92,8 +98,8 @@ def pca(
         # Perform the projection analysis through the 'anaeig' gromacs command
         p = Popen([
             "echo",
-            "Protein-H",
-            "Backbone",
+            pca_fit_selection,
+            pca_selection,
         ], stdout=PIPE)
         logs = run([
             "gmx",
