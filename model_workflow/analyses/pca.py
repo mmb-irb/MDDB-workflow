@@ -4,6 +4,7 @@ import math
 from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.tools.topology_manager import get_chains, set_chains
 
 # Set a name for the pca average file
 # If not specified, this file is create with the name 'average.pdb'
@@ -60,6 +61,10 @@ def pca(
     if not os.path.exists(output_eigenvalues_filename):
         print(logs)
         raise SystemExit('Something went wrong with GROMACS')
+
+    # Retore chains in the average structure
+    chains = get_chains(input_topology_filename)
+    set_chains(pca_average_filename, chains)
 
     # Read the eigen values file and get an array with all eigen values
     values = []
