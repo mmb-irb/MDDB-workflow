@@ -27,9 +27,13 @@ def rmsd_pairwise(
     pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
     # Run the analysis
-    data = pt.pairwise_rmsd(pt_trajectory, '@CA')
+    overall_selection = '@CA'
+    data = pt.pairwise_rmsd(pt_trajectory, overall_selection)
     # Convert data to a normal list, since numpy ndarrays are not json serializable
     data = data.tolist()
+    # In case there is no data we stop here
+    if len(data) == 0:
+        raise SystemExit('The rmsd-pairwise overall selection (' + overall_selection + ') is empty')
 
     # Set the final structure data
     output_analysis = [
