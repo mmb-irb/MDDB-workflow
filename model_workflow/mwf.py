@@ -688,6 +688,7 @@ parser.add_argument(
 
 parser.add_argument(
     "-pr", "--preprocess_protocol",
+    type=int,
     default=0,
     help=("Set how the trajectory must be imaged and fitted (i.e. centered, without translation or rotation)\n"
         "These protocolos may help in some situations, but the imaging step can not be fully automatized\n"
