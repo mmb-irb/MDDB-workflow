@@ -19,6 +19,8 @@ import re
 import prody
 import pytraj as pt
 
+from .topology_corrector import purgeNonUtf8
+
 # DANI: Hay que comprobar que no haya residuos de número repetido sin icode
 # DANI: Si esto sucede ProDy no verá los residuos y pytraj sí
 # DANI: Análisis de pytraj fallarán por este baile de números (e.g. rmsd-perres)
@@ -271,6 +273,7 @@ class Selection:
 
 # Get a list with each atom chain from a pdb
 def get_chains (pdb_filename : str) -> list:
+    purgeNonUtf8(pdb_filename)
     pdb = prody.parsePDB(pdb_filename)
     atoms = list(pdb.iterAtoms())
     chains = [ atom.getChid() for atom in atoms ]
