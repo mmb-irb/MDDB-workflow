@@ -15,6 +15,9 @@ import json
 # Import external analysis tools
 import pytraj as pt
 
+# Import tools from mdtoolbelt
+from mdtoolbelt.structures import Structure
+
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_processor
 from model_workflow.tools.filter_atoms import filter_atoms
@@ -146,10 +149,10 @@ OUTPUT_topology_filename = 'md.imaged.rot.dry.pdb'
 OUTPUT_trajectory_filename = 'md.imaged.rot.xtc'
 OUTPUT_charges_filename = get_output_charges_filename()
 OUTPUT_first_frame_filename = 'firstFrame.pdb'
-OUTPUT_backbone_filename = 'backbone.pdb'
 OUTPUT_average_structure_filename = 'average.pdb'
 OUTPUT_average_frame_filename = 'average.xtc'
 OUTPUT_metadata_filename = 'metadata.json'
+OUTPUT_interactions_filename = 'md.interactions.json'
 OUTPUT_rmsds_filename = 'md.rmsds.json'
 OUTPUT_tmscores_filename = 'md.tmscores.json'
 OUTPUT_rmsf_filename = 'md.rmsf.xvg'
@@ -283,6 +286,12 @@ topology_reference = Dependency(TopologyReference, {
     'topology_filename': topology_filename
 })
 
+# Set a parsed structure/topology with useful features
+# This object also include functions to convert residue numeration from one format to another
+structure = Dependency(Structure.from_pdb_file, {
+    'pdb_filename': topology_filename
+})
+
 # Set the pytraj trayectory
 pt_trajectory = Dependency(get_pytraj_trajectory, {
     'input_topology_filename': topology_filename,
@@ -294,11 +303,6 @@ first_frame_filename = File(OUTPUT_first_frame_filename, get_first_frame, {
     'input_topology_filename' : topology_filename,
     'input_trajectory_filename' : trajectory_filename,
     'first_frame_filename' : OUTPUT_first_frame_filename
-})
-# Get the backbone structure
-backbone_filename = File(OUTPUT_backbone_filename, get_backbone, {
-    'topology_reference': topology_reference,
-    'output_backbone_filename': OUTPUT_backbone_filename
 })
 # Get the average structure in pdb format
 average_structure_filename = File(OUTPUT_average_structure_filename, get_average, {
@@ -327,6 +331,7 @@ interactions = Dependency(process_interactions, {
     'trajectory_filename': trajectory_filename,
     'interactions': input_interactions,
     'topology_reference': topology_reference,
+    'interactions_file': OUTPUT_interactions_filename,
 }, 'interactions')
 
 # Find out residues and interface residues for each interaction

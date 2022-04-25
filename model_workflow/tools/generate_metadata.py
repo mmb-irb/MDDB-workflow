@@ -52,11 +52,11 @@ def generate_metadata (
         'agent_2': interaction['agent_2'],
         'selection_1': interaction['selection_1'],
         'selection_2': interaction['selection_2'],
-        'residues_1': [ str(residue) for residue in interaction['residues_1'] ],
-        'residues_2': [ str(residue) for residue in interaction['residues_2'] ],
-        'interface_1': [ str(residue) for residue in interaction['interface_1'] ],
-        'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
-        'strong_bonds': interaction['strong_bonds'],
+        #'residues_1': [ str(residue) for residue in interaction['residues_1'] ],
+        #'residues_2': [ str(residue) for residue in interaction['residues_2'] ],
+        #'interface_1': [ str(residue) for residue in interaction['interface_1'] ],
+        #'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
+        #'strong_bonds': interaction['strong_bonds'],
     } for interaction in processed_interactions]
 
     # Get the input topology reference

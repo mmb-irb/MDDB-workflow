@@ -11,72 +11,79 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.tools.get_last_frame import get_last_frame
 from model_workflow.tools.xvg_parse import xvg_parse
 
-# Since interactions are heavy to calculate they are stored in a json file
-# This file is only a backup, which is not uploaded to the database
-# In addition, this file may be used to force interactions with custom interface residues manually
-interactions_backup = 'interactions.json'
+# The cutoff distance is in Ångstroms (Å)
+cutoff_distance : float = 5
 
+# Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
-# WARNING: The cutoff distance is in Ångstroms (Å)
+# The heavy results of interactions are stored in a json file which is uploaded to the database independently
+# This file is also used as a backup here, since calculating interactions is a heavy calculation
+# In addition, this file may be used to force interactions with custom interface residues manually
 def process_interactions (
     interactions : list,
     topology_filename : str,
     trajectory_filename : str,
     topology_reference,
-    cutoff_distance : float = 5) -> list:
+    interactions_file : str) -> list:
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
-    if os.path.exists(interactions_backup):
-        with open(interactions_backup, 'r') as file:
-            interactions = json.load(file)
-        # Parse the residues in string format to 'sourceResidue' format (e.g. 'A:1')
-        for interaction in interactions:
-            for key in ['residues_1','residues_2','interface_1','interface_2']:
-                interaction[key] = [ sourceResidue.from_tag(residue) for residue in interaction[key] ]
-        return interactions
+    if os.path.exists(interactions_file):
+        return load_interactions(interactions_file, topology_reference)
 
     # If there are no interactions return an empty list
     if not interactions or len(interactions) == 0:
         return []
     
     for interaction in interactions:
+        selection_1 = interaction['selection_1']
+        selection_2 = interaction['selection_2']
+        # Get residues and residue indices
         # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.residues_selection(
-            interaction['selection_1']
-        )
+        residues_1, residue_indices_1 = topology_reference.prody_selection_2_residues(selection_1)
+        interaction['residues_1'] = residues_1
+        residue_indices_1 = [ int(i) for i in residue_indices_1 ]
+        interaction['residue_indices_1'] = residue_indices_1
         # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.residues_selection(
-            interaction['selection_2']
-        )
+        residues_2, residue_indices_2 = topology_reference.prody_selection_2_residues(selection_2)
+        interaction['residues_2'] = residues_2
+        residue_indices_2 = [ int(i) for i in residue_indices_2 ]
+        interaction['residue_indices_2'] = residue_indices_2
         # Get 100 frames (or less) along the trajectory
         frames_limit = 100
         frames, step, count = get_pdb_frames(topology_filename, trajectory_filename, frames_limit)
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_1_residues = []
         interface_2_residues = []
+        interface_1_indices = []
+        interface_2_indices = []
         for current_frame in frames:
             frame_structure = TopologyReference(current_frame)
             # interface_1 is the list of residues from the agent 1 which are close to the agent 2
-            frame_interface_1 = frame_structure.residues_selection(
-                '(' + interaction['selection_1'] +
-                ') and same residue as exwithin ' +
-                str(cutoff_distance) +
-                ' of (' +
-                interaction['selection_2'] + ')')
-            interface_1_residues += frame_interface_1
+            interface_selection_1 = ('(' + selection_1 + ') and same residue as exwithin ' +
+                str(cutoff_distance) + ' of (' + selection_2 + ')')
+            frame_interface_residues_1, frame_interface_residue_indices_1 = frame_structure.prody_selection_2_residues(
+                interface_selection_1
+            )
+            interface_1_residues += frame_interface_residues_1
+            interface_1_indices += frame_interface_residue_indices_1
             # interface_2 is the list of residues from agent 2 which are close to the agent 1
-            frame_interface_2 = frame_structure.residues_selection(
-                '(' + interaction['selection_2'] +
-                ') and same residue as exwithin ' +
-                str(cutoff_distance) +
-                ' of (' +
-                interaction['selection_1'] + ')')
-            interface_2_residues += frame_interface_2
+            interface_selection_2 = ('(' + selection_2 + ') and same residue as exwithin ' +
+                str(cutoff_distance) + ' of (' + selection_1 + ')')
+            frame_interface_residues_2, frame_interface_residue_indices_2 = frame_structure.prody_selection_2_residues(
+                interface_selection_2
+            )
+            interface_2_residues += frame_interface_residues_2
+            interface_2_indices += frame_interface_residue_indices_2
         
-        # Remove duplicates and sorth residues
+        # Remove duplicates and sort residues
         interaction['interface_1'] = sorted(list(set(interface_1_residues)))
         interaction['interface_2'] = sorted(list(set(interface_2_residues)))
+        # Conver indices in normal integers
+        interface_1_indices = [ int(i) for i in interface_1_indices ]
+        interface_2_indices = [ int(i) for i in interface_2_indices ]
+        interaction['interface_indices_1'] = sorted(list(set(interface_1_indices)))
+        interaction['interface_indices_2'] = sorted(list(set(interface_2_indices)))
 
         # Find strong bonds between residues in different interfaces
         # Use the last trajectory frame to find them
@@ -101,25 +108,49 @@ def process_interactions (
         print(interaction['name'] +
             ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
 
-    # Save a backup for interactions
-    with open(interactions_backup, 'w') as file:
+    # Write the interactions file with the fields to be uploaded to the database only
+    # i.e. strong bonds and residue indices
+    file_keys = [
+        'name',
+        'agent_1',
+        'agent_2',
+        'residue_indices_1',
+        'residue_indices_2',
+        'interface_indices_1',
+        'interface_indices_2',
+        'strong_bonds'
+    ]
+    with open(interactions_file, 'w') as file:
         # Create a new interactions object with all 'sourceResidue' values as string
         # e.g. 'A:1'
-        serializable_interactions = []
+        file_interactions = []
         for interaction in interactions:
-            serializable_interaction = {}
-            for key, value in interaction.items():
-                if len(value) == 0:
-                    continue
-                sample = value[0]
-                if type(sample) == sourceResidue:
-                    serializable_interaction[key] = [ str(element) for element in value ]
-                else:
-                    serializable_interaction[key] = value
-            serializable_interactions.append(serializable_interaction)
-        json.dump(serializable_interactions, file, indent=4)
+            file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
+            file_interactions.append(file_interaction)
+        json.dump(file_interactions, file, indent=4)
 
     return interactions
+
+# Load interactions from an already existinf interactions file
+def load_interactions (interactions_file : str, topology_reference) -> list:
+    with open(interactions_file, 'r') as file:
+        # The stored interactions should carry only residue indices and strong bonds
+        interactions = json.load(file)
+        # Now we must complete every interactions dict by adding residues in source format and pytraj format
+        for interaction in interactions:
+            # Get residues from their indices
+            converter = topology_reference.index_2_prody
+            interaction['residues_1'] = [ converter(index) for index in interaction['residue_indices_1'] ]
+            interaction['residues_2'] = [ converter(index) for index in interaction['residue_indices_2'] ]
+            interaction['interface_1'] = [ converter(index) for index in interaction['interface_indices_1'] ]
+            interaction['interface_2'] = [ converter(index) for index in interaction['interface_indices_2'] ]
+            # Transform to pytraj
+            converter = topology_reference.source2pytraj
+            interaction['pt_residues_1'] = list(map(converter, interaction['residues_1']))
+            interaction['pt_residues_2'] = list(map(converter, interaction['residues_2']))
+            interaction['pt_interface_1'] = list(map(converter, interaction['interface_1']))
+            interaction['pt_interface_2'] = list(map(converter, interaction['interface_2']))
+        return interactions
 
 # The easy processing uses the cutoff in the topology / structure to set the interface residues
 # Interface residues are defined as by a cuttoff distance in Angstroms
@@ -190,8 +221,8 @@ def process_interactions_gromacs (
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
-    if os.path.exists(interactions_backup):
-        with open(interactions_backup, 'r') as file:
+    if os.path.exists(interactions_file):
+        with open(interactions_file, 'r') as file:
             interactions = json.load(file)
         # Parse the residues in string format to 'sourceResidue' format (e.g. 'A:1')
         for interaction in interactions:
@@ -231,7 +262,7 @@ def process_interactions_gromacs (
             ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
 
     # Save a backup for interactions
-    with open(interactions_backup, 'w') as file:
+    with open(interactions_file, 'w') as file:
         # Create a new interactions object with all 'sourceResidue' values as string
         # e.g. 'A:1'
         serializable_interactions = []

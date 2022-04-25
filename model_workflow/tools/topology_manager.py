@@ -153,7 +153,7 @@ class TopologyReference:
         if index < len(self.residues):
             residue = self.residues[index]
             if (residue.getResnum() == expectedNumber and residue.getResname()[0:3] == expectedName):
-                return sourceResidue(residue.getChid(), residue.getResnum(), residue.getIcode())
+                return sourceResidue.from_prody(residue)
             
         # Pytraj index may not match the prody index in caotic topologies
         # (i.e. when heavy atoms and hydrogen are listed independently)
@@ -163,34 +163,28 @@ class TopologyReference:
         for residue in self.residues:
             #print(str(residue.getResnum()) + ' -> ' + str(expectedNumber) + ' / ' + residue.getResname()[0:3] + ' -> ' + expectedName)
             if (residue.getResnum() == expectedNumber and residue.getResname()[0:3] == expectedName):
-                return sourceResidue(residue.getChid(), residue.getResnum(), residue.getIcode())
+                return sourceResidue.from_prody(residue)
             
         # Return None if there are no results    
         return None
 
     # Get the standarized residue array from a prody string selection
     # Residues in the array are in 'sourceResidue' format
-    def residues_selection (self, selection : str) -> list:
-        
-        # Each ATOM in the selection
+    def prody_selection_2_residues (self, selection : str) -> tuple:
         sel = self.topology.select(selection)
-
         if not sel:
             print("WARNING: The selection '" + selection + "' matches no atom in the reference topology")
             return []
 
         # Getting residue chains
         chains = sel.getChids()
-
         # Getting residue nums
         residue_numbers = sel.getResnums()
-
         # Getting icodes
         icodes = sel.getIcodes()
 
         # Joining chains and nums
         residues = [sourceResidue(i,j,k) for i, j, k in zip(chains, residue_numbers, icodes)]
-        
         # Get only the unique residues
         residues = list(set(residues))
         
@@ -202,8 +196,11 @@ class TopologyReference:
         
         residues.sort(key = by_residue)
         residues.sort(key = by_chain)
-        
-        return residues
+
+        # Get residue indices
+        residue_indices = list(set(sel.getResindices()))
+
+        return residues, residue_indices
 
     # Get the a pytraj selection string with all atoms which correspond to a prody selection string
     def get_pytraj_selection (self, selection : str) -> str:
@@ -250,6 +247,11 @@ class TopologyReference:
     # Set a function to find the absolute residue index in the corrected topology from an absolute atom index
     def get_atom_residue_index (self, atom_index : int) -> int:
         return self.atoms[atom_index].getResindex()
+
+    # Get a residue in source notation by its index
+    def index_2_prody (self, index : int) -> sourceResidue:
+        residue = self.residues[index]
+        return sourceResidue.from_prody(residue)
 
 class Selection:
 
