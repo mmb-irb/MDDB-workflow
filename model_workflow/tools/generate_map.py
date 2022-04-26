@@ -1,4 +1,3 @@
-import prody
 import json
 
 from pathlib import Path
@@ -16,17 +15,59 @@ from Bio.SubsMat import MatrixInfo
 # aligner.open_gap_score = -10
 # aligner.extend_gap_score = -0.5
 
+# Load the references for toporefs
 # Load the reference for residue names and letters
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
+toporefs_source = resources + '/toporefs.json'
 residues_source = resources + '/residues.json'
 residues_reference = None
 with open(residues_source, 'r') as file:
     residues_reference = json.load(file)
+stored_toporefs = None
+with open(toporefs_source, 'r') as file:
+    stored_toporefs = json.load(file)
+
+# For each stored topology reference, align the reference sequence with the topology sequence
+def generate_map (structure : 'Structure') -> dict:
+    # For each input topology reference, align the reference sequence with the topology sequence
+    # Each 'toporef' must include the input toporef name and the align map
+    toporefs = []
+    for reference in stored_toporefs:
+        # Find the corresponding stored topology reference and get its residues sequence
+        name = reference['name']
+        reference_sequence = reference['sequence']
+        reference_map = map_sequence(reference_sequence, structure)
+        if all(residue == None for residue in reference_map):
+            continue
+        toporefs.append({
+            'name': name,
+            'map': reference_map,
+        })
+
+    # Reformat data according to a new system (introduced later)
+    residues_count = len(structure.residues)
+    references = []
+    residue_reference_indices = [ None ] * residues_count
+    residue_reference_numbers = [ None ] * residues_count
+    for index, toporef in enumerate(toporefs):
+        references.append(toporef['name'])
+        for r, residue in enumerate(toporef['map']):
+            if residue == None:
+                continue
+            residue_reference_indices[r] = index
+            residue_reference_numbers[r] = residue
+
+    residues_map = {
+        'references': references,
+        'residue_reference_indices': residue_reference_indices,
+        'residue_reference_numbers': residue_reference_numbers,
+    }
+    return residues_map
 
 # Align a reference aminoacid sequence with each chain sequence in a topology
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
-def generate_map (ref_sequence : str, topology_filename : str) -> list:
-    sequences = get_chain_sequences(topology_filename)
+def map_sequence (ref_sequence : str, structure : 'Structure') -> list:
+    sequences = get_chain_sequences(structure)
     mapping = []
     for s in sequences:
         sequence = sequences[s]
@@ -42,17 +83,14 @@ def generate_map (ref_sequence : str, topology_filename : str) -> list:
 # e.g. Glycan residues '2MA' and 'YMA' are taken as adenine and glycine respectively
 # This is due to the prody custom map in 'mod_res_map.dat'
 # For this reason, another tool is used to obtain the residues sequence
-def get_chain_sequences (topology_filename : str) -> dict:
-    topology = prody.parsePDB(topology_filename)
+def get_chain_sequences (structure : 'Structure') -> dict:
     sequences = {}
-    chains = topology.iterChains()
+    chains = structure.chains
     for chain in chains:
-        name = chain.getChid()
-        # Error prone prody alternative
-        # sequence = chain.getSequence(allres=True)
+        name = chain.name
         sequence = ''
-        for residue in chain.iterResidues():
-            resname = residue.getResname()
+        for residue in chain.residues:
+            resname = residue.name
             letter = resname_2_letter(resname)
             sequence += letter
         # Save sequences by chain name (i.e. chain id or chain letter)

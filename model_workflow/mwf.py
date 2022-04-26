@@ -31,6 +31,8 @@ from model_workflow.tools.get_backbone import get_backbone
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.generate_metadata import generate_metadata
+from model_workflow.tools.generate_map import generate_map
+from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_charges import get_charges
@@ -145,13 +147,14 @@ class File(Dependency):
 # Set output filenames
 # WARNING: Output filenames can not be changed easily since the loader uses these names
 # WARNING: Thus, these are also the filenames in the database, API, and client
-OUTPUT_topology_filename = 'md.imaged.rot.dry.pdb'
+OUTPUT_pdb_filename = 'md.imaged.rot.dry.pdb'
 OUTPUT_trajectory_filename = 'md.imaged.rot.xtc'
 OUTPUT_charges_filename = get_output_charges_filename()
 OUTPUT_first_frame_filename = 'firstFrame.pdb'
 OUTPUT_average_structure_filename = 'average.pdb'
 OUTPUT_average_frame_filename = 'average.xtc'
 OUTPUT_metadata_filename = 'metadata.json'
+OUTPUT_topology_filename = 'topology.json'
 OUTPUT_interactions_filename = 'md.interactions.json'
 OUTPUT_rmsds_filename = 'md.rmsds.json'
 OUTPUT_tmscores_filename = 'md.tmscores.json'
@@ -212,7 +215,7 @@ membranes = Dependency(getInput, {'input': 'membranes'})
 vmd = Dependency(vmd_processor, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filenames': original_trajectory_filenames,
-    'output_topology_filename': OUTPUT_topology_filename,
+    'output_topology_filename': OUTPUT_pdb_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
 }, 'vmd')
 
@@ -222,7 +225,7 @@ process_input_files = Dependency(process_input_files, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filenames': original_trajectory_filenames,
     'input_charges_filename': original_charges_filename,
-    'output_topology_filename': OUTPUT_topology_filename,
+    'output_topology_filename': OUTPUT_pdb_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
     'translation': translation,
@@ -232,7 +235,7 @@ process_input_files = Dependency(process_input_files, {
 # Main topology and trajectory files
 # These may be created from the original topology and trajectory files after some processing
 # These files are then widely used along the workflow
-topology_filename = File(OUTPUT_topology_filename,
+topology_filename = File(OUTPUT_pdb_filename,
     process_input_files.func,
     process_input_files.args)
 trajectory_filename = File(OUTPUT_trajectory_filename,
@@ -349,6 +352,19 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'charges': charges,
     'output_metadata_filename': OUTPUT_metadata_filename
 }, 'metadata')
+
+# Prepare the metadata output file
+residues_map = Dependency(generate_map, {
+    'structure': structure,
+}, 'map')
+
+# Prepare the topology output file
+topology_filename = File(OUTPUT_topology_filename, generate_topology, {
+    'structure': structure,
+    'charges': charges,
+    'residues_map': residues_map,
+    'output_topology_filename': OUTPUT_topology_filename
+}, 'topology')
 
 # Pack up all tools which may be called directly from the console
 tools = [
@@ -488,10 +504,10 @@ analyses = [
 ]
 
 # Set a list with all dependencies to be required if the whole workflow is run
-workflow = [ metadata_filename, *analyses ]
+workflow = [ metadata_filename, topology_filename, *analyses ]
 
 # Set a list with all dependencies which may be requested independently
-requestables = [ *analyses, *tools, metadata_filename ]
+requestables = [ *analyses, *tools, metadata_filename, topology_filename ]
 
 # Main ---------------------------------------------------------------------------------
 
