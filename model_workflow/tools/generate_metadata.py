@@ -9,9 +9,8 @@ def generate_metadata (
     input_topology_filename : str,
     input_trajectory_filename : str,
     inputs_filename : str,
-    processed_interactions : list,
     snapshots : int,
-    charges: list,
+    residues_map : dict,
     output_metadata_filename : str):
 
     # Set a function to retrieve 'inputs' values and handle missing keys
@@ -40,19 +39,8 @@ def generate_metadata (
     if not ligands:
         ligands = []
 
-    # Set the metadata interactions
-    metadata_interactions = [{
-        'name': interaction['name'],
-        'agent_1': interaction['agent_1'],
-        'agent_2': interaction['agent_2'],
-        'selection_1': interaction['selection_1'],
-        'selection_2': interaction['selection_2'],
-        #'residues_1': [ str(residue) for residue in interaction['residues_1'] ],
-        #'residues_2': [ str(residue) for residue in interaction['residues_2'] ],
-        #'interface_1': [ str(residue) for residue in interaction['interface_1'] ],
-        #'interface_2': [ str(residue) for residue in interaction['interface_2'] ],
-        #'strong_bonds': interaction['strong_bonds'],
-    } for interaction in processed_interactions]
+    # Get the references from the residues map
+    references = residues_map['references'] if residues_map else []
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
@@ -92,10 +80,10 @@ def generate_metadata (
         'CL': cl,
         'LIGANDS': ligands,
         'CUSTOMS': getInput('customs'),
-        'INTERACTIONS': metadata_interactions,
+        'INTERACTIONS': getInput('interactions'),
+        'REFERENCES': references,
         'CHAINNAMES': getInput('chainnames'),
         'MEMBRANES': getInput('membranes'),
-        'CHARGES': charges,
         'LINKS': getInput('links'),
     }
     metadata_filename = 'metadata.json'

@@ -343,20 +343,19 @@ charges = Dependency(get_charges, {
 }, 'charges')
 
 # Prepare the metadata output file
+residues_map = Dependency(generate_map, {
+    'structure': structure,
+}, 'map')
+
+# Prepare the metadata output file
 metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'input_topology_filename': topology_filename,
     'input_trajectory_filename': trajectory_filename,
     'inputs_filename': inputs_filename,
-    'processed_interactions': interactions,
     'snapshots': snapshots,
-    'charges': charges,
+    'residues_map': residues_map,
     'output_metadata_filename': OUTPUT_metadata_filename
 }, 'metadata')
-
-# Prepare the metadata output file
-residues_map = Dependency(generate_map, {
-    'structure': structure,
-}, 'map')
 
 # Prepare the topology output file
 topology_filename = File(OUTPUT_topology_filename, generate_topology, {
