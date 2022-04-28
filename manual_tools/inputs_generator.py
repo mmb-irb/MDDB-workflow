@@ -24,7 +24,6 @@ inputs = {
         }
     ],
     "membranes": [],
-    "toporefs": [],
     "customs": [],
     "unit": "Other",
     "pdbIds": [],

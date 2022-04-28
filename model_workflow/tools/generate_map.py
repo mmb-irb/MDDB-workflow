@@ -15,50 +15,50 @@ from Bio.SubsMat import MatrixInfo
 # aligner.open_gap_score = -10
 # aligner.extend_gap_score = -0.5
 
-# Load the references for toporefs
+# Load the references
 # Load the reference for residue names and letters
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
-toporefs_source = resources + '/toporefs.json'
+references_source = resources + '/references.json'
 residues_source = resources + '/residues.json'
 residues_reference = None
 with open(residues_source, 'r') as file:
     residues_reference = json.load(file)
-stored_toporefs = None
-with open(toporefs_source, 'r') as file:
-    stored_toporefs = json.load(file)
+stored_references = None
+with open(references_source, 'r') as file:
+    stored_references = json.load(file)
 
 # For each stored topology reference, align the reference sequence with the topology sequence
 def generate_map (structure : 'Structure') -> dict:
     # For each input topology reference, align the reference sequence with the topology sequence
-    # Each 'toporef' must include the input toporef name and the align map
-    toporefs = []
-    for reference in stored_toporefs:
+    # Each 'reference' must include the reference name and the align map
+    references = []
+    for reference in stored_references:
         # Find the corresponding stored topology reference and get its residues sequence
         name = reference['name']
         reference_sequence = reference['sequence']
         reference_map = map_sequence(reference_sequence, structure)
         if all(residue == None for residue in reference_map):
             continue
-        toporefs.append({
+        references.append({
             'name': name,
             'map': reference_map,
         })
 
     # Reformat data according to a new system (introduced later)
     residues_count = len(structure.residues)
-    references = []
+    reference_names = []
     residue_reference_indices = [ None ] * residues_count
     residue_reference_numbers = [ None ] * residues_count
-    for index, toporef in enumerate(toporefs):
-        references.append(toporef['name'])
-        for r, residue in enumerate(toporef['map']):
+    for index, reference in enumerate(references):
+        reference_names.append(reference['name'])
+        for r, residue in enumerate(reference['map']):
             if residue == None:
                 continue
             residue_reference_indices[r] = index
             residue_reference_numbers[r] = residue
 
     residues_map = {
-        'references': references,
+        'references': reference_names,
         'residue_reference_indices': residue_reference_indices,
         'residue_reference_numbers': residue_reference_numbers,
     }
