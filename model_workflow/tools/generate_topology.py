@@ -7,44 +7,44 @@ def generate_topology (
     residues_map : dict,
     output_topology_filename : str
 ):
-    print(structure)
     # The structure will be a bunch of arrays
     # Atom data
     atom_names = []
     atom_elements = []
+    atom_residue_indices = []
     for atom in structure.atoms:
         atom_names.append(atom.name)
         if atom.element:
             atom_elements.append(atom.element)
+        atom_residue_indices.append(atom.residue.index)
+        
     # Residue data
     residue_names = []
     residue_numbers = []
     residue_icodes = []
-    residue_atom_indices = []
+    residue_chain_indices = []
     for residue in structure.residues:
         residue_names.append(residue.name)
         residue_numbers.append(residue.number)
         if residue.icode:
             residue_icodes.append(residue.icode)
-        residue_atom_indices.append(residue.atom_indices)
+        residue_chain_indices.append(residue.chain.index)
     # Chain data
     chain_names = []
-    chain_residue_indices = []
     for chain in structure.chains:
         chain_names.append(chain.name)
-        chain_residue_indices.append(chain.residue_indices)
 
     # Setup the final output
     topology = {
         'atom_names': atom_names,
         'atom_elements': atom_elements,
         'atom_charges': charges,
+        'atom_residue_indices': atom_residue_indices,
         'residue_names': residue_names,
         'residue_numbers': residue_numbers,
         'residue_icodes': residue_icodes,
-        'residue_atom_indices': residue_atom_indices,
+        'residue_chain_indices': residue_chain_indices,
         'chain_names': chain_names,
-        'chain_residue_indices': chain_residue_indices,
         **residues_map,
     }
     with open(output_topology_filename, 'w') as file:

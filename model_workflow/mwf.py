@@ -15,16 +15,13 @@ import json
 # Import external analysis tools
 import pytraj as pt
 
-# Import tools from mdtoolbelt
-from mdtoolbelt.structures import Structure
-
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_processor
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_input_files import process_input_files, find_charges_filename, get_output_charges_filename
-from model_workflow.tools.topology_manager import TopologyReference
+from model_workflow.tools.topology_manager import TopologyReference, setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_backbone import get_backbone
@@ -291,7 +288,7 @@ topology_reference = Dependency(TopologyReference, {
 
 # Set a parsed structure/topology with useful features
 # This object also include functions to convert residue numeration from one format to another
-structure = Dependency(Structure.from_pdb_file, {
+structure = Dependency(setup_structure, {
     'pdb_filename': topology_filename
 })
 

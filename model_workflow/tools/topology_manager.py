@@ -21,6 +21,9 @@ import pytraj as pt
 
 from .topology_corrector import purgeNonUtf8
 
+# Import tools from mdtoolbelt
+from mdtoolbelt.structures import Structure
+
 # DANI: Hay que comprobar que no haya residuos de número repetido sin icode
 # DANI: Si esto sucede ProDy no verá los residuos y pytraj sí
 # DANI: Análisis de pytraj fallarán por este baile de números (e.g. rmsd-perres)
@@ -352,3 +355,58 @@ def prody_selection_to_ndx (
     selected_atoms = list(selected_pdb.iterAtoms())
     selected_atom_indexes = [ atom.getIndex() for atom in selected_atoms ]
     return selected_atom_indexes
+
+# This is the new system to handle the topology
+def setup_structure (pdb_filename : str) -> 'Structure':
+    structure = Structure.from_pdb_file(pdb_filename)
+    # Correct atmo elements
+    for atom in structure.atoms:
+        # Make sure elements have the first letter cap and the second letter not cap
+        if atom.element:
+            atom.element = first_cap_only(atom.element)
+        # If elements are missing then guess them from atom names
+        else:
+            element = guess_name_element(atom.name)
+            atom.element = element
+    return structure
+
+# Given a string with 1 or 2 characters, return a new string with the first letter cap and the second letter not cap (if any)
+def first_cap_only (name : str) -> str:
+    if len(name) == 1:
+        return name.upper()
+    first_character = name[0].upper()
+    second_character = name[1].lower()
+    return first_character + second_character
+
+# Guess an atom element from its name
+supported_elements = [ 'C', 'N', 'O', 'H', 'P', 'S', 'K', 'F', 'Cl', 'Na', 'Zn', 'Mg', 'Fe' ]
+def guess_name_element (name: str) -> str:
+    length = len(name)
+    next_character = None
+    for i, character in enumerate(name):
+        # Get the next character, since element may be formed by 2 letters
+        if i < length - 1:
+            next_character = name[i+1]
+            # If next character is not a string then ignore it
+            if not next_character.isalpha():
+                next_character = None
+        # Try to get all possible matches between the characters and the supported atoms
+        # First letter is always caps
+        character = character.upper()
+        # First try to match both letters together
+        if next_character:
+            # Start with the second letter in caps
+            next_character = next_character.upper()
+            both = character + next_character
+            if both in supported_elements:
+                return both
+            # Continue with the second letter in lowers
+            next_character = next_character.lower()
+            both = character + next_character
+            if both in supported_elements:
+                return both
+        # Finally, try with the first character alone
+        if character in supported_elements:
+            return character
+    raise SystemExit(
+        "ERROR: Not recognized element in '" + name + "'")

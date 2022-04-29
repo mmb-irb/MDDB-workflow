@@ -326,8 +326,8 @@ def get_topology_cmip_elements_alternative (input_topology_filename : str):
             # Finally, try with the first character alone
             if character in cmip_supported_elements:
                 return character
-            raise SystemExit(
-                "ERROR: Not recognized element in '" + name + "'")
+        raise SystemExit(
+            "ERROR: Not recognized element in '" + name + "'")
 
     # Set functions to find the closest atom of a specified atom
     def get_distance(coords1, coords2):
