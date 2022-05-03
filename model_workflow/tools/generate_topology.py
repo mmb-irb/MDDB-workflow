@@ -9,30 +9,40 @@ def generate_topology (
 ):
     # The structure will be a bunch of arrays
     # Atom data
-    atom_names = []
-    atom_elements = []
-    atom_residue_indices = []
-    for atom in structure.atoms:
-        atom_names.append(atom.name)
-        if atom.element:
-            atom_elements.append(atom.element)
-        atom_residue_indices.append(atom.residue.index)
+    structure_atoms = structure.atoms
+    atom_count = len(structure_atoms)
+    atom_names = [ None ] * atom_count
+    atom_elements = [ None ] * atom_count
+    atom_residue_indices = [ None ] * atom_count
+    for index, atom in enumerate(structure_atoms):
+        atom_names[index] = atom.name
+        atom_elements[index] = atom.element
+        atom_residue_indices[index] = atom.residue.index
         
     # Residue data
-    residue_names = []
-    residue_numbers = []
-    residue_icodes = []
-    residue_chain_indices = []
-    for residue in structure.residues:
-        residue_names.append(residue.name)
-        residue_numbers.append(residue.number)
+    structure_residues = structure.residues
+    residue_count = len(structure_residues)
+    residue_names = [ None ] * residue_count
+    residue_numbers = [ None ] * residue_count
+    residue_icodes = [ None ] * residue_count
+    residue_chain_indices = [ None ] * residue_count
+    for index, residue in enumerate(structure_residues):
+        residue_names[index] = residue.name
+        residue_numbers[index] = residue.number
         if residue.icode:
-            residue_icodes.append(residue.icode)
-        residue_chain_indices.append(residue.chain.index)
+            residue_icodes[index] = residue.icode
+        residue_chain_indices[index] = residue.chain.index
+
+    # In case there are not icodes at all set the icodes list empty
+    if all(icode == None for icode in residue_icodes):
+        residue_icodes = []
+
     # Chain data
-    chain_names = []
-    for chain in structure.chains:
-        chain_names.append(chain.name)
+    structure_chains = structure.chains
+    chain_count = len(structure_chains)
+    chain_names = [ None ] * chain_count
+    for index, chain in enumerate(structure_chains):
+        chain_names[index] = chain.name
 
     # Setup the final output
     topology = {
