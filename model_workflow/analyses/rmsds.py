@@ -1,26 +1,31 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
+import os
 from subprocess import run, PIPE, Popen
 import json
+
+from typing import List
 
 # Run multiple RMSD analyses
 # A RMSD analysis is run with each reference:
 # - First frame
 # - Average structure
 # A RMSD analysis is run over each rmsd target:
-# - Whole protein
-# - Heavy atoms
-# - Backbone
-# - Alpha carbons
+# - Protein
+# - Nucleic acid
 def rmsds(
     input_trajectory_filename : str,
     output_analysis_filename : str,
     frames_limit : int,
     first_frame_filename : str,
     average_structure_filename : str,
-    rmsd_groups : list = ['Protein', 'Protein-H', 'Backbone', 'C-alpha'],
+    structure : 'Structure',
+    selections : List[str] = ['protein', 'nucleic'],
     ):
+
+    # Prody selection syntax by default
+    parsed_selections = [ structure.select(selection) for selection in selections ]
 
     rmsd_references = [first_frame_filename, average_structure_filename]
 
@@ -48,13 +53,14 @@ def rmsds(
     for reference in rmsd_references:
         # Get a standarized reference name
         reference_name = reference[0:-4].lower()
-        for group in rmsd_groups:
+        for i, group in enumerate(selections):
+            parsed_selection = parsed_selections[i]
             # Get a standarized group name
             group_name = group.lower()
             # Set the analysis filename
             rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name + '.xvg'
             # Run the rmsd
-            rmsd(reference, reduced_trajectory_filename, group, rmsd_analysis)
+            rmsd(reference, reduced_trajectory_filename, parsed_selection, rmsd_analysis)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output
@@ -82,14 +88,21 @@ def rmsds(
 def rmsd (
     input_reference_filename : str,
     input_trajectory_filename : str,
-    group_name : str,
-    output_analysis_filename : str) -> str:
+    selection : 'Selection',
+    output_analysis_filename : str):
+
+    # Convert the selection to a ndx file gromacs can read
+    selection_name = 'rmsd_selection'
+    selection_ndx = selection.to_ndx(selection_name)
+    ndx_filename = '.rmsd.ndx'
+    with open(ndx_filename, 'w') as file:
+        file.write(selection_ndx)   
     
     # Run Gromacs
     p = Popen([
         "echo",
-        group_name, # Select group for least squares fit
-        group_name, # Select group for RMSD calculation
+        selection_name, # Select group for least squares fit
+        selection_name, # Select group for RMSD calculation
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -100,12 +113,19 @@ def rmsd (
         input_trajectory_filename,
         '-o',
         output_analysis_filename,
+        '-n',
+        ndx_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
 
-    # Return gromacs logs
-    return logs
+    # If the output does not exist at this point it means something went wrong with gromacs
+    if not os.path.exists(output_analysis_filename):
+        print(logs)
+        raise SystemExit('Something went wrong with GROMACS')
+
+    # Remove the ndx file
+    os.remove(ndx_filename)
 
 # Look for sudden raises of RMSd values from one frame to another
 def rmsd_check (
@@ -139,6 +159,11 @@ def rmsd_check (
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+
+    # If the output does not exist at this point it means something went wrong with gromacs
+    if not os.path.exists(test_filename):
+        print(logs)
+        raise SystemExit('Something went wrong with GROMACS')
 
     # Read the output and do the check
     test = xvg_parse(test_filename, ['Times', 'Values'])

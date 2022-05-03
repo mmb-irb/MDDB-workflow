@@ -384,6 +384,7 @@ analyses = [
         'frames_limit': 5000,
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
+        'structure': structure,
     }, 'rmsds'),
     # Here we set a small frames limit since this anlaysis is a bit slow
     File(OUTPUT_tmscores_filename, tmscores, {
