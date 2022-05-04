@@ -20,6 +20,10 @@ To uninstall the develop mode use:
 
 `python setup.py develop -u`
 
+or:
+
+`pip uninstall model-workflow`
+
 To make notebooks fully operative use:
 WARNING: This may break the environment for using the mwf
 
@@ -45,8 +49,9 @@ Conda-pack is installed with:
 
 `conda install conda-pack`
 
-First of all, you need the environment 'mwf' to be installed in your computer in PRODUCTION mode (see previous section).
-Once installed, pack the mwf environment with:
+When packing a conda environment there must be no package installed in development mode.
+If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled (see previous section). You can install in production mode but it is not required for the conda pack.
+Now pack the mwf environment with:
 
 `conda pack -n mwf`
 
