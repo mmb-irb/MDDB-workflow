@@ -1,6 +1,6 @@
 import json
 
-# Generate a json file to be uploaded to the database with topology data
+# Generate a json file to be uploaded to the database (mongo) with topology data
 def generate_topology (
     structure,
     charges : list,
@@ -24,7 +24,10 @@ def generate_topology (
     residue_count = len(structure_residues)
     residue_names = [ None ] * residue_count
     residue_numbers = [ None ] * residue_count
-    residue_icodes = [ None ] * residue_count
+    # Icodes are saved as a dictionary since usually only a few residues have icodes (or none)
+    # Resiude ids are used as keys and, when loaded to mongo, they will become strings
+    # Saving icodes as an array would be unefficient since it will result in an array filled with nulls
+    residue_icodes = {}
     residue_chain_indices = [ None ] * residue_count
     for index, residue in enumerate(structure_residues):
         residue_names[index] = residue.name
@@ -33,9 +36,9 @@ def generate_topology (
             residue_icodes[index] = residue.icode
         residue_chain_indices[index] = residue.chain.index
 
-    # In case there are not icodes at all set the icodes list empty
-    if all(icode == None for icode in residue_icodes):
-        residue_icodes = []
+    # In case there are not icodes at all set the icodes as None (i.e. null for mongo)
+    if len(list(residue_icodes.keys())) == 0:
+        residue_icodes = None
 
     # Chain data
     structure_chains = structure.chains
