@@ -2,6 +2,7 @@ import tmscoring
 
 from subprocess import run, PIPE, Popen
 import json
+import os
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
@@ -30,7 +31,6 @@ def tmscores (
     # Get a standarized group name
     group_name = 'c-alpha'
 
-    frames_ndx = 'frames.ndx'
     # Iterate over each reference and group
     for reference in tmscore_references:
         # Get a standarized reference name
@@ -57,6 +57,10 @@ def tmscores (
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
+        # If the output does not exist at this point it means something went wrong with gromacs
+        if not os.path.exists(grouped_reference):
+            print(logs)
+            raise SystemExit('Something went wrong with GROMACS')
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
@@ -82,9 +86,14 @@ def tmscores (
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
 
+            # If the output does not exist at this point it means something went wrong with gromacs
+            if not os.path.exists(grouped_reference):
+                print(logs)
+                raise SystemExit('Something went wrong with GROMACS')
+
             # Run the tmscoring over the current frame against the current reference
             # Append the result data for each ligand
-            tmscore = tmscoring.get_tm(grouped_reference, current_frame)
+            tmscore = tmscoring.get_tm(grouped_reference, filtered_frame)
             tmscores.append(tmscore)
 
             run([
