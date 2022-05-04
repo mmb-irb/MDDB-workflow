@@ -54,7 +54,10 @@ def rmsds(
         # Get a standarized reference name
         reference_name = reference[0:-4].lower()
         for i, group in enumerate(selections):
+            # If the selection is empty then skip this rmsd
             parsed_selection = parsed_selections[i]
+            if not parsed_selection:
+                continue
             # Get a standarized group name
             group_name = group.lower()
             # Set the analysis filename
