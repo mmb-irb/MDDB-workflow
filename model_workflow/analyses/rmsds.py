@@ -22,6 +22,7 @@ def rmsds(
     average_structure_filename : str,
     structure : 'Structure',
     selections : List[str] = ['protein', 'nucleic'],
+    skip_checkings : bool = False,
     ):
 
     # Prody selection syntax by default
@@ -32,7 +33,8 @@ def rmsds(
     # First of all, run an RMSd for the whole trajectory and check there are no sudden changes
     # This RMSd is not saved, but this is only a test to check the inegrity of the simulation
     # Note that it makes no difference which reference is used here
-    rmsd_check(rmsd_references[0], input_trajectory_filename)
+    if not skip_checkings:
+        rmsd_check(rmsd_references[0], input_trajectory_filename)
 
     # The start will be always 0 since we start with the first frame
     start = 0

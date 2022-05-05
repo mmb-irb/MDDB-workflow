@@ -197,6 +197,7 @@ translation = Dependency(getInput, {'input': 'translation'})
 filter_selection = Dependency(getInput, {'input': 'filter_selection'})
 pca_fit_selection = Dependency(getInput, {'input': 'pca_fit_selection'})
 pca_selection = Dependency(getInput, {'input': 'pca_selection'})
+skip_checkings = Dependency(getInput, {'input': 'skip_checkings'})
 
 # Extract some input values which may be required for the different workflow steps
 input_interactions = Dependency(getInput, {'input': 'interactions'})
@@ -385,6 +386,7 @@ analyses = [
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
         'structure': structure,
+        'skip_checkings': skip_checkings,
     }, 'rmsds'),
     # Here we set a small frames limit since this anlaysis is a bit slow
     File(OUTPUT_tmscores_filename, tmscores, {
@@ -753,6 +755,11 @@ parser.add_argument(
     "-s", "--setup",
     action='store_true',
     help="If passed, only download required files and run mandatory dependencies. Then exits.")
+
+parser.add_argument(
+    "-sck", "--skip_checkings",
+    action='store_true',
+    help="If passed, skip RMSD checking and proceed with the workflow")
 
 # Set a list with the alias of all requestable dependencies
 choices = [ dependency.alias for dependency in requestables ]
