@@ -47,11 +47,14 @@ def generate_topology (
     for index, chain in enumerate(structure_chains):
         chain_names[index] = chain.name
 
+    # Check we have charges and, if not, set charges as None (i.e. null for mongo)
+    atom_charges = charges if len(charges) > 0 else None
+
     # Setup the final output
     topology = {
         'atom_names': atom_names,
         'atom_elements': atom_elements,
-        'atom_charges': charges,
+        'atom_charges': atom_charges,
         'atom_residue_indices': atom_residue_indices,
         'residue_names': residue_names,
         'residue_numbers': residue_numbers,
