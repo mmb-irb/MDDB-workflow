@@ -733,8 +733,11 @@ parser.add_argument(
 
 parser.add_argument(
     "-filt", "--filter_selection",
-    default=None,
-    help="Atoms selection to be filtered in VMD format")
+    nargs='?',
+    default=False,
+    const=True,
+    help=("Atoms selection to be filtered in VMD format\n"
+        "If the argument is passed alone (i.e. with no selection) then water and counter ions are filtered"))
 
 parser.add_argument(
     "-pcafit", "--pca_fit_selection",

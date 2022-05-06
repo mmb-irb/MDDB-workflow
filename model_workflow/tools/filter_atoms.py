@@ -20,7 +20,7 @@ def filter_atoms (
     trajectory_filename : str,
     charges_filename : str,
     filter_selection : str
-):    
+):
 
     # Handle missing filter selection
     if not filter_selection:
@@ -114,7 +114,8 @@ def filter_atoms (
 
 # Set the pytraj mask to filter the desired atoms from a specific topology
 def get_filter_mask (source_topology_filename : str, filter_selection : str) -> str:
-    if filter_selection == 'default':
+    # If the default filtering was rquested
+    if filter_selection == True:
         return get_default_filter_mask(source_topology_filename)
     # The filter selection is meant to be in vmd selection format
     filter_mask = vmd_selection_2_pytraj_mask(source_topology_filename, filter_selection)
