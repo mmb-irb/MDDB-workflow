@@ -90,6 +90,8 @@ def get_tpr_charges_manual (input_charges_filename : str) -> list:
         search = re.search(r"q=([0-9e+-. ]*),", line)
         if search:
             charges.append(float(search[1]))
+    if len(charges) == 0:
+        raise SystemExit('Charges extraction from tpr file has failed')
     return charges
 
 # This works for the old tpr format (tested in 112)
