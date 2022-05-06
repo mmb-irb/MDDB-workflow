@@ -4,7 +4,6 @@ import math
 from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.tools.topology_manager import get_chains, set_chains
 
 # Set a name for the pca average file
 # If not specified, this file is create with the name 'average.pdb'
@@ -22,8 +21,9 @@ def pca(
     output_eigenvalues_filename: str,
     output_eigenvectors_filename: str,
     frames_limit : int,
-    pca_fit_selection : str = 'Protein-H',
-    pca_selection : str = 'Backbone'
+    structure : 'Structure',
+    pca_fit_selection : str,
+    pca_selection : str
 ):
 
     # By default we set the whole trajectory as PCA trajectory
@@ -35,11 +35,26 @@ def pca(
         frames_limit,
     )
 
+    # Parse the string selections
+    # Prody selection syntax by default
+    parsed_pca_fit_selection = structure.select(pca_fit_selection)
+    parsed_pca_selection = structure.select(pca_selection)
+
+    # Convert the selection to a ndx file gromacs can read
+    fit_selection_name = 'fit'
+    fit_selection_ndx = parsed_pca_fit_selection.to_ndx(fit_selection_name)
+    pca_selection_name = 'pca'
+    pca_selection_ndx = parsed_pca_selection.to_ndx(pca_selection_name)
+    ndx_filename = '.pca.ndx'
+    with open(ndx_filename, 'w') as file:
+        file.write(fit_selection_ndx)
+        file.write(pca_selection_ndx)
+
     # Calculate eigen values and eigen vectors with Gromacs
     p = Popen([
         "echo",
-        pca_fit_selection,
-        pca_selection,
+        fit_selection_name,
+        pca_selection_name,
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -54,6 +69,8 @@ def pca(
         output_eigenvectors_filename,
         '-av',
         pca_average_filename,
+        '-n',
+        ndx_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
@@ -61,10 +78,6 @@ def pca(
     if not os.path.exists(output_eigenvalues_filename):
         print(logs)
         raise SystemExit('Something went wrong with GROMACS')
-
-    # Retore chains in the average structure
-    chains = get_chains(input_topology_filename)
-    set_chains(pca_average_filename, chains)
 
     # Read the eigen values file and get an array with all eigen values
     values = []
@@ -103,8 +116,8 @@ def pca(
         # Perform the projection analysis through the 'anaeig' gromacs command
         p = Popen([
             "echo",
-            pca_fit_selection,
-            pca_selection,
+            fit_selection_name,
+            pca_selection_name,
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -129,6 +142,8 @@ def pca(
             strev,
             '-last',
             strev,
+            '-n',
+            ndx_filename,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
