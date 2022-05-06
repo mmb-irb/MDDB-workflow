@@ -29,7 +29,14 @@ def process_interactions (
     # If there is a backup then use it
     # Load the backup and return its content as it is
     if os.path.exists(interactions_file):
-        return load_interactions(interactions_file, topology_reference)
+        loaded_interactions = load_interactions(interactions_file, topology_reference)
+        # Merge the loaded interactions with the input interactions to cover all fields
+        complete_interactions = []
+        for i, input_interaction in enumerate(interactions):
+            loaded_interaction = loaded_interactions[i]
+            complete_interaction = { **input_interaction, **loaded_interaction }
+            complete_interactions.append(complete_interaction)
+        return complete_interactions
 
     # If there are no interactions return an empty list
     if not interactions or len(interactions) == 0:
