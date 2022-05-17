@@ -1,30 +1,24 @@
 # Principal component analysis (PCA)
-import os
-import math
-from subprocess import run, PIPE, Popen
+from sklearn.decomposition import PCA
+import numpy as np
+import json
+
+import mdtraj as md
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
-# Set a name for the pca average file
-# If not specified, this file is create with the name 'average.pdb'
-# This name enters in conflict with the average filename so it must be changed
-pca_average_filename = 'pca.average.pdb'
-
-# Perform the PCA of the trajectory
-# The PCA is performed with the whole trajectory when the size is reasonable
-# When the trajectory is larger than 2000 snapshots we reduce the trajectory
-# A new projection trajectory is made for each eigen vector with 1% or greater explained variance
-# WARNING: Projection trajectories are backbone only
-def pca(
+# Perform the PCA analysis
+def pca (
     input_topology_filename: str,
     input_trajectory_filename: str,
-    output_eigenvalues_filename: str,
-    output_eigenvectors_filename: str,
+    output_analysis_filename: str,
+    output_trajectory_projections_prefix : str,
     frames_limit : int,
     structure : 'Structure',
-    pca_fit_selection : str,
-    pca_selection : str
-):
+    fit_selection : str,
+    analysis_selection : str,
+    projection_frames : int = 20
+) -> dict:
 
     # By default we set the whole trajectory as PCA trajectory
     pca_trajectory_filename = input_trajectory_filename
@@ -37,113 +31,85 @@ def pca(
 
     # Parse the string selections
     # Prody selection syntax by default
-    parsed_pca_fit_selection = structure.select(pca_fit_selection)
-    parsed_pca_selection = structure.select(pca_selection)
+    parsed_fit_selection = structure.select(fit_selection)
+    parsed_analysis_selection = structure.select(analysis_selection)
 
-    # Convert the selection to a ndx file gromacs can read
-    fit_selection_name = 'fit'
-    fit_selection_ndx = parsed_pca_fit_selection.to_ndx(fit_selection_name)
-    pca_selection_name = 'pca'
-    pca_selection_ndx = parsed_pca_selection.to_ndx(pca_selection_name)
-    ndx_filename = '.pca.ndx'
-    with open(ndx_filename, 'w') as file:
-        file.write(fit_selection_ndx)
-        file.write(pca_selection_ndx)
+    # Load the trajectory
+    mdtraj_trajectory = md.load(pca_trajectory_filename, top=input_topology_filename)
+    # Fit the trajectory according to the specified fit selection
+    mdtraj_trajectory.superpose(mdtraj_trajectory, frame=0, atom_indices=parsed_fit_selection.atom_indices)
+    # Filter the atoms to be analized
+    atom_indices = parsed_analysis_selection.atom_indices
+    mdtraj_trajectory = mdtraj_trajectory.atom_slice(atom_indices=atom_indices)
+    # Reshape data to a sklearn-friendly format
+    frames_number = mdtraj_trajectory.n_frames
+    atoms_number = mdtraj_trajectory.n_atoms
+    reshape = mdtraj_trajectory.xyz.reshape(frames_number, atoms_number * 3)
 
-    # Calculate eigen values and eigen vectors with Gromacs
-    p = Popen([
-        "echo",
-        fit_selection_name,
-        pca_selection_name,
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "covar",
-        "-s",
-        input_topology_filename,
-        "-f",
-        pca_trajectory_filename,
-        '-o',
-        output_eigenvalues_filename,
-        '-v',
-        output_eigenvectors_filename,
-        '-av',
-        pca_average_filename,
-        '-n',
-        ndx_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
+    # Perform the PCA using sklearn
+    pca = PCA()
+    transformed = pca.fit_transform(reshape)
+    # DANI: Al transponer esto las proyecciones parece que tienen más sentido
+    transformed = transformed.transpose()
 
-    if not os.path.exists(output_eigenvalues_filename):
-        print(logs)
-        raise SystemExit('Something went wrong with GROMACS')
+    # Get eigenvalues
+    # Multiply values by 100 since values are in namometers (squared) and we want Ångstroms
+    eigenvalues = [ ev * 100 for ev in pca.explained_variance_ ]
+    # Get eigenvectors
+    eigenvectors = [ [ float(v) for v in eigenvector ] for eigenvector in pca.components_ ]
 
-    # Read the eigen values file and get an array with all eigen values
-    values = []
-    with open(output_eigenvalues_filename, 'r') as file:
-        for line in file:
-            if line.startswith(("#", "@")):
-                continue
-            else:
-                values.append(float(line.split()[1]))
+    # Get the mean structure coordinates
+    mean = pca.mean_.flatten()
 
-    # Get the total eigen value by adding all eigen values
-    total = 0
-    for value in values:
-        total += value
+    # Get the total explained variance by adding all eigenvalues
+    total = sum(eigenvalues)
 
-    # Count how many eigen values are greater than 1% of the total eigen value
-    # Eigen values are ordered from greater to lower by default, so we stop at the first value lower than 1%
-    greater = 0
+    # Now get the projection for those eigenvectors whose eigenvalue is greater than 1% of the total explained variance
+    # Eigenvalues are ordered from greater to lower by default, so we stop at the first value lower than 1%
+    # Save projections from those eigenvectors
+    projections = []
     cutoff = total / 100
-    for value in values:
-        if value >= cutoff:
-            greater += 1
-        else:
+    for i, value in enumerate(eigenvalues):
+        if value < cutoff:
             break
+        # This logic was copied from here:
+        # https://userguide.mdanalysis.org/stable/examples/analysis/reduced_dimensions/pca.html
+        eigenvector = eigenvectors[i]
+        trans = transformed[i]
+        offset = np.outer(trans, eigenvector)
+        trajectory_projection = mean + offset
+        coordinates = trajectory_projection.reshape(len(trans), -1, 3)
+        # Now we have the time dependent projection of the principal component
+        # However, we will sort frames according to the projection value
+        # In addition we will take only a few frames
+        frame_projections = np.matmul(reshape, eigenvector)
+        max_projection = max(frame_projections)
+        min_projection = min(frame_projections)
+        projection_step = (max_projection - min_projection) / (projection_frames - 1)
+        selected_projections = [ min_projection + projection_step * s for s in range(projection_frames) ]
+        selected_coordinates = [ coordinates[get_closer_value_index(frame_projections, p)] for p in selected_projections ]
+        # Load coordinates in mdtraj and export the trajectory to xtc
+        trajectory_projection = md.Trajectory(selected_coordinates, mdtraj_trajectory.topology)
+        trajectory_projection_filename = output_trajectory_projections_prefix + '_' + str(i+1).zfill(2) + '.xtc'
+        trajectory_projection.save_xtc(trajectory_projection_filename)
+        # Save projections to be further exported
+        projections.append(list(frame_projections))
 
-    # Now make a projection for each suitable eigen vector
-    for ev in range(1, greater+1):
-        strev = str(ev)
-        # Set the name of the new projection analysis
-        projection = 'pca.proj' + strev + '.xvg'
-        # Set the name of the new projection trajectory
-        projection_trajectory = 'md.pca-' + strev + '.xtc'
-        # UNKNOWN USE
-        pca_rmsf = 'pca.rmsf' + strev + '.xvg'
+    # DANI: Usa esto para generar una estructura (pdb) que te permita visualizar las trajectory projections
+    #trajectory_projection[0].save_pdb('pca.trajectory_projection_structure.pdb')
 
-        # Perform the projection analysis through the 'anaeig' gromacs command
-        p = Popen([
-            "echo",
-            fit_selection_name,
-            pca_selection_name,
-        ], stdout=PIPE)
-        logs = run([
-            "gmx",
-            "anaeig",
-            "-s",
-            input_topology_filename,
-            "-f",
-            pca_trajectory_filename,
-            '-eig',
-            output_eigenvalues_filename,
-            '-v',
-            output_eigenvectors_filename,
-            '-proj',
-            projection,
-            '-extr',
-            projection_trajectory,
-            '-rmsf',
-            pca_rmsf,
-            '-nframes',
-            '20',
-            '-first',
-            strev,
-            '-last',
-            strev,
-            '-n',
-            ndx_filename,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
+    # Set the output dict
+    data = {
+        'framestep': step,
+        'atoms': atom_indices,
+        'eigenvalues': eigenvalues,
+        'projections': projections
+    }
+    # Finally, export the analysis in json format
+    with open(output_analysis_filename, 'w') as file:
+        json.dump({'data': data}, file)
+
+# Given an array with numbers, get the index of the value which is closer
+def get_closer_value_index (list : list, value : float) -> int:
+    distances = [ abs(value-v) for v in list ]
+    return min(range(len(distances)), key=distances.__getitem__)

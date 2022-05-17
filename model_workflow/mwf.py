@@ -159,7 +159,8 @@ OUTPUT_rmsds_filename = 'md.rmsds.json'
 OUTPUT_tmscores_filename = 'md.tmscores.json'
 OUTPUT_rmsf_filename = 'md.rmsf.xvg'
 OUTPUT_rgyr_filename = 'md.rgyr.xvg'
-OUTPUT_pca_filename = 'pca.eigenval.xvg'
+OUTPUT_pca_filename = 'md.pca.json'
+OUTPUT_pca_trajectory_projection_prefix = 'pca.trajectory'
 OUTPUT_rmsdperres_filename = 'md.rmsd.perres.json'
 OUTPUT_rmsdpairwise_filename = 'md.rmsd.pairwise.json'
 OUTPUT_distperres_filename = 'md.dist.perres.json'
@@ -421,12 +422,12 @@ analyses = [
     File(OUTPUT_pca_filename, pca, {
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
-        "output_eigenvalues_filename": OUTPUT_pca_filename,
-        "output_eigenvectors_filename": "eigenvec.trr",
+        "output_analysis_filename": OUTPUT_pca_filename,
+        "output_trajectory_projections_prefix": OUTPUT_pca_trajectory_projection_prefix,
         'frames_limit': 2000,
         'structure': structure,
-        'pca_fit_selection': pca_fit_selection,
-        'pca_selection': pca_selection,
+        'fit_selection': pca_fit_selection,
+        'analysis_selection': pca_selection,
     }, 'pca'),
     # DANI: Intenta usar mucha memoria, hay que revisar
     # DANI: Puede saltar un error de imposible alojar tanta memoria
