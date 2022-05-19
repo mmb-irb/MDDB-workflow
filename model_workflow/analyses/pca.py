@@ -75,14 +75,13 @@ def pca (
         # This logic was copied from here:
         # https://userguide.mdanalysis.org/stable/examples/analysis/reduced_dimensions/pca.html
         eigenvector = eigenvectors[i]
-        trans = transformed[i]
-        offset = np.outer(trans, eigenvector)
+        frame_projections = transformed[i]
+        offset = np.outer(frame_projections, eigenvector)
         trajectory_projection = mean + offset
-        coordinates = trajectory_projection.reshape(len(trans), -1, 3)
+        coordinates = trajectory_projection.reshape(len(frame_projections), -1, 3)
         # Now we have the time dependent projection of the principal component
         # However, we will sort frames according to the projection value
         # In addition we will take only a few frames
-        frame_projections = np.matmul(reshape, eigenvector)
         max_projection = max(frame_projections)
         min_projection = min(frame_projections)
         projection_step = (max_projection - min_projection) / (projection_frames - 1)
@@ -92,8 +91,8 @@ def pca (
         trajectory_projection = md.Trajectory(selected_coordinates, mdtraj_trajectory.topology)
         trajectory_projection_filename = output_trajectory_projections_prefix + '_' + str(i+1).zfill(2) + '.xtc'
         trajectory_projection.save_xtc(trajectory_projection_filename)
-        # Save projections to be further exported
-        projections.append(list(frame_projections))
+        # Save projections to be further exported to json
+        projections.append([ float(v) for v in frame_projections ])
 
     # DANI: Usa esto para generar una estructura (pdb) que te permita visualizar las trajectory projections
     #trajectory_projection[0].save_pdb('pca.trajectory_projection_structure.pdb')
