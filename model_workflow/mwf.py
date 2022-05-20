@@ -586,6 +586,8 @@ def download_input_files(
                     sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
                     itp_url = project_url + '/files/' + itp_filename
                     urllib.request.urlretrieve(itp_url, itp_filename)
+            # Set the final charges filename as the downloaded charges filename
+            charges_filename.filename = input_charges_filename
             
 
 # Main function
