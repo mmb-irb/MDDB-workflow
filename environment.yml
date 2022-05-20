@@ -83,7 +83,7 @@ dependencies:
   - lzo=2.10=h7b6447c_2
   - matplotlib-base=3.3.1=py36h817c723_0
   - mdanalysis=1.1.1=py36hc4f0c31_0
-  - mdtoolbelt=0.0.3=py36_0
+  - mdtoolbelt=0.0.4=py36_0
   - mdtraj=1.9.5=py36h348eb32_1
   - mkl=2020.2=256
   - mkl_random=1.2.0=py36h7c3b610_1

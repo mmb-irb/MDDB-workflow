@@ -57,7 +57,7 @@ from model_workflow.analyses.pockets import pockets
 unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
 sys.stdout = unbuffered
 
-# Set a standard selection for protein and nucleic acid backbones in ProDy syntax
+# Set a standard selection for protein and nucleic acid backbones in vmd syntax
 protein_and_nucleic_backbone = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
 # CLASSES -------------------------------------------------------------------------
 
@@ -746,12 +746,12 @@ parser.add_argument(
 parser.add_argument(
     "-pcafit", "--pca_fit_selection",
     default=protein_and_nucleic_backbone,
-    help="Group selection for the pca fit in ProDy format")
+    help="Atom selection for the pca fitting in vmd syntax")
 
 parser.add_argument(
     "-pcasel", "--pca_selection",
     default=protein_and_nucleic_backbone,
-    help="Group selection for pca in ProDy format")
+    help="Atom selection for pca analysis in vmd syntax")
 
 parser.add_argument(
     "-d", "--download",

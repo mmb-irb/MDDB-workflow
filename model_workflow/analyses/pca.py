@@ -31,8 +31,8 @@ def pca (
 
     # Parse the string selections
     # Prody selection syntax by default
-    parsed_fit_selection = structure.select(fit_selection)
-    parsed_analysis_selection = structure.select(analysis_selection)
+    parsed_fit_selection = structure.select(fit_selection, syntax='vmd')
+    parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd')
 
     # Load the trajectory
     mdtraj_trajectory = md.load(pca_trajectory_filename, top=input_topology_filename)
