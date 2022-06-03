@@ -48,7 +48,7 @@ def generate_topology (
         chain_names[index] = chain.name
 
     # Check we have charges and, if not, set charges as None (i.e. null for mongo)
-    atom_charges = charges if len(charges) > 0 else None
+    atom_charges = charges if charges and len(charges) > 0 else None
 
     # Setup the final output
     topology = {
