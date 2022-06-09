@@ -42,6 +42,11 @@ def generate_metadata (
     # Get the references from the residues map
     references = residues_map['references'] if residues_map else []
 
+    # Make the forcefields a list in case it is a single string
+    forcefields = getInput('ff')
+    if type(forcefields) == str:
+        forcefields = [forcefields]
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -63,7 +68,7 @@ def generate_metadata (
         'TIMESTEP': getInput('timestep'),
         'SNAPSHOTS': snapshots,
         'FREQUENCY': frequency,
-        'FF': getInput('ff'),
+        'FF': forcefields,
         'TEMP': getInput('temp'),
         'WAT': getInput('wat'),
         'BOXTYPE': getInput('boxtype'),
