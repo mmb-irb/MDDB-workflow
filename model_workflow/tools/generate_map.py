@@ -56,6 +56,11 @@ def generate_map (structure : 'Structure') -> dict:
                 continue
             residue_reference_indices[r] = index
             residue_reference_numbers[r] = residue
+    # If there are not references at the end then set all feilds as None, in order to save space
+    if len(reference_names) == 0:
+        reference_names = None
+        residue_reference_indices = None
+        residue_reference_numbers = None
 
     residues_map = {
         'references': reference_names,
