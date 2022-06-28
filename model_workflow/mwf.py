@@ -12,9 +12,6 @@ from pathlib import Path
 import urllib.request
 import json
 
-# Import external analysis tools
-import pytraj as pt
-
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_processor
 from model_workflow.tools.filter_atoms import filter_atoms
@@ -485,7 +482,7 @@ analyses = [
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_sasa_filename,
-        "reference": topology_reference,
+        'structure': structure,
         'frames_limit': 200,
     }, 'sasa'),
     File(OUTPUT_energies_filename, energies, {

@@ -15,7 +15,7 @@ def sasa(
     input_topology_filename: str,
     input_trajectory_filename: str,
     output_analysis_filename: str,
-    reference,
+    structure : 'Structure',
     frames_limit : int,
 ):
 
@@ -73,10 +73,11 @@ def sasa(
         # Restructure data by adding all atoms sas per residue
         atom_numbers = sasa['n']
         atom_areas = sasa['area']
-        sas_per_residues = [0.0] * len(reference.residues)
+        sas_per_residues = [0.0] * len(structure.residues)
         for atom_number, atom_area in zip(atom_numbers, atom_areas):
             atom_index = int(atom_number) - 1
-            residue_index = reference.get_atom_residue_index(atom_index)
+            atom = structure.atoms[atom_index]
+            residue_index = atom.residue_index
             sas_per_residues[residue_index] += atom_area
         sasa_per_frame.append(sas_per_residues)
         # Delete current frame files before going for the next frame
@@ -89,10 +90,8 @@ def sasa(
     # Format output data
     # Sasa values must be separated by residue and then ordered by frame
     data = []
-    for r, residue in enumerate(reference.residues):
-        # Name the residue in the source format
-        name = reference.get_residue_name(residue)
-        atom_count = residue.numAtoms()
+    for r, residue in enumerate(structure.residues):
+        atom_count = len(residue.atoms)
         # Harvest its sasa along each frame
         saspf = []
         for frame in sasa_per_frame:
@@ -104,10 +103,11 @@ def sasa(
             standard_frame_sas = normalized_frame_sas * 100
             saspf.append(standard_frame_sas)
         # Calculate the mean and standard deviation of the residue sasa values
+        residue_tag = residue.chain.name + ':' + str(residue.number) + residue.icode
         mean = numpy.mean(saspf)
         stdv = numpy.std(saspf)
         data.append({
-            'name': name,
+            'name': residue_tag,
             'saspf': saspf,
             'mean': mean,
             'stdv': stdv
