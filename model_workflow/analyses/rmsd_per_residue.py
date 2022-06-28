@@ -15,7 +15,7 @@ def rmsd_per_residue (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    topology_reference,
+    structure : 'Structure',
     membranes,
     frames_limit : int):
 
@@ -26,12 +26,18 @@ def rmsd_per_residue (
     # We must exclude here membranes from the analysis
     # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
     if membranes and len(membranes) > 0:
+        # DANI: Esto en su día lo hice en prody y cambiarlo ahora significaría tener que cambiar todos lo campos en la db
+        # DANI: Lo ideal sería hacerlo con syntaxis de VMD o MolStar (a futuro)
         prody_selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
-        pytraj_selection = topology_reference.get_pytraj_selection(prody_selection)
+        selection = structure.select(prody_selection, syntax='prody')
+        pytraj_selection = selection.to_pytraj()
         filtered_pt_trajectory = pt_trajectory[pytraj_selection]
+        # Create a filtered topology with the same selection than pytraj
+        control_structure = structure.filter(selection)
     else:
         filtered_pt_trajectory = pt_trajectory
-    
+        control_structure = structure
+
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
     # This class has keys but its attributes can not be accessed through the key
@@ -43,28 +49,26 @@ def rmsd_per_residue (
     # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
     del data[0]
 
+    # Check the structure to match in number of residues with the pytraj results
+    if len(control_structure.residues) != len(data):
+        raise ValueError('Number of residues in structure does not match number of residues in RMSD-perres results')
+
     # Mine the analysis data
     output_analysis = []
-    for residue in data:
+    for residue_index, residue_data in enumerate(data):
+        # DEPRECATED: Now residues are found using the residue index and the control structure
         # Convert pytraj residue keys to source notation
         # Key format: SER:1, TYR:2, ...
-        match = re.match('(.*):(.*)', residue.key)
-        id = match.groups(0)[1]
-        source_residue = topology_reference.pytraj2source(int(id))
-        # Residue tag may be not found in excepcional cases which Prody fails to handle:
-        # e.g. Residues repeated like: 1, 2, 2, 2, 3, ... (e.g. NMA and ACE residues)
-        # In this cases we just ignore the residue
-        # If this residue MUST be recorded then change the topology manually adding icodes
-        # e.g. Residues repeated like: 1, 2, 2A, 2B, 3, ...
-        if not source_residue:
-            continue
-        residue_tag = str(source_residue)
+        # match = re.match('(.*):(.*)', residue.key)
+        # num = match.groups(0)[1]
+        residue = control_structure.residues[residue_index]
+        residue_tag = residue.chain.name + ':' + str(residue.number) + residue.icode
         # Write data to the output file
         # The 'residue' DataArray contains numeric values (rmsds) and it is not JSON serializable
         output_analysis.append(
             {
                 'name': residue_tag,
-                'rmsds': list(residue),
+                'rmsds': list(residue_data),
             }
         )
 

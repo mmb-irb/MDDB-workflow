@@ -445,7 +445,7 @@ analyses = [
         'input_topology_filename': pdb_filename,
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_rmsdperres_filename,
-        "topology_reference": topology_reference,
+        'structure': structure,
         'membranes': membranes,
         'frames_limit': 200,
     }, 'rmsdperres'),
