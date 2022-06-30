@@ -59,6 +59,7 @@ def generate_metadata (
         'CONTACT': getInput('contact'),
         'PROGRAM': getInput('program'),
         'VERSION': getInput('version'),
+        'TYPE': getInput('type'),
         'METHOD': getInput('method'),
         'LICENSE': getInput('license'),
         'LINKCENSE': getInput('linkcense'),
