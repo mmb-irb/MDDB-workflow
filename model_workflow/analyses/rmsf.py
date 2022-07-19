@@ -2,6 +2,7 @@
 # Easy and fast trajectory analyses carried by Gromacs
 
 from subprocess import run, PIPE, Popen
+import os
 
 # Fluctuation
 # 
@@ -16,7 +17,7 @@ def rmsf (
     # Run Gromacs
     p = Popen([
         "echo",
-        "Protein",
+        "System",
     ], stdout=PIPE)
     logs = run([
         "gmx",
@@ -32,6 +33,11 @@ def rmsf (
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+
+    # If the output does not exist at this point it means something went wrong with gromacs
+    if not os.path.exists(output_analysis_filename):
+        print(logs)
+        raise SystemExit('Something went wrong with GROMACS')
 
     # Return gromacs logs
     return logs

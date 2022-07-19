@@ -22,7 +22,7 @@ def rgyr (
     # Run Gromacs
     p = Popen([
         "echo",
-        "Protein",
+        "System",
     ], stdout=PIPE)
     logs = run([
         "gmx",

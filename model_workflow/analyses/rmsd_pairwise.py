@@ -14,7 +14,6 @@ from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajec
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
 # The pytraj trajectory ('pt_trajectory') may be reduced
 
-
 def rmsd_pairwise(
     input_topology_filename : str,
     input_trajectory_filename : str,
@@ -27,7 +26,8 @@ def rmsd_pairwise(
     pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
     # Run the analysis
-    overall_selection = '@CA'
+    overall_selection = "@CA,C5'"
+    # Take a minimal subset of atoms representing both the protein and nucleic
     data = pt.pairwise_rmsd(pt_trajectory, overall_selection)
     # Convert data to a normal list, since numpy ndarrays are not json serializable
     data = data.tolist()

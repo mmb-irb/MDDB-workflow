@@ -395,6 +395,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_tmscores_filename,
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
+        'structure' : structure,
         'frames_limit': 200,
     }, 'tmscores'),
     # This analysis is fast and the output size depends on the number of atoms only

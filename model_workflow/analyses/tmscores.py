@@ -15,33 +15,39 @@ def tmscores (
     output_analysis_filename : str,
     first_frame_filename : str,
     average_structure_filename : str,
+    structure : 'Structure',
     frames_limit : int):
 
     tmscore_references  = [first_frame_filename, average_structure_filename]
 
+    # Set the alpha carbon selection
+    selection = structure.select('name CA', syntax='vmd')
+    if not selection:
+        print('WARNING: There are not atoms to be analyzed for the TM score analysis')
+        return
+
+    # Convert the selection to ndx so we can use it in gromacs
+    selection_name = 'alpha-carbons'
+    ndx_selection = selection.to_ndx(selection_name)
+    ndx_filename = '.tmscore.ndx'
+    with open(ndx_filename, 'w') as file:
+        file.write(ndx_selection)
+
+    # Set the frame start and step
     start = 0
     step = None
     
     output_analysis = []
 
-    # The only possible group in TM score is the alpha carbon
-    # They are the only atoms taken in count by the TM score algorithm
-    group = 'C-alpha'
-
-    # Get a standarized group name
-    group_name = 'c-alpha'
-
     # Iterate over each reference and group
     for reference in tmscore_references:
-        # Get a standarized reference name
-        reference_name = reference[0:-4].lower()
         # Create a reference topology with only the group atoms
         # WARNING: Yes, TM score would work also with the whole reference, but it takes more time!!
         # This has been experimentally tested and it may take more than the double of time
         grouped_reference = 'gref.pdb'
         p = Popen([
             "echo",
-            group,
+            selection_name,
         ], stdout=PIPE)
         logs = run([
             "gmx",
@@ -52,6 +58,8 @@ def tmscores (
             reference,
             '-o',
             grouped_reference,
+            '-n',
+            ndx_filename,
             "-dump",
             "0",
             '-quiet'
@@ -71,7 +79,7 @@ def tmscores (
             filtered_frame = 'f.' + current_frame
             p = Popen([
                 "echo",
-                group,
+                selection_name,
             ], stdout=PIPE)
             logs = run([
                 "gmx",
@@ -82,6 +90,8 @@ def tmscores (
                 current_frame,
                 '-o',
                 filtered_frame,
+                '-n',
+                ndx_filename,
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
@@ -101,6 +111,8 @@ def tmscores (
                 filtered_frame,
             ], stdout=PIPE).stdout.decode()
 
+        # Get a standarized reference name
+        reference_name = reference[0:-4].lower()
         # Save the tmscores in the output object
         data = {
             'values': tmscores,
