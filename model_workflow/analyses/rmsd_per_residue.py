@@ -8,6 +8,8 @@ import re
 
 import json
 
+from distutils.version import StrictVersion
+
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
 
 # The pytraj trajectory may be reduced
@@ -32,6 +34,12 @@ def rmsd_per_residue (
         selection = structure.select(prody_selection, syntax='prody')
         pytraj_selection = selection.to_pytraj()
         filtered_pt_trajectory = pt_trajectory[pytraj_selection]
+        # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
+        # This happens with some random pdbs which pytraj considers to have 0 Mols
+        # More info: https://github.com/Amber-MD/cpptraj/pull/820
+        # DANI: Esto es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
+        if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
+            filtered_pt_trajectory.top.start_new_mol()
         # Create a filtered topology with the same selection than pytraj
         control_structure = structure.filter(selection)
     else:

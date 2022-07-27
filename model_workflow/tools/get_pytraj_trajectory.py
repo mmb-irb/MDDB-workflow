@@ -3,6 +3,7 @@
 
 import math
 import pytraj as pt
+from distutils.version import StrictVersion
 
 # Get the whole trajectory
 def get_pytraj_trajectory (
@@ -15,8 +16,9 @@ def get_pytraj_trajectory (
     # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
     # This happens with some random pdbs which pytraj considers to have 0 Mols
     # More info: https://github.com/Amber-MD/cpptraj/pull/820
-    # DANI: Este es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
-    #pt_trajectory.top.start_new_mol()
+    # DANI: Esto es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
+    if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
+        pt_trajectory.top.start_new_mol()
 
     return pt_trajectory
 
