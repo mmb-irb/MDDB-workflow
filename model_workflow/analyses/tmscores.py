@@ -117,7 +117,7 @@ def tmscores (
         data = {
             'values': tmscores,
             'reference': reference_name,
-            'group': group_name
+            'group': 'c-alpha'
         }
         output_analysis.append(data)
 
