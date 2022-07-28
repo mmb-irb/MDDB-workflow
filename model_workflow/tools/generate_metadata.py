@@ -47,12 +47,17 @@ def generate_metadata (
     if type(forcefields) == str:
         forcefields = [forcefields]
 
+    # Collections must be null in case there are not collections
+    collections = getInput('collections')
+    if not collections:
+        collections = None
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
         'PDBIDS': getInput('pdbIds'),
         'NAME': getInput('name'),
-        'UNIT': getInput('unit'),
+        'COLLECTIONS': collections,
         'DESCRIPTION': getInput('description'),
         'AUTHORS': getInput('authors'),
         'GROUPS': getInput('groups'),
@@ -91,6 +96,8 @@ def generate_metadata (
         'CHAINNAMES': getInput('chainnames'),
         'MEMBRANES': getInput('membranes'),
         'LINKS': getInput('links'),
+        # Collection specifics
+        'CV19_UNIT': getInput('cv19_unit')
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
