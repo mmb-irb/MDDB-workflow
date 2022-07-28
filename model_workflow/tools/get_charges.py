@@ -8,6 +8,7 @@ import re
 from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr
 
 from MDAnalysis.topology.TPRParser import TPRParser
+from MDAnalysis.topology.TOPParser import TOPParser
 
 # Set the standard name for the input raw charges
 raw_charges_filename = 'charges.txt'
@@ -33,15 +34,35 @@ def get_charges(charges_source_filename : str) -> list:
 
 # Given a topology which includes charges
 # Extract those charges and save them in a list to be returned
+# Use different tools, since ones may fail where others success
+# Note that this not a matter of the format only, but also of the format version
+# There are different versions of .top files, for instance
+def get_topology_charges (input_topology_filename : str) -> list:
+    try:
+        topology_charges = get_topology_charges_pytraj(input_topology_filename)
+    except Exception as err:
+        print(err)
+        print('The canonical charges mining (pytraj) failed. Retrying with alternative mining (mdanalysis)')
+        topology_charges = get_topology_charges_mdanalysis(input_topology_filename)
+    return topology_charges
+
+# Get topology charges using pytraj
 # Supported formats (tested): prmtop, top, psf (standard psf, not from DESRES)
 # Supported formats (not tested): mol2, cif, sdf
 # Non supported formats: mae, tpr, pdb (has no charges)
-def get_topology_charges (input_topology_filename : str) -> list:
+def get_topology_charges_pytraj (input_topology_filename : str) -> list:
     topology = pt.load_topology(filename=input_topology_filename)
     # WARNING: We must convert this numpy ndarray to a normal list
     # Otherwise the search by index is extremly ineficient
     topology_charges = list(topology.charge)
     return topology_charges
+
+# Get topology charges using mdanalysis
+def get_topology_charges_mdanalysis (input_charges_filename : str) -> list:
+    parser = TOPParser(input_charges_filename)
+    topology = parser.parse()
+    charges = list(topology.charges.values)
+    return charges
 
 # Write the raw charges file from a list of charges
 def generate_raw_energies_file (charges : list, filename : str = raw_charges_filename):
