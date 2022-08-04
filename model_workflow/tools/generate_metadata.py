@@ -96,6 +96,7 @@ def generate_metadata (
         'CHAINNAMES': getInput('chainnames'),
         'MEMBRANES': getInput('membranes'),
         'LINKS': getInput('links'),
+        'ORIENTATION': getInput('orientation'),
         # Collection specifics
         'CV19_UNIT': getInput('cv19_unit')
     }
