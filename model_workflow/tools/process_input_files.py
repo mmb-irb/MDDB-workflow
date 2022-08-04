@@ -26,7 +26,6 @@ def process_input_files (
     ) -> None:
 
     # In case the topology is a 'pdb' file just rename it
-    # This is done in first place since VMD does not handle tpr files
     if not os.path.exists(output_topology_filename) and is_pdb(input_topology_filename):
         os.rename(input_topology_filename, output_topology_filename)
         input_topology_filename = output_topology_filename
