@@ -116,25 +116,3 @@ def sasa(
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
         json.dump({'data': data}, file)
-
-# Read a pdb file and return the residues which gromacs would consider
-# This is used for those exotic topologies where the gromacs amount of residues does not match prody's
-# def get_gromacs_residues (pdb_filename : str):
-#     residues = []
-#     # Read the topology line by line and get all residue data (name, chain, number and icode)
-#     with open(pdb_filename, "r") as file:
-#         lines = file.readlines()
-#         last_residue = None
-#         for line in lines:
-#             # Skip non atom lines
-#             if line[0:4] != 'ATOM':
-#                 continue
-#             # Get the part of the line where the residue data is found
-#             residue = line[17:31]
-#             # If it is the same residue than the previous line then skip it
-#             if residue == last_residue:
-#                 continue
-#             # Otherwise, record it
-#             residues.append(residue)
-#             last_residue = residue
-#     return residues

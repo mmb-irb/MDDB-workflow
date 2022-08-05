@@ -18,10 +18,9 @@ from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_input_files import process_input_files, find_charges_filename, get_output_charges_filename
-from model_workflow.tools.topology_manager import TopologyReference, setup_structure
+from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
-from model_workflow.tools.get_backbone import get_backbone
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.generate_metadata import generate_metadata
@@ -273,19 +272,13 @@ imaging = Dependency(image_and_fit, {
     'translation': translation,
 }, 'imaging')
 
-# Examine and correct the topology file using ProDy
+# Examine and correct the topology file
 # WARNING: This is the independent call for this function
 # WARNING: In the canonical workflow, this function is called inside 'process_input_files'
 corrector = Dependency(topology_corrector, {
     'input_topology_filename': original_topology_filename,
     'output_topology_filename': original_trajectory_filenames
 }, 'corrector')
-
-# Create an object with the topology data in both ProDy and Pytraj formats
-# This object also include functions to convert residue numeration from one format to another
-topology_reference = Dependency(TopologyReference, {
-    'topology_filename': pdb_filename
-})
 
 # Set a parsed structure/topology with useful features
 # This object also include functions to convert residue numeration from one format to another
@@ -331,7 +324,7 @@ interactions = Dependency(process_interactions, {
     'topology_filename': pdb_filename,
     'trajectory_filename': trajectory_filename,
     'interactions': input_interactions,
-    'topology_reference': topology_reference,
+    'structure': structure,
     'interactions_file': OUTPUT_interactions_filename,
 }, 'interactions')
 
@@ -475,7 +468,7 @@ analyses = [
         'input_topology_filename': pdb_filename,
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_hbonds_filename,
-        "topology_reference": topology_reference,
+        'structure': structure,
         "interactions": interactions,
         'frames_limit': 200,
     }, 'hbonds'),
@@ -490,7 +483,6 @@ analyses = [
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_energies_filename,
-        "reference": topology_reference,
         "interactions": interactions,
         'charges': charges,
         'frames_limit': 100,
@@ -499,6 +491,7 @@ analyses = [
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_pockets_filename,
+        'structure': structure,
         'membranes': membranes,
         'frames_limit': 100,
     }, 'pockets'),

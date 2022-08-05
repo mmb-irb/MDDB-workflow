@@ -5,7 +5,8 @@ import pytraj as pt
 
 from model_workflow.tools.get_charges import get_raw_charges, raw_charges_filename, get_tpr_charges
 from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr, get_pytraj_parm_format
-from model_workflow.tools.topology_manager import prody_selection_to_ndx
+
+from mdtoolbelt.selections import Selection
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -333,18 +334,29 @@ def tpr_filter(
     p.stdout.close()
 
 # Filter a structure and a trajectory file together
+# DANI: No se ha provado desde que se rehizo todo esto, cuidao
 def get_unmembraned_trajectory (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_topology_filename : str,
     output_trajectory_filename : str,
+    structure : 'Structure',
     membranes : list
 ):
-    # Set the .ndx file with the atom indices
-    prody_selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
-    atom_indices = prody_selection_to_ndx(input_topology_filename, prody_selection)
-    groups = { "my_selection" : atom_indices }
-    atom_indices_2_gromacs_ndx(groups, index_filename)
+    # Get all membrane atom indices
+    membrane_atom_indices = []
+    for membrane in membranes:
+        membrane_parsed_selection = structure.select(membrane['selection'], syntax='vmd')
+        membrane_atom_indices += membrane_parsed_selection.atom_indices
+    membrane_atom_indices = list(set(atom_indices))
+    # Now get all non-membrane atom indices
+    atom_indices = [ i for i, atom in enumerate(structure.atoms) if i not in membrane_atom_indices ]
+    # Convert atom indices to a ndx file gromacs can read
+    selection = Selection(atom_indices)
+    selection_name = 'unmembraned_selection'
+    ndx_atom_indices = selection.to_ndx(selection_name)
+    with open(index_filename, 'w') as file:
+        file.write(ndx_atom_indices)  
     # Filter the trajectory
     xtc_filter(input_topology_filename, input_trajectory_filename, output_trajectory_filename, index_filename)
     # Filter the topology

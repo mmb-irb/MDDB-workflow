@@ -25,8 +25,8 @@ def rmsds(
     skip_checkings : bool = False,
     ):
 
-    # Prody selection syntax by default
-    parsed_selections = [ structure.select(selection) for selection in selections ]
+    # VMD selection syntax
+    parsed_selections = [ structure.select(selection, syntax='vmd') for selection in selections ]
 
     rmsd_references = [first_frame_filename, average_structure_filename]
 

@@ -82,12 +82,6 @@ def map_sequence (ref_sequence : str, structure : 'Structure') -> list:
 
 # Get each chain name and aminoacids sequence in a topology
 # Output format example: {'A':'VNLTT', 'B':'SVASQ', ...}
-# WARNING: Prody sometimes splits chains with no reason
-# All chains with the same name are joined together to avoid this problem, even when the split is real
-# WARNING: Prody's 'getSequence' tool sometimes adds wrong aminoacid characters
-# e.g. Glycan residues '2MA' and 'YMA' are taken as adenine and glycine respectively
-# This is due to the prody custom map in 'mod_res_map.dat'
-# For this reason, another tool is used to obtain the residues sequence
 def get_chain_sequences (structure : 'Structure') -> dict:
     sequences = {}
     chains = structure.chains

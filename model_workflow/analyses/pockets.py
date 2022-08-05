@@ -39,6 +39,7 @@ def pockets (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
+    structure : 'Structure',
     membranes : list,
     frames_limit : int):
 
@@ -69,6 +70,7 @@ def pockets (
             pockets_trajectory,
             unmembraned_structure,
             unmembraned_trajectory,
+            structure,
             membranes
         )
         pockets_topology = unmembraned_structure

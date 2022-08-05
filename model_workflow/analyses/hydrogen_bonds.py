@@ -24,7 +24,7 @@ def hydrogen_bonds (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    topology_reference,
+    structure : 'Structure',
     interactions : list,
     frames_limit : int):
 
@@ -38,9 +38,9 @@ def hydrogen_bonds (
     pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
     # Save the reference function to get an absolue atom index from a pytraj atom index
-    get_atom_index = topology_reference.get_atom_index
+    get_atom_index = structure.get_atom_index
     # Save the reference function to get a source residue from a pytraj residue
-    pytraj2source = topology_reference.pytraj2source
+    pytraj_residue_index_2_residue = structure.pytraj_residue_index_2_residue
 
     # Save each analysis to a dict which will be parsed to json
     output_analysis = []
@@ -89,8 +89,8 @@ def hydrogen_bonds (
                 hydrogen_atom = matchObj.group(5)
 
                 # Get the acceptor and donor residues in source notation
-                acceptor = pytraj2source(int(acceptor_resnum))
-                donor = pytraj2source(int(donor_resnum))
+                acceptor = pytraj_residue_index_2_residue(int(acceptor_resnum))
+                donor = pytraj_residue_index_2_residue(int(donor_resnum))
                 
                 # WARNING: The analysis may return hydrogen bonds between residues from the same agent
                 # Accept the hydrogen bond only if its residues belong to different interaction agents

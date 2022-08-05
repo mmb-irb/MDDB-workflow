@@ -4,15 +4,16 @@
 from subprocess import run, PIPE, Popen
 import os
 import json
+from typing import List
 
-from model_workflow.tools.topology_manager import TopologyReference, sourceResidue
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.tools.get_last_frame import get_last_frame
-from model_workflow.tools.xvg_parse import xvg_parse
+
+# The limit of frames to be selected along the trajectory for the interface analysis
+frames_limit = 100
 
 # The cutoff distance is in Ångstroms (Å)
-cutoff_distance : float = 5
+distance_cutoff : float = 5
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
@@ -23,13 +24,13 @@ def process_interactions (
     interactions : list,
     topology_filename : str,
     trajectory_filename : str,
-    topology_reference,
+    structure : 'Structure',
     interactions_file : str) -> list:
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
     if os.path.exists(interactions_file):
-        loaded_interactions = load_interactions(interactions_file, topology_reference)
+        loaded_interactions = load_interactions(interactions_file, structure)
         # Merge the loaded interactions with the input interactions to cover all fields
         complete_interactions = []
         for i, input_interaction in enumerate(interactions):
@@ -41,79 +42,60 @@ def process_interactions (
     # If there are no interactions return an empty list
     if not interactions or len(interactions) == 0:
         return []
+
+    # If trajectory frames number is bigger than the limit we create a reduced trajectory
+    reduced_trajectory, step, frames = get_reduced_trajectory(
+        topology_filename,
+        trajectory_filename,
+        frames_limit,
+    )
     
+    # Iterate over each defined interaction
     for interaction in interactions:
-        selection_1 = interaction['selection_1']
-        selection_2 = interaction['selection_2']
-        # Get residues and residue indices
-        # residues_1 is the list of all residues in the first agent
-        residues_1, residue_indices_1 = topology_reference.prody_selection_2_residues(selection_1)
-        interaction['residues_1'] = residues_1
-        residue_indices_1 = [ int(i) for i in residue_indices_1 ]
-        interaction['residue_indices_1'] = residue_indices_1
-        # residues_2 is the list of all residues in the second agent
-        residues_2, residue_indices_2 = topology_reference.prody_selection_2_residues(selection_2)
-        interaction['residues_2'] = residues_2
-        residue_indices_2 = [ int(i) for i in residue_indices_2 ]
-        interaction['residue_indices_2'] = residue_indices_2
-        # Get 100 frames (or less) along the trajectory
-        frames_limit = 100
-        frames, step, count = get_pdb_frames(topology_filename, trajectory_filename, frames_limit)
+        # Get a few frames along the trajectory
+        #frames, step, count = get_pdb_frames(topology_filename, trajectory_filename, frames_limit)
         # Find out the interaction residues for each frame and save all residues as the overall interface
-        interface_1_residues = []
-        interface_2_residues = []
-        interface_1_indices = []
-        interface_2_indices = []
-        for current_frame in frames:
-            frame_structure = TopologyReference(current_frame)
-            # interface_1 is the list of residues from the agent 1 which are close to the agent 2
-            interface_selection_1 = ('(' + selection_1 + ') and same residue as exwithin ' +
-                str(cutoff_distance) + ' of (' + selection_2 + ')')
-            frame_interface_residues_1, frame_interface_residue_indices_1 = frame_structure.prody_selection_2_residues(
-                interface_selection_1
-            )
-            interface_1_residues += frame_interface_residues_1
-            interface_1_indices += frame_interface_residue_indices_1
-            # interface_2 is the list of residues from agent 2 which are close to the agent 1
-            interface_selection_2 = ('(' + selection_2 + ') and same residue as exwithin ' +
-                str(cutoff_distance) + ' of (' + selection_1 + ')')
-            frame_interface_residues_2, frame_interface_residue_indices_2 = frame_structure.prody_selection_2_residues(
-                interface_selection_2
-            )
-            interface_2_residues += frame_interface_residues_2
-            interface_2_indices += frame_interface_residue_indices_2
-        
-        # Remove duplicates and sort residues
-        interaction['interface_1'] = sorted(list(set(interface_1_residues)))
-        interaction['interface_2'] = sorted(list(set(interface_2_residues)))
-        # Conver indices in normal integers
-        interface_1_indices = [ int(i) for i in interface_1_indices ]
-        interface_2_indices = [ int(i) for i in interface_2_indices ]
-        interaction['interface_indices_1'] = sorted(list(set(interface_1_indices)))
-        interaction['interface_indices_2'] = sorted(list(set(interface_2_indices)))
+        interface_results = get_interface_atom_indices_vmd(
+            topology_filename,
+            reduced_trajectory,
+            interaction['selection_1'],
+            interaction['selection_2'],
+            distance_cutoff
+        )
+        # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
+        for agent in ['1','2']:
+            # First with all atoms/residues
+            atom_indices = interface_results['selection_' + agent + '_atom_indices']
+            residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ]))
+            interaction['residue_indices_' + agent] = residue_indices
+            interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
+            # Then with interface atoms/residues
+            interface_atom_indices = interface_results['selection_' + agent + '_interface_atom_indices']
+            interface_residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ]))
+            interaction['interface_indices_' + agent] = interface_residue_indices
+            interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
 
         # Find strong bonds between residues in different interfaces
         # Use the last trajectory frame to find them
         last_frame_filename = 'last_frame.pdb'
         get_last_frame(topology_filename, trajectory_filename, last_frame_filename)
-        vmd_atom_selection_1 = topology_reference.get_prody_selection(interaction['selection_1']).to_vmd()
-        vmd_atom_selection_2 = topology_reference.get_prody_selection(interaction['selection_2']).to_vmd()
-        strong_bonds = get_strong_bonds(last_frame_filename, vmd_atom_selection_1, vmd_atom_selection_2)
+        strong_bonds = get_strong_bonds(last_frame_filename, interaction['selection_1'], interaction['selection_2'])
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
+        converter = structure.residue_2_pytraj_residue_index
         interaction.update(
             {
-                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
-                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
-                'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
-                'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
+                'pt_residues_1': list(map(converter, interaction['residues_1'])),
+                'pt_residues_2': list(map(converter, interaction['residues_2'])),
+                'pt_interface_1': list(map(converter, interaction['interface_1'])),
+                'pt_interface_2': list(map(converter, interaction['interface_2'])),
                 'strong_bonds': strong_bonds
             }
         )
 
         print(interaction['name'] +
-            ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+            ' -> ' + str(interaction['interface_indices_1'] + interaction['interface_indices_2']))
 
     # Write the interactions file with the fields to be uploaded to the database only
     # i.e. strong bonds and residue indices
@@ -128,8 +110,6 @@ def process_interactions (
         'strong_bonds'
     ]
     with open(interactions_file, 'w') as file:
-        # Create a new interactions object with all 'sourceResidue' values as string
-        # e.g. 'A:1'
         file_interactions = []
         for interaction in interactions:
             file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
@@ -139,310 +119,150 @@ def process_interactions (
     return interactions
 
 # Load interactions from an already existinf interactions file
-def load_interactions (interactions_file : str, topology_reference) -> list:
+def load_interactions (interactions_file : str, structure : 'Structure') -> list:
     with open(interactions_file, 'r') as file:
         # The stored interactions should carry only residue indices and strong bonds
         interactions = json.load(file)
         # Now we must complete every interactions dict by adding residues in source format and pytraj format
         for interaction in interactions:
             # Get residues from their indices
-            converter = topology_reference.index_2_prody
-            interaction['residues_1'] = [ converter(index) for index in interaction['residue_indices_1'] ]
-            interaction['residues_2'] = [ converter(index) for index in interaction['residue_indices_2'] ]
-            interaction['interface_1'] = [ converter(index) for index in interaction['interface_indices_1'] ]
-            interaction['interface_2'] = [ converter(index) for index in interaction['interface_indices_2'] ]
+            residues = structure.residues
+            interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
+            interaction['residues_2'] = [ residues[index] for index in interaction['residue_indices_2'] ]
+            interaction['interface_1'] = [ residues[index] for index in interaction['interface_indices_1'] ]
+            interaction['interface_2'] = [ residues[index] for index in interaction['interface_indices_2'] ]
             # Transform to pytraj
-            converter = topology_reference.source2pytraj
+            converter = structure.residue_2_pytraj_residue_index
             interaction['pt_residues_1'] = list(map(converter, interaction['residues_1']))
             interaction['pt_residues_2'] = list(map(converter, interaction['residues_2']))
             interaction['pt_interface_1'] = list(map(converter, interaction['interface_1']))
             interaction['pt_interface_2'] = list(map(converter, interaction['interface_2']))
         return interactions
 
-# The easy processing uses the cutoff in the topology / structure to set the interface residues
-# Interface residues are defined as by a cuttoff distance in Angstroms
-# DEPRECATED
-# DANI: El nuevo sistema hace lo mismo, pero en lugar de solo en la primera frame lo hace en varias
-# DANI: De manera que al final, cada residuo que ha salido en una frame como mínimo se considera apto
-def easy_process_interactions (
-    interactions : list,
-    topology_reference,
-    cutoff_distance : float = 5) -> list:
+# Given two atom selections, find interface atoms and return their indices
+# Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
+# Return also atom indices for the whole selections
+def get_interface_atom_indices_vmd (
+    input_structure_filename : str,
+    input_trajectory_filename : str,
+    selection_1 : str,
+    selection_2 : str,
+    distance_cutoff : float,
+) -> List[int]:
 
-    if not interactions or len(interactions) == 0:
-        return []
+    # Set the interface selections
+    interface_selection_1 = ('(' + selection_1 + ') and same residue as exwithin ' +
+        str(distance_cutoff) + ' of (' + selection_2 + ')')
+    interface_selection_2 = ('(' + selection_2 + ') and same residue as exwithin ' +
+        str(distance_cutoff) + ' of (' + selection_1 + ')')
     
-    for interaction in interactions:
-        # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.residues_selection(
-            interaction['selection_1']
-        )
-        # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.residues_selection(
-            interaction['selection_2']
-        )
-        # interface_1 is the list of residues from the agent 1 which are close to the agent 2
-        interaction['interface_1'] = topology_reference.residues_selection(
-            '(' + interaction['selection_1'] +
-            ') and same residue as exwithin ' +
-            str(cutoff_distance) +
-            ' of (' +
-            interaction['selection_2'] + ')')
-        # interface_2 is the list of residues from agent 2 which are close to the agent 1
-        interaction['interface_2'] = topology_reference.residues_selection(
-            '(' + interaction['selection_2'] +
-            ') and same residue as exwithin ' +
-            str(cutoff_distance) +
-            ' of (' +
-            interaction['selection_1'] + ')')
+    # Set the output txt files for vmd to write the atom indices
+    selection_1_filename = '.selection_1.txt'
+    selection_2_filename = '.selection_2.txt'
+    interface_selection_1_filename = '.interface_selection_1.txt'
+    interface_selection_2_filename = '.interface_selection_2.txt'
 
-        # Translate all residues selections to pytraj notation
-        # These values are used along the workflow but not added to metadata
-        interaction.update(
-            {
-                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
-                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
-                'pt_interface_1': list(map(topology_reference.source2pytraj, interaction['interface_1'])),
-                'pt_interface_2': list(map(topology_reference.source2pytraj, interaction['interface_2'])),
-            }
-        )
+    # Prepare a script for VMD to run. This is Tcl language
+    commands_filename = 'commands.vmd'
+    with open(commands_filename, "w") as file:
+        # -------------------------------------------
+        # First get the whole selection atom indices
+        # -------------------------------------------
+        # Select the specified atoms
+        file.write('set selection [atomselect top "' + selection_1 + '"]\n')
+        # Save atom indices from the selection
+        file.write('set indices [$selection list]\n')
+        # Write atom indices to a file
+        file.write('set indices_file [open ' + selection_1_filename + ' w]\n')
+        file.write('puts $indices_file $indices\n')
+        # Select the specified atoms
+        file.write('set selection [atomselect top "' + selection_2 + '"]\n')
+        # Save atom indices from the selection
+        file.write('set indices [$selection list]\n')
+        # Write atom indices to a file
+        file.write('set indices_file [open ' + selection_2_filename + ' w]\n')
+        file.write('puts $indices_file $indices\n')
+        # -------------------------------------------
+        # Now get the interface selection atom indices
+        # -------------------------------------------
+        # Capture indices for each frame in the trajectory
+        file.write('set accumulated_interface1_atom_indices []\n')
+        file.write('set accumulated_interface2_atom_indices []\n')
+        file.write('set interface1 [atomselect top "' + interface_selection_1 + '"]\n')
+        file.write('set interface2 [atomselect top "' + interface_selection_2 + '"]\n')
+        # Get the number of frames in the trajectory
+        file.write('set nframes [molinfo top get numframes]\n')
+        # Iterate over each frame
+        file.write('for { set i 1 } { $i < $nframes } { incr i } {\n')
+        # Update the selection in the current frame
+        file.write('    $interface1 frame $i\n')
+        file.write('    $interface1 update\n')
+        # Add its atom indices to the acumulated atom indices
+        file.write('    set interface1_atom_indices [$interface1 list]\n')
+        file.write('    set accumulated_interface1_atom_indices [concat $accumulated_interface1_atom_indices $interface1_atom_indices ]\n')
+        # Repeat with the selection 2
+        file.write('    $interface2 frame $i\n')
+        file.write('    $interface2 update\n')
+        file.write('    set interface2_atom_indices [$interface2 list]\n')
+        file.write('    set accumulated_interface2_atom_indices [concat $accumulated_interface2_atom_indices $interface2_atom_indices ]\n')
+        file.write('}\n')
+        # Remove duplicated indices
+        file.write('lsort -unique $accumulated_interface1_atom_indices\n')
+        file.write('lsort -unique $accumulated_interface2_atom_indices\n')
+        # Write indices to files
+        file.write('set indices_file [open ' + interface_selection_1_filename + ' w]\n')
+        file.write('puts $indices_file $accumulated_interface1_atom_indices\n')
+        file.write('set indices_file [open ' + interface_selection_2_filename + ' w]\n')
+        file.write('puts $indices_file $accumulated_interface2_atom_indices\n')
+        file.write('exit\n')
 
-        print(interaction['name'] +
-            ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+    # Run VMD
+    logs = run([
+        "vmd",
+        input_structure_filename,
+        input_trajectory_filename,
+        "-e",
+        commands_filename,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
-    return interactions
-
-# The processing uses gromacs to find interface residues
-# Residues are filtered by minimum distance along the trajecotry
-# DEPRECATED
-# DANI: El problema de este sistema es que puede haber diferencias en la numeración de residuos
-# DANI: Gromacs puede contar residuos diferente que pytraj y prody (e.g. hidrógenos al final)
-# DANI: Pytraj y prody también pueden contar diferente, pero ya tengo funciones para parsear
-# DANI: Hacer estas funciones para parsear de gromacs a prody o pytraj no es banal
-# DANI: Esto se debe a que gromacs es mucho menos accesible que prody o pytraj
-def process_interactions_gromacs (
-    topology_filename : str,
-    trajectory_filename : str,
-    interactions : list,
-    topology_reference) -> list:
-
-    # If there is a backup then use it
-    # Load the backup and return its content as it is
-    if os.path.exists(interactions_file):
-        with open(interactions_file, 'r') as file:
-            interactions = json.load(file)
-        # Parse the residues in string format to 'sourceResidue' format (e.g. 'A:1')
-        for interaction in interactions:
-            for key in ['residues_1','residues_2','interface_1','interface_2']:
-                interaction[key] = [ sourceResidue.from_tag(residue) for residue in interaction[key] ]
-        return interactions
-
-    if not interactions or len(interactions) == 0:
-        return []
+    # If any of the output files do not exist at this point then it means something went wrong with vmd
+    expected_output_files = [
+        selection_1_filename,
+        selection_2_filename,
+        interface_selection_1_filename,
+        interface_selection_2_filename
+    ]
+    for output_file in expected_output_files:
+        if not os.path.exists(output_file):
+            print(logs)
+            raise SystemExit('Something went wrong with VMD')
     
-    for interaction in interactions:
-        # residues_1 is the list of all residues in the first agent
-        interaction['residues_1'] = topology_reference.residues_selection(
-            interaction['selection_1']
-        )
-        # residues_2 is the list of all residues in the second agent
-        interaction['residues_2'] = topology_reference.residues_selection(
-            interaction['selection_2']
-        )
-        # Translate the residues selections to pytraj notation
-        # These values are used along the workflow but not added to metadata
-        interaction.update(
-            {
-                'pt_residues_1': list(map(topology_reference.source2pytraj, interaction['residues_1'])),
-                'pt_residues_2': list(map(topology_reference.source2pytraj, interaction['residues_2'])),
-            }
-        )
-        # Find out the interface resdiues for each agent
-        # Update the interaction dict by adding both interfaces
-        get_interface_residues_gromacs(topology_filename, trajectory_filename, interaction)
-        
-        # Translate the residues selections back from pytraj notation
-        interaction['interface_1'] = list(map(topology_reference.pytraj2source, interaction['pt_interface_1']))
-        interaction['interface_2'] = list(map(topology_reference.pytraj2source, interaction['pt_interface_2']))
+    # Set a function to read the VMD output and parse the atom indices string to an array of integers
+    def process_vmd_output (output_filename : str) -> List[int]:
+        with open(output_filename, 'r') as file:
+            raw_atom_indices = file.read()
+        return [ int(i) for i in raw_atom_indices.split() ]
 
-        print(interaction['name'] +
-            ' -> ' + str(interaction['interface_1'] + interaction['interface_2']))
+    # Read the VMD output
+    selection_1_atom_indices = process_vmd_output(selection_1_filename)
+    selection_2_atom_indices = process_vmd_output(selection_2_filename)
+    selection_1_interface_atom_indices = process_vmd_output(interface_selection_1_filename)
+    selection_2_interface_atom_indices = process_vmd_output(interface_selection_2_filename)
+    
+    # Remove trash files
+    trash_files = [ commands_filename ] + expected_output_files
+    for trash_file in trash_files:
+        os.remove(trash_file)
 
-    # Save a backup for interactions
-    with open(interactions_file, 'w') as file:
-        # Create a new interactions object with all 'sourceResidue' values as string
-        # e.g. 'A:1'
-        serializable_interactions = []
-        for interaction in interactions:
-            serializable_interaction = {}
-            for key, value in interaction.items():
-                if type(value) == sourceResidue:
-                    serializable_interaction[key] = [ str(element) for element in value ]
-                else:
-                    serializable_interaction[key] = value
-            serializable_interactions.append(serializable_interaction)
-        json.dump(serializable_interactions, file, indent=4)
-
-    return interactions
-
-# There is a file which is always produced by mindist
-# We remove it each time for the files to do not disturb us
-residual_mindist_file = 'mindist.xvg'
-
-# Find out the interface residues from an interaction and add them to the input dict
-# Obtain minimum distances between each agents pair of residues and get the closer ones
-# This is powered by the gromacs command 'mindist' and the distance cutoff is 5 Angstroms
-# WARNING: The cutoff distance is in nanometers (nm)
-# DEPRECATED
-def get_interface_residues_gromacs(
-    topology_filename : str,
-    trajectory_filename : str,
-    interaction : dict,
-    cutoff_distance : float = 0.5) -> dict:
-
-    # Use a reduced trajectory since this process is slow
-    frames_limit = 100
-    reduced_trajectory_filename, step, frames = get_reduced_trajectory(
-        topology_filename,
-        trajectory_filename,
-        frames_limit,
-    )
-
-    # First of all we must set up gromacs index to select each interacting agent separately
-    # This is performed using the make_ndx gromacs command with specific commands
-
-    # In order to remove all default groups we run first 'keep 0' and then 'del 0'
-    # i.e. first remove all groups but the group 0 and then remove the group 0
-    remove_default_groups = 'keep 0' + '\n' + 'del 0' + '\n'
-
-    # Create a new group with the agent 1 residues and name
-    residues_1 = interaction['pt_residues_1']
-    name_1 = interaction['agent_1'].replace(' ','_') # Avoid white spaces
-    string_residues_1 = [ str(residue) for residue in residues_1 ]
-    select_1 = 'ri ' + ' '.join(string_residues_1) + '\n'
-    rename_1 = 'name 0 ' + name_1 + '\n'
-
-    # Create a new group with the agent 2 residues and name
-    residues_2 = interaction['pt_residues_2']
-    name_2 = interaction['agent_2'].replace(' ','_') # Avoid white spaces
-    string_residues_2 = [ str(residue) for residue in residues_2 ]
-    select_2 = 'ri ' + ' '.join(string_residues_2) + '\n'
-    rename_2 = 'name 1 ' + name_2 + '\n'
-
-    # Join all commands with the 'save and exit' command at the end
-    all_commands = remove_default_groups + select_1 + rename_1 + select_2 + rename_2 + 'q'
-
-    # Run gromacs make_ndx to create the index file
-    index = 'index.ndx'
-    p = Popen([
-        "echo",
-        all_commands,
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "make_ndx",
-        "-f",
-        topology_filename,
-        '-o',
-        index,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-
-    # Now calculate the minimum distance for each residue in each agent using the mindist gromacs command
-
-    # Run gromacs mindist to create the minimum distances per residue file
-    mindistres_filename = 'mindistres.xvg'
-    p = Popen([
-        "echo",
-        "0",
-        "1",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "mindist",
-        "-s",
-        topology_filename,
-        "-f",
-        reduced_trajectory_filename,
-        "-n",
-        index,
-        '-or',
-        mindistres_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-
-    # Mine the distances from the gromacs output file
-    data_1 = xvg_parse(mindistres_filename, ['residue', 'distance'])
-
-    # Set which residues are considered as interface residues according to distances
-    interface_1 = []
-    distances = data_1['distance']
-    for i, distance in enumerate(distances):
-        if distance <= cutoff_distance:
-            interface_1.append(residues_1[i])
-
-    # Then delete the output files
-    run([
-        "rm",
-        mindistres_filename,
-        residual_mindist_file,
-    ], stdout=PIPE).stdout.decode()
-
-    # Repeat the process with the second agent
-
-    # Run gromacs mindist to create the minimum distances per residue file
-    mindistres_filename = 'mindistres.xvg'
-    p = Popen([
-        "echo",
-        "1",
-        "0",
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "mindist",
-        "-s",
-        topology_filename,
-        "-f",
-        reduced_trajectory_filename,
-        "-n",
-        index,
-        '-or',
-        mindistres_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-
-    # Mine the distances from the gromacs output file
-    data_2 = xvg_parse(mindistres_filename, ['residue', 'distance'])
-
-    # Set which residues are considered as interface residues according to distances
-    interface_2 = []
-    distances = data_2['distance']
-    for i, distance in enumerate(distances):
-        if distance <= cutoff_distance:
-            interface_2.append(residues_2[i])
-
-    # Then delete the output files
-    run([
-        "rm",
-        mindistres_filename,
-        residual_mindist_file,
-    ], stdout=PIPE).stdout.decode()
-
-    # Update the interaction dict with both interfaces
-    interaction['pt_interface_1'] = interface_1
-    interaction['pt_interface_2'] = interface_2
-
-    # Remove the index file
-    run([
-        "rm",
-        index,
-    ], stdout=PIPE).stdout.decode()
-
-    return interaction
-
+    # Return the results
+    return {
+        'selection_1_atom_indices': selection_1_atom_indices,
+        'selection_2_atom_indices': selection_2_atom_indices,
+        'selection_1_interface_atom_indices': selection_1_interface_atom_indices,
+        'selection_2_interface_atom_indices': selection_2_interface_atom_indices
+    }
 
 # Set a function to retrieve strong bonds between 2 atom selections
 # Atom selections must be in VMD selection syntax

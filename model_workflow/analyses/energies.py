@@ -47,7 +47,6 @@ def energies(
         input_topology_filename: str,
         input_trajectory_filename: str,
         output_analysis_filename: str,
-        reference,
         interactions: list,
         charges: list,
         frames_limit : int):

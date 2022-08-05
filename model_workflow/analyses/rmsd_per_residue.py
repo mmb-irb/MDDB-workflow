@@ -28,10 +28,8 @@ def rmsd_per_residue (
     # We must exclude here membranes from the analysis
     # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
     if membranes and len(membranes) > 0:
-        # DANI: Esto en su día lo hice en prody y cambiarlo ahora significaría tener que cambiar todos lo campos en la db
-        # DANI: Lo ideal sería hacerlo con syntaxis de VMD o MolStar (a futuro)
-        prody_selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
-        selection = structure.select(prody_selection, syntax='prody')
+        selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
+        selection = structure.select(selection, syntax='vmd')
         pytraj_selection = selection.to_pytraj()
         filtered_pt_trajectory = pt_trajectory[pytraj_selection]
         # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs

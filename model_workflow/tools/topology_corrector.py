@@ -5,7 +5,6 @@ from mdtoolbelt.structures import Structure, calculate_distance
 from model_workflow.tools.vmd_processor import vmd_chainer
 
 # Analyze the topology looking for irregularities and then modify the topology to standarize the format
-# Both analysis and modifications are carried by Prody
 #
 # Supported cases:
 #
