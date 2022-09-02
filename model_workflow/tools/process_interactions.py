@@ -66,7 +66,7 @@ def process_interactions (
         for agent in ['1','2']:
             # First with all atoms/residues
             atom_indices = interface_results['selection_' + agent + '_atom_indices']
-            residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ]))
+            residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
             interaction['residue_indices_' + agent] = residue_indices
             interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
@@ -151,10 +151,8 @@ def get_interface_atom_indices_vmd (
 ) -> List[int]:
 
     # Set the interface selections
-    interface_selection_1 = ('(' + selection_1 + ') and same residue as exwithin ' +
-        str(distance_cutoff) + ' of (' + selection_2 + ')')
-    interface_selection_2 = ('(' + selection_2 + ') and same residue as exwithin ' +
-        str(distance_cutoff) + ' of (' + selection_1 + ')')
+    interface_selection_1 = ('(' + selection_1 + ') and within ' + str(distance_cutoff) + ' of (' + selection_2 + ')')
+    interface_selection_2 = ('(' + selection_2 + ') and within ' + str(distance_cutoff) + ' of (' + selection_1 + ')')
     
     # Set the output txt files for vmd to write the atom indices
     selection_1_filename = '.selection_1.txt'
