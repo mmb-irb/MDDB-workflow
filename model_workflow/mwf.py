@@ -55,6 +55,11 @@ sys.stdout = unbuffered
 
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
 protein_and_nucleic_backbone = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
+
+# Provisional fix for SSL bypass
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 # CLASSES -------------------------------------------------------------------------
 
 class Dependency:
@@ -680,7 +685,7 @@ parser.add_argument(
 
 parser.add_argument(
     "-url",
-    default="https://bioexcel-cv19-dev.bsc.es",
+    default="https://mdposit-dev.bsc.es",
     help="URL from where to download project")
 
 parser.add_argument(
