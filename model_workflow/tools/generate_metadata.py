@@ -92,6 +92,7 @@ def generate_metadata (
         'LIGANDS': ligands,
         'CUSTOMS': getInput('customs'),
         'INTERACTIONS': getInput('interactions'),
+        'FORCED_REFERENCES': getInput('forced_references'),
         'REFERENCES': references,
         'CHAINNAMES': getInput('chainnames'),
         'MEMBRANES': getInput('membranes'),

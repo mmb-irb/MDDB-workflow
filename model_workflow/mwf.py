@@ -24,7 +24,7 @@ from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.generate_metadata import generate_metadata
-from model_workflow.tools.generate_map import generate_map
+from model_workflow.tools.generate_map import generate_map_online
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_frames_count import get_frames_count
@@ -202,6 +202,7 @@ skip_checkings = Dependency(getInput, {'input': 'skip_checkings'})
 input_interactions = Dependency(getInput, {'input': 'interactions'})
 ligands = Dependency(getInput, {'input': 'ligands'})
 membranes = Dependency(getInput, {'input': 'membranes'})
+forced_references = Dependency(getInput, {'input': 'forced_references'})
 
 # Define intermediate tools and files
 
@@ -334,8 +335,9 @@ charges = Dependency(get_charges, {
 }, 'charges')
 
 # Prepare the metadata output file
-residues_map = Dependency(generate_map, {
+residues_map = Dependency(generate_map_online, {
     'structure': structure,
+    'forced_references': forced_references
 }, 'map')
 
 # Prepare the metadata output file

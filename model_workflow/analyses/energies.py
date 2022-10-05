@@ -59,6 +59,22 @@ def energies(
         print('No charges were passed')
         return
 
+    # Check the number of atoms on each interacting agent
+    # If there is any agent with more than 80000 atoms CMIP will fail so we must skip this specific energies analysis by now
+    # DANI: Este valor límite se puede cambiar en CMIP, pero hay que recompilar y eso no es banal en un environment de conda
+    cmip_atom_limit = 80000
+    for interaction in interactions:
+        exceeds = False
+        for agent in ['1', '2']:
+            residues = interaction['residues_' + agent]
+            atom_count = sum([ len(residue.atom_indices) for residue in residues ])
+            if atom_count >= cmip_atom_limit:
+                exceeds = True
+                break
+        if exceeds:
+            print('WARNING: ' + interaction['name'] + ' is exceeding the CMIP atom count limit of ' + str(cmip_atom_limit) + ' and it will be skipped for this analysis')
+            interaction['exceeds'] = True
+
     # This anlaysis produces many residual output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
     if not os.path.exists(energies_folder):
@@ -92,6 +108,10 @@ def energies(
         # Repeat the whole process for each interaction
         data = []
         for interaction in interactions:
+
+            # Check if the interaction as been marked as 'exceeds', in which case we skip it
+            if interaction.get('exceeds', False):
+                continue
 
             name = interaction['name']
             strong_bonds = interaction.get('strong_bonds', None)
@@ -143,7 +163,7 @@ def energies(
 
     # Extract the energies for each frame in a reduced trajectory
     frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
-    interactions_data = [[] for i in interactions]
+    interactions_data = [[] for interaction in interactions if not interaction.get('exceeds', False)]
     for current_frame in frames:
         
         # Run the main analysis over the current frame
@@ -155,6 +175,10 @@ def energies(
     # Now calculated residue average values through all frames for each pair of interaction agents
     output_analysis = []
     for i, interaction in enumerate(interactions):
+
+        # Check if the interaction as been marked as 'exceeds', in which case we skip it
+        if interaction.get('exceeds', False):
+            continue
 
         # Get the main data
         data = interactions_data[i]
