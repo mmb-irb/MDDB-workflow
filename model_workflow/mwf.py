@@ -177,37 +177,185 @@ OUTPUT_pockets_filename = 'md.pockets.json'
 # First of all define the inputs dict
 # This dict will be updated as soon as the workflow starts with the input filenames
 inputs = {}
+missing_input_exception = Exception('Missing input')
 # Set a function to retrieve 'inputs' values and handle missing keys
-def getInput(input: str):
-    return inputs.get(input, None)
+def get_input (name : str):
+    value = inputs.get(name, missing_input_exception)
+    if value == missing_input_exception:
+        raise SystemExit('ERROR: Missing input "' + name + '"')
+    return value
 # Set a function to load the inputs file
-def load_inputs(filename : str):
-    with open(filename, 'r') as file:
+def load_inputs (inputs_filename : str):
+    # Check if the inputs file exists
+    # If it does not, then try to download it
+    if not os.path.exists(inputs_filename):
+        # Check we have the inputs required to download the file
+        server_url = get_input('url')
+        project = get_input('project')
+        # If not, then there is nothing to do
+        if not server_url or not project:
+            raise SystemExit('ERROR: Missing inputs file "' + inputs_filename + '"')
+        # Download the inputs json file if it does not exists
+        sys.stdout.write('Downloading inputs (' + inputs_filename + ')\n')
+        project_url = server_url + '/api/rest/current/projects/' + project
+        inputs_url = project_url + '/inputs/'
+        urllib.request.urlretrieve(inputs_url, inputs_filename)
+        # Write the inputs file in a pretty formatted way
+        with open(inputs_filename, 'r+') as file:
+            file_content = json.load(file)
+            file.seek(0)
+            json.dump(file_content, file, indent=4)
+            file.truncate()
+    # Update the inputs object with the contents of the inputs json file
+    with open(inputs_filename, 'r') as file:
         inputs_data = json.load(file)
         inputs.update(inputs_data)
+
+# Set functions to get input files names and, in case they are missing, try to download them
+# DANI: Que la descarga de cada input file sea independiente debería ser útil para ahorrar descargas innecesarias
+# DANI: Sin embargo es poco probable que ahorremos nada ahora mismo, porque el 'process_input_files' lo necesita todo
+# DANI: Hay que darle una vuelta -> Usar el mdtb convert tal vez sería una solución
+
+# Get the input pdb filename from the inputs
+# If the file is not found try to download it
+def get_input_pdb_filename ():
+    # Get the pdb filename from the inputs
+    original_pdb_filename = get_input('input_topology_filename')
+    # Check if the file exists
+    if os.path.exists(original_pdb_filename):
+        return original_pdb_filename
+    # If not, try to download it
+    # Check we have the inputs required to download the file
+    server_url = get_input('url')
+    project = get_input('project')
+    # If not, then there is nothing to do
+    if not server_url or not project:
+        raise SystemExit('ERROR: Missing input pdb file "' + original_pdb_filename + '"')
+    # Download the file
+    project_url = server_url + '/api/rest/current/projects/' + project
+    sys.stdout.write('Downloading structure (' + original_pdb_filename + ')\n')
+    topology_url = project_url + '/files/' + original_pdb_filename
+    try:
+        urllib.request.urlretrieve(topology_url, original_pdb_filename)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise SystemExit('ERROR: Missing input pdb file "' + original_pdb_filename + '"')
+        else:
+            raise ValueError('Something went wrong with the MDposit request: ' + topology_url)
+    return original_pdb_filename
+
+# Get the input trajectory filename(s) from the inputs
+# If file(s) are not found try to download it
+def get_input_trajectory_filenames ():
+    # Get the trajectory filename(s) from the inputs
+    original_trajectory_filenames = get_input('input_trajectory_filenames')
+    # Check if the file exists
+    if all([ os.path.exists(filename) for filename in original_trajectory_filenames ]):
+        return original_trajectory_filenames
+    # If not, try to download them
+    # Check we have the inputs required to download the files
+    server_url = get_input('url')
+    project = get_input('project')
+    # If not, then there is nothing to do
+    if not server_url or not project:
+        raise SystemExit('ERROR: Missing input trajectory files "' + ', '.join(original_trajectory_filenames) + '"')
+    # Download each trajectory file (ususally it will be just one)
+    project_url = server_url + '/api/rest/current/projects/' + project
+    for original_trajectory_filename in original_trajectory_filenames:
+        # Skip already existing files
+        if os.path.exists(original_trajectory_filename):
+            continue
+        sys.stdout.write('Downloading trajectory (' + original_trajectory_filename + ')\n')
+        trajectory_url = project_url + '/files/' + original_trajectory_filename
+        try:
+            urllib.request.urlretrieve(trajectory_url, original_trajectory_filename)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise SystemExit('ERROR: Missing input trajectory file "' + original_trajectory_filename + '"')
+            else:
+                raise ValueError('Something went wrong with the MDposit request: ' + trajectory_url)
+    return original_trajectory_filenames
+
+# Get the input charges filename from the inputs
+# If the file is not found try to download it
+def get_input_charges_filename ():
+    # Get the charges filename from the inputs
+    original_charges_filename = get_input('input_charges_filename')
+    # Check if the file exists
+    if original_charges_filename and os.path.exists(original_charges_filename):
+        return original_charges_filename
+    # If not, try to download it
+    # Check we have the inputs required to download the file
+    server_url = get_input('url')
+    project = get_input('project')
+    # If not, then there is nothing to do
+    if not server_url or not project:
+        raise SystemExit('ERROR: Missing input charges file "' + original_charges_filename + '"')
+    # Check which files are available for this project
+    project_url = server_url + '/api/rest/current/projects/' + project
+    files_url = project_url + '/files'
+    response = urllib.request.urlopen(files_url)
+    files = json.loads(response.read())
+    # In case there is no specified charges we must find out which is the charges filename
+    # It may be a topology with charges or it may be a raw charges text file
+    if not original_charges_filename:
+        # Check if there is any topology file (e.g. topology.prmtop, topology.top, ...)
+        charges_file = next((f for f in files if f['filename'][0:9] == 'topology.'), None)
+        # In case there is no topology, check if there is raw charges (i.e. 'charges.txt')
+        if not charges_file:
+            charges_file = next((f for f in files if f['filename'] == 'charges.txt'), None)
+        # In case there is neither raw charges we send a warning and stop here
+        if not charges_file:
+            print('WARNING: There are no charges in this project')
+        else:
+            # In case we found a charges file set the input charges filename as this
+            original_charges_filename = charges_file['filename']
+    # Download the charges file
+    if original_charges_filename and not os.path.exists(original_charges_filename):
+        sys.stdout.write('Downloading charges (' + original_charges_filename + ')\n')
+        charges_url = project_url + '/files/' + original_charges_filename
+        try:
+            urllib.request.urlretrieve(charges_url, original_charges_filename)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise SystemExit('ERROR: Missing input topology file "' + original_charges_filename + '"')
+            else:
+                raise ValueError('Something went wrong with the MDposit request: ' + charges_url)
+        # In the special case that the topology is from Gromacs (i.e. 'topology.top')...
+        # We must also download all itp files, if any
+        if original_charges_filename == 'topology.top':
+            itp_filenames = [f['filename'] for f in files if f['filename'][-4:] == '.itp']
+            for itp_filename in itp_filenames:
+                sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
+                itp_url = project_url + '/files/' + itp_filename
+                urllib.request.urlretrieve(itp_url, itp_filename)
+        # Set the final charges filename as the downloaded charges filename
+        #charges_filename.filename = original_charges_filename
+    return original_charges_filename
+
 
 # Get input filenames from the already updated inputs
 
 # The original topology and trajectory filenames are the input filenames
-original_topology_filename = Dependency(getInput, {'input': 'input_topology_filename'})
-original_trajectory_filenames = Dependency(getInput, {'input': 'input_trajectory_filenames'})
-original_charges_filename = Dependency(getInput, {'input': 'input_charges_filename'})
+original_topology_filename = Dependency(get_input_pdb_filename, {})
+original_trajectory_filenames = Dependency(get_input_trajectory_filenames, {})
+original_charges_filename = Dependency(get_input_charges_filename, {})
 # The 'inputs file' is a json file which must contain all parameters to run the workflow
-inputs_filename = Dependency(getInput, {'input': 'inputs_filename'})
+inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
 
 # Get also some input values which are passed through command line instead of the inputs file
-preprocess_protocol = Dependency(getInput, {'input': 'preprocess_protocol'})
-translation = Dependency(getInput, {'input': 'translation'})
-filter_selection = Dependency(getInput, {'input': 'filter_selection'})
-pca_fit_selection = Dependency(getInput, {'input': 'pca_fit_selection'})
-pca_selection = Dependency(getInput, {'input': 'pca_selection'})
-skip_checkings = Dependency(getInput, {'input': 'skip_checkings'})
+preprocess_protocol = Dependency(get_input, {'name': 'preprocess_protocol'})
+translation = Dependency(get_input, {'name': 'translation'})
+filter_selection = Dependency(get_input, {'name': 'filter_selection'})
+pca_fit_selection = Dependency(get_input, {'name': 'pca_fit_selection'})
+pca_selection = Dependency(get_input, {'name': 'pca_selection'})
+skip_checkings = Dependency(get_input, {'name': 'skip_checkings'})
 
 # Extract some input values which may be required for the different workflow steps
-input_interactions = Dependency(getInput, {'input': 'interactions'})
-ligands = Dependency(getInput, {'input': 'ligands'})
-membranes = Dependency(getInput, {'input': 'membranes'})
-forced_references = Dependency(getInput, {'input': 'forced_references'})
+input_interactions = Dependency(get_input, {'name': 'interactions'})
+ligands = Dependency(get_input, {'name': 'ligands'})
+membranes = Dependency(get_input, {'name': 'membranes'})
+forced_references = Dependency(get_input, {'name': 'forced_references'})
 
 # Define intermediate tools and files
 
@@ -510,83 +658,7 @@ workflow = [ metadata_filename, topology_filename, *analyses ]
 # Set a list with all dependencies which may be requested independently
 requestables = [ *analyses, *tools, metadata_filename, topology_filename ]
 
-# Main ---------------------------------------------------------------------------------
-
-# Manage the working directory
-# Download topology, trajectory and inputs files from MoDEL if a project is specified
-def download_input_files(
-        directory: str,
-        project: str,
-        url: str,
-        input_topology_filename: str,
-        input_trajectory_filenames: str,
-        input_charges_filename: str,
-        inputs_filename: str):
-    # Create the directory if it does not exists
-    if not os.path.exists(directory):
-        Path(directory).mkdir(parents=True, exist_ok=True)
-    # Move to the specified directory
-    os.chdir(directory)
-    # If there is a specified project...
-    if project:
-        project_url = url + '/api/rest/current/projects/' + project
-        # Download the inputs json file if it does not exists
-        if not os.path.exists(inputs_filename):
-            sys.stdout.write('Downloading inputs (' + inputs_filename + ')\n')
-            inputs_url = project_url + '/inputs/'
-            urllib.request.urlretrieve(inputs_url, inputs_filename)
-            # Rewrite the inputs file in a pretty formatted way
-            with open(inputs_filename, 'r+') as file:
-                file_content = json.load(file)
-                file.seek(0)
-                json.dump(file_content, file, indent=4)
-                file.truncate()
-        # Download the topology file if it does not exists
-        if not os.path.exists(input_topology_filename):
-            sys.stdout.write('Downloading topology (' + input_topology_filename + ')\n')
-            topology_url = project_url + '/files/' + input_topology_filename
-            urllib.request.urlretrieve(topology_url, input_topology_filename)
-        # Iterate over requested trajectory files
-        for input_trajectory_filename in input_trajectory_filenames:
-            # Download the trajectory file if it does not exists
-            if not os.path.exists(input_trajectory_filename):
-                sys.stdout.write('Downloading trajectory (' + input_trajectory_filename + ')\n')
-                trajectory_url = project_url + '/files/' + input_trajectory_filename
-                urllib.request.urlretrieve(trajectory_url, input_trajectory_filename)
-        # Check which files are available for this project
-        files_url = project_url + '/files'
-        response = urllib.request.urlopen(files_url)
-        files = json.loads(response.read())
-        # In case there is no specified charges we must find out which is the charges filename
-        # It may be a topology with charges or it may be a raw charges text file
-        if not input_charges_filename:
-            # Check if there is any topology file (e.g. topology.prmtop, topology.top, ...)
-            charges_file = next((f for f in files if f['filename'][0:9] == 'topology.'), None)
-            # In case there is no topology, check if there is raw charges (i.e. 'charges.txt')
-            if not charges_file:
-                charges_file = next((f for f in files if f['filename'] == 'charges.txt'), None)
-            # In case there is neither raw charges we send a warning and stop here
-            if not charges_file:
-                print('WARNING: There are no charges in this project')
-            else:
-                # In case we found a charges file set the input charges filename as this
-                input_charges_filename = charges_file['filename']
-        # Download the charges file
-        if input_charges_filename and not os.path.exists(input_charges_filename):
-            sys.stdout.write('Downloading charges (' + input_charges_filename + ')\n')
-            charges_url = project_url + '/files/' + input_charges_filename
-            urllib.request.urlretrieve(charges_url, input_charges_filename)
-            # In the special case that the topology is from Gromacs (i.e. 'topology.top')...
-            # We must also download all itp files, if any
-            if input_charges_filename == 'topology.top':
-                itp_filenames = [f['filename'] for f in files if f['filename'][-4:] == '.itp']
-                for itp_filename in itp_filenames:
-                    sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
-                    itp_url = project_url + '/files/' + itp_filename
-                    urllib.request.urlretrieve(itp_url, itp_filename)
-            # Set the final charges filename as the downloaded charges filename
-            charges_filename.filename = input_charges_filename
-            
+# Main ---------------------------------------------------------------------------------            
 
 # Main function
 def main():
@@ -602,30 +674,15 @@ def main():
     # The vars function converts the args object to a dictionary
     inputs.update(vars(args))
 
-    # Manage the working directory and make the required downloads
-    download_input_files(
-        directory=Path(args.working_dir).resolve(),
-        project=args.project,
-        url=args.url,
-        input_topology_filename=input_topology_filename,
-        input_trajectory_filenames=input_trajectory_filenames,
-        input_charges_filename=input_charges_filename,
-        inputs_filename=inputs_filename )
+    # Load the inputs file
+    load_inputs(inputs_filename)
 
     # If download is passed as True then exit as soon as the setup is finished
     if args.download:
+        original_topology_filename.value
+        original_trajectory_filenames.value
+        original_charges_filename.value
         return
-
-    if not os.path.exists(input_topology_filename):
-        raise SystemExit('ERROR: Missing input topology file "' + input_topology_filename + '"')
-
-    for input_trajectory_filename in input_trajectory_filenames:
-        if not os.path.exists(input_trajectory_filename):
-            raise SystemExit('ERROR: Missing input trajectory file "' + input_trajectory_filename + '"')
-
-    # Load the inputs file
-    if os.path.exists(inputs_filename):
-        load_inputs(inputs_filename)
 
     # Run tools which must be run always
     # They better be fast

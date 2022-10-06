@@ -1,6 +1,7 @@
 # This script is used to get standarized and corrected topology and trajectory files
 
 import os
+from typing import List
 
 from model_workflow.tools.formats import is_pdb, is_psf, is_tpr, is_gro, is_xtc, is_dcd, is_netcdf, are_xtc, are_dcd, are_netcdf, is_raw, is_prmtop, is_top, is_psf, raw_charges_filename
 from model_workflow.tools.gromacs_processor import topology_to_pdb, merge_xtc_files, get_first_frame
@@ -16,7 +17,7 @@ from model_workflow.tools.topology_corrector import topology_corrector
 # e.g. charges are filtered according to atoms in topology
 def process_input_files (
     input_topology_filename : str,
-    input_trajectory_filenames : str,
+    input_trajectory_filenames : List[str],
     input_charges_filename : str,
     output_topology_filename : str,
     output_trajectory_filename : str,
