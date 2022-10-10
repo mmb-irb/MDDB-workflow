@@ -1,6 +1,8 @@
 import json
-import urllib.request
+import time
 import re
+import urllib.request
+import requests
 
 from typing import List, Tuple, Optional
 
@@ -286,7 +288,7 @@ def embl_to_uniprot (embl_id : str) -> str:
             parsed_response = response.read().decode("utf-8")
     # If the accession is not found in the EMBL then we can stop here
     except urllib.error.HTTPError as error:
-        if error.code == 400:
+        if error.code == 400 or error.code == 404:
             return None
         else:
             raise ValueError('Something went wrong with the ENA request: ' + request_url)
@@ -322,14 +324,21 @@ def pdb_to_uniprot (pdb_id : str) -> List[str]:
 # e.g. BAH02663.1 -> B6ZGN7
 def accession_to_uniprot (accession : str) -> List[str]:
     print('Searching UniProt ID for ' + accession)
-    uniprot_ids = pdb_to_uniprot(accession)
-    if uniprot_ids:
-        print('    Got it from PDB -> ' + ', '.join(uniprot_ids))
-        return uniprot_ids
+    # Try with UniProt ID mapping for GenBank accessions
+    uniprot_id = genbank_to_uniprot(accession)
+    if uniprot_id:
+        print('    Got it from GenBank -> ' + uniprot_id)
+        return [ uniprot_id ]
+    # Try with ENA
     uniprot_id = embl_to_uniprot(accession)
     if uniprot_id:
         print('    Got it from ENA -> ' + uniprot_id)
         return [ uniprot_id ]
+    # Try with PDB
+    uniprot_ids = pdb_to_uniprot(accession)
+    if uniprot_ids:
+        print('    Got it from PDB -> ' + ', '.join(uniprot_ids))
+        return uniprot_ids
     print('    Not found')
     return []
 
@@ -388,7 +397,15 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
         if error.code == 400:
             raise ValueError('Something went wrong with the Uniprot request: ' + request_url)
     # Get the full protein name
-    protein_name = parsed_response['protein']['recommendedName']['fullName']['value']
+    protein_data = parsed_response['protein']
+    protein_name_data = protein_data.get('recommendedName', None)
+    # DANI: It is possible that the 'recommendedName' is missing if it is not a reviewed UniProt entry
+    if not protein_name_data:
+        print('WARNING: The UniProt accession ' + uniprot_accession + ' is missing the recommended name. You should consider changing the reference.')
+        protein_name_data = protein_data.get('submittedName', None)[0]
+    if not protein_name_data:
+        raise ValueError('Unexpected structure in UniProt response for accession ' + uniprot_accession)
+    protein_name = protein_name_data['fullName']['value']
     # Get the gene names as a single string
     gene_names = ', '.join([ gene['name']['value'] for gene in parsed_response['gene'] ])
     # Get the organism name
@@ -431,3 +448,81 @@ def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
     if reference:
         return reference, True
     return get_uniprot_reference(uniprot_accession), False
+
+# -----------------------------------------------------------------------------------------------
+# The following code has been copied from https://www.uniprot.org/help/id_mapping (10/10/2022)
+
+# Set the UniProt API URL
+API_URL = "https://rest.uniprot.org"
+# Set the seconds to wait between every retry
+POLLING_INTERVAL = 3
+
+# Check if the job has already a result
+def check_response (response):
+    try:
+        response.raise_for_status()
+    except requests.HTTPError:
+        print(response.json())
+        raise
+
+# Send the job
+def submit_id_mapping (from_db, to_db, ids):
+    request = requests.post(
+        f"{API_URL}/idmapping/run",
+        data={"from": from_db, "to": to_db, "ids": ",".join(ids)},
+    )
+    check_response(request)
+    return request.json()["jobId"]
+
+# Set the session, which is used firther by 2 functions
+session = requests.Session()
+
+# Check repeatedly until results are returned
+def check_id_mapping_results_ready (job_id):
+    while True:
+        request = session.get(f"{API_URL}/idmapping/status/{job_id}")
+        check_response(request)
+        j = request.json()
+        if "jobStatus" in j:
+            if j["jobStatus"] == "RUNNING":
+                #print(f"Retrying in {POLLING_INTERVAL}s")
+                time.sleep(POLLING_INTERVAL)
+            else:
+                raise Exception(j["jobStatus"])
+        else:
+            return True
+
+# Find the link to the results
+def get_id_mapping_results_link (job_id):
+    url = f"{API_URL}/idmapping/details/{job_id}"
+    request = session.get(url)
+    check_response(request)
+    return request.json()["redirectURL"]
+
+# -----------------------------------------------------------------------------------------------
+
+# Mine the uniprot id from the results
+def mine_uniprot (results_url : str) -> Optional[str]:
+    with urllib.request.urlopen(results_url) as response:
+        parsed_response = json.loads(response.read().decode("utf-8"))
+    results = parsed_response['results']
+    # Return None if there are not results
+    if len(results) == 0:
+        return None
+    # Get the first result accesion
+    first_result = results[0]
+    uniprot_id = first_result['to']['primaryAccession']
+    return uniprot_id
+    
+
+# Main function: Given a GenBank protein accession find its corresponding UniProt id
+def genbank_to_uniprot (genbank_accession : str) -> str:
+    # Send the job and store its job id
+    job_id = submit_id_mapping(from_db="EMBL-GenBank-DDBJ_CDS", to_db="UniProtKB", ids=[genbank_accession])
+    # Wait until we have results
+    if check_id_mapping_results_ready(job_id):
+        # Find the link to the results
+        results_url = get_id_mapping_results_link(job_id)
+        # Mine the uniprot id from the results
+        return mine_uniprot(results_url)
+    raise SystemExit('Something went wrong with the results')
