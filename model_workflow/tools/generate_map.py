@@ -352,7 +352,15 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
         raise ValueError('Unexpected structure in UniProt response for accession ' + uniprot_accession)
     protein_name = protein_name_data['fullName']['value']
     # Get the gene names as a single string
-    gene_names = ', '.join([ gene['name']['value'] for gene in parsed_response['gene'] ])
+    gene_names = []
+    for gene in parsed_response['gene']:
+        gene_name = gene.get('name', None)
+        if not gene_name:
+            gene_name = gene.get('orfNames', [])[0]
+        if not gene_name:
+            raise ValueError('The uniprot response for ' + uniprot_accession + ' has an unexpected format')
+        gene_names.append(gene_name['value'])
+    gene_names = ', '.join(gene_names)
     # Get the organism name
     organism = parsed_response['organism']['names'][0]['value']
     # Get the aminoacids sequence
