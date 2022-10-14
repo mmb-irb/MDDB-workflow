@@ -89,17 +89,16 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
             continue
         # Run the blast
         sequence = structure_sequence['sequence']
-        uniprot_ids = blast(sequence)
-        # Build a new reference from each resulting uniprot
-        for uniprot_id in uniprot_ids:
-            reference, already_loaded = get_reference(uniprot_id)
-            reference_sequences[reference['uniprot']] = reference['sequence']
-            # Save the current whole reference object for later
-            references[reference['uniprot']] = reference
-    # If we have every protein chain matched with a reference already then we stop here
-    if match_sequences():
-        export_references(protein_sequences)
-        return format_topology_data(structure, protein_sequences)
+        uniprot_id = blast(sequence)
+        # Build a new reference from the resulting uniprot
+        reference, already_loaded = get_reference(uniprot_id)
+        reference_sequences[reference['uniprot']] = reference['sequence']
+        # Save the current whole reference object for later
+        references[reference['uniprot']] = reference
+        # If we have every protein chain matched with a reference already then we stop here
+        if match_sequences():
+            export_references(protein_sequences)
+            return format_topology_data(structure, protein_sequences)
     raise RuntimeError('The BLAST failed to find a matching reference sequence for at least one protein sequence')
 
 # Try to match all protein sequences with the available reference sequences
@@ -290,11 +289,14 @@ def blast (sequence : str) -> List[str]:
     )
     parsed_result = xmltodict.parse(result.read())
     hits = parsed_result['BlastOutput']['BlastOutput_iterations']['Iteration']['Iteration_hits']['Hit']
-    # Accessions for each sequence in the blast results are for the EMBL database
+    # Get the first result only
+    result = hits[0]
+    # Return the accession
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
-    accessions = [ hit['Hit_accession'] for hit in hits ]
-    # Return the first result
-    return accessions[0]
+    accession = result['Hit_accession']
+    print('Result: ' + accession)
+    print(result['Hit_def'])
+    return accession
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
 def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
@@ -376,4 +378,5 @@ def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
     reference = get_mdposit_reference(uniprot_accession)
     if reference:
         return reference, True
-    return get_uniprot_reference(uniprot_accession), False
+    reference = get_uniprot_reference(uniprot_accession)
+    return reference, False
