@@ -246,7 +246,7 @@ def get_input_pdb_filename ():
 
 # Get the input trajectory filename(s) from the inputs
 # If file(s) are not found try to download it
-def get_input_trajectory_filenames ():
+def get_input_trajectory_filenames (sample : bool = False):
     # Get the trajectory filename(s) from the inputs
     original_trajectory_filenames = get_input('input_trajectory_filenames')
     # Check if the file exists
@@ -261,6 +261,20 @@ def get_input_trajectory_filenames ():
         raise SystemExit('ERROR: Missing input trajectory files "' + ', '.join(original_trajectory_filenames) + '"')
     # Download each trajectory file (ususally it will be just one)
     project_url = server_url + '/api/rest/current/projects/' + project
+    # In case only a sample is requested we use the trajectory endpoint to get the first 10 frames only
+    if sample:
+        original_trajectory_filename = original_trajectory_filenames[0]
+        sys.stdout.write('Downloading trajectory (' + original_trajectory_filename + ')\n')
+        trajectory_url = project_url + '/files/trajectory?format=xtc&frames=1:10:1'
+        try:
+            urllib.request.urlretrieve(trajectory_url, original_trajectory_filename)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise SystemExit('ERROR: Missing input trajectory file "' + original_trajectory_filename + '"')
+            else:
+                raise ValueError('Something went wrong with the MDposit request: ' + trajectory_url)
+        return [ original_trajectory_filename ]
+    # Otherwise, we download the requested
     for original_trajectory_filename in original_trajectory_filenames:
         # Skip already existing files
         if os.path.exists(original_trajectory_filename):
@@ -333,25 +347,25 @@ def get_input_charges_filename ():
         #charges_filename.filename = original_charges_filename
     return original_charges_filename
 
-
-# Get input filenames from the already updated inputs
-
-# The original topology and trajectory filenames are the input filenames
-original_topology_filename = Dependency(get_input_pdb_filename, {})
-original_trajectory_filenames = Dependency(get_input_trajectory_filenames, {})
-original_charges_filename = Dependency(get_input_charges_filename, {})
-# The 'inputs file' is a json file which must contain all parameters to run the workflow
-inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
-
-# Get also some input values which are passed through command line instead of the inputs file
+# Get some input values which are passed through command line instead of the inputs file
 preprocess_protocol = Dependency(get_input, {'name': 'preprocess_protocol'})
 translation = Dependency(get_input, {'name': 'translation'})
 filter_selection = Dependency(get_input, {'name': 'filter_selection'})
 pca_fit_selection = Dependency(get_input, {'name': 'pca_fit_selection'})
 pca_selection = Dependency(get_input, {'name': 'pca_selection'})
 skip_checkings = Dependency(get_input, {'name': 'skip_checkings'})
+sample_trajectory = Dependency(get_input, {'name': 'sample_trajectory'})
 
-# Extract some input values which may be required for the different workflow steps
+# Get input filenames from the already updated inputs
+
+# The original topology and trajectory filenames are the input filenames
+original_topology_filename = Dependency(get_input_pdb_filename, {})
+original_trajectory_filenames = Dependency(get_input_trajectory_filenames, {'sample': sample_trajectory})
+original_charges_filename = Dependency(get_input_charges_filename, {})
+# The 'inputs file' is a json file which must contain all parameters to run the workflow
+inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
+
+# Extract some additional input values from the inputs json file
 input_interactions = Dependency(get_input, {'name': 'interactions'})
 ligands = Dependency(get_input, {'name': 'ligands'})
 membranes = Dependency(get_input, {'name': 'membranes'})
@@ -824,6 +838,11 @@ parser.add_argument(
     "-sck", "--skip_checkings",
     action='store_true',
     help="If passed, skip RMSD checking and proceed with the workflow")
+
+parser.add_argument(
+    "-smp", "--sample_trajectory",
+    action='store_true',
+    help="If passed, download just the 10 first frames of the trajectory instead of it all")
 
 # Set a list with the alias of all requestable dependencies
 choices = [ dependency.alias for dependency in requestables ]
