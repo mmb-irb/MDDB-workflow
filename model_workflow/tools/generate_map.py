@@ -75,6 +75,20 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
                 reference = references[uniprot_id]
                 # If the alignment is better then we impose the new reference
                 structure_sequence['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
+        # Sum up the current matching
+        print('Reference summary:')
+        for structure_sequence in structure_sequences:
+            name = structure_sequence['name']
+            match = structure_sequence.get('match', None)
+            if not match:
+                print('   ' + name + ' -> Not protein')
+                continue
+            reference = structure_sequence['match'].get('ref', None)
+            if not reference:
+                print('   ' + name + ' -> ¿?')
+                continue
+            uniprot_id = reference['uniprot']
+            print('   ' + name + ' -> ' + uniprot_id)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
         return all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
     # If we have every protein chain matched with a reference already then we stop here
@@ -204,7 +218,7 @@ def get_chain_sequences (structure : 'Structure') -> list:
             sequence += letter
             residue_indices.append(residue.index)
         # Save sequences by chain name (i.e. chain id or chain letter)
-        sequence_object = { 'sequence': sequence, 'residue_indices': residue_indices }
+        sequence_object = { 'name': name, 'sequence': sequence, 'residue_indices': residue_indices }
         sequences.append(sequence_object)
     return sequences
 
