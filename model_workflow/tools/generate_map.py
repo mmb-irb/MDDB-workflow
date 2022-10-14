@@ -277,81 +277,15 @@ def align (ref_sequence : str, new_sequence : str) -> Optional[ Tuple[list, floa
 
     return aligned_mapping, normalized_score
 
-# Given an EMBL accession, return the corresponding UniProt accession
-# e.g. BAH02663.1 -> B6ZGN7
-# None is return when the embl accession has not a UniProt id
-def embl_to_uniprot (embl_id : str) -> str:
-    # Request the EMBL API to retrieve the id associated data
-    request_url = 'https://www.ebi.ac.uk/ena/browser/api/embl/' + embl_id + '?lineLimit=0&annotationOnly=true'
-    try:
-        with urllib.request.urlopen(request_url) as response:
-            parsed_response = response.read().decode("utf-8")
-    # If the accession is not found in the EMBL then we can stop here
-    except urllib.error.HTTPError as error:
-        if error.code == 400 or error.code == 404:
-            return None
-        else:
-            raise ValueError('Something went wrong with the ENA request: ' + request_url)
-    # Mine the uniprot accession
-    result = re.search('db_xref="UniProtKB/TrEMBL:([0-9A-Z]*)"', parsed_response)
-    if result == None:
-        return None
-    return result[1]
-
-# Given a pdb Id, get its uniprot id
-# e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
-def pdb_to_uniprot (pdb_id : str) -> List[str]:
-    # Request the MMB service to retrieve pdb data
-    request_url = 'https://mmb.irbbarcelona.org/api/pdb/' + pdb_id + '/entry'
-    try:
-        with urllib.request.urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the PDB then we can stop here
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        else:
-            raise ValueError('Something went wrong with the PDB request: ' + request_url)
-    # Get the uniprot accessions
-    uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
-    return uniprot_ids
-
-# Given an accession from the blast, try to find and equivalent uniprot accession
-# Note that a single accession may be related to several uniprot ids
-# In those cases we return all uniprot ids
-# e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
-# e.g. 5cnn -> P00533
-# e.g. BAH02663.1 -> B6ZGN7
-def accession_to_uniprot (accession : str) -> List[str]:
-    print('Searching UniProt ID for ' + accession)
-    # Try with UniProt ID mapping for GenBank accessions
-    uniprot_id = genbank_to_uniprot(accession)
-    if uniprot_id:
-        print('    Got it from GenBank -> ' + uniprot_id)
-        return [ uniprot_id ]
-    # Try with ENA
-    uniprot_id = embl_to_uniprot(accession)
-    if uniprot_id:
-        print('    Got it from ENA -> ' + uniprot_id)
-        return [ uniprot_id ]
-    # Try with PDB
-    uniprot_ids = pdb_to_uniprot(accession)
-    if uniprot_ids:
-        print('    Got it from PDB -> ' + ', '.join(uniprot_ids))
-        return uniprot_ids
-    print('    Not found')
-    return []
-
 # Given an aminoacids sequence, return a list of uniprot ids
-# At least 1 of the uniprot ids will belong to a very similar sequence
-# This happens because the blast results return not only UniProt IDs but also other database accessions
-# In those cases we find the equivalent (or most related) uniprot id
-# In some databases a single accession may correspond to several uniprot accessions (e.g. PDB)
+# Note that we are blasting against UniProtKB / Swiss-Prot so results will always be valid UniProt accessions
+# WARNING: This always means results will correspond to curated entries only
+#   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
 def blast (sequence : str) -> List[str]:
     print('Throwing blast...')
     result = NCBIWWW.qblast(
         program = "blastp",
-        database = "nr",
+        database = "swissprot", # UniProtKB / Swiss-Prot
         sequence = sequence,
     )
     parsed_result = xmltodict.parse(result.read())
@@ -359,13 +293,8 @@ def blast (sequence : str) -> List[str]:
     # Accessions for each sequence in the blast results are for the EMBL database
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
     accessions = [ hit['Hit_accession'] for hit in hits ]
-    # Return the first UniProt accesssion
-    # Note that not all accessions have an equivalent UniProt accession (e.g. XP_032963186)
-    for accession in accessions:
-        uniprot_ids = accession_to_uniprot(accession)
-        if uniprot_ids:
-            return uniprot_ids
-    raise ValueError('None of the blast result accessions corresponds to a UniProt reference sequence')
+    # Return the first result
+    return accessions[0]
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
 def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
@@ -448,81 +377,3 @@ def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
     if reference:
         return reference, True
     return get_uniprot_reference(uniprot_accession), False
-
-# -----------------------------------------------------------------------------------------------
-# The following code has been copied from https://www.uniprot.org/help/id_mapping (10/10/2022)
-
-# Set the UniProt API URL
-API_URL = "https://rest.uniprot.org"
-# Set the seconds to wait between every retry
-POLLING_INTERVAL = 3
-
-# Check if the job has already a result
-def check_response (response):
-    try:
-        response.raise_for_status()
-    except requests.HTTPError:
-        print(response.json())
-        raise
-
-# Send the job
-def submit_id_mapping (from_db, to_db, ids):
-    request = requests.post(
-        f"{API_URL}/idmapping/run",
-        data={"from": from_db, "to": to_db, "ids": ",".join(ids)},
-    )
-    check_response(request)
-    return request.json()["jobId"]
-
-# Set the session, which is used firther by 2 functions
-session = requests.Session()
-
-# Check repeatedly until results are returned
-def check_id_mapping_results_ready (job_id):
-    while True:
-        request = session.get(f"{API_URL}/idmapping/status/{job_id}")
-        check_response(request)
-        j = request.json()
-        if "jobStatus" in j:
-            if j["jobStatus"] == "RUNNING":
-                #print(f"Retrying in {POLLING_INTERVAL}s")
-                time.sleep(POLLING_INTERVAL)
-            else:
-                raise Exception(j["jobStatus"])
-        else:
-            return True
-
-# Find the link to the results
-def get_id_mapping_results_link (job_id):
-    url = f"{API_URL}/idmapping/details/{job_id}"
-    request = session.get(url)
-    check_response(request)
-    return request.json()["redirectURL"]
-
-# -----------------------------------------------------------------------------------------------
-
-# Mine the uniprot id from the results
-def mine_uniprot (results_url : str) -> Optional[str]:
-    with urllib.request.urlopen(results_url) as response:
-        parsed_response = json.loads(response.read().decode("utf-8"))
-    results = parsed_response['results']
-    # Return None if there are not results
-    if len(results) == 0:
-        return None
-    # Get the first result accesion
-    first_result = results[0]
-    uniprot_id = first_result['to']['primaryAccession']
-    return uniprot_id
-    
-
-# Main function: Given a GenBank protein accession find its corresponding UniProt id
-def genbank_to_uniprot (genbank_accession : str) -> str:
-    # Send the job and store its job id
-    job_id = submit_id_mapping(from_db="EMBL-GenBank-DDBJ_CDS", to_db="UniProtKB", ids=[genbank_accession])
-    # Wait until we have results
-    if check_id_mapping_results_ready(job_id):
-        # Find the link to the results
-        results_url = get_id_mapping_results_link(job_id)
-        # Mine the uniprot id from the results
-        return mine_uniprot(results_url)
-    raise SystemExit('Something went wrong with the results')
