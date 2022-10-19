@@ -652,6 +652,7 @@ analyses = [
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_energies_filename,
+        'structure': structure,
         "interactions": interactions,
         'charges': charges,
         'frames_limit': 100,

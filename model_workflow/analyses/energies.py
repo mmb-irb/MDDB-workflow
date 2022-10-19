@@ -23,12 +23,11 @@ import numpy
 import math
 from subprocess import run, PIPE, Popen
 import json
-from typing import Optional
-
-import prody
-import pytraj as pt
+from typing import Optional, List
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+
+from mdtoolbelt.structures import Structure
 
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
@@ -44,12 +43,13 @@ energies_folder = current_directory + '/energies'
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies(
-        input_topology_filename: str,
-        input_trajectory_filename: str,
-        output_analysis_filename: str,
-        interactions: list,
-        charges: list,
-        frames_limit : int):
+    input_topology_filename : str,
+    input_trajectory_filename : str,
+    output_analysis_filename : str,
+    structure : 'Structure',
+    interactions : list,
+    charges : list,
+    frames_limit : int):
 
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
@@ -80,36 +80,31 @@ def energies(
     if not os.path.exists(energies_folder):
         os.mkdir(energies_folder)
 
-    # Correct the topology by renaming residues according to if they are terminals
-    energies_topology = energies_folder + '/energies.pdb'
-    energies_topology_prody = prody.parsePDB(input_topology_filename)
-    energies_topology_prody = name_terminal_residues(energies_topology_prody)
-    prody.writePDB(energies_topology, energies_topology_prody)
+    # Adapt the structure for cmip
+    energies_structure = structure.copy()
 
-    # Get each atom element in CMIP format
-    elements = get_topology_cmip_elements(input_topology_filename)
+    # Rename residues according to if they are terminals
+    name_terminal_residues(energies_structure)
+
+    # Set each atom element in CMIP format
+    set_cmip_elements(energies_structure)
+
+    # Save the structure back to a pdb
+    energies_structure_filename = energies_folder + '/energies.pdb'
+    energies_structure.generate_pdb_file(energies_structure_filename)
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
-    def get_frame_energy(frame_pdb):
-        # Parse the pdb file to prody format and then correct it
-        frame_structure = prody.parsePDB(frame_pdb)
-        # Add chains according to the reference topology, since gromacs has deleted chains
-        # DANI: Esto ya no debería hacer falta ya que ahora las frames vienen de pytraj, no de Gromacs
-        #frame_structure.setChids(reference.topology.getChids())
+    def get_frame_energy (frame_structure : 'Structure') -> List[dict]:
 
-        # Set charges and elements according to the topology mined data
-        frame_structure.setElements(elements)
-        frame_structure.setCharges(charges)
-
-        # WARNING: At this point topology should be corrected
+        # WARNING: At this point structure should be corrected
         # WARNING: Repeated atoms will make the analysis fail
 
         # Repeat the whole process for each interaction
         data = []
         for interaction in interactions:
 
-            # Check if the interaction as been marked as 'exceeds', in which case we skip it
+            # Check if the interaction has been marked as 'exceeds', in which case we skip it
             if interaction.get('exceeds', False):
                 continue
 
@@ -118,19 +113,38 @@ def energies(
 
             # Select the first agent and extract it in a CMIP friendly pdb format
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
-            agent1_selection = frame_structure.select(interaction['selection_1'])
+            agent1_selection = frame_structure.select(interaction['selection_1'], syntax='vmd')
+            agent1_structure = frame_structure.filter(agent1_selection)
+            # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
+            # Set also the elements to macth the original structure, since the frame generator messes the elements
+            for a, atom in enumerate(agent1_structure.atoms):
+                atom_index = agent1_selection.atom_indices[a]
+                charge = charges[atom_index]
+                setattr(atom, 'charge', charge)
+                cmip_element = energies_structure.atoms[atom_index].element
+                atom.element = cmip_element
+            # Raise an error if the selection is empty
             if not agent1_selection:
                 raise SystemExit('ERROR: Agent "' + interaction['agent_1'] + '" with selection "' + 
                     interaction['selection_1'] + '" has no atoms')
-            agent1_cmip = selection2cmip(agent1_name, agent1_selection, strong_bonds)
+            agent1_cmip = selection2cmip(agent1_name, agent1_structure, strong_bonds)
 
             # Repeat the process with agent 2
             agent2_name = interaction['agent_2'].replace(' ', '_').replace('/', '_')
-            agent2_selection = frame_structure.select(interaction['selection_2'])
+            agent2_selection = frame_structure.select(interaction['selection_2'], syntax='vmd')
+            agent2_structure = frame_structure.filter(agent2_selection)
+            # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
+            for a, atom in enumerate(agent2_structure.atoms):
+                atom_index = agent2_selection.atom_indices[a]
+                charge = charges[atom_index]
+                setattr(atom, 'charge', charge)
+                cmip_element = energies_structure.atoms[atom_index].element
+                atom.element = cmip_element
+            # Raise an error if the selection is empty
             if not agent2_selection:
                 raise SystemExit('ERROR: Agent "' + interaction['agent_2'] + '" with selection "' + 
                     interaction['selection_2'] + '" has no atoms')
-            agent2_cmip = selection2cmip(agent2_name, agent2_selection, strong_bonds)
+            agent2_cmip = selection2cmip(agent2_name, agent2_structure, strong_bonds)
 
             # Copy the source cmip inputs file in the local directory
             # Inputs will be modified to adapt the cmip grid to both agents together
@@ -162,13 +176,14 @@ def energies(
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
+    frames, step, count = get_pdb_frames(energies_structure_filename, input_trajectory_filename, frames_limit)
     interactions_data = [[] for interaction in interactions if not interaction.get('exceeds', False)]
-    for current_frame in frames:
+    for current_frame_pdb in frames:
         
         # Run the main analysis over the current frame
         # Append the result data for each interaction
-        frame_energies_data = get_frame_energy(current_frame)
+        current_frame_structure = Structure.from_pdb_file(current_frame_pdb)
+        frame_energies_data = get_frame_energy(current_frame_structure)
         for i, data in enumerate(frame_energies_data):
             interactions_data[i].append(data)
 
@@ -202,45 +217,45 @@ def energies(
     # Finally remove the reduced topology
     logs = run([
         "rm",
-        energies_topology,
+        energies_structure_filename,
     ], stdout=PIPE).stdout.decode()
 
-# Transform prody selection to a cmip input pdb, which includes charges
-# Charges have been previously taken from the charges topology and injected in prody
-def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : Optional[list]) -> str:
-    
+# Transform an agent structure to a cmip input pdb, which includes charges
+# Charges have been previously taken from the charges topology and in the structure as atom additional atributes
+def selection2cmip(agent_name : str, agent_structure : 'Structure', strong_bonds : Optional[list]) -> str:
     print('Setting ' + agent_name + ' charges')
-    atoms = agent_selection.iterAtoms()
-
+    # Get indices of atoms in current agent with a strong bond with an atom in the other agent
+    # They will be further marked for CMIP to ignore them
     strong_bond_indexes = []
     if strong_bonds:
         for bond in strong_bonds:
             strong_bond_indexes += bond
-
     # Write a special pdb which contains charges as CMIP expects to find them
     output_filename = energies_folder + '/' + agent_name + '.cmip.pdb'
     with open(output_filename, "w") as file:
-
-        for a, atom in enumerate(atoms):
+        # Write a line for each atom
+        for a, atom in enumerate(agent_structure.atoms):
             
             index = str(a+1).rjust(5)
-            atomname = atom.getName()
-            name =  ' ' + atomname.ljust(3) if len(atomname) < 4 else atomname
-            residue_name = atom.getResname().ljust(3)
-            chain = atom.getChid().rjust(1)
-            residue_number = str(atom.getResnum()).rjust(4)
-            icode = atom.getIcode().rjust(1)
-            coords = atom.getCoords()
+            atom_name = atom.name
+            name =  ' ' + atom_name.ljust(3) if len(atom_name) < 4 else atom_name
+            residue = atom.residue
+            residue_name = residue.name.ljust(3)
+            chain = atom.chain
+            chain_name = chain.name.rjust(1)
+            residue_number = str(residue.number).rjust(4)
+            icode = residue.icode.rjust(1)
+            coords = atom.coords
             x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
-            charge = "{:.4f}".format(atom.getCharge())
+            charge = "{:.4f}".format(atom.charge) # Charge was manually added before, it is not a standard attribute
             # In case this atom is making an strong bond between both interacting agents we add an 'X' before the element
             # This way CMIP will ignore the atom. Otherwise it would return high non-sense Van der Waals values
-            real_index = atom.getIndex()
+            real_index = atom.index
             cmip_ignore_flag = 'X' if real_index in strong_bond_indexes else ''
-            element = cmip_ignore_flag + atom.getElement()
+            element = cmip_ignore_flag + atom.element
             
             atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name + ' '
-                + chain + residue_number + icode + '   ' + x_coord + y_coord + z_coord
+                + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
                 + ' ' + str(charge).rjust(7) + '  ' + element + '\n')
             file.write(atom_line)
 
@@ -251,235 +266,71 @@ def selection2cmip(agent_name : str, agent_selection : str, strong_bonds : Optio
 # Hydrogens bonded to oxygen are renamed as 'HO'
 # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
 # Some heavy atom elements may be also modified (e.g. 'CL' -> 'Cl')
-# There are two ways to do this: the canonical (faster) and the alternative (error proof)
-def get_topology_cmip_elements (input_topology_filename : str):
-    try:
-        elements = get_topology_cmip_elements_canonical(input_topology_filename)
-    except Exception as err:
-        print(err)
-        print('The canonical elements mining failed. Retrying with alternative mining')
-        elements = get_topology_cmip_elements_alternative(input_topology_filename)
-    return elements
-
-# Use pytraj for this task
-def get_topology_cmip_elements_canonical (input_topology_filename : str):
-    
-    topology = pt.load_topology(filename=input_topology_filename)
-
-    # Set all supported elements
-    # This is required to transform element names (returned by pytraj) to element letters
-    standard_elements = {
-        'hydrogen': 'H',
-        'carbon': 'C',
-        'oxygen': 'O',
-        'nitrogen': 'N',
-        'sulfur': 'S',
-        'sodium': 'Na',
-        'chlorine': 'Cl',
-        'zinc': 'Zn',
-        'fluorine': 'F',
-        'magnesium': 'Mg',
-        'phosphorus': 'P',
-    }
-    # Iterate over each atom to save their CMIP element
-    elements = []
-    atoms = list(topology.atoms)
-    for a, atom in enumerate(atoms):
-        residue = atom.resname
-        # Skip this atom if we already found it
-        name = atom.name
-        element = standard_elements[atom.element]
+def set_cmip_elements (structure : 'Structure'):
+    # Iterate over each atom to fix their element according to CMIP standards
+    for a, atom in enumerate(structure.atoms):
+        element = atom.element
         # Adapt hydrogens element to CMIP requirements
         if element == 'H':
-            # There should we always only 1 bond
-            # If you have the error below you may need to updated the pytraj version or reintsall pytraj
-            # ValueError: Buffer dtype mismatch, expected 'int' but got 'long'
-            bonded_heavy_atom_index = atom.bonded_indices()[0]
-            bonded_heavy_atom = atoms[bonded_heavy_atom_index]
-            bonded_heavy_atom_element = standard_elements[bonded_heavy_atom.element]
+            # We must find the element of the heavy atom this hydrogen is bonded to
+            atom_bonds = atom.get_bonds()
+            # There should be always only 1 bond
+            if len(atom_bonds) != 1:
+                raise ValueError('An hydrogen should always have one and only one bond')
+            bonded_atom_index = atom_bonds[0]
+            bonded_atom_element = structure.atoms[bonded_atom_index].element
             # Hydrogens bonded to carbons remain as 'H'
-            if bonded_heavy_atom_element == 'C':
+            if bonded_atom_element == 'C':
                 pass
             # Hydrogens bonded to oxygen are renamed as 'HO'
-            elif bonded_heavy_atom_element == 'O':
+            elif bonded_atom_element == 'O':
                 element = 'HO'
             # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-            elif bonded_heavy_atom_element == 'N' or bonded_heavy_atom_element == 'S':
+            elif bonded_atom_element == 'N' or bonded_atom_element == 'S':
                 element = 'HN'
             else:
                 raise SystemExit(
-                    'ERROR: Hydrogen bonded to not supported heavy atom: ' + bonded_heavy_atom_element)
-        elements.append(element)
-    return elements
-
-# Use prody for this task
-def get_topology_cmip_elements_alternative (input_topology_filename : str):
-
-    topology = prody.parsePDB(input_topology_filename)
-
-    # Try to guess the atom element from the name of the atom
-    # This is used only when element is missing
-    cmip_supported_elements = ['Cl', 'Na', 'Zn', 'Mg', 'C', 'N', 'P', 'S',
-                                'HW', 'HO', 'HN', 'H', 'F', 'OW', 'O', 'IP', 'IM', 'I']
-    def guess_name_element(name: str) -> str:
-        length = len(name)
-        next_character = None
-        for i, character in enumerate(name):
-            # Get the next character, since element may be formed by 2 letters
-            if i < length - 1:
-                next_character = name[i+1]
-                # If next character is not a string then ignore it
-                if not next_character.isalpha():
-                    next_character = None
-            # Try to get all possible matches between the characters and the supported atoms
-            # First letter is always caps
-            character = character.upper()
-            # First try to match both letters together
-            if next_character:
-                # Start with the second letter in caps
-                next_character = next_character.upper()
-                both = character + next_character
-                if both in cmip_supported_elements:
-                    return both
-                # Continue with the second letter in lowers
-                next_character = next_character.lower()
-                both = character + next_character
-                if both in cmip_supported_elements:
-                    return both
-            # Finally, try with the first character alone
-            if character in cmip_supported_elements:
-                return character
-        raise SystemExit(
-            "ERROR: Not recognized element in '" + name + "'")
-
-    # Set functions to find the closest atom of a specified atom
-    def get_distance(coords1, coords2):
-        squared_distance = numpy.sum((coords1 - coords2)**2, axis=0)
-        distance = numpy.sqrt(squared_distance)
-        return distance
-
-    # Find the closest atom to the provided atom
-    # Since this function is only used with hydrogen atoms we only search in the current atom residue
-    def find_closest_atom(atom):
-        atom_resnum = atom.getResnum()
-        residue = topology.select('resnum ' + str(atom_resnum))
-        residue_atoms = list(residue.iterAtoms())
-        residue_coords = residue.getCoords()
-        current_coords = atom.getCoords()
-        distances = [get_distance(current_coords, c)
-                        for c in residue_coords]
-        sorted_distances = [d for d in distances]
-        sorted_distances.sort()
-        # We take the second minimum, since the first minimum will be always 0
-        smallest_distance = sorted_distances[1]
-        index = distances.index(smallest_distance)
-        closest_atom = residue_atoms[index]
-        return closest_atom
-
-    # Harvest the element of each atom
-    # Update the element of each hydrogen according to CMIP needs
-    elements = []
-    for atom in topology.iterAtoms():
-        # First of all, correct tha name by moving numbers from the start to the end
-        # e.g. 1HD1 -> HD11
-        name = atom.getName()
-        characters = name
-        for character in characters:
-            if not character.isalpha():
-                name = name[1:] + name[0]
-            else:
-                break
-        atom.setName(name)
-        # Then, correct the element
-        # If element is missing try to guess it from the name
-        element = atom.getElement()
-        if not element:
-            element = guess_name_element(name)
-            atom.setElement(element)
-        # Find hydrogens by element
-        # WARNING: Avoid finding hydrogens by name. It is very risky
-        if element == 'H':
-            bonded_heavy_atom = find_closest_atom(atom)
-            bonded_heavy_atom_element = bonded_heavy_atom.getElement()
-            if not bonded_heavy_atom_element:
-                bonded_heavy_atom_element = guess_name_element(bonded_heavy_atom.getName())
-                bonded_heavy_atom.setElement(bonded_heavy_atom_element)
-            # Hydrogens bonded to carbons remain as 'H'
-            if bonded_heavy_atom_element == 'C':
-                pass
-            # Hydrogens bonded to oxygen are renamed as 'HO'
-            elif bonded_heavy_atom_element == 'O':
-                element = 'HO'
-            # Hydrogens bonded to nitrogen or sulfur are renamed as 'HN'
-            elif bonded_heavy_atom_element == 'N' or bonded_heavy_atom_element == 'S':
-                element = 'HN'
-            else:
-                raise SystemExit(
-                    'ERROR: Hydrogen bonded to not supported heavy atom: ' + bonded_heavy_atom_element)
-        # Update other elements naming
-        elif element == 'CL':
-            element = 'Cl'
-        elif element == 'BR':
-            element = 'Br'
-        elif element == 'ZN':
-            element = 'Zn'
-        elif element == 'NA':
-            element = 'Na'
-        elif element == 'MG':
-            element = 'Mg'
-        # Get the correct element
-        atom.setElement(element)
-        elements.append(element)
-    # Return the corrected prody topology
-    return elements
+                    'ERROR: Hydrogen bonded to not supported heavy atom: ' + bonded_atom_element)
+        atom.element = element
 
 protein_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS',
                     'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
 
 rna_residues = ['RA', 'RU', 'RC', 'RG']
 
-# Change residue names in a prody selection to meet the CMIP requirements
+# Change residue names in a structure to meet the CMIP requirements
 # Change terminal residue names by adding an 'N' or 'C'
-def name_terminal_residues(selection):
-    
-    # Set a new selection
-    new_selection = selection.toAtomGroup()
+def name_terminal_residues (structure : 'Structure'):
 
-    # Get all atoms and atom coordinates
-    chains = new_selection.iterChains()
+    for chain in structure.chains:
 
-    for chain in chains:
-
-        residues = list(chain.iterResidues())
+        residues = chain.residues
 
         # Check if the first residue is tagged as a terminal residue
         # If not, rename it
         first_residue = residues[0]
-        first_residue_name = first_residue.getResname()
+        first_residue_name = first_residue.name
         # In case it is a protein
         if first_residue_name in protein_residues:
             first_residue_name += 'N'
-            first_residue.setResname(first_residue_name)
+            first_residue.name = first_residue_name
         # In case it is RNA
         elif first_residue_name in rna_residues:
             first_residue_name += '5'
-            first_residue.setResname(first_residue_name)
+            first_residue.name = first_residue_name
 
         # Check if the last residue is tagged as 'C' terminal
         # If not, rename it
         last_residue = residues[-1]
-        last_residue_name = last_residue.getResname()
+        last_residue_name = last_residue.name
         # In case it is a protein
         if last_residue_name in protein_residues:
             last_residue_name += 'C'
-            last_residue.setResname(last_residue_name)
+            last_residue.name = last_residue_name
         # In case it is RNA
         elif last_residue_name in rna_residues:
             last_residue_name += '3'
-            last_residue.setResname(last_residue_name)
-
-    # Return the corrected prody topology
-    return new_selection
+            last_residue.name = last_residue_name
 
 # Run CMIP in 'checkonly' mode (i.e. start and stop) for both agents
 # Mine the grid generated by CMIP for both agents and calculate a new grid which would include both
