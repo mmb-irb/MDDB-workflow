@@ -23,11 +23,12 @@ import numpy
 import math
 from subprocess import run, PIPE, Popen
 import json
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
 from mdtoolbelt.structures import Structure
+from mdtoolbelt.selections import Selection
 
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
@@ -93,6 +94,64 @@ def energies(
     energies_structure_filename = energies_folder + '/energies.pdb'
     energies_structure.generate_pdb_file(energies_structure_filename)
 
+    # Transform an agent structure to a cmip input pdb, which includes charges
+    # Charges have been previously taken from the charges topology and in the structure as atom additional atributes
+    def selection2cmip(name : str, residues : List['Residue'], structure : 'Structure', strong_bonds : Optional[list]) -> str:
+        print('Setting ' + name + ' CMIP PDB')
+        # Parse the residue indices selection
+        # Convert residue indices to atom indices
+        atom_indices = sum([ residue.atom_indices for residue in residues ],[])
+        parsed_selection = Selection(atom_indices)
+        # Raise an error if the selection is empty
+        if not parsed_selection:
+            raise ValueError('ERROR: Agent "' + name + '" with selection "' + selection + '" has no atoms')
+        # Filter the selected atom in the structure
+        selected_structure = structure.filter(parsed_selection)
+        # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
+        # Set also the elements to macth the original structure, since the frame generator messes the elements
+        for a, atom in enumerate(selected_structure.atoms):
+            atom_index = parsed_selection.atom_indices[a]
+            charge = charges[atom_index]
+            setattr(atom, 'charge', charge)
+            cmip_element = energies_structure.atoms[atom_index].element
+            atom.element = cmip_element
+        # Get indices of atoms in current agent with a strong bond with an atom in the other agent
+        # They will be further marked for CMIP to ignore them
+        strong_bond_indexes = []
+        if strong_bonds:
+            for bond in strong_bonds:
+                strong_bond_indexes += bond
+        # Write a special pdb which contains charges as CMIP expects to find them
+        output_filename = energies_folder + '/' + name + '.cmip.pdb'
+        with open(output_filename, "w") as file:
+            # Write a line for each atom
+            for a, atom in enumerate(selected_structure.atoms):
+                
+                index = str(a+1).rjust(5)
+                atom_name = atom.name
+                name =  ' ' + atom_name.ljust(3) if len(atom_name) < 4 else atom_name
+                residue = atom.residue
+                residue_name = residue.name.ljust(3)
+                chain = atom.chain
+                chain_name = chain.name.rjust(1)
+                residue_number = str(residue.number).rjust(4)
+                icode = residue.icode.rjust(1)
+                coords = atom.coords
+                x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
+                charge = "{:.4f}".format(atom.charge) # Charge was manually added before, it is not a standard attribute
+                # In case this atom is making an strong bond between both interacting agents we add an 'X' before the element
+                # This way CMIP will ignore the atom. Otherwise it would return high non-sense Van der Waals values
+                real_index = atom.index
+                cmip_ignore_flag = 'X' if real_index in strong_bond_indexes else ''
+                element = cmip_ignore_flag + atom.element
+                
+                atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name + ' '
+                    + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
+                    + ' ' + str(charge).rjust(7) + '  ' + element + '\n')
+                file.write(atom_line)
+
+        return output_filename
+
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
     def get_frame_energy (frame_structure : 'Structure') -> List[dict]:
@@ -113,38 +172,13 @@ def energies(
 
             # Select the first agent and extract it in a CMIP friendly pdb format
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
-            agent1_selection = frame_structure.select(interaction['selection_1'], syntax='vmd')
-            agent1_structure = frame_structure.filter(agent1_selection)
-            # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
-            # Set also the elements to macth the original structure, since the frame generator messes the elements
-            for a, atom in enumerate(agent1_structure.atoms):
-                atom_index = agent1_selection.atom_indices[a]
-                charge = charges[atom_index]
-                setattr(atom, 'charge', charge)
-                cmip_element = energies_structure.atoms[atom_index].element
-                atom.element = cmip_element
-            # Raise an error if the selection is empty
-            if not agent1_selection:
-                raise SystemExit('ERROR: Agent "' + interaction['agent_1'] + '" with selection "' + 
-                    interaction['selection_1'] + '" has no atoms')
-            agent1_cmip = selection2cmip(agent1_name, agent1_structure, strong_bonds)
+            agent1_residue_indices = interaction['residues_1']
+            agent1_cmip = selection2cmip(agent1_name, agent1_residue_indices, frame_structure, strong_bonds)
 
             # Repeat the process with agent 2
             agent2_name = interaction['agent_2'].replace(' ', '_').replace('/', '_')
-            agent2_selection = frame_structure.select(interaction['selection_2'], syntax='vmd')
-            agent2_structure = frame_structure.filter(agent2_selection)
-            # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
-            for a, atom in enumerate(agent2_structure.atoms):
-                atom_index = agent2_selection.atom_indices[a]
-                charge = charges[atom_index]
-                setattr(atom, 'charge', charge)
-                cmip_element = energies_structure.atoms[atom_index].element
-                atom.element = cmip_element
-            # Raise an error if the selection is empty
-            if not agent2_selection:
-                raise SystemExit('ERROR: Agent "' + interaction['agent_2'] + '" with selection "' + 
-                    interaction['selection_2'] + '" has no atoms')
-            agent2_cmip = selection2cmip(agent2_name, agent2_structure, strong_bonds)
+            agent2_residue_indices = interaction['residues_2']
+            agent2_cmip = selection2cmip(agent2_name, agent2_residue_indices, frame_structure, strong_bonds)
 
             # Copy the source cmip inputs file in the local directory
             # Inputs will be modified to adapt the cmip grid to both agents together
@@ -153,25 +187,46 @@ def energies(
             cmip_inputs = energies_folder + '/cmip.in'
             run([ "cp", cmip_inputs_source, cmip_inputs ], stdout=PIPE)
 
+            # Select the first agent interface and extract it in a CMIP friendly pdb format
+            agent1_interface_name = agent1_name + '_interface'
+            agent1_interface_residue_indices = interaction['interface_1']
+            agent1_interface_cmip = selection2cmip(agent1_interface_name, agent1_interface_residue_indices, frame_structure, strong_bonds)
+
+            # Repeat the process with agent 2
+            agent2_interface_name = agent2_name + '_interface'
+            agent2_interface_residue_indices = interaction['interface_2']
+            agent2_interface_cmip = selection2cmip(agent2_interface_name, agent2_interface_residue_indices, frame_structure, strong_bonds)
+
             # Set the CMIP box dimensions and densities to fit both the host and the guest
-            adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
+            # Box origin and size are modified in the cmip inputs
+            # Values returned are only used for display / debug purposes
+            box_origin, box_size = adapt_cmip_grid(agent1_interface_cmip, agent2_interface_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
             agent1_output_energy = energies_folder + '/' + agent1_name + '.energy.pdb'
-            agent1_data = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1_output_energy)
+            agent1_residue_energies, agent1_atom_energies = get_cmip_energies(cmip_inputs, agent1_cmip, agent2_cmip, agent1_output_energy)
             agent2_output_energy = energies_folder + '/' + agent2_name + '.energy.pdb'
-            agent2_data = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_output_energy)
+            agent2_residue_energies, agent2_atom_energies = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_output_energy)
 
-            data.append({ 'agent1': agent1_data, 'agent2': agent2_data })
+            # DANI: Usa esto para escribir los resultados de las energías por átomo
+            sample = {
+                'agent1': { 'energies': agent1_atom_energies, 'pdb': agent1_cmip },
+                'agent2': { 'energies': agent2_atom_energies, 'pdb': agent2_cmip },
+                'box': { 'origin': box_origin, 'size': box_size } 
+            }
+            with open('energies-sample.json', 'w') as file:
+                json.dump(sample, file)
+
+            data.append({ 'agent1': agent1_residue_energies, 'agent2': agent2_residue_energies })
 
             # Delete current agent pdb files before going for the next interaction
-            run([
-                "rm",
-                agent1_cmip,
-                agent2_cmip,
-                agent1_output_energy,
-                agent2_output_energy,
-            ], stdout=PIPE).stdout.decode()
+            # run([
+            #     "rm",
+            #     agent1_cmip,
+            #     agent2_cmip,
+            #     agent1_output_energy,
+            #     agent2_output_energy,
+            # ], stdout=PIPE).stdout.decode()
 
         return data
 
@@ -219,47 +274,6 @@ def energies(
         "rm",
         energies_structure_filename,
     ], stdout=PIPE).stdout.decode()
-
-# Transform an agent structure to a cmip input pdb, which includes charges
-# Charges have been previously taken from the charges topology and in the structure as atom additional atributes
-def selection2cmip(agent_name : str, agent_structure : 'Structure', strong_bonds : Optional[list]) -> str:
-    print('Setting ' + agent_name + ' charges')
-    # Get indices of atoms in current agent with a strong bond with an atom in the other agent
-    # They will be further marked for CMIP to ignore them
-    strong_bond_indexes = []
-    if strong_bonds:
-        for bond in strong_bonds:
-            strong_bond_indexes += bond
-    # Write a special pdb which contains charges as CMIP expects to find them
-    output_filename = energies_folder + '/' + agent_name + '.cmip.pdb'
-    with open(output_filename, "w") as file:
-        # Write a line for each atom
-        for a, atom in enumerate(agent_structure.atoms):
-            
-            index = str(a+1).rjust(5)
-            atom_name = atom.name
-            name =  ' ' + atom_name.ljust(3) if len(atom_name) < 4 else atom_name
-            residue = atom.residue
-            residue_name = residue.name.ljust(3)
-            chain = atom.chain
-            chain_name = chain.name.rjust(1)
-            residue_number = str(residue.number).rjust(4)
-            icode = residue.icode.rjust(1)
-            coords = atom.coords
-            x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
-            charge = "{:.4f}".format(atom.charge) # Charge was manually added before, it is not a standard attribute
-            # In case this atom is making an strong bond between both interacting agents we add an 'X' before the element
-            # This way CMIP will ignore the atom. Otherwise it would return high non-sense Van der Waals values
-            real_index = atom.index
-            cmip_ignore_flag = 'X' if real_index in strong_bond_indexes else ''
-            element = cmip_ignore_flag + atom.element
-            
-            atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name + ' '
-                + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
-                + ' ' + str(charge).rjust(7) + '  ' + element + '\n')
-            file.write(atom_line)
-
-    return output_filename
 
 # Given a topology (e.g. pdb, prmtop), extract the atom elements in a CMIP friendly format
 # Hydrogens bonded to carbons remain as 'H'
@@ -335,7 +349,8 @@ def name_terminal_residues (structure : 'Structure'):
 # Run CMIP in 'checkonly' mode (i.e. start and stop) for both agents
 # Mine the grid generated by CMIP for both agents and calculate a new grid which would include both
 # Finally, modify the provided 'cmip_inputs' with the new grid parameters
-def adapt_cmip_grid(agent1, agent2, cmip_inputs):
+# Keep residues in the interface only to determine the size of the box since residues which are far will never contribute
+def adapt_cmip_grid(agent1_cmip_pdb : str, agent2_cmip_pdb : str, cmip_inputs : str):
     print('Adapting grid')
 
     # Set a name for the checkonly CMIP outputs
@@ -352,11 +367,11 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
         "-i",
         cmip_inputs_checkonly_source,
         "-pr",
-        agent1,
+        agent1_cmip_pdb,
         "-vdw",
         vdw_source,
         "-hs",
-        agent2,
+        agent2_cmip_pdb,
         "-byat",
         cmip_checkonly_output,
     ], stdout=PIPE).stdout.decode()
@@ -372,11 +387,11 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
         "-i",
         cmip_inputs_checkonly_source,
         "-pr",
-        agent2,
+        agent2_cmip_pdb,
         "-vdw",
         vdw_source,
         "-hs",
-        agent1,
+        agent1_cmip_pdb,
         "-byat",
         cmip_checkonly_output,
     ], stdout=PIPE).stdout.decode()
@@ -450,6 +465,12 @@ def adapt_cmip_grid(agent1, agent2, cmip_inputs):
         "rm",
         cmip_checkonly_output,
     ], stdout=PIPE).stdout.decode()
+
+    # Calculate the resulting box origin and size and return both values
+    # These values are used for display / debug purposes only
+    new_size = (new_density[0] * grid_unit_size, new_density[1] * grid_unit_size, new_density[2] * grid_unit_size)
+    new_origin = (new_center[0] - new_size[0] / 2, new_center[1] - new_size[1] / 2, new_center[2] - new_size[2] / 2)
+    return new_origin, new_size
 
 def mine_cmip_output(logs):
     center, density, units = (), (), ()
@@ -528,7 +549,8 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
 
     # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
     # Group the results by residues adding their values
-    residues = {}
+    atom_energies = []
+    residue_energies = {}
     with open(cmip_output, 'r') as file:
         lines = list(file)
         # If this file is empty it means something went wrong with CMIP
@@ -540,6 +562,7 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
                 for line in cmip_logs:
                     print(line)
             raise SystemExit('ERROR: Something went wrong with CMIP!')
+        # Mine energies line by line (i.e. atom by atom)
         for line in lines:
             chain = line[21:22]
             residue_id = line[22:28]
@@ -553,13 +576,17 @@ def get_cmip_energies(cmip_inputs, pr, hs, cmip_output):
             if both > 100:
                 print('WARNING: We have extremly high values in energies which are beeing discarded')
                 energies = (0, 0, 0)
-            if residue in residues:
-                residues[residue] = tuple(
-                    [a+b for a, b in zip(energies, residues[residue])])
+            # Add current atom energy values to the atom energies list
+            # DANI: Esto ahora mismo solo sirve para poder samplear los resultados antes de que se junten por residuos
+            atom_energies.append(energies)
+            # Add current atom energy values to the accumulated residue energy value
+            if residue in residue_energies:
+                residue_energies[residue] = tuple([a+b for a, b in zip(energies, residue_energies[residue])])
             else:
-                residues[residue] = energies
+                residue_energies[residue] = energies
 
-    return residues
+    return residue_energies, atom_energies
+    
 
 # Format data grouping atom energies by residue
 # Calculate means of the whole
