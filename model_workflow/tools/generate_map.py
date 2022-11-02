@@ -1,8 +1,5 @@
 import json
-import time
-import re
 import urllib.request
-import requests
 
 from typing import List, Tuple, Optional
 
