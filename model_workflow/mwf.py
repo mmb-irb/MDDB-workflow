@@ -646,7 +646,8 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_sasa_filename,
         'structure': structure,
-        'frames_limit': 200,
+        'membranes': membranes,
+        'frames_limit': 100,
     }, 'sasa'),
     File(OUTPUT_energies_filename, energies, {
         "input_topology_filename": pdb_filename,

@@ -16,32 +16,40 @@ def sasa(
     input_trajectory_filename: str,
     output_analysis_filename: str,
     structure : 'Structure',
+    membranes,
     frames_limit : int,
 ):
+    # For this analysis me must filter out hydrogens
+    heavy_atoms_selection = '( not name "H.*" )'
 
-    # Set indexes to select the system without hydrogens
-    indexes = 'indexes.ndx'
+    # Execute the atom selection over the structure
+    structure_selection = structure.select(heavy_atoms_selection, syntax='vmd')
 
-    # Remove all groups but 0
-    remove_others = 'keep 0' + '\n'
-    selection_without_hydrogens = '0 & !a H*' + '\n'
-    remove_system = 'del 0' + '\n'
-    all_commands = remove_others + selection_without_hydrogens + remove_system + 'q'
+    # At this point the number of residues between the original and the non-hydrogens structure should match
+    # We rely on this, so we must check
+    filtered_structure = structure.filter(structure_selection)
+    filtered_residues_count = len(filtered_structure.residues)
+    original_residues_count = len(structure.residues)
+    if filtered_residues_count != original_residues_count:
+        raise ValueError('The number of residues does not match after filtering out hydrogens')
 
-    p = Popen([
-        "echo",
-        all_commands,
-    ], stdout=PIPE)
-    logs = run([
-        "gmx",
-        "make_ndx",
-        "-f",
-        input_topology_filename,
-        '-o',
-        indexes,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
+    # Convert the structure selection to a ndx file
+    selection_name = 'sasa'
+    ndx_selection = structure_selection.to_ndx(selection_name)
+    ndx_filename = 'indices.ndx'
+    with open(ndx_filename, 'w') as file:
+        file.write(ndx_selection)
+
+    # We must exclude sasa results from membranes
+    # Membrane lipids in the border will always have unrealistic sasa values
+    # Their apolar regions is exposed to solvent only because boundary conditions are broken, but this is not real
+    # WARNING: These results must be exlucded from the analysis afterwards, but the membrane can not be excluded from the structure
+    # Otherwise, those residues which are covered by the membrane would be exposed to the solvent during the analysis
+    skipped_residue_indices = []
+    if membranes and len(membranes) > 0:
+        membrane_selection = ' and '.join([ '( ' + membrane['selection'] + ' )' for membrane in membranes ])
+        membrane_atom_indices = structure.select(membrane_selection).atom_indices
+        skipped_residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in membrane_atom_indices ]))
 
     # Calculate the sasa for each frame
     sasa_per_frame = []
@@ -61,11 +69,16 @@ def sasa(
             '-oa',
             current_frame_sasa,
             "-n",
-            indexes,
+            ndx_filename,
             "-surface",
             "0",
             '-quiet'
         ], stdout=PIPE).stdout.decode()
+
+        # In case the output file does not exist at this point it means something went wrong with Gromacs
+        if not os.path.exists(current_frame_sasa):
+            print(logs)
+            raise SystemExit('Something went wrong with Gromacs')
 
         # Mine the sasa results (.xvg file)
         # Hydrogen areas are not recorded in the xvg file
@@ -87,13 +100,25 @@ def sasa(
             area_filename,
         ], stdout=PIPE).stdout.decode()
 
+    # Remove the indices file since it is not required anymore
+    os.remove(ndx_filename)
+
     # Format output data
     # Sasa values must be separated by residue and then ordered by frame
-    data = []
+    saspf = []
+    means = []
+    stdvs = []
     for r, residue in enumerate(structure.residues):
+        # Skip membrane residues
+        if r in skipped_residue_indices:
+            saspf.append(None)
+            means.append(None)
+            stdvs.append(None)
+            continue
+        # Get the number of atoms in current residue
         atom_count = len(residue.atoms)
         # Harvest its sasa along each frame
-        saspf = []
+        residue_saspf = []
         for frame in sasa_per_frame:
             # IMPORTANT: The original SASA value is modified to be normalized
             # We divide the value by the number of atoms
@@ -101,18 +126,22 @@ def sasa(
             normalized_frame_sas = frame_sas / atom_count
             # To make is standard with the rest of analyses we pass the results from nm² to A²
             standard_frame_sas = normalized_frame_sas * 100
-            saspf.append(standard_frame_sas)
+            residue_saspf.append(standard_frame_sas)
+        # Add current resiude sas per frame to the overall list
+        saspf.append(residue_saspf)
         # Calculate the mean and standard deviation of the residue sasa values
-        residue_tag = residue.chain.name + ':' + str(residue.number) + residue.icode
-        mean = numpy.mean(saspf)
-        stdv = numpy.std(saspf)
-        data.append({
-            'name': residue_tag,
-            'saspf': saspf,
-            'mean': mean,
-            'stdv': stdv
-        })
+        mean = numpy.mean(residue_saspf)
+        means.append(mean)
+        stdv = numpy.std(residue_saspf)
+        stdvs.append(stdv)
+    # Set the content of the analysis output file
+    output = {
+        'step': step,
+        'saspf': saspf,
+        'means': means,
+        'stdvs': stdvs,
+    }
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump({'data': data}, file)
+        json.dump(output, file)
