@@ -25,6 +25,10 @@ def rmsd_per_residue (
     # Reduce it in case it exceeds the frames limit
     pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
+    # Set the indices of residues in the analysis
+    # This is important since some residues may be excluded (membrane residues)
+    residue_indices = list(range(len(structure.residues)))
+
     # We must exclude here membranes from the analysis
     # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
     if membranes and len(membranes) > 0:
@@ -35,14 +39,13 @@ def rmsd_per_residue (
         # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
         # This happens with some random pdbs which pytraj considers to have 0 Mols
         # More info: https://github.com/Amber-MD/cpptraj/pull/820
-        # DANI: Esto es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
+        # IMPORTANT: This is critical for pytraj <= 2.0.5 but it makes the code fail for pytraj 2.0.6
         if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
             filtered_pt_trajectory.top.start_new_mol()
-        # Create a filtered topology with the same selection than pytraj
-        control_structure = structure.filter(selection)
+        # Update the residue indices list with the selected atom residues
+        residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in selection.atom_indices ]))
     else:
         filtered_pt_trajectory = pt_trajectory
-        control_structure = structure
 
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
@@ -56,30 +59,19 @@ def rmsd_per_residue (
     del data[0]
 
     # Check the structure to match in number of residues with the pytraj results
-    if len(control_structure.residues) != len(data):
+    if len(residue_indices) != len(data):
         raise ValueError('Number of residues in structure does not match number of residues in RMSD-perres results')
 
     # Mine the analysis data
-    output_analysis = []
-    for residue_index, residue_data in enumerate(data):
-        # DEPRECATED: Now residues are found using the residue index and the control structure
-        # Convert pytraj residue keys to source notation
-        # Key format: SER:1, TYR:2, ...
-        # match = re.match('(.*):(.*)', residue.key)
-        # num = match.groups(0)[1]
-        residue = control_structure.residues[residue_index]
-        residue_tag = residue.chain.name + ':' + str(residue.number) + residue.icode
-        # Write data to the output file
-        # The 'residue' DataArray contains numeric values (rmsds) and it is not JSON serializable
-        output_analysis.append(
-            {
-                'name': residue_tag,
-                'rmsds': list(residue_data),
-            }
-        )
+    whole_structure_residues_count = len(structure.residues)
+    rmsd_per_residue = [ None ] * whole_structure_residues_count
+    for index, residue_data in enumerate(data):
+        # Get the actual residue index of the current data
+        residue_index = residue_indices[index]
+        # Add current data to its corresponding position in the 'per residue' list
+        rmsd_per_residue[residue_index] = list(residue_data)
 
     # Export the analysis in json format
+    output_analysis = { 'step': pt_trajectory.step, 'rmsdpr': rmsd_per_residue }
     with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
-    
-    # It is not possible to represent the whole rmsd per residue with a classical graph
+        json.dump(output_analysis, file)
