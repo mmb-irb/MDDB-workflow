@@ -73,7 +73,7 @@ def sasa(
             "-surface",
             "0",
             '-quiet'
-        ], stdout=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
         # In case the output file does not exist at this point it means something went wrong with Gromacs
         if not os.path.exists(current_frame_sasa):
