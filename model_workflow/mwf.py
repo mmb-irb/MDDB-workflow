@@ -607,7 +607,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_rmsdperres_filename,
         'structure': structure,
         'membranes': membranes,
-        'frames_limit': 200,
+        'frames_limit': 100,
     }, 'rmsdperres'),
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
     # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge

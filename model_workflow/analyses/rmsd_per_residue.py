@@ -25,27 +25,36 @@ def rmsd_per_residue (
     # Reduce it in case it exceeds the frames limit
     pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
 
-    # Set the indices of residues in the analysis
-    # This is important since some residues may be excluded (membrane residues)
-    residue_indices = list(range(len(structure.residues)))
+    # We must filter out residues which only have 1 atom (e.g. ions)
+    # This is because sometimes pytraj does not return results for them and then the number of results and residues does not match
+    # More info: https://github.com/Amber-MD/pytraj/issues/1580
+    ion_atom_indices = []
+    for residue in structure.residues:
+        if len(residue.atom_indices) == 1:
+            ion_atom_indices += residue.atom_indices
 
     # We must exclude here membranes from the analysis
     # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
+    membrane_atom_indices = []
     if membranes and len(membranes) > 0:
-        selection = ' and '.join([ '( not ' + membrane['selection'] + ' )' for membrane in membranes ])
-        selection = structure.select(selection, syntax='vmd')
-        pytraj_selection = selection.to_pytraj()
-        filtered_pt_trajectory = pt_trajectory[pytraj_selection]
-        # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
-        # This happens with some random pdbs which pytraj considers to have 0 Mols
-        # More info: https://github.com/Amber-MD/cpptraj/pull/820
-        # IMPORTANT: This is critical for pytraj <= 2.0.5 but it makes the code fail for pytraj 2.0.6
-        if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
-            filtered_pt_trajectory.top.start_new_mol()
-        # Update the residue indices list with the selected atom residues
-        residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in selection.atom_indices ]))
-    else:
-        filtered_pt_trajectory = pt_trajectory
+        membrane_selection_string = ' and '.join([ '( ' + membrane['selection'] + ' )' for membrane in membranes ])
+        membrane_selection = structure.select(membrane_selection_string, syntax='vmd')
+
+    # Filter the trajectory with the specified residue indices
+    filter_out_atom_indices = ion_atom_indices + membrane_atom_indices
+    filter_out_selection = structure.select_atom_indices(filter_out_atom_indices)
+    filter_in_selection = structure.invert_selection(filter_out_selection)
+    pytraj_selection = filter_in_selection.to_pytraj()
+    filtered_pt_trajectory = pt_trajectory[pytraj_selection]
+    # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
+    # This happens with some random pdbs which pytraj considers to have 0 Mols
+    # More info: https://github.com/Amber-MD/cpptraj/pull/820
+    # IMPORTANT: This is critical for pytraj <= 2.0.5 but it makes the code fail for pytraj 2.0.6
+    if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
+        filtered_pt_trajectory.top.start_new_mol()
+
+    # Calculate the residue indices of the overall structure remaining in the filtered trajectory
+    residue_indices = structure.get_selection_residue_indices(filter_in_selection)
 
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
@@ -58,9 +67,9 @@ def rmsd_per_residue (
     # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
     del data[0]
 
-    # Check the structure to match in number of residues with the pytraj results
+    # Check the expected output number of residues to match with the pytraj results
     if len(residue_indices) != len(data):
-        raise ValueError('Number of residues in structure does not match number of residues in RMSD-perres results')
+        raise ValueError('Number of residues in structure (' + str(len(residue_indices)) + ') does not match number of residues in RMSD-perres results (' + str(len(data)) + ')')
 
     # Mine the analysis data
     whole_structure_residues_count = len(structure.residues)
