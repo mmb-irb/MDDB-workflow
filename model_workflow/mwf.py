@@ -444,8 +444,10 @@ imaging = Dependency(image_and_fit, {
 # WARNING: This is the independent call for this function
 # WARNING: In the canonical workflow, this function is called inside 'process_input_files'
 corrector = Dependency(topology_corrector, {
-    'input_topology_filename': original_topology_filename,
-    'output_topology_filename': original_trajectory_filenames
+    'input_pdb_filename': original_topology_filename,
+    'output_topology_filename': original_topology_filename,
+    'input_trajectory_filename': original_trajectory_filenames,
+    'output_trajectory_filename': original_trajectory_filenames,
 }, 'corrector')
 
 # Set a parsed structure/topology with useful features

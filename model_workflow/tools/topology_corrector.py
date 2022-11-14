@@ -1,3 +1,5 @@
+from typing import Optional
+
 # Import mdtoolbelt tools
 from mdtoolbelt.structures import Structure, calculate_distance
 
@@ -10,14 +12,16 @@ from model_workflow.tools.vmd_processor import vmd_chainer
 #
 # * Missing chains -> Chains are added through VMD
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
-# * (Not supported yet) Hyrdogens are placed at the end ->
+# * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
 
 
-def topology_corrector(
+def topology_corrector (
     input_pdb_filename: str,
-    output_topology_filename: str):
+    output_topology_filename: str,
+    input_trajectory_filename : Optional[str] = None,
+    output_trajectory_filename : Optional[str] = None):
 
     print('Correcting topology')
 
@@ -75,6 +79,12 @@ def topology_corrector(
 
     if structure.check_repeated_residues(fix_residues=True, display_summary=True):
         modified = True
+
+        # Sort trajectory coordinates in case atoms were sorted
+        if input_trajectory_filename and structure.trajectory_atom_sorter:
+            print('Sorting trajectory atom coordinates to fit the new structure sort...')
+            structure.trajectory_atom_sorter(input_pdb_filename, input_trajectory_filename, output_trajectory_filename)
+
     # ------------------------------------------------------------------------------------------
     # Repeated atoms --------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
@@ -88,7 +98,7 @@ def topology_corrector(
 
     # Write a new topology if any modification was done
     if modified:
-        print('The topology file has been modificated')
+        print('The topology file has been modificated -> ' + output_topology_filename)
         structure.generate_pdb_file(output_topology_filename)
 
 
