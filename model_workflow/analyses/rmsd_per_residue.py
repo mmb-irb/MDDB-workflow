@@ -39,6 +39,7 @@ def rmsd_per_residue (
     if membranes and len(membranes) > 0:
         membrane_selection_string = ' and '.join([ '( ' + membrane['selection'] + ' )' for membrane in membranes ])
         membrane_selection = structure.select(membrane_selection_string, syntax='vmd')
+        membrane_atom_indices = membrane_selection.atom_indices
 
     # Filter the trajectory with the specified residue indices
     filter_out_atom_indices = ion_atom_indices + membrane_atom_indices
