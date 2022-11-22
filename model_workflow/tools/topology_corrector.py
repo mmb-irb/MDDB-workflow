@@ -1,7 +1,7 @@
 from typing import Optional
 
 # Import mdtoolbelt tools
-from mdtoolbelt.structures import Structure, calculate_distance
+from mdtoolbelt.structures import Structure
 
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_chainer
@@ -15,6 +15,7 @@ from model_workflow.tools.vmd_processor import vmd_chainer
 # * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
+# * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
 
 
 def topology_corrector (
@@ -23,7 +24,7 @@ def topology_corrector (
     input_trajectory_filename : Optional[str] = None,
     output_trajectory_filename : Optional[str] = None):
 
-    print('Correcting topology')
+    print('----- Correcting topology -----')
 
     # Track if there has been any modification and then topology must be rewritten
     modified = False
@@ -33,7 +34,7 @@ def topology_corrector (
     #purgeNonUtf8(input_pdb_filename)
 
     # Import the pdb file and parse it to a structure object
-    structure = Structure.from_pdb_file(input_pdb_filename)    
+    structure = Structure.from_pdb_file(input_pdb_filename)
 
     # ------------------------------------------------------------------------------------------
     # Missing chains --------------------------------------------------------------------------
@@ -82,7 +83,7 @@ def topology_corrector (
 
         # Sort trajectory coordinates in case atoms were sorted
         if input_trajectory_filename and structure.trajectory_atom_sorter:
-            print('Sorting trajectory atom coordinates to fit the new structure sort...')
+            print('Sorting trajectory coordinates to fit the new structure atom sort...')
             structure.trajectory_atom_sorter(input_pdb_filename, input_trajectory_filename, output_trajectory_filename)
 
     # ------------------------------------------------------------------------------------------
@@ -93,13 +94,24 @@ def topology_corrector (
         modified = True
 
     # ------------------------------------------------------------------------------------------
+    # Missing/Non-standard elements ------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    if structure.fix_atom_elements(trust=False):
+        modified = True
+
+    # ------------------------------------------------------------------------------------------
     # Final output -----------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     # Write a new topology if any modification was done
     if modified:
-        print('The topology file has been modificated -> ' + output_topology_filename)
+        print(' The topology file has been modificated -> ' + output_topology_filename)
         structure.generate_pdb_file(output_topology_filename)
+    else:
+        print(' Everything is fine')
+
+    print('-------------------------------')
 
 
 # Set a function to get the next letter from an input letter in alphabetic order

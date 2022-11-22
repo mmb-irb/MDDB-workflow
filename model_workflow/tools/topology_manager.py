@@ -1,7 +1,5 @@
 # Topology/Structure management tools
 
-import pytraj as pt
-
 # Import tools from mdtoolbelt
 from mdtoolbelt.structures import Structure
 
@@ -24,8 +22,6 @@ def set_chains (pdb_filename : str, chains : list):
 def setup_structure (pdb_filename : str) -> 'Structure':
     # Set the structure using mdtoolbelt
     structure = Structure.from_pdb_file(pdb_filename)
-    # Fix atom element names by standarizing the caps (first upper, second lower) and filling the missing elements
-    structure.fix_atom_elements()
     # Set a reference system to handle conversions to pytraj topology
     # First set the pytraj topology
     pytraj_topology = structure.get_pytraj_topology()
