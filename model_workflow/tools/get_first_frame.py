@@ -37,5 +37,5 @@ def get_first_frame (
         '-dump',
         '0',
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()

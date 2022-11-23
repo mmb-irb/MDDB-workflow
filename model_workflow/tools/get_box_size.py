@@ -41,7 +41,7 @@ def get_box_size(
         '-e',
         '0',
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()
 
     if not os.path.exists(box_analysis):
