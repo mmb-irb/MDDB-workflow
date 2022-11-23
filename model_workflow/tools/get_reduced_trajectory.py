@@ -62,7 +62,7 @@ def get_reduced_trajectory (
             '-skip',
             str(step),
             '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
         p.stdout.close()
 
     # Calculate also the final number of frames given the current step and return this value
