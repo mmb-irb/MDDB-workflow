@@ -346,7 +346,7 @@ def get_input_charges_filename ():
                 itp_url = project_url + '/files/' + itp_filename
                 urllib.request.urlretrieve(itp_url, itp_filename)
         # Set the final charges filename as the downloaded charges filename
-        #charges_filename.filename = original_charges_filename
+        charges_filename.filename = original_charges_filename
     return original_charges_filename
 
 # Get some input values which are passed through command line instead of the inputs file
