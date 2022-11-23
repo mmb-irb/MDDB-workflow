@@ -31,7 +31,7 @@ def rmsf (
         '-oq',
         output_noelem_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()
 
     # If the output does not exist at this point it means something went wrong with gromacs

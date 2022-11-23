@@ -30,6 +30,10 @@ import json
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.filter_atoms import get_unmembraned_trajectory
 
+CURSOR_UP_ONE = '\x1b[1A'
+ERASE_LINE = '\x1b[2K'
+ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+
 # Get only the 10 first pockets since the analysis is quite slow by now
 # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
 maximum_pockets_number = 10
@@ -300,6 +304,9 @@ def pockets (
     # Set the dict where all output data will be stored
     output_analysis = []
 
+    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
+    print()
+
     # Next, we analyze each selected pocket independently. The steps for each pocket are:
     # 1 - Create a new grid file
     # 2 - Conver the grid to pdb
@@ -318,7 +325,9 @@ def pockets (
         checking_filename = pocket_output + '_mdpocket.pdb'
         if not (os.path.exists(checking_filename) and os.path.getsize(checking_filename) > 0):
 
-            print('Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
+            # Update the logs
+            print(ERASE_PREVIOUS_LINE)
+            print(' Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
             
             # Create the new grid for this pocket, where all values from other pockets are set to 0
             pocket_value = p[0]

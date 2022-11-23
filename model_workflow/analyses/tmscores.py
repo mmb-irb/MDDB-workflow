@@ -41,6 +41,7 @@ def tmscores (
 
     # Iterate over each reference and group
     for reference in tmscore_references:
+        print(' Running TM score using ' + reference + ' as reference')
         # Create a reference topology with only the group atoms
         # WARNING: Yes, TM score would work also with the whole reference, but it takes more time!!
         # This has been experimentally tested and it may take more than the double of time
@@ -63,7 +64,7 @@ def tmscores (
             "-dump",
             "0",
             '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
         p.stdout.close()
         # If the output does not exist at this point it means something went wrong with gromacs
         if not os.path.exists(grouped_reference):
@@ -93,7 +94,7 @@ def tmscores (
                 '-n',
                 ndx_filename,
                 '-quiet'
-            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+            ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
             p.stdout.close()
 
             # If the output does not exist at this point it means something went wrong with gromacs

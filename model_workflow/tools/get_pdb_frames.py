@@ -7,6 +7,10 @@ import math
 
 import pytraj as pt
 
+CURSOR_UP_ONE = '\x1b[1A'
+ERASE_LINE = '\x1b[2K'
+ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+
 # Build a generator which returns frames from the trajectory in pdb format
 # The frames limit is the maximum number of frames to be iterated
 # Note that the number of frames iterated may be less than the specified number
@@ -33,9 +37,13 @@ def get_pdb_frames (
     frames_list = range(0, frames_count)
 
     def frames_generator():
+        # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
+        print()
 
         # Extract each frame in pdb format
         for f in frames_list:
+            # Update the current frame log
+            print(ERASE_PREVIOUS_LINE)
             print('Frame ' + str(f+1) + ' / ' + str(frames_count))
             current_frame = 'frame' + str(f) + '.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]

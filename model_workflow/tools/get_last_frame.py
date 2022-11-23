@@ -39,5 +39,5 @@ def get_last_frame (
         '-dump',
         str(frames_count - 1),
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()

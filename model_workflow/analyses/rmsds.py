@@ -129,7 +129,7 @@ def rmsd (
         '-n',
         ndx_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()
 
     # If the output does not exist at this point it means something went wrong with gromacs
@@ -177,7 +177,7 @@ def rmsd_check (
         '-n',
         ndx_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()
 
     # If the output does not exist at this point it means something went wrong with gromacs
