@@ -21,6 +21,7 @@ from model_workflow.tools.process_input_files import process_input_files, find_c
 from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
+from model_workflow.tools.get_last_frame import get_last_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.generate_metadata import generate_metadata
@@ -152,6 +153,7 @@ OUTPUT_trajectory_filename = 'md.imaged.rot.xtc'
 OUTPUT_charges_filename = get_output_charges_filename()
 OUTPUT_first_frame_filename = 'firstFrame.pdb'
 OUTPUT_average_structure_filename = 'average.pdb'
+OUTPUT_last_frame_filename = 'last_frame.pdb'
 OUTPUT_average_frame_filename = 'average.xtc'
 OUTPUT_metadata_filename = 'metadata.json'
 OUTPUT_topology_filename = 'topology.json'
@@ -450,10 +452,21 @@ corrector = Dependency(topology_corrector, {
     'output_trajectory_filename': original_trajectory_filenames,
 }, 'corrector')
 
+# Set a pdb file containing the last trajectory frame
+# Using the last frame is adviced when checking atomic bonds
+# This is because the first frame may be not fully equilibrated and some atoms may be closer than they should
+# This should never happen in the last frame
+last_frame_filename = File(OUTPUT_last_frame_filename, get_last_frame, {
+    'input_topology_filename': pdb_filename,
+    'input_trajectory_filename': trajectory_filename,
+    'last_frame_filename': OUTPUT_last_frame_filename,
+})
+
 # Set a parsed structure/topology with useful features
 # This object also include functions to convert residue numeration from one format to another
+# Use the last frame to set up the structure to ensure covalent bonds will be right
 structure = Dependency(setup_structure, {
-    'pdb_filename': pdb_filename
+    'pdb_filename': last_frame_filename
 })
 
 # Set the pytraj trayectory
@@ -491,9 +504,10 @@ snapshots = Dependency(get_frames_count, {
 
 # Find out residues and interface residues for each interaction
 interactions = Dependency(process_interactions, {
+    'interactions': input_interactions,
     'topology_filename': pdb_filename,
     'trajectory_filename': trajectory_filename,
-    'interactions': input_interactions,
+    'last_frame_filename': last_frame_filename,
     'structure': structure,
     'interactions_file': OUTPUT_interactions_filename,
 }, 'interactions')

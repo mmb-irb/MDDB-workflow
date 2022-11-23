@@ -7,7 +7,6 @@ import json
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.tools.get_last_frame import get_last_frame
 
 # The limit of frames to be selected along the trajectory for the interface analysis
 frames_limit = 100
@@ -24,6 +23,7 @@ def process_interactions (
     interactions : list,
     topology_filename : str,
     trajectory_filename : str,
+    last_frame_filename : str,
     structure : 'Structure',
     interactions_file : str) -> list:
 
@@ -77,8 +77,6 @@ def process_interactions (
 
         # Find strong bonds between residues in different interfaces
         # Use the last trajectory frame to find them
-        last_frame_filename = 'last_frame.pdb'
-        get_last_frame(topology_filename, trajectory_filename, last_frame_filename)
         strong_bonds = get_strong_bonds(last_frame_filename, interaction['selection_1'], interaction['selection_2'])
 
         # Translate all residues selections to pytraj notation
@@ -301,7 +299,7 @@ def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_sel
         commands_filename,
         "-dispdev",
         "none"
-    ], stdout=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE).stdout.decode()
     
     # Read the VMD output
     with open(output_index_1_file, 'r') as file:
