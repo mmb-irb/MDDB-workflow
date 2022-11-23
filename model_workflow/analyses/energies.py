@@ -203,7 +203,9 @@ def energies (
             # Set the CMIP box dimensions and densities to fit both the host and the guest
             # Box origin and size are modified in the cmip inputs
             # Values returned are only used for display / debug purposes
-            box_origin, box_size = adapt_cmip_grid(agent1_interface_cmip, agent2_interface_cmip, cmip_inputs)
+            box_origin, box_size = adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
+            # DANI: Esto es experimental
+            #box_origin, box_size = adapt_cmip_grid(agent1_interface_cmip, agent2_interface_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
             print(' Calculating energies for ' + agent1_name + ' as host and ' + agent2_name + ' as guest')
