@@ -464,9 +464,11 @@ last_frame_filename = File(OUTPUT_last_frame_filename, get_last_frame, {
 
 # Set a parsed structure/topology with useful features
 # This object also include functions to convert residue numeration from one format to another
-# Use the last frame to set up the structure to ensure covalent bonds will be right
+# Use the corrected structure pdb file to ensure everything is fine
+# Use the last frame coordinates to ensure covalent bonds will be right
 structure = Dependency(setup_structure, {
-    'pdb_filename': last_frame_filename
+    'pdb_filename': pdb_filename,
+    'last_frame': last_frame_filename,
 })
 
 # Set the pytraj trayectory
