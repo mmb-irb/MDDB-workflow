@@ -738,13 +738,20 @@ def workflow (
 
 ):
 
+    # Reset all dependencies
+    # This is useful in case we run this function more than once without reseting the module
+    # Note that this script was originally called only from argparse so this was not necessary
+    dependencies = [ var_value for var_name, var_value in dict(globals()).items() if isinstance(var_value, Dependency) ]
+    for dependecy in dependencies:
+        dependecy._value = None
+
     # Update the inputs variable with all current function arguments
     inputs.update(locals())
 
     # Load the inputs file
     load_inputs(inputs_filename)
 
-    # If download is passed as True then exit as soon as the setup is finished
+    # If download is passed as True then download all data we may need further and exit
     if download:
         original_topology_filename.value
         original_trajectory_filenames.value
