@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 import urllib.request
 import json
+from typing import Optional, Union, List
 
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_processor
@@ -192,7 +193,7 @@ def load_inputs (inputs_filename : str):
     # If it does not, then try to download it
     if not os.path.exists(inputs_filename):
         # Check we have the inputs required to download the file
-        server_url = get_input('url')
+        server_url = get_input('database_url')
         project = get_input('project')
         # If not, then there is nothing to do
         if not server_url or not project:
@@ -228,7 +229,7 @@ def get_input_pdb_filename ():
         return original_pdb_filename
     # If not, try to download it
     # Check we have the inputs required to download the file
-    server_url = get_input('url')
+    server_url = get_input('database_url')
     project = get_input('project')
     # If not, then there is nothing to do
     if not server_url or not project:
@@ -256,7 +257,7 @@ def get_input_trajectory_filenames (sample : bool = False):
         return original_trajectory_filenames
     # If not, try to download them
     # Check we have the inputs required to download the files
-    server_url = get_input('url')
+    server_url = get_input('database_url')
     project = get_input('project')
     # If not, then there is nothing to do
     if not server_url or not project:
@@ -302,7 +303,7 @@ def get_input_charges_filename ():
         return original_charges_filename
     # If not, try to download it
     # Check we have the inputs required to download the file
-    server_url = get_input('url')
+    server_url = get_input('database_url')
     project = get_input('project')
     # If not, then there is nothing to do
     if not server_url or not project:
@@ -694,25 +695,57 @@ requestables = [ *analyses, *tools, metadata_filename, topology_filename ]
 
 # Main ---------------------------------------------------------------------------------            
 
-# Main function
-def main():
+# Function called through argparse
+def main ():
 
     # Parse input arguments from the console
     args = parser.parse_args()
-    input_topology_filename = args.input_topology_filename
-    input_trajectory_filenames = args.input_trajectory_filenames
-    inputs_filename =  args.inputs_filename
-    input_charges_filename = args.input_charges_filename
-
     # Set the command line inputs
     # The vars function converts the args object to a dictionary
-    inputs.update(vars(args))
+    workflow_args = vars(args)
+    # Call the actual main function
+    workflow(**workflow_args)
+
+# Set default input filenames
+# They may be modified through console command arguments
+DEFAULT_working_directory = str(Path.cwd())
+DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
+DEFAULT_input_trajectory_filenames = ['md.imaged.rot.xtc']
+DEFAULT_inputs_filename = 'inputs.json'
+DEFAULT_input_charges_filename = find_charges_filename()
+DEFAULT_database_url = 'https://mdposit-dev.bsc.es'
+
+# The actual main function
+def workflow (
+    working_dir : str = DEFAULT_working_directory,
+    input_topology_filename : str = DEFAULT_input_topology_filename,
+    input_trajectory_filenames : List[str] = DEFAULT_input_trajectory_filenames,
+    inputs_filename : str = DEFAULT_inputs_filename,
+    input_charges_filename : str = DEFAULT_input_charges_filename,
+    database_url : str = DEFAULT_database_url,
+    project : Optional[str] = None,
+    sample_trajectory : bool = False,
+    download : bool = False,
+    setup : bool = False,
+    include : Optional[List[str]] = None,
+    exclude : Optional[List[str]] = None,
+    filter_selection : Union[bool, str] = False,
+    preprocess_protocol : int = 0,
+    translation : List[float] = [0, 0, 0],
+    skip_checkings : bool = False,
+    pca_selection : str = protein_and_nucleic_backbone,
+    pca_fit_selection : str = protein_and_nucleic_backbone,
+
+):
+
+    # Update the inputs variable with all current function arguments
+    inputs.update(locals())
 
     # Load the inputs file
     load_inputs(inputs_filename)
 
     # If download is passed as True then exit as soon as the setup is finished
-    if args.download:
+    if download:
         original_topology_filename.value
         original_trajectory_filenames.value
         original_charges_filename.value
@@ -723,22 +756,22 @@ def main():
     process_input_files.value
 
     # If setup is passed as True then exit as soon as the setup is finished
-    if args.setup:
+    if setup:
         return
 
     # Run the requested analyses
-    if args.include and len(args.include) > 0:
-        sys.stdout.write(f"Executing specific dependencies: " + str(args.include) + '\n')
+    if include and len(include) > 0:
+        sys.stdout.write(f"Executing specific dependencies: " + str(include) + '\n')
         # Include only the specified dependencies
-        requested_dependencies = [ dep for dep in requestables if dep.alias in args.include ]
+        requested_dependencies = [ dep for dep in requestables if dep.alias in include ]
         for dependency in requested_dependencies:
             dependency.value
     # Run all analyses if none was specified
     else:
         # Include all non excluded dependencies
         requested_dependencies = workflow
-        if args.exclude and len(args.exclude) > 0:
-            requested_dependencies = [ dep for dep in workflow if dep.alias not in args.exclude ]
+        if exclude and len(exclude) > 0:
+            requested_dependencies = [ dep for dep in workflow if dep.alias not in exclude ]
         for dependency in requested_dependencies:
             dependency.value
 
@@ -751,20 +784,10 @@ def main():
 # Define console arguments to call the workflow
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
 
-# Get current directory
-current_directory = Path.cwd()
-
-# Set default input filenames
-# They may be modified through console command arguments
-DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
-DEFAULT_input_trajectory_filenames = ['md.imaged.rot.xtc']
-DEFAULT_inputs_filename = 'inputs.json'
-DEFAULT_input_charges_filename = find_charges_filename()
-
 # Set optional arguments
 parser.add_argument(
     "-dir", "--working_dir",
-    default=current_directory,
+    default=DEFAULT_working_directory,
     help="Directory where to perform analysis. "
     "If empty, will use current directory.")
 
@@ -775,8 +798,8 @@ parser.add_argument(
     "topology files will be downloaded from remote server.")
 
 parser.add_argument(
-    "-url",
-    default="https://mdposit-dev.bsc.es",
+    "-url", "--database_url",
+    default=DEFAULT_database_url,
     help="URL from where to download project")
 
 parser.add_argument(
