@@ -7,8 +7,6 @@ resources_directory = 'model_workflow/utils/resources'
 deprecated_directory = resources_directory + '/deprecated'
 resources_files = [ log for log in glob(resources_directory + '/*') if log != deprecated_directory ]
 
-print(resources_files)
-
 setup(
     name='model_workflow',
     version='0.0.1',
