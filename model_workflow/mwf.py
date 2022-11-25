@@ -688,7 +688,7 @@ analyses = [
 ]
 
 # Set a list with all dependencies to be required if the whole workflow is run
-workflow = [ metadata_filename, topology_filename, *analyses ]
+basic_dependencies = [ metadata_filename, topology_filename, *analyses ]
 
 # Set a list with all dependencies which may be requested independently
 requestables = [ *analyses, *tools, metadata_filename, topology_filename ]
@@ -776,9 +776,9 @@ def workflow (
     # Run all analyses if none was specified
     else:
         # Include all non excluded dependencies
-        requested_dependencies = workflow
+        requested_dependencies = basic_dependencies
         if exclude and len(exclude) > 0:
-            requested_dependencies = [ dep for dep in workflow if dep.alias not in exclude ]
+            requested_dependencies = [ dep for dep in basic_dependencies if dep.alias not in exclude ]
         for dependency in requested_dependencies:
             dependency.value
 
