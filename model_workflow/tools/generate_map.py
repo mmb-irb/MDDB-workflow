@@ -1,3 +1,4 @@
+import os
 import json
 import urllib.request
 
@@ -35,6 +36,9 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
+    # Import local references, in case the references json file already exists
+    if os.path.exists(references_filename):
+        references = import_references()
     # Get the structure chain sequences
     structure_sequences = get_chain_sequences(structure)
     # Find out which chains are protein
@@ -48,8 +52,13 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
     reference_sequences = {}
     if forced_references:
         for uniprot_id in forced_references:
+            # If reference is already in the list (i.e. it has been imported) then skip this process
+            reference = references.get(uniprot_id, None)
+            if reference:
+                reference_sequences[uniprot_id] = reference['sequence']
+                continue
             reference, already_loaded = get_reference(uniprot_id)
-            reference_sequences[reference['uniprot']] = reference['sequence']
+            reference_sequences[uniprot_id] = reference['sequence']
             # Save the current whole reference object for later
             references[reference['uniprot']] = reference
     # Try to match all protein sequences with the available reference sequences
@@ -152,6 +161,19 @@ def export_references (mapping_data : list):
         final_uniprots.append(uniprot)
     with open(references_filename, 'w') as file:
         json.dump(final_references, file, indent=4)
+
+# Import reference json file so we do not have to rerun this process
+def import_references () -> list:
+    print(' Importing references from ' + references_filename)
+    # Read the file
+    with open(references_filename, 'r') as file:
+        file_content = json.load(file)
+    # Format data as the process expects to find it
+    references = {}
+    for reference in file_content:
+        uniprot = reference['uniprot']
+        references[uniprot] = reference
+    return references
 
 # Reformat mapping data to the topology system (introduced later)
 def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
