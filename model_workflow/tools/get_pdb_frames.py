@@ -1,9 +1,10 @@
 from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 
 from subprocess import run, PIPE, Popen
 import math
+from typing import Optional
 
 import pytraj as pt
 
@@ -17,13 +18,16 @@ ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 def get_pdb_frames (
     topology_filename : str,
     trajectory_filename : str,
-    frames_limit : int
+    frames_limit : Optional[int] = None
 ):
 
     # Load the trajectory using pytraj
-    trajectory = pt.iterload(trajectory_filename, topology_filename)
+    trajectory = get_pytraj_trajectory(topology_filename, trajectory_filename)
     # Get the total number of snapshots in the trajectory
     snapshots = trajectory.n_frames
+    # In case we are missing a frames limit set the limit as the number os snapshots
+    if frames_limit == None:
+        frames_limit = snapshots
 
     # Set a maximum number of frames
     # If trajectory has more frames than the limit create a reduced trajectory
@@ -56,6 +60,21 @@ def get_pdb_frames (
             ], stdout=PIPE).stdout.decode()
 
     return frames_generator(), frames_step, frames_count
+
+# Get a specific trajectory frame in pdb format
+# Return the name of the generated file
+def get_pdb_frame (
+    topology_filename : str,
+    trajectory_filename : str,
+    frame : int
+) -> str:
+
+    # Load the trajectory using pytraj
+    trajectory = get_pytraj_trajectory(topology_filename, trajectory_filename)
+    trajectory_frame = trajectory[frame:frame+1]
+    trajectory_frame_filename = 'frame' + str(frame) + '.pdb'
+    pt.write_traj(trajectory_frame_filename, trajectory_frame, overwrite=True)
+    return trajectory_frame_filename
 
 # Build a generator which returns frames from the trajectory in pdb format
 # The frames limit is the maximum number of frames to be iterated

@@ -5,18 +5,21 @@ from mdtoolbelt.structures import Structure
 
 # Import local tools
 from model_workflow.tools.vmd_processor import vmd_chainer
+from model_workflow.tools.get_safe_bonds import do_bonds_match, get_safe_bonds, get_safe_bonds_canonical_frame
+from model_workflow.tools.get_pdb_frames import get_pdb_frame
 
 # Analyze the topology looking for irregularities and then modify the topology to standarize the format
 #
 # Supported cases:
 #
+# * Wrong bonds: A bond is formed / broken because its 2 atoms are too close / far in the
+#   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are fine
 # * Missing chains -> Chains are added through VMD
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
 # * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
-
 
 def topology_corrector (
     input_pdb_filename: str,
@@ -35,6 +38,27 @@ def topology_corrector (
 
     # Import the pdb file and parse it to a structure object
     structure = Structure.from_pdb_file(input_pdb_filename)
+
+    # ------------------------------------------------------------------------------------------
+    # Wrong bonds ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
+    safe_bonds = get_safe_bonds(input_pdb_filename, input_trajectory_filename)
+    # If the safe bonds do not match the structure bonds then we have to fix it
+    if not do_bonds_match(structure.bonds, safe_bonds):
+        modified = True
+        print('WARNING: Default structure has wrong bonds')
+        # Set the safe bonds as the structure bonds
+        structure.bonds = safe_bonds
+        # Find the first frame in the whole trajectory where safe bonds are respected
+        safe_bonds_frame = get_safe_bonds_canonical_frame(input_pdb_filename, input_trajectory_filename, safe_bonds)
+        # Set also the safe bonds frame structure to mine its coordinates
+        safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
+        safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
+        # Set all coordinates in the main structure by copying the safe bonds frame coordinates
+        for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
+            atom_1.coords = atom_2.coords
 
     # ------------------------------------------------------------------------------------------
     # Missing chains --------------------------------------------------------------------------

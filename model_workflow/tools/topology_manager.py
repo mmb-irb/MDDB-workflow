@@ -19,14 +19,9 @@ def set_chains (pdb_filename : str, chains : list):
     structure.generate_pdb_file(pdb_filename)
 
 # This is the new system to handle the topology
-def setup_structure (pdb_filename : str, last_frame : str) -> 'Structure':
+def setup_structure (pdb_filename : str) -> 'Structure':
     # Set the structure using mdtoolbelt
     structure = Structure.from_pdb_file(pdb_filename)
-    # Set also the last frame structure to mine its coordinates
-    last_frame_structure = Structure.from_pdb_file(last_frame)
-    # Set all coordinates in the main structure by copying the last frame coordinates
-    for atom_1, atom_2 in zip(structure.atoms, last_frame_structure.atoms):
-        atom_1.coords = atom_2.coords
     # Set a reference system to handle conversions to pytraj topology
     # First set the pytraj topology
     pytraj_topology = structure.get_pytraj_topology()

@@ -23,7 +23,6 @@ def process_interactions (
     interactions : list,
     topology_filename : str,
     trajectory_filename : str,
-    last_frame_filename : str,
     structure : 'Structure',
     interactions_file : str) -> list:
 
@@ -76,8 +75,8 @@ def process_interactions (
             interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
 
         # Find strong bonds between residues in different interfaces
-        # Use the last trajectory frame to find them
-        strong_bonds = get_strong_bonds(last_frame_filename, interaction['selection_1'], interaction['selection_2'])
+        # Use the main topology, which is corrected and thus will retrieve the right bonds
+        strong_bonds = get_strong_bonds(topology_filename, interaction['selection_1'], interaction['selection_2'])
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
