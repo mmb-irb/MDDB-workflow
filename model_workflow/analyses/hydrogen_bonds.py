@@ -49,6 +49,8 @@ def hydrogen_bonds (
         
         # Select all interface residues in pytraj notation
         pt_interface = interaction['pt_interface_1'] + interaction['pt_interface_2']
+        if len(pt_interface) == 0:
+            raise ValueError('There are no interface residues for interaction "' + interaction['name'] + '"')
         pt_selection = ':' + ','.join(map(str, pt_interface))
 
         # Run the analysis

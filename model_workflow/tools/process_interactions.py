@@ -66,6 +66,10 @@ def process_interactions (
             # First with all atoms/residues
             atom_indices = interface_results['selection_' + agent + '_atom_indices']
             residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
+            # Check residue lists to not be empty, which should never happen
+            if len(residue_indices) == 0:
+                agent_name = interaction['agent_' + agent]
+                raise ValueError('Empty selection for agent "' + agent_name + '" in interaction "' + interaction['name'] + '": ' + interaction['selection_' + agent])
             interaction['residue_indices_' + agent] = residue_indices
             interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
@@ -126,6 +130,11 @@ def load_interactions (interactions_file : str, structure : 'Structure') -> list
             residues = structure.residues
             interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
             interaction['residues_2'] = [ residues[index] for index in interaction['residue_indices_2'] ]
+            # Check residue lists to not be empty, which should never happen
+            if len(interaction['residues_1']) == 0:
+                raise ValueError('Empty selection for agent "' + interaction['agent_1'] + '" in interaction "' + interaction['name'] + '"')
+            if len(interaction['residues_2']) == 0:
+                raise ValueError('Empty selection for agent "' + interaction['agent_2'] + '" in interaction "' + interaction['name'] + '"')
             interaction['interface_1'] = [ residues[index] for index in interaction['interface_indices_1'] ]
             interaction['interface_2'] = [ residues[index] for index in interaction['interface_indices_2'] ]
             # Transform to pytraj
