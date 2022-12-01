@@ -28,7 +28,6 @@ from typing import Optional, List, Tuple
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
 from mdtoolbelt.structures import Structure
-from mdtoolbelt.selections import Selection
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
@@ -104,7 +103,7 @@ def energies (
         # Parse the residue indices selection
         # Convert residue indices to atom indices
         atom_indices = sum([ residue.atom_indices for residue in residues ],[])
-        parsed_selection = Selection(atom_indices)
+        parsed_selection = structure.select_atom_indices(atom_indices)
         # Raise an error if the selection is empty
         if not parsed_selection:
             raise ValueError('ERROR: Agent "' + name + '" with selection "' + selection + '" has no atoms')
@@ -242,7 +241,8 @@ def energies (
 
     # Extract the energies for each frame in a reduced trajectory
     frames, step, count = get_pdb_frames(energies_structure_filename, input_trajectory_filename, frames_limit)
-    interactions_data = [[] for interaction in interactions if not interaction.get('exceeds', False)]
+    non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
+    interactions_data = [[] for interaction in non_exceeding_interactions]
     for current_frame_pdb in frames:
         
         # Run the main analysis over the current frame
@@ -254,7 +254,7 @@ def energies (
 
     # Now calculated residue average values through all frames for each pair of interaction agents
     output_analysis = []
-    for i, interaction in enumerate(interactions):
+    for i, interaction in enumerate(non_exceeding_interactions):
 
         # Check if the interaction as been marked as 'exceeds', in which case we skip it
         if interaction.get('exceeds', False):
