@@ -508,7 +508,8 @@ charges = Dependency(get_charges, {
 # Prepare the metadata output file
 residues_map = Dependency(generate_map_online, {
     'structure': structure,
-    'forced_references': forced_references
+    'forced_references': forced_references,
+    'inputs': inputs,
 }, 'map')
 
 # Prepare the metadata output file

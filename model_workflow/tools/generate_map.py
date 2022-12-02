@@ -32,7 +32,7 @@ references_filename = 'references.json'
 # Chains which do not match any reference sequence will be blasted
 # Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
-def generate_map_online (structure : 'Structure', forced_references : List[str] = []) -> dict:
+def generate_map_online (structure : 'Structure', forced_references : List[str] = [], inputs : dict = None) -> dict:
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
@@ -97,6 +97,22 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
             print('   ' + name + ' -> ' + uniprot_id)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
         return all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
+    # If we have every protein chain matched with a reference already then we stop here
+    if match_sequences():
+        export_references(protein_sequences)
+        return format_topology_data(structure, protein_sequences)
+    # If there are still any chain which is not matched with a reference then we need more references
+    # To get them, retrieve all uniprot codes associated to the pdb codes, if any
+    pdb_ids = inputs.get('pdbIds', [])
+    for pdb_id in pdb_ids:
+        # Ask PDB
+        uniprot_ids = pdb_to_uniprot(pdb_id)
+        for uniprot_id in uniprot_ids:
+            # Build a new reference from the resulting uniprot
+            reference, already_loaded = get_reference(uniprot_id)
+            reference_sequences[reference['uniprot']] = reference['sequence']
+            # Save the current whole reference object for later
+            references[reference['uniprot']] = reference
     # If we have every protein chain matched with a reference already then we stop here
     if match_sequences():
         export_references(protein_sequences)
@@ -421,3 +437,21 @@ def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
         return reference, True
     reference = get_uniprot_reference(uniprot_accession)
     return reference, False
+
+# Given a pdb Id, get its uniprot id
+# e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
+def pdb_to_uniprot (pdb_id : str) -> List[str]:
+    # Request the MMB service to retrieve pdb data
+    request_url = 'https://mmb.irbbarcelona.org/api/pdb/' + pdb_id + '/entry'
+    try:
+        with urllib.request.urlopen(request_url) as response:
+            parsed_response = json.loads(response.read().decode("utf-8"))
+    # If the accession is not found in the PDB then we can stop here
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        else:
+            raise ValueError('Something went wrong with the PDB request: ' + request_url)
+    # Get the uniprot accessions
+    uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
+    return uniprot_ids
