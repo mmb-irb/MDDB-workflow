@@ -33,6 +33,8 @@ CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_2_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 
+# distance_cutoff = 5
+
 # Set the path to auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "utils" / "resources")
 #preppdb_source = resources + '/preppdb.pl'
@@ -190,21 +192,37 @@ def energies (
             run([ "cp", cmip_inputs_source, cmip_inputs ], stdout=PIPE)
 
             # Select the first agent interface and extract it in a CMIP friendly pdb format
-            agent1_interface_name = agent1_name + '_interface'
-            agent1_interface_residue_indices = interaction['interface_1']
-            agent1_interface_cmip = selection2cmip(agent1_interface_name, agent1_interface_residue_indices, frame_structure, strong_bonds)
-
+            # agent1_interface_name = agent1_name + '_interface'
+            # agent1_interface_residue_indices = interaction['interface_1']
+            # agent1_interface_cmip = selection2cmip(agent1_interface_name, agent1_interface_residue_indices, frame_structure, strong_bonds)
             # Repeat the process with agent 2
-            agent2_interface_name = agent2_name + '_interface'
-            agent2_interface_residue_indices = interaction['interface_2']
-            agent2_interface_cmip = selection2cmip(agent2_interface_name, agent2_interface_residue_indices, frame_structure, strong_bonds)
+            # agent2_interface_name = agent2_name + '_interface'
+            # agent2_interface_residue_indices = interaction['interface_2']
+            # agent2_interface_cmip = selection2cmip(agent2_interface_name, agent2_interface_residue_indices, frame_structure, strong_bonds)
+
+            # To performe the analysis it is enought with picking residues in the interface and residues close to them
+            # Close residues are selected based in distance cutoff
+            # Select both interface and close residues together
+            # agent_cmip_files = []
+            # for agent in ['1','2']:
+            #     agent_name = agent1_name if agent == '1' else agent2_name
+            #     interface_name = agent_name + '_interface'
+            #     interface_residues = interaction['interface_' + agent]
+            #     interface_atom_indices = sum([ residue.atom_indices for residue in interface_residues ],[])
+            #     interface_selection = frame_structure.select_atom_indices(interface_atom_indices)
+            #     close_interface_selection_string = 'same resid as (within ' + str(distance_cutoff) + ' of (' + interface_selection.to_vmd() + '))'
+            #     close_interface_selection = frame_structure.select(close_interface_selection_string, syntax='vmd')
+            #     close_interface_residue_indices = frame_structure.get_selection_residue_indices(close_interface_selection)
+            #     close_interface_residues = [ frame_structure.residues[index] for index in close_interface_residue_indices ]
+            #     close_interface_cmip = selection2cmip(interface_name, close_interface_residues, frame_structure, strong_bonds)
+            #     agent_cmip_files.append(close_interface_cmip)
+            # # Get the filenames of the genereated 'cmip-friendly' pdb files
+            # agent1_close_cmip, agent2_close_cmip = agent_cmip_files
 
             # Set the CMIP box dimensions and densities to fit both the host and the guest
             # Box origin and size are modified in the cmip inputs
             # Values returned are only used for display / debug purposes
             box_origin, box_size = adapt_cmip_grid(agent1_cmip, agent2_cmip, cmip_inputs)
-            # DANI: Esto es experimental
-            #box_origin, box_size = adapt_cmip_grid(agent1_interface_cmip, agent2_interface_cmip, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
             print(' Calculating energies for ' + agent1_name + ' as host and ' + agent2_name + ' as guest')
@@ -215,13 +233,13 @@ def energies (
             agent2_residue_energies, agent2_atom_energies = get_cmip_energies(cmip_inputs, agent2_cmip, agent1_cmip, agent2_output_energy)
 
             # DANI: Usa esto para escribir los resultados de las energías por átomo
-            sample = {
-                'agent1': { 'energies': agent1_atom_energies, 'pdb': agent1_cmip },
-                'agent2': { 'energies': agent2_atom_energies, 'pdb': agent2_cmip },
-                'box': { 'origin': box_origin, 'size': box_size } 
-            }
-            with open('energies-sample.json', 'w') as file:
-                json.dump(sample, file)
+            # sample = {
+            #     'agent1': { 'energies': agent1_atom_energies, 'pdb': agent1_cmip },
+            #     'agent2': { 'energies': agent2_atom_energies, 'pdb': agent2_cmip },
+            #     'box': { 'origin': box_origin, 'size': box_size } 
+            # }
+            # with open('energies-sample.json', 'w') as file:
+            #     json.dump(sample, file)
 
             data.append({ 'agent1': agent1_residue_energies, 'agent2': agent2_residue_energies })
 
