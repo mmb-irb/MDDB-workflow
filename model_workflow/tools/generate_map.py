@@ -369,6 +369,7 @@ def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
 def get_uniprot_reference (uniprot_accession : str) -> dict:
     # Request Uniprot
     request_url = 'https://www.ebi.ac.uk/proteins/api/proteins/' + uniprot_accession
+    print('Requesting ' + request_url)
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
@@ -388,14 +389,16 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
     protein_name = protein_name_data['fullName']['value']
     # Get the gene names as a single string
     gene_names = []
-    for gene in parsed_response['gene']:
+    # WARNING: Some uniprot entries are missing gene names (e.g. P00718)
+    genes = parsed_response.get('gene', [])
+    for gene in genes:
         gene_name = gene.get('name', None)
         if not gene_name:
             gene_name = gene.get('orfNames', [])[0]
         if not gene_name:
             raise ValueError('The uniprot response for ' + uniprot_accession + ' has an unexpected format')
         gene_names.append(gene_name['value'])
-    gene_names = ', '.join(gene_names)
+    gene_names = ', '.join(gene_names) if len(gene_names) > 0 else None
     # Get the organism name
     organism = parsed_response['organism']['names'][0]['value']
     # Get the aminoacids sequence
@@ -454,4 +457,5 @@ def pdb_to_uniprot (pdb_id : str) -> List[str]:
             raise ValueError('Something went wrong with the PDB request: ' + request_url)
     # Get the uniprot accessions
     uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
+    print('References for PDB code ' + pdb_id + ': ' + ', '.join(uniprot_ids))
     return uniprot_ids
