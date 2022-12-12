@@ -110,6 +110,8 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
         for uniprot_id in uniprot_ids:
             # Build a new reference from the resulting uniprot
             reference, already_loaded = get_reference(uniprot_id)
+            if reference == None:
+                continue
             reference_sequences[reference['uniprot']] = reference['sequence']
             # Save the current whole reference object for later
             references[reference['uniprot']] = reference
@@ -370,6 +372,7 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
     # Request Uniprot
     request_url = 'https://www.ebi.ac.uk/proteins/api/proteins/' + uniprot_accession
     print('Requesting ' + request_url)
+    parsed_response = None
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
@@ -377,6 +380,10 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
     except urllib.error.HTTPError as error:
         if error.code == 400:
             raise ValueError('Something went wrong with the Uniprot request: ' + request_url)
+    # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
+    if parsed_response == None:
+        print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
+        return None
     # Get the full protein name
     protein_data = parsed_response['protein']
     protein_name_data = protein_data.get('recommendedName', None)
