@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 from pathlib import Path
 
@@ -26,16 +26,41 @@ import xmltodict
 # Set the name of the json file which will store the used reference objects
 references_filename = 'references.json'
 
+# Set a flag to represent a synthetic construct reference (i.e. no reference although it is protein)
+synthetic_construct_flag = 'sc'
+
 # Map the structure aminoacids sequences against the standard reference sequences
 # References are uniprot accession ids and they are optional
 # For each reference, align the reference sequence with the topology sequence
 # Chains which do not match any reference sequence will be blasted
 # Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
-def generate_map_online (structure : 'Structure', forced_references : List[str] = [], inputs : dict = None) -> dict:
+def generate_map_online (
+    structure : 'Structure',
+    forced_references : Optional[ Union[list,dict] ] = None,
+    pdb_ids : List[str] = []
+) -> dict:
+    # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
+    strict_references = type(forced_references) == dict
+    # Check the synthetic construct flag not to be passed when references are not strict
+    if not strict_references and synthetic_construct_flag in forced_references:
+        raise SystemExit('WRONG INPUT: The "synthetic construct" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"sc"})')
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
+    # Given a uniprot accession, get the reference object
+    # Try first asking to the MDposit database in case the reference exists already
+    # If not, retrieve UniProt data and build the reference object
+    # Return also a boolean to set if the reference already existed (True) or not (False)
+    def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
+        reference = references.get(uniprot_accession, None)
+        if reference:
+            return reference, True
+        reference = get_mdposit_reference(uniprot_accession)
+        if reference:
+            return reference, True
+        reference = get_uniprot_reference(uniprot_accession)
+        return reference, False
     # Import local references, in case the references json file already exists
     if os.path.exists(references_filename):
         references = import_references()
@@ -51,7 +76,12 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
     # For each input forced reference, get the reference sequence
     reference_sequences = {}
     if forced_references:
-        for uniprot_id in forced_references:
+        forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
+        for uniprot_id in forced_uniprot_ids:
+            # If instead of a uniprot id there is a 'synthetic construct' flag
+            # A synthetic construct does not have a reference sequence by definition so we skip this process
+            if uniprot_id == synthetic_construct_flag:
+                continue
             # If reference is already in the list (i.e. it has been imported) then skip this process
             reference = references.get(uniprot_id, None)
             if reference:
@@ -61,6 +91,8 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
             reference_sequences[uniprot_id] = reference['sequence']
             # Save the current whole reference object for later
             references[reference['uniprot']] = reference
+    # Save already tried alignments to not repeat the alignment further
+    tried_alignments = { structure_sequence['name']: [] for structure_sequence in protein_sequences }
     # Try to match all protein sequences with the available reference sequences
     # In case of match, objects in the 'protein_sequences' list are modified by adding the result
     # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
@@ -68,9 +100,42 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
         # Track each chain-reference alignment match and keep the score of successful alignments
         # Now for each structure sequence, align all reference sequences and keep the best alignment (if it meets the minimum)
         for structure_sequence in protein_sequences:
+            chain = structure_sequence['name']
+            chain_tried_alignments = tried_alignments[chain]
+            # In case references are forced per chain check if there is a reference for this chain and match according to this
+            if strict_references:
+                # Get the forced specific chain for this sequence, if any
+                forced_reference = forced_references.get(chain, None)
+                if forced_reference:
+                    # If the chain has a specific forced reference then we must align it just once
+                    # Skip this process in further matches
+                    if structure_sequence['match']['ref']:
+                        continue
+                    # In case the forced reference is the synthetic construct flag
+                    # Thus it has no reference sequence and we must not try to match it
+                    # Actually, any match would be accidental and not correct
+                    if forced_reference == synthetic_construct_flag:
+                        structure_sequence['match'] = { 'ref': synthetic_construct_flag }
+                        continue
+                    # Get the forced reference sequence and align it to the chain sequence in order to build the map
+                    reference_sequence = reference_sequences[forced_reference]
+                    print(' Aligning chain ' + chain + ' with ' + forced_reference + ' reference sequence')
+                    align_results = align(reference_sequence, structure_sequence['sequence'])
+                    # The align must match or we stop here and warn the user
+                    if not align_results:
+                        raise SystemExit('Forced reference ' + chain + ' -> ' + forced_reference + ' does not match in sequence')
+                    sequence_map, align_score = align_results
+                    reference = references[forced_reference]
+                    structure_sequence['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
+                    continue
             for uniprot_id, reference_sequence in reference_sequences.items():
+                # If this alignment has been tried already then skip it
+                if uniprot_id in chain_tried_alignments:
+                    continue
                 # Align the structure sequence with the reference sequence
+                print(' Aligning chain ' + chain + ' with ' + uniprot_id + ' reference sequence')
                 align_results = align(reference_sequence, structure_sequence['sequence'])
+                tried_alignments[chain].append(uniprot_id) # Save the alignment try, no matter if it works or not
                 if not align_results:
                     continue
                 # In case we have a valid alignment, check the alignment score is better than the current reference score (if any)
@@ -82,7 +147,7 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
                 # If the alignment is better then we impose the new reference
                 structure_sequence['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
         # Sum up the current matching
-        print('Reference summary:')
+        print(' Reference summary:')
         for structure_sequence in structure_sequences:
             name = structure_sequence['name']
             match = structure_sequence.get('match', None)
@@ -92,6 +157,9 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
             reference = structure_sequence['match'].get('ref', None)
             if not reference:
                 print('   ' + name + ' -> ¿?')
+                continue
+            if reference == synthetic_construct_flag:
+                print('   ' + name + ' -> Synthetic construct')
                 continue
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
@@ -103,7 +171,6 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
         return format_topology_data(structure, protein_sequences)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot codes associated to the pdb codes, if any
-    pdb_ids = inputs.get('pdbIds', [])
     for pdb_id in pdb_ids:
         # Ask PDB
         uniprot_ids = pdb_to_uniprot(pdb_id)
@@ -139,39 +206,19 @@ def generate_map_online (structure : 'Structure', forced_references : List[str] 
             return format_topology_data(structure, protein_sequences)
     raise RuntimeError('The BLAST failed to find a matching reference sequence for at least one protein sequence')
 
-# Try to match all protein sequences with the available reference sequences
-# In case of match, objects in the 'protein_sequences' list are modified by adding the result
-# Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-def match_sequences (protein_sequences : list, reference_sequences : dict) -> bool:
-    # Track each chain-reference alignment match and keep the score of successful alignments
-    # Now for each structure sequence, align all reference sequences and keep the best alignment (if it meets the minimum)
-    for structure_sequence in protein_sequences:
-        for uniprot_id, reference_sequence in reference_sequences.items():
-            # Align the structure sequence with the reference sequence
-            align_results = align(reference_sequence, structure_sequence['sequence'])
-            if not align_results:
-                continue
-            # In case we have a valid alignment, check the alignment score is better than the current reference score (if any)
-            sequence_map, align_score = align_results
-            current_reference = structure_sequence['match']
-            if current_reference['score'] > align_score:
-                continue
-            reference = references[uniprot_id]
-            # If the alignment is better then we impose the new reference
-            structure_sequence['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
-    # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-    return all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
-
 # Export reference objects data to a json file
 # This file is used by the loader to load new references to the database
 # Note that all references are saved to this json file, even those which are already in the database
 # It is the loader who is the responsible to check which references must be loaded and which ones are loaded already
+# Note that mapping data (i.e. which residue belongs to each reference) is not saved
 def export_references (mapping_data : list):
     final_references = []
     final_uniprots = []
     for data in mapping_data:
         match = data['match']
         ref = match['ref']
+        if ref == synthetic_construct_flag:
+            continue
         uniprot = ref['uniprot']
         if uniprot in final_uniprots:
             continue
@@ -206,15 +253,23 @@ def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
         # Get the reference index
         # Note that several matches may belong to the same reference and thus have the same index
         reference = match['ref']
+        # If we have the synthetic construct flag
+        if reference == synthetic_construct_flag:
+            if synthetic_construct_flag not in reference_ids:
+                reference_ids.append(synthetic_construct_flag)
+            reference_index = reference_ids.index(synthetic_construct_flag)
+            for residue_index in data['residue_indices']:
+                residue_reference_indices[residue_index] = reference_index
+            continue
+        # If we have a regular uniprot id
         uniprot_id = reference['uniprot']
         if uniprot_id not in reference_ids:
             reference_ids.append(reference['uniprot'])
         reference_index = reference_ids.index(uniprot_id)
-        residue_indices = data['residue_indices']
-        for r, residue_number in enumerate(match['map']):
+        # Set the topology reference number and index for each residue
+        for residue_index, residue_number in zip(data['residue_indices'], match['map']):
             if residue_number == None:
                 continue
-            residue_index = residue_indices[r]
             residue_reference_indices[residue_index] = reference_index
             residue_reference_numbers[residue_index] = residue_number
     # If there are not references at the end then set all fields as None, in order to save space
@@ -264,7 +319,8 @@ def get_chain_sequences (structure : 'Structure') -> list:
 # which match each new sequence residues indexes (indexes)
 # Return also the score of the alignment
 # Return None when there is not valid alignment at all
-def align (ref_sequence : str, new_sequence : str) -> Optional[ Tuple[list, float] ]:
+# Set verbose = True to see a visual summary of the sequence alignments in the logs
+def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Optional[ Tuple[list, float] ]:
 
     #print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
 
@@ -289,11 +345,11 @@ def align (ref_sequence : str, new_sequence : str) -> Optional[ Tuple[list, floa
     # Output format example: '----VNLTT'
     best_alignment = alignments[0]
     aligned_sequence = best_alignment[1]
-    print(format_alignment(*alignments[0]))
     score = alignments[0][2]
     # WARNING: Do not use 'aligned_sequence' length here since it has the total sequence length
     normalized_score = score / len(new_sequence)
-    print('Normalized score: ' + str(normalized_score))
+    if verbose:
+        print(format_alignment(*alignments[0]))
 
     # If the normalized score does not reaches the minimum we consider the alignment is not valid
     # It may happen when the reference goes for a specific chain but we must map all chains
@@ -301,8 +357,12 @@ def align (ref_sequence : str, new_sequence : str) -> Optional[ Tuple[list, floa
     # Non maching sequence may return a 0.1-0.3 normalized score
     # Matching sequence may return >4 normalized score
     if normalized_score < 1:
-        print('Not valid alignment')
+        print('    Not valid alignment')
         return None
+
+    # Tell the user about the success
+    beautiful_normalized_score = round(normalized_score * 100) / 100
+    print('    Valid alignment -> Normalized score = ' + str(beautiful_normalized_score))
 
     # Match each residue
     aligned_mapping = []
@@ -361,25 +421,26 @@ def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in the database then we stop here
     except urllib.error.HTTPError as error:
+        # If the uniprot accession is not yet in the MDposit references then return None
         if error.code == 404:
             return None
         else:
-            raise ValueError('Something went wrong with the MDposit request: ' + request_url)
+            print('Error when requesting ' + request_url)
+            raise ValueError('Something went wrong with the MDposit request (error ' + str(error.code) + ')')
     return parsed_response
 
 # Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database
 def get_uniprot_reference (uniprot_accession : str) -> dict:
     # Request Uniprot
     request_url = 'https://www.ebi.ac.uk/proteins/api/proteins/' + uniprot_accession
-    print('Requesting ' + request_url)
     parsed_response = None
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in UniProt then the id is not valid
     except urllib.error.HTTPError as error:
-        if error.code == 400:
-            raise ValueError('Something went wrong with the Uniprot request: ' + request_url)
+        print('Error when requesting ' + request_url)
+        raise ValueError('Something went wrong with the Uniprot request (error ' + str(error.code) + ')')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
     if parsed_response == None:
         print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
@@ -437,17 +498,6 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
         'domains': domains
     }
 
-# Given a uniprot accession, get the reference object
-# Try first asking to the MDposit database in case the reference exists already
-# If not, retrieve UniProt data and build the reference object
-# Return also a boolean to set if the reference already existed (True) or not (False)
-def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
-    reference = get_mdposit_reference(uniprot_accession)
-    if reference:
-        return reference, True
-    reference = get_uniprot_reference(uniprot_accession)
-    return reference, False
-
 # Given a pdb Id, get its uniprot id
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
 def pdb_to_uniprot (pdb_id : str) -> List[str]:
@@ -464,5 +514,5 @@ def pdb_to_uniprot (pdb_id : str) -> List[str]:
             raise ValueError('Something went wrong with the PDB request: ' + request_url)
     # Get the uniprot accessions
     uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
-    print('References for PDB code ' + pdb_id + ': ' + ', '.join(uniprot_ids))
+    print(' References for PDB code ' + pdb_id + ': ' + ', '.join(uniprot_ids))
     return uniprot_ids

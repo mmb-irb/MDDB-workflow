@@ -371,6 +371,7 @@ input_interactions = Dependency(get_input, {'name': 'interactions'})
 ligands = Dependency(get_input, {'name': 'ligands'})
 membranes = Dependency(get_input, {'name': 'membranes'})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
+pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
 
 # Define intermediate tools and files
 
@@ -509,7 +510,7 @@ charges = Dependency(get_charges, {
 residues_map = Dependency(generate_map_online, {
     'structure': structure,
     'forced_references': forced_references,
-    'inputs': inputs,
+    'pdb_ids': pdb_ids,
 }, 'map')
 
 # Prepare the metadata output file
