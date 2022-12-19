@@ -458,13 +458,13 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
     # Get the gene names as a single string
     gene_names = []
     # WARNING: Some uniprot entries are missing gene names (e.g. P00718)
+    # WARNING: Some uniprot entries have names in non-canonical keys (e.g. orfNames, olnNames)
+    #       These names are not shown event in the uniprot web page so we also skip them
     genes = parsed_response.get('gene', [])
     for gene in genes:
         gene_name = gene.get('name', None)
         if not gene_name:
-            gene_name = gene.get('orfNames', [])[0]
-        if not gene_name:
-            raise ValueError('The uniprot response for ' + uniprot_accession + ' has an unexpected format')
+            continue
         gene_names.append(gene_name['value'])
     gene_names = ', '.join(gene_names) if len(gene_names) > 0 else None
     # Get the organism name
