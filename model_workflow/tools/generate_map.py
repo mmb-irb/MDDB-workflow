@@ -430,7 +430,7 @@ def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
     return parsed_response
 
 # Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database
-def get_uniprot_reference (uniprot_accession : str) -> dict:
+def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     # Request Uniprot
     request_url = 'https://www.ebi.ac.uk/proteins/api/proteins/' + uniprot_accession
     parsed_response = None
@@ -439,6 +439,9 @@ def get_uniprot_reference (uniprot_accession : str) -> dict:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in UniProt then the id is not valid
     except urllib.error.HTTPError as error:
+        if error.code == 404:
+            print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
+            return None
         print('Error when requesting ' + request_url)
         raise ValueError('Something went wrong with the Uniprot request (error ' + str(error.code) + ')')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
