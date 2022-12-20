@@ -480,9 +480,12 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
         if feature['type'] != "CHAIN":
             continue
         name = feature['description']
-        comments = [ comment for comment in parsed_response['comments'] if name == comment.get('molecule', None) ]
-        comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
-        description = '\n\n'.join(comment_text)
+        description = None
+        comments_data = parsed_response.get('comments', None)
+        if comments_data:
+            comments = [ comment for comment in parsed_response['comments'] if name == comment.get('molecule', None) ]
+            comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
+            description = '\n\n'.join(comment_text)
         domains.append({
             'name': name,
             'description': description,
