@@ -14,7 +14,6 @@ import json
 from typing import Optional, Union, List
 
 # Import local tools
-from model_workflow.tools.vmd_processor import vmd_processor
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
@@ -375,17 +374,6 @@ pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
 
 # Define intermediate tools and files
 
-# Process the topology and or trajectory files using VMD
-# Files are converted to supported formats and trajectory pieces are merged into a single file
-# In addition, some irregularities in the topology may be fixed by VMD
-# If the output topology and trajectory files already exists it is assumed they are already processed
-vmd = Dependency(vmd_processor, {
-    'input_topology_filename': original_topology_filename,
-    'input_trajectory_filenames': original_trajectory_filenames,
-    'output_topology_filename': OUTPUT_pdb_filename,
-    'output_trajectory_filename': OUTPUT_trajectory_filename,
-}, 'vmd')
-
 # Preprocessing
 # This is equivalent to running 'vmd', 'imaging' and 'corrector' together
 process_input_files = Dependency(process_input_files, {
@@ -533,7 +521,6 @@ topology_filename = File(OUTPUT_topology_filename, generate_topology, {
 
 # Pack up all tools which may be called directly from the console
 tools = [
-    vmd,
     filtering,
     imaging,
     corrector,

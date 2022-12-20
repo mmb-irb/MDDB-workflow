@@ -4,7 +4,6 @@ from typing import Optional
 from mdtoolbelt.structures import Structure
 
 # Import local tools
-from model_workflow.tools.vmd_processor import vmd_chainer
 from model_workflow.tools.get_safe_bonds import do_bonds_match, get_safe_bonds, get_safe_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 
@@ -71,13 +70,8 @@ def topology_corrector (
     if len(chains) == 1 and ( chains[0].name == ' ' or chains[0].name == 'X' ):
         print('WARNING: chains are missing and they will be added')
 
-        # Use VMD to set chains according to fragments
-        vmd_chainer(input_pdb_filename, input_pdb_filename)
-
-        # Import the new pdb file and parse it again
-        structure = Structure.from_pdb_file(input_pdb_filename)
-        # Redefine chains as well
-        chains = structure.chains
+        # Run the chainer
+        structure.chainer()
 
     else:
         # In case there are some missing chains
