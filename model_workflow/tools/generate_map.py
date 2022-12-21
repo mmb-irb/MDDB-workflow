@@ -476,7 +476,9 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     sequence = parsed_response['sequence']['sequence']
     # Get interesting regions to be highlighted in the client
     domains = []
-    for feature in parsed_response['features']:
+    # WARNING: Some uniprot entries are missing features (e.g. O27908)
+    features = parsed_response.get('features', [])
+    for feature in features:
         if feature['type'] != "CHAIN":
             continue
         name = feature['description']
