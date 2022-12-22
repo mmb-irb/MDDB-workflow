@@ -133,6 +133,7 @@ def generate_map_online (
                 if uniprot_id in chain_tried_alignments:
                     continue
                 # Align the structure sequence with the reference sequence
+                # NEVER FORGET: This system relies on the fact that topology chains are not repeated
                 print(' Aligning chain ' + chain + ' with ' + uniprot_id + ' reference sequence')
                 align_results = align(reference_sequence, structure_sequence['sequence'])
                 tried_alignments[chain].append(uniprot_id) # Save the alignment try, no matter if it works or not
@@ -285,17 +286,6 @@ def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
     }
     return residues_map
 
-# Align a reference aminoacid sequence with each chain sequence in a topology
-# NEVER FORGET: This system relies on the fact that topology chains are not repeated
-def map_sequence (ref_sequence : str, structure : 'Structure') -> list:
-    sequences = get_chain_sequences(structure)
-    mapping = []
-    for s in sequences:
-        sequence = sequences[s]
-        sequence_map = align(ref_sequence, sequence)
-        mapping += sequence_map
-    return mapping
-
 # Get each chain name and aminoacids sequence in a topology
 # Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]
 def get_chain_sequences (structure : 'Structure') -> list:
@@ -391,7 +381,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
 # Note that we are blasting against UniProtKB / Swiss-Prot so results will always be valid UniProt accessions
 # WARNING: This always means results will correspond to curated entries only
 #   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
-def blast (sequence : str) -> List[str]:
+def blast (sequence : str) -> str:
     print('Throwing blast...')
     result = NCBIWWW.qblast(
         program = "blastp",
