@@ -205,7 +205,8 @@ def generate_map_online (
         if match_sequences():
             export_references(protein_sequences)
             return format_topology_data(structure, protein_sequences)
-    raise RuntimeError('The BLAST failed to find a matching reference sequence for at least one protein sequence')
+    print('WARNING: The BLAST failed to find a matching reference sequence for at least one protein sequence')
+    return format_topology_data(structure, protein_sequences)
 
 # Export reference objects data to a json file
 # This file is used by the loader to load new references to the database
@@ -254,6 +255,9 @@ def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
         # Get the reference index
         # Note that several matches may belong to the same reference and thus have the same index
         reference = match['ref']
+        # If reference is missing at this point then it means we failed to find a matching reference
+        if reference == None:
+            continue
         # If we have the synthetic construct flag
         if reference == synthetic_construct_flag:
             if synthetic_construct_flag not in reference_ids:
