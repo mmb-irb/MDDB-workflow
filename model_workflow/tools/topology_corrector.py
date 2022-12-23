@@ -14,6 +14,7 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frame
 # * Wrong bonds: A bond is formed / broken because its 2 atoms are too close / far in the
 #   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are fine
 # * Missing chains -> Chains are added through VMD
+# * Splitted chain -> Kill the process and ward the user. This should never happen by just reading a pdb, but after correcting
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
@@ -83,7 +84,25 @@ def topology_corrector (
             unlettered_chain.name = new_letter
             modified = True
             print('WARNING: Some missing chains -> Now chain ' + new_letter)
-        
+
+    # ------------------------------------------------------------------------------------------
+    # Splitted chains --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Check if chains are splitted. If so, stop here and warn the user
+    checked_chains = []
+    last_chain = None
+    for atom in structure.atoms:
+        chain_name = atom.chain.name
+        if chain_name == last_chain:
+            continue
+        last_chain = chain_name
+        if chain_name in checked_chains:
+            # Note that this will never happen because of the pdb itself, duplicated chains are handled further
+            # This will only happen if chains were missing and guessed, and there is something very wrong in the structure
+            # Check fragments with the VMD and searh for wrong bonds
+            raise SystemExit('ERROR: We are having splitted chains (e.g. ' + chain_name + ')')
+        checked_chains.append(chain_name)
 
     # ------------------------------------------------------------------------------------------
     # Repeated chains --------------------------------------------------------------------------
