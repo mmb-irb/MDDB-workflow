@@ -175,6 +175,8 @@ def generate_map_online (
     for pdb_id in pdb_ids:
         # Ask PDB
         uniprot_ids = pdb_to_uniprot(pdb_id)
+        if uniprot_ids == None:
+            continue 
         for uniprot_id in uniprot_ids:
             # Build a new reference from the resulting uniprot
             reference, already_loaded = get_reference(uniprot_id)
@@ -502,7 +504,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 
 # Given a pdb Id, get its uniprot id
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
-def pdb_to_uniprot (pdb_id : str) -> List[str]:
+def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
     # Request the MMB service to retrieve pdb data
     request_url = 'https://mmb.irbbarcelona.org/api/pdb/' + pdb_id + '/entry'
     try:
@@ -511,6 +513,7 @@ def pdb_to_uniprot (pdb_id : str) -> List[str]:
     # If the accession is not found in the PDB then we can stop here
     except urllib.error.HTTPError as error:
         if error.code == 404:
+            print(' PDB code ' + pdb_id + ' not found')
             return None
         else:
             raise ValueError('Something went wrong with the PDB request: ' + request_url)
