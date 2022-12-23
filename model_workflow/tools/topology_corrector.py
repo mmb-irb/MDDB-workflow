@@ -1,4 +1,5 @@
 from typing import Optional
+from os import remove
 
 # Import mdtoolbelt tools
 from mdtoolbelt.structures import Structure
@@ -59,6 +60,8 @@ def topology_corrector (
         # Set all coordinates in the main structure by copying the safe bonds frame coordinates
         for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
             atom_1.coords = atom_2.coords
+        # Remove the safe bonds frame since it is not requird anymore
+        remove(safe_bonds_frame_filename)
 
     # ------------------------------------------------------------------------------------------
     # Missing chains --------------------------------------------------------------------------
