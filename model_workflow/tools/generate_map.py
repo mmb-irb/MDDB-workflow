@@ -172,23 +172,24 @@ def generate_map_online (
         return format_topology_data(structure, protein_sequences)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot codes associated to the pdb codes, if any
-    for pdb_id in pdb_ids:
-        # Ask PDB
-        uniprot_ids = pdb_to_uniprot(pdb_id)
-        if uniprot_ids == None:
-            continue 
-        for uniprot_id in uniprot_ids:
-            # Build a new reference from the resulting uniprot
-            reference, already_loaded = get_reference(uniprot_id)
-            if reference == None:
-                continue
-            reference_sequences[reference['uniprot']] = reference['sequence']
-            # Save the current whole reference object for later
-            references[reference['uniprot']] = reference
-    # If we have every protein chain matched with a reference already then we stop here
-    if match_sequences():
-        export_references(protein_sequences)
-        return format_topology_data(structure, protein_sequences)
+    if len(pdb_ids) > 0:
+        for pdb_id in pdb_ids:
+            # Ask PDB
+            uniprot_ids = pdb_to_uniprot(pdb_id)
+            if uniprot_ids == None:
+                continue 
+            for uniprot_id in uniprot_ids:
+                # Build a new reference from the resulting uniprot
+                reference, already_loaded = get_reference(uniprot_id)
+                if reference == None:
+                    continue
+                reference_sequences[reference['uniprot']] = reference['sequence']
+                # Save the current whole reference object for later
+                references[reference['uniprot']] = reference
+        # If we have every protein chain matched with a reference already then we stop here
+        if match_sequences():
+            export_references(protein_sequences)
+            return format_topology_data(structure, protein_sequences)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, we run a blast with each orphan chain sequence
     for structure_sequence in protein_sequences:
@@ -402,7 +403,6 @@ def blast (sequence : str) -> str:
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
     accession = result['Hit_accession']
     print('Result: ' + accession)
-    print(result['Hit_def'])
     return accession
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
