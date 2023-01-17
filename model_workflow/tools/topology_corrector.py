@@ -15,7 +15,7 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frame
 # * Wrong bonds: A bond is formed / broken because its 2 atoms are too close / far in the
 #   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are fine
 # * Missing chains -> Chains are added through VMD
-# * Splitted chain -> Kill the process and ward the user. This should never happen by just reading a pdb, but after correcting
+# * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
@@ -25,8 +25,9 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frame
 def topology_corrector (
     input_pdb_filename: str,
     output_topology_filename: str,
-    input_trajectory_filename : Optional[str] = None,
-    output_trajectory_filename : Optional[str] = None):
+    input_trajectory_filename : Optional[str],
+    output_trajectory_filename : Optional[str],
+    register : dict):
 
     print('----- Correcting topology -----')
 
@@ -115,7 +116,7 @@ def topology_corrector (
         modified = True
 
     # ------------------------------------------------------------------------------------------
-    # Repeated residues ------------------------------------------------------------------------
+    # Splitted residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     if structure.check_repeated_residues(fix_residues=True, display_summary=True):
@@ -123,6 +124,12 @@ def topology_corrector (
 
         # Sort trajectory coordinates in case atoms were sorted
         if input_trajectory_filename and structure.trajectory_atom_sorter:
+            # Save a warning in the register
+            register['warnings'].append('Atoms have been sorted to solve splitted residues')
+            # Save the new order in the register
+            # DANI: Dado que no reordenamos las topologías orignales (muchos formatos, mucho marrón) hay que guardar esto
+            # DANI: Es para curarnos en salud, pero lo suyo sería poder exportar topologías de la API que ya tengan los datos bien
+            register['new_atom_order'] = structure.new_atom_order
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
             structure.trajectory_atom_sorter(input_pdb_filename, input_trajectory_filename, output_trajectory_filename)
 

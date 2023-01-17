@@ -30,6 +30,7 @@ from model_workflow.tools.get_summarized_trajectory import get_summarized_trajec
 from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
+from model_workflow.tools.register import start_register, save_register
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -372,6 +373,10 @@ membranes = Dependency(get_input, {'name': 'membranes'})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
 pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
 
+# Set the register here
+# Note that register is called after input have been fully defined
+register = Dependency(start_register, { 'inputs': inputs })
+
 # Define intermediate tools and files
 
 # Preprocessing
@@ -385,6 +390,7 @@ process_input_files = Dependency(process_input_files, {
     'preprocess_protocol': preprocess_protocol,
     'translation': translation,
     'filter_selection' : filter_selection,
+    'register': register,
 })
 
 # Main topology and trajectory files
@@ -715,11 +721,12 @@ def workflow (
     # Reset all dependencies
     # This is useful in case we run this function more than once without reseting the module
     # Note that this script was originally called only from argparse so this was not necessary
-    dependencies = [ var_value for var_name, var_value in dict(globals()).items() if isinstance(var_value, Dependency) ]
-    for dependecy in dependencies:
-        dependecy._value = None
+    for var_value in dict(globals()).values():
+        if isinstance(var_value, Dependency):
+            var_value._value = None
 
     # Update the inputs variable with all current function arguments
+    # WARNING: Do not declare any variable over this line or it will be included in the inputs and thus in the register
     inputs.update(locals())
 
     # Load the inputs file
@@ -730,6 +737,7 @@ def workflow (
         original_topology_filename.value
         original_trajectory_filenames.value
         original_charges_filename.value
+        # Note that there is no need to save the register if we just downloaded data
         return
 
     # Run tools which must be run always
@@ -738,6 +746,8 @@ def workflow (
 
     # If setup is passed as True then exit as soon as the setup is finished
     if setup:
+        # Save the register
+        save_register(register.value)
         return
 
     # Run the requested analyses
@@ -758,6 +768,9 @@ def workflow (
 
     # Remove gromacs backups
     remove_trash()
+
+    # Save the register
+    save_register(register.value)
 
     sys.stdout.write("Done!\n")
 

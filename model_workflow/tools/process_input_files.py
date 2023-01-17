@@ -22,7 +22,8 @@ def process_input_files (
     output_trajectory_filename : str,
     preprocess_protocol : int,
     translation: list,
-    filter_selection : str
+    filter_selection : str,
+    register : dict,
     ) -> None:
 
     # Convert input topology and trajectories to output topology and trajectory
@@ -66,7 +67,13 @@ def process_input_files (
                       output_topology_filename, output_trajectory_filename, preprocess_protocol, translation)
 
     # Examine and correct the topology file
-    topology_corrector(output_topology_filename, output_topology_filename, output_trajectory_filename, output_trajectory_filename)
+    topology_corrector(
+        output_topology_filename,
+        output_topology_filename,
+        output_trajectory_filename,
+        output_trajectory_filename,
+        register
+    )
 
 # Find out if there is any file with a supported charges format in the current directory
 # In that case, return the first match
