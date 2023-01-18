@@ -108,10 +108,7 @@ def filter_atoms (
 
     # Remove the index file in case it was created
     if os.path.exists(index_filename):
-        run([
-            "rm",
-            index_filename,
-        ], stdout=PIPE).stdout.decode()
+        os.remove(index_filename)
 
 # Set the pytraj mask to filter the desired atoms from a specific topology
 def get_filter_mask (source_topology_filename : str, filter_selection : str) -> str:

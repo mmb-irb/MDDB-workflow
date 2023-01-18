@@ -86,10 +86,7 @@ def rmsds(
             }
             output_analysis.append(data)
             # Remove the analysis xvg file since it is not required anymore
-            run([
-                "rm",
-                rmsd_analysis,
-            ], stdout=PIPE).stdout.decode()
+            os.remove(rmsd_analysis)
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
@@ -198,7 +195,4 @@ def rmsd_check (
         previous = value
 
     # Remove the test xvg file since it is not required anymore
-    run([
-        "rm",
-        test_filename,
-    ], stdout=PIPE).stdout.decode()
+    os.remove(test_filename)

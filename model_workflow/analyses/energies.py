@@ -17,6 +17,7 @@
 
 # Imports libraries
 import os
+from shutil import copyfile
 from pathlib import Path
 import re
 import numpy
@@ -189,7 +190,7 @@ def energies (
             # Note than modified inputs file is not conserved along frames
             # Structures may change along trajectory thus requiring a different grid size
             cmip_inputs = energies_folder + '/cmip.in'
-            run([ "cp", cmip_inputs_source, cmip_inputs ], stdout=PIPE)
+            copyfile(cmip_inputs_source, cmip_inputs)
 
             # Select the first agent interface and extract it in a CMIP friendly pdb format
             # agent1_interface_name = agent1_name + '_interface'
@@ -243,15 +244,6 @@ def energies (
 
             data.append({ 'agent1': agent1_residue_energies, 'agent2': agent2_residue_energies })
 
-            # Delete current agent pdb files before going for the next interaction
-            # run([
-            #     "rm",
-            #     agent1_cmip,
-            #     agent2_cmip,
-            #     agent1_output_energy,
-            #     agent2_output_energy,
-            # ], stdout=PIPE).stdout.decode()
-
             # Erase the 2 previous log lines
             print(ERASE_2_PREVIOUS_LINES)
 
@@ -298,10 +290,7 @@ def energies (
         json.dump({'data': output_analysis}, file)
 
     # Finally remove the reduced topology
-    logs = run([
-        "rm",
-        energies_structure_filename,
-    ], stdout=PIPE).stdout.decode()
+    os.remove(energies_structure_filename)
 
 # Given a topology (e.g. pdb, prmtop), extract the atom elements in a CMIP friendly format
 # Hydrogens bonded to carbons remain as 'H'
@@ -489,10 +478,7 @@ def adapt_cmip_grid (agent1_cmip_pdb : str, agent2_cmip_pdb : str, cmip_inputs :
             file.write(line)
 
     # Delete the 'ckeckonly' file
-    run([
-        "rm",
-        cmip_checkonly_output,
-    ], stdout=PIPE).stdout.decode()
+    os.remove(cmip_checkonly_output)
 
     # Calculate the resulting box origin and size and return both values
     # These values are used for display / debug purposes only

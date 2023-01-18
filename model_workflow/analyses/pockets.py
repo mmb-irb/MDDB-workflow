@@ -87,7 +87,7 @@ def pockets (
         logs = run([
             "mkdir",
             mdpocket_folder,
-        ], stdout=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
     # Run the mdpocket analysis to find new pockets
     mdpocket_output = mdpocket_folder + '/mdpout'
@@ -108,7 +108,7 @@ def pockets (
             pockets_topology,
             "-o",
             mdpocket_output,
-        ], stdout=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
     # Read and harvest the gird file
     with open(grid_filename,'r') as file:
@@ -392,7 +392,7 @@ def pockets (
                 pocket_output,
                 "--selected_pocket",
                 new_pdb_filename,
-            ], stdout=PIPE).stdout.decode()
+            ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
         # Mine data from the mdpocket 'descriptors' output file
         descriptors_data = {}

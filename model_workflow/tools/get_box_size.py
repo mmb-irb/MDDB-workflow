@@ -68,10 +68,7 @@ def get_box_size(
           str(boxsizey) + ',' + str(boxsizez) + ')')
 
     # Remove the box analysis
-    run([
-        "rm",
-        box_analysis,
-    ], stdout=PIPE).stdout.decode()
+    os.remove(box_analysis)
 
     # Return gromacs logs
     return (boxsizex, boxsizey, boxsizez)

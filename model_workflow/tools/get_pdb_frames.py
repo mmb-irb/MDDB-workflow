@@ -2,6 +2,7 @@ from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 
+import os
 from subprocess import run, PIPE, Popen
 import math
 from typing import Optional
@@ -54,10 +55,7 @@ def get_pdb_frames (
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
             yield current_frame
             # Delete current frame file before going for the next frame
-            run([
-                "rm",
-                current_frame,
-            ], stdout=PIPE).stdout.decode()
+            os.remove(current_frame)
 
     return frames_generator(), frames_step, frames_count
 
@@ -141,10 +139,7 @@ def get_pdb_frames_gromacs (
             yield current_frame
 
             # Delete current frame files before going for the next frame
-            run([
-                "rm",
-                frames_ndx,
-                current_frame,
-            ], stdout=PIPE).stdout.decode()
+            os.remove(frames_ndx)
+            os.remove(current_frame)
 
     return frames_generator(), frames_step, frames_count

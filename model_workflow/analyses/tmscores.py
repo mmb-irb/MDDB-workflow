@@ -107,10 +107,7 @@ def tmscores (
             tmscore = tmscoring.get_tm(grouped_reference, filtered_frame)
             tmscores.append(tmscore)
 
-            run([
-                "rm",
-                filtered_frame,
-            ], stdout=PIPE).stdout.decode()
+            os.remove(filtered_frame)
 
         # Get a standarized reference name
         reference_name = reference[0:-4].lower()
@@ -122,10 +119,7 @@ def tmscores (
         }
         output_analysis.append(data)
 
-        run([
-            "rm",
-            grouped_reference,
-        ], stdout=PIPE).stdout.decode()
+        os.remove(grouped_reference)
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:

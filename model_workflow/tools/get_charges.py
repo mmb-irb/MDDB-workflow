@@ -94,13 +94,14 @@ def get_tpr_charges (input_charges_filename : str) -> list:
 def get_tpr_charges_manual (input_charges_filename : str) -> list:
     charges = []
     # Read the tpr file making a 'dump'
-    readable_tpr = Popen([
+    process = Popen([
         "gmx",
         "dump",
         "-s",
         input_charges_filename,
         "-quiet"
-    ], stdout=PIPE).stdout
+    ], stdout=PIPE, stderr=PIPE)
+    readable_tpr = process.stdout
     # Mine the atomic charges
     for line in readable_tpr:
         line = line.decode()
@@ -112,6 +113,8 @@ def get_tpr_charges_manual (input_charges_filename : str) -> list:
         if search:
             charges.append(float(search[1]))
     if len(charges) == 0:
+        error_logs = process.stderr.decode()
+        print(error_logs)
         raise SystemExit('Charges extraction from tpr file has failed')
     return charges
 
