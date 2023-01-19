@@ -22,27 +22,12 @@ def rmsds(
     average_structure_filename : str,
     structure : 'Structure',
     selections : List[str] = ['protein', 'nucleic'],
-    skip_checkings : bool = False,
     ):
 
     # VMD selection syntax
     parsed_selections = [ structure.select(selection, syntax='vmd') for selection in selections ]
 
     rmsd_references = [first_frame_filename, average_structure_filename]
-
-    # First of all, run an RMSd for the whole trajectory and check there are no sudden changes
-    # This RMSd is not saved, but this is only a test to check the inegrity of the simulation
-    # Note that it makes no difference which reference is used here
-    # Atoms used for this test are the sum of all selections
-    if not skip_checkings:
-        non_empty_parsed_selections = [ parsed_selection for parsed_selection in parsed_selections if parsed_selection ]
-        if len(non_empty_parsed_selections) == 0:
-            print('WARNING: There are not atoms to be analyzed for the RMSD analysis')
-            return
-        overall_selection = non_empty_parsed_selections[0]
-        for parsed_selection in non_empty_parsed_selections[1:-1]:
-            overall_selection = overall_selection.merge(parsed_selection)
-        rmsd_check(rmsd_references[0], input_trajectory_filename, overall_selection)
 
     # The start will be always 0 since we start with the first frame
     start = 0
@@ -136,63 +121,3 @@ def rmsd (
 
     # Remove the ndx file
     os.remove(ndx_filename)
-
-# Look for sudden raises of RMSd values from one frame to another
-def rmsd_check (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    check_selection : 'Selection'
-    ):
-
-    print('Checking trajectory integrity')
-
-    # Convert the selection to a ndx file gromacs can read
-    selection_name = 'check_selection'
-    ndx_selection = check_selection.to_ndx(selection_name)
-    ndx_filename = '.rmsd.ndx'
-    with open(ndx_filename, 'w') as file:
-        file.write(ndx_selection)
-
-    # Set the name for the output of the test rmsd
-    test_filename = 'test.rmsd.xvg'
-
-    # Run Gromacs
-    p = Popen([
-        "echo",
-        selection_name, # Select group for least squares fit
-        selection_name, # Select group for RMSD calculation
-    ], stdout=PIPE)
-    process = run([
-        "gmx",
-        "rms",
-        "-s",
-        input_topology_filename,
-        "-f",
-        input_trajectory_filename,
-        '-o',
-        test_filename,
-        '-n',
-        ndx_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    output_logs = process.stdout.decode()
-    p.stdout.close()
-
-    # If the output does not exist at this point it means something went wrong with gromacs
-    if not os.path.exists(test_filename):
-        print(output_logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with GROMACS at the checking')
-
-    # Read the output and do the check
-    test = xvg_parse(test_filename, ['Times', 'Values'])
-    values = test['Values']
-    previous = values[0]
-    for i, value in enumerate(values):
-        if abs(value - previous) > 1:
-            raise ValueError('There is something wrong with RMSd values. Check frame ' + str(i))
-        previous = value
-
-    # Remove the test xvg file since it is not required anymore
-    os.remove(test_filename)

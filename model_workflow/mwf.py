@@ -46,6 +46,7 @@ from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
+from model_workflow.analyses.rmsd_check import check_sudden_jumps
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -547,7 +548,6 @@ analyses = [
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
         'structure': structure,
-        'skip_checkings': skip_checkings,
     }, 'rmsds'),
     # Here we set a small frames limit since this anlaysis is a bit slow
     File(OUTPUT_tmscores_filename, tmscores, {
@@ -743,6 +743,11 @@ def workflow (
     # Run tools which must be run always
     # They better be fast
     process_input_files.value
+
+    # Run some checkings
+    if not skip_checkings:
+        if check_sudden_jumps(pdb_filename.filename, trajectory_filename.filename, structure.value):
+            raise SystemExit()
 
     # If setup is passed as True then exit as soon as the setup is finished
     if setup:
