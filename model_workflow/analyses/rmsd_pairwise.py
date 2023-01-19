@@ -4,7 +4,6 @@
 # The analysis is carried by pytraj
 
 import pytraj as pt
-import re
 
 import json
 
