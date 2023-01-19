@@ -21,6 +21,7 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frame
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
 # * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
+# * Incoherent atom bonds -> Stop the workflow and warn the user, the simulation may be wrong
 
 def topology_corrector (
     input_pdb_filename: str,
@@ -65,7 +66,7 @@ def topology_corrector (
         remove(safe_bonds_frame_filename)
 
     # ------------------------------------------------------------------------------------------
-    # Missing chains --------------------------------------------------------------------------
+    # Missing chains ---------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     # Check if chains are missing. If so, create a new chainned topology and set it as the reference
@@ -77,6 +78,7 @@ def topology_corrector (
 
         # Run the chainer
         structure.chainer()
+        modified = True
 
     else:
         # In case there are some missing chains
@@ -134,7 +136,7 @@ def topology_corrector (
             structure.trajectory_atom_sorter(input_pdb_filename, input_trajectory_filename, output_trajectory_filename)
 
     # ------------------------------------------------------------------------------------------
-    # Repeated atoms --------------------------------------------------------------------------
+    # Repeated atoms ---------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     if structure.check_repeated_atoms(fix_atoms=True, display_summary=True):
@@ -146,6 +148,13 @@ def topology_corrector (
 
     if structure.fix_atom_elements(trust=False):
         modified = True
+
+    # ------------------------------------------------------------------------------------------
+    # Incoherent number of bonds ---------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    if structure.check_incoherent_bonds():
+        raise SystemExit('ERROR: Uncoherent bonds were found')
 
     # ------------------------------------------------------------------------------------------
     # Final output -----------------------------------------------------------------------------
