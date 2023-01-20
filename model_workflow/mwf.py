@@ -355,7 +355,7 @@ translation = Dependency(get_input, {'name': 'translation'})
 filter_selection = Dependency(get_input, {'name': 'filter_selection'})
 pca_fit_selection = Dependency(get_input, {'name': 'pca_fit_selection'})
 pca_selection = Dependency(get_input, {'name': 'pca_selection'})
-skip_checkings = Dependency(get_input, {'name': 'skip_checkings'})
+mercy = Dependency(get_input, {'name': 'mercy'})
 sample_trajectory = Dependency(get_input, {'name': 'sample_trajectory'})
 
 # Get input filenames from the already updated inputs
@@ -392,6 +392,7 @@ process_input_files = Dependency(process_input_files, {
     'translation': translation,
     'filter_selection' : filter_selection,
     'register': register,
+    'mercy': mercy,
 })
 
 # Main topology and trajectory files
@@ -712,7 +713,7 @@ def workflow (
     filter_selection : Union[bool, str] = False,
     preprocess_protocol : int = 0,
     translation : List[float] = [0, 0, 0],
-    skip_checkings : bool = False,
+    mercy : bool = False,
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
 
@@ -745,8 +746,8 @@ def workflow (
     process_input_files.value
 
     # Run some checkings
-    if not skip_checkings:
-        if check_sudden_jumps(pdb_filename.filename, trajectory_filename.filename, structure.value):
+    if check_sudden_jumps(pdb_filename.filename, trajectory_filename.filename, structure.value):
+        if not mercy:
             raise SystemExit()
 
     # If setup is passed as True then exit as soon as the setup is finished
@@ -877,9 +878,9 @@ parser.add_argument(
     help="If passed, only download required files and run mandatory dependencies. Then exits.")
 
 parser.add_argument(
-    "-sck", "--skip_checkings",
+    "-m", "--mercy",
     action='store_true',
-    help="If passed, skip RMSD checking and proceed with the workflow")
+    help="If passed, do not kill the process when a checking fails and proceed with the workflow")
 
 parser.add_argument(
     "-smp", "--sample_trajectory",

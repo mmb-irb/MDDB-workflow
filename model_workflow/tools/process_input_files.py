@@ -24,6 +24,7 @@ def process_input_files (
     translation: list,
     filter_selection : str,
     register : dict,
+    mercy : bool,
     ) -> None:
 
     # Convert input topology and trajectories to output topology and trajectory
@@ -72,7 +73,8 @@ def process_input_files (
         output_topology_filename,
         output_trajectory_filename,
         output_trajectory_filename,
-        register
+        register,
+        mercy
     )
 
 # Find out if there is any file with a supported charges format in the current directory

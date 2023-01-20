@@ -28,7 +28,9 @@ def topology_corrector (
     output_topology_filename: str,
     input_trajectory_filename : Optional[str],
     output_trajectory_filename : Optional[str],
-    register : dict):
+    register : dict,
+    mercy : bool
+):
 
     print('----- Correcting topology -----')
 
@@ -154,7 +156,9 @@ def topology_corrector (
     # ------------------------------------------------------------------------------------------
 
     if structure.check_incoherent_bonds():
-        raise SystemExit('ERROR: Uncoherent bonds were found')
+        print('FAIL: Uncoherent bonds were found')
+        if not mercy:
+            raise SystemExit()
 
     # ------------------------------------------------------------------------------------------
     # Final output -----------------------------------------------------------------------------
