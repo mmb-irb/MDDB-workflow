@@ -27,6 +27,11 @@ def check_sudden_jumps (
 
     print('Checking trajectory integrity')
 
+    # Set the RMSD cutoff based in the number of atoms: the greater the structure the more flexible the RMSD cutoff
+    natoms = len(parsed_selection.atom_indices)
+    rmsd_cutoff = round((0.1 + natoms * 0.00001) * 1000) / 1000 
+    print(' RMSD jump cutoff -> ' + str(rmsd_cutoff) + ' Å')
+
     # Load the trajectory frame by frame
     trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
 
@@ -42,7 +47,7 @@ def check_sudden_jumps (
         print(' Frame ' + str(f))
 
         # Calculate RMSD value between previous and current frame
-        rmsd_value = mdt.rmsd(frame, previous_frame)[0]
+        rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
 
         # If the RMSD value is bigger than the cutoff then stop here
         if rmsd_value > rmsd_cutoff:
