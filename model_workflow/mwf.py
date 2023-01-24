@@ -305,48 +305,49 @@ def get_input_charges_filename ():
     server_url = get_input('database_url')
     project = get_input('project')
     # If not, then there is nothing to do
-    if not server_url or not project:
+    if original_charges_filename and (not server_url or not project):
         raise SystemExit('ERROR: Missing input charges file "' + original_charges_filename + '"')
     # Check which files are available for this project
-    project_url = server_url + '/api/rest/current/projects/' + project
-    files_url = project_url + '/files'
-    response = urllib.request.urlopen(files_url)
-    files = json.loads(response.read())
-    # In case there is no specified charges we must find out which is the charges filename
-    # It may be a topology with charges or it may be a raw charges text file
-    if not original_charges_filename:
-        # Check if there is any topology file (e.g. topology.prmtop, topology.top, ...)
-        charges_file = next((f for f in files if f['filename'][0:9] == 'topology.'), None)
-        # In case there is no topology, check if there is raw charges (i.e. 'charges.txt')
-        if not charges_file:
-            charges_file = next((f for f in files if f['filename'] == 'charges.txt'), None)
-        # In case there is neither raw charges we send a warning and stop here
-        if not charges_file:
-            print('WARNING: There are no charges in this project')
-        else:
-            # In case we found a charges file set the input charges filename as this
-            original_charges_filename = charges_file['filename']
-    # Download the charges file
-    if original_charges_filename and not os.path.exists(original_charges_filename):
-        sys.stdout.write('Downloading charges (' + original_charges_filename + ')\n')
-        charges_url = project_url + '/files/' + original_charges_filename
-        try:
-            urllib.request.urlretrieve(charges_url, original_charges_filename)
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                raise SystemExit('ERROR: Missing input topology file "' + original_charges_filename + '"')
+    if project:
+        project_url = server_url + '/api/rest/current/projects/' + project
+        files_url = project_url + '/files'
+        response = urllib.request.urlopen(files_url)
+        files = json.loads(response.read())
+        # In case there is no specified charges we must find out which is the charges filename
+        # It may be a topology with charges or it may be a raw charges text file
+        if not original_charges_filename:
+            # Check if there is any topology file (e.g. topology.prmtop, topology.top, ...)
+            charges_file = next((f for f in files if f['filename'][0:9] == 'topology.'), None)
+            # In case there is no topology, check if there is raw charges (i.e. 'charges.txt')
+            if not charges_file:
+                charges_file = next((f for f in files if f['filename'] == 'charges.txt'), None)
+            # In case there is neither raw charges we send a warning and stop here
+            if not charges_file:
+                print('WARNING: There are no charges in this project')
             else:
-                raise ValueError('Something went wrong with the MDposit request: ' + charges_url)
-        # In the special case that the topology is from Gromacs (i.e. 'topology.top')...
-        # We must also download all itp files, if any
-        if original_charges_filename == 'topology.top':
-            itp_filenames = [f['filename'] for f in files if f['filename'][-4:] == '.itp']
-            for itp_filename in itp_filenames:
-                sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
-                itp_url = project_url + '/files/' + itp_filename
-                urllib.request.urlretrieve(itp_url, itp_filename)
-        # Set the final charges filename as the downloaded charges filename
-        charges_filename.filename = original_charges_filename
+                # In case we found a charges file set the input charges filename as this
+                original_charges_filename = charges_file['filename']
+        # Download the charges file
+        if original_charges_filename and not os.path.exists(original_charges_filename):
+            sys.stdout.write('Downloading charges (' + original_charges_filename + ')\n')
+            charges_url = project_url + '/files/' + original_charges_filename
+            try:
+                urllib.request.urlretrieve(charges_url, original_charges_filename)
+            except urllib.error.HTTPError as error:
+                if error.code == 404:
+                    raise SystemExit('ERROR: Missing input topology file "' + original_charges_filename + '"')
+                else:
+                    raise ValueError('Something went wrong with the MDposit request: ' + charges_url)
+            # In the special case that the topology is from Gromacs (i.e. 'topology.top')...
+            # We must also download all itp files, if any
+            if original_charges_filename == 'topology.top':
+                itp_filenames = [f['filename'] for f in files if f['filename'][-4:] == '.itp']
+                for itp_filename in itp_filenames:
+                    sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
+                    itp_url = project_url + '/files/' + itp_filename
+                    urllib.request.urlretrieve(itp_url, itp_filename)
+            # Set the final charges filename as the downloaded charges filename
+            charges_filename.filename = original_charges_filename
     return original_charges_filename
 
 # Get some input values which are passed through command line instead of the inputs file
