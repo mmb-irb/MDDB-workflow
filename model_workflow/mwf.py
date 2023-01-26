@@ -721,16 +721,16 @@ def workflow (
 
 ):
 
+    # Update the inputs variable with all current function arguments
+    # WARNING: Do not declare any variable over this line or it will be included in the inputs and thus in the register
+    inputs.update(locals())
+
     # Reset all dependencies
     # This is useful in case we run this function more than once without reseting the module
     # Note that this script was originally called only from argparse so this was not necessary
     for var_value in dict(globals()).values():
         if isinstance(var_value, Dependency):
             var_value._value = None
-
-    # Update the inputs variable with all current function arguments
-    # WARNING: Do not declare any variable over this line or it will be included in the inputs and thus in the register
-    inputs.update(locals())
 
     # Load the inputs file
     load_inputs(inputs_filename)
