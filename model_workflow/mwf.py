@@ -374,6 +374,7 @@ ligands = Dependency(get_input, {'name': 'ligands'})
 membranes = Dependency(get_input, {'name': 'membranes'})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
 pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
+time_length = Dependency(get_input, {'name': 'length'})
 
 # Set the register here
 # Note that register is called after input have been fully defined
@@ -747,9 +748,15 @@ def workflow (
     process_input_files.value
 
     # Run some checkings
-    if check_sudden_jumps(pdb_filename.filename, trajectory_filename.filename, structure.value):
+    if check_sudden_jumps(
+        pdb_filename.filename,
+        trajectory_filename.filename,
+        structure.value,
+        time_length.value,
+        snapshots.value
+    ):
         if not mercy:
-            raise SystemExit()
+            raise SystemExit('Failed RMSD checking')
 
     # If setup is passed as True then exit as soon as the setup is finished
     if setup:
