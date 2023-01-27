@@ -80,7 +80,7 @@ def get_safe_bonds_canonical_frame (structure_filename : str, trajectory_filenam
             break
     # If no frame has the canonical bonds then we stop here and warn the user
     if safe_bonds_frame == None:
-        raise RuntimeError('There is no canonical frame for safe bonds')
+        raise RuntimeError('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
 
     print(' Got it -> Frame ' + str(safe_bonds_frame + 1))
 
