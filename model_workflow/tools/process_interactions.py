@@ -20,7 +20,7 @@ distance_cutoff : float = 5
 # This file is also used as a backup here, since calculating interactions is a heavy calculation
 # In addition, this file may be used to force interactions with custom interface residues manually
 def process_interactions (
-    interactions : list,
+    input_interactions : list,
     topology_filename : str,
     trajectory_filename : str,
     structure : 'Structure',
@@ -39,7 +39,7 @@ def process_interactions (
         return complete_interactions
 
     # If there are no interactions return an empty list
-    if not interactions or len(interactions) == 0:
+    if not input_interactions or len(input_interactions) == 0:
         return []
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
@@ -49,6 +49,9 @@ def process_interactions (
         frames_limit,
     )
     
+    # Duplicate the input interactions to avoid modifying the originals
+    interactions = [ { k:v for k,v in interaction.items() } for interaction in input_interactions ]
+
     # Iterate over each defined interaction
     for interaction in interactions:
         # Get a few frames along the trajectory

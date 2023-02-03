@@ -492,7 +492,7 @@ snapshots = Dependency(get_frames_count, {
 
 # Find out residues and interface residues for each interaction
 interactions = Dependency(process_interactions, {
-    'interactions': input_interactions,
+    'input_interactions': input_interactions,
     'topology_filename': pdb_filename,
     'trajectory_filename': trajectory_filename,
     'structure': structure,
