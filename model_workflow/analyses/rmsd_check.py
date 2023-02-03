@@ -1,12 +1,18 @@
 import mdtraj as mdt
+from numpy import mean, std
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 
-# Set how big can be the RMSD jump between 2 frames
-# If the jump is bigger then we return True
-rmsd_cutoff = 1
+# LORE
+# This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep
+# However, after a deep study, it was observed that simulations with similar features may show very different RMSD jumps
+# For this reason now we comptue RMSD jumps along the whole trajectory and check that the biggest jump is not an outlier
+# The outlier is defined according to how many times the standard deviation far from the mean is a value
+# DANI: He visto saltos 'correctos' pasar de 6
+# DANI: He visto saltos 'incorrectos' no bajar de 10
+standard_deviations_cutoff = 9
 
 # Look for sudden raises of RMSd values from one frame to another
 # To do so, we check the RMSD of every frame using its previous frame as reference
@@ -29,24 +35,17 @@ def check_sudden_jumps (
 
     print('Checking trajectory integrity')
 
-    # Set the RMSD cutoff based in the number of atoms: the greater the structure the more flexible the RMSD cutoff
-    natoms = len(parsed_selection.atom_indices)
-    print(' Number of atoms evaluated: ' + str(natoms))
-    # Set the RMSD cutoff based in the time step between frames: the longest time the more flexible the RMSD cutoff
-    timestep = round((time_length / snapshots) * 100) / 100
-    print(' Frame timestep: ' + str(timestep) + ' ns')
-    # Set the RMSD cutoff
-    rmsd_cutoff = round((timestep * natoms * 0.01) * 1000) / 1000 
-    print(' RMSD jump cutoff -> ' + str(rmsd_cutoff) + ' Å')
-
     # Load the trajectory frame by frame
     trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
 
-    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
-    print()
-
     # Save the previous frame any time
     previous_frame = next(trajectory)
+
+    # Save all RMSD jumps
+    rmsd_jumps = []
+
+    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
+    print()
 
     for f, frame in enumerate(trajectory, 1):
         # Update the current frame log
@@ -55,14 +54,30 @@ def check_sudden_jumps (
 
         # Calculate RMSD value between previous and current frame
         rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
-        #print(rmsd_value)
-
-        # If the RMSD value is bigger than the cutoff then stop here
-        if rmsd_value > rmsd_cutoff:
-            print('FAIL: High RMSd (' + str(rmsd_value)  + ') values between frames ' + str(f) + ' and ' + str(f+1))
-            return True
+        rmsd_jumps.append(rmsd_value)
 
         # Update the previous frame as the current one
         previous_frame = frame
+
+    # Get the maximum RMSD value and check it is a reasonable deviation from the average values
+    # Otherwise, if it is an outlier, the test fails
+    mean_rmsd_jump = mean(rmsd_jumps)
+    stdv_rmsd_jump = std(rmsd_jumps)
+
+    # Capture outliers
+    # If we capture more than 5 we stop searching
+    outliers_count = 0
+    for i, rmsd_jump in enumerate(rmsd_jumps):
+        z_score = (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump
+        if abs(z_score) > standard_deviations_cutoff:
+            if (outliers_count >= 4):
+                print('etc...')
+                break
+            print('FAIL: Sudden RMSD jump between frames ' + str(i) + ' and ' + str(i+1))
+            outliers_count += 1
+
+    # If there were any outlier then the check has failed
+    if outliers_count > 0:
+        return True
 
     return False
