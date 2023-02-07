@@ -12,16 +12,19 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frame
 #
 # Supported cases:
 #
-# * Wrong bonds: A bond is formed / broken because its 2 atoms are too close / far in the
-#   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are fine
+# * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
+# * Unstable atom bonds: A bond is formed / broken because its 2 atoms are too close / far in the structure
+#   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
+# * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
+#   -> Stop the workflow and warn the user
 # * Missing chains -> Chains are added through VMD
 # * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
 # * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
 # * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
-# * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
-# * Incoherent atom bonds -> Stop the workflow and warn the user, the simulation may be wrong
+
+# Note that the 'mercy' flag may be passed for crticial checkings to not kill the process on fail
 
 def topology_corrector (
     input_pdb_filename: str,
@@ -45,7 +48,16 @@ def topology_corrector (
     structure = Structure.from_pdb_file(input_pdb_filename)
 
     # ------------------------------------------------------------------------------------------
-    # Wrong bonds ------------------------------------------------------------------------------
+    # Missing/Non-standard elements ------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # It is important to fix elements before trying to fix bonds, since elements have an impact on bonds
+    # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
+    if structure.fix_atom_elements(trust=False):
+        modified = True
+
+    # ------------------------------------------------------------------------------------------
+    # Unstable atom bonds ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
@@ -66,6 +78,15 @@ def topology_corrector (
             atom_1.coords = atom_2.coords
         # Remove the safe bonds frame since it is not requird anymore
         remove(safe_bonds_frame_filename)
+
+    # ------------------------------------------------------------------------------------------
+    # Incoherent atom bonds ---------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    if structure.check_incoherent_bonds():
+        print('FAIL: Uncoherent bonds were found')
+        if not mercy:
+            raise SystemExit()
 
     # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------
@@ -143,22 +164,6 @@ def topology_corrector (
 
     if structure.check_repeated_atoms(fix_atoms=True, display_summary=True):
         modified = True
-
-    # ------------------------------------------------------------------------------------------
-    # Missing/Non-standard elements ------------------------------------------------------------
-    # ------------------------------------------------------------------------------------------
-
-    if structure.fix_atom_elements(trust=False):
-        modified = True
-
-    # ------------------------------------------------------------------------------------------
-    # Incoherent number of bonds ---------------------------------------------------------------
-    # ------------------------------------------------------------------------------------------
-
-    if structure.check_incoherent_bonds():
-        print('FAIL: Uncoherent bonds were found')
-        if not mercy:
-            raise SystemExit()
 
     # ------------------------------------------------------------------------------------------
     # Final output -----------------------------------------------------------------------------
