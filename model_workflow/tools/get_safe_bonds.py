@@ -8,16 +8,20 @@ from typing import List
 frames_limit = 10
 
 # Check if two sets of bonds match perfectly
-def do_bonds_match (bonds_1 : List[ List[int] ], bonds_2 : List[ List[int] ]) -> bool:
+def do_bonds_match (bonds_1 : List[ List[int] ], bonds_2 : List[ List[int] ], verbose : bool = False) -> bool:
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
         raise ValueError('The number of atoms is not matching in both bond lists')
     # For each atom, check bonds to match perfectly
     # Order is not important
-    for atom_bonds_1, atom_bonds_2 in zip(bonds_1, bonds_2):
+    for atom_index, (atom_bonds_1, atom_bonds_2) in enumerate(zip(bonds_1, bonds_2)):
         if len(atom_bonds_1) != len(atom_bonds_2):
+            if verbose:
+                print('Missmatch in atom ' + str(atom_index) + ': ' + str(atom_bonds_1) + ' -> ' + str(atom_bonds_2))
             return False
         if any(bond not in atom_bonds_2 for bond in atom_bonds_1):
+            if verbose:
+                print('Missmatch in atom ' + str(atom_index) + ': ' + str(atom_bonds_1) + ' -> ' + str(atom_bonds_2))
             return False
     return True
 
