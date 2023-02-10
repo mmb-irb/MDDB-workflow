@@ -49,6 +49,8 @@ def generate_topology (
 
     # Check we have charges and, if not, set charges as None (i.e. null for mongo)
     atom_charges = charges if charges and len(charges) > 0 else None
+    if not atom_charges:
+        print('WARNING: Topology is missing atom charges')
 
     # Setup the final output
     topology = {
