@@ -166,6 +166,7 @@ def generate_map_online (
             print('   ' + name + ' -> ' + uniprot_id)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
         return all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
+    # --- End of match_sequences function --------------------------------------------------------------------------------
     # If we have every protein chain matched with a reference already then we stop here
     if match_sequences():
         export_references(protein_sequences)
@@ -209,6 +210,7 @@ def generate_map_online (
             export_references(protein_sequences)
             return format_topology_data(structure, protein_sequences)
     print('WARNING: The BLAST failed to find a matching reference sequence for at least one protein sequence')
+    export_references(protein_sequences)
     return format_topology_data(structure, protein_sequences)
 
 # Export reference objects data to a json file
@@ -423,6 +425,10 @@ def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
         else:
             print('Error when requesting ' + request_url)
             raise ValueError('Something went wrong with the MDposit request (error ' + str(error.code) + ')')
+    # This error may occur if there is no internet connection
+    except urllib.error.URLError as error:
+        print('Error when requesting ' + request_url)
+        raise ValueError('Something went wrong with the MDposit request')
     return parsed_response
 
 # Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database
