@@ -62,8 +62,12 @@ def generate_map_online (
         reference = get_uniprot_reference(uniprot_accession)
         return reference, False
     # Import local references, in case the references json file already exists
+    imported_references = None
     if os.path.exists(references_filename):
-        references = import_references()
+        imported_references = import_references()
+        # Append the imported references to the overall references pool
+        for k,v in imported_references.items():
+            references[k] = v
     # Get the structure chain sequences
     structure_sequences = get_chain_sequences(structure)
     # Find out which chains are protein
@@ -75,25 +79,9 @@ def generate_map_online (
             protein_sequences.append(structure_sequence)
     # For each input forced reference, get the reference sequence
     reference_sequences = {}
-    if forced_references:
-        forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
-        for uniprot_id in forced_uniprot_ids:
-            # If instead of a uniprot id there is a 'synthetic construct' flag
-            # A synthetic construct does not have a reference sequence by definition so we skip this process
-            if uniprot_id == synthetic_construct_flag:
-                continue
-            # If reference is already in the list (i.e. it has been imported) then skip this process
-            reference = references.get(uniprot_id, None)
-            if reference:
-                reference_sequences[uniprot_id] = reference['sequence']
-                continue
-            reference, already_loaded = get_reference(uniprot_id)
-            reference_sequences[uniprot_id] = reference['sequence']
-            # Save the current whole reference object for later
-            references[reference['uniprot']] = reference
     # Save already tried alignments to not repeat the alignment further
     tried_alignments = { structure_sequence['name']: [] for structure_sequence in protein_sequences }
-    # Try to match all protein sequences with the available reference sequences
+    # Set a function to try to match all protein sequences with the available reference sequences
     # In case of match, objects in the 'protein_sequences' list are modified by adding the result
     # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
     def match_sequences () -> bool:
@@ -165,12 +153,52 @@ def generate_map_online (
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-        return all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
+        # If all protein sequences were matched then also export the references
+        allright = all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
+        if allright:
+            export_references(protein_sequences)
+        return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
-    # If we have every protein chain matched with a reference already then we stop here
-    if match_sequences():
-        export_references(protein_sequences)
-        return format_topology_data(structure, protein_sequences)
+    # First use the forced references for the matching
+    if forced_references:
+        forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
+        for uniprot_id in forced_uniprot_ids:
+            # If instead of a uniprot id there is a 'synthetic construct' flag
+            # A synthetic construct does not have a reference sequence by definition so we skip this process
+            if uniprot_id == synthetic_construct_flag:
+                continue
+            # If reference is already in the list (i.e. it has been imported) then skip this process
+            reference = references.get(uniprot_id, None)
+            if reference:
+                reference_sequences[uniprot_id] = reference['sequence']
+                continue
+            # Find the reference data for the given uniprot id
+            reference, already_loaded = get_reference(uniprot_id)
+            reference_sequences[uniprot_id] = reference['sequence']
+            # Save the current whole reference object for later
+            references[reference['uniprot']] = reference
+        # Now that we have all forced references data perform the matching
+        # If we have every protein chain matched with a reference then we stop here
+        print(' Using only forced references from inputs.json')
+        if match_sequences():
+            return format_topology_data(structure, protein_sequences)
+    # Now add the imported references to reference sequences. Thus now they will be 'matchable'
+    # Thus now they will be 'matchable', so try to match sequences again in case any of the imported references has not been tried
+    # It was not done before since we want forced references to have priority
+    if imported_references:
+        need_rematch = False
+        for uniprot_id, reference in imported_references.items():
+            # If the imported reference has been aligned already (i.e. it was a forced reference)
+            if uniprot_id in reference_sequences:
+                continue
+            # Otherwise, include it
+            need_rematch = True
+            reference_sequences[uniprot_id] = reference['sequence']
+        # If there was at least one imported reference missing then rerun the matching
+        if need_rematch:
+            print(' Using also references imported from references.json')
+            if match_sequences():
+                return format_topology_data(structure, protein_sequences)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot codes associated to the pdb codes, if any
     if len(pdb_ids) > 0:
@@ -188,8 +216,8 @@ def generate_map_online (
                 # Save the current whole reference object for later
                 references[reference['uniprot']] = reference
         # If we have every protein chain matched with a reference already then we stop here
+        print(' Using also references related to PDB ids from inputs.json')
         if match_sequences():
-            export_references(protein_sequences)
             return format_topology_data(structure, protein_sequences)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, we run a blast with each orphan chain sequence
@@ -206,8 +234,8 @@ def generate_map_online (
         # Save the current whole reference object for later
         references[reference['uniprot']] = reference
         # If we have every protein chain matched with a reference already then we stop here
+        print(' Using also references from blast')
         if match_sequences():
-            export_references(protein_sequences)
             return format_topology_data(structure, protein_sequences)
     print('WARNING: The BLAST failed to find a matching reference sequence for at least one protein sequence')
     export_references(protein_sequences)
