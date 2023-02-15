@@ -17,14 +17,14 @@ def generate_metadata (
     inputs = None
     with open(inputs_filename, 'r') as file:
         inputs = json.load(file)
-    def getInput(input: str):
+    def get_input(input: str):
         return inputs.get(input, None)
 
     # Calculate the frequency
     # Divide the simulation time, which is in nanoseconds (ns) by the number of frames
     # Multiply it by 1000 since we want the frequency in picoseconds (ps)
-    length = getInput('length')
-    frequency = (length / snapshots) * 1000
+    length = get_input('length')
+    frequency = (length / snapshots) * 1000 if length != None else None
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
@@ -35,7 +35,7 @@ def generate_metadata (
      cl) = get_atoms_count(input_topology_filename)
 
     # Extract some additional metadata from the inputs file which is required further
-    ligands = getInput('ligands')
+    ligands = get_input('ligands')
     if not ligands:
         ligands = []
 
@@ -43,45 +43,45 @@ def generate_metadata (
     references = residues_map['references'] if residues_map else []
 
     # Make the forcefields a list in case it is a single string
-    forcefields = getInput('ff')
+    forcefields = get_input('ff')
     if type(forcefields) == str:
         forcefields = [forcefields]
 
     # Collections must be null in case there are not collections
-    collections = getInput('collections')
+    collections = get_input('collections')
     if not collections:
         collections = None
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
-        'PDBIDS': getInput('pdbIds'),
-        'NAME': getInput('name'),
+        'PDBIDS': get_input('pdbIds'),
+        'NAME': get_input('name'),
         'COLLECTIONS': collections,
-        'DESCRIPTION': getInput('description'),
-        'AUTHORS': getInput('authors'),
-        'GROUPS': getInput('groups'),
-        'CONTACT': getInput('contact'),
-        'PROGRAM': getInput('program'),
-        'VERSION': getInput('version'),
-        'TYPE': getInput('type'),
-        'METHOD': getInput('method'),
-        'LICENSE': getInput('license'),
-        'LINKCENSE': getInput('linkcense'),
-        'CITATION': getInput('citation'),
-        'THANKS': getInput('thanks'),
+        'DESCRIPTION': get_input('description'),
+        'AUTHORS': get_input('authors'),
+        'GROUPS': get_input('groups'),
+        'CONTACT': get_input('contact'),
+        'PROGRAM': get_input('program'),
+        'VERSION': get_input('version'),
+        'TYPE': get_input('type'),
+        'METHOD': get_input('method'),
+        'LICENSE': get_input('license'),
+        'LINKCENSE': get_input('linkcense'),
+        'CITATION': get_input('citation'),
+        'THANKS': get_input('thanks'),
         'LENGTH': length,
-        'TIMESTEP': getInput('timestep'),
+        'TIMESTEP': get_input('timestep'),
         'SNAPSHOTS': snapshots,
         'FREQUENCY': frequency,
         'FF': forcefields,
-        'TEMP': getInput('temp'),
-        'WAT': getInput('wat'),
-        'BOXTYPE': getInput('boxtype'),
+        'TEMP': get_input('temp'),
+        'WAT': get_input('wat'),
+        'BOXTYPE': get_input('boxtype'),
         'BOXSIZEX': boxsizex,
         'BOXSIZEY': boxsizey,
         'BOXSIZEZ': boxsizez,
-        'ENSEMBLE': getInput('ensemble'),
+        'ENSEMBLE': get_input('ensemble'),
         'SYSTATS': systats,
         'PROTATS': protats,
         'PROT': prot,
@@ -90,16 +90,16 @@ def generate_metadata (
         'NA': na,
         'CL': cl,
         'LIGANDS': ligands,
-        'CUSTOMS': getInput('customs'),
-        'INTERACTIONS': getInput('interactions'),
-        'FORCED_REFERENCES': getInput('forced_references'),
+        'CUSTOMS': get_input('customs'),
+        'INTERACTIONS': get_input('interactions'),
+        'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': references,
-        'CHAINNAMES': getInput('chainnames'),
-        'MEMBRANES': getInput('membranes'),
-        'LINKS': getInput('links'),
-        'ORIENTATION': getInput('orientation'),
+        'CHAINNAMES': get_input('chainnames'),
+        'MEMBRANES': get_input('membranes'),
+        'LINKS': get_input('links'),
+        'ORIENTATION': get_input('orientation'),
         # Collection specifics
-        'CV19_UNIT': getInput('cv19_unit')
+        'CV19_UNIT': get_input('cv19_unit')
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:
