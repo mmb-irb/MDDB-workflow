@@ -25,6 +25,10 @@ def check_sudden_jumps (
     check_selection : str = 'protein or nucleic',
     ) -> bool:
 
+    # If the trajectory has only 1 value then there is no test to do
+    if snapshots <= 1:
+        return False
+
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
 
