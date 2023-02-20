@@ -17,7 +17,7 @@ from typing import Optional, Union, List
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
-from model_workflow.tools.process_input_files import process_input_files, find_charges_filename, get_output_charges_filename
+from model_workflow.tools.process_input_files import process_input_files, find_charges_filename
 from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
@@ -151,7 +151,6 @@ class File(Dependency):
 # WARNING: Thus, these are also the filenames in the database, API, and client
 OUTPUT_pdb_filename = 'md.imaged.rot.dry.pdb'
 OUTPUT_trajectory_filename = 'md.imaged.rot.xtc'
-OUTPUT_charges_filename = get_output_charges_filename()
 OUTPUT_first_frame_filename = 'firstFrame.pdb'
 OUTPUT_average_structure_filename = 'average.pdb'
 OUTPUT_average_frame_filename = 'average.xtc'
@@ -220,7 +219,7 @@ def load_inputs (inputs_filename : str):
 
 # Get the input pdb filename from the inputs
 # If the file is not found try to download it
-def get_input_pdb_filename ():
+def get_input_pdb_filename () -> str:
     # Get the pdb filename from the inputs
     original_pdb_filename = get_input('input_topology_filename')
     # Check if the file exists
@@ -248,7 +247,7 @@ def get_input_pdb_filename ():
 
 # Get the input trajectory filename(s) from the inputs
 # If file(s) are not found try to download it
-def get_input_trajectory_filenames (sample : bool = False):
+def get_input_trajectory_filenames (sample : bool = False) -> str:
     # Get the trajectory filename(s) from the inputs
     original_trajectory_filenames = get_input('input_trajectory_filenames')
     # Check if the file exists
@@ -294,7 +293,7 @@ def get_input_trajectory_filenames (sample : bool = False):
 
 # Get the input charges filename from the inputs
 # If the file is not found try to download it
-def get_input_charges_filename ():
+def get_input_charges_filename () -> str:
     # Get the charges filename from the inputs
     original_charges_filename = get_input('input_charges_filename')
     # Check if the file exists
@@ -310,6 +309,19 @@ def get_input_charges_filename ():
     # Check which files are available for this project
     if project:
         project_url = server_url + '/api/rest/current/projects/' + project
+        # Check if the project has a topology and download it in json format if so
+        topology_url = project_url + '/topology'
+        topology = None
+        try:
+            response = urllib.request.urlopen(topology_url)
+            topology = json.loads(response.read())
+        except:
+            pass
+        # If we have the standard topology then export it and stop here
+        if topology:
+            with open(OUTPUT_topology_filename, 'w') as file:
+                json.dump(topology, file, indent=4)
+            return OUTPUT_topology_filename
         files_url = project_url + '/files'
         response = urllib.request.urlopen(files_url)
         files = json.loads(response.read())
@@ -346,8 +358,6 @@ def get_input_charges_filename ():
                     sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
                     itp_url = project_url + '/files/' + itp_filename
                     urllib.request.urlretrieve(itp_url, itp_filename)
-            # Set the final charges filename as the downloaded charges filename
-            charges_filename.filename = original_charges_filename
     return original_charges_filename
 
 # Get some input values which are passed through command line instead of the inputs file
@@ -409,10 +419,13 @@ trajectory_filename = File(OUTPUT_trajectory_filename,
 
 # Charges filename
 # This may be created from the original charges filename
-# This file is used for the energies analysis
-charges_filename = File(OUTPUT_charges_filename,
-    process_input_files.func,
-    process_input_files.args)
+# Note that there is not a defined name since it may change
+# Atom charges are extracted from this file
+# DANI: This is the name of a file which is generated through the 'process_input_files' function
+# DANI: Althought this should be a File and not a Dependency there are two reasons to set it like this
+# DANI: 1 - The name of the file is variable
+# DANI: 2 - This file is never requested alone
+charges_filename = Dependency(find_charges_filename, {})
 
 # Filter atoms to remove water and ions
 # As an exception, some water and ions may be not removed if specified

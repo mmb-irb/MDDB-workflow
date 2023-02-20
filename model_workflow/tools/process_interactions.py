@@ -32,8 +32,7 @@ def process_interactions (
         loaded_interactions = load_interactions(interactions_file, structure)
         # Merge the loaded interactions with the input interactions to cover all fields
         complete_interactions = []
-        for i, input_interaction in enumerate(interactions):
-            loaded_interaction = loaded_interactions[i]
+        for input_interaction, loaded_interaction in zip(input_interactions, loaded_interactions):
             complete_interaction = { **input_interaction, **loaded_interaction }
             complete_interactions.append(complete_interaction)
         return complete_interactions

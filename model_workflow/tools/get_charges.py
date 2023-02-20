@@ -1,26 +1,35 @@
 import pytraj as pt
 
-import os
+from os.path import exists
+from json import load
 from pathlib import Path
 from subprocess import Popen, PIPE
 import re
 
-from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr
+from model_workflow.tools.formats import is_pytraj_supported, is_tpr
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
 
 # Set the standard name for the input raw charges
 raw_charges_filename = 'charges.txt'
+# Set the standard topology name
+standard_topology_filename = 'topology.json'
 
 # Extract charges from a source file
 def get_charges(charges_source_filename : str) -> list:
-    if not charges_source_filename or not os.path.exists(charges_source_filename):
+    if not charges_source_filename or not exists(charges_source_filename):
         return None
     print('Charges in the "' + charges_source_filename + '" file will be used')
+    charges = None
+    # If we have the standard topology then get charges from it
+    if charges_source_filename == standard_topology_filename:
+        with open(standard_topology_filename, 'r') as file:
+            standard_topology = load(file)
+            charges = standard_topology['atom_charges']
     # In some ocasions, charges may come inside a raw charges file
-    if is_raw(charges_source_filename):
-        charges = get_raw_charges(raw_charges_filename)
+    elif charges_source_filename == raw_charges_filename:
+        charges = get_raw_charges(charges_source_filename)
     # In some ocasions, charges may come inside a topology which can be parsed through pytraj
     elif is_pytraj_supported(charges_source_filename):
         charges = get_topology_charges(charges_source_filename)

@@ -1,7 +1,7 @@
 # This script is used to get standarized and corrected topology and trajectory files
 
 import os
-from typing import List
+from typing import List, Optional
 
 from model_workflow.tools.formats import is_psf, is_tpr, is_raw, is_prmtop, is_top, is_psf, raw_charges_filename
 from model_workflow.tools.filter_atoms import filter_atoms
@@ -39,21 +39,8 @@ def process_input_files (
     # Rename it according to standards
     output_charges_filename = None
     if input_charges_filename and os.path.exists(input_charges_filename):
-        # If it is a 'charges.txt' then we do not have to rename it
-        if is_raw(input_charges_filename):
-            output_charges_filename = input_charges_filename
-        # In other cases rename the charges file
-        elif is_prmtop(input_charges_filename):
-            output_charges_filename = 'topology.prmtop'
-        elif is_top(input_charges_filename):
-            output_charges_filename = 'topology.top'
-        elif is_psf(input_charges_filename):
-            output_charges_filename = 'topology.psf'
-        elif is_tpr(input_charges_filename):
-            output_charges_filename = 'topology.tpr'
-        else:
-            raise ValueError('Charges file is in a non supported format')
-        
+        output_charges_filename = get_output_charges_filename(input_charges_filename)
+        # This renaming should only occur with prmtop/tpr/psf/top files
         if not os.path.exists(output_charges_filename):
             os.rename(input_charges_filename, output_charges_filename)
 
@@ -77,23 +64,21 @@ def process_input_files (
         mercy
     )
 
-# Find out if there is any file with a supported charges format in the current directory
-# In that case, return the first match
-# Raw energies have priority
-def get_output_charges_filename():
-
+# Set the output charges filename given the input charges filename
+# i.e. if the input is whatever.top it will be renamed as topology.top
+# Standard topology charges have priority
+def get_output_charges_filename(input_charges_filename : str) -> Optional[str]:
     # Iterate over all files in the current directory
-    for filename in os.listdir('.'):
-        if is_raw(filename):
-            return filename
-        elif is_prmtop(filename):
-            return 'topology.prmtop'
-        elif is_top(filename):
-            return 'topology.top'
-        elif is_psf(filename):
-            return 'topology.psf'
-        elif is_tpr(filename):
-            return 'topology.tpr'
+    if input_charges_filename == 'topology.json' or is_raw(input_charges_filename):
+        return input_charges_filename
+    elif is_prmtop(input_charges_filename):
+        return 'topology.prmtop'
+    elif is_top(input_charges_filename):
+        return 'topology.top'
+    elif is_psf(input_charges_filename):
+        return 'topology.psf'
+    elif is_tpr(input_charges_filename):
+        return 'topology.tpr'
     return None
 
 # Find out if there is any of the standard topology filenames in the current directory
@@ -103,6 +88,7 @@ def find_charges_filename():
 
     # Set the standard filenames
     standard_filenames = [
+        'topology.json',
         raw_charges_filename,
         'topology.prmtop',
         'topology.top',
