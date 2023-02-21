@@ -77,6 +77,10 @@ def generate_map_online (
         if next((letter for letter in sequence if letter != 'X'), None):
             structure_sequence['match'] = { 'ref': None, 'map': None, 'score': 0 }
             protein_sequences.append(structure_sequence)
+    # If there are no protein sequences then there is no need to map anything
+    if len(protein_sequences) == 0:
+        print(' There are no protein sequences')
+        return format_topology_data(structure, protein_sequences)
     # For each input forced reference, get the reference sequence
     reference_sequences = {}
     # Save already tried alignments to not repeat the alignment further
@@ -259,6 +263,10 @@ def export_references (mapping_data : list):
             continue
         final_references.append(ref)
         final_uniprots.append(uniprot)
+    # If there are no references to exported then do not egenrate the json file
+    if len(final_references) == 0:
+        return
+    # Write references to a json file
     with open(references_filename, 'w') as file:
         json.dump(final_references, file, indent=4)
 
