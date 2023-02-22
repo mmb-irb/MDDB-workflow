@@ -46,7 +46,7 @@ def check_sudden_jumps (
     previous_frame = next(trajectory)
 
     # Save all RMSD jumps
-    rmsd_jumps = []
+    rmsd_jumps = []    
 
     # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
     print()
@@ -68,20 +68,34 @@ def check_sudden_jumps (
     mean_rmsd_jump = mean(rmsd_jumps)
     stdv_rmsd_jump = std(rmsd_jumps)
 
+    # First frames may not be perfectly equilibrated and thus have stronger RMSD jumps
+    # For this reason we allow the first frames to bypass the check
+    # As soon as one frame is below the cutoff the bypass is finished for the following frames
+    # Count the number of bypassed frames and warn the user in case there are any
+    bypassed_frames = 0
+
     # Capture outliers
     # If we capture more than 5 we stop searching
     outliers_count = 0
     for i, rmsd_jump in enumerate(rmsd_jumps):
         z_score = (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump
         if abs(z_score) > standard_deviations_cutoff:
-            if (outliers_count >= 4):
-                print('etc...')
+            # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
+            if i == bypassed_frames:
+                bypassed_frames += 1
+                continue
+            if outliers_count >= 4:
+                print(' etc...')
                 break
-            print('FAIL: Sudden RMSD jump between frames ' + str(i) + ' and ' + str(i+1))
+            print(' FAIL: Sudden RMSD jump between frames ' + str(i) + ' and ' + str(i+1))
             outliers_count += 1
 
     # If there were any outlier then the check has failed
     if outliers_count > 0:
         return True
+
+    # Warn the user if we had bypassed frames
+    if bypassed_frames > 0:
+        print(' WARNING: First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     return False
