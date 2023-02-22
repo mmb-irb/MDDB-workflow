@@ -531,7 +531,8 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'inputs_filename': inputs_filename,
     'snapshots': snapshots,
     'residues_map': residues_map,
-    'output_metadata_filename': OUTPUT_metadata_filename
+    'output_metadata_filename': OUTPUT_metadata_filename,
+    'register': register
 }, 'metadata')
 
 # Prepare the topology output file
@@ -541,6 +542,16 @@ topology_filename = File(OUTPUT_topology_filename, generate_topology, {
     'residues_map': residues_map,
     'output_topology_filename': OUTPUT_topology_filename
 }, 'topology')
+
+# Set a test to check trajectory integrity
+sudden_jumps = Dependency(check_sudden_jumps, {
+    'input_structure_filename': pdb_filename,
+    'input_trajectory_filename': trajectory_filename,
+    'structure': structure,
+    'register': register,
+    'time_length': time_length,
+    'snapshots': snapshots,
+})
 
 # Pack up all tools which may be called directly from the console
 tools = [
@@ -684,7 +695,8 @@ analyses = [
 ]
 
 # Set a list with all dependencies to be required if the whole workflow is run
-basic_dependencies = [ metadata_filename, topology_filename, *analyses ]
+# Metadata is the last dependency since it contains the regiter warnings
+basic_dependencies = [ topology_filename, *analyses, metadata_filename ]
 
 # Set a list with all dependencies which may be requested independently
 requestables = [ *analyses, *tools, metadata_filename, topology_filename ]
@@ -761,13 +773,7 @@ def workflow (
     process_input_files.value
 
     # Run some checkings
-    if check_sudden_jumps(
-        pdb_filename.filename,
-        trajectory_filename.filename,
-        structure.value,
-        time_length.value,
-        snapshots.value
-    ):
+    if sudden_jumps.value:
         if not mercy:
             raise SystemExit('Failed RMSD checking')
 

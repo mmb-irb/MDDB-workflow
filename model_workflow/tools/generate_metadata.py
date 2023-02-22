@@ -11,7 +11,9 @@ def generate_metadata (
     inputs_filename : str,
     snapshots : int,
     residues_map : dict,
-    output_metadata_filename : str):
+    output_metadata_filename : str,
+    register : dict
+    ):
 
     # Set a function to retrieve 'inputs' values and handle missing keys
     inputs = None
@@ -98,6 +100,7 @@ def generate_metadata (
         'MEMBRANES': get_input('membranes'),
         'LINKS': get_input('links'),
         'ORIENTATION': get_input('orientation'),
+        'WARNINGS': register['warnings'],
         # Collection specifics
         'CV19_UNIT': get_input('cv19_unit')
     }

@@ -19,7 +19,8 @@ standard_deviations_cutoff = 9
 def check_sudden_jumps (
     input_structure_filename : str,
     input_trajectory_filename : str,
-    structure : str,
+    structure : 'Structure',
+    register : dict,
     time_length : float,
     snapshots : int,
     check_selection : str = 'protein or nucleic',
@@ -92,10 +93,12 @@ def check_sudden_jumps (
 
     # If there were any outlier then the check has failed
     if outliers_count > 0:
+        register['warnings'].append('RMSD check has failed: there may be sudden jumps along the trajectory')
         return True
 
     # Warn the user if we had bypassed frames
     if bypassed_frames > 0:
         print(' WARNING: First ' + str(bypassed_frames) + ' frames may be not equilibrated')
+        register['warnings'].append('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     return False
