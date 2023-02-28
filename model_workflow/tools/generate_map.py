@@ -37,8 +37,10 @@ synthetic_construct_flag = 'sc'
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
 def generate_map_online (
     structure : 'Structure',
+    register : dict,
+    mercy : bool = False,
     forced_references : Optional[ Union[list,dict] ] = None,
-    pdb_ids : List[str] = []
+    pdb_ids : List[str] = [],
 ) -> dict:
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
     strict_references = type(forced_references) == dict
@@ -156,11 +158,10 @@ def generate_map_online (
                 continue
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
+        # Export already matched references
+        export_references(protein_sequences)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-        # If all protein sequences were matched then also export the references
-        allright = all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])
-        if allright:
-            export_references(protein_sequences)
+        allright = all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])            
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
@@ -241,8 +242,10 @@ def generate_map_online (
         print(' Using also references from blast')
         if match_sequences():
             return format_topology_data(structure, protein_sequences)
-    print('WARNING: The BLAST failed to find a matching reference sequence for at least one protein sequence')
-    export_references(protein_sequences)
+    if not mercy:
+        raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
+    print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
+    register['warnings'].append('There is at least one protein region which is not mapped to any reference sequence')
     return format_topology_data(structure, protein_sequences)
 
 # Export reference objects data to a json file
@@ -256,7 +259,7 @@ def export_references (mapping_data : list):
     for data in mapping_data:
         match = data['match']
         ref = match['ref']
-        if ref == synthetic_construct_flag:
+        if not ref or ref == synthetic_construct_flag:
             continue
         uniprot = ref['uniprot']
         if uniprot in final_uniprots:
