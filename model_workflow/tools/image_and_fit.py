@@ -1,11 +1,19 @@
 # This script is used to fit a trajectory (i.e. eliminate translation and rotation)
 # This process is carried by Gromacs
 
-import os
+from os import remove
+from os.path import exists
 from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.topology_manager import get_chains, set_chains
 from model_workflow.tools.formats import is_tpr
+
+from mdtoolbelt.structures import Structure
+
+# Set the deault centering selection (vmd syntax): protein and nucleic acids
+center_selection = 'protein or nucleic'
+center_selection_name = 'protein_and_nucleic_acids'
+center_selection_filename = '.index.ndx'
 
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb and .tpr
@@ -32,6 +40,15 @@ def image_and_fit (
     # First of all save chains
     # Gromacs will delete chains so we need to recover them after
     chains_backup = get_chains(input_topology_filename)
+
+    # Set a custom index file (.ndx) to select protein and nucleic acids
+    # This is useful for some imaging steps
+    structure = Structure.from_pdb_file(input_topology_filename)
+    selection = structure.select(center_selection, syntax='vmd')
+    # Convert the selection to a ndx file which gromacs can read
+    selection_ndx = selection.to_ndx(center_selection_name)
+    with open(center_selection_filename, 'w') as file:
+        file.write(selection_ndx)
 
     # In order to run the imaging protocol 4 we need a .tpr file, not just the .pdb file
     # This is because there is a '-pbc res' step which only works with a .tpr file
@@ -129,6 +146,8 @@ def image_and_fit (
             '-center',
             '-ur',
             'compact',
+            '-n',
+            center_selection_filename,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
@@ -200,12 +219,18 @@ def image_and_fit (
             output_trajectory_filename,
             '-fit',
             'rot+trans',
+            '-n',
+            center_selection_filename,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
 
     # Recover chains
     set_chains(output_topology_filename, chains_backup)
+
+    # Clean up the index files
+    if exists(center_selection_filename):
+        remove(center_selection_filename)
 
 
 # Get the first frame of a trajectory
