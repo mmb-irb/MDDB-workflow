@@ -313,6 +313,7 @@ def get_input_charges_filename () -> str:
         topology_url = project_url + '/topology'
         topology = None
         try:
+            sys.stdout.write('Downloading charges (topology.json)\n')
             response = urllib.request.urlopen(topology_url)
             topology = json.loads(response.read())
         except:
