@@ -129,7 +129,7 @@ def image_and_fit (
         # Run Gromacs
         p = Popen([
             "echo",
-            "Protein",
+            center_selection_name,
             "System",
         ], stdout=PIPE)
         logs = run([
@@ -205,7 +205,6 @@ def image_and_fit (
         # Run Gromacs
         p = Popen([
             "echo",
-            'Protein',
             "System",
         ], stdout=PIPE)
         logs = run([
@@ -219,8 +218,6 @@ def image_and_fit (
             output_trajectory_filename,
             '-fit',
             'rot+trans',
-            '-n',
-            center_selection_filename,
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
