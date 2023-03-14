@@ -24,7 +24,8 @@ def process_input_files (
     translation: list,
     filter_selection : str,
     register : dict,
-    mercy : bool,
+    mercy : List[str],
+    trust : List[str]
     ) -> None:
 
     # Convert input topology and trajectories to output topology and trajectory
@@ -61,7 +62,8 @@ def process_input_files (
         output_trajectory_filename,
         output_trajectory_filename,
         register,
-        mercy
+        mercy,
+        trust
     )
 
 # Set the output charges filename given the input charges filename

@@ -3,7 +3,7 @@
 # This is the starter script
 
 # Import python libraries
-from argparse import ArgumentParser, RawTextHelpFormatter
+from argparse import ArgumentParser, RawTextHelpFormatter, Action
 import os
 import sys
 import io
@@ -368,6 +368,7 @@ filter_selection = Dependency(get_input, {'name': 'filter_selection'})
 pca_fit_selection = Dependency(get_input, {'name': 'pca_fit_selection'})
 pca_selection = Dependency(get_input, {'name': 'pca_selection'})
 mercy = Dependency(get_input, {'name': 'mercy'})
+trust = Dependency(get_input, {'name': 'trust'})
 sample_trajectory = Dependency(get_input, {'name': 'sample_trajectory'})
 
 # Get input filenames from the already updated inputs
@@ -406,6 +407,7 @@ process_input_files = Dependency(process_input_files, {
     'filter_selection' : filter_selection,
     'register': register,
     'mercy': mercy,
+    'trust': trust,
 })
 
 # Main topology and trajectory files
@@ -523,6 +525,7 @@ residues_map = Dependency(generate_map_online, {
     'structure': structure,
     'register': register,
     'mercy': mercy,
+    'trust': trust,
     'forced_references': forced_references,
     'pdb_ids': pdb_ids,
 }, 'map')
@@ -743,7 +746,8 @@ def workflow (
     filter_selection : Union[bool, str] = False,
     preprocess_protocol : int = 0,
     translation : List[float] = [0, 0, 0],
-    mercy : bool = False,
+    mercy : List[str] = [],
+    trust : List[str] = [],
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
 
@@ -776,8 +780,10 @@ def workflow (
     process_input_files.value
 
     # Run some checkings
-    if sudden_jumps.value:
-        if not mercy:
+    must_check_trajectory_integrity = 'intrajrity' not in trust
+    if must_check_trajectory_integrity and sudden_jumps.value:
+        must_be_killed = 'intrajrity' not in mercy
+        if must_be_killed:
             raise SystemExit('Failed RMSD checking')
 
     # If setup is passed as True then exit as soon as the setup is finished
@@ -907,10 +913,56 @@ parser.add_argument(
     action='store_true',
     help="If passed, only download required files and run mandatory dependencies. Then exits.")
 
+# Set a custom argparse action to handle the following 2 arguments
+# This is done becuase it is not possible to combine nargs='*' with const
+# https://stackoverflow.com/questions/72803090/argparse-how-to-create-the-equivalent-of-const-with-nargs
+class custom (Action):
+    # If argument is not passed -> default
+    # If argument is passed empty -> const
+    # If argument is passed with values -> values
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values:
+            setattr(namespace, self.dest, values)
+        else:
+            setattr(namespace, self.dest, self.const)
+
+# State all the available checkings, which may be trusted
+available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
+
+parser.add_argument(
+    "-t", "--trust",
+    type=str,
+    nargs='*',
+    default=[],
+    action=custom,
+    const=available_checkings,
+    choices=available_checkings,
+    help=("If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n"
+        "Available protocols:\n"
+        "- stabonds - Stable bonds\n"
+        "- cohbonds - Coherent bonds\n"
+        "- intrajrity - Trajectory integrity")
+)
+
+# State all critical process failures, which are to be lethal for the workflow unless mercy is given
+available_failures = available_checkings + [ 'refseq' ]
+
 parser.add_argument(
     "-m", "--mercy",
-    action='store_true',
-    help="If passed, do not kill the process when a checking fails and proceed with the workflow")
+    type=str,
+    nargs='*',
+    default=[],
+    action=custom,
+    const=available_failures,
+    choices=available_failures,
+    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
+        "Note that all checkings are allowed to fail if the argument is passed alone.\n"
+        "Available protocols:\n"
+        "- stabonds - Stable bonds\n"
+        "- cohbonds - Coherent bonds\n"
+        "- intrajrity - Trajectory integrity\n"
+        "- refseq - Reference sequence")
+)
 
 parser.add_argument(
     "-smp", "--sample_trajectory",

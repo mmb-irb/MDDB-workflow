@@ -1,7 +1,7 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from mdtoolbelt.vmd_spells import get_covalent_bonds
 
-from typing import List
+from typing import List, Optional
 
 
 # A few frames should be enough
@@ -69,7 +69,11 @@ def get_safe_bonds (structure_filename : str, trajectory_filename : str) -> List
     return safe_bonds
 
 # Return a canonical frame number where all bonds are exactly as they should
-def get_safe_bonds_canonical_frame (structure_filename : str, trajectory_filename : str, safe_bonds : List[ List[int] ]) -> int:
+def get_safe_bonds_canonical_frame (
+    structure_filename : str,
+    trajectory_filename : str,
+    safe_bonds : List[ List[int] ]
+) -> Optional[int]:
 
     # Now that we have the safe bonds, we must find a frame where bonds are exactly the canonical ones
     print('Searching safe bonds canonical frame')
@@ -82,9 +86,9 @@ def get_safe_bonds_canonical_frame (structure_filename : str, trajectory_filenam
         if do_bonds_match(bonds, safe_bonds):
             safe_bonds_frame = frame_number
             break
-    # If no frame has the canonical bonds then we stop here and warn the user
+    # If no frame has the canonical bonds then we return None
     if safe_bonds_frame == None:
-        raise RuntimeError('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
+        return None
 
     print(' Got it -> Frame ' + str(safe_bonds_frame + 1))
 

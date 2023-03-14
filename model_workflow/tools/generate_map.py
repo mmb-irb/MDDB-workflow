@@ -38,7 +38,7 @@ synthetic_construct_flag = 'sc'
 def generate_map_online (
     structure : 'Structure',
     register : dict,
-    mercy : bool = False,
+    mercy : List[str] = [],
     forced_references : Optional[ Union[list,dict] ] = None,
     pdb_ids : List[str] = [],
 ) -> dict:
@@ -242,7 +242,10 @@ def generate_map_online (
         print(' Using also references from blast')
         if match_sequences():
             return format_topology_data(structure, protein_sequences)
-    if not mercy:
+    # At this point we should have macthed all sequences
+    # If not, kill the process unless mercy was given
+    must_be_killed = 'refseq' not in mercy
+    if must_be_killed:
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
     print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
     register['warnings'].append('There is at least one protein region which is not mapped to any reference sequence')
