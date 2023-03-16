@@ -44,10 +44,13 @@ def image_and_fit (
     # Set a custom index file (.ndx) to select protein and nucleic acids
     # This is useful for some imaging steps
     structure = Structure.from_pdb_file(input_topology_filename)
+    system_selection = structure.select('all', syntax='vmd')
     selection = structure.select(center_selection, syntax='vmd')
     # Convert the selection to a ndx file which gromacs can read
+    system_selection_ndx = system_selection.to_ndx('System')
     selection_ndx = selection.to_ndx(center_selection_name)
     with open(center_selection_filename, 'w') as file:
+        file.write(system_selection_ndx)
         file.write(selection_ndx)
 
     # In order to run the imaging protocol 4 we need a .tpr file, not just the .pdb file
