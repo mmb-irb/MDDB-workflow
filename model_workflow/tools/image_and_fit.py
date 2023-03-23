@@ -144,11 +144,31 @@ def image_and_fit (
             input_trajectory_filename,
             '-o',
             output_trajectory_filename,
+            '-center',
+            '-pbc',
+            'nojump', 
+            '-n',
+            center_selection_filename,
+            '-quiet'
+        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+        p.stdout.close()
+
+        # Run Gromacs
+        p = Popen([
+            "echo",
+            "System",
+        ], stdout=PIPE)
+        logs = run([
+            "gmx",
+            "trjconv",
+            "-s",
+            input_tpr_filename,
+            "-f",
+            output_trajectory_filename,
+            '-o',
+            output_trajectory_filename,
             '-pbc',
             'res', # Note that the 'res' option requires a tpr to be passed
-            '-center',
-            '-ur',
-            'compact',
             '-n',
             center_selection_filename,
             '-quiet'
