@@ -18,10 +18,12 @@ def do_bonds_match (bonds_1 : List[ List[int] ], bonds_2 : List[ List[int] ], ve
         if len(atom_bonds_1) != len(atom_bonds_2):
             if verbose:
                 print('Missmatch in atom ' + str(atom_index) + ': ' + str(atom_bonds_1) + ' -> ' + str(atom_bonds_2))
+                print() # Extra line for the frame logs to not erase the previous log
             return False
         if any(bond not in atom_bonds_2 for bond in atom_bonds_1):
             if verbose:
                 print('Missmatch in atom ' + str(atom_index) + ': ' + str(atom_bonds_1) + ' -> ' + str(atom_bonds_2))
+                print() # Extra line for the frame logs to not erase the previous log
             return False
     return True
 
@@ -72,7 +74,8 @@ def get_safe_bonds (structure_filename : str, trajectory_filename : str) -> List
 def get_safe_bonds_canonical_frame (
     structure_filename : str,
     trajectory_filename : str,
-    safe_bonds : List[ List[int] ]
+    safe_bonds : List[ List[int] ],
+    patience : int = 100, # Limit of frames to check before we surrender
 ) -> Optional[int]:
 
     # Now that we have the safe bonds, we must find a frame where bonds are exactly the canonical ones
@@ -86,6 +89,9 @@ def get_safe_bonds_canonical_frame (
         if do_bonds_match(bonds, safe_bonds):
             safe_bonds_frame = frame_number
             break
+        # If we didn't find a canonical frame at this point we probablty won't
+        if frame_number > patience:
+            return None
     # If no frame has the canonical bonds then we return None
     if safe_bonds_frame == None:
         return None
