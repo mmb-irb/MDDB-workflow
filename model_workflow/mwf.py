@@ -195,7 +195,8 @@ def load_inputs (inputs_filename : str):
         project = get_input('project')
         # If not, then there is nothing to do
         if not server_url or not project:
-            raise SystemExit('ERROR: Missing inputs file "' + inputs_filename + '"')
+            #raise SystemExit('ERROR: Missing inputs file "' + inputs_filename + '"')
+            return
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + inputs_filename + ')\n')
         project_url = server_url + '/api/rest/current/projects/' + project
