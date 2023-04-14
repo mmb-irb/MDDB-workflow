@@ -78,9 +78,16 @@ def check_sudden_jumps (
     # Capture outliers
     # If we capture more than 5 we stop searching
     outliers_count = 0
+    max_z_score = 0
+    max_z_score_frame = 0
     for i, rmsd_jump in enumerate(rmsd_jumps):
-        z_score = (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump
-        if abs(z_score) > standard_deviations_cutoff:
+        z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
+        # Keep track of the maixmum z score
+        if z_score > max_z_score:
+            max_z_score = z_score
+            max_z_score_frame = i
+        # If z score bypassed the limit then report it
+        if z_score > standard_deviations_cutoff:
             # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
             if i == bypassed_frames:
                 bypassed_frames += 1
@@ -90,6 +97,9 @@ def check_sudden_jumps (
                 break
             print(' FAIL: Sudden RMSD jump between frames ' + str(i) + ' and ' + str(i+1))
             outliers_count += 1
+
+    # Always print the maximum z score and its frames
+    print('Maximum z score (' + str(max_z_score) + ') reported between frames ' + str(max_z_score_frame) + ' and ' + str(max_z_score_frame + 1))
 
     # If there were any outlier then the check has failed
     if outliers_count > 0:
