@@ -171,6 +171,12 @@ OUTPUT_sasa_filename = 'md.sasa.json'
 OUTPUT_energies_filename = 'md.energies.json'
 OUTPUT_pockets_filename = 'md.pockets.json'
 
+# State all the available checkings, which may be trusted
+available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
+
+# State all critical process failures, which are to be lethal for the workflow unless mercy is given
+available_failures = available_checkings + [ 'refseq' ]
+
 # Define all dependencies
 # Dependencies are tools and files that are required by some analyses
 # They are only run/generated when some analysis requires them
@@ -746,12 +752,33 @@ def workflow (
     filter_selection : Union[bool, str] = False,
     preprocess_protocol : int = 0,
     translation : List[float] = [0, 0, 0],
-    mercy : List[str] = [],
-    trust : List[str] = [],
+    mercy : Union[ List[str], bool ] = [],
+    trust : Union[ List[str], bool ] = [],
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
 
 ):
+
+    # Fix the input_trajectory_filenames argument: in case it is a string convert it to a list
+    if type(input_trajectory_filenames) == str:
+        input_trajectory_filenames = [input_trajectory_filenames]
+
+    # Fix the mercy input, if needed
+    # If a boolean is passed instead of a list we set its corresponding value
+    if type(mercy) == bool:
+        if mercy:
+            mercy = available_failures
+        else:
+            mercy = []
+
+    # Fix the trust input, if needed
+    # If a boolean is passed instead of a list we set its corresponding value
+    if type(trust) == bool:
+        if trust:
+            trust = available_checkings
+        else:
+            trust = []
+        
 
     # Update the inputs variable with all current function arguments
     # WARNING: Do not declare any variable over this line or it will be included in the inputs and thus in the register
@@ -926,9 +953,6 @@ class custom (Action):
         else:
             setattr(namespace, self.dest, self.const)
 
-# State all the available checkings, which may be trusted
-available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
-
 parser.add_argument(
     "-t", "--trust",
     type=str,
@@ -943,9 +967,6 @@ parser.add_argument(
         "- cohbonds - Coherent bonds\n"
         "- intrajrity - Trajectory integrity")
 )
-
-# State all critical process failures, which are to be lethal for the workflow unless mercy is given
-available_failures = available_checkings + [ 'refseq' ]
 
 parser.add_argument(
     "-m", "--mercy",
