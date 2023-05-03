@@ -26,8 +26,8 @@ import xmltodict
 # Set the name of the json file which will store the used reference objects
 references_filename = 'references.json'
 
-# Set a flag to represent a synthetic construct reference (i.e. no reference although it is protein)
-synthetic_construct_flag = 'sc'
+# Set a flag to represent a protein which is not referable (e.g. antibodies, synthetic constructs)
+no_referable_flag = 'noref'
 
 # Map the structure aminoacids sequences against the standard reference sequences
 # References are uniprot accession ids and they are optional
@@ -44,9 +44,9 @@ def generate_map_online (
 ) -> dict:
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
     strict_references = type(forced_references) == dict
-    # Check the synthetic construct flag not to be passed when references are not strict
-    if not strict_references and synthetic_construct_flag in forced_references:
-        raise SystemExit('WRONG INPUT: The "synthetic construct" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"sc"})')
+    # Check the "no referable" flag not to be passed when references are not strict
+    if not strict_references and no_referable_flag in forced_references:
+        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"' + no_referable_flag + '"})')
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
@@ -105,11 +105,11 @@ def generate_map_online (
                     # Skip this process in further matches
                     if structure_sequence['match']['ref']:
                         continue
-                    # In case the forced reference is the synthetic construct flag
+                    # In case the forced reference is the "no referable" flag
                     # Thus it has no reference sequence and we must not try to match it
                     # Actually, any match would be accidental and not correct
-                    if forced_reference == synthetic_construct_flag:
-                        structure_sequence['match'] = { 'ref': synthetic_construct_flag }
+                    if forced_reference == no_referable_flag:
+                        structure_sequence['match'] = { 'ref': no_referable_flag }
                         continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
                     reference_sequence = reference_sequences[forced_reference]
@@ -153,8 +153,8 @@ def generate_map_online (
             if not reference:
                 print('   ' + name + ' -> ¿?')
                 continue
-            if reference == synthetic_construct_flag:
-                print('   ' + name + ' -> Synthetic construct')
+            if reference == no_referable_flag:
+                print('   ' + name + ' -> No referable')
                 continue
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
@@ -168,9 +168,8 @@ def generate_map_online (
     if forced_references:
         forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
         for uniprot_id in forced_uniprot_ids:
-            # If instead of a uniprot id there is a 'synthetic construct' flag
-            # A synthetic construct does not have a reference sequence by definition so we skip this process
-            if uniprot_id == synthetic_construct_flag:
+            # If instead of a uniprot id there is a 'no referable' flag then we skip this process
+            if uniprot_id == no_referable_flag:
                 continue
             # If reference is already in the list (i.e. it has been imported) then skip this process
             reference = references.get(uniprot_id, None)
@@ -262,7 +261,7 @@ def export_references (mapping_data : list):
     for data in mapping_data:
         match = data['match']
         ref = match['ref']
-        if not ref or ref == synthetic_construct_flag:
+        if not ref or ref == no_referable_flag:
             continue
         uniprot = ref['uniprot']
         if uniprot in final_uniprots:
@@ -305,11 +304,11 @@ def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
         # If reference is missing at this point then it means we failed to find a matching reference
         if reference == None:
             continue
-        # If we have the synthetic construct flag
-        if reference == synthetic_construct_flag:
-            if synthetic_construct_flag not in reference_ids:
-                reference_ids.append(synthetic_construct_flag)
-            reference_index = reference_ids.index(synthetic_construct_flag)
+        # If we have the "no referable" flag
+        if reference == no_referable_flag:
+            if no_referable_flag not in reference_ids:
+                reference_ids.append(no_referable_flag)
+            reference_index = reference_ids.index(no_referable_flag)
             for residue_index in data['residue_indices']:
                 residue_reference_indices[residue_index] = reference_index
             continue
