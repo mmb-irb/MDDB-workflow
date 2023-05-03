@@ -80,7 +80,7 @@ def topology_corrector (
                 print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
                 must_be_killed = 'stabonds' not in mercy
                 if must_be_killed:
-                    raise RuntimeError()
+                    raise SystemExit('Failed to find stable bonds')
             # Set also the safe bonds frame structure to mine its coordinates
             safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
             safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
@@ -99,7 +99,7 @@ def topology_corrector (
         print('FAIL: Uncoherent bonds were found')
         must_be_killed = 'cohbonds' not in mercy
         if must_be_killed:
-            raise SystemExit()
+            raise SystemExit('Failed to find coherent bonds')
 
     # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------

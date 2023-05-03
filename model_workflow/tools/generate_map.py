@@ -232,6 +232,8 @@ def generate_map_online (
         # Run the blast
         sequence = structure_sequence['sequence']
         uniprot_id = blast(sequence)
+        if not uniprot_id:
+            continue
         # Build a new reference from the resulting uniprot
         reference, already_loaded = get_reference(uniprot_id)
         reference_sequences[reference['uniprot']] = reference['sequence']
@@ -431,7 +433,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
 # Note that we are blasting against UniProtKB / Swiss-Prot so results will always be valid UniProt accessions
 # WARNING: This always means results will correspond to curated entries only
 #   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
-def blast (sequence : str) -> str:
+def blast (sequence : str) -> Optional[str]:
     print('Throwing blast...')
     result = NCBIWWW.qblast(
         program = "blastp",
@@ -439,9 +441,13 @@ def blast (sequence : str) -> str:
         sequence = sequence,
     )
     parsed_result = xmltodict.parse(result.read())
-    hits = parsed_result['BlastOutput']['BlastOutput_iterations']['Iteration']['Iteration_hits']['Hit']
+    hits = parsed_result['BlastOutput']['BlastOutput_iterations']['Iteration']['Iteration_hits']
+    # When there is no result return None
+    # Note that this is possible although hardly unprobable
+    if not hits:
+        return None
     # Get the first result only
-    result = hits[0]
+    result = hits['Hit'][0]
     # Return the accession
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
     accession = result['Hit_accession']
