@@ -61,6 +61,7 @@ def process_input_files (
         output_topology_filename,
         output_trajectory_filename,
         output_trajectory_filename,
+        output_charges_filename,
         register,
         mercy,
         trust
