@@ -17,6 +17,7 @@ def sasa(
     output_analysis_filename: str,
     structure : 'Structure',
     membranes,
+    snapshots : int,
     frames_limit : int,
 ):
     # For this analysis me must filter out hydrogens
@@ -53,7 +54,7 @@ def sasa(
 
     # Calculate the sasa for each frame
     sasa_per_frame = []
-    frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, frames_limit)
+    frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
     for f, current_frame in enumerate(frames):
 
         # Run the sasa analysis over the current frame

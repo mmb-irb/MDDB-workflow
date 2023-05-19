@@ -17,6 +17,7 @@ from typing import List
 def rmsds(
     input_trajectory_filename : str,
     output_analysis_filename : str,
+    snapshots : int,
     frames_limit : int,
     first_frame_filename : str,
     average_structure_filename : str,
@@ -38,6 +39,7 @@ def rmsds(
     reduced_trajectory_filename, step, frames = get_reduced_trajectory(
         rmsd_references[0],
         input_trajectory_filename,
+        snapshots,
         frames_limit,
     )
 

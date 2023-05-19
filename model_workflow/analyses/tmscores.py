@@ -16,6 +16,7 @@ def tmscores (
     first_frame_filename : str,
     average_structure_filename : str,
     structure : 'Structure',
+    snapshots : int,
     frames_limit : int):
 
     tmscore_references  = [first_frame_filename, average_structure_filename]
@@ -73,7 +74,7 @@ def tmscores (
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
-        frames, step, count = get_pdb_frames(reference, input_trajectory_filename, frames_limit)
+        frames, step, count = get_pdb_frames(reference, input_trajectory_filename, snapshots, frames_limit)
         for current_frame in frames:
 
             # Filter atoms in the current frame

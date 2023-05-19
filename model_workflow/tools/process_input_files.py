@@ -6,7 +6,6 @@ from typing import List, Optional
 from model_workflow.tools.formats import is_psf, is_tpr, is_raw, is_prmtop, is_top, is_psf, raw_charges_filename
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
-from model_workflow.tools.topology_corrector import topology_corrector
 
 from mdtoolbelt.conversions import convert
 
@@ -23,10 +22,8 @@ def process_input_files (
     preprocess_protocol : int,
     translation: list,
     filter_selection : str,
-    register : dict,
-    mercy : List[str],
-    trust : List[str]
     ) -> None:
+    print('Processing input files')
 
     # Convert input topology and trajectories to output topology and trajectory
     convert(
@@ -54,18 +51,6 @@ def process_input_files (
     if preprocess_protocol > 0:
         image_and_fit(output_topology_filename, output_trajectory_filename, output_charges_filename,
                       output_topology_filename, output_trajectory_filename, preprocess_protocol, translation)
-
-    # Examine and correct the topology file
-    topology_corrector(
-        output_topology_filename,
-        output_topology_filename,
-        output_trajectory_filename,
-        output_trajectory_filename,
-        output_charges_filename,
-        register,
-        mercy,
-        trust
-    )
 
 # Set the output charges filename given the input charges filename
 # i.e. if the input is whatever.top it will be renamed as topology.top

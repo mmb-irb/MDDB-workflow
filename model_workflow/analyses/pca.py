@@ -13,6 +13,7 @@ def pca (
     input_trajectory_filename: str,
     output_analysis_filename: str,
     output_trajectory_projections_prefix : str,
+    snapshots : int,
     frames_limit : int,
     structure : 'Structure',
     fit_selection : str,
@@ -26,6 +27,7 @@ def pca (
     pca_trajectory_filename, step, frames = get_reduced_trajectory(
         input_topology_filename,
         input_trajectory_filename,
+        snapshots,
         frames_limit,
     )
 

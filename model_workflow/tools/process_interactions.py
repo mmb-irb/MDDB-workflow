@@ -24,6 +24,7 @@ def process_interactions (
     topology_filename : str,
     trajectory_filename : str,
     structure : 'Structure',
+    snapshots : int,
     interactions_file : str) -> list:
 
     # If there is a backup then use it
@@ -45,6 +46,7 @@ def process_interactions (
     reduced_trajectory, step, frames = get_reduced_trajectory(
         topology_filename,
         trajectory_filename,
+        snapshots,
         frames_limit,
     )
     
@@ -53,8 +55,6 @@ def process_interactions (
 
     # Iterate over each defined interaction
     for interaction in interactions:
-        # Get a few frames along the trajectory
-        #frames, step, count = get_pdb_frames(topology_filename, trajectory_filename, frames_limit)
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices_vmd(
             topology_filename,

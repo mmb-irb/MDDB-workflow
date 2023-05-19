@@ -30,11 +30,11 @@ def do_bonds_match (bonds_1 : List[ List[int] ], bonds_2 : List[ List[int] ], ve
 # Get covalent bonds using VMD along different frames
 # This way we avoid having false positives because 2 atoms are very close in one frame by accident
 # This way we avoid having false negatives because 2 atoms are very far in one frame by accident
-def get_safe_bonds (structure_filename : str, trajectory_filename : str) -> List[ List[int] ]:
+def get_safe_bonds (structure_filename : str, trajectory_filename : str, snapshots : int) -> List[ List[int] ]:
 
     # Get each frame in pdb format to run VMD
     print('Finding safe bonds')
-    frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, frames_limit)
+    frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots, frames_limit)
 
     # Track bonds along frames
     frame_bonds = []
@@ -74,13 +74,14 @@ def get_safe_bonds (structure_filename : str, trajectory_filename : str) -> List
 def get_safe_bonds_canonical_frame (
     structure_filename : str,
     trajectory_filename : str,
+    snapshots : int,
     safe_bonds : List[ List[int] ],
     patience : int = 100, # Limit of frames to check before we surrender
 ) -> Optional[int]:
 
     # Now that we have the safe bonds, we must find a frame where bonds are exactly the canonical ones
     print('Searching safe bonds canonical frame')
-    frames, step, count = get_pdb_frames(structure_filename, trajectory_filename)
+    frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots)
 
     # We check all frames but we stop as soon as we find a match
     safe_bonds_frame = None

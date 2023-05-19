@@ -149,8 +149,11 @@ class File(Dependency):
 # Set output filenames
 # WARNING: Output filenames can not be changed easily since the loader uses these names
 # WARNING: Thus, these are also the filenames in the database, API, and client
+OUTPUT_provisional_pdb_filename = 'provisional.pdb'
 OUTPUT_pdb_filename = 'md.imaged.rot.dry.pdb'
 OUTPUT_trajectory_filename = 'md.imaged.rot.xtc'
+#OUTPUT_pdb_filename = 'structure.pdb'
+#OUTPUT_trajectory_filename = 'trajectory.xtc'
 OUTPUT_first_frame_filename = 'firstFrame.pdb'
 OUTPUT_average_structure_filename = 'average.pdb'
 OUTPUT_average_frame_filename = 'average.xtc'
@@ -407,20 +410,17 @@ process_input_files = Dependency(process_input_files, {
     'input_topology_filename': original_topology_filename,
     'input_trajectory_filenames': original_trajectory_filenames,
     'input_charges_filename': original_charges_filename,
-    'output_topology_filename': OUTPUT_pdb_filename,
+    'output_topology_filename': OUTPUT_provisional_pdb_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
     'preprocess_protocol': preprocess_protocol,
     'translation': translation,
     'filter_selection' : filter_selection,
-    'register': register,
-    'mercy': mercy,
-    'trust': trust,
 })
 
 # Main topology and trajectory files
 # These may be created from the original topology and trajectory files after some processing
 # These files are then widely used along the workflow
-pdb_filename = File(OUTPUT_pdb_filename,
+provisional_pdb_filename = File(OUTPUT_provisional_pdb_filename,
     process_input_files.func,
     process_input_files.args)
 trajectory_filename = File(OUTPUT_trajectory_filename,
@@ -437,41 +437,34 @@ trajectory_filename = File(OUTPUT_trajectory_filename,
 # DANI: 2 - This file is never requested alone
 charges_filename = Dependency(find_charges_filename, {})
 
-# Filter atoms to remove water and ions
-# As an exception, some water and ions may be not removed if specified
-# WARNING: This is the independent call for this function
-# WARNING: In the canonical workflow, this function is called inside 'process_input_files'
-filtering = Dependency(filter_atoms, {
-    'topology_filename' : original_topology_filename,
-    'trajectory_filename' : original_trajectory_filenames,
-    'charges_filename' : original_charges_filename,
-    'filter_selection': filter_selection,
-}, 'filter')
+# Count the number of snapshots
+# This value is used widely along the workflow instead of counting frames again to be more efficient
+# Note that some trajectory formats require to read the whole file to count frames (e.g. xtc)
+# The logic to count frames is powered by pytraj and thus it handles many different trajectory formats
+snapshots = Dependency(get_frames_count, {
+    'input_topology_filename': provisional_pdb_filename,
+    'input_trajectory_filename': trajectory_filename
+}, 'snapshots')
 
-# Image the trajectory if it is required
-# i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
-# Fit the trajectory by removing the translation and rotation if it is required
-# WARNING: This is the independent call for this function
-# WARNING: In the canonical workflow, this function is called inside 'process_input_files'
-imaging = Dependency(image_and_fit, {
-    'input_topology_filename': original_topology_filename,
-    'input_trajectory_filename': original_trajectory_filenames,
-    'input_tpr_filename' : original_charges_filename,
-    'output_topology_filename': original_topology_filename,
-    'output_trajectory_filename': original_trajectory_filenames,
-    'preprocess_protocol': preprocess_protocol,
-    'translation': translation,
-}, 'imaging')
-
-# Examine and correct the topology file
-# WARNING: This is the independent call for this function
-# WARNING: In the canonical workflow, this function is called inside 'process_input_files'
+# Examine and correct the structure file
 corrector = Dependency(topology_corrector, {
-    'input_pdb_filename': original_topology_filename,
-    'output_topology_filename': original_topology_filename,
-    'input_trajectory_filename': original_trajectory_filenames,
-    'output_trajectory_filename': original_trajectory_filenames,
+    'input_pdb_filename': OUTPUT_provisional_pdb_filename,
+    'output_topology_filename': OUTPUT_pdb_filename,
+    'input_trajectory_filename': trajectory_filename,
+    'output_trajectory_filename': trajectory_filename,
+    'input_charges_filename': charges_filename,
+    'snapshots' : snapshots,
+    'register' : register,
+    'mercy' : mercy,
+    'trust' : trust,
 }, 'corrector')
+
+# Main topology and trajectory files
+# These may be created from the original topology and trajectory files after some processing
+# These files are then widely used along the workflow
+pdb_filename = File(OUTPUT_pdb_filename,
+    corrector.func,
+    corrector.args)
 
 # Set a parsed structure/topology with useful features
 # IMPORTANT: Note that the pdb file at this point is already corrected
@@ -507,18 +500,13 @@ average_frame_filename = File(OUTPUT_average_frame_filename, get_average, {
 
 # Get additional metadata usedin the workflow which is not in the inputs
 
-# Count the number of snapshots
-snapshots = Dependency(get_frames_count, {
-    'input_topology_filename': pdb_filename,
-    'input_trajectory_filename': trajectory_filename
-}, 'snapshots')
-
 # Find out residues and interface residues for each interaction
 interactions = Dependency(process_interactions, {
     'input_interactions': input_interactions,
     'topology_filename': pdb_filename,
     'trajectory_filename': trajectory_filename,
     'structure': structure,
+    'snapshots' : snapshots,
     'interactions_file': OUTPUT_interactions_filename,
 }, 'interactions')
 
@@ -567,8 +555,6 @@ sudden_jumps = Dependency(check_sudden_jumps, {
 
 # Pack up all tools which may be called directly from the console
 tools = [
-    filtering,
-    imaging,
     corrector,
     interactions,
     snapshots,
@@ -586,6 +572,7 @@ analyses = [
         'frames_limit': 5000,
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
+        'snapshots': snapshots,
         'structure': structure,
     }, 'rmsds'),
     # Here we set a small frames limit since this anlaysis is a bit slow
@@ -596,6 +583,7 @@ analyses = [
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
         'structure' : structure,
+        'snapshots': snapshots,
         'frames_limit': 200,
     }, 'tmscores'),
     # This analysis is fast and the output size depends on the number of atoms only
@@ -612,6 +600,7 @@ analyses = [
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_rgyr_filename,
+        'snapshots': snapshots,
         'frames_limit': 5000,
     }, 'rgyr'),
     # WARNING: This analysis will generate several output files
@@ -622,6 +611,7 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_pca_filename,
         "output_trajectory_projections_prefix": OUTPUT_pca_trajectory_projection_prefix,
+        'snapshots' : snapshots,
         'frames_limit': 2000,
         'structure': structure,
         'fit_selection': pca_fit_selection,
@@ -645,6 +635,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_rmsdperres_filename,
         'structure': structure,
         'membranes': membranes,
+        'snapshots': snapshots,
         'frames_limit': 100,
     }, 'rmsdperres'),
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
@@ -654,6 +645,7 @@ analyses = [
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_rmsdpairwise_filename,
         "interactions": interactions,
+        'snapshots': snapshots,
         'frames_limit': 200,
     }, 'rmsdpairwise'),
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
@@ -662,6 +654,7 @@ analyses = [
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_distperres_filename,
         "interactions": interactions,
+        'snapshots': snapshots,
         'frames_limit': 200,
     }, 'distperres'),
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
@@ -677,6 +670,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_hbonds_filename,
         'structure': structure,
         "interactions": interactions,
+        'snapshots': snapshots,
         'frames_limit': 200,
     }, 'hbonds'),
     File(OUTPUT_sasa_filename, sasa, {
@@ -685,6 +679,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_sasa_filename,
         'structure': structure,
         'membranes': membranes,
+        'snapshots': snapshots,
         'frames_limit': 100,
     }, 'sasa'),
     File(OUTPUT_energies_filename, energies, {
@@ -694,6 +689,7 @@ analyses = [
         'structure': structure,
         "interactions": interactions,
         'charges': charges,
+        'snapshots': snapshots,
         'frames_limit': 100,
     }, 'energies'),
     File(OUTPUT_pockets_filename, pockets, {
@@ -702,6 +698,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_pockets_filename,
         'structure': structure,
         'membranes': membranes,
+        'snapshots': snapshots,
         'frames_limit': 100,
     }, 'pockets'),
 ]
@@ -728,16 +725,16 @@ def main ():
 
 # Set default input filenames
 # They may be modified through console command arguments
-DEFAULT_working_directory = str(Path.cwd())
-DEFAULT_input_topology_filename = 'md.imaged.rot.dry.pdb'
-DEFAULT_input_trajectory_filenames = ['md.imaged.rot.xtc']
+#DEFAULT_working_directory = str(Path.cwd())
+DEFAULT_input_topology_filename = OUTPUT_pdb_filename
+DEFAULT_input_trajectory_filenames = [OUTPUT_trajectory_filename]
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_input_charges_filename = find_charges_filename()
 DEFAULT_database_url = 'https://mdposit-dev.bsc.es'
 
 # The actual main function
 def workflow (
-    working_dir : str = DEFAULT_working_directory,
+    #working_dir : str = DEFAULT_working_directory,
     input_topology_filename : str = DEFAULT_input_topology_filename,
     input_trajectory_filenames : List[str] = DEFAULT_input_trajectory_filenames,
     inputs_filename : str = DEFAULT_inputs_filename,
@@ -756,7 +753,6 @@ def workflow (
     trust : Union[ List[str], bool ] = [],
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
-
 ):
 
     # Fix the input_trajectory_filenames argument: in case it is a string convert it to a list
@@ -848,11 +844,11 @@ def workflow (
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
 
 # Set optional arguments
-parser.add_argument(
-    "-dir", "--working_dir",
-    default=DEFAULT_working_directory,
-    help="Directory where to perform analysis. "
-    "If empty, will use current directory.")
+# parser.add_argument(
+#     "-dir", "--working_dir",
+#     default=DEFAULT_working_directory,
+#     help="Directory where to perform analysis. "
+#     "If empty, will use current directory.")
 
 parser.add_argument(
     "-proj", "--project",

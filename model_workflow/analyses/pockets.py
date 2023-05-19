@@ -45,6 +45,7 @@ def pockets (
     output_analysis_filename : str,
     structure : 'Structure',
     membranes : list,
+    snapshots : int,
     frames_limit : int):
 
     # DANI: De momento, no se hacen pockets para simulaciones con membrana
@@ -60,6 +61,7 @@ def pockets (
     pockets_trajectory, step, frames = get_reduced_trajectory(
         input_topology_filename,
         input_trajectory_filename,
+        snapshots,
         frames_limit,
     )
 

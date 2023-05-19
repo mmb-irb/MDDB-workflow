@@ -17,12 +17,14 @@ def rgyr (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
+    snapshots : int,
     frames_limit : int):
 
     # Use a reduced trajectory in case the original trajectory has many frames
     reduced_trajectory_filename, step, frames = get_reduced_trajectory(
         input_topology_filename,
         input_trajectory_filename,
+        snapshots,
         frames_limit,
     )
     

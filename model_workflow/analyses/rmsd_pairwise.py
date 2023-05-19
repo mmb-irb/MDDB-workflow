@@ -18,11 +18,12 @@ def rmsd_pairwise(
     input_trajectory_filename : str,
     output_analysis_filename : str,
     interactions : list,
+    snapshots : int,
     frames_limit : int):
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
+    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
 
     # Run the analysis
     overall_selection = "@CA,C5'"

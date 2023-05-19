@@ -19,11 +19,12 @@ def rmsd_per_residue (
     output_analysis_filename : str,
     structure : 'Structure',
     membranes,
+    snapshots : int,
     frames_limit : int):
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, frames_limit)
+    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
 
     # We must filter out residues which only have 1 atom (e.g. ions)
     # This is because sometimes pytraj does not return results for them and then the number of results and residues does not match

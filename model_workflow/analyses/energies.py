@@ -56,6 +56,7 @@ def energies (
     structure : 'Structure',
     interactions : list,
     charges : list,
+    snapshots : int,
     frames_limit : int):
 
     if not interactions or len(interactions) == 0:
@@ -250,7 +251,7 @@ def energies (
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, step, count = get_pdb_frames(energies_structure_filename, input_trajectory_filename, frames_limit)
+    frames, step, count = get_pdb_frames(energies_structure_filename, input_trajectory_filename, snapshots, frames_limit)
     non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
     interactions_data = [[] for interaction in non_exceeding_interactions]
     for current_frame_pdb in frames:

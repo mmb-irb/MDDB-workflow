@@ -1,6 +1,7 @@
 from typing import Optional, List
 from os import remove
 from os.path import exists
+from json import load
 
 # Import mdtoolbelt tools
 from mdtoolbelt.structures import Structure
@@ -37,6 +38,7 @@ def topology_corrector (
     input_trajectory_filename : Optional[str],
     output_trajectory_filename : Optional[str],
     input_charges_filename : Optional[str],
+    snapshots : int,
     register : dict,
     mercy : List[str],
     trust : List[str]
@@ -75,7 +77,7 @@ def topology_corrector (
         if must_check_stable_bonds:
 
             # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
-            safe_bonds = get_safe_bonds(input_pdb_filename, input_trajectory_filename)
+            safe_bonds = get_safe_bonds(input_pdb_filename, input_trajectory_filename, snapshots)
             # If the safe bonds do not match the structure bonds then we have to fix it
             if not do_bonds_match(structure.bonds, safe_bonds):
                 modified = True
@@ -83,7 +85,7 @@ def topology_corrector (
                 # Set the safe bonds as the structure bonds
                 structure.bonds = safe_bonds
                 # Find the first frame in the whole trajectory where safe bonds are respected
-                safe_bonds_frame = get_safe_bonds_canonical_frame(input_pdb_filename, input_trajectory_filename, safe_bonds)
+                safe_bonds_frame = get_safe_bonds_canonical_frame(input_pdb_filename, input_trajectory_filename, snapshots, safe_bonds)
                 # If there is no canonical frame then stop here since there must be a problem
                 if safe_bonds_frame == None:
                     print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
@@ -195,9 +197,10 @@ def topology_corrector (
     # Write a new topology if any modification was done
     if modified:
         print(' The topology file has been modificated -> ' + output_topology_filename)
-        structure.generate_pdb_file(output_topology_filename)
     else:
         print(' Everything is fine')
+    # Generate the file anyway so this new structure is used and not reclaulcated
+    structure.generate_pdb_file(output_topology_filename)
 
     print('-------------------------------')
 

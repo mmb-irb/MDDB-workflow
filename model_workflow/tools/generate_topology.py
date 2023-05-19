@@ -18,6 +18,7 @@ def generate_topology (
         atom_names[index] = atom.name
         atom_elements[index] = atom.element
         atom_residue_indices[index] = atom.residue.index
+    atom_bonds = structure.bonds
         
     # Residue data
     structure_residues = structure.residues
@@ -58,6 +59,7 @@ def generate_topology (
         'atom_elements': atom_elements,
         'atom_charges': atom_charges,
         'atom_residue_indices': atom_residue_indices,
+        'atom_bonds': atom_bonds,
         'residue_names': residue_names,
         'residue_numbers': residue_numbers,
         'residue_icodes': residue_icodes,
