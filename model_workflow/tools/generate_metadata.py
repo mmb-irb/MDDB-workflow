@@ -22,12 +22,6 @@ def generate_metadata (
     def get_input(input: str):
         return inputs.get(input, None)
 
-    # Calculate the frequency
-    # Divide the simulation time, which is in nanoseconds (ns) by the number of frames
-    # Multiply it by 1000 since we want the frequency in picoseconds (ps)
-    length = get_input('length')
-    frequency = (length / snapshots) * 1000 if length != None else None
-
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
         input_topology_filename, input_trajectory_filename)
@@ -72,10 +66,9 @@ def generate_metadata (
         'LINKCENSE': get_input('linkcense'),
         'CITATION': get_input('citation'),
         'THANKS': get_input('thanks'),
-        'LENGTH': length,
+        'LENGTH': get_input('length'),
         'TIMESTEP': get_input('timestep'),
         'SNAPSHOTS': snapshots,
-        'FREQUENCY': frequency,
         'FF': forcefields,
         'TEMP': get_input('temp'),
         'WAT': get_input('wat'),
