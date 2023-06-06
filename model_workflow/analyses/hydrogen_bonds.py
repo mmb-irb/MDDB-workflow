@@ -36,7 +36,7 @@ def hydrogen_bonds (
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frames_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
 
     # Save the reference function to get an absolue atom index from a pytraj atom index
     get_atom_index = structure.get_atom_index

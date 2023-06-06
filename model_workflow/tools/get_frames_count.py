@@ -1,6 +1,7 @@
 # Get frames count
 
 import pytraj as pt
+# LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 
 # Get the trajectory frames number using pytraj
 def get_frames_count (
@@ -15,4 +16,5 @@ def get_frames_count (
     # Return the frames number
     frames = pt_trajectory.n_frames
     print(' Frames: ' + str(frames))
+
     return frames

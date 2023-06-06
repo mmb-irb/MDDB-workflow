@@ -44,10 +44,10 @@ def get_atoms_count (
     with open(input_topology_filename, 'r') as file:
         
         # Keep track of the current residue
-        current_residue_number = 0
+        current_residue_number = None
         
         for line in file:
-            if(line.split()[0] == 'ATOM'):
+            if line.split()[0] == 'ATOM':
                 systats += 1
                 
                 # Get the residue number in this line
@@ -55,7 +55,7 @@ def get_atoms_count (
                 
                 # If the residue number in this line is different to the current residue...
                 # Get its data and set it as the current
-                if(current_residue_number != residue_number):
+                if current_residue_number != residue_number:
                     current_residue_number = residue_number
                     
                     # Get the name of this residue
@@ -70,16 +70,16 @@ def get_atoms_count (
                     elif(residue_name == 'DPP'):
                         dppc += 1
                         
-                if(residue_name == 'PROT'):
+                if residue_name == 'PROT':
                     protats += 1
                     
-                if(residue_name == 'SOL' or residue_name == 'WAT'):
+                if residue_name == 'SOL' or residue_name == 'WAT':
                     sol += 1
                         
-                if(residue_name == 'NA' or residue_name == 'NA+' or residue_name == 'K' or residue_name == 'K+'):
+                if residue_name == 'NA' or residue_name == 'NA+' or residue_name == 'K' or residue_name == 'K+':
                     na += 1
                     
-                if(residue_name == 'CL' or residue_name == 'CL-'):
+                if residue_name == 'CL' or residue_name == 'CL-':
                     cl += 1
 
     # Display it

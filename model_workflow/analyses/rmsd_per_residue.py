@@ -24,7 +24,7 @@ def rmsd_per_residue (
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
 
     # We must filter out residues which only have 1 atom (e.g. ions)
     # This is because sometimes pytraj does not return results for them and then the number of results and residues does not match
@@ -85,6 +85,6 @@ def rmsd_per_residue (
         rmsd_per_residue[residue_index] = list(residue_data)
 
     # Export the analysis in json format
-    output_analysis = { 'step': pt_trajectory.step, 'rmsdpr': rmsd_per_residue }
+    output_analysis = { 'step': frame_step, 'rmsdpr': rmsd_per_residue }
     with open(output_analysis_filename, 'w') as file:
         json.dump(output_analysis, file)

@@ -23,7 +23,7 @@ def rmsd_pairwise(
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
 
     # Run the analysis
     overall_selection = "@CA,C5'"
@@ -65,9 +65,7 @@ def rmsd_pairwise(
 
     # Write in the analysis the starting frame and the step between frames
     # By default the first frame in the reduced trajectory is the first frame (0)
-    start = 0
-    step = pt_trajectory.step
 
     # Export the analysis in json format
     with open(output_analysis_filename, 'w') as file:
-        json.dump({'data': output_analysis, 'start': start, 'step': step}, file)
+        json.dump({'data': output_analysis, 'start': 0, 'step': frame_step}, file)

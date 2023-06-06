@@ -38,7 +38,7 @@ def get_charges(charges_source_filename : str) -> list:
     elif is_tpr(charges_source_filename):
         charges = get_tpr_charges(charges_source_filename)
     else:
-        raise ValueError('Charges file is in a non supported format')
+        raise ValueError('Charges file (' + charges_source_filename + ') is in a non supported format')
     return charges
 
 # Given a topology which includes charges

@@ -20,10 +20,11 @@ def process_input_files (
     output_topology_filename : str,
     output_trajectory_filename : str,
     preprocess_protocol : int,
-    translation: list,
+    translation : list,
     filter_selection : str,
     ) -> None:
-    print('Processing input files')
+
+    print('-- Processing input files --')
 
     # Convert input topology and trajectories to output topology and trajectory
     convert(
@@ -51,6 +52,7 @@ def process_input_files (
     if preprocess_protocol > 0:
         image_and_fit(output_topology_filename, output_trajectory_filename, output_charges_filename,
                       output_topology_filename, output_trajectory_filename, preprocess_protocol, translation)
+    print('-- Processed input files  --')
 
 # Set the output charges filename given the input charges filename
 # i.e. if the input is whatever.top it will be renamed as topology.top

@@ -36,28 +36,26 @@ def get_reduced_pytraj_trajectory (
     # WARNING: This may be a lot of time for a huge trajectory. Use the snapshots input instead
 
     # Set a reduced trajectory used for heavy analyses
+
     # If the current trajectory has already less or the same frames than the limit
     # Then do nothing and use it also as reduced
     if snapshots <= reduced_trajectory_frames_limit:
-        reduced_pt_trajectory = pt_trajectory
-        # Add a step value which will be required later
-        reduced_pt_trajectory.step = 1
+        frame_step = 1
+        return pt_trajectory, frame_step, snapshots
+
     # Otherwise, create a reduced trajectory with as much frames as specified above
     # These frames are picked along the trajectory
-    else:
-        # Calculate the step between frames in the reduced trajectory to match the final number of frames
-        # WARNING: Since the step must be an integer the thorical step must be rounded
-        # This means the specified final number of frames may not be accomplished, but it is okey
-        # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
-        # This means the final number of frames will be the specified or less
-        # CRITICAL WARNING:
-        # This formula is exactly the same that the client uses to request stepped frames to the API
-        # This means that the client and the workflow are coordinated and these formulas must not change
-        # If you decide to change this formula (in both workflow and client)...
-        # You will have to run again all the database analyses with reduced trajectories
-        step = math.ceil(snapshots / reduced_trajectory_frames_limit)
-        reduced_pt_trajectory = pt_trajectory[0:snapshots:step]
-        # Add the step value to the reduced trajectory explicitly. It will be required later
-        reduced_pt_trajectory.step = step
-
-    return reduced_pt_trajectory
+    # Calculate the step between frames in the reduced trajectory to match the final number of frames
+    # WARNING: Since the step must be an integer the thorical step must be rounded
+    # This means the specified final number of frames may not be accomplished, but it is okey
+    # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
+    # This means the final number of frames will be the specified or less
+    # CRITICAL WARNING:
+    # This formula is exactly the same that the client uses to request stepped frames to the API
+    # This means that the client and the workflow are coordinated and these formulas must not change
+    # If you decide to change this formula (in both workflow and client)...
+    # You will have to run again all the database analyses with reduced trajectories
+    frame_step = math.ceil(snapshots / reduced_trajectory_frames_limit)
+    reduced_pt_trajectory = pt_trajectory[0:snapshots:frame_step]
+    reduced_frame_count = math.ceil(snapshots / frame_step)
+    return reduced_pt_trajectory, frame_step, reduced_frame_count

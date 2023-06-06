@@ -19,7 +19,7 @@ from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_input_files import process_input_files, find_charges_filename
 from model_workflow.tools.topology_manager import setup_structure
-from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
+from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
@@ -120,12 +120,20 @@ class File(Dependency):
     # The 'func' is the function to generate the file
     # If there is no func it means the file will be always there (i.e. it is an input file)
     # The 'args' are the arguments for the 'func'
-    def __init__ (self, filename : str, func, args = {}, alias = ''):
+    # The 'always_remake' flag is used to always generate the file and overw
+    def __init__ (self, filename : str, func, args = {}, alias = '', always_remake : bool = False):
         self.filename = filename
+        self.always_remake = always_remake
         super().__init__(func, args, alias)
 
+    def __str__ (self):
+        return self.filename
+
+    def __repr__ (self):
+        return self.filename
+
     def exists (self) -> bool:
-        if not self.filename:
+        if self.always_remake or not self.filename:
             return False
         return os.path.exists(self.filename)
 
@@ -464,7 +472,8 @@ corrector = Dependency(topology_corrector, {
 # These files are then widely used along the workflow
 pdb_filename = File(OUTPUT_pdb_filename,
     corrector.func,
-    corrector.args)
+    corrector.args,
+    always_remake=True)
 
 # Set a parsed structure/topology with useful features
 # IMPORTANT: Note that the pdb file at this point is already corrected
@@ -549,8 +558,7 @@ sudden_jumps = Dependency(check_sudden_jumps, {
     'input_trajectory_filename': trajectory_filename,
     'structure': structure,
     'register': register,
-    'time_length': time_length,
-    'snapshots': snapshots,
+    #'time_length': time_length,
 })
 
 # Pack up all tools which may be called directly from the console

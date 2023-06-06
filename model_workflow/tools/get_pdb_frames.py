@@ -31,14 +31,12 @@ def get_pdb_frames (
 
     # Set a maximum number of frames
     # If trajectory has more frames than the limit create a reduced trajectory
-    reduced_trajectory = get_reduced_pytraj_trajectory(
+    reduced_trajectory, frames_step, frames_count = get_reduced_pytraj_trajectory(
         topology_filename,
         trajectory_filename,
         snapshots,
         frames_limit
     )
-    frames_step = reduced_trajectory.step
-    frames_count = reduced_trajectory.n_frames
     frames_list = range(0, frames_count)
 
     def frames_generator():

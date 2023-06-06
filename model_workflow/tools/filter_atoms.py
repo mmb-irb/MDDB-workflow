@@ -1,4 +1,5 @@
-import os
+from os import remove
+from os.path import exists
 from subprocess import run, PIPE, Popen
 
 import pytraj as pt
@@ -12,6 +13,9 @@ from mdtoolbelt.selections import Selection
 index_filename = 'filter.ndx'
 # Set the name for the group name in gromacs ndx file
 filter_group_name = "not_water_or_counter_ions"
+
+# Set the standard topology name
+standard_topology_filename = 'topology.json'
 
 # Filter atoms of all input topologies by remvoing atoms and ions
 # As an exception, some water and ions may be not removed if specified
@@ -55,10 +59,22 @@ def filter_atoms (
         pdb_filter(topology_filename, topology_filename, index_filename)
 
     # Filter charges according to the file format
-    if charges_filename and os.path.exists(charges_filename):
+    if charges_filename and exists(charges_filename):
         print('Processing charges')
+        # Already parsed charges
+        if charges_filename == standard_topology_filename:
+            with open(standard_topology_filename, 'r') as file:
+                standard_topology = load(file)
+            charges = standard_topology['atom_charges']
+            print('Charges count: ' + str(charges))
+            # Make it match since there is no problem when these 2 do not match
+            filtered_charges_atoms_count = filtered_atoms_count
+            # If the number of charges does not match the number of atoms then just remove the standard topolog file
+            # This way it will be generated again further but from the new filtered structure
+            if charges != filtered_atoms_count:
+                remove(standard_topology_filename)
         # Raw charges
-        if is_raw(charges_filename):
+        elif is_raw(charges_filename):
             charges = get_raw_charges(charges_filename)
             # Nothing to do here. It better matches by defualt or we have a problem
             filtered_charges_atoms_count = len(charges)
@@ -89,7 +105,7 @@ def filter_atoms (
             print('Charges count: ' + str(charges_atoms_count))
             # If the number of charges in greater than expected then filter the tpr file and extract charges again
             if charges_atoms_count > filtered_atoms_count:
-                if not os.path.exists(index_filename):
+                if not exists(index_filename):
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Charges number does not match the structure atoms and tpr files can not be filtered alone')
@@ -97,7 +113,7 @@ def filter_atoms (
                 charges = get_tpr_charges(charges_filename)
             filtered_charges_atoms_count = len(charges)
         else:
-            raise ValueError('Charges file is in a non supported format')
+            raise ValueError('Charges file (' + charges_filename + ') is in a non supported format')
 
         print('Filtered charges atoms: ' + str(filtered_charges_atoms_count))
 
@@ -107,8 +123,8 @@ def filter_atoms (
             raise ValueError('Filtered atom counts in topology and charges does not match')
 
     # Remove the index file in case it was created
-    if os.path.exists(index_filename):
-        os.remove(index_filename)
+    if exists(index_filename):
+        remove(index_filename)
 
 # Set the pytraj mask to filter the desired atoms from a specific topology
 def get_filter_mask (source_topology_filename : str, filter_selection : str) -> str:

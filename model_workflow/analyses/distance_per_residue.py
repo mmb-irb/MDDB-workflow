@@ -60,7 +60,7 @@ def distance_per_residue (
         reduced_analyses[biggest_interaction_index] = True
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
     # Run the analysis for each interaction
     output_analysis = []
     for n, interaction in enumerate(interactions):
