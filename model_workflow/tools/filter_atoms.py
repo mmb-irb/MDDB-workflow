@@ -1,6 +1,7 @@
 from os import remove
 from os.path import exists
 from subprocess import run, PIPE, Popen
+from json import load
 
 import pytraj as pt
 
