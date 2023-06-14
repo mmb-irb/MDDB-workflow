@@ -67,7 +67,7 @@ def filter_atoms (
             with open(standard_topology_filename, 'r') as file:
                 standard_topology = load(file)
             charges = standard_topology['atom_charges']
-            print('Charges count: ' + str(charges))
+            print('Charges count: ' + str(len(charges)))
             # Make it match since there is no problem when these 2 do not match
             filtered_charges_atoms_count = filtered_atoms_count
             # If the number of charges does not match the number of atoms then just remove the standard topolog file
