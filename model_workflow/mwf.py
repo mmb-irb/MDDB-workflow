@@ -120,10 +120,11 @@ class File(Dependency):
     # The 'func' is the function to generate the file
     # If there is no func it means the file will be always there (i.e. it is an input file)
     # The 'args' are the arguments for the 'func'
-    # The 'always_remake' flag is used to always generate the file and overw
-    def __init__ (self, filename : str, func, args = {}, alias = '', always_remake : bool = False):
+    # The 'must_remake' flag is used to generate the file and thus overwrite the previous file once per workflow run
+    def __init__ (self, filename : str, func, args = {}, alias = '', must_remake : bool = False):
         self.filename = filename
-        self.always_remake = always_remake
+        self.must_remake = must_remake
+        self.remade = False
         super().__init__(func, args, alias)
 
     def __str__ (self):
@@ -133,7 +134,7 @@ class File(Dependency):
         return self.filename
 
     def exists (self) -> bool:
-        if self.always_remake or not self.filename:
+        if (self.must_remake and not self.remade) or not self.filename:
             return False
         return os.path.exists(self.filename)
 
@@ -148,6 +149,7 @@ class File(Dependency):
         parsed_args = self.parse_args()
         sys.stdout.write('Generating "' + self.filename + '" file\n')
         self.func(**parsed_args)
+        self.remade = True
         return self.filename
 
     value = property(get_value, None, None, "The dependency value")
@@ -473,7 +475,7 @@ corrector = Dependency(topology_corrector, {
 pdb_filename = File(OUTPUT_pdb_filename,
     corrector.func,
     corrector.args,
-    always_remake=True)
+    must_remake=True)
 
 # Set a parsed structure/topology with useful features
 # IMPORTANT: Note that the pdb file at this point is already corrected
