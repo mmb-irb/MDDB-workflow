@@ -87,6 +87,7 @@ def generate_metadata (
         'LIGANDS': ligands,
         'CUSTOMS': get_input('customs'),
         'INTERACTIONS': get_input('interactions'),
+        'PBC_SELECTION': get_input('pbc_selection'),
         'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': references,
         'CHAINNAMES': get_input('chainnames'),
