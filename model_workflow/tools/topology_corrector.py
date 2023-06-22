@@ -66,40 +66,40 @@ def topology_corrector (
     # ------------------------------------------------------------------------------------------
 
     # Try to get bonds from the topology file before guessing
-    topology_bonds = get_bonds(input_charges_filename)
-    if topology_bonds:
-        structure.bonds = topology_bonds
-    else:
+    safe_bonds = get_bonds(input_charges_filename)
+    # If failed to mine topology bonds then guess stable bonds
+    if not safe_bonds:
         print('Bonds will be guessed by atom distances and radius')
-
         # Check and find if needed stable bonds
         must_check_stable_bonds = 'stabonds' not in trust
         if must_check_stable_bonds:
-
             # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
             safe_bonds = get_safe_bonds(input_pdb_filename, input_trajectory_filename, snapshots)
-            # If the safe bonds do not match the structure bonds then we have to fix it
-            if not do_bonds_match(structure.bonds, safe_bonds):
-                modified = True
-                print('WARNING: Default structure has wrong bonds')
-                # Set the safe bonds as the structure bonds
-                structure.bonds = safe_bonds
-                # Find the first frame in the whole trajectory where safe bonds are respected
-                safe_bonds_frame = get_safe_bonds_canonical_frame(input_pdb_filename, input_trajectory_filename, snapshots, safe_bonds)
-                # If there is no canonical frame then stop here since there must be a problem
-                if safe_bonds_frame == None:
-                    print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
-                    must_be_killed = 'stabonds' not in mercy
-                    if must_be_killed:
-                        raise SystemExit('Failed to find stable bonds')
-                # Set also the safe bonds frame structure to mine its coordinates
-                safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
-                safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
-                # Set all coordinates in the main structure by copying the safe bonds frame coordinates
-                for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
-                    atom_1.coords = atom_2.coords
-                # Remove the safe bonds frame since it is not requird anymore
-                remove(safe_bonds_frame_filename)
+    # If failed to mine bonds from topology and we trust stable bonds then simly use structure bonds
+    if not safe_bonds:
+        safe_bonds = structure.bonds
+    # If the safe bonds do not match the structure bonds then we have to fix it
+    if not do_bonds_match(structure.bonds, safe_bonds):
+        modified = True
+        print('WARNING: Default structure has wrong bonds')
+        # Set the safe bonds as the structure bonds
+        structure.bonds = safe_bonds
+        # Find the first frame in the whole trajectory where safe bonds are respected
+        safe_bonds_frame = get_safe_bonds_canonical_frame(input_pdb_filename, input_trajectory_filename, snapshots, safe_bonds)
+        # If there is no canonical frame then stop here since there must be a problem
+        if safe_bonds_frame == None:
+            print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
+            must_be_killed = 'stabonds' not in mercy
+            if must_be_killed:
+                raise SystemExit('Failed to find stable bonds')
+        # Set also the safe bonds frame structure to mine its coordinates
+        safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
+        safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
+        # Set all coordinates in the main structure by copying the safe bonds frame coordinates
+        for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
+            atom_1.coords = atom_2.coords
+        # Remove the safe bonds frame since it is not requird anymore
+        remove(safe_bonds_frame_filename)
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
