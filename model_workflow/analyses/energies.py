@@ -17,6 +17,7 @@
 
 # Imports libraries
 import os
+from os.path import exists
 from shutil import copyfile
 from pathlib import Path
 import re
@@ -47,6 +48,7 @@ vdw_source = resources + '/vdwprm'
 # Set a folder to be created in order to store residual output files from this analysis
 current_directory = str(Path().absolute())
 energies_folder = current_directory + '/energies'
+energies_backup = energies_folder + '/backup.json'
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies (
@@ -85,7 +87,7 @@ def energies (
 
     # This anlaysis produces many residual output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
-    if not os.path.exists(energies_folder):
+    if not exists(energies_folder):
         os.mkdir(energies_folder)
 
     # Adapt the structure for cmip
@@ -253,15 +255,27 @@ def energies (
     # Extract the energies for each frame in a reduced trajectory
     frames, step, count = get_pdb_frames(energies_structure_filename, input_trajectory_filename, snapshots, frames_limit)
     non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
-    interactions_data = [[] for interaction in non_exceeding_interactions]
-    for current_frame_pdb in frames:
-        
+
+    # Load backup data in case there is a backup file
+    if exists(energies_backup):
+        print(' Recovering energies backup')
+        with open(energies_backup, 'r') as file:
+            interactions_data = json.load(file)
+    else:
+        interactions_data = [[] for interaction in non_exceeding_interactions]
+    for frame_number, current_frame_pdb in enumerate(frames):
+        # If we already have this frame in the backup then skip it
+        if frame_number < len(interactions_data[0]):
+            continue
         # Run the main analysis over the current frame
         # Append the result data for each interaction
         current_frame_structure = Structure.from_pdb_file(current_frame_pdb)
         frame_energies_data = get_frame_energy(current_frame_structure)
         for i, data in enumerate(frame_energies_data):
             interactions_data[i].append(data)
+        # Save a backup just in case the process is interrupted further
+        with open(energies_backup, 'w') as file:
+            json.dump(interactions_data, file)
 
     # Now calculated residue average values through all frames for each pair of interaction agents
     output_analysis = []
