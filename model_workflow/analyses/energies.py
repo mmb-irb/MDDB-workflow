@@ -503,8 +503,8 @@ def adapt_cmip_grid (agent1_cmip_pdb : str, agent2_cmip_pdb : str, cmip_inputs :
 
 def mine_cmip_output (logs):
     center, density, units = (), (), ()
-    grid_density_exp = r"^\s*Grid density:\s+([-]*\d+)\s+([-]*\d+)\s+([-]*\d+)"
-    grid_center_exp = r"^\s*Grid center:\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)\s+([-]*\d+.\d+)"
+    grid_density_exp = r"^\s*Grid density:\s+(\d+)\s+(\d+)\s+(\d+)"
+    grid_center_exp = r"^\s*Grid center:([- ]+\d+.\d+)([- ]+\d+.\d+)([- ]+\d+.\d+)"
     grid_units_exp = r"^\s*Grid units:\s+(\d+.\d+)\s+(\d+.\d+)\s+(\d+.\d+)"
     for line in logs:
         grid_center_groups = re.match(grid_center_exp, line)
