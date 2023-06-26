@@ -4,6 +4,8 @@ from subprocess import run, PIPE, Popen
 import json
 import os
 
+from typing import List
+
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 
 # TM scores
@@ -16,6 +18,7 @@ def tmscores (
     first_frame_filename : str,
     average_structure_filename : str,
     structure : 'Structure',
+    pbc_residues: List[int],
     snapshots : int,
     frames_limit : int):
 
@@ -25,6 +28,14 @@ def tmscores (
     selection = structure.select('name CA', syntax='vmd')
     if not selection:
         print('WARNING: There are not atoms to be analyzed for the TM score analysis')
+        return
+
+    # Remove PBC residues from the selection
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+    selection -= pbc_selection
+
+    if not selection:
+        print('WARNING: There are not atoms to be analyzed for the TM score analysis after PBC substraction')
         return
 
     # Convert the selection to ndx so we can use it in gromacs

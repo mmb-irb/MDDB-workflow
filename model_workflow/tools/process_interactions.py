@@ -8,9 +8,6 @@ from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
-# The limit of frames to be selected along the trajectory for the interface analysis
-frames_limit = 100
-
 # The cutoff distance is in Ångstroms (Å)
 distance_cutoff : float = 5
 
@@ -25,7 +22,8 @@ def process_interactions (
     trajectory_filename : str,
     structure : 'Structure',
     snapshots : int,
-    interactions_file : str) -> list:
+    interactions_file : str,
+    frames_limit : int) -> list:
 
     # If there is a backup then use it
     # Load the backup and return its content as it is

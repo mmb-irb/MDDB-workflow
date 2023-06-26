@@ -1,6 +1,8 @@
 import mdtraj as mdt
 from numpy import mean, std
 
+from typing import List
+
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
@@ -20,6 +22,7 @@ def check_sudden_jumps (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
+    pbc_residues : List[int],
     register : dict,
     #time_length : float,
     check_selection : str = 'protein or nucleic',
@@ -29,8 +32,17 @@ def check_sudden_jumps (
     parsed_selection = structure.select(check_selection, syntax='vmd')
 
     # If there is nothing to check then warn the user and stop here
-    if not parsed_selection or len(parsed_selection.atom_indices) == 0:
+    if not parsed_selection:
         print('WARNING: There are not atoms to be analyzed for the RMSD analysis')
+        return
+
+    # Discard PBC residues from the selection to be checked
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+    parsed_selection -= pbc_selection
+
+    # If there is nothing to check then warn the user and stop here
+    if not parsed_selection:
+        print('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
         return
 
     print('Checking trajectory integrity')

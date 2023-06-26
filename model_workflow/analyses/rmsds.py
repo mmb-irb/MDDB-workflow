@@ -22,11 +22,16 @@ def rmsds(
     first_frame_filename : str,
     average_structure_filename : str,
     structure : 'Structure',
+    pbc_residues: List[int],
     selections : List[str] = ['protein', 'nucleic'],
     ):
 
     # VMD selection syntax
     parsed_selections = [ structure.select(selection, syntax='vmd') for selection in selections ]
+
+    # Remove PBC residues from parsed selections
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+    parsed_selections = [ selection - pbc_selection for selection in parsed_selections ]
 
     rmsd_references = [first_frame_filename, average_structure_filename]
 
@@ -93,7 +98,7 @@ def rmsd (
     ndx_selection = selection.to_ndx(selection_name)
     ndx_filename = '.rmsd.ndx'
     with open(ndx_filename, 'w') as file:
-        file.write(ndx_selection)   
+        file.write(ndx_selection)
     
     # Run Gromacs
     p = Popen([

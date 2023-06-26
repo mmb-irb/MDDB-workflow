@@ -3,6 +3,8 @@ from sklearn.decomposition import PCA
 import numpy as np
 import json
 
+from typing import List
+
 import mdtraj as md
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
@@ -18,6 +20,7 @@ def pca (
     structure : 'Structure',
     fit_selection : str,
     analysis_selection : str,
+    pbc_residues : List[int],
     projection_frames : int = 20
 ) -> dict:
 
@@ -31,10 +34,13 @@ def pca (
         frames_limit,
     )
 
+    # Parse PBC residues into a selection to be removed from further PCA selections
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+
     # Parse the string selections
     # VMD selection syntax
-    parsed_fit_selection = structure.select(fit_selection, syntax='vmd')
-    parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd')
+    parsed_fit_selection = structure.select(fit_selection, syntax='vmd') - pbc_selection
+    parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd') - pbc_selection
 
     # Load the trajectory
     mdtraj_trajectory = md.load(pca_trajectory_filename, top=input_topology_filename)

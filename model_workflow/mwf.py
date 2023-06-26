@@ -14,8 +14,6 @@ import json
 from typing import Optional, Union, List
 
 # Import local tools
-from model_workflow.tools.filter_atoms import filter_atoms
-from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_input_files import process_input_files, find_charges_filename
 from model_workflow.tools.topology_manager import setup_structure
@@ -383,7 +381,8 @@ def get_input_charges_filename () -> str:
     return original_charges_filename
 
 # Get some input values which are passed through command line instead of the inputs file
-preprocess_protocol = Dependency(get_input, {'name': 'preprocess_protocol'})
+image = Dependency(get_input, {'name': 'image'})
+fit = Dependency(get_input, {'name': 'fit'})
 translation = Dependency(get_input, {'name': 'translation'})
 filter_selection = Dependency(get_input, {'name': 'filter_selection'})
 pca_fit_selection = Dependency(get_input, {'name': 'pca_fit_selection'})
@@ -404,8 +403,6 @@ inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
 # Extract some additional input values from the inputs json file
 input_interactions = Dependency(get_input, {'name': 'interactions'})
 input_pbc_selection = Dependency(get_input, {'name': 'pbc_selection'})
-ligands = Dependency(get_input, {'name': 'ligands'})
-membranes = Dependency(get_input, {'name': 'membranes'})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
 pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
 time_length = Dependency(get_input, {'name': 'length'})
@@ -424,9 +421,11 @@ process_input_files = Dependency(process_input_files, {
     'input_charges_filename': original_charges_filename,
     'output_topology_filename': OUTPUT_provisional_pdb_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
-    'preprocess_protocol': preprocess_protocol,
+    'image': image,
+    'fit': fit,
     'translation': translation,
     'filter_selection' : filter_selection,
+    'pbc_selection' : input_pbc_selection,
 })
 
 # Main topology and trajectory files
@@ -521,6 +520,7 @@ interactions = Dependency(process_interactions, {
     'structure': structure,
     'snapshots' : snapshots,
     'interactions_file': OUTPUT_interactions_filename,
+    'frames_limit': 1000,
 }, 'interactions')
 
 # Find the PBC residues
@@ -568,6 +568,7 @@ sudden_jumps = Dependency(check_sudden_jumps, {
     'input_structure_filename': pdb_filename,
     'input_trajectory_filename': trajectory_filename,
     'structure': structure,
+    'pbc_residues': pbc_residues,
     'register': register,
     #'time_length': time_length,
 })
@@ -593,6 +594,7 @@ analyses = [
         'average_structure_filename': average_structure_filename,
         'snapshots': snapshots,
         'structure': structure,
+        'pbc_residues': pbc_residues,
     }, 'rmsds'),
     # Here we set a small frames limit since this anlaysis is a bit slow
     File(OUTPUT_tmscores_filename, tmscores, {
@@ -602,6 +604,7 @@ analyses = [
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
         'structure' : structure,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 200,
     }, 'tmscores'),
@@ -639,6 +642,7 @@ analyses = [
         'structure': structure,
         'fit_selection': pca_fit_selection,
         'analysis_selection': pca_selection,
+        'pbc_residues': pbc_residues,
     }, 'pca'),
     # DANI: Intenta usar mucha memoria, hay que revisar
     # DANI: Puede saltar un error de imposible alojar tanta memoria
@@ -668,9 +672,11 @@ analyses = [
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_rmsdpairwise_filename,
         "interactions": interactions,
+        'structure': structure,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 200,
-        'overall_selection': "@CA,C5'"
+        'overall_selection': "name CA or name C5"
     }, 'rmsdpairwise'),
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     File(OUTPUT_distperres_filename, distance_per_residue, {
@@ -721,7 +727,7 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_pockets_filename,
         'structure': structure,
-        'membranes': membranes,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'pockets'),
@@ -771,7 +777,7 @@ def workflow (
     include : Optional[List[str]] = None,
     exclude : Optional[List[str]] = None,
     filter_selection : Union[bool, str] = False,
-    preprocess_protocol : int = 0,
+    image : bool = False, fit : bool = False,
     translation : List[float] = [0, 0, 0],
     mercy : Union[ List[str], bool ] = [],
     trust : Union[ List[str], bool ] = [],
@@ -908,28 +914,20 @@ parser.add_argument(
     help="Path to charges topology filename")
 
 parser.add_argument(
-    "-pr", "--preprocess_protocol",
-    type=int,
-    default=0,
-    help=("Set how the trajectory must be imaged and fitted (i.e. centered, without translation or rotation)\n"
-        "These protocolos may help in some situations, but the imaging step can not be fully automatized\n"
-        "If protocols do not work, the gromacs parameters must be modified manually\n"
-        "Available protocols:\n"
-        "0. Do nothing (default) -> The trajectory is already imaged and fitted\n"
-        "1. No imaging, only fitting -> The trajectory is already imaged but not fitted\n"
-        "2. Basic imaging -> Atoms are centered automatically\n"
-        "   Recommended for single molecules only\n"
-        "3. Translated imaging -> Manually translate everything before imaging\n"
-        "   Recommended for interacting molecules\n"
-        "4. Allowed jump imaging -> Residues are centered automatically. The 'nojump' and the fitting steps are skipped\n"
-        "   Recommended for proteins inside membranes\n"
-        "   * Note that a .tpr topology is required in order to run protocol 4"))
+    "-img", "--image",
+    action='store_true',
+    help="Set if the trajectory is to be imaged")
+
+parser.add_argument(
+    "-fit", "--fit",
+    action='store_true',
+    help="Set if the trajectory is to be fitted (both rotation and translation)")
 
 parser.add_argument(
     "-trans", "--translation",
     nargs='*',
     default=[0,0,0],
-    help=("Set the x y z translation for the imaging process (only protocol 3)\n"
+    help=("Set the x y z translation for the imaging process\n"
         "e.g. -trans 0.5 -1 0"))
 
 parser.add_argument(

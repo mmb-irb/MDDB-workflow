@@ -27,8 +27,9 @@ from subprocess import run, PIPE, Popen
 
 import json
 
+from typing import List
+
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.tools.filter_atoms import get_unmembraned_trajectory
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
@@ -44,14 +45,16 @@ def pockets (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     structure : 'Structure',
-    membranes : list,
+    pbc_residues : List[int],
     snapshots : int,
     frames_limit : int):
 
-    # DANI: De momento, no se hacen pockets para simulaciones con membrana
+    # DANI: De momento, no se hacen pockets para simulaciones con residuos en PBC (e.g. membrana)
+    # DANI: Esto es debido a que los átomos donde NO queremos que encuentre pockets no se pueden descartar
+    # DANI: Descartarlos significa quitarlos, pero si los quitamos entonces podemos encontrar pockets donde están estos átomos
     # DANI: Estamos a la espera que los de mdpocket incluyan un flag para estos casos
     # https://github.com/Discngine/fpocket/issues/77#issuecomment-974193129
-    if membranes and len(membranes) > 0:
+    if pbc_residues and len(pbc_residues) > 0:
         return
 
     # Set a reduced trajectory with only 100 frames
@@ -64,23 +67,6 @@ def pockets (
         snapshots,
         frames_limit,
     )
-
-    # We exclude the membrane
-    # DANI: Este es un arreglo temporal pero no es perfecto ya que pueden aparecer pockets donde se encuentra la membrana
-    pockets_topology = input_topology_filename
-    if membranes and len(membranes) > 0:
-        unmembraned_structure = 'pockets_unmembraned_structure.pdb'
-        unmembraned_trajectory = 'pockets_unmembraned_trajectory.xtc'
-        get_unmembraned_trajectory(
-            pockets_topology,
-            pockets_trajectory,
-            unmembraned_structure,
-            unmembraned_trajectory,
-            structure,
-            membranes
-        )
-        pockets_topology = unmembraned_structure
-        pockets_trajectory = unmembraned_trajectory
 
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
@@ -107,7 +93,7 @@ def pockets (
             "--trajectory_format",
             "xtc",
             "-f",
-            pockets_topology,
+            input_topology_filename,
             "-o",
             mdpocket_output,
         ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -389,7 +375,7 @@ def pockets (
                 "--trajectory_format",
                 "xtc",
                 "-f",
-                pockets_topology,
+                input_topology_filename,
                 "-o",
                 pocket_output,
                 "--selected_pocket",
