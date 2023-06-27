@@ -57,10 +57,6 @@ sys.stdout = unbuffered
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
 protein_and_nucleic_backbone = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
 
-# Provisional fix for SSL bypass
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 # CLASSES -------------------------------------------------------------------------
 
 class Dependency:
@@ -760,7 +756,7 @@ DEFAULT_input_topology_filename = OUTPUT_pdb_filename
 DEFAULT_input_trajectory_filenames = [OUTPUT_trajectory_filename]
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_input_charges_filename = find_charges_filename()
-DEFAULT_database_url = 'https://mdposit-dev.bsc.es'
+DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu'
 
 # The actual main function
 def workflow (
