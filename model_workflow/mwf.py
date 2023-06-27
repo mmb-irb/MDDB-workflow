@@ -55,6 +55,7 @@ unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=
 sys.stdout = unbuffered
 
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
+protein_and_nucleic = 'protein or nucleic'
 protein_and_nucleic_backbone = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
 
 # CLASSES -------------------------------------------------------------------------
@@ -559,6 +560,8 @@ topology_filename = File(OUTPUT_topology_filename, generate_topology, {
     'output_topology_filename': OUTPUT_topology_filename
 }, 'topology')
 
+# Get the cutoff for the test below
+rmsd_cutoff = Dependency(get_input, {'name': 'rmsd_cutoff'})
 # Set a test to check trajectory integrity
 sudden_jumps = Dependency(check_sudden_jumps, {
     'input_structure_filename': pdb_filename,
@@ -567,6 +570,8 @@ sudden_jumps = Dependency(check_sudden_jumps, {
     'pbc_residues': pbc_residues,
     'register': register,
     #'time_length': time_length,
+    'check_selection': protein_and_nucleic,
+    'standard_deviations_cutoff': rmsd_cutoff,
 })
 
 # Pack up all tools which may be called directly from the console
@@ -757,6 +762,7 @@ DEFAULT_input_trajectory_filenames = [OUTPUT_trajectory_filename]
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_input_charges_filename = find_charges_filename()
 DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu'
+DEFAULT_rmsd_cutoff = 9
 
 # The actual main function
 def workflow (
@@ -779,6 +785,7 @@ def workflow (
     trust : Union[ List[str], bool ] = [],
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
+    rmsd_cutoff : float = DEFAULT_rmsd_cutoff
 ):
 
     # Fix the input_trajectory_filenames argument: in case it is a string convert it to a list
@@ -1014,9 +1021,8 @@ parser.add_argument(
     help="Set the unique analyses or tools to be run. All other steps will be skipped")
 
 parser.add_argument(
-    "-e", "--exclude",
-    nargs='*',
-    choices=choices,
-    help=("Set the unique analyses or tools to be skipped. All other steps will be run.\n"
-        "If the 'include' argument is passed the 'exclude' argument will be ignored.\n"
-        "WARNING: If an excluded dependecy is required by others then it will be run anyway"))
+    "-rcut", "--rmsd_cutoff",
+    type=float,
+    default=DEFAULT_rmsd_cutoff,
+    help=("Set the cutoff for the RMSD sudden jumps analysis to fail (default " + str(DEFAULT_rmsd_cutoff) + ").\n"
+        "This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.\n"))

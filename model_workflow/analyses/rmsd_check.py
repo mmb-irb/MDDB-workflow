@@ -12,9 +12,6 @@ ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 # However, after a deep study, it was observed that simulations with similar features may show very different RMSD jumps
 # For this reason now we comptue RMSD jumps along the whole trajectory and check that the biggest jump is not an outlier
 # The outlier is defined according to how many times the standard deviation far from the mean is a value
-# DANI: He visto saltos 'correctos' pasar de 6
-# DANI: He visto saltos 'incorrectos' no bajar de 10
-standard_deviations_cutoff = 9
 
 # Look for sudden raises of RMSd values from one frame to another
 # To do so, we check the RMSD of every frame using its previous frame as reference
@@ -25,8 +22,10 @@ def check_sudden_jumps (
     pbc_residues : List[int],
     register : dict,
     #time_length : float,
-    check_selection : str = 'protein or nucleic',
-    ) -> bool:
+    check_selection : str,
+    # DANI: He visto saltos 'correctos' pasar de 6
+    # DANI: He visto saltos 'incorrectos' no bajar de 10
+    standard_deviations_cutoff : float) -> bool:
 
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
