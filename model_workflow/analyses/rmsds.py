@@ -31,7 +31,12 @@ def rmsds(
 
     # Remove PBC residues from parsed selections
     pbc_selection = structure.select_residue_indices(pbc_residues)
-    parsed_selections = [ selection - pbc_selection for selection in parsed_selections ]
+    pbc_free_parse_selections = []
+    for selection in parsed_selections:
+        if selection:
+            pbc_free_parse_selections.append(selection - pbc_selection)
+        else:
+            pbc_free_parse_selections.append(None)
 
     rmsd_references = [first_frame_filename, average_structure_filename]
 
@@ -57,7 +62,7 @@ def rmsds(
         reference_name = reference[0:-4].lower()
         for i, group in enumerate(selections):
             # If the selection is empty then skip this rmsd
-            parsed_selection = parsed_selections[i]
+            parsed_selection = pbc_free_parse_selections[i]
             if not parsed_selection:
                 continue
             # Get a standarized group name
