@@ -20,8 +20,11 @@ def generate_topology (
         atom_names[index] = atom.name
         atom_elements[index] = atom.element
         atom_residue_indices[index] = atom.residue.index
-    atom_bonds = structure.bonds
-        
+
+    # Set the atom bonds
+    # In order to make it more standard sort atom bonds by their indices
+    atom_bonds = [ sorted(atom_indices) for atom_indices in structure.bonds ]
+
     # Residue data
     structure_residues = structure.residues
     residue_count = len(structure_residues)
