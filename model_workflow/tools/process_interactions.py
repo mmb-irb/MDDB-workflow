@@ -8,8 +8,7 @@ from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
-# The cutoff distance is in Ångstroms (Å)
-distance_cutoff : float = 5
+failed_flag = 'failed'
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
@@ -23,7 +22,13 @@ def process_interactions (
     structure : 'Structure',
     snapshots : int,
     interactions_file : str,
-    frames_limit : int) -> list:
+    mercy : List[str],
+    frames_limit : int,
+    # Percent of frames where an interaction must have place (from 0 to 1)
+    # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
+    frames_percent_cutoff : float = 0.1,
+    # The cutoff distance is in Ångstroms (Å)
+    distance_cutoff : float = 5) -> list:
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
@@ -61,6 +66,25 @@ def process_interactions (
             interaction['selection_2'],
             distance_cutoff
         )
+        # Check if the interaction is respecting the frames percent cutoff and if it fails then kill it
+        frames_percent = interface_results['interacting_frames'] / interface_results['total_frames']
+        pretty_frames_percent = str(round(frames_percent * 100) / 100)
+        if frames_percent < frames_percent_cutoff:
+            # Check if we must have mercy in case of interaction failure
+            must_be_killed = 'interact' not in mercy
+            if must_be_killed:
+                meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
+                raise SystemExit('Interaction "' + interaction['name'] + '" is not reaching the frames percent cutoff of ' + str(frames_percent_cutoff) + ' (' + pretty_frames_percent + ').\n'
+                    'This means the interaction ' + meaning_log + '.\n'
+                    'Check agent selections are correct or consider removing this interaction from the inputs.\n'
+                    '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
+                    '   - Agent 2 selection: ' + interaction['selection_2'] + '\n'
+                    'Use the "--mercy interact" flag for the workflow to continue. Failed interactions will be removed from both analyses and metadata.')
+            # If the workflow is not to be killed then just remove this interaction from the interactions list
+            # Thus it will not be considered in interaction analyses and it will not appear in the metadata
+            else:
+                interaction[failed_flag] = True
+                continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
         for agent in ['1','2']:
             # First with all atoms/residues
@@ -74,7 +98,7 @@ def process_interactions (
             interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
             interface_atom_indices = interface_results['selection_' + agent + '_interface_atom_indices']
-            interface_residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ]))
+            interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
             interaction['interface_indices_' + agent] = interface_residue_indices
             interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
 
@@ -95,8 +119,11 @@ def process_interactions (
             }
         )
 
-        print(interaction['name'] +
-            ' -> ' + str(interaction['interface_indices_1'] + interaction['interface_indices_2']))
+        print(interaction['name'] + ' (' + pretty_frames_percent + ') -> ' + 
+           str(sorted(interaction['interface_indices_1'] + interaction['interface_indices_2'])))
+
+    # Remove failed interactions, if any
+    interactions = [ interaction for interaction in interactions if not interaction.get(failed_flag, False) ]
 
     # Write the interactions file with the fields to be uploaded to the database only
     # i.e. strong bonds and residue indices
@@ -119,7 +146,7 @@ def process_interactions (
 
     return interactions
 
-# Load interactions from an already existinf interactions file
+# Load interactions from an already existing interactions file
 def load_interactions (interactions_file : str, structure : 'Structure') -> list:
     with open(interactions_file, 'r') as file:
         # The stored interactions should carry only residue indices and strong bonds
@@ -161,10 +188,13 @@ def get_interface_atom_indices_vmd (
     interface_selection_2 = ('(' + selection_2 + ') and within ' + str(distance_cutoff) + ' of (' + selection_1 + ')')
     
     # Set the output txt files for vmd to write the atom indices
+    # Note that these output files are deleted at the end of this function
     selection_1_filename = '.selection_1.txt'
     selection_2_filename = '.selection_2.txt'
     interface_selection_1_filename = '.interface_selection_1.txt'
     interface_selection_2_filename = '.interface_selection_2.txt'
+    interacting_frames_filename = '.iframes.txt'
+    total_frames_filename = '.nframes.txt'
 
     # Prepare a script for VMD to run. This is Tcl language
     commands_filename = 'commands.vmd'
@@ -188,12 +218,15 @@ def get_interface_atom_indices_vmd (
         file.write('puts $indices_file $indices\n')
         # -------------------------------------------
         # Now get the interface selection atom indices
+        # Also count the number of frames where there is at least one interacting residue
         # -------------------------------------------
         # Capture indices for each frame in the trajectory
         file.write('set accumulated_interface1_atom_indices []\n')
         file.write('set accumulated_interface2_atom_indices []\n')
         file.write('set interface1 [atomselect top "' + interface_selection_1 + '"]\n')
         file.write('set interface2 [atomselect top "' + interface_selection_2 + '"]\n')
+        # Capture the number of frames where the interaction happens
+        file.write('set iframes 0\n')
         # Get the number of frames in the trajectory
         file.write('set nframes [molinfo top get numframes]\n')
         # Iterate over each frame
@@ -209,7 +242,17 @@ def get_interface_atom_indices_vmd (
         file.write('    $interface2 update\n')
         file.write('    set interface2_atom_indices [$interface2 list]\n')
         file.write('    set accumulated_interface2_atom_indices [concat $accumulated_interface2_atom_indices $interface2_atom_indices ]\n')
+        # If there was at least one residue in one of the interactions then add one to the interaction frame count
+        # Note that checking both interactions would be redundant so one is enough
+        file.write('    if { [llength $interface1_atom_indices] > 0 } {\n')
+        file.write('        incr iframes\n')
+        file.write('    }\n')
         file.write('}\n')
+        # Write the number of interacting frames and total frames to files
+        file.write('set iframes_file [open ' + interacting_frames_filename + ' w]\n')
+        file.write('puts $iframes_file $iframes\n')
+        file.write('set nframes_file [open ' + total_frames_filename + ' w]\n')
+        file.write('puts $nframes_file $nframes\n')
         # Remove duplicated indices
         file.write('lsort -unique $accumulated_interface1_atom_indices\n')
         file.write('lsort -unique $accumulated_interface2_atom_indices\n')
@@ -236,7 +279,9 @@ def get_interface_atom_indices_vmd (
         selection_1_filename,
         selection_2_filename,
         interface_selection_1_filename,
-        interface_selection_2_filename
+        interface_selection_2_filename,
+        interacting_frames_filename,
+        total_frames_filename
     ]
     for output_file in expected_output_files:
         if not os.path.exists(output_file):
@@ -254,6 +299,8 @@ def get_interface_atom_indices_vmd (
     selection_2_atom_indices = process_vmd_output(selection_2_filename)
     selection_1_interface_atom_indices = process_vmd_output(interface_selection_1_filename)
     selection_2_interface_atom_indices = process_vmd_output(interface_selection_2_filename)
+    interacting_frames = process_vmd_output(interacting_frames_filename)[0]
+    total_frames = process_vmd_output(total_frames_filename)[0]
     
     # Remove trash files
     trash_files = [ commands_filename ] + expected_output_files
@@ -265,7 +312,9 @@ def get_interface_atom_indices_vmd (
         'selection_1_atom_indices': selection_1_atom_indices,
         'selection_2_atom_indices': selection_2_atom_indices,
         'selection_1_interface_atom_indices': selection_1_interface_atom_indices,
-        'selection_2_interface_atom_indices': selection_2_interface_atom_indices
+        'selection_2_interface_atom_indices': selection_2_interface_atom_indices,
+        'interacting_frames': interacting_frames,
+        'total_frames': total_frames
     }
 
 # Set a function to retrieve strong bonds between 2 atom selections

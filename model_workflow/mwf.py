@@ -184,7 +184,7 @@ OUTPUT_pockets_filename = 'md.pockets.json'
 available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
 
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-available_failures = available_checkings + [ 'refseq' ]
+available_failures = available_checkings + [ 'refseq', 'interact' ]
 
 # Define all dependencies
 # Dependencies are tools and files that are required by some analyses
@@ -517,6 +517,7 @@ interactions = Dependency(process_interactions, {
     'structure': structure,
     'snapshots' : snapshots,
     'interactions_file': OUTPUT_interactions_filename,
+    'mercy' : mercy,
     'frames_limit': 1000,
 }, 'interactions')
 
