@@ -845,6 +845,9 @@ def workflow (
 
     # If setup is passed as True then exit as soon as the setup is finished
     if setup:
+        pdb_filename.value
+        trajectory_filename.value
+        charges_filename.value
         # Save the register
         save_register(register.value)
         return
