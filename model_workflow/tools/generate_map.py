@@ -457,10 +457,7 @@ def blast (sequence : str) -> Optional[str]:
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
 def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
     # Request MDposit
-    #request_url = 'https://mdposit-dev.bsc.es/api/rest/v1/references/' + uniprot_accession
-    # DANI: De momento la query hay que hacerla a cv19 para ahorrarnos problemas con los certificados
-    # DANI: Las references no se filtran por collections así que las tendremos todas aunque estos en cv19
-    request_url = 'https://bioexcel-cv19-dev.bsc.es/api/rest/v1/references/' + uniprot_accession
+    request_url = 'https://mdposit-dev.mddbr.eu/api/rest/v1/references/' + uniprot_accession
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
