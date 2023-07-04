@@ -820,6 +820,8 @@ def workflow (
     for var_value in dict(globals()).values():
         if isinstance(var_value, Dependency):
             var_value._value = None
+        if isinstance(var_value, File):
+            var_value.remade = False
 
     # Load the inputs file
     load_inputs(inputs_filename)
