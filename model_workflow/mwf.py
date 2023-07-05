@@ -60,25 +60,35 @@ protein_and_nucleic_backbone = "(protein and name N CA C) or (nucleic and name P
 
 # CLASSES -------------------------------------------------------------------------
 
+dependency_unname = 'unnamed dependency'
 class Dependency:
     _depend = True
     # The 'func' is the function to get the value
     # The 'args' are the arguments for the 'func'
     # The 'filename' is the name of the file which is expected to be required for this dependency
-    # When a filename is passed the dependecy 'value' is replaced by this 'filename' when exists
-    def __init__ (self, func, args = {}, alias = ''):
+    # When a filename is passed the dependency 'value' is replaced by this 'filename' when exists
+    def __init__ (self, func, args = {}, alias = dependency_unname):
         self.func = func
         self.args = args
         self.alias = alias
         self._value = None
+        # Set an internal flag to know if a a dependency has been calculated
+        # Checking if _value is None is not enough, since the result of a calculation may be None
+        self._done = False
+
+    def __str__ (self):
+        return self.alias
+
+    def __repr__ (self):
+        return self.alias
 
     # For each 'Dependency' instance in args call its dependency function
-    def parse_args(self):
+    def parse_args (self):
 
         # For a given non Dependency instance, return the value as it is
         # For a given Dependency instance, get the real value of it
         # Getting the value means also calling its dependency function
-        def parse(value):
+        def parse (value):
             # When it is a Dependency or an inheritor class
             if hasattr(value, '_depend'):
                 parsed_value = value.value
@@ -99,18 +109,24 @@ class Dependency:
     # Get the dependency value
     # Execute the corresponding function if we do not have the value yet
     # Once the value has been calculated save it as an internal variabel
-    def get_value(self):
+    def get_value (self):
         value = self._value
-        if value:
+        if self._done:
             return value
         parsed_args = self.parse_args()
-        if self.alias:
+        if self.alias and self.alias != dependency_unname:
             sys.stdout.write('Running "' + self.alias + '"\n')
         value = self.func(**parsed_args)
         self._value = value # Save the result for possible further use
+        self._done = True
         return value
 
     value = property(get_value, None, None, "The dependency value")
+
+    # Reset the dependency for it to be considered as not run
+    def reset (self):
+        self._value = None
+        self._done = False
 
 class File(Dependency):
     # The 'func' is the function to generate the file
@@ -120,7 +136,6 @@ class File(Dependency):
     def __init__ (self, filename : str, func, args = {}, alias = '', must_remake : bool = False):
         self.filename = filename
         self.must_remake = must_remake
-        self.remade = False
         super().__init__(func, args, alias)
 
     def __str__ (self):
@@ -130,9 +145,9 @@ class File(Dependency):
         return self.filename
 
     def exists (self) -> bool:
-        if (self.must_remake and not self.remade) or not self.filename:
+        if (self.must_remake and not self._done) or not self.filename:
             return False
-        return os.path.exists(self.filename)
+        return exists(self.filename)
 
     # Get the dependency value, which in file cases is the filename
     # Execute the corresponding function if we do not have the value yet
@@ -145,7 +160,7 @@ class File(Dependency):
         parsed_args = self.parse_args()
         sys.stdout.write('Generating "' + self.filename + '" file\n')
         self.func(**parsed_args)
-        self.remade = True
+        self._done = True
         return self.filename
 
     value = property(get_value, None, None, "The dependency value")
@@ -542,12 +557,14 @@ residues_map = Dependency(generate_map_online, {
 }, 'map')
 
 # Prepare the metadata output file
+# It is cheap to remake and this may solve problems when changing inputs if metadata is already done
 metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'input_topology_filename': pdb_filename,
     'input_trajectory_filename': trajectory_filename,
     'inputs_filename': inputs_filename,
     'snapshots': snapshots,
     'residues_map': residues_map,
+    'interactions': interactions,
     'output_metadata_filename': OUTPUT_metadata_filename,
     'register': register
 }, 'metadata')
@@ -819,9 +836,7 @@ def workflow (
     # Note that this script was originally called only from argparse so this was not necessary
     for var_value in dict(globals()).values():
         if isinstance(var_value, Dependency):
-            var_value._value = None
-        if isinstance(var_value, File):
-            var_value.remade = False
+            var_value.reset()
 
     # Load the inputs file
     load_inputs(inputs_filename)

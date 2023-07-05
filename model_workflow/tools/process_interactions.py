@@ -8,8 +8,6 @@ from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
-failed_flag = 'failed'
-
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
 # The heavy results of interactions are stored in a json file which is uploaded to the database independently
@@ -45,6 +43,9 @@ def process_interactions (
     if not input_interactions or len(input_interactions) == 0:
         return []
 
+    # Set a list to save names of failed interactions (this is used only when mercy is passed)
+    failed_interaction_names = []
+
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory, step, frames = get_reduced_trajectory(
         topology_filename,
@@ -70,20 +71,22 @@ def process_interactions (
         frames_percent = interface_results['interacting_frames'] / interface_results['total_frames']
         pretty_frames_percent = str(round(frames_percent * 100) / 100)
         if frames_percent < frames_percent_cutoff:
+            meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
+            print('Interaction "' + interaction['name'] + '" is not reaching the frames percent cutoff of ' + str(frames_percent_cutoff) + ' (' + pretty_frames_percent + ').\n'
+                'This means the interaction ' + meaning_log + '.\n'
+                'Check agent selections are correct or consider removing this interaction from the inputs.\n'
+                '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
+                '   - Agent 2 selection: ' + interaction['selection_2'])
             # Check if we must have mercy in case of interaction failure
             must_be_killed = 'interact' not in mercy
             if must_be_killed:
-                meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
-                raise SystemExit('Interaction "' + interaction['name'] + '" is not reaching the frames percent cutoff of ' + str(frames_percent_cutoff) + ' (' + pretty_frames_percent + ').\n'
-                    'This means the interaction ' + meaning_log + '.\n'
-                    'Check agent selections are correct or consider removing this interaction from the inputs.\n'
-                    '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
-                    '   - Agent 2 selection: ' + interaction['selection_2'] + '\n'
-                    'Use the "--mercy interact" flag for the workflow to continue. Failed interactions will be removed from both analyses and metadata.')
+                raise SystemExit('FAIL: an interaction failed to be set.\n'
+                    'Use the "--mercy interact" flag for the workflow to continue.\n'
+                    'Failed interactions will be removed from both analyses and metadata.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
             else:
-                interaction[failed_flag] = True
+                failed_interaction_names.append(interaction['name'])
                 continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
         for agent in ['1','2']:
@@ -123,7 +126,11 @@ def process_interactions (
            str(sorted(interaction['interface_indices_1'] + interaction['interface_indices_2'])))
 
     # Remove failed interactions, if any
-    interactions = [ interaction for interaction in interactions if not interaction.get(failed_flag, False) ]
+    interactions = [ interaction for interaction in interactions if interaction['name'] not in failed_interaction_names ]
+
+    # If there are not valid interactions left then do not generate the interaction file
+    if len(interactions) == 0:
+        return []
 
     # Write the interactions file with the fields to be uploaded to the database only
     # i.e. strong bonds and residue indices

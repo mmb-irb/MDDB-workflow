@@ -11,6 +11,7 @@ def generate_metadata (
     inputs_filename : str,
     snapshots : int,
     residues_map : dict,
+    interactions : list,
     output_metadata_filename : str,
     register : dict
     ):
@@ -47,6 +48,13 @@ def generate_metadata (
     collections = get_input('collections')
     if not collections:
         collections = None
+
+    # Metadata interactions are simply the input interactions
+    # Final interactions are used only to check which interactions were discarded
+    # Thus failed interactions are removed from metadata
+    metadata_interactions = get_input('interactions')
+    final_interaction_names = [ interaction['name'] for interaction in interactions ]
+    metadata_interactions = [ interaction for interaction in metadata_interactions if interaction['name'] in final_interaction_names ]
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
@@ -86,7 +94,7 @@ def generate_metadata (
         'CL': cl,
         'LIGANDS': ligands,
         'CUSTOMS': get_input('customs'),
-        'INTERACTIONS': get_input('interactions'),
+        'INTERACTIONS': metadata_interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
         'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': references,
