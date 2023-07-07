@@ -19,6 +19,7 @@ def get_pdb_frames (
     trajectory_filename : str,
     snapshots : int,
     frames_limit : Optional[int] = None,
+    output_frames_prefix : str = 'frame',
 ):
 
     # Load the trajectory using pytraj
@@ -49,7 +50,7 @@ def get_pdb_frames (
             # Update the current frame log
             print(ERASE_PREVIOUS_LINE)
             print('Frame ' + str(f+1) + ' / ' + str(frames_count))
-            current_frame = cwd + '/frame' + str(f) + '.pdb'
+            current_frame = cwd + '/' + output_frames_prefix + str(f) + '.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
             yield current_frame

@@ -89,7 +89,7 @@ def tmscores (
         for current_frame in frames:
 
             # Filter atoms in the current frame
-            filtered_frame = 'f.' + current_frame
+            filtered_frame = 'filtered_frame.pdb'
             p = Popen([
                 "echo",
                 selection_name,
