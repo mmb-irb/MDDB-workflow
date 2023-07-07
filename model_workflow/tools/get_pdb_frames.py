@@ -40,15 +40,16 @@ def get_pdb_frames (
     frames_list = range(0, frames_count)
 
     def frames_generator():
+        # Get the current directory at this point and use it to delete old files, in case we change the directory
+        cwd = os.getcwd()
         # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
         print()
-
         # Extract each frame in pdb format
         for f in frames_list:
             # Update the current frame log
             print(ERASE_PREVIOUS_LINE)
             print('Frame ' + str(f+1) + ' / ' + str(frames_count))
-            current_frame = 'frame' + str(f) + '.pdb'
+            current_frame = cwd + '/frame' + str(f) + '.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
             yield current_frame
