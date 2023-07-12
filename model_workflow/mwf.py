@@ -5,6 +5,7 @@
 # Import python libraries
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 import os
+from os.path import exists
 import sys
 import io
 import math
@@ -221,7 +222,7 @@ def get_input (name : str):
 def load_inputs (inputs_filename : str):
     # Check if the inputs file exists
     # If it does not, then try to download it
-    if not os.path.exists(inputs_filename):
+    if not exists(inputs_filename):
         # Check we have the inputs required to download the file
         server_url = get_input('database_url')
         project = get_input('project')
@@ -256,7 +257,7 @@ def get_input_pdb_filename () -> str:
     # Get the pdb filename from the inputs
     original_pdb_filename = get_input('input_topology_filename')
     # Check if the file exists
-    if os.path.exists(original_pdb_filename):
+    if exists(original_pdb_filename):
         return original_pdb_filename
     # If not, try to download it
     # Check we have the inputs required to download the file
@@ -284,7 +285,7 @@ def get_input_trajectory_filenames (sample : bool = False) -> str:
     # Get the trajectory filename(s) from the inputs
     original_trajectory_filenames = get_input('input_trajectory_filenames')
     # Check if the file exists
-    if all([ os.path.exists(filename) for filename in original_trajectory_filenames ]):
+    if all([ exists(filename) for filename in original_trajectory_filenames ]):
         return original_trajectory_filenames
     # If not, try to download them
     # Check we have the inputs required to download the files
@@ -311,7 +312,7 @@ def get_input_trajectory_filenames (sample : bool = False) -> str:
     # Otherwise, we download the requested
     for original_trajectory_filename in original_trajectory_filenames:
         # Skip already existing files
-        if os.path.exists(original_trajectory_filename):
+        if exists(original_trajectory_filename):
             continue
         sys.stdout.write('Downloading trajectory (' + original_trajectory_filename + ')\n')
         trajectory_url = project_url + '/files/' + original_trajectory_filename
@@ -330,7 +331,7 @@ def get_input_charges_filename () -> str:
     # Get the charges filename from the inputs
     original_charges_filename = get_input('input_charges_filename')
     # Check if the file exists
-    if original_charges_filename and os.path.exists(original_charges_filename):
+    if original_charges_filename and exists(original_charges_filename):
         return original_charges_filename
     # If not, try to download it
     # Check we have the inputs required to download the file
@@ -374,7 +375,7 @@ def get_input_charges_filename () -> str:
                 # In case we found a charges file set the input charges filename as this
                 original_charges_filename = charges_file['filename']
         # Download the charges file
-        if original_charges_filename and not os.path.exists(original_charges_filename):
+        if original_charges_filename and not exists(original_charges_filename):
             sys.stdout.write('Downloading charges (' + original_charges_filename + ')\n')
             charges_url = project_url + '/files/' + original_charges_filename
             try:

@@ -225,15 +225,17 @@ standard_topology_filename = 'topology.json'
 def get_bonds (bonds_source_filename : str) -> list:
     if not bonds_source_filename or not exists(bonds_source_filename):
         return None
-    bonds = None
     # If we have the standard topology then get bonds from it
     if bonds_source_filename == standard_topology_filename:
         print('Bonds in the "' + bonds_source_filename + '" file will be used')
+        standard_topology = None
         with open(standard_topology_filename, 'r') as file:
             standard_topology = load(file)
-            bonds = standard_topology['atom_bonds']
+        bonds = standard_topology.get('atom_bonds', None)
+        if bonds:
+            return bonds
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
-    elif is_pytraj_supported(bonds_source_filename):
+    if is_pytraj_supported(bonds_source_filename):
         print('Bonds will be mined from "' + bonds_source_filename + '"')
         topology = pt.load_topology(filename=bonds_source_filename)
         atom_bonds = [ [] for i in range(topology.n_atoms) ]
@@ -243,6 +245,4 @@ def get_bonds (bonds_source_filename : str) -> list:
             atom_bonds[b].append(a)
         return atom_bonds
     # If we can not mine bonds then return None and they will be guessed further
-    else:
-        return None
-    return bonds
+    return None

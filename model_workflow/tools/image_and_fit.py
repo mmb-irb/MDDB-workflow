@@ -51,8 +51,9 @@ def image_and_fit (
     structure = Structure.from_pdb_file(input_topology_filename)
     system_selection = structure.select('all', syntax='vmd')
     custom_selection = structure.select(center_selection, syntax='vmd')
-    parsed_pbc_selection = structure.select(pbc_selection, syntax='vmd')
-    custom_selection -= parsed_pbc_selection
+    if pbc_selection:
+        parsed_pbc_selection = structure.select(pbc_selection, syntax='vmd')
+        custom_selection -= parsed_pbc_selection
     # Convert both selections to a single ndx file which gromacs can read
     system_selection_ndx = system_selection.to_ndx('System')
     selection_ndx = custom_selection.to_ndx(center_selection_name)
