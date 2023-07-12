@@ -14,8 +14,6 @@ import json
 from typing import Optional, Union, List
 
 # Import local tools
-from model_workflow.tools.filter_atoms import filter_atoms
-from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.topology_corrector import topology_corrector
 from model_workflow.tools.process_input_files import process_input_files, find_charges_filename
 from model_workflow.tools.topology_manager import setup_structure
@@ -23,6 +21,7 @@ from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
+from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_metadata
 from model_workflow.tools.generate_map import generate_map_online
 from model_workflow.tools.generate_topology import generate_topology
@@ -57,33 +56,40 @@ unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=
 sys.stdout = unbuffered
 
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
+protein_and_nucleic = 'protein or nucleic'
 protein_and_nucleic_backbone = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
-
-# Provisional fix for SSL bypass
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
 
 # CLASSES -------------------------------------------------------------------------
 
+dependency_unname = 'unnamed dependency'
 class Dependency:
     _depend = True
     # The 'func' is the function to get the value
     # The 'args' are the arguments for the 'func'
     # The 'filename' is the name of the file which is expected to be required for this dependency
-    # When a filename is passed the dependecy 'value' is replaced by this 'filename' when exists
-    def __init__ (self, func, args = {}, alias = ''):
+    # When a filename is passed the dependency 'value' is replaced by this 'filename' when exists
+    def __init__ (self, func, args = {}, alias = dependency_unname):
         self.func = func
         self.args = args
         self.alias = alias
         self._value = None
+        # Set an internal flag to know if a a dependency has been calculated
+        # Checking if _value is None is not enough, since the result of a calculation may be None
+        self._done = False
+
+    def __str__ (self):
+        return self.alias
+
+    def __repr__ (self):
+        return self.alias
 
     # For each 'Dependency' instance in args call its dependency function
-    def parse_args(self):
+    def parse_args (self):
 
         # For a given non Dependency instance, return the value as it is
         # For a given Dependency instance, get the real value of it
         # Getting the value means also calling its dependency function
-        def parse(value):
+        def parse (value):
             # When it is a Dependency or an inheritor class
             if hasattr(value, '_depend'):
                 parsed_value = value.value
@@ -104,27 +110,33 @@ class Dependency:
     # Get the dependency value
     # Execute the corresponding function if we do not have the value yet
     # Once the value has been calculated save it as an internal variabel
-    def get_value(self):
+    def get_value (self):
         value = self._value
-        if value:
+        if self._done:
             return value
         parsed_args = self.parse_args()
-        if self.alias:
+        if self.alias and self.alias != dependency_unname:
             sys.stdout.write('Running "' + self.alias + '"\n')
         value = self.func(**parsed_args)
         self._value = value # Save the result for possible further use
+        self._done = True
         return value
 
     value = property(get_value, None, None, "The dependency value")
+
+    # Reset the dependency for it to be considered as not run
+    def reset (self):
+        self._value = None
+        self._done = False
 
 class File(Dependency):
     # The 'func' is the function to generate the file
     # If there is no func it means the file will be always there (i.e. it is an input file)
     # The 'args' are the arguments for the 'func'
-    # The 'always_remake' flag is used to always generate the file and overw
-    def __init__ (self, filename : str, func, args = {}, alias = '', always_remake : bool = False):
+    # The 'must_remake' flag is used to generate the file and thus overwrite the previous file once per workflow run
+    def __init__ (self, filename : str, func, args = {}, alias = '', must_remake : bool = False):
         self.filename = filename
-        self.always_remake = always_remake
+        self.must_remake = must_remake
         super().__init__(func, args, alias)
 
     def __str__ (self):
@@ -134,9 +146,9 @@ class File(Dependency):
         return self.filename
 
     def exists (self) -> bool:
-        if self.always_remake or not self.filename:
+        if (self.must_remake and not self._done) or not self.filename:
             return False
-        return os.path.exists(self.filename)
+        return exists(self.filename)
 
     # Get the dependency value, which in file cases is the filename
     # Execute the corresponding function if we do not have the value yet
@@ -149,6 +161,7 @@ class File(Dependency):
         parsed_args = self.parse_args()
         sys.stdout.write('Generating "' + self.filename + '" file\n')
         self.func(**parsed_args)
+        self._done = True
         return self.filename
 
     value = property(get_value, None, None, "The dependency value")
@@ -188,7 +201,7 @@ OUTPUT_helical_parameters = 'md.helical.parameters.json'
 available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
 
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-available_failures = available_checkings + [ 'refseq' ]
+available_failures = available_checkings + [ 'refseq', 'interact' ]
 
 # Define all dependencies
 # Dependencies are tools and files that are required by some analyses
@@ -382,7 +395,8 @@ def get_input_charges_filename () -> str:
     return original_charges_filename
 
 # Get some input values which are passed through command line instead of the inputs file
-preprocess_protocol = Dependency(get_input, {'name': 'preprocess_protocol'})
+image = Dependency(get_input, {'name': 'image'})
+fit = Dependency(get_input, {'name': 'fit'})
 translation = Dependency(get_input, {'name': 'translation'})
 filter_selection = Dependency(get_input, {'name': 'filter_selection'})
 pca_fit_selection = Dependency(get_input, {'name': 'pca_fit_selection'})
@@ -402,8 +416,7 @@ inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
 
 # Extract some additional input values from the inputs json file
 input_interactions = Dependency(get_input, {'name': 'interactions'})
-ligands = Dependency(get_input, {'name': 'ligands'})
-membranes = Dependency(get_input, {'name': 'membranes'})
+input_pbc_selection = Dependency(get_input, {'name': 'pbc_selection'})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
 pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
 time_length = Dependency(get_input, {'name': 'length'})
@@ -422,9 +435,11 @@ process_input_files = Dependency(process_input_files, {
     'input_charges_filename': original_charges_filename,
     'output_topology_filename': OUTPUT_provisional_pdb_filename,
     'output_trajectory_filename': OUTPUT_trajectory_filename,
-    'preprocess_protocol': preprocess_protocol,
+    'image': image,
+    'fit': fit,
     'translation': translation,
     'filter_selection' : filter_selection,
+    'pbc_selection' : input_pbc_selection,
 })
 
 # Main topology and trajectory files
@@ -475,7 +490,7 @@ corrector = Dependency(topology_corrector, {
 pdb_filename = File(OUTPUT_pdb_filename,
     corrector.func,
     corrector.args,
-    always_remake=True)
+    must_remake=True)
 
 # Set a parsed structure/topology with useful features
 # IMPORTANT: Note that the pdb file at this point is already corrected
@@ -509,7 +524,7 @@ average_frame_filename = File(OUTPUT_average_frame_filename, get_average, {
     'output_average_filename': OUTPUT_average_frame_filename
 })
 
-# Get additional metadata usedin the workflow which is not in the inputs
+# Get additional metadata used in the workflow which is not in the inputs
 
 # Find out residues and interface residues for each interaction
 interactions = Dependency(process_interactions, {
@@ -519,7 +534,15 @@ interactions = Dependency(process_interactions, {
     'structure': structure,
     'snapshots' : snapshots,
     'interactions_file': OUTPUT_interactions_filename,
+    'mercy' : mercy,
+    'frames_limit': 1000,
 }, 'interactions')
+
+# Find the PBC residues
+pbc_residues = Dependency(get_pbc_residues, {
+    'structure': structure,
+    'input_pbc_selection': input_pbc_selection
+}, 'pbc_residues')
 
 # Find out residues and interface residues for each interaction
 charges = Dependency(get_charges, {
@@ -536,12 +559,14 @@ residues_map = Dependency(generate_map_online, {
 }, 'map')
 
 # Prepare the metadata output file
+# It is cheap to remake and this may solve problems when changing inputs if metadata is already done
 metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'input_topology_filename': pdb_filename,
     'input_trajectory_filename': trajectory_filename,
     'inputs_filename': inputs_filename,
     'snapshots': snapshots,
     'residues_map': residues_map,
+    'interactions': interactions,
     'output_metadata_filename': OUTPUT_metadata_filename,
     'register': register
 }, 'metadata')
@@ -551,16 +576,22 @@ topology_filename = File(OUTPUT_topology_filename, generate_topology, {
     'structure': structure,
     'charges': charges,
     'residues_map': residues_map,
+    'pbc_residues': pbc_residues,
     'output_topology_filename': OUTPUT_topology_filename
 }, 'topology')
 
+# Get the cutoff for the test below
+rmsd_cutoff = Dependency(get_input, {'name': 'rmsd_cutoff'})
 # Set a test to check trajectory integrity
 sudden_jumps = Dependency(check_sudden_jumps, {
     'input_structure_filename': pdb_filename,
     'input_trajectory_filename': trajectory_filename,
     'structure': structure,
+    'pbc_residues': pbc_residues,
     'register': register,
     #'time_length': time_length,
+    'check_selection': protein_and_nucleic,
+    'standard_deviations_cutoff': rmsd_cutoff,
 })
 
 # Pack up all tools which may be called directly from the console
@@ -584,6 +615,7 @@ analyses = [
         'average_structure_filename': average_structure_filename,
         'snapshots': snapshots,
         'structure': structure,
+        'pbc_residues': pbc_residues,
     }, 'rmsds'),
     # Here we set a small frames limit since this anlaysis is a bit slow
     File(OUTPUT_tmscores_filename, tmscores, {
@@ -593,6 +625,7 @@ analyses = [
         'first_frame_filename': first_frame_filename,
         'average_structure_filename': average_structure_filename,
         'structure' : structure,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 200,
     }, 'tmscores'),
@@ -601,7 +634,9 @@ analyses = [
     File(OUTPUT_rmsf_filename, rmsf, {
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
-        "output_analysis_filename": OUTPUT_rmsf_filename
+        "output_analysis_filename": OUTPUT_rmsf_filename,
+        'structure': structure,
+        'pbc_residues': pbc_residues,
     }, 'rmsf'),
     # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
     # WARNING: However, the output file size depends on the trajectory size
@@ -612,6 +647,8 @@ analyses = [
         "output_analysis_filename": OUTPUT_rgyr_filename,
         'snapshots': snapshots,
         'frames_limit': 5000,
+        'structure': structure,
+        'pbc_residues': pbc_residues,
     }, 'rgyr'),
     # WARNING: This analysis will generate several output files
     # File 'pca.average.pdb' is generated by the PCA and used by the client
@@ -626,6 +663,7 @@ analyses = [
         'structure': structure,
         'fit_selection': pca_fit_selection,
         'analysis_selection': pca_selection,
+        'pbc_residues': pbc_residues,
     }, 'pca'),
     # DANI: Intenta usar mucha memoria, hay que revisar
     # DANI: Puede saltar un error de imposible alojar tanta memoria
@@ -644,7 +682,7 @@ analyses = [
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_rmsdperres_filename,
         'structure': structure,
-        'membranes': membranes,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'rmsdperres'),
@@ -655,8 +693,11 @@ analyses = [
         'input_trajectory_filename': trajectory_filename,
         "output_analysis_filename": OUTPUT_rmsdpairwise_filename,
         "interactions": interactions,
+        'structure': structure,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 200,
+        'overall_selection': "name CA or name C5"
     }, 'rmsdpairwise'),
     # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
     File(OUTPUT_distperres_filename, distance_per_residue, {
@@ -688,7 +729,7 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_sasa_filename,
         'structure': structure,
-        'membranes': membranes,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'sasa'),
@@ -707,7 +748,7 @@ analyses = [
         "input_trajectory_filename": trajectory_filename,
         "output_analysis_filename": OUTPUT_pockets_filename,
         'structure': structure,
-        'membranes': membranes,
+        'pbc_residues': pbc_residues,
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'pockets'),
@@ -747,7 +788,8 @@ DEFAULT_input_topology_filename = OUTPUT_pdb_filename
 DEFAULT_input_trajectory_filenames = [OUTPUT_trajectory_filename]
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_input_charges_filename = find_charges_filename()
-DEFAULT_database_url = 'https://mdposit-dev.bsc.es'
+DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu'
+DEFAULT_rmsd_cutoff = 9
 
 # The actual main function
 def workflow (
@@ -764,12 +806,13 @@ def workflow (
     include : Optional[List[str]] = None,
     exclude : Optional[List[str]] = None,
     filter_selection : Union[bool, str] = False,
-    preprocess_protocol : int = 0,
+    image : bool = False, fit : bool = False,
     translation : List[float] = [0, 0, 0],
     mercy : Union[ List[str], bool ] = [],
     trust : Union[ List[str], bool ] = [],
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
+    rmsd_cutoff : float = DEFAULT_rmsd_cutoff
 ):
 
     # Fix the input_trajectory_filenames argument: in case it is a string convert it to a list
@@ -802,7 +845,7 @@ def workflow (
     # Note that this script was originally called only from argparse so this was not necessary
     for var_value in dict(globals()).values():
         if isinstance(var_value, Dependency):
-            var_value._value = None
+            var_value.reset()
 
     # Load the inputs file
     load_inputs(inputs_filename)
@@ -828,6 +871,9 @@ def workflow (
 
     # If setup is passed as True then exit as soon as the setup is finished
     if setup:
+        pdb_filename.value
+        trajectory_filename.value
+        charges_filename.value
         # Save the register
         save_register(register.value)
         return
@@ -901,28 +947,20 @@ parser.add_argument(
     help="Path to charges topology filename")
 
 parser.add_argument(
-    "-pr", "--preprocess_protocol",
-    type=int,
-    default=0,
-    help=("Set how the trajectory must be imaged and fitted (i.e. centered, without translation or rotation)\n"
-        "These protocolos may help in some situations, but the imaging step can not be fully automatized\n"
-        "If protocols do not work, the gromacs parameters must be modified manually\n"
-        "Available protocols:\n"
-        "0. Do nothing (default) -> The trajectory is already imaged and fitted\n"
-        "1. No imaging, only fitting -> The trajectory is already imaged but not fitted\n"
-        "2. Basic imaging -> Atoms are centered automatically\n"
-        "   Recommended for single molecules only\n"
-        "3. Translated imaging -> Manually translate everything before imaging\n"
-        "   Recommended for interacting molecules\n"
-        "4. Allowed jump imaging -> Residues are centered automatically. The 'nojump' and the fitting steps are skipped\n"
-        "   Recommended for proteins inside membranes\n"
-        "   * Note that a .tpr topology is required in order to run protocol 4"))
+    "-img", "--image",
+    action='store_true',
+    help="Set if the trajectory is to be imaged")
+
+parser.add_argument(
+    "-fit", "--fit",
+    action='store_true',
+    help="Set if the trajectory is to be fitted (both rotation and translation)")
 
 parser.add_argument(
     "-trans", "--translation",
     nargs='*',
     default=[0,0,0],
-    help=("Set the x y z translation for the imaging process (only protocol 3)\n"
+    help=("Set the x y z translation for the imaging process\n"
         "e.g. -trans 0.5 -1 0"))
 
 parser.add_argument(
@@ -1013,9 +1051,8 @@ parser.add_argument(
     help="Set the unique analyses or tools to be run. All other steps will be skipped")
 
 parser.add_argument(
-    "-e", "--exclude",
-    nargs='*',
-    choices=choices,
-    help=("Set the unique analyses or tools to be skipped. All other steps will be run.\n"
-        "If the 'include' argument is passed the 'exclude' argument will be ignored.\n"
-        "WARNING: If an excluded dependecy is required by others then it will be run anyway"))
+    "-rcut", "--rmsd_cutoff",
+    type=float,
+    default=DEFAULT_rmsd_cutoff,
+    help=("Set the cutoff for the RMSD sudden jumps analysis to fail (default " + str(DEFAULT_rmsd_cutoff) + ").\n"
+        "This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.\n"))

@@ -19,9 +19,10 @@ def process_input_files (
     input_charges_filename : str,
     output_topology_filename : str,
     output_trajectory_filename : str,
-    preprocess_protocol : int,
+    image : bool, fit: bool,
     translation : list,
     filter_selection : str,
+    pbc_selection : str,
     ) -> None:
 
     print('-- Processing input files --')
@@ -49,9 +50,9 @@ def process_input_files (
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
     # Fit the trajectory by removing the translation and rotation if it is required
-    if preprocess_protocol > 0:
+    if image or fit:
         image_and_fit(output_topology_filename, output_trajectory_filename, output_charges_filename,
-                      output_topology_filename, output_trajectory_filename, preprocess_protocol, translation)
+                      output_topology_filename, output_trajectory_filename, image, fit, translation, pbc_selection)
     print('-- Processed input files  --')
 
 # Set the output charges filename given the input charges filename

@@ -17,12 +17,12 @@ def do_bonds_match (bonds_1 : List[ List[int] ], bonds_2 : List[ List[int] ], ve
     for atom_index, (atom_bonds_1, atom_bonds_2) in enumerate(zip(bonds_1, bonds_2)):
         if len(atom_bonds_1) != len(atom_bonds_2):
             if verbose:
-                print('Missmatch in atom ' + str(atom_index) + ': ' + str(atom_bonds_1) + ' -> ' + str(atom_bonds_2))
+                print('Missmatch in atom ' + str(atom_index) + ': it is ' + str(atom_bonds_1) + ' -> it must be ' + str(atom_bonds_2))
                 print() # Extra line for the frame logs to not erase the previous log
             return False
         if any(bond not in atom_bonds_2 for bond in atom_bonds_1):
             if verbose:
-                print('Missmatch in atom ' + str(atom_index) + ': ' + str(atom_bonds_1) + ' -> ' + str(atom_bonds_2))
+                print('Missmatch in atom ' + str(atom_index) + ': it is ' + str(atom_bonds_1) + ' -> it must be ' + str(atom_bonds_2))
                 print() # Extra line for the frame logs to not erase the previous log
             return False
     return True

@@ -5,8 +5,8 @@
 
 import pytraj as pt
 import re
-
 import json
+from typing import List
 
 from distutils.version import StrictVersion
 
@@ -18,7 +18,7 @@ def rmsd_per_residue (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     structure : 'Structure',
-    membranes,
+    pbc_residues : List[int],
     snapshots : int,
     frames_limit : int):
 
@@ -34,18 +34,15 @@ def rmsd_per_residue (
         if len(residue.atom_indices) == 1:
             ion_atom_indices += residue.atom_indices
 
-    # We must exclude here membranes from the analysis
-    # Membrane lipids close to boundaries are use to jump so the RMSD values of those residues would eclipse the protein
-    membrane_atom_indices = []
-    if membranes and len(membranes) > 0:
-        membrane_selection_string = ' and '.join([ '( ' + membrane['selection'] + ' )' for membrane in membranes ])
-        membrane_selection = structure.select(membrane_selection_string, syntax='vmd')
-        if not membrane_selection:
-            raise SystemExit('ERROR: Membrane selection "' + membrane_selection_string + '" is empty')
-        membrane_atom_indices = membrane_selection.atom_indices
+    # We must exclude here PBC residues from the analysis
+    # PBC residues may jump through boundaries thus having non-sense high RMSD values
+    pbc_atom_indices = []
+    if pbc_residues and len(pbc_residues) > 0:
+        pbc_selection = structure.select_residue_indices(pbc_residues)
+        pbc_atom_indices = pbc_selection.atom_indices
 
     # Filter the trajectory with the specified residue indices
-    filter_out_atom_indices = ion_atom_indices + membrane_atom_indices
+    filter_out_atom_indices = ion_atom_indices + pbc_atom_indices
     filter_out_selection = structure.select_atom_indices(filter_out_atom_indices)
     filter_in_selection = structure.invert_selection(filter_out_selection)
     pytraj_selection = filter_in_selection.to_pytraj()

@@ -1,10 +1,12 @@
 import json
+from typing import List
 
 # Generate a json file to be uploaded to the database (mongo) with topology data
 def generate_topology (
     structure,
-    charges : list,
+    charges : List[int],
     residues_map : dict,
+    pbc_residues : List[int],
     output_topology_filename : str
 ):
     # The structure will be a bunch of arrays
@@ -18,8 +20,11 @@ def generate_topology (
         atom_names[index] = atom.name
         atom_elements[index] = atom.element
         atom_residue_indices[index] = atom.residue.index
-    atom_bonds = structure.bonds
-        
+
+    # Set the atom bonds
+    # In order to make it more standard sort atom bonds by their indices
+    atom_bonds = [ sorted(atom_indices) for atom_indices in structure.bonds ]
+
     # Residue data
     structure_residues = structure.residues
     residue_count = len(structure_residues)
@@ -65,7 +70,10 @@ def generate_topology (
         'residue_icodes': residue_icodes,
         'residue_chain_indices': residue_chain_indices,
         'chain_names': chain_names,
+        # Residues map includes 3 fields: references, residue_reference_indices and residue_reference_numbers
         **residues_map,
+        # Save also the pbc residues here
+        'pbc_residues': pbc_residues
     }
     with open(output_topology_filename, 'w') as file:
         json.dump(topology, file)

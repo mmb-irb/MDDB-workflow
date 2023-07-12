@@ -103,7 +103,7 @@ Input files may be download from an already uploaded project:
 
 `mwf -proj <project id>`
 
-By default, data files will be downloaded from `https://bioexcel-cv19-dev.bsc.es`. Another URL can be specified with the `-url` option.
+By default, data files will be downloaded from `https://mdposit-dev.mddbr.eu`. Another URL can be specified with the `-url` option.
 
 By default, the whole workflow is run.
 The exit may be forced after downloading input files with the `-d` option.

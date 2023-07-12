@@ -6,6 +6,7 @@ from os.path import exists
 from os import remove
 from numpy import mean, std
 from json import dump
+from typing import List
 
 from model_workflow.tools.xvg_parse import xvg_parse
 
@@ -23,7 +24,8 @@ def rmsf (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-):
+    structure : 'Structure',
+    pbc_residues : List[int]):
     
     # Run Gromacs
     p = Popen([
@@ -52,20 +54,25 @@ def rmsf (
 
     # Read the output file and parse it
     raw_rmsf_data = xvg_parse(rmsf_data_filename, ['atom', 'rmsf'])
+    rmsf_values = raw_rmsf_data['rmsf']
 
-    # Cleanup both the auxiliar and the residual files
-    remove(rmsf_data_filename)
-    remove(output_noelem_filename)
+    # Filter out values from PBC residue atoms since they may have not sense
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+    for index in pbc_selection.atom_indices:
+        rmsf_values[index] = None
+
+    # Get all rmsf values which are not None
+    actual_rmsf_values = [ v for v in rmsf_values if v != None ]
 
     # Format data
     rmsf_data = {
         'y': {
             'rmsf': {
-                'average': mean(raw_rmsf_data['rmsf']),
-                'stddev': std(raw_rmsf_data['rmsf']),
-                'min': min(raw_rmsf_data['rmsf']),
-                'max': max(raw_rmsf_data['rmsf']),
-                'data': raw_rmsf_data['rmsf']
+                'average': mean(actual_rmsf_values),
+                'stddev': std(actual_rmsf_values),
+                'min': min(actual_rmsf_values),
+                'max': max(actual_rmsf_values),
+                'data': rmsf_values # Keep all values here to make the list length match the number of atoms
             }
         }
     }
@@ -73,3 +80,7 @@ def rmsf (
     # Export formatted data to a json file
     with open(output_analysis_filename, 'w') as file:
         dump(rmsf_data, file)
+
+    # Cleanup both the auxiliar and the residual files
+    remove(rmsf_data_filename)
+    remove(output_noelem_filename)

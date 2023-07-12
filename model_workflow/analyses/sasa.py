@@ -5,6 +5,7 @@ import os
 import json
 import numpy
 from subprocess import run, PIPE, Popen
+from typing import List
 
 # This is a residual file produced by the sasa analysis
 # It must be deleted after each
@@ -16,7 +17,7 @@ def sasa(
     input_trajectory_filename: str,
     output_analysis_filename: str,
     structure : 'Structure',
-    membranes,
+    pbc_residues : List[int],
     snapshots : int,
     frames_limit : int,
 ):
@@ -41,16 +42,11 @@ def sasa(
     with open(ndx_filename, 'w') as file:
         file.write(ndx_selection)
 
-    # We must exclude sasa results from membranes
-    # Membrane lipids in the border will always have unrealistic sasa values
-    # Their apolar regions is exposed to solvent only because boundary conditions are broken, but this is not real
+    # We must exclude PBC residues (e.g. membranes) from sasa results
+    # PBC residues close to the boundary will always have unrealistic sasa values
     # WARNING: These results must be exlucded from the analysis afterwards, but the membrane can not be excluded from the structure
     # Otherwise, those residues which are covered by the membrane would be exposed to the solvent during the analysis
-    skipped_residue_indices = []
-    if membranes and len(membranes) > 0:
-        membrane_selection = ' and '.join([ '( ' + membrane['selection'] + ' )' for membrane in membranes ])
-        membrane_atom_indices = structure.select(membrane_selection).atom_indices
-        skipped_residue_indices = list(set([ structure.atoms[atom_index].residue_index for atom_index in membrane_atom_indices ]))
+    skipped_residue_indices = pbc_residues
 
     # Calculate the sasa for each frame
     sasa_per_frame = []

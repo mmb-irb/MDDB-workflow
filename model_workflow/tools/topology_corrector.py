@@ -92,14 +92,17 @@ def topology_corrector (
             must_be_killed = 'stabonds' not in mercy
             if must_be_killed:
                 raise SystemExit('Failed to find stable bonds')
-        # Set also the safe bonds frame structure to mine its coordinates
-        safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
-        safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
-        # Set all coordinates in the main structure by copying the safe bonds frame coordinates
-        for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
-            atom_1.coords = atom_2.coords
-        # Remove the safe bonds frame since it is not requird anymore
-        remove(safe_bonds_frame_filename)
+            register['warnings'].append(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates.\n'
+            'The main PDB structure is the default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
+        else:
+            # Set also the safe bonds frame structure to mine its coordinates
+            safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
+            safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
+            # Set all coordinates in the main structure by copying the safe bonds frame coordinates
+            for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
+                atom_1.coords = atom_2.coords
+            # Remove the safe bonds frame since it is not required anymore
+            remove(safe_bonds_frame_filename)
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
@@ -111,6 +114,7 @@ def topology_corrector (
         must_be_killed = 'cohbonds' not in mercy
         if must_be_killed:
             raise SystemExit('Failed to find coherent bonds')
+        register['warnings'].append('Bonds are not coherent. Some atoms may have less/more bonds than they should.')
 
     # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------

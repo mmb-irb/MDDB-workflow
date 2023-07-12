@@ -1,6 +1,8 @@
 import mdtraj as mdt
 from numpy import mean, std
 
+from typing import List
+
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
@@ -10,9 +12,6 @@ ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 # However, after a deep study, it was observed that simulations with similar features may show very different RMSD jumps
 # For this reason now we comptue RMSD jumps along the whole trajectory and check that the biggest jump is not an outlier
 # The outlier is defined according to how many times the standard deviation far from the mean is a value
-# DANI: He visto saltos 'correctos' pasar de 6
-# DANI: He visto saltos 'incorrectos' no bajar de 10
-standard_deviations_cutoff = 9
 
 # Look for sudden raises of RMSd values from one frame to another
 # To do so, we check the RMSD of every frame using its previous frame as reference
@@ -20,17 +19,29 @@ def check_sudden_jumps (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
+    pbc_residues : List[int],
     register : dict,
     #time_length : float,
-    check_selection : str = 'protein or nucleic',
-    ) -> bool:
+    check_selection : str,
+    # DANI: He visto saltos 'correctos' pasar de 6
+    # DANI: He visto saltos 'incorrectos' no bajar de 10
+    standard_deviations_cutoff : float) -> bool:
 
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
 
     # If there is nothing to check then warn the user and stop here
-    if not parsed_selection or len(parsed_selection.atom_indices) == 0:
+    if not parsed_selection:
         print('WARNING: There are not atoms to be analyzed for the RMSD analysis')
+        return
+
+    # Discard PBC residues from the selection to be checked
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+    parsed_selection -= pbc_selection
+
+    # If there is nothing to check then warn the user and stop here
+    if not parsed_selection:
+        print('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
         return
 
     print('Checking trajectory integrity')
