@@ -47,6 +47,7 @@ from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_sudden_jumps
+from model_workflow.analyses.helical_parameters import helical_parameters
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -181,6 +182,7 @@ OUTPUT_hbonds_filename = 'md.hbonds.json'
 OUTPUT_sasa_filename = 'md.sasa.json'
 OUTPUT_energies_filename = 'md.energies.json'
 OUTPUT_pockets_filename = 'md.pockets.json'
+OUTPUT_helical_parameters = 'md.helical.parameters.json'
 
 # State all the available checkings, which may be trusted
 available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
@@ -709,6 +711,13 @@ analyses = [
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'pockets'),
+    File(OUTPUT_helical_parameters, helical_parameters, {
+        'input_topology_filename': pdb_filename,
+        'input_trajectory_filename': trajectory_filename,
+        "output_analysis_filename": OUTPUT_helical_parameters,
+        'structure': structure,
+        'frames_limit': 1000,
+    }, 'helical'),
 ]
 
 # Set a list with all dependencies to be required if the whole workflow is run
