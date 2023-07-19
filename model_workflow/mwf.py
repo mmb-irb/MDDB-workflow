@@ -50,6 +50,7 @@ from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_sudden_jumps
 from model_workflow.analyses.helical_parameters import helical_parameters
+from model_workflow.analyses.markov import markov
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -200,6 +201,7 @@ OUTPUT_energies_filename = 'md.energies.json'
 OUTPUT_pockets_filename = 'md.pockets.json'
 OUTPUT_helical_parameters_filename = 'md.helical.parameters.json'
 OUTPUT_screenshot_filename = 'screenshot.jpg'
+OUTPUT_markov_filename = 'md.markov.json'
 
 # State all the available checkings, which may be trusted
 available_checkings = [ 'stabonds', 'cohbonds', 'intrajrity' ]
@@ -216,8 +218,8 @@ available_failures = available_checkings + [ 'refseq', 'interact' ]
 inputs = {}
 missing_input_exception = Exception('Missing input')
 # Set a function to retrieve 'inputs' values and handle missing keys
-def get_input (name : str):
-    value = inputs.get(name, missing_input_exception)
+def get_input (name : str, missing_input_callback = missing_input_exception):
+    value = inputs.get(name, missing_input_callback)
     if value == missing_input_exception:
         raise SystemExit('ERROR: Missing input "' + name + '"')
     return value
@@ -235,7 +237,7 @@ def load_inputs (inputs_filename : str):
             return
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + inputs_filename + ')\n')
-        project_url = server_url + '/api/rest/current/projects/' + project
+        project_url = server_url + '/rest/current/projects/' + project
         inputs_url = project_url + '/inputs/'
         urllib.request.urlretrieve(inputs_url, inputs_filename)
         # Write the inputs file in a pretty formatted way
@@ -270,7 +272,7 @@ def get_input_pdb_filename () -> str:
     if not server_url or not project:
         raise SystemExit('ERROR: Missing input pdb file "' + original_pdb_filename + '"')
     # Download the file
-    project_url = server_url + '/api/rest/current/projects/' + project
+    project_url = server_url + '/rest/current/projects/' + project
     sys.stdout.write('Downloading structure (' + original_pdb_filename + ')\n')
     topology_url = project_url + '/files/' + original_pdb_filename
     try:
@@ -298,7 +300,7 @@ def get_input_trajectory_filenames (sample : bool = False) -> str:
     if not server_url or not project:
         raise SystemExit('ERROR: Missing input trajectory files "' + ', '.join(original_trajectory_filenames) + '"')
     # Download each trajectory file (ususally it will be just one)
-    project_url = server_url + '/api/rest/current/projects/' + project
+    project_url = server_url + '/rest/current/projects/' + project
     # In case only a sample is requested we use the trajectory endpoint to get the first 10 frames only
     if sample:
         original_trajectory_filename = original_trajectory_filenames[0]
@@ -345,7 +347,7 @@ def get_input_charges_filename () -> str:
         raise SystemExit('ERROR: Missing input charges file "' + original_charges_filename + '"')
     # Check which files are available for this project
     if project:
-        project_url = server_url + '/api/rest/current/projects/' + project
+        project_url = server_url + '/rest/current/projects/' + project
         # Check if the project has a topology and download it in json format if so
         topology_url = project_url + '/topology'
         topology = None
@@ -398,6 +400,52 @@ def get_input_charges_filename () -> str:
                     urllib.request.urlretrieve(itp_url, itp_filename)
     return original_charges_filename
 
+# Get the input populations filename from the inputs
+# If the file is not found and we have download inputs then try to download it
+# If the file is not found and we don't have download inputs then its okay, this is an optional input
+def get_populations (populations_filename : str) -> Optional[ List[float] ]:
+    # Get the populations filename from the inputs
+    input_populations_filename = get_input('input_populations_filename')
+    # If the file already exists then read and parse it and return its content
+    if exists(input_populations_filename):
+        with open(input_populations_filename, 'r') as file:
+            populations = json.load(file)
+        return populations
+    # Try to download the file
+    # Check we have the inputs required to download the file
+    server_url = get_input('database_url')
+    project = get_input('project')
+    # If we have not download inputs then there is nothing to do
+    if not server_url or not project:
+        return None
+    # Get a list with the names of files in this project
+    project_url = server_url + '/rest/current/projects/' + project
+    files_url = project_url + '/files'
+    files_response = None
+    try:
+        files_response = urllib.request.urlopen(files_url)
+    except:
+        raise SystemExit('Something went wrong with the MDposit request: ' + files_url)
+    files = json.loads(files_response.read())
+    filenames = [ f['filename'] for f in files ]
+    # If the populations file is not in the list then there is nothing to do
+    if not input_populations_filename in filenames:
+        return None
+    # Download the file
+    sys.stdout.write('Downloading populations (' + input_populations_filename + ')\n')
+    populations_url = files_url + '/' + input_populations_filename
+    try:
+        urllib.request.urlretrieve(populations_url, input_populations_filename)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise SystemExit('ERROR: Missing input populations file "' + input_populations_filename + '"')
+        else:
+            raise ValueError('Something went wrong with the MDposit request: ' + populations_url)
+    # Read and parse the donwloaded file and return its content
+    with open(input_populations_filename, 'r') as file:
+        populations = json.load(file)
+    return populations
+
 # Get some input values which are passed through command line instead of the inputs file
 image = Dependency(get_input, {'name': 'image'})
 fit = Dependency(get_input, {'name': 'fit'})
@@ -408,6 +456,16 @@ pca_selection = Dependency(get_input, {'name': 'pca_selection'})
 mercy = Dependency(get_input, {'name': 'mercy'})
 trust = Dependency(get_input, {'name': 'trust'})
 sample_trajectory = Dependency(get_input, {'name': 'sample_trajectory'})
+input_type = Dependency(get_input, {'name': 'type'})
+# DANI: Esto es temporal, creo. El input 'type' debió llamarse 'is_time_dependend/related' y ser un boolean
+# DANI: Algun día lo cambiaré, pero esto implica cambio en db, api y cliente también
+def check_is_time_dependent (input_type : str) -> bool:
+    if input_type == 'trajectory':
+        return True
+    elif input_type == 'ensemble':
+        return False
+    raise SystemExit('Not supported input type value: ' + input_type)
+is_time_dependend = Dependency(check_is_time_dependent, {'input_type': input_type})
 
 # Get input filenames from the already updated inputs
 
@@ -417,10 +475,11 @@ original_trajectory_filenames = Dependency(get_input_trajectory_filenames, {'sam
 original_charges_filename = Dependency(get_input_charges_filename, {})
 # The 'inputs file' is a json file which must contain all parameters to run the workflow
 inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
+populations_filename = Dependency(get_input, {'name': 'input_populations_filename'})
 
 # Extract some additional input values from the inputs json file
 input_interactions = Dependency(get_input, {'name': 'interactions'})
-input_pbc_selection = Dependency(get_input, {'name': 'pbc_selection'})
+input_pbc_selection = Dependency(get_input, {'name': 'pbc_selection', 'missing_input_callback': None})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
 pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
 time_length = Dependency(get_input, {'name': 'length'})
@@ -553,6 +612,9 @@ charges = Dependency(get_charges, {
     'charges_source_filename': charges_filename,
 }, 'charges')
 
+# Load the populations
+populations = Dependency(get_populations, { 'populations_filename': populations_filename })
+
 # Prepare the metadata output file
 residues_map = Dependency(generate_map_online, {
     'structure': structure,
@@ -573,7 +635,7 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'interactions': interactions,
     'output_metadata_filename': OUTPUT_metadata_filename,
     'register': register
-}, 'metadata')
+}, 'metadata', must_remake=True)
 
 # Prepare the topology output file
 topology_filename = File(OUTPUT_topology_filename, generate_topology, {
@@ -771,6 +833,14 @@ analyses = [
         'structure': structure,
         'frames_limit': 1000,
     }, 'helical'),
+    File(OUTPUT_markov_filename, markov, {
+        "input_topology_filename": pdb_filename,
+        "input_trajectory_filename": trajectory_filename,
+        "output_analysis_filename": OUTPUT_markov_filename,
+        'structure': structure,
+        'populations': populations,
+        'rmsd_selection': protein_and_nucleic,
+    }, 'markov'),
 ]
 
 # Set a list with all dependencies to be required if the whole workflow is run
@@ -800,7 +870,8 @@ DEFAULT_input_topology_filename = OUTPUT_pdb_filename
 DEFAULT_input_trajectory_filenames = [OUTPUT_trajectory_filename]
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_input_charges_filename = find_charges_filename()
-DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu'
+DEFAULT_input_populations_filename = 'populations.json'
+DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu/api'
 DEFAULT_rmsd_cutoff = 9
 
 # The actual main function
@@ -810,6 +881,7 @@ def workflow (
     input_trajectory_filenames : List[str] = DEFAULT_input_trajectory_filenames,
     inputs_filename : str = DEFAULT_inputs_filename,
     input_charges_filename : str = DEFAULT_input_charges_filename,
+    input_populations_filename : str = DEFAULT_input_populations_filename,
     database_url : str = DEFAULT_database_url,
     project : Optional[str] = None,
     sample_trajectory : bool = False,
@@ -867,6 +939,7 @@ def workflow (
         original_topology_filename.value
         original_trajectory_filenames.value
         original_charges_filename.value
+        populations.value
         # Note that there is no need to save the register if we just downloaded data
         return
 
@@ -957,6 +1030,11 @@ parser.add_argument(
     "-char", "--input_charges_filename",
     default=DEFAULT_input_charges_filename, # There is no default since many formats may be possible
     help="Path to charges topology filename")
+
+parser.add_argument(
+    "-pop", "--input_populations_filename",
+    default=DEFAULT_input_populations_filename,
+    help="Path to populations filename")
 
 parser.add_argument(
     "-img", "--image",
