@@ -584,6 +584,8 @@ average_frame_filename = File(OUTPUT_average_frame_filename, get_average, {
 
 # Get additional metadata used in the workflow which is not in the inputs
 
+# Get the cutoff for the interactions below
+interaction_cutoff = Dependency(get_input, {'name': 'interaction_cutoff'})
 # Find out residues and interface residues for each interaction
 interactions = Dependency(process_interactions, {
     'input_interactions': input_interactions,
@@ -594,6 +596,7 @@ interactions = Dependency(process_interactions, {
     'interactions_file': OUTPUT_interactions_filename,
     'mercy' : mercy,
     'frames_limit': 1000,
+    'interaction_cutoff': interaction_cutoff
 }, 'interactions')
 
 # Find the PBC residues
@@ -853,6 +856,7 @@ DEFAULT_input_charges_filename = find_charges_filename()
 DEFAULT_input_populations_filename = 'populations.json'
 DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu/api'
 DEFAULT_rmsd_cutoff = 9
+DEFAULT_interaction_cutoff = 0.1
 
 # The actual main function
 def workflow (
@@ -876,7 +880,8 @@ def workflow (
     trust : Union[ List[str], bool ] = [],
     pca_selection : str = protein_and_nucleic_backbone,
     pca_fit_selection : str = protein_and_nucleic_backbone,
-    rmsd_cutoff : float = DEFAULT_rmsd_cutoff
+    rmsd_cutoff : float = DEFAULT_rmsd_cutoff,
+    interaction_cutoff : float = DEFAULT_interaction_cutoff
 ):
 
     # Fix the input_trajectory_filenames argument: in case it is a string convert it to a list
@@ -1126,3 +1131,10 @@ parser.add_argument(
     default=DEFAULT_rmsd_cutoff,
     help=("Set the cutoff for the RMSD sudden jumps analysis to fail (default " + str(DEFAULT_rmsd_cutoff) + ").\n"
         "This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.\n"))
+
+parser.add_argument(
+    "-icut", "--interaction_cutoff",
+    type=float,
+    default=DEFAULT_interaction_cutoff,
+    help=("Set the cutoff for the interactions analysis to fail (default " + str(DEFAULT_interaction_cutoff) + ").\n"
+        "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
