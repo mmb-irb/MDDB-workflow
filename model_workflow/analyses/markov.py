@@ -5,12 +5,17 @@
 
 from typing import List
 from json import dump
+from os import remove
 
 import mdtraj as mdt
+
+from model_workflow.tools.get_screenshot import get_screenshot 
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+
+auxiliar_pdb_filename = '.model.pdb'
 
 def markov (
     input_topology_filename : str,
@@ -81,10 +86,27 @@ def markov (
             rsmd = mdt.rmsd(frame_coordinates[frame], frame_coordinates[other_frame], atom_indices=parsed_selection.atom_indices)[0]
             rmsd_row.append(float(rsmd))
         rmsd_matrix.append(rmsd_row)
+    print(' Taking screenshots of selected frames')
+    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
+    print()
+    frame_count = str(len(frame_coordinates))
+    # For each frame coordinates, generate PDB file, take a scrrenshot and delete it
+    for i, coordinates in enumerate(frame_coordinates.values(), 1):
+        # Update the current frame log
+        print(ERASE_PREVIOUS_LINE)
+        print('  Screenshot ' + str(i) + '/' + frame_count)
+        # Generate the pdb file
+        coordinates.save(auxiliar_pdb_filename)
+        # Set the screenshot filename
+        screenshot_filename = 'markov_screenshot_' + str(i).zfill(2) + '.jpg'
+        # Generate the screenshot
+        get_screenshot(auxiliar_pdb_filename, screenshot_filename)
+        # Remove the pdb file
+        remove(auxiliar_pdb_filename)
     # Export the analysis data to a json file
     data = {
         'frames': highest_population_frames,
-        'populations': highest_population_frames,
+        'populations': highest_populations,
         'rmsd_matrix': rmsd_matrix
     }
     with open(output_analysis_filename, 'w') as file:
