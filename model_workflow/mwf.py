@@ -31,6 +31,8 @@ from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.register import start_register, save_register
+from model_workflow.tools.get_screenshot import get_screenshot
+
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -47,6 +49,7 @@ from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_sudden_jumps
+from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
 
 # Make the system output stream to not be buffered
@@ -196,6 +199,8 @@ OUTPUT_hbonds_filename = 'md.hbonds.json'
 OUTPUT_sasa_filename = 'md.sasa.json'
 OUTPUT_energies_filename = 'md.energies.json'
 OUTPUT_pockets_filename = 'md.pockets.json'
+OUTPUT_helical_parameters_filename = 'md.helical.parameters.json'
+OUTPUT_screenshot_filename = 'screenshot.jpg'
 OUTPUT_markov_filename = 'md.markov.json'
 
 # State all the available checkings, which may be trusted
@@ -644,6 +649,12 @@ topology_filename = File(OUTPUT_topology_filename, generate_topology, {
     'output_topology_filename': OUTPUT_topology_filename
 }, 'topology')
 
+# Prepare screenshot file 
+screenshot = File(OUTPUT_screenshot_filename, get_screenshot, {
+    'input_structure_filename' : OUTPUT_pdb_filename,
+    'output_screenshot_filename' : OUTPUT_screenshot_filename,
+}, 'screenshot')
+
 # Get the cutoff for the test below
 rmsd_cutoff = Dependency(get_input, {'name': 'rmsd_cutoff'})
 # Set a test to check trajectory integrity
@@ -664,6 +675,8 @@ tools = [
     interactions,
     snapshots,
     charges,
+    residues_map,
+    screenshot,
 ]
 
 # Define all analyses
@@ -816,6 +829,13 @@ analyses = [
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'pockets'),
+    File(OUTPUT_helical_parameters_filename, helical_parameters, {
+        'input_topology_filename': pdb_filename,
+        'input_trajectory_filename': trajectory_filename,
+        "output_analysis_filename": OUTPUT_helical_parameters_filename,
+        'structure': structure,
+        'frames_limit': 1000,
+    }, 'helical'),
     File(OUTPUT_markov_filename, markov, {
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,
