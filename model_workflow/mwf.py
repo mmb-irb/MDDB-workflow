@@ -44,6 +44,7 @@ from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
 from model_workflow.analyses.distance_per_residue import distance_per_residue
+#from model_workflow.analyses.hydrogen_bonds_2 import hydrogen_bonds
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
@@ -800,6 +801,9 @@ analyses = [
         "interactions": interactions,
         'snapshots': snapshots,
         'frames_limit': 200,
+        # 'is_time_dependend': is_time_dependend,
+        # 'time_splits': 100,
+        # 'populations': populations
     }, 'hbonds'),
     File(OUTPUT_sasa_filename, sasa, {
         "input_topology_filename": pdb_filename,
