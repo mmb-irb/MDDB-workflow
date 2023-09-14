@@ -524,32 +524,57 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     domains = []
     # WARNING: Some uniprot entries are missing features (e.g. O27908)
     features = parsed_response.get('features', [])
+    # Get comments data which may be useful to further build domain descriptions
+    comments_data = parsed_response.get('comments', None)
+    # There are many types of features but in this case we will focus on domanins and similar
+    target_types = ['CHAIN', 'REGION', 'DOMAIN', 'MOTIF', 'SITE']
     for feature in features:
-        if feature['type'] != "CHAIN":
+        # Skip features of other types
+        if feature['type'] not in target_types:
             continue
+        # Get the domain name
         name = feature['description']
+        # Build the domain description from the coments data
         description = None
-        comments_data = parsed_response.get('comments', None)
         if comments_data:
             comments = [ comment for comment in parsed_response['comments'] if name == comment.get('molecule', None) ]
             comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
             description = '\n\n'.join(comment_text)
-        domains.append({
+        # If we already have a domain with the same name then join both domains
+        # For instance, you may have several repetitions of the 'Disordered' region
+        already_existing_domain = next((domain for domain in domains if domain['name'] == name), None)
+        if already_existing_domain:
+            already_existing_domain['selection'] += ', ' + feature['begin'] + '-' + feature['end']
+            continue
+        # Otherwise, create a new domain
+        domain = {
             'name': name,
-            'description': description,
-            # Set the representations to be configured in the client viewer to show this domain
-            'representations':[{
-                'name': name,
-                'selection': feature['begin'] + '-' + feature['end']
-            }]
-        })
+            'selection': feature['begin'] + '-' + feature['end']
+        }
+        # Add a description only if we succesfully mined it
+        # Note that only features tagged as CHAIN have comments (not sure about this)
+        if description:
+            domain['description'] = description
+        # Add the new domain to the list
+        domains.append(domain)
+    # Mine protein functions from Gene Ontology references
+    # Get database references
+    db_references = parsed_response['dbReferences']
+    # Get references from Gene Ontology (GO) only
+    go_references = [ ref for ref in db_references if ref['type'] == 'GO' ]
+    # A Gene Ontology entry may be one of three types:
+    # Cellular Component (C), Molecular Function (F) and Biological Process (P)
+    # In this case we are interested in protein function only so we will keep those with the 'F' header
+    functions = [ ref['properties']['term'][2:] for ref in go_references if ref['properties']['term'][0:2] == 'F:' ]
+    # Set the final reference to be uploaded to the database
     return {
         'name': protein_name,
         'gene': gene_names,
         'organism': organism,
         'uniprot': uniprot_accession,
         'sequence': sequence,
-        'domains': domains
+        'domains': domains,
+        'functions': functions
     }
 
 # Given a pdb Id, get its uniprot id
