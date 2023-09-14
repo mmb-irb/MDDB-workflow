@@ -634,6 +634,7 @@ metadata_filename = File(OUTPUT_metadata_filename, generate_metadata, {
     'input_topology_filename': pdb_filename,
     'input_trajectory_filename': trajectory_filename,
     'inputs_filename': inputs_filename,
+    'structure': structure,
     'snapshots': snapshots,
     'residues_map': residues_map,
     'interactions': interactions,
