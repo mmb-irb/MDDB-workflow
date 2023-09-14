@@ -155,8 +155,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence):
     if not os.path.exists(helical_parameters_folder):
         os.mkdir(helical_parameters_folder)
     # Purge residual files from previous runs
-    possible_residual_filenames = glob.glob(helical_parameters_folder+'/*.cda') + glob.glob(helical_parameters_folder+'/*.lis') 
-    + glob.glob(helical_parameters_folder+'/*.ser')
+    possible_residual_filenames = glob.glob(helical_parameters_folder+'/*.cda') + glob.glob(helical_parameters_folder+'/*.lis') + glob.glob(helical_parameters_folder+'/*.ser')
     for filename in possible_residual_filenames:
         os.remove(filename)
         
