@@ -650,7 +650,7 @@ topology_filename = File(OUTPUT_topology_filename, generate_topology, {
 screenshot = File(OUTPUT_screenshot_filename, get_screenshot, {
     'input_structure_filename' : OUTPUT_pdb_filename,
     'output_screenshot_filename' : OUTPUT_screenshot_filename,
-}, 'screenshot')
+}, 'screenshot', must_remake=True)
 
 # Get the cutoff for the test below
 rmsd_cutoff = Dependency(get_input, {'name': 'rmsd_cutoff'})
