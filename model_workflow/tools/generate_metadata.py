@@ -61,6 +61,13 @@ def generate_metadata (
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, residues_map)
 
+    # Find the PTMs
+    # Save only their names for now
+    # DANI: Esto es temporal y de momento solo busca ser un parámetro de facil query
+    # DANI: Cuando esté más maduro también almacenaremos residuo afectado, como mínimo
+    ptms = structure.find_ptms()
+    ptm_names = list(set([ ptm['name'] for ptm in ptms ]))
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -105,6 +112,7 @@ def generate_metadata (
         'REFERENCES': references,
         'SEQUENCES': sequence_metadata['sequences'],
         'DOMAINS': sequence_metadata['domains'],
+        'PTM': ptm_names,
         'CHAINNAMES': get_input('chainnames'),
         'MEMBRANES': get_input('membranes'),
         'LINKS': get_input('links'),
