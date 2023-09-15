@@ -118,6 +118,11 @@ def helical_parameters (
     else:
         selection = structure.select('nucleic', syntax='vmd')
 
+    # If there is nothing to analyze then we return here
+    if not selection:
+        print(' There are no nucleic acids')
+        return
+
     # Get the sequence from the selected chains
     chain_indices = structure.get_selection_chain_indices(selection)
     if len(chain_indices) != 2:

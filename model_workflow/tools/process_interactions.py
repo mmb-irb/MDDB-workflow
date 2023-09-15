@@ -24,7 +24,7 @@ def process_interactions (
     frames_limit : int,
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
-    frames_percent_cutoff : float = 0.1,
+    interaction_cutoff : float = 0.1,
     # The cutoff distance is in Ångstroms (Å)
     distance_cutoff : float = 5) -> list:
 
@@ -70,9 +70,9 @@ def process_interactions (
         # Check if the interaction is respecting the frames percent cutoff and if it fails then kill it
         frames_percent = interface_results['interacting_frames'] / interface_results['total_frames']
         pretty_frames_percent = str(round(frames_percent * 100) / 100)
-        if frames_percent < frames_percent_cutoff:
+        if frames_percent < interaction_cutoff:
             meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
-            print('Interaction "' + interaction['name'] + '" is not reaching the frames percent cutoff of ' + str(frames_percent_cutoff) + ' (' + pretty_frames_percent + ').\n'
+            print('Interaction "' + interaction['name'] + '" is not reaching the frames percent cutoff of ' + str(interaction_cutoff) + ' (' + pretty_frames_percent + ').\n'
                 'This means the interaction ' + meaning_log + '.\n'
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
                 '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'

@@ -75,11 +75,11 @@ def topology_corrector (
         if must_check_stable_bonds:
             # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
             safe_bonds = get_safe_bonds(input_pdb_filename, input_trajectory_filename, snapshots)
-    # If failed to mine bonds from topology and we trust stable bonds then simly use structure bonds
-    if not safe_bonds:
-        safe_bonds = structure.bonds
+        # If we trust stable bonds then simply use structure bonds
+        else:
+            safe_bonds = structure.bonds
     # If the safe bonds do not match the structure bonds then we have to fix it
-    if not do_bonds_match(structure.bonds, safe_bonds):
+    if 'stabonds' not in trust and not do_bonds_match(structure.bonds, safe_bonds):
         modified = True
         print('WARNING: Default structure has wrong bonds')
         # Set the safe bonds as the structure bonds

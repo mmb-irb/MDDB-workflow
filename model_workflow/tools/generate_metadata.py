@@ -1,5 +1,6 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
+from model_workflow.tools.generate_map import get_sequence_metadata
 
 import json
 from pathlib import Path
@@ -9,6 +10,7 @@ def generate_metadata (
     input_topology_filename : str,
     input_trajectory_filename : str,
     inputs_filename : str,
+    structure : 'Structure',
     snapshots : int,
     residues_map : dict,
     interactions : list,
@@ -56,6 +58,9 @@ def generate_metadata (
     final_interaction_names = [ interaction['name'] for interaction in interactions ]
     metadata_interactions = [ interaction for interaction in metadata_interactions if interaction['name'] in final_interaction_names ]
 
+    # Get additional metadata related to the aminoacids sequence
+    sequence_metadata = get_sequence_metadata(structure, residues_map)
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -98,13 +103,16 @@ def generate_metadata (
         'PBC_SELECTION': get_input('pbc_selection'),
         'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': references,
+        'SEQUENCES': sequence_metadata['sequences'],
+        'DOMAINS': sequence_metadata['domains'],
         'CHAINNAMES': get_input('chainnames'),
         'MEMBRANES': get_input('membranes'),
         'LINKS': get_input('links'),
         'ORIENTATION': get_input('orientation'),
         'WARNINGS': register['warnings'],
         # Collection specifics
-        'CV19_UNIT': get_input('cv19_unit')
+        'CV19_UNIT': get_input('cv19_unit'),
+        'CV19_VARIANT': sequence_metadata['cv19_variant']
     }
     metadata_filename = 'metadata.json'
     with open(metadata_filename, 'w') as file:

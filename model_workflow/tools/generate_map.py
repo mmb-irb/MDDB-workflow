@@ -39,7 +39,7 @@ def generate_map_online (
     structure : 'Structure',
     register : dict,
     mercy : List[str] = [],
-    forced_references : Optional[ Union[list,dict] ] = None,
+    forced_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
@@ -524,32 +524,57 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     domains = []
     # WARNING: Some uniprot entries are missing features (e.g. O27908)
     features = parsed_response.get('features', [])
+    # Get comments data which may be useful to further build domain descriptions
+    comments_data = parsed_response.get('comments', None)
+    # There are many types of features but in this case we will focus on domanins and similar
+    target_types = ['CHAIN', 'REGION', 'DOMAIN', 'MOTIF', 'SITE']
     for feature in features:
-        if feature['type'] != "CHAIN":
+        # Skip features of other types
+        if feature['type'] not in target_types:
             continue
+        # Get the domain name
         name = feature['description']
+        # Build the domain description from the coments data
         description = None
-        comments_data = parsed_response.get('comments', None)
         if comments_data:
             comments = [ comment for comment in parsed_response['comments'] if name == comment.get('molecule', None) ]
             comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
             description = '\n\n'.join(comment_text)
-        domains.append({
+        # If we already have a domain with the same name then join both domains
+        # For instance, you may have several repetitions of the 'Disordered' region
+        already_existing_domain = next((domain for domain in domains if domain['name'] == name), None)
+        if already_existing_domain:
+            already_existing_domain['selection'] += ', ' + feature['begin'] + '-' + feature['end']
+            continue
+        # Otherwise, create a new domain
+        domain = {
             'name': name,
-            'description': description,
-            # Set the representations to be configured in the client viewer to show this domain
-            'representations':[{
-                'name': name,
-                'selection': feature['begin'] + '-' + feature['end']
-            }]
-        })
+            'selection': feature['begin'] + '-' + feature['end']
+        }
+        # Add a description only if we succesfully mined it
+        # Note that only features tagged as CHAIN have comments (not sure about this)
+        if description:
+            domain['description'] = description
+        # Add the new domain to the list
+        domains.append(domain)
+    # Mine protein functions from Gene Ontology references
+    # Get database references
+    db_references = parsed_response['dbReferences']
+    # Get references from Gene Ontology (GO) only
+    go_references = [ ref for ref in db_references if ref['type'] == 'GO' ]
+    # A Gene Ontology entry may be one of three types:
+    # Cellular Component (C), Molecular Function (F) and Biological Process (P)
+    # In this case we are interested in protein function only so we will keep those with the 'F' header
+    functions = [ ref['properties']['term'][2:] for ref in go_references if ref['properties']['term'][0:2] == 'F:' ]
+    # Set the final reference to be uploaded to the database
     return {
         'name': protein_name,
         'gene': gene_names,
         'organism': organism,
         'uniprot': uniprot_accession,
         'sequence': sequence,
-        'domains': domains
+        'domains': domains,
+        'functions': functions
     }
 
 # Given a pdb Id, get its uniprot id
@@ -571,3 +596,82 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
     uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
     print(' References for PDB code ' + pdb_id + ': ' + ', '.join(uniprot_ids))
     return uniprot_ids
+
+# This function is used by the generate_metadata script
+# 1. Get structure sequences
+# 2. Calculate which reference domains are covered by the previous sequence
+# 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
+from model_workflow.utils.covid_variants import get_variants
+def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict:
+    # First mine the sequences from the structure
+    # Set a different sequence for each chain
+    sequences = [ chain.get_sequence() for chain in structure.chains ]
+    # Get values from the residue map
+    reference_ids = residues_map['references']
+    residue_reference_numbers = residues_map['residue_reference_numbers']
+    residue_reference_indices = residues_map['residue_reference_indices']
+    # Load references data, which should already be save to the references data file
+    references_data = import_references()
+    # In case we have the SARS-CoV-2 spike among the references, check also which is the variant it belongs to
+    # DANI: Esto es un parche. En un futuro buscaremos una manera mejor de comprovar variantes en cualquier contexto
+    variant = None
+    covid_spike_reference_id = 'P0DTC2'
+    if covid_spike_reference_id in reference_ids:
+        # Load the reference variant sequences
+        covid_spike_variants = get_variants()
+        # Load the reference data and find a chain which belongs to the spike
+        # We consider having only one variant, so all chains should return the same result
+        reference_data = references_data[covid_spike_reference_id]
+        covid_spike_reference_index = reference_ids.index(covid_spike_reference_id)
+        sample_residue_index = next((residue_index for residue_index, reference_index in enumerate(residue_reference_indices) if reference_index == covid_spike_reference_index), None)
+        if sample_residue_index == None:
+            raise SystemExit('Failed to find residue belonging to SARS-CoV-2 variant') 
+        sample_chain_sequence = structure.residues[sample_residue_index].chain.get_sequence()
+        # Align the sample chain sequence against all variants to find the best match
+        highest_score = 0
+        for variant_name, variant_sequence in covid_spike_variants.items():
+            align_results = align(variant_sequence, sample_chain_sequence)
+            if not align_results:
+                continue
+            mapping, score = align_results
+            if score > highest_score:
+                highest_score = score
+                variant = variant_name
+        # At this point there should be a result
+        if not variant:
+            raise SystemExit('Something went wrong trying to find the SARS-CoV-2 variant')
+    # Set which reference domains are present in the structure
+    domains = []
+    for reference_index, reference_id in enumerate(reference_ids):
+        # Get residue numbers of residues which belong to the current reference in th residue map
+        residue_numbers = []
+        for residue_index, residue_reference_index in enumerate(residue_reference_indices):
+            if residue_reference_index == reference_index:
+                residue_numbers.append(residue_reference_numbers[residue_index])
+        # Set a function to find if any of the residue numbers is within a given range
+        def in_range (start : int, end : int) -> bool:
+            for residue_number in residue_numbers:
+                if residue_number >= start and residue_number <= end:
+                    return True
+            return False
+        # Get the reference data for the current reference uniprot id
+        reference_data = references_data.get(reference_id, None)
+        if not reference_data:
+            raise SystemExit(reference_id + ' is not in the references data file')
+        # Iterate over data domains
+        for domain in reference_data['domains']:
+            selection = domain['selection']
+            # Iterate over the residue ranges in the selection field
+            residue_ranges = selection.split(', ')
+            for residue_range in residue_ranges:
+                start, end = [ int(num) for num in residue_range.split('-') ]
+                # If this range includes any resiudes in the residue map then the domain is included in the list
+                if in_range(start, end):
+                    domains.append(domain['name'])
+                    break
+    # Return the sequence matadata
+    return {
+        'sequences': sequences,
+        'domains': domains,
+        'cv19_variant': variant
+    }
