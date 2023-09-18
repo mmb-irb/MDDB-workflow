@@ -292,6 +292,8 @@ def import_references () -> list:
 
 # Reformat mapping data to the topology system (introduced later)
 def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
+    print('MAPPING DATA!!')
+    print(mapping_data)
     # Get the count of residues from the structure
     residues_count = len(structure.residues)
     # Now format data
@@ -643,6 +645,9 @@ def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict
     # Set which reference domains are present in the structure
     domains = []
     for reference_index, reference_id in enumerate(reference_ids):
+        # If this is not referable then there are no domains to mine
+        if reference_id == no_referable_flag:
+            continue
         # Get residue numbers of residues which belong to the current reference in th residue map
         residue_numbers = []
         for residue_index, residue_reference_index in enumerate(residue_reference_indices):
