@@ -541,11 +541,17 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
             comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
             description = '\n\n'.join(comment_text)
         # Set the domain selection
-        selection = feature['begin'] + '-' + feature['end']
-        # Sometimes these 'begin' and 'end' values include symbols like '>'
-        # I dont know their meaning but they are apparently ignored in the UniProt web cliente, so we do the same
-        selection = selection.replace('>', '')
-        selection = selection.replace('<', '')
+        # The domain 'begin' and 'end' values may include non-numeric symbols such as '~', '>' or '<'
+        # These values are usually ignored or replaced by '?' in the UniProt web client
+        # There may be not numeric value at all (e.g. Q99497)
+        # In these cases uniprot shows the domain but it does not allow to use its functionallities 
+        # e.g. you can not blast using the domain sequence
+        # It makes not sense having a domain with unkown range to me so we skip these domains
+        begin = feature['begin'].replace('~', '').replace('>', '').replace('<', '')
+        end = feature['end'].replace('~', '').replace('>', '').replace('<', '')
+        if begin == '' or end == '':
+            continue
+        selection = begin + '-' + end
         # If we already have a domain with the same name then join both domains
         # For instance, you may have several repetitions of the 'Disordered' region
         already_existing_domain = next((domain for domain in domains if domain['name'] == name), None)
