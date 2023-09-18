@@ -540,16 +540,22 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
             comments = [ comment for comment in parsed_response['comments'] if name == comment.get('molecule', None) ]
             comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
             description = '\n\n'.join(comment_text)
+        # Set the domain selection
+        selection = feature['begin'] + '-' + feature['end']
+        # Sometimes these 'begin' and 'end' values include symbols like '>'
+        # I dont know their meaning but they are apparently ignored in the UniProt web cliente, so we do the same
+        selection = selection.replace('>', '')
+        selection = selection.replace('<', '')
         # If we already have a domain with the same name then join both domains
         # For instance, you may have several repetitions of the 'Disordered' region
         already_existing_domain = next((domain for domain in domains if domain['name'] == name), None)
         if already_existing_domain:
-            already_existing_domain['selection'] += ', ' + feature['begin'] + '-' + feature['end']
+            already_existing_domain['selection'] += ', ' + selection
             continue
         # Otherwise, create a new domain
         domain = {
             'name': name,
-            'selection': feature['begin'] + '-' + feature['end']
+            'selection': selection
         }
         # Add a description only if we succesfully mined it
         # Note that only features tagged as CHAIN have comments (not sure about this)
