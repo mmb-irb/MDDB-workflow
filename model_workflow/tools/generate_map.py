@@ -29,6 +29,9 @@ references_filename = 'references.json'
 # Set a flag to represent a protein which is not referable (e.g. antibodies, synthetic constructs)
 no_referable_flag = 'noref'
 
+# Set a flag to represent a not found reference
+not_found_flag = 'notfound'
+
 # Map the structure aminoacids sequences against the standard reference sequences
 # References are uniprot accession ids and they are optional
 # For each reference, align the reference sequence with the topology sequence
@@ -156,6 +159,9 @@ def generate_map_online (
             if reference == no_referable_flag:
                 print('   ' + name + ' -> No referable')
                 continue
+            if reference == not_found_flag:
+                print('   ' + name + ' -> Not found')
+                continue
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
         # Export already matched references
@@ -233,6 +239,7 @@ def generate_map_online (
         sequence = structure_sequence['sequence']
         uniprot_id = blast(sequence)
         if not uniprot_id:
+            structure_sequence['match'] = { 'ref': not_found_flag }
             continue
         # Build a new reference from the resulting uniprot
         reference, already_loaded = get_reference(uniprot_id)
@@ -263,7 +270,7 @@ def export_references (mapping_data : list):
     for data in mapping_data:
         match = data['match']
         ref = match['ref']
-        if not ref or ref == no_referable_flag:
+        if not ref or ref == no_referable_flag or ref == not_found_flag:
             continue
         uniprot = ref['uniprot']
         if uniprot in final_uniprots:
@@ -311,6 +318,14 @@ def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
             if no_referable_flag not in reference_ids:
                 reference_ids.append(no_referable_flag)
             reference_index = reference_ids.index(no_referable_flag)
+            for residue_index in data['residue_indices']:
+                residue_reference_indices[residue_index] = reference_index
+            continue
+        # If we have the "not found" flag
+        if reference == not_found_flag:
+            if not_found_flag not in reference_ids:
+                reference_ids.append(not_found_flag)
+            reference_index = reference_ids.index(not_found_flag)
             for residue_index in data['residue_indices']:
                 residue_reference_indices[residue_index] = reference_index
             continue
@@ -657,6 +672,9 @@ def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict
     for reference_index, reference_id in enumerate(reference_ids):
         # If this is not referable then there are no domains to mine
         if reference_id == no_referable_flag:
+            continue
+        # If the reference was not found then there are no domains to mine
+        if reference_id == not_found_flag:
             continue
         # Get residue numbers of residues which belong to the current reference in th residue map
         residue_numbers = []
