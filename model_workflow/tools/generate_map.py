@@ -114,6 +114,11 @@ def generate_map_online (
                     if forced_reference == no_referable_flag:
                         structure_sequence['match'] = { 'ref': no_referable_flag }
                         continue
+                    # In case the forced reference is the "not found" flag
+                    # This should not happend but we may be using references as forced references, so just in case
+                    if forced_reference == not_found_flag:
+                        structure_sequence['match'] = { 'ref': not_found_flag }
+                        continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
                     reference_sequence = reference_sequences[forced_reference]
                     print(' Aligning chain ' + chain + ' with ' + forced_reference + ' reference sequence')
@@ -176,6 +181,10 @@ def generate_map_online (
         for uniprot_id in forced_uniprot_ids:
             # If instead of a uniprot id there is a 'no referable' flag then we skip this process
             if uniprot_id == no_referable_flag:
+                continue
+            # If instead of a uniprot id there is a 'not found' flag then we skip this process
+            # This should not happend but we may be using references as forced references, so just in case
+            if uniprot_id == not_found_flag:
                 continue
             # If reference is already in the list (i.e. it has been imported) then skip this process
             reference = references.get(uniprot_id, None)
