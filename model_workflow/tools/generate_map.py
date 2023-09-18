@@ -292,8 +292,6 @@ def import_references () -> list:
 
 # Reformat mapping data to the topology system (introduced later)
 def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
-    print('MAPPING DATA!!')
-    print(mapping_data)
     # Get the count of residues from the structure
     residues_count = len(structure.residues)
     # Now format data
@@ -609,11 +607,11 @@ def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict
     # Set a different sequence for each chain
     sequences = [ chain.get_sequence() for chain in structure.chains ]
     # Get values from the residue map
-    reference_ids = residues_map['references']
+    reference_ids = residues_map['references'] if residues_map['references'] else []
     residue_reference_numbers = residues_map['residue_reference_numbers']
     residue_reference_indices = residues_map['residue_reference_indices']
     # Load references data, which should already be save to the references data file
-    references_data = import_references()
+    references_data = import_references() if os.path.exists(references_filename) else {}
     # In case we have the SARS-CoV-2 spike among the references, check also which is the variant it belongs to
     # DANI: Esto es un parche. En un futuro buscaremos una manera mejor de comprovar variantes en cualquier contexto
     variant = None
