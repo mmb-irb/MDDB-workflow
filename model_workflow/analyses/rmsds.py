@@ -111,7 +111,7 @@ def rmsd (
         selection_name, # Select group for least squares fit
         selection_name, # Select group for RMSD calculation
     ], stdout=PIPE)
-    logs = run([
+    process = run([
         "gmx",
         "rms",
         "-s",
@@ -123,12 +123,17 @@ def rmsd (
         '-n',
         ndx_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    # Consuming the output makes the process run
+    output_logs = process.stdout.decode()
+    # Close the input
     p.stdout.close()
 
     # If the output does not exist at this point it means something went wrong with gromacs
     if not os.path.exists(output_analysis_filename):
-        print(logs)
+        print(output_logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
         raise SystemExit('Something went wrong with GROMACS')
 
     # Remove the ndx file
