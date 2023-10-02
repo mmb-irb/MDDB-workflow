@@ -483,7 +483,7 @@ input_interactions = Dependency(get_input, {'name': 'interactions'})
 input_pbc_selection = Dependency(get_input, {'name': 'pbc_selection', 'missing_input_callback': None})
 forced_references = Dependency(get_input, {'name': 'forced_references'})
 pdb_ids = Dependency(get_input, {'name': 'pdbIds'})
-time_length = Dependency(get_input, {'name': 'length'})
+#time_length = Dependency(get_input, {'name': 'length'})
 
 # Set the register here
 # Note that register is called after input have been fully defined

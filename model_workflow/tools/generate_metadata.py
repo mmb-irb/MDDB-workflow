@@ -86,7 +86,7 @@ def generate_metadata (
         'LINKCENSE': get_input('linkcense'),
         'CITATION': get_input('citation'),
         'THANKS': get_input('thanks'),
-        'LENGTH': get_input('length'),
+        'FRAMESTEP': get_input('framestep'),
         'TIMESTEP': get_input('timestep'),
         'SNAPSHOTS': snapshots,
         'FF': forcefields,
@@ -113,6 +113,7 @@ def generate_metadata (
         'SEQUENCES': sequence_metadata['sequences'],
         'DOMAINS': sequence_metadata['domains'],
         'PTM': ptm_names,
+        'MULTIMERIC' : get_input('multimeric'),
         'CHAINNAMES': get_input('chainnames'),
         'MEMBRANES': get_input('membranes'),
         'LINKS': get_input('links'),
@@ -120,6 +121,9 @@ def generate_metadata (
         'WARNINGS': register['warnings'],
         # Collection specifics
         'CV19_UNIT': get_input('cv19_unit'),
+        'CV19_STARTCONF': get_input('cv19_startconf'),
+        'CV19_ABS': get_input('cv19_abs'),
+        'CV19_NANOBS': get_input('cv19_nanobs'),
         'CV19_VARIANT': sequence_metadata['cv19_variant']
     }
     metadata_filename = 'metadata.json'

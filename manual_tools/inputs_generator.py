@@ -1,3 +1,5 @@
+# WARNING: This is very deprecated. Update the inputs if you want to reuse it
+
 import sys
 import json
 
