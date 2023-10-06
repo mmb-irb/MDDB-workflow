@@ -239,10 +239,14 @@ def get_bonds (bonds_source_filename : str) -> list:
         print('Bonds will be mined from "' + bonds_source_filename + '"')
         topology = pt.load_topology(filename=bonds_source_filename)
         atom_bonds = [ [] for i in range(topology.n_atoms) ]
-        for bond in topology.bonds:
-            a,b = bond.indices
-            atom_bonds[a].append(b)
-            atom_bonds[b].append(a)
-        return atom_bonds
+        # If all bonds are empty then it means the parsing failed or the topology has no atoms
+        # We must guess them
+        if any(len(bonds) > 0 for bonds in atom_bonds):
+            for bond in topology.bonds:
+                a,b = bond.indices
+                atom_bonds[a].append(b)
+                atom_bonds[b].append(a)
+            return atom_bonds
+        print(' Bonds could not be mined')
     # If we can not mine bonds then return None and they will be guessed further
     return None
