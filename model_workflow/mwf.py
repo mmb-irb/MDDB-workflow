@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 import urllib.request
 import json
+import numpy
 from typing import Optional, Union, List
 
 # Import local tools
@@ -401,18 +402,28 @@ def get_input_charges_filename () -> str:
                     urllib.request.urlretrieve(itp_url, itp_filename)
     return original_charges_filename
 
-# Get the input populations filename from the inputs
+# Set a function to read a file which may be in differen formats
+def read_file (filename : str):
+    # Get the file format
+    file_format = filename.split('.')[-1]
+    # Read numpy files
+    if file_format == 'npy':
+        return numpy.load(filename)
+    # Read JSON files
+    if file_format == 'json':
+        with open(filename, 'r') as file:
+            return json.load(file)
+
+# Load the content from a file
 # If the file is not found and we have download inputs then try to download it
-# If the file is not found and we don't have download inputs then its okay, this is an optional input
-def get_populations (populations_filename : str) -> Optional[ List[float] ]:
-    # Get the populations filename from the inputs
-    input_populations_filename = get_input('input_populations_filename')
+# If the file is not found and we don't have download inputs then return None
+def load_file (filename : str):
     # If the file already exists then read and parse it and return its content
-    if exists(input_populations_filename):
-        with open(input_populations_filename, 'r') as file:
-            populations = json.load(file)
-        return populations
-    # Try to download the file
+    content = None
+    if exists(filename):
+        content = read_file(filename)
+        return content
+    # If file does not exist then try to download the file
     # Check we have the inputs required to download the file
     server_url = get_input('database_url')
     project = get_input('project')
@@ -429,23 +440,22 @@ def get_populations (populations_filename : str) -> Optional[ List[float] ]:
         raise SystemExit('Something went wrong with the MDposit request: ' + files_url)
     files = json.loads(files_response.read())
     filenames = [ f['filename'] for f in files ]
-    # If the populations file is not in the list then there is nothing to do
-    if not input_populations_filename in filenames:
+    # If the file is not in the list then there is nothing to do
+    if not filename in filenames:
         return None
     # Download the file
-    sys.stdout.write('Downloading populations (' + input_populations_filename + ')\n')
-    populations_url = files_url + '/' + input_populations_filename
+    sys.stdout.write('Downloading npy file (' + filename + ')\n')
+    populations_url = files_url + '/' + filename
     try:
-        urllib.request.urlretrieve(populations_url, input_populations_filename)
+        urllib.request.urlretrieve(populations_url, filename)
     except urllib.error.HTTPError as error:
         if error.code == 404:
-            raise SystemExit('ERROR: Missing input populations file "' + input_populations_filename + '"')
+            raise SystemExit('ERROR: Missing input filename file "' + filename + '"')
         else:
             raise ValueError('Something went wrong with the MDposit request: ' + populations_url)
     # Read and parse the donwloaded file and return its content
-    with open(input_populations_filename, 'r') as file:
-        populations = json.load(file)
-    return populations
+    content = read_file(filename)
+    return content
 
 # Get some input values which are passed through command line instead of the inputs file
 image = Dependency(get_input, {'name': 'image'})
@@ -477,6 +487,7 @@ original_charges_filename = Dependency(get_input_charges_filename, {})
 # The 'inputs file' is a json file which must contain all parameters to run the workflow
 inputs_filename = Dependency(get_input, {'name': 'inputs_filename'})
 populations_filename = Dependency(get_input, {'name': 'input_populations_filename'})
+#transitions_filename = Dependency(get_input, {'name': 'input_transitions_filename'})
 
 # Extract some additional input values from the inputs json file
 input_interactions = Dependency(get_input, {'name': 'interactions'})
@@ -617,7 +628,9 @@ charges = Dependency(get_charges, {
 }, 'charges')
 
 # Load the populations
-populations = Dependency(get_populations, { 'populations_filename': populations_filename })
+populations = Dependency(load_file, { 'filename': populations_filename })
+# Load the transitions
+#transitions = Dependency(load_file, { 'filename': transitions_filename })
 
 # Prepare the metadata output file
 residues_map = Dependency(generate_map_online, {
@@ -847,6 +860,7 @@ analyses = [
         "output_analysis_filename": OUTPUT_markov_filename,
         'structure': structure,
         'populations': populations,
+        #'transitions': transitions,
         'rmsd_selection': protein_and_nucleic,
     }, 'markov'),
 ]
@@ -879,6 +893,8 @@ DEFAULT_input_trajectory_filenames = [OUTPUT_trajectory_filename]
 DEFAULT_inputs_filename = 'inputs.json'
 DEFAULT_input_charges_filename = find_charges_filename()
 DEFAULT_input_populations_filename = 'populations.json'
+# DEFAULT_input_populations_filename = 'populations.npy'
+# DEFAULT_input_transitions_filename = 'tprobs.npy'
 DEFAULT_database_url = 'https://mdposit-dev.mddbr.eu/api'
 DEFAULT_rmsd_cutoff = 9
 DEFAULT_interaction_cutoff = 0.1
@@ -891,6 +907,7 @@ def workflow (
     inputs_filename : str = DEFAULT_inputs_filename,
     input_charges_filename : str = DEFAULT_input_charges_filename,
     input_populations_filename : str = DEFAULT_input_populations_filename,
+    #input_transitions_filename : str = DEFAULT_input_transitions_filename,
     database_url : str = DEFAULT_database_url,
     project : Optional[str] = None,
     sample_trajectory : bool = False,
@@ -1044,7 +1061,12 @@ parser.add_argument(
 parser.add_argument(
     "-pop", "--input_populations_filename",
     default=DEFAULT_input_populations_filename,
-    help="Path to populations filename")
+    help="Path to equilibrium populations filename (Markov State Model only)")
+
+# parser.add_argument(
+#     "-tpro", "--input_transitions_filename",
+#     default=DEFAULT_input_transitions_filename,
+#     help="Path to transition probabilities filename (Markov State Model only)")
 
 parser.add_argument(
     "-img", "--image",
