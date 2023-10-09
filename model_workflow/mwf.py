@@ -200,7 +200,7 @@ OUTPUT_hbonds_filename = 'md.hbonds.json'
 OUTPUT_sasa_filename = 'md.sasa.json'
 OUTPUT_energies_filename = 'md.energies.json'
 OUTPUT_pockets_filename = 'md.pockets.json'
-OUTPUT_helical_parameters_filename = 'md.helical.parameters.json'
+OUTPUT_helical_parameters_filename = 'md.helical.json'
 OUTPUT_screenshot_filename = 'screenshot.jpg'
 OUTPUT_markov_filename = 'md.markov.json'
 

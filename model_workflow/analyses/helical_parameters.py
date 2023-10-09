@@ -1,6 +1,7 @@
 import json as js
 import numpy as np
 import os
+from os.path import exists
 import pandas as pd
 import math
 import subprocess
@@ -8,7 +9,10 @@ from shutil import move
 import glob
 
 conda_prefix = os.environ['CONDA_PREFIX']
-standard_path = conda_prefix + '/.curvesplus/standard'
+# If this path does not exist then it means curves is not installed
+curves_path = conda_prefix + '/.curvesplus'
+# Note that this is not a file, but the prefix to 3 different files
+standard_prefix = curves_path + '/standard'
 
 # TAKE INTO ACCOUNT THAT EL CODE WAS DEVELOP AND IMPLEMENTED IN THIS WORKFLOW USING AS A TEMPLATE CODE USED IN IRBBARCELONA BIOBB 
 # HERE THERE IS THE LINK RELATED TO THEIR WEBPAGE WITH MORE WORKFLOWS COMPUTING OTHER STUFF
@@ -123,6 +127,10 @@ def helical_parameters (
         print(' There are no nucleic acids')
         return
 
+    # Check curves is installed
+    if not exists(curves_path):
+        raise SystemExit(' Cannot find curves path. Is Curves+ installed?')
+
     # Get the sequence from the selected chains
     chain_indices = structure.get_selection_chain_indices(selection)
     if len(chain_indices) != 2:
@@ -163,7 +171,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence):
     instructions = [
         "Cur+ <<!",
         " &inp",
-        f"  file={trajectory_input},ftop={topology_input},lis={helical_parameters_folder}/test,lib={standard_path}",
+        f"  file={trajectory_input},ftop={topology_input},lis={helical_parameters_folder}/test,lib={standard_prefix}",
         " &end",
         "2 1 -1 0 0",
         f"{strand_indexes[0][0]}:{strand_indexes[0][1]}",
@@ -172,6 +180,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence):
     ]
     instructions = ["\n".join(instructions)]
     cmd = " ".join(instructions)
+    print(' Running curves')
     # Execute the software using the instructions written previously
     process = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True,executable=os.getenv('SHELL', '/bin/sh'))
 
@@ -207,6 +216,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence):
     instructions2 = ["\n".join(instructions2)]
     cmd2 = " ".join(instructions2)
     #logs = subprocess.run(instructions,stderr=subprocess.PIPE).stderr.decode()
+    print(' Running canals')
     process = subprocess.Popen(cmd2,stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True,executable=os.getenv('SHELL', '/bin/sh'))
     
     out, err = process.communicate()
