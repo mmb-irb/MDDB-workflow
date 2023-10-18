@@ -117,5 +117,3 @@ def mount (url : str, mountpoint : str):
         open(mountpoint, 'w').close()
     # Mount the handler in the mount point
     FUSE(handler, mountpoint, nothreads=False, foreground=False)
-
-mount(sys.argv[1], sys.argv[2])
