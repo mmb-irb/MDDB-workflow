@@ -847,13 +847,13 @@ analyses = [
         'snapshots': snapshots,
         'frames_limit': 100,
     }, 'pockets'),
-    File(OUTPUT_helical_parameters_filename, helical_parameters, {
-        'input_topology_filename': pdb_filename,
-        'input_trajectory_filename': trajectory_filename,
-        "output_analysis_filename": OUTPUT_helical_parameters_filename,
-        'structure': structure,
-        'frames_limit': 1000,
-    }, 'helical'),
+    # File(OUTPUT_helical_parameters_filename, helical_parameters, {
+    #     'input_topology_filename': pdb_filename,
+    #     'input_trajectory_filename': trajectory_filename,
+    #     "output_analysis_filename": OUTPUT_helical_parameters_filename,
+    #     'structure': structure,
+    #     'frames_limit': 1000,
+    # }, 'helical'),
     File(OUTPUT_markov_filename, markov, {
         "input_topology_filename": pdb_filename,
         "input_trajectory_filename": trajectory_filename,

@@ -151,9 +151,10 @@ def helical_parameters (
     dictionary_information = send_files(sequences[0],frames_limit)
     # Set the path into the original directory outside the folder helicalparameters
     os.chdir(actual_path)
-    # Convert the dictionary into a json file using js.dump 
+    # Convert the dictionary into a json file using js.dump
+    # DANI: Estamos teniendo NaNs que no son soportados más adelante, hay que eliminarlos
     with open(output_analysis_filename, "w") as outfile:
-        js.dump(dictionary_information, outfile)
+        js.dump(dictionary_information, outfile, allow_nan=False)
     
 
 # Function to execute Curves+ and Canals software to generate the output needed
