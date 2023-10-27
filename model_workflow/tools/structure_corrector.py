@@ -7,6 +7,7 @@ from json import load
 from mdtoolbelt.structures import Structure
 
 # Import local tools
+from model_workflow.constants import TOPOLOGY_FILENAME
 from model_workflow.tools.get_safe_bonds import do_bonds_match, get_safe_bonds, get_safe_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.tools.formats import is_pytraj_supported
@@ -14,7 +15,7 @@ from model_workflow.tools.formats import is_pytraj_supported
 # Import other software
 import pytraj as pt
 
-# Analyze the topology looking for irregularities and then modify the topology to standarize the format
+# Analyze the structure looking for irregularities and then modify the structure to standarize the format
 #
 # Supported cases:
 #
@@ -32,25 +33,25 @@ import pytraj as pt
 
 # Note that the 'mercy' flag may be passed for crticial checkings to not kill the process on fail
 
-def topology_corrector (
-    input_pdb_filename: str,
-    output_topology_filename : str,
+def structure_corrector (
+    input_structure_filename: str,
     input_trajectory_filename : Optional[str],
+    input_topology_filename : Optional[str],
+    output_structure_filename : str,
     output_trajectory_filename : Optional[str],
-    input_charges_filename : Optional[str],
     snapshots : int,
     register : dict,
     mercy : List[str],
     trust : List[str]
 ):
 
-    print('----- Correcting topology -----')
+    print('--- Correcting structure ---')
 
-    # Track if there has been any modification and then topology must be rewritten
+    # Track if there has been any modification and then the structure must be rewritten
     modified = False
 
     # Import the pdb file and parse it to a structure object
-    structure = Structure.from_pdb_file(input_pdb_filename)
+    structure = Structure.from_pdb_file(input_structure_filename)
 
     # ------------------------------------------------------------------------------------------
     # Missing/Non-standard elements ------------------------------------------------------------
@@ -65,8 +66,8 @@ def topology_corrector (
     # Unstable atom bonds ----------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    # Try to get bonds from the topology file before guessing
-    safe_bonds = get_bonds(input_charges_filename)
+    # Try to get bonds from the topology before guessing
+    safe_bonds = get_bonds(input_topology_filename)
     # If failed to mine topology bonds then guess stable bonds
     if not safe_bonds:
         print('Bonds will be guessed by atom distances and radius')
@@ -74,7 +75,7 @@ def topology_corrector (
         must_check_stable_bonds = 'stabonds' not in trust
         if must_check_stable_bonds:
             # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
-            safe_bonds = get_safe_bonds(input_pdb_filename, input_trajectory_filename, snapshots)
+            safe_bonds = get_safe_bonds(input_structure_filename, input_trajectory_filename, snapshots)
         # If we trust stable bonds then simply use structure bonds
         else:
             safe_bonds = structure.bonds
@@ -85,7 +86,7 @@ def topology_corrector (
         # Set the safe bonds as the structure bonds
         structure.bonds = safe_bonds
         # Find the first frame in the whole trajectory where safe bonds are respected
-        safe_bonds_frame = get_safe_bonds_canonical_frame(input_pdb_filename, input_trajectory_filename, snapshots, safe_bonds)
+        safe_bonds_frame = get_safe_bonds_canonical_frame(input_structure_filename, input_trajectory_filename, snapshots, safe_bonds)
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
             print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
@@ -96,7 +97,7 @@ def topology_corrector (
             'The main PDB structure is the default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
         else:
             # Set also the safe bonds frame structure to mine its coordinates
-            safe_bonds_frame_filename = get_pdb_frame(input_pdb_filename, input_trajectory_filename, safe_bonds_frame)
+            safe_bonds_frame_filename = get_pdb_frame(input_structure_filename, input_trajectory_filename, safe_bonds_frame)
             safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
             # Set all coordinates in the main structure by copying the safe bonds frame coordinates
             for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
@@ -120,7 +121,7 @@ def topology_corrector (
     # Missing chains ---------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    # Check if chains are missing. If so, create a new chainned topology and set it as the reference
+    # Check if chains are missing. If so, create a new chainned structure and set it as the reference
     chains = structure.chains
     
     # In case there are not chains at all
@@ -185,7 +186,7 @@ def topology_corrector (
             # DANI: Es para curarnos en salud, pero lo suyo sería poder exportar topologías de la API que ya tengan los datos bien
             register['new_atom_order'] = structure.new_atom_order
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
-            structure.trajectory_atom_sorter(input_pdb_filename, input_trajectory_filename, output_trajectory_filename)
+            structure.trajectory_atom_sorter(input_structure_filename, input_trajectory_filename, output_trajectory_filename)
 
     # ------------------------------------------------------------------------------------------
     # Repeated atoms ---------------------------------------------------------------------------
@@ -198,13 +199,13 @@ def topology_corrector (
     # Final output -----------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    # Write a new topology if any modification was done
+    # Write a new structure if any modification was done
     if modified:
-        print(' The topology file has been modificated -> ' + output_topology_filename)
+        print(' The structure file has been modificated -> ' + output_structure_filename)
     else:
         print(' Everything is fine')
     # Generate the file anyway so this new structure is used and not reclaulcated
-    structure.generate_pdb_file(output_topology_filename)
+    structure.generate_pdb_file(output_structure_filename)
 
     print('-------------------------------')
 
@@ -218,18 +219,15 @@ def get_new_letter(current_letters : list) -> str:
         raise SystemExit("There are no more letters")
     return new_letter
 
-# Set the standard topology name
-standard_topology_filename = 'topology.json'
-
 # Extract bonds from a source file
 def get_bonds (bonds_source_filename : str) -> list:
     if not bonds_source_filename or not exists(bonds_source_filename):
         return None
     # If we have the standard topology then get bonds from it
-    if bonds_source_filename == standard_topology_filename:
+    if bonds_source_filename == TOPOLOGY_FILENAME:
         print('Bonds in the "' + bonds_source_filename + '" file will be used')
         standard_topology = None
-        with open(standard_topology_filename, 'r') as file:
+        with open(bonds_source_filename, 'r') as file:
             standard_topology = load(file)
         bonds = standard_topology.get('atom_bonds', None)
         if bonds:
@@ -237,16 +235,16 @@ def get_bonds (bonds_source_filename : str) -> list:
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
     if is_pytraj_supported(bonds_source_filename):
         print('Bonds will be mined from "' + bonds_source_filename + '"')
-        topology = pt.load_topology(filename=bonds_source_filename)
-        atom_bonds = [ [] for i in range(topology.n_atoms) ]
-        for bond in topology.bonds:
+        pt_topology = pt.load_topology(filename=bonds_source_filename)
+        atom_bonds = [ [] for i in range(pt_topology.n_atoms) ]
+        for bond in pt_topology.bonds:
             a,b = bond.indices
             atom_bonds[a].append(b)
             atom_bonds[b].append(a)
         # If there is any bonding data then return bonds
         if any(len(bonds) > 0 for bonds in atom_bonds):
             return atom_bonds
-        # If all bonds are empty then it means the parsing failed or the topology has no atoms
+        # If all bonds are empty then it means the parsing failed or the pytraj topology has no bonds
         # We must guess them
         print(' Bonds could not be mined')
     # If we can not mine bonds then return None and they will be guessed further

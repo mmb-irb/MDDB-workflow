@@ -17,7 +17,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'mwf = model_workflow.mwf:main',
+            'mwf = model_workflow.console:main',
         ]
     },
     data_files=[

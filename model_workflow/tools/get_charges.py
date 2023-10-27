@@ -6,15 +6,11 @@ from pathlib import Path
 from subprocess import Popen, PIPE
 import re
 
+from model_workflow.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 from model_workflow.tools.formats import is_pytraj_supported, is_tpr
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
-
-# Set the standard name for the input raw charges
-raw_charges_filename = 'charges.txt'
-# Set the standard topology name
-standard_topology_filename = 'topology.json'
 
 # Extract charges from a source file
 def get_charges(charges_source_filename : str) -> list:
@@ -23,12 +19,12 @@ def get_charges(charges_source_filename : str) -> list:
     print('Charges in the "' + charges_source_filename + '" file will be used')
     charges = None
     # If we have the standard topology then get charges from it
-    if charges_source_filename == standard_topology_filename:
-        with open(standard_topology_filename, 'r') as file:
+    if charges_source_filename == TOPOLOGY_FILENAME:
+        with open(charges_source_filename, 'r') as file:
             standard_topology = load(file)
             charges = standard_topology['atom_charges']
     # In some ocasions, charges may come inside a raw charges file
-    elif charges_source_filename == raw_charges_filename:
+    elif charges_source_filename == RAW_CHARGES_FILENAME:
         charges = get_raw_charges(charges_source_filename)
     # In some ocasions, charges may come inside a topology which can be parsed through pytraj
     elif is_pytraj_supported(charges_source_filename):
@@ -74,7 +70,7 @@ def get_topology_charges_mdanalysis (input_charges_filename : str) -> list:
     return charges
 
 # Write the raw charges file from a list of charges
-def generate_raw_energies_file (charges : list, filename : str = raw_charges_filename):
+def generate_raw_energies_file (charges : list, filename : str = RAW_CHARGES_FILENAME):
     with open(filename, 'w') as file:
         for charge in charges:
             file.write("{:.6f}".format(charge) + '\n')

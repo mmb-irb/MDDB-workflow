@@ -3,9 +3,7 @@ from numpy import mean, std
 
 from typing import List
 
-CURSOR_UP_ONE = '\x1b[1A'
-ERASE_LINE = '\x1b[2K'
-ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+test_name = 'intrajrity'
 
 # LORE
 # This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep
@@ -20,6 +18,8 @@ def check_sudden_jumps (
     input_trajectory_filename : str,
     structure : 'Structure',
     pbc_residues : List[int],
+    mercy : List[str],
+    trust: List[str],
     register : dict,
     #time_length : float,
     check_selection : str,
@@ -27,13 +27,16 @@ def check_sudden_jumps (
     # DANI: He visto saltos 'incorrectos' no bajar de 10
     standard_deviations_cutoff : float) -> bool:
 
+    # Skip the test if we trust
+    if test_name in trust:
+        return False
+
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
 
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        print('WARNING: There are not atoms to be analyzed for the RMSD analysis')
-        return
+        raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
 
     # Discard PBC residues from the selection to be checked
     pbc_selection = structure.select_residue_indices(pbc_residues)
@@ -41,8 +44,7 @@ def check_sudden_jumps (
 
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        print('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
-        return
+        raise Exception('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
 
     print('Checking trajectory integrity')
 
@@ -55,13 +57,9 @@ def check_sudden_jumps (
     # Save all RMSD jumps
     rmsd_jumps = []    
 
-    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
-    print()
-
     for f, frame in enumerate(trajectory, 1):
         # Update the current frame log
-        print(ERASE_PREVIOUS_LINE)
-        print(' Frame ' + str(f))
+        print(' Frame ' + str(f), end='\r')
 
         # Calculate RMSD value between previous and current frame
         rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
@@ -109,16 +107,23 @@ def check_sudden_jumps (
             outliers_count += 1
 
     # Always print the maximum z score and its frames
-    print('Maximum z score (' + str(max_z_score) + ') reported between frames ' + str(max_z_score_frame) + ' and ' + str(max_z_score_frame + 1))
+    print(' Maximum z score (' + str(max_z_score) + ') reported between frames ' + str(max_z_score_frame) + ' and ' + str(max_z_score_frame + 1))
 
     # If there were any outlier then the check has failed
     if outliers_count > 0:
-        register['warnings'].append('RMSD check has failed: there may be sudden jumps along the trajectory')
-        return True
+        # Add a warning an return True since the test failed in case we have mercy
+        message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
+        if test_name in mercy:
+            register['warnings'].append(message)
+            return True
+        # Otherwise kill the process right away
+        raise Exception(message)
 
     # Warn the user if we had bypassed frames
     if bypassed_frames > 0:
         print(' WARNING: First ' + str(bypassed_frames) + ' frames may be not equilibrated')
         register['warnings'].append('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
+
+    print(' Test has passed successfully')
 
     return False

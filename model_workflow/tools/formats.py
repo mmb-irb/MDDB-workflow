@@ -1,3 +1,39 @@
+# Get a file extension
+def get_file_extension (filename : str) -> str:
+    extension = filename.split('.')[-1]
+    if extension == filename:
+        raise Exception('File "' + filename + '" has not extension and thus format cannot be guessed')
+    return extension
+
+# Get a file format
+# Note that some formats have different filename tails
+standard_formats = {
+    # Topologies
+    'top': 'top',
+    'psf': 'psf',
+    'prmtop': 'prmtop',
+    'prm7': 'prmtop',
+    # Structures
+    'pdb': 'pdb',
+    'gro': 'gro',
+    # Trajectories
+    'xtc': 'xtc',
+    'trr': 'trr',
+    'dcd': 'dcd',
+    'nc': 'nc',
+    'cdf': 'nc',
+    'netcdf': 'nc',
+    'crd': 'crd',
+    'mdcrd': 'crd',
+    'trj': 'crd'
+}
+def get_file_standard_format (filename : str) -> str:
+    extension = get_file_extension(filename)
+    standard_format = standard_formats.get(extension, None)
+    if not standard_format:
+        raise Exception('Not recognized format extension "' + extension + '" from file "' + filename + '"')
+    return standard_format
+
 # Topology file formats
 
 def is_pdb (filename : str) -> bool:

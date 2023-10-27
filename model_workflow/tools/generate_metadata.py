@@ -14,8 +14,8 @@ def generate_metadata (
     snapshots : int,
     residues_map : dict,
     interactions : list,
-    output_metadata_filename : str,
-    register : dict
+    register : dict,
+    output_metadata_filename : str
     ):
 
     # Set a function to retrieve 'inputs' values and handle missing keys
