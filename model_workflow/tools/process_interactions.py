@@ -15,7 +15,7 @@ from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 # In addition, this file may be used to force interactions with custom interface residues manually
 def process_interactions (
     input_interactions : list,
-    topology_filename : str,
+    structure_filename : str,
     trajectory_filename : str,
     structure : 'Structure',
     snapshots : int,
@@ -48,7 +48,7 @@ def process_interactions (
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory, step, frames = get_reduced_trajectory(
-        topology_filename,
+        structure_filename,
         trajectory_filename,
         snapshots,
         frames_limit,
@@ -61,7 +61,7 @@ def process_interactions (
     for interaction in interactions:
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices_vmd(
-            topology_filename,
+            structure_filename,
             reduced_trajectory,
             interaction['selection_1'],
             interaction['selection_2'],
@@ -107,7 +107,7 @@ def process_interactions (
 
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
-        strong_bonds = get_strong_bonds(topology_filename, interaction['selection_1'], interaction['selection_2'])
+        strong_bonds = get_strong_bonds(structure_filename, interaction['selection_1'], interaction['selection_2'])
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata

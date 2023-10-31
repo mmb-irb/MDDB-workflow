@@ -13,6 +13,7 @@ standard_formats = {
     'psf': 'psf',
     'prmtop': 'prmtop',
     'prm7': 'prmtop',
+    'txt': 'txt', # charges.txt
     # Structures
     'pdb': 'pdb',
     'gro': 'gro',

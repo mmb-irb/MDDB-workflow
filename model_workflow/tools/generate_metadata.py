@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Generate a JSON file with all the metadata
 def generate_metadata (
-    input_topology_filename : str,
+    input_structure_filename : str,
     input_trajectory_filename : str,
     inputs_filename : str,
     structure : 'Structure',
@@ -27,11 +27,11 @@ def generate_metadata (
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
-        input_topology_filename, input_trajectory_filename)
+        input_structure_filename, input_trajectory_filename)
 
     # Count different type of atoms and residues
     (systats, protats, prot, dppc, sol, na,
-     cl) = get_atoms_count(input_topology_filename)
+     cl) = get_atoms_count(input_structure_filename)
 
     # Extract some additional metadata from the inputs file which is required further
     ligands = get_input('ligands')

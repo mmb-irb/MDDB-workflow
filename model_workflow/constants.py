@@ -40,14 +40,6 @@ RAW_CHARGES_FILENAME = 'charges.txt'
 # Accepted topology formats for atomic charges mining
 ACCEPTED_TOPOLOGY_FORMATS = ['top', 'psf', 'prmtop', 'prm7']
 
-# Set the fault MD configuration: only one MD whose directory is the parent directroy itself
-# Thus MD files are in the same directory that the project files
-DEFAULT_MDS_CONFIGURATION = [{
-    'directory': '.',
-    'structure_filename': STRUCTURE_FILENAME,
-    'trajectory_filename': TRAJECTORY_FILENAME
-}]
-
 # Set generated file names
 FIRST_FRAME_FILENAME = 'first_frame.pdb'
 AVERAGE_STRUCTURE_FILENAME = 'average.pdb'
@@ -68,6 +60,7 @@ OUTPUT_RMSF_FILENAME = 'md.rmsf.json'
 OUTPUT_RGYR_FILENAME = 'md.rgyr.json'
 OUTPUT_PCA_FILENAME = 'md.pca.json'
 OUTPUT_PCA_PROJECTION_PREFIX = 'pca.trajectory'
+OUTPUT_PCA_CONTACTS_FILENAME = 'md.pca_contacts.json'
 OUTPUT_RMSD_PERRES_FILENAME = 'md.rmsd.perres.json'
 OUTPUT_RMSD_PAIRWISE_FILENAME = 'md.rmsd.pairwise.json'
 OUTPUT_DIST_PERRES_FILENAME = 'md.dist.perres.json'

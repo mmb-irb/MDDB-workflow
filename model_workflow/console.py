@@ -1,29 +1,8 @@
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
-from model_workflow.mwf import workflow, Project
+from model_workflow.mwf import workflow, Project, requestables
 from model_workflow.constants import *
 
-expected_project_args = Project.__init__.__code__.co_varnames
-
-# -----------------------------------------------------------------------------------------
-
-# # Pack up all tools which may be called directly from the console
-# tools = [
-#     corrector,
-#     interactions,
-#     snapshots,
-#     charges,
-#     residues_map,
-#     screenshot,
-# ]
-
-# analyses = [ ... ]
-
-# # Set a list with all dependencies to be required if the whole workflow is run
-# # Metadata is the last dependency since it contains the regiter warnings
-# basic_dependencies = [ topology_filename, *analyses, metadata_filename ]
-
-# # Set a list with all dependencies which may be requested independently
-# requestables = [ *analyses, *tools, metadata_filename, topology_filename ]
+expected_project_args = set(Project.__init__.__code__.co_varnames)
 
 # Main ---------------------------------------------------------------------------------            
 
@@ -47,11 +26,17 @@ def main ():
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
 
 # Set optional arguments
-# parser.add_argument(
-#     "-dir", "--working_dir",
-#     default=DEFAULT_working_directory,
-#     help="Directory where to perform analysis. "
-#     "If empty, will use current directory.")
+parser.add_argument(
+    "-dir", "--working_directory",
+    default='.',
+    help="Directory where the whole workflow is run. Current directory by default.")
+
+parser.add_argument(
+    "-mdir", "--md_directories",
+    nargs='*',
+    default=['.'],
+    help="Path to the different MD directories. Each directory is to contain an independent trajectory and structure."
+)
 
 parser.add_argument(
     "-proj", "--accession",
@@ -65,36 +50,36 @@ parser.add_argument(
     help="URL from where to download project")
 
 parser.add_argument(
-    "-stru", "--input_structure_filename",
+    "-stru", "--input_structure_filepath",
     default=STRUCTURE_FILENAME,
-    help="Path to input structure filename")
+    help="Path to input structure file")
 
 parser.add_argument(
-    "-traj", "--input_trajectory_filenames",
+    "-traj", "--input_trajectory_filepaths",
     #type=argparse.FileType('r'),
     nargs='*',
     default=TRAJECTORY_FILENAME,
-    help="Path to input trajectory filename")
+    help="Path to input trajectory file")
 
 parser.add_argument(
-    "-top", "--input_topology_filename",
+    "-top", "--input_topology_filepath",
     default=None, # There is no default since many formats may be possible
-    help="Path to input topology filename")
+    help="Path to input topology file")
 
 parser.add_argument(
-    "-inp", "--inputs_filename",
+    "-inp", "--inputs_filepath",
     default=DEFAULT_INPUTS_FILENAME,
-    help="Path to inputs filename")
+    help="Path to inputs file")
 
 parser.add_argument(
-    "-pop", "--populations_filename",
+    "-pop", "--populations_filepath",
     default=DEFAULT_POPULATIONS_FILENAME,
-    help="Path to equilibrium populations filename (Markov State Model only)")
+    help="Path to equilibrium populations file (Markov State Model only)")
 
 parser.add_argument(
-    "-tpro", "--transitions_filename",
+    "-tpro", "--transitions_filepath",
     default=DEFAULT_TRANSITIONS_FILENAME,
-    help="Path to transition probabilities filename (Markov State Model only)")
+    help="Path to transition probabilities file (Markov State Model only)")
 
 parser.add_argument(
     "-img", "--image",
@@ -192,7 +177,7 @@ parser.add_argument(
     help="If passed, download just the 10 first frames of the trajectory instead of it all")
 
 # Set a list with the alias of all requestable dependencies
-choices = list(Project.requestables.keys())
+choices = list(requestables.keys())
 
 parser.add_argument(
     "-i", "--include",
