@@ -13,7 +13,7 @@ test_name = 'intrajrity'
 
 # Look for sudden raises of RMSd values from one frame to another
 # To do so, we check the RMSD of every frame using its previous frame as reference
-def check_sudden_jumps (
+def check_trajectory_integrity (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
@@ -29,7 +29,7 @@ def check_sudden_jumps (
 
     # Skip the test if we trust
     if test_name in trust:
-        return False
+        return True
 
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
@@ -70,7 +70,7 @@ def check_sudden_jumps (
 
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if len(rmsd_jumps) <= 1:
-        return False
+        return True
 
     # Get the maximum RMSD value and check it is a reasonable deviation from the average values
     # Otherwise, if it is an outlier, the test fails
@@ -115,7 +115,7 @@ def check_sudden_jumps (
         message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
         if test_name in mercy:
             register['warnings'].append(message)
-            return True
+            return False
         # Otherwise kill the process right away
         raise Exception(message)
 
@@ -125,5 +125,4 @@ def check_sudden_jumps (
         register['warnings'].append('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     print(' Test has passed successfully')
-
-    return False
+    return True

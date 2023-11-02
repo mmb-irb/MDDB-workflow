@@ -119,14 +119,16 @@ Run the workflow but exlcude some specific analyses:
 
 _Other options:_
 
-`-top`: input topology filename. Default: `md.imaged.rot.dry.pdb`
+`-stru`: input topology filename. Default: `structure.pdb`
 
-`-traj`: input trajectory filename. Default: `md.imaged.rot.xtc`
+`-traj`: input trajectory filename. Default: `trajectory.xtc`
 
-`-char`: inputs charges filename. Default: `topology.XXX`
+`-top`: inputs charges filename. Default: `topology.XXX`
 
 `-in`: inputs filename. Default: `inputs.json`
 
-`-pr`: preprocess protocol. Default: 0
+`-img`: is to be imaged. Default: False
+
+`-fit`: is to be fitted. Default: False
 
 `-trans`: Imaging translation. Default: 0 0 0

@@ -3,7 +3,7 @@
 # This is the starter script
 
 # Import python libraries
-from os import chdir, remove
+from os import chdir, remove, symlink
 from os.path import exists, isabs
 import sys
 import io
@@ -12,8 +12,7 @@ from pathlib import Path
 import urllib.request
 import json
 import numpy
-from datetime import datetime
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Callable
 
 # Constants
 from model_workflow.constants import *
@@ -33,12 +32,12 @@ from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
-from model_workflow.tools.formats import get_file_standard_format
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
 from model_workflow.tools.httpsf import mount
 from model_workflow.tools.file import File
+from model_workflow.tools.register import Register
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -55,7 +54,7 @@ from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
-from model_workflow.analyses.rmsd_check import check_sudden_jumps
+from model_workflow.analyses.rmsd_check import check_trajectory_integrity
 #from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
 
@@ -127,17 +126,17 @@ class MD:
 
         # Other values which may be found/calculated on demand
         self._available_files = None
-        self._sudden_jumps = None
         self._snapshots = None
         self._structure = None
         self._pytraj_topology = None
         self._interactions = None
 
+        # Tests
+        self._trajectory_integrity = None
+        self._tests_passed = None
+
         # Set a new MD specific entry for the project register
-        self.register = {
-            'warnings': []
-        }
-        self.project.register['mds'].append(self.register)
+        self.register = self.project.register.mds[self.directory]
 
 
     def __repr__ (self):
@@ -170,7 +169,7 @@ class MD:
             structure_url = self.url + '/structure'
         # Download the file
         try:
-            urllib.request.urlretrieve(structure_url, input_structure_file.absolute_path)
+            urllib.request.urlretrieve(structure_url, input_structure_file.path)
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 raise Exception('Missing input pdb file "' + self._input_structure_file.filename + '"')
@@ -258,7 +257,7 @@ class MD:
         file_url = self.url + '/files/' + target_file.filename
         # Download the file
         try:
-            urllib.request.urlretrieve(file_url, target_file.absolute_path)
+            urllib.request.urlretrieve(file_url, target_file.path)
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 print('Missing file "' + target_file.filename + '"')
@@ -274,44 +273,50 @@ class MD:
     # This process corrects and standarizes the topology, the trajectory and the structure
     def process_input_files (self):
 
-        # Set the output filenames
-        output_structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
-        output_trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
-        output_topology_filepath = self.project._topology_filepath
+        # Set the input filepaths
+        input_structure_file = self.input_structure_file
+        input_trajectory_files = self.input_trajectory_files
+        input_topology_file = self.project.input_topology_file
 
-        print('--- Processing input files ---')
+        # Set the output filepaths
+        output_structure_file = File(self.md_pathify(STRUCTURE_FILENAME))
+        output_trajectory_file = File(self.md_pathify(TRAJECTORY_FILENAME))
+        output_topology_file = File(self.project._topology_filepath)
+
+        print('-> Processing input files')
 
         # --- CONVERTING AND MERGING ------------------------------------------------------------
 
         # Set output filenames for the already converted structure
-        input_structure_format = get_file_standard_format(self.input_structure_file.absolute_path)
-        output_structure_format = get_file_standard_format(output_structure_filepath)
+        input_structure_format = self.input_structure_file.format
+        output_structure_format = output_structure_file.format
         converted_structure_filepath = self.md_pathify(CONVERTED_STRUCTURE)
         # If input structure already matches the output format then avoid the renaming
         if input_structure_format == output_structure_format:
-            converted_structure_filepath = self.input_structure_file.absolute_path
+            converted_structure_filepath = input_structure_file.path
+        converted_structure_file = File(converted_structure_filepath)
         # Set output filenames for the already converted structure
         # Input trajectories should have all the same format
-        input_trajectory_filenames = [ trajectory_file.filename for trajectory_file in self.input_trajectory_files ]
-        input_trajectory_formats = set([ get_file_standard_format(filename) for filename in input_trajectory_filenames ])
+        input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
         if len(input_trajectory_formats) > 1:
             raise Exception('All input trajectory files must have the same format')
         input_trajectories_format = list(input_trajectory_formats)[0]
-        output_trajectory_format = get_file_standard_format(output_trajectory_filepath)
+        output_trajectory_format = output_trajectory_file.format
         converted_trajectory_filepath = self.md_pathify(CONVERTED_TRAJECTORY)
         # If input trajectory already matches the output format and is unique then avoid the renaming
         if input_trajectories_format == output_trajectory_format and len(self.input_trajectory_files) == 1:
-            converted_trajectory_filepath = self.input_trajectory_files[0].absolute_path
-        input_trajectory_paths = [ trajectory_file.absolute_path for trajectory_file in self.input_trajectory_files ]
+            converted_trajectory_filepath = self.input_trajectory_files[0].path
+        converted_trajectory_file = File(converted_trajectory_filepath)
+        input_trajectory_absolute_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
 
         # Convert input structure and trajectories to output structure and trajectory
-        if not exists(converted_structure_filepath) or not exists(converted_trajectory_filepath):
-            print(' - Converting and merging')
+        if not converted_structure_file.exists or not converted_trajectory_file.exists:
+            print(' -> Converting and merging')
             convert(
-                input_structure_filename = self.input_structure_file.absolute_path,
-                output_structure_filename = converted_structure_filepath,
-                input_trajectory_filenames = input_trajectory_paths,
-                output_trajectory_filename = converted_trajectory_filepath,
+                input_structure_filename = input_structure_file.path,
+                output_structure_filename = converted_structure_file.path,
+                input_trajectory_filenames = input_trajectory_absolute_paths,
+                output_trajectory_filename = converted_trajectory_file.path,
             )
 
         # Topologies are never converted, but they are kept in their original format
@@ -320,23 +325,25 @@ class MD:
 
         # Find out if we need to filter
         # i.e. check if there is a selection filter and it matches some atoms
-        must_filter = bool(self.filter_selection and Structure.from_pdb_file(converted_structure_filepath).select(self.filter_selection))
+        converted_structure = Structure.from_pdb_file(converted_structure_file.path)
+        must_filter = bool(self.filter_selection and converted_structure.select(self.filter_selection))
 
         # Set output filenames for the already filtered structure and trajectory
-        filtered_structure_filepath = self.md_pathify(FILTERED_STRUCTURE) if must_filter else converted_structure_filepath
-        filtered_trajectory_filepath = self.md_pathify(FILTERED_TRAJECTORY) if must_filter else converted_trajectory_filepath
+        # Note that this is the only step affecting topology and thus here we output the definitive topology
+        filtered_structure_file = File(self.md_pathify(FILTERED_STRUCTURE)) if must_filter else converted_structure_file
+        filtered_trajectory_file = File(self.md_pathify(FILTERED_TRAJECTORY)) if must_filter else converted_trajectory_file
+        filtered_topology_file = output_topology_file if must_filter else input_topology_file
         
         # Filter atoms in structure, trajectory and topology if required and not done yet
-        # Note that this is the only step affecting topology and thus here we output the definitive topology
-        if must_filter and (not exists(filtered_structure_filepath) or not exists(filtered_trajectory_filepath)):
-            print(' - Filtering atoms')
+        if must_filter and (not filtered_structure_file.exists or not filtered_trajectory_file.exists):
+            print(' -> Filtering atoms')
             filter_atoms(
-                input_structure_filename = converted_structure_filepath,
-                input_trajectory_filename = converted_trajectory_filepath,
-                input_topology_filename = self.project.input_topology_file.filename, # We use input topology
-                output_structure_filename = filtered_structure_filepath,
-                output_trajectory_filename = filtered_trajectory_filepath,
-                output_topology_filepath = output_topology_filepath, # We genereate the definitive topology
+                input_structure_file = converted_structure_file,
+                input_trajectory_file = converted_trajectory_file,
+                input_topology_file = input_topology_file, # We use input topology
+                output_structure_file = filtered_structure_file,
+                output_trajectory_file = filtered_trajectory_file,
+                output_topology_file = filtered_topology_file, # We genereate the definitive topology
                 filter_selection = self.filter_selection
             )
 
@@ -347,20 +354,20 @@ class MD:
         must_image = self.image or self.fit
 
         # Set output filenames for the already filtered structure and trajectory
-        imaged_structure_filepath = self.md_pathify(IMAGED_STRUCTURE) if must_image else filtered_structure_filepath
-        imaged_trajectory_filepath = self.md_pathify(IMAGED_TRAJECTORY) if must_image else filtered_trajectory_filepath
+        imaged_structure_file = File(self.md_pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
+        imaged_trajectory_file = File(self.md_pathify(IMAGED_TRAJECTORY)) if must_image else filtered_trajectory_file
 
         # Image the trajectory if it is required
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
-        if must_image and (not exists(imaged_structure_filepath) or not exists(imaged_trajectory_filepath)):
-            print(' - Imaging and fitting')
+        if must_image and (not imaged_structure_file.exists or not imaged_trajectory_file.exists):
+            print(' -> Imaging and fitting')
             image_and_fit(
-                input_structure_filename = filtered_structure_filepath,
-                input_trajectory_filename = filtered_trajectory_filepath,
-                input_topology_filename = output_topology_filepath, # This is optional if there are no PBC residues
-                output_structure_filename = imaged_structure_filepath,
-                output_trajectory_filename = imaged_trajectory_filepath,
+                input_structure_file = filtered_structure_file,
+                input_trajectory_file = filtered_trajectory_file,
+                input_topology_file = filtered_topology_file, # This is optional if there are no PBC residues
+                output_structure_file = imaged_structure_file,
+                output_trajectory_file = imaged_trajectory_file,
                 image = self.image,
                 fit = self.fit,
                 translation = self.translation,
@@ -380,20 +387,38 @@ class MD:
         # Snapshots are calculated by default from the already processed structure and trajectory
         # For this reason we can not rely on the public snaphsots getter
         # We must calculate snapshots here using last step structure and trajectory
-        self._snapshots = get_frames_count(imaged_structure_filepath, imaged_trajectory_filepath)
+        self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
 
         # Correct the structure
         structure_corrector(
-            input_structure_filename = imaged_structure_filepath,
-            input_trajectory_filename = imaged_trajectory_filepath,
-            input_topology_filename = output_topology_filepath,
-            output_structure_filename = output_structure_filepath,
-            output_trajectory_filename = output_trajectory_filepath,
+            input_structure_file = imaged_structure_file,
+            input_trajectory_file = imaged_trajectory_file,
+            input_topology_file = filtered_topology_file,
+            output_structure_file = output_structure_file,
+            output_trajectory_file = output_trajectory_file,
             snapshots = self._snapshots,
             register = self.register,
             mercy = self.mercy,
             trust = self.trust
         )
+
+        # At this point, there is a chance that the input files have not been modified
+        # This means the input format has already the output format and it is not to be imaged, fitted or corrected
+        # However we need the output files to exist and we dont want to rename the original ones to conserve them
+        # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
+        input_and_output_files = [
+            (imaged_structure_file, output_structure_file),
+            (imaged_trajectory_file, output_trajectory_file),
+            (filtered_topology_file, output_topology_file)
+        ]
+        for input_file, output_file in input_and_output_files:
+            if not output_file.exists:
+                symlink(input_file.path, output_file.path)
+
+        # Save the internal variables
+        self._structure_file = output_structure_file
+        self._trajectory_file = output_trajectory_file
+        self._topology_file = output_topology_file
 
         # --- Cleanup intermediate files
 
@@ -406,6 +431,9 @@ class MD:
             file_path = self.md_pathify(filename)
             if exists(file_path):
                 remove(file_path)
+
+        # Run a few tests to make sure files are correct
+        self.pass_tests()
 
     # Get the processed structure
     def get_structure_file (self) -> str:
@@ -458,7 +486,7 @@ class MD:
             return self._snapshots
         # Otherwise we must find the value
         # This happens when the input files are already porcessed and thus we did not yet count the frames
-        self._snapshots = get_frames_count(self.structure_file.absolute_path, self.trajectory_file.absolute_path)
+        self._snapshots = get_frames_count(self.structure_file.path, self.trajectory_file.path)
         return self._snapshots
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
@@ -469,7 +497,7 @@ class MD:
             return self._structure
         # Otherwise we must set the structure
         # Note that this is not only the mdtoolbelt structure, but it also contains additional logic
-        self._structure = setup_structure(self.structure_file.absolute_path)
+        self._structure = setup_structure(self.structure_file.path)
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 
@@ -480,8 +508,8 @@ class MD:
             return self._pytraj_topology
         # Otherwise we must set the pytarj trajectory
         self._pytraj_topology = get_pytraj_trajectory(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path
         )
         return self._pytraj_topology
     pytraj_trajectory = property(get_pytraj_trajectory, None, None, "Pytraj trajectory (read only)")
@@ -495,9 +523,9 @@ class MD:
             return first_frame_file
         # Otherwise, generate it
         get_first_frame(
-            input_structure_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
-            first_frame_filename = first_frame_file.absolute_path
+            input_structure_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
+            first_frame_filename = first_frame_file.path
         )
         return first_frame_file
     first_frame_file = property(get_first_frame_file, None, None, "First frame (read only)")
@@ -512,7 +540,7 @@ class MD:
         # Otherwise, generate it
         get_average(
             pytraj_trajectory = self.pytraj_trajectory,
-            output_average_filename = average_structure_file.absolute_path
+            output_average_filename = average_structure_file.path
         )
         return average_structure_file
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
@@ -527,8 +555,8 @@ class MD:
         # Otherwise, process interactions
         self._interactions = process_interactions(
             input_interactions = self.project.input_interactions,
-            structure_filename = self.structure_file.absolute_path,
-            trajectory_filename = self.trajectory_file.absolute_path,
+            structure_filename = self.structure_file.path,
+            trajectory_filename = self.trajectory_file.path,
             structure = self.structure,
             snapshots = self.snapshots,
             interactions_file = OUTPUT_INTERACTIONS_FILENAME,
@@ -569,15 +597,19 @@ class MD:
         return self.project.residues_map
     residues_map = property(get_residues_map, None, None, "Residues mapping (read only)")
 
+    # ---------------------------------------------------------------------------------
+    # Tests
+    # ---------------------------------------------------------------------------------
+
     # Sudden jumps test
-    def get_sudden_jumps (self) -> bool:
+    def is_trajectory_integral (self) -> bool:
         # If we already have a stored value then return it
-        if self._sudden_jumps != None:
-            return self._sudden_jumps
+        if self._trajectory_integrity != None:
+            return self._trajectory_integrity
         # Otherwise we must find the value
-        self._sudden_jumps = check_sudden_jumps(
-            input_structure_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+        self._trajectory_integrity = check_trajectory_integrity(
+            input_structure_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
             mercy = self.mercy,
@@ -587,8 +619,26 @@ class MD:
             check_selection = PROTEIN_AND_NUCLEIC,
             standard_deviations_cutoff = self.rmsd_cutoff,
         )
-        return self._sudden_jumps
-    sudden_jumps = property(get_sudden_jumps, None, None, "Sudden jumps test (read only)")
+        return self._trajectory_integrity
+
+    # Set a function tu run all tests and make a summary
+    # Note that some test are run implicity 
+    # e.g. stable bonds is run when processing files for the trajectory integrity test
+    # Note that tests in this function do not modify any file
+    # DANI: Estría bien anotar en el registro o así los tests que han pasado, para no repetirlos cada vez
+    def pass_tests (self) -> bool:
+        # If tests were already run then do not run them again
+        if self._tests_passed != None:
+            return self._tests_passed
+        # Check the trajectory has not sudden jumps
+        if not self.is_trajectory_integral():
+            self._tests_passed = False
+            return self._tests_passed
+        # If all tests passed then make a summary and report the success
+        print(GREEN_HEADER + 'All tests passed' + COLOR_END)
+        self._tests_passed = True
+        return self._tests_passed
+
 
     # ---------------------------------------------------------------------------------
     # Analyses
@@ -605,11 +655,11 @@ class MD:
         # WARNING: However, the output file size depends on the trajectory size
         # WARNING: In very long trajectories the number of points may make the client go slow when loading data
         rmsds(
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             frames_limit = 5000,
-            first_frame_filename = self.first_frame_file.absolute_path,
-            average_structure_filename = self.average_structure_file.absolute_path,
+            first_frame_filename = self.first_frame_file.path,
+            average_structure_filename = self.average_structure_file.path,
             snapshots = self.snapshots,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
@@ -624,11 +674,11 @@ class MD:
         print('-> Running TM scores analysis')
         # Here we set a small frames limit since this anlaysis is a bit slow
         tmscores(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            first_frame_filename = self.first_frame_file.absolute_path,
-            average_structure_filename = self.average_structure_file.absolute_path,
+            first_frame_filename = self.first_frame_file.path,
+            average_structure_filename = self.average_structure_file.path,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
             snapshots = self.snapshots,
@@ -645,8 +695,8 @@ class MD:
         # This analysis is fast and the output size depends on the number of atoms only
         # For this reason here it is used the whole trajectory with no frames limit
         rmsf(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
@@ -663,8 +713,8 @@ class MD:
         # WARNING: However, the output file size depends on the trajectory size
         # WARNING: In very long trajectories the number of points may make the client go slow when loading data
         rgyr(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             snapshots = self.snapshots,
             frames_limit = 5000,
@@ -683,10 +733,10 @@ class MD:
         # File 'pca.average.pdb' is generated by the PCA and it was used by the client but not anymore
         # File 'covar.log' is generated by the PCA but never used
         pca(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            output_trajectory_projections_prefix = OUTPUT_PCA_PROJECTION_PREFIX,
+            output_trajectory_projections_prefix = self.md_pathify(OUTPUT_PCA_PROJECTION_PREFIX),
             snapshots = self.snapshots,
             frames_limit = 2000,
             structure = self.structure,
@@ -707,7 +757,7 @@ class MD:
     #         return
     #     print('-> Running PCA contacts analysis')
     #     pca_contacts(
-    #         trajectory = self.trajectory_file.absolute_path,
+    #         trajectory = self.trajectory_file.path,
     #         topology = self.pdb_filename,
     #         interactions = self.interactions,
     #         output_analysis_filename = output_analysis_filepath
@@ -723,8 +773,8 @@ class MD:
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size. It may be pretty big
         rmsd_per_residue(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
@@ -742,8 +792,8 @@ class MD:
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge
         rmsd_pairwise(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             interactions = self.interactions,
             structure = self.structure,
@@ -762,8 +812,8 @@ class MD:
         print('-> Running distance per residue analysis')
         # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
         distance_per_residue(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             interactions = self.interactions,
             snapshots = self.snapshots,
@@ -785,8 +835,8 @@ class MD:
         # DANI: Me sabe muy mal perder resolución con este análisis, porque en cáculo es muy rápido
         # DANI: Hay que crear un sistema de carga en mongo alternativo para análisis pesados
         hydrogen_bonds(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             interactions = self.interactions,
@@ -806,8 +856,8 @@ class MD:
         print('-> Running SAS analysis')
         # Run the analysis
         sasa(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
@@ -824,8 +874,8 @@ class MD:
         print('-> Running energies analysis')
         # Run the analysis
         energies(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             interactions = self.interactions,
@@ -843,8 +893,8 @@ class MD:
         print('-> Running pockets analysis')
         # Run the analysis
         pockets(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
@@ -862,8 +912,8 @@ class MD:
     #     print('-> Running helical analysis')
     #     # Run the analysis
     #     helical_parameters(
-    #         input_topology_filename = self.structure_file.absolute_path,
-    #         input_trajectory_filename = self.trajectory_file.absolute_path,
+    #         input_topology_filename = self.structure_file.path,
+    #         input_trajectory_filename = self.trajectory_file.path,
     #         output_analysis_filename = output_analysis_filepath,
     #         structure = self.structure,
     #         frames_limit = 1000,
@@ -878,8 +928,8 @@ class MD:
         print('-> Running Markov analysis')
         # Run the analysis
         markov(
-            input_topology_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
             populations = self.populations,
@@ -942,6 +992,11 @@ class Project:
         if database_url and accession:
             self.url = database_url + '/rest/current/projects/' + accession
 
+        # Save inputs for the register, even if they are not used in the class
+        self.inputs_filepath = inputs_filepath
+        self.input_topology_filepath = input_topology_filepath
+
+
         # Set internal variables for input filenames
         # Set the inputs file
         self._inputs_file = File(inputs_filepath)
@@ -951,25 +1006,27 @@ class Project:
             self._input_topology_file = File(self.guess_input_topology_filename())
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
-        self._input_structure_filepath = input_structure_filepath
+        self.input_structure_filepath = input_structure_filepath
         # WARNING: Input trajectory filepaths may be both a list or a single string
         if type(input_trajectory_filepaths) == list:
-            self._input_trajectory_filepaths = input_trajectory_filepaths 
+            self.input_trajectory_filepaths = input_trajectory_filepaths 
         elif type(input_trajectory_filepaths) == str:
-            self._input_trajectory_filepaths = [ input_trajectory_filepaths ]
+            self.input_trajectory_filepaths = [ input_trajectory_filepaths ]
         else:
             raise Exception('Input trajectory filepaths must be a list of strings or a string')
         # Check no trajectory path is absolute
-        for path in self._input_trajectory_filepaths:
+        for path in self.input_trajectory_filepaths:
             if path[0] == '/':
                 raise Exception('Trajectory paths MUST be relative, not absolute (' + path + ')')
         # Input populations and transitions for MSM
-        self._populations_file = File(populations_filepath)
-        self._transitions_file = File(transitions_filepath)
+        self.populations_filepath = populations_filepath
+        self._populations_file = File(self.populations_filepath)
+        self.transitions_filepath = transitions_filepath
+        self._transitions_file = File(self.transitions_filepath)
 
         # Set the processed topology filepath, which depends on the input topology filename
         # Note that this file is different from the standard topology, although it may be standard as well
-        self._topology_filepath = File(self.inherit_topology_filename())
+        self._topology_filepath = self.inherit_topology_filename()
         self._topology_file = None
 
         # Set the standard topology file
@@ -1032,46 +1089,17 @@ class Project:
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        self.register = {
-            'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S'),
-            'inputs': {
-                'directory': directory,
-                'accession': accession,
-                'database_url': database_url,
-                'inputs_filepath': inputs_filepath,
-                'input_topology_filepath': input_topology_filepath,
-                'input_structure_filepath': input_structure_filepath,
-                'input_trajectory_filepaths': input_trajectory_filepaths,
-                'populations_filepath': populations_filepath,
-                'transitions_filepath': transitions_filepath,
-                'md_directories': md_directories,
-                'reference_md_directory': reference_md_directory,
-                'filter_selection': filter_selection,
-                'image': image,
-                'fit': fit,
-                'translation': translation,
-                'mercy': mercy,
-                'trust': trust,
-                'pca_selection': pca_selection,
-                'pca_fit_selection': pca_fit_selection,
-                'rmsd_cutoff': rmsd_cutoff,
-                'interaction_cutoff': interaction_cutoff,
-                'sample_trajectory': sample_trajectory,
-            },
-            'warnings': [],
-            # Set a subsection for MD specific registers
-            'mds': []
-        }
+        self.register = Register(self)
 
         # Now instantiate a new MD for each MD found and save the reference MD
-        # Note that this is done at the end since the MD instance inherits several values from the project instance
+        # Note that this is done at the end since every MD instance inherits several values from the project instance
         self.mds = []
         self.reference_md = None
         for n, md_directory in enumerate(self.md_directories, 1):
             md = MD(
                 project = self, number = n, directory = md_directory,
-                input_structure_filepath = self._input_structure_filepath,
-                input_trajectory_filepaths = self._input_trajectory_filepaths,
+                input_structure_filepath = self.input_structure_filepath,
+                input_trajectory_filepaths = self.input_trajectory_filepaths,
             )
             self.mds.append(md)
             if md_directory == self.reference_md_directory:
@@ -1098,9 +1126,9 @@ class Project:
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + self._inputs_file.filename + ')\n')
         inputs_url = self.url + '/inputs/'
-        urllib.request.urlretrieve(inputs_url, self._inputs_file.absolute_path)
+        urllib.request.urlretrieve(inputs_url, self._inputs_file.path)
         # Rewrite the inputs file in a pretty formatted way
-        with open(self._inputs_file.absolute_path, 'r+') as file:
+        with open(self._inputs_file.path, 'r+') as file:
             file_content = json.load(file)
             file.seek(0)
             json.dump(file_content, file, indent=4)
@@ -1149,9 +1177,9 @@ class Project:
             topology_url = self.url + '/topology'
             try:
                 sys.stdout.write('Downloading topology (' + self._input_topology_file.filename + ')\n')
-                urllib.request.urlretrieve(topology_url, self._input_topology_file.absolute_path)
+                urllib.request.urlretrieve(topology_url, self._input_topology_file.path)
                 # Rewrite the topology file in a pretty formatted way
-                with open(self._input_topology_file.absolute_path, 'r+') as file:
+                with open(self._input_topology_file.path, 'r+') as file:
                     file_content = json.load(file)
                     file.seek(0)
                     json.dump(file_content, file, indent=4)
@@ -1164,7 +1192,7 @@ class Project:
         topology_url = self.url + '/files/' + self._input_topology_file.filename
         try:
             sys.stdout.write('Downloading topology (' + self._input_topology_file.filename + ')\n')
-            urllib.request.urlretrieve(topology_url, self._input_topology_file.absolute_path)
+            urllib.request.urlretrieve(topology_url, self._input_topology_file.path)
         except:
             raise Exception('Something where wrong while downloading the topology')
         # Before we finish, in case the topology is a '.top' file, we may need to download the itp files as well
@@ -1239,7 +1267,7 @@ class Project:
         if self._inputs:
             return self._inputs
         # Otherwise, load inputs from the inputs file
-        with open(self.inputs_file.absolute_path, 'r') as file:
+        with open(self.inputs_file.path, 'r') as file:
             inputs_data = json.load(file)
             self._inputs = inputs_data
         # Finally return the updated inputs
@@ -1278,18 +1306,8 @@ class Project:
     # Register ---------------
 
     # Save the current register to a file
-    # In case there is a previous register, read it and append data to it
     def save_register (self):
-        register_data = []
-        # Check if there is previous register data
-        if exists(REGISTER_FILENAME):
-            with open(REGISTER_FILENAME, 'r') as file:
-                register_data = json.load(file)
-        # Add current register data
-        register_data.append(self.register)
-        # Write it to a json file
-        with open(REGISTER_FILENAME, 'w') as file:
-            json.dump(register_data, file, indent=4)
+        self.register.save()
 
     # Processed files ----------------------------------------------------
 
@@ -1303,7 +1321,7 @@ class Project:
             return filename
         if filename == RAW_CHARGES_FILENAME:
             return filename
-        standard_format = get_file_standard_format(filename)
+        standard_format = self._input_topology_file.format
         return 'topology.' + standard_format
 
     # Get the processed topology
@@ -1356,7 +1374,7 @@ class Project:
         if self._charges:
             return self._charges
         # Otherwise we must find the value
-        self._charges = get_charges(self.topology_file.absolute_path)
+        self._charges = get_charges(self.topology_file)
         return self._charges
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
@@ -1409,8 +1427,8 @@ class Project:
         print('-> Generating metadata')
         # Otherwise, generate it
         generate_metadata(
-            input_structure_filename = self.structure_file.absolute_path,
-            input_trajectory_filename = self.trajectory_file.absolute_path,
+            input_structure_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
             inputs_filename = self.inputs_file.filename, # DANI: No sería mejor pasarle los inputs?
             structure = self.structure,
             snapshots = self.snapshots,
@@ -1439,7 +1457,7 @@ class Project:
             charges = self.charges,
             residues_map = self.residues_map,
             pbc_residues = self.pbc_residues,
-            output_topology_filepath = self._standard_topology_file.absolute_path
+            output_topology_filepath = self._standard_topology_file.path
         )
         return self._standard_topology_file
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
@@ -1452,7 +1470,7 @@ class Project:
         print('-> Generating screenshot')
         # Otherwise, generate it
         get_screenshot(
-            input_structure_filename = self.structure_file.absolute_path,
+            input_structure_filename = self.structure_file.path,
             output_screenshot_filename = OUTPUT_SCREENSHOT_FILENAME,
         )
         return OUTPUT_SCREENSHOT_FILENAME
@@ -1468,10 +1486,10 @@ def read_file (target_file : File) -> dict:
     file_format = target_file.filename.split('.')[-1]
     # Read numpy files
     if file_format == 'npy':
-        return numpy.load(target_file.absolute_path)
+        return numpy.load(target_file.path)
     # Read JSON files
     if file_format == 'json':
-        with open(target_file.absolute_path, 'r') as file:
+        with open(target_file.path, 'r') as file:
             return json.load(file)
 
 # Input files
@@ -1551,42 +1569,32 @@ def workflow (
     # Now iterate over the different MDs
     for md in project.mds:
 
-        print(' ** MD ' + md.directory + ' ** ')
+        print('\n' + CYAN_HEADER + ' ** MD ' + md.directory + ' ** ' + COLOR_END)
 
-        # Check input files are present and download them if they are missing and it is possible
-        for getter in input_files.values():
+        # Set a function to call getters with the proper instance
+        def call_getter (getter : Callable):
             instance = md if getter.__qualname__[0:3] == 'MD.' else project
             getter(instance)
 
-        # If download is passed as True then exit here
-        # Note that there is no need to save the register if we just downloaded data
+        # If download is passed as True then just download input files if they are missing and exit
         if download:
+            for getter in input_files.values():
+                call_getter(getter)
             continue
 
-        # Process input files if needed
-        for getter in processed_files.values():
-            instance = md if getter.__qualname__[0:3] == 'MD.' else project
-            getter(instance)
-
-        # Now that we have the processed files run any additional tests here
-
-        # Check the trajectory has not sudden jumps
-        # Calling the value is enought to trigger the logic
-        # The logic will warn us if something is wrong
-        # DANI: Estría bien anotar en el registro o así los tests que han pasado, para no repetirlos cada vez
-        md.sudden_jumps
-
-        # If setup is passed as True then exit here
+        # If setup is passed as True then process input files and exit here
         if setup:
+            for getter in processed_files.values():
+                call_getter(getter)
             continue
 
         # Run the requested analyses
         if include and len(include) > 0:
             sys.stdout.write(f"Executing specific dependencies: " + ', '.join(include) + '\n')
             # Include only the specified dependencies
-            requested = [ getter for name, getter in project.requestables.items() if name in include ]
+            requested = [ getter for name, getter in requestables.items() if name in include ]
             for getter in requested:
-                getter(project)
+                call_getter(getter)
             # Exit here
             continue
 
@@ -1607,8 +1615,7 @@ def workflow (
         # Run the requests
         for request in requests:
             getter = requestables[request]
-            instance = md if getter.__qualname__[0:3] == 'MD.' else project
-            getter(instance)
+            call_getter(getter)
 
         # Remove gromacs backups
         # DANI: Esto iría mejor en otro sitio

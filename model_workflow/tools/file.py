@@ -1,6 +1,8 @@
 from os.path import exists, isabs, abspath, relpath, split
 from typing import Optional
 
+from model_workflow.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
+
 # A file handler
 # Absolute paths are used in runtime
 # Relative paths are used to store paths
@@ -20,8 +22,24 @@ class File:
         else:
             self.relative_path = relative_or_basolute_path
             self.absolute_path = abspath(self.relative_path)
+        # When simply a path is requested we return the absolute path
+        self.path = self.absolute_path
         # Capture the filename
         self.filename = split(relative_or_basolute_path)[-1]
+        # Set the file extension
+        self.extension = self.filename.split('.')[-1]
+        if self.extension == self.filename:
+            self.extension = None
+        # Set the file format
+        self.format = None
+        if self.extension:
+            extension_format = EXTENSION_FORMATS.get(self.extension, None)
+            if not extension_format:
+                raise Exception('Not recognized format extension "' + self.extension + '" from file "' + self.filename + '"')
+            self.format = extension_format
+        # Set a couple of additional values according to pytraj format requirements
+        self.is_pytraj_supported = self.format in PYTRAJ_SUPPORTED_FORMATS
+        self.pytraj_parm_format = PYTRAJ_PARM_FORMAT.get(self.format, None)
 
     def __repr__ (self) -> str:
         return '< File ' + self.filename + ' >'

@@ -6,7 +6,6 @@ from os.path import exists
 from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.topology_manager import get_chains, set_chains
-from model_workflow.tools.formats import is_tpr
 
 from mdtoolbelt.structures import Structure
 
@@ -15,22 +14,21 @@ center_selection = 'protein or nucleic'
 center_selection_name = 'protein_and_nucleic_acids'
 center_selection_filename = '.index.ndx'
 
-# input_structure_filename - The name string of the input topology file (path)
-# Tested supported formats are .pdb and .tpr
-# input_trajectory_filename - The name string of the input trajectory file (path)
-# Tested supported formats are .trr and .xtc
-# output_trajectory_filename - The name string of the output trajectory file (path)
-# Tested supported format is .xtc
+# Image and fit a trajectory
 # image - Set if it must me imaged
 # fit - Set if it must be fitted
 # translation - Set how it must be translated during imaging
 # pbc_selection - Set a selection to exclude PBC residues from both the centering and the fitting focuses
 def image_and_fit (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    input_topology_filename : str, # This is optional if there are no PBC residues
-    output_structure_filename : str,
-    output_trajectory_filename : str,
+    # Tested supported formats are .pdb and .tpr
+    input_structure_file : 'File',
+    # Tested supported formats are .trr and .xtc
+    input_trajectory_file : 'File',
+    # This must be in .tpr format
+    # This is optional if there are no PBC residues
+    input_topology_file : 'File', 
+    output_structure_file : 'File',
+    output_trajectory_file : 'File',
     image : bool, fit : bool,
     translation : list,
     pbc_selection : str,
@@ -43,12 +41,12 @@ def image_and_fit (
 
     # First of all save chains
     # Gromacs will delete chains so we need to recover them after
-    chains_backup = get_chains(input_structure_filename)
+    chains_backup = get_chains(input_structure_file.path)
 
     # Set a custom index file (.ndx) to select protein and nucleic acids
     # Also exclude PBC residues from this custom selection
     # This is useful for some imaging steps (centering and fitting)
-    structure = Structure.from_pdb_file(input_structure_filename)
+    structure = Structure.from_pdb_file(input_structure_file.path)
     system_selection = structure.select('all', syntax='vmd')
     custom_selection = structure.select(center_selection, syntax='vmd')
     if pbc_selection:
@@ -63,7 +61,7 @@ def image_and_fit (
 
     # In order to run the imaging with PBC residues we need a .tpr file, not just the .pdb file
     # This is because there is a '-pbc mol' step which only works with a .tpr file
-    is_tpr_available = input_topology_filename and is_tpr(input_topology_filename)
+    is_tpr_available = input_topology_file and input_topology_file.format == 'tpr'
     has_pbc_residues = bool(pbc_selection)
     if has_pbc_residues and not is_tpr_available:
         raise SystemExit('In order to image a simulation with PBC residues it is mandatory to provide a .tpr file')
@@ -87,11 +85,11 @@ def image_and_fit (
                 "gmx",
                 "trjconv",
                 "-s",
-                input_structure_filename,
+                input_structure_file.path,
                 "-f",
-                input_trajectory_filename,
+                input_trajectory_file.path,
                 '-o',
-                output_trajectory_filename,
+                output_trajectory_file.path,
                 '-trans',
                 str(translation[0]),
                 str(translation[1]),
@@ -117,11 +115,11 @@ def image_and_fit (
                 "gmx",
                 "trjconv",
                 "-s",
-                input_structure_filename,
+                input_structure_file.path,
                 "-f",
-                input_trajectory_filename,
+                input_trajectory_file.path,
                 '-o',
-                output_trajectory_filename,
+                output_trajectory_file.path,
                 '-pbc',
                 'atom',
                 '-center',
@@ -132,7 +130,7 @@ def image_and_fit (
             p.stdout.close()
 
         # Select the first frame of the recently imaged trayectory as the new topology
-        reset_structure (input_structure_filename, output_trajectory_filename, output_structure_filename)
+        reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
 
         # If there are PBC residues then run a '-pbc mol' to make all residues stay inside the box anytime
         if has_pbc_residues:
@@ -146,11 +144,11 @@ def image_and_fit (
                 "gmx",
                 "trjconv",
                 "-s",
-                input_topology_filename,
+                input_topology_file.path,
                 "-f",
-                output_trajectory_filename,
+                output_trajectory_file.path,
                 '-o',
-                output_trajectory_filename,
+                output_trajectory_file.path,
                 '-pbc',
                 'mol', # Note that the 'mol' option requires a tpr to be passed
                 '-n',
@@ -160,7 +158,7 @@ def image_and_fit (
             p.stdout.close()
 
             # Select the first frame of the recently translated and imaged trayectory as the new topology
-            reset_structure (input_structure_filename, output_trajectory_filename, output_structure_filename)
+            reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
 
 
         # -----------------------------------------------------------------------------------------------
@@ -175,11 +173,11 @@ def image_and_fit (
                 "gmx",
                 "trjconv",
                 "-s",
-                output_structure_filename,
+                output_structure_file.path,
                 "-f",
-                output_trajectory_filename,
+                output_trajectory_file.path,
                 '-o',
-                output_trajectory_filename,
+                output_trajectory_file.path,
                 # Expanding the box may help in some situations
                 # However there are secondary effects for the trajectory
                 #'-box',
@@ -200,7 +198,7 @@ def image_and_fit (
 
         # The trajectory to fit is the already imaged trajectory
         # However, if there was no imaging, the trajectory to fit is the input trajectory
-        trajectroy_to_fit = output_trajectory_filename if image else input_trajectory_filename
+        trajectroy_to_fit = output_trajectory_file.path if image else input_trajectory_file.path
 
         # Run Gromacs
         p = Popen([
@@ -212,11 +210,11 @@ def image_and_fit (
             "gmx",
             "trjconv",
             "-s",
-            output_structure_filename,
+            output_structure_file.path,
             "-f",
             trajectroy_to_fit,
             '-o',
-            output_trajectory_filename,
+            output_trajectory_file.path,
             '-fit',
             'rot+trans',
             '-n',
@@ -226,7 +224,7 @@ def image_and_fit (
         p.stdout.close()
 
     # Recover chains
-    set_chains(output_structure_filename, chains_backup)
+    set_chains(output_structure_file.path, chains_backup)
 
     # Clean up the index file
     # if exists(center_selection_filename):

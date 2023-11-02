@@ -6,9 +6,8 @@ from typing import Union
 
 import pytraj as pt
 
-from model_workflow.constants import TOPOLOGY_FILENAME
+from model_workflow.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
-from model_workflow.tools.formats import is_raw, is_pytraj_supported, is_tpr, get_pytraj_parm_format
 
 from mdtoolbelt.selections import Selection
 
@@ -21,12 +20,12 @@ filter_group_name = "not_water_or_counter_ions"
 # As an exception, some water and ions may be not removed if specified
 # At the end, all topologies must match in atoms count
 def filter_atoms (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    input_topology_filename : str,
-    output_structure_filename : str,
-    output_trajectory_filename : str,
-    output_topology_filename : str,
+    input_structure_file : 'File',
+    input_trajectory_file : 'File',
+    input_topology_file : 'File',
+    output_structure_file : 'File',
+    output_trajectory_file : 'File',
+    output_topology_file : 'File',
     # Filter selection may be a cutom seleection or True, in which case we run a default filtering
     filter_selection : Union[bool, str]
 ):
@@ -36,12 +35,12 @@ def filter_atoms (
         return
 
     # Load the structure and trajectory
-    trajectory = pt.iterload(input_trajectory_filename, input_structure_filename)
+    trajectory = pt.iterload(input_trajectory_file.path, input_structure_file.path)
     pt_topology = trajectory.topology
     atoms_count = pt_topology.n_atoms
 
     # Set the pytraj mask to filter the desired atoms from the structure
-    filter_mask = get_filter_mask(input_structure_filename, filter_selection)
+    filter_mask = get_filter_mask(input_structure_file.path, filter_selection)
 
     # Set the filtered structure
     filtered_pt_topology = pt_topology[filter_mask]
@@ -58,16 +57,16 @@ def filter_atoms (
         # As long as indices are for atoms and not residues there should never be any incompatibility
         pytraj_mask_2_gromacs_ndx(pt_topology, { filter_group_name : filter_mask }, index_filename)
         # Filter the trajectory
-        xtc_filter(input_structure_filename, input_trajectory_filename, output_trajectory_filename, index_filename)
+        xtc_filter(input_structure_file.path, input_trajectory_file.path, output_trajectory_file.path, index_filename)
         # Filter the structure
-        pdb_filter(input_structure_filename, output_structure_filename, index_filename)
+        pdb_filter(input_structure_file.path, output_structure_file.path, index_filename)
 
     # Filter topology according to the file format
-    if input_topology_filename and exists(input_topology_filename):
+    if input_topology_file and input_topology_file.exists:
         print('Filtering topology...')
         # Already parsed topology
-        if input_topology_filename == TOPOLOGY_FILENAME:
-            with open(input_topology_filename, 'r') as file:
+        if input_topology_file.filename == TOPOLOGY_FILENAME:
+            with open(input_topology_file.path, 'r') as file:
                 standard_topology = load(file)
             charges = standard_topology['atom_charges']
             print('Topology atoms count: ' + str(len(charges)))
@@ -76,35 +75,35 @@ def filter_atoms (
             # If the number of charges does not match the number of atoms then just remove the standard topology file
             # This way it will be generated again further but from the new filtered structure
             if len(charges) != filtered_structure_atoms_count:
-                remove(input_topology_filename)
+                remove(input_topology_file.path)
         # Raw charges
-        elif is_raw(input_topology_filename):
-            charges = get_raw_charges(input_topology_filename)
+        elif input_topology_file.filename == RAW_CHARGES_FILENAME:
+            charges = get_raw_charges(input_topology_file.path)
             # Nothing to do here. It better matches by defualt or we have a problem
             filtered_topology_atoms_count = len(charges)
             print('Topology atoms count: ' + str(filtered_topology_atoms_count))
         # Pytraj supported formats
-        elif is_pytraj_supported(input_topology_filename):
+        elif input_topology_file.is_pytraj_supported:
             # Load the topology and count its atoms
-            pt_topology = pt.load_topology(filename=input_topology_filename)
+            pt_topology = pt.load_topology(filename=input_topology_file.path)
             topology_atoms_count = pt_topology.n_atoms
             print('Topology atoms count: ' + str(topology_atoms_count))
             # Filter the desired atoms using the mask and then count them
-            filter_mask = get_filter_mask(input_topology_filename, filter_selection)
+            filter_mask = get_filter_mask(input_topology_file.path, filter_selection)
             filtered_pt_topology = pt_topology[filter_mask]
             filtered_topology_atoms_count = filtered_pt_topology.n_atoms
             # If there is a difference in atom counts then write the filtered topology
             if filtered_topology_atoms_count < topology_atoms_count:
                 pt.write_parm(
-                    filename=output_topology_filename,
+                    filename=output_topology_file.path,
                     top=filtered_pt_topology,
-                    format=get_pytraj_parm_format(input_topology_filename),
+                    format=input_topology_file.pytraj_parm_format,
                     overwrite=True
                 )
         # Gromacs format format
-        elif is_tpr(input_topology_filename):
+        elif input_topology_file.format == 'tpr':
             # Extract charges from the tpr file and count them
-            charges = get_tpr_charges(input_topology_filename)
+            charges = get_tpr_charges(input_topology_file.path)
             topology_atoms_count = len(charges)
             print('Topology atoms count: ' + str(topology_atoms_count))
             # If the number of charges in greater than expected then filter the tpr file and extract charges again
@@ -113,11 +112,11 @@ def filter_atoms (
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
-                tpr_filter(input_topology_filename, output_topology_filename, index_filename)
-                charges = get_tpr_charges(input_topology_filename)
+                tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
+                charges = get_tpr_charges(input_topology_fil.path)
             filtered_topology_atoms_count = len(charges)
         else:
-            raise ValueError('Topology file (' + input_topology_filename + ') is in a non supported format')
+            raise ValueError('Topology file (' + input_topology_file.filename + ') is in a non supported format')
 
         print('Filtered topology atoms: ' + str(filtered_topology_atoms_count))
 

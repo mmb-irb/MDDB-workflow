@@ -118,7 +118,7 @@ def generate_metadata (
         'MEMBRANES': get_input('membranes'),
         'LINKS': get_input('links'),
         'ORIENTATION': get_input('orientation'),
-        'WARNINGS': register['warnings'],
+        'WARNINGS': register.warnings,
         # Collection specifics
         'CV19_UNIT': get_input('cv19_unit'),
         'CV19_STARTCONF': get_input('cv19_startconf'),
