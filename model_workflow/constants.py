@@ -34,6 +34,31 @@ TRAJECTORY_FILENAME = 'trajectory.xtc'
 
 # Intermediate filenames
 REGISTER_FILENAME = '.register.json'
+# Set the input values to be saved in the project register
+REGISTER_INPUTS = [
+    'directory',
+    'accession',
+    'database_url',
+    'inputs_filepath',
+    'input_topology_filepath',
+    'input_structure_filepath',
+    'input_trajectory_filepaths',
+    'populations_filepath',
+    'transitions_filepath',
+    'md_directories',
+    'reference_md_directory',
+    'filter_selection',
+    'image',
+    'fit',
+    'translation',
+    'mercy',
+    'trust',
+    'pca_selection',
+    'pca_fit_selection',
+    'rmsd_cutoff',
+    'interaction_cutoff',
+    'sample_trajectory',
+]
 
 # An old system for when original topology is very wrong and charges must be provided manually
 RAW_CHARGES_FILENAME = 'charges.txt'
@@ -50,26 +75,31 @@ AVERAGE_STRUCTURE_FILENAME = 'average.pdb'
 OUTPUT_METADATA_FILENAME = 'metadata.json'
 
 # Set the output screenshot filename
-OUTPUT_SCREENSHOT_FILENAME = 'screenshot.jpg'
+OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 
 # Set analyses files to be generated
-OUTPUT_INTERACTIONS_FILENAME = 'md.interactions.json'
-OUTPUT_RMSDS_FILENAME = 'md.rmsds.json'
-OUTPUT_TMSCORES_FILENAME = 'md.tmscores.json'
-OUTPUT_RMSF_FILENAME = 'md.rmsf.json'
-OUTPUT_RGYR_FILENAME = 'md.rgyr.json'
-OUTPUT_PCA_FILENAME = 'md.pca.json'
-OUTPUT_PCA_PROJECTION_PREFIX = 'pca.trajectory'
-OUTPUT_PCA_CONTACTS_FILENAME = 'md.pca_contacts.json'
-OUTPUT_RMSD_PERRES_FILENAME = 'md.rmsd.perres.json'
-OUTPUT_RMSD_PAIRWISE_FILENAME = 'md.rmsd.pairwise.json'
-OUTPUT_DIST_PERRES_FILENAME = 'md.dist.perres.json'
-OUTPUT_HBONDS_FILENAME = 'md.hbonds.json'
-OUTPUT_SASA_FILENAME = 'md.sasa.json'
-OUTPUT_ENERGIES_FILENAME = 'md.energies.json'
-OUTPUT_POCKETS_FILENAME = 'md.pockets.json'
-OUTPUT_HELICAL_PARAMETERS_FILENAME = 'md.helical.json'
-OUTPUT_MARKOV_FILENAME = 'md.markov.json'
+OUTPUT_INTERACTIONS_FILENAME = 'mda.interactions.json'
+OUTPUT_RMSDS_FILENAME = 'mda.rmsds.json'
+OUTPUT_TMSCORES_FILENAME = 'mda.tmscores.json'
+OUTPUT_RMSF_FILENAME = 'mda.rmsf.json'
+OUTPUT_RGYR_FILENAME = 'mda.rgyr.json'
+OUTPUT_PCA_FILENAME = 'mda.pca.json'
+OUTPUT_PCA_PROJECTION_PREFIX = 'mdt.pca_trajectory'
+OUTPUT_PCA_CONTACTS_FILENAME = 'mda.pca_contacts.json'
+OUTPUT_RMSD_PERRES_FILENAME = 'mda.rmsd_perres.json'
+OUTPUT_RMSD_PAIRWISE_FILENAME = 'mda.rmsd_pairwise.json'
+OUTPUT_DIST_PERRES_FILENAME = 'mda.dist_perres.json'
+OUTPUT_HBONDS_FILENAME = 'mda.hbonds.json'
+OUTPUT_SASA_FILENAME = 'mda.sasa.json'
+OUTPUT_ENERGIES_FILENAME = 'mda.energies.json'
+OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
+OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket' # WARNING: If this is changed then the pockets function must be updated as well
+OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
+OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
+
+# Set folder names for some analyses which generate a lot of intermediate step files
+ENERGIES_FOLDER = 'energies'
+POCKETS_FOLDER = 'mdpocket'
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
@@ -104,7 +134,8 @@ EXTENSION_FORMATS = {
     'trj': 'crd',
     # Other
     'json': 'json',
-    'npy': 'npy'
+    'npy': 'npy',
+    'in': 'txt'
 }
 
 # Topology and trajectory file formats supported by PyTraj
@@ -140,4 +171,13 @@ PYTRAJ_PARM_FORMAT = {
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
 GREEN_HEADER = '\033[92m'
 CYAN_HEADER = '\033[96m'
+YELLOW_HEADER = '\033[93m'
+RED_HEADER = '\033[91m'
 COLOR_END = '\033[0m'
+
+# Set a dictionary to parse an internal raw name to a pretty human firendly name
+NICE_NAMES = {
+    'stabonds': 'Stable bonds test',
+    'cohbonds': 'Coherent bonds test',
+    'intrajrity': 'Trajectory integrity test'
+}

@@ -20,7 +20,7 @@ def check_trajectory_integrity (
     pbc_residues : List[int],
     mercy : List[str],
     trust: List[str],
-    register : dict,
+    register : 'Register',
     #time_length : float,
     check_selection : str,
     # DANI: He visto saltos 'correctos' pasar de 6
@@ -29,6 +29,10 @@ def check_trajectory_integrity (
 
     # Skip the test if we trust
     if test_name in trust:
+        return True
+
+    # Skip the test if it is already passed according to the register
+    if register.tests.get(test_name, None):
         return True
 
     # Parse the selection in VMD selection syntax
@@ -70,6 +74,7 @@ def check_trajectory_integrity (
 
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if len(rmsd_jumps) <= 1:
+        register.tests[test_name] = True
         return True
 
     # Get the maximum RMSD value and check it is a reasonable deviation from the average values
@@ -114,7 +119,8 @@ def check_trajectory_integrity (
         # Add a warning an return True since the test failed in case we have mercy
         message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
         if test_name in mercy:
-            register['warnings'].append(message)
+            register.warnings.append(message)
+            register.tests[test_name] = False
             return False
         # Otherwise kill the process right away
         raise Exception(message)
@@ -122,7 +128,8 @@ def check_trajectory_integrity (
     # Warn the user if we had bypassed frames
     if bypassed_frames > 0:
         print(' WARNING: First ' + str(bypassed_frames) + ' frames may be not equilibrated')
-        register['warnings'].append('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
+        register.warnings.append('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     print(' Test has passed successfully')
+    register.tests[test_name] = True
     return True

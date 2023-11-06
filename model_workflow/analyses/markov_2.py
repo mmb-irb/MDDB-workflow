@@ -16,10 +16,6 @@ import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot 
 
-CURSOR_UP_ONE = '\x1b[1A'
-ERASE_LINE = '\x1b[2K'
-ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
-
 auxiliar_pdb_filename = '.model.pdb'
 
 def markov (
@@ -57,12 +53,9 @@ def markov (
     next_frame = next(selected_frames)
     # Conserve only the desired frames
     frame_coordinates = {}
-    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
-    print()
     for frame_number, chunk in enumerate(trajectory):
         # Update the current frame log
-        print(ERASE_PREVIOUS_LINE)
-        print(' Frame ' + str(frame_number))
+        print(' Frame ' + str(frame_number), end='\r')
         # Skip the current frame if we do not need it
         if frame_number != next_frame:
             continue
@@ -82,14 +75,11 @@ def markov (
             row.append(transition)
         transitions_matrix.append(row)
     print(' Taking screenshots of selected frames')
-    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
-    print()
     frame_count = str(len(frame_coordinates))
     # For each frame coordinates, generate PDB file, take a scrrenshot and delete it
     for i, coordinates in enumerate(frame_coordinates.values(), 1):
         # Update the current frame log
-        print(ERASE_PREVIOUS_LINE)
-        print('  Screenshot ' + str(i) + '/' + frame_count)
+        print('  Screenshot ' + str(i) + '/' + frame_count, end='\r')
         # Generate the pdb file
         coordinates.save(auxiliar_pdb_filename)
         # Set the screenshot filename

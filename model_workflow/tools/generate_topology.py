@@ -3,11 +3,11 @@ from typing import List
 
 # Generate a json file to be uploaded to the database (mongo) with topology data
 def generate_topology (
-    structure,
+    structure : 'Structure',
     charges : List[int],
     residues_map : dict,
     pbc_residues : List[int],
-    output_topology_filename : str
+    output_topology_filepath : str
 ):
     # The structure will be a bunch of arrays
     # Atom data
@@ -75,5 +75,5 @@ def generate_topology (
         # Save also the pbc residues here
         'pbc_residues': pbc_residues
     }
-    with open(output_topology_filename, 'w') as file:
+    with open(output_topology_filepath, 'w') as file:
         json.dump(topology, file)

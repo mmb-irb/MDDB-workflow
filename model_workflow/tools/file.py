@@ -1,3 +1,4 @@
+from os import remove
 from os.path import exists, isabs, abspath, relpath, split
 from typing import Optional
 
@@ -53,3 +54,6 @@ class File:
     def check_existence (self) -> bool:
         return exists(self.absolute_path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
+
+    def remove (self):
+        remove(self.absolute_path)

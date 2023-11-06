@@ -39,7 +39,7 @@ def structure_corrector (
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
     snapshots : int,
-    register : dict,
+    register : 'Register',
     mercy : List[str],
     trust : List[str]
 ):
@@ -66,10 +66,11 @@ def structure_corrector (
     # ------------------------------------------------------------------------------------------
 
     # Set if stable bonds have to be checked
-    must_check_stable_bonds = 'stabonds' not in trust
+    stable_bonds_flag = 'stabonds'
+    must_check_stable_bonds = stable_bonds_flag not in trust
 
-    # in case this analysis has been already passed we skip the process
-    if register['tests'].get('stabonds', None) == True:
+    # If this analysis has been already passed then we skip the process
+    if register.tests.get(stable_bonds_flag, None) == True:
         must_check_stable_bonds = False
 
     # Try to get bonds from the topology before guessing
@@ -95,11 +96,11 @@ def structure_corrector (
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
             print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
-            must_be_killed = 'stabonds' not in mercy
+            must_be_killed = stable_bonds_flag not in mercy
             if must_be_killed:
                 raise SystemExit('Failed to find stable bonds')
-            register['tests']['stabonds'] = False
-            register['warnings'].append(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates.\n'
+            register.tests[stable_bonds_flag] = False
+            register.warnings.append(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates.\n'
             'The main PDB structure is the default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
         else:
             # Set also the safe bonds frame structure to mine its coordinates
@@ -111,21 +112,34 @@ def structure_corrector (
             # Remove the safe bonds frame since it is not required anymore
             remove(safe_bonds_frame_filename)
 
-    # Tag the stabonds test as succeed if we did not skip it
-    if must_check_stable_bonds and register['tests'].get('stabonds', None) != False:
-        register['tests']['stabonds'] = True
+    # Tag the test as succeed if we did not skip it
+    if must_check_stable_bonds and register.tests.get(stable_bonds_flag, None) != False:
+        register.tests[stable_bonds_flag] = True
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    must_check_coherent_bonds = 'cohbonds' not in trust
+    # Set if coherent bonds have to be checked
+    coherent_bonds_flag = 'cohbonds'
+    must_check_coherent_bonds = coherent_bonds_flag not in trust
+
+    # If this analysis has been already passed then we skip the process
+    if register.tests.get(coherent_bonds_flag, None) == True:
+        must_check_stable_bonds = False
+
+    # Run the coherent bonds analysis if necessary
     if must_check_coherent_bonds and structure.check_incoherent_bonds():
         print('FAIL: Uncoherent bonds were found')
-        must_be_killed = 'cohbonds' not in mercy
+        must_be_killed = coherent_bonds_flag not in mercy
         if must_be_killed:
             raise SystemExit('Failed to find coherent bonds')
-        register['warnings'].append('Bonds are not coherent. Some atoms may have less/more bonds than they should.')
+        register.tests[coherent_bonds_flag] = False
+        register.warnings.append('Bonds are not coherent. Some atoms may have less/more bonds than they should.')
+
+    # Tag the test as succeed if we did not skip it
+    if must_check_coherent_bonds and register.tests.get(coherent_bonds_flag, None) != False:
+        register.tests[coherent_bonds_flag] = True
 
     # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------
@@ -190,11 +204,11 @@ def structure_corrector (
         # Sort trajectory coordinates in case atoms were sorted
         if input_trajectory_file.path and structure.trajectory_atom_sorter:
             # Save a warning in the register
-            register['warnings'].append('Atoms have been sorted to solve splitted residues')
+            register.warnings.append('Atoms have been sorted to solve splitted residues')
             # Save the new order in the register
             # DANI: Dado que no reordenamos las topologías orignales (muchos formatos, mucho marrón) hay que guardar esto
             # DANI: Es para curarnos en salud, pero lo suyo sería poder exportar topologías de la API que ya tengan los datos bien
-            register['new_atom_order'] = structure.new_atom_order
+            register.cache['new_atom_order'] = structure.new_atom_order
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
             structure.trajectory_atom_sorter(input_structure_file.path, input_trajectory_file.path, output_trajectory_file.path)
 

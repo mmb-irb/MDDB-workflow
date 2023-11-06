@@ -28,6 +28,7 @@ import json
 from typing import Optional, List, Tuple
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.tools.file import File
 
 from mdtoolbelt.structures import Structure
 
@@ -42,14 +43,15 @@ resources = str(Path(__file__).parent.parent / "utils" / "resources")
 #preppdb_source = resources + '/preppdb.pl'
 preppdb_source = resources + '/old_preppdb.pl' # DANI: Este no renombra los terminales
 cmip_inputs_checkonly_source = resources + '/check.in'
-cmip_inputs_source = resources + '/input.in'
+cmip_inputs_source = File(resources + '/input.in')
 vdw_source = resources + '/vdwprm'
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
+    input_trajectory_file : File,
     output_analysis_filename : str,
+    # Set a folder to be created in order to store residual output files from this analysis
+    energies_folder : str,
     structure : 'Structure',
     interactions : list,
     charges : list,
@@ -64,10 +66,9 @@ def energies (
         print('No charges were passed')
         return
 
-    # Set a folder to be created in order to store residual output files from this analysis
-    current_directory = os.getcwd()
-    energies_folder = current_directory + '/energies'
-    energies_backup = energies_folder + '/backup.json'
+    # Set a backup file to store some results on the fly
+    # This is useful to restore these values in case the analysis is disrupt since it is a long analysis
+    energies_backup = File(energies_folder + '/backup.json')
 
     # Check the number of atoms on each interacting agent
     # If there is any agent with more than 80000 atoms CMIP will fail so we must skip this specific energies analysis by now
@@ -100,12 +101,12 @@ def energies (
     set_cmip_elements(energies_structure)
 
     # Save the structure back to a pdb
-    energies_structure_filename = energies_folder + '/energies.pdb'
-    energies_structure.generate_pdb_file(energies_structure_filename)
+    energies_structure_file = File(energies_folder + '/energies.pdb')
+    energies_structure.generate_pdb_file(energies_structure_file.path)
 
     # Transform an agent structure to a cmip input pdb, which includes charges
     # Charges have been previously taken from the charges topology and in the structure as atom additional atributes
-    def selection2cmip (name : str, residues : List['Residue'], structure : 'Structure', strong_bonds : Optional[list]) -> str:
+    def selection2cmip (name : str, residues : List['Residue'], structure : 'Structure', strong_bonds : Optional[list]) -> File:
         # Parse the residue indices selection
         # Convert residue indices to atom indices
         atom_indices = sum([ residue.atom_indices for residue in residues ],[])
@@ -130,8 +131,8 @@ def energies (
             for bond in strong_bonds:
                 strong_bond_indexes += bond
         # Write a special pdb which contains charges as CMIP expects to find them
-        output_filename = energies_folder + '/' + name + '.cmip.pdb'
-        with open(output_filename, "w") as file:
+        output_filepath = energies_folder + '/' + name + '.cmip.pdb'
+        with open(output_filepath, "w") as file:
             # Write a line for each atom
             for a, atom in enumerate(selected_structure.atoms):
                 
@@ -158,7 +159,7 @@ def energies (
                     + ' ' + str(charge).rjust(7) + '  ' + element + '\n')
                 file.write(atom_line)
 
-        return output_filename
+        return File(output_filepath)
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are already added by residues
@@ -192,8 +193,8 @@ def energies (
             # Inputs will be modified to adapt the cmip grid to both agents together
             # Note than modified inputs file is not conserved along frames
             # Structures may change along trajectory thus requiring a different grid size
-            cmip_inputs = energies_folder + '/cmip.in'
-            copyfile(cmip_inputs_source, cmip_inputs)
+            cmip_inputs = File(energies_folder + '/cmip.in')
+            copyfile(cmip_inputs_source.path, cmip_inputs.path)
 
             # Select the first agent interface and extract it in a CMIP friendly pdb format
             # agent1_interface_name = agent1_name + '_interface'
@@ -226,13 +227,13 @@ def energies (
             # Set the CMIP box dimensions and densities to fit both the host and the guest
             # Box origin and size are modified in the cmip inputs
             # Values returned are only used for display / debug purposes
-            box_origin, box_size = adapt_cmip_grid(energies_folder, agent1_cmip, agent2_cmip, cmip_inputs)
+            box_origin, box_size = adapt_cmip_grid(energies_folder, agent1_cmip.path, agent2_cmip.path, cmip_inputs.path)
 
             # Run the CMIP software to get the desired energies
             print(' Calculating energies for ' + agent1_name + ' as host and ' + agent2_name + ' as guest')
-            agent1_residue_energies, agent1_atom_energies = get_cmip_energies(energies_folder, cmip_inputs, agent1_cmip, agent2_cmip)
+            agent1_residue_energies, agent1_atom_energies = get_cmip_energies(energies_folder, cmip_inputs.path, agent1_cmip.path, agent2_cmip.path)
             print(' Calculating energies for ' + agent2_name + ' as host and ' + agent1_name + ' as guest')
-            agent2_residue_energies, agent2_atom_energies = get_cmip_energies(energies_folder, cmip_inputs, agent2_cmip, agent1_cmip)
+            agent2_residue_energies, agent2_atom_energies = get_cmip_energies(energies_folder, cmip_inputs.path, agent2_cmip.path, agent1_cmip.path)
 
             # DANI: Usa esto para escribir los resultados de las energías por átomo
             # sample = {
@@ -251,13 +252,13 @@ def energies (
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, step, count = get_pdb_frames(energies_structure_filename, input_trajectory_filename, snapshots, frames_limit)
+    frames, step, count = get_pdb_frames(energies_structure_file.path, input_trajectory_file.path, snapshots, frames_limit)
     non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
 
     # Load backup data in case there is a backup file
-    if exists(energies_backup):
+    if energies_backup.exists:
         print(' Recovering energies backup')
-        with open(energies_backup, 'r') as file:
+        with open(energies_backup.path, 'r') as file:
             interactions_data = json.load(file)
     else:
         interactions_data = [[] for interaction in non_exceeding_interactions]
@@ -272,7 +273,7 @@ def energies (
         for i, data in enumerate(frame_energies_data):
             interactions_data[i].append(data)
         # Save a backup just in case the process is interrupted further
-        with open(energies_backup, 'w') as file:
+        with open(energies_backup.path, 'w') as file:
             json.dump(interactions_data, file)
 
     # Now calculated residue average values through all frames for each pair of interaction agents
@@ -303,7 +304,7 @@ def energies (
         json.dump({'data': output_analysis}, file)
 
     # Finally remove the reduced topology
-    os.remove(energies_structure_filename)
+    energies_structure_file.remove()
 
 # Given a topology (e.g. pdb, prmtop), extract the atom elements in a CMIP friendly format
 # Hydrogens bonded to carbons remain as 'H'
@@ -383,12 +384,15 @@ def name_terminal_residues (structure : 'Structure'):
 # Keep residues in the interface only to determine the size of the box since residues which are far will never contribute
 def adapt_cmip_grid (directory : str, agent1_cmip_pdb : str, agent2_cmip_pdb : str, cmip_inputs : str) -> tuple:
 
-    # Move to the energies folder for a moment for the residual cmip files to get generated inside of it
-    os.chdir(directory)
-
     # Set a name for the checkonly CMIP outputs
     # This name is not important, since the data we want is in the CMIP logs
-    cmip_checkonly_output = directory + '/checkonly.energy.pdb'
+    cmip_checkonly_output = File(directory + '/checkonly.energy.pdb')
+
+    # Capture the current directory to come back later
+    base_directory = os.getcwd()
+
+    # Move to the energies folder for a moment for the residual cmip files to get generated inside of it
+    os.chdir(directory)
 
     # Run CMIP in 'checkonly' mode and save the grid dimensions output
     # First do it for the agent 1
@@ -403,7 +407,7 @@ def adapt_cmip_grid (directory : str, agent1_cmip_pdb : str, agent2_cmip_pdb : s
         "-hs",
         agent2_cmip_pdb,
         "-byat",
-        cmip_checkonly_output,
+        cmip_checkonly_output.path,
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
     # Mine the grid dimensions from CMIP logs
@@ -423,7 +427,7 @@ def adapt_cmip_grid (directory : str, agent1_cmip_pdb : str, agent2_cmip_pdb : s
         "-hs",
         agent1_cmip_pdb,
         "-byat",
-        cmip_checkonly_output,
+        cmip_checkonly_output.path,
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
     # Mine the grid dimensions from CMIP logs
@@ -431,7 +435,7 @@ def adapt_cmip_grid (directory : str, agent1_cmip_pdb : str, agent2_cmip_pdb : s
         cmip_logs_agent2.split("\n"))
 
     # Get back to the main folder
-    os.chdir("..")
+    os.chdir(base_directory)
 
     # Calculate grid dimensions for a new grid which contains both previous grids
     new_center, new_density = compute_new_grid(
@@ -491,7 +495,7 @@ def adapt_cmip_grid (directory : str, agent1_cmip_pdb : str, agent2_cmip_pdb : s
             file.write(line)
 
     # Delete the 'ckeckonly' file
-    os.remove(cmip_checkonly_output)
+    cmip_checkonly_output.remove()
 
     # Calculate the resulting box origin and size and return both values
     # These values are used for display / debug purposes only
@@ -554,10 +558,12 @@ def compute_new_grid (
 
 # Run the CMIP software to get the desired energies
 def get_cmip_energies (directory : str, cmip_inputs : str, pr : str, hs : str) -> tuple:
+    # Set the cmip output filename, which is to be read rigth after it is generated
+    cmip_output_file = File(directory + '/cmip_output.pdb')
+    # Capture the current directory to come back later
+    base_directory = os.getcwd()
     # Move to the energies folder for a moment for the residual cmip files to get generated inside of it
     os.chdir(directory)
-    # Set the cmip output filename, which is to be read rigth after it is generated
-    cmip_output_filename = directory + '/cmip_output.pdb'
     # Run cmip
     cmip_logs = run([
         "cmip",
@@ -570,15 +576,15 @@ def get_cmip_energies (directory : str, cmip_inputs : str, pr : str, hs : str) -
         "-hs",
         hs,
         "-byat",
-        cmip_output_filename,
+        cmip_output_file.path,
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
     # Get back to the main folder
-    os.chdir("..")
+    os.chdir(base_directory)
     # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
     # Group the results by residues adding their values
     atom_energies = []
     residue_energies = {}
-    with open(cmip_output_filename, 'r') as file:
+    with open(cmip_output_file.path, 'r') as file:
         lines = list(file)
         # If this file is empty it means something went wrong with CMIP
         # We print its logs and exit
@@ -612,7 +618,7 @@ def get_cmip_energies (directory : str, cmip_inputs : str, pr : str, hs : str) -
             else:
                 residue_energies[residue] = energies
     # Remove the oupt file since it is not needed anymore
-    os.remove(cmip_output_filename)
+    cmip_output_file.remove()
     return residue_energies, atom_energies
     
 

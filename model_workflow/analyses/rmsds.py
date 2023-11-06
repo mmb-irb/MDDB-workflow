@@ -15,12 +15,12 @@ from typing import List
 # - Protein
 # - Nucleic acid
 def rmsds(
-    input_trajectory_filename : str,
+    trajectory_file : 'File',
+    first_frame_file : 'File',
+    average_structure_file : 'File',
     output_analysis_filename : str,
     snapshots : int,
     frames_limit : int,
-    first_frame_filename : str,
-    average_structure_filename : str,
     structure : 'Structure',
     pbc_residues: List[int],
     selections : List[str] = ['protein', 'nucleic'],
@@ -38,8 +38,6 @@ def rmsds(
         else:
             pbc_free_parse_selections.append(None)
 
-    rmsd_references = [first_frame_filename, average_structure_filename]
-
     # The start will be always 0 since we start with the first frame
     start = 0
 
@@ -47,8 +45,8 @@ def rmsds(
     # Use a reduced trajectory in case the original trajectory has many frames
     # Note that it makes no difference which reference is used here
     reduced_trajectory_filename, step, frames = get_reduced_trajectory(
-        rmsd_references[0],
-        input_trajectory_filename,
+        first_frame_file.path,
+        trajectory_file.path,
         snapshots,
         frames_limit,
     )
@@ -56,10 +54,13 @@ def rmsds(
     # Save results in this array
     output_analysis = []
 
+    # Set the reference structures to run the RMSD against
+    rmsd_references = [first_frame_file, average_structure_file]
+
     # Iterate over each reference and group
     for reference in rmsd_references:
         # Get a standarized reference name
-        reference_name = reference[0:-4].lower()
+        reference_name = reference.filename[0:-4].lower()
         for i, group in enumerate(selections):
             # If the selection is empty then skip this rmsd
             parsed_selection = pbc_free_parse_selections[i]
@@ -70,7 +71,7 @@ def rmsds(
             # Set the analysis filename
             rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name + '.xvg'
             # Run the rmsd
-            rmsd(reference, reduced_trajectory_filename, parsed_selection, rmsd_analysis)
+            rmsd(reference.path, reduced_trajectory_filename, parsed_selection, rmsd_analysis)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output
@@ -93,8 +94,8 @@ def rmsds(
 # 
 # Perform the RMSd analysis 
 def rmsd (
-    input_reference_filename : str,
-    input_trajectory_filename : str,
+    reference_filepath : str,
+    trajectory_filepath : str,
     selection : 'Selection', # This selection will never be empty, since this is checked previously
     output_analysis_filename : str):
 
@@ -115,9 +116,9 @@ def rmsd (
         "gmx",
         "rms",
         "-s",
-        input_reference_filename,
+        reference_filepath,
         "-f",
-        input_trajectory_filename,
+        trajectory_filepath,
         '-o',
         output_analysis_filename,
         '-n',
@@ -134,7 +135,7 @@ def rmsd (
         print(output_logs)
         error_logs = process.stderr.decode()
         print(error_logs)
-        raise SystemExit('Something went wrong with GROMACS')
+        raise Exception('Something went wrong with GROMACS')
 
     # Remove the ndx file
     os.remove(ndx_filename)

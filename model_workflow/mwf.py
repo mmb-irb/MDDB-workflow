@@ -133,10 +133,9 @@ class MD:
 
         # Tests
         self._trajectory_integrity = None
-        self._tests_passed = None
 
-        # Set a new MD specific entry for the project register
-        self.register = self.project.register.mds[self.directory]
+        # Set a new MD specific register
+        self.register = Register(file_path = self.md_pathify(REGISTER_FILENAME))
 
 
     def __repr__ (self):
@@ -265,7 +264,6 @@ class MD:
             else:
                 raise Exception('Something went wrong with the MDposit request: ' + file_url)
         return True
-
 
     # Processed files ----------------------------------------------------      
 
@@ -432,8 +430,41 @@ class MD:
             if exists(file_path):
                 remove(file_path)
 
-        # Run a few tests to make sure files are correct
-        self.pass_tests()
+        # --- RUNNING FINAL TESTS ------------------------------------------------------------
+
+        # Note that some tests have been run already
+        # e.g. stable bonds is run in the structure corrector function
+
+        # Note that tests here do not modify any file
+
+        # Check the trajectory has not sudden jumps
+        self.is_trajectory_integral()
+
+        # Make a final summary
+        print('Tests summary:')
+        for test_name in AVAILABLE_CHECKINGS:
+            test_result = self.register.tests.get(test_name)
+            # Print things pretty
+            test_nice_name = NICE_NAMES[test_name]
+            test_nice_result = None
+            if test_result == None:
+                test_nice_result = YELLOW_HEADER + 'Not run' + COLOR_END
+            elif test_result == False:
+                test_nice_result = RED_HEADER + 'Failed' + COLOR_END
+            elif test_result == True:
+                test_nice_result = GREEN_HEADER + 'Passed' + COLOR_END
+            else:
+                raise ValueError()
+            
+            print(' - ' + test_nice_name + ' -> ' + test_nice_result)
+
+    # Check if any of the available tests is missing or failed
+    def any_missing_processing_tests (self) -> bool:
+        for checking in AVAILABLE_CHECKINGS:
+            test_result = self.register.tests.get(checking, None)
+            if not test_result:
+                return True
+        return False
 
     # Get the processed structure
     def get_structure_file (self) -> str:
@@ -441,13 +472,14 @@ class MD:
         # This means we already found or generated this file
         if self._structure_file:
             return self._structure_file
-        # If the file already exists then we are done
+        # Set the file
         structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
         self._structure_file = File(structure_filepath)
-        if self._structure_file.exists:
-            return self._structure_file
-        # Otherwise, process input files to generate the processed structure
-        self.process_input_files()
+        # If file does not exist then run the processing logic to generate it
+        # Also run it if any of the tests is missing or failed since tests are run in the processing logic
+        if not self._structure_file.exists or self.any_missing_processing_tests():
+            self.process_input_files()
+        # Now that the file is sure to exist we return it
         return self._structure_file
     structure_file = property(get_structure_file, None, None, "Structure filename (read only)")
 
@@ -460,10 +492,11 @@ class MD:
         # If the file already exists then we are done
         trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
         self._trajectory_file = File(trajectory_filepath)
-        if self._trajectory_file.exists:
-            return self._trajectory_file
-        # Otherwise, process input files to generate the processed trajectory
-        self.process_input_files()
+        # If file does not exist then run the processing logic to generate it
+        # Also run it if any of the tests is missing or failed since tests are run in the processing logic
+        if not self._trajectory_file.exists or self.any_missing_processing_tests():
+            self.process_input_files()
+        # Now that the file is sure to exist we return it
         return self._trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory filename (read only)")
 
@@ -484,9 +517,16 @@ class MD:
         # The processing logic is able to set the internal snapshots value as well so this avoid repeating the process
         if self.trajectory_file and self._snapshots != None:
             return self._snapshots
+        # If we already have a value in the register cache then use it
+        field_name = 'snapshots'
+        if field_name in self.register.cache:
+            return self.register.cache[field_name]
+        print('-> Counting snapshots')
         # Otherwise we must find the value
         # This happens when the input files are already porcessed and thus we did not yet count the frames
         self._snapshots = get_frames_count(self.structure_file.path, self.trajectory_file.path)
+        # Save the snapshots value in the register cache as well
+        self.register.cache[field_name] = self._snapshots
         return self._snapshots
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
@@ -559,7 +599,7 @@ class MD:
             trajectory_filename = self.trajectory_file.path,
             structure = self.structure,
             snapshots = self.snapshots,
-            interactions_file = OUTPUT_INTERACTIONS_FILENAME,
+            interactions_file = self.md_pathify(OUTPUT_INTERACTIONS_FILENAME),
             mercy = self.mercy,
             frames_limit = 1000,
             interaction_cutoff = self.interaction_cutoff
@@ -621,25 +661,6 @@ class MD:
         )
         return self._trajectory_integrity
 
-    # Set a function tu run all tests and make a summary
-    # Note that some test are run implicity 
-    # e.g. stable bonds is run when processing files for the trajectory integrity test
-    # Note that tests in this function do not modify any file
-    # DANI: Estría bien anotar en el registro o así los tests que han pasado, para no repetirlos cada vez
-    def pass_tests (self) -> bool:
-        # If tests were already run then do not run them again
-        if self._tests_passed != None:
-            return self._tests_passed
-        # Check the trajectory has not sudden jumps
-        if not self.is_trajectory_integral():
-            self._tests_passed = False
-            return self._tests_passed
-        # If all tests passed then make a summary and report the success
-        print(GREEN_HEADER + 'All tests passed' + COLOR_END)
-        self._tests_passed = True
-        return self._tests_passed
-
-
     # ---------------------------------------------------------------------------------
     # Analyses
     # ---------------------------------------------------------------------------------
@@ -655,11 +676,11 @@ class MD:
         # WARNING: However, the output file size depends on the trajectory size
         # WARNING: In very long trajectories the number of points may make the client go slow when loading data
         rmsds(
-            input_trajectory_filename = self.trajectory_file.path,
+            trajectory_file = self.trajectory_file,
+            first_frame_file = self.first_frame_file,
+            average_structure_file = self.average_structure_file,
             output_analysis_filename = output_analysis_filepath,
             frames_limit = 5000,
-            first_frame_filename = self.first_frame_file.path,
-            average_structure_filename = self.average_structure_file.path,
             snapshots = self.snapshots,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
@@ -874,9 +895,9 @@ class MD:
         print('-> Running energies analysis')
         # Run the analysis
         energies(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
+            input_trajectory_file = self.trajectory_file,
             output_analysis_filename = output_analysis_filepath,
+            energies_folder = self.md_pathify(ENERGIES_FOLDER),
             structure = self.structure,
             interactions = self.interactions,
             charges = self.charges,
@@ -893,9 +914,11 @@ class MD:
         print('-> Running pockets analysis')
         # Run the analysis
         pockets(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
+            structure_file = self.structure_file,
+            trajectory_file = self.trajectory_file,
+            pockets_prefix = self.md_pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
             output_analysis_filename = output_analysis_filepath,
+            mdpocket_folder = self.md_pathify(POCKETS_FOLDER),
             structure = self.structure,
             pbc_residues = self.pbc_residues,
             snapshots = self.snapshots,
@@ -1089,7 +1112,10 @@ class Project:
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        self.register = Register(self)
+        register_inputs = {}
+        for input_name in REGISTER_INPUTS:
+            register_inputs[input_name] = getattr(self, input_name)
+        self.register = Register(inputs=register_inputs)
 
         # Now instantiate a new MD for each MD found and save the reference MD
         # Note that this is done at the end since every MD instance inherits several values from the project instance
@@ -1303,12 +1329,6 @@ class Project:
         raise SystemExit('Not supported input type value: ' + self.input_type)
     is_time_dependend = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
-    # Register ---------------
-
-    # Save the current register to a file
-    def save_register (self):
-        self.register.save()
-
     # Processed files ----------------------------------------------------
 
     # Set the expected output topology filename given the input topology filename
@@ -1332,10 +1352,11 @@ class Project:
             return self._topology_file
         # If the file already exists then we are done
         self._topology_file = File(self._topology_filepath)
-        if self._topology_file.exists:
-            return self._topology_file
-        # Otherwise, process input files to generate the processed topology
-        self.reference_md.process_input_files()
+        # If file does not exist then run the processing logic to generate it
+        # Also run it if any of the tests is missing or failed since tests are run in the processing logic
+        if not self._topology_file.exists or self.reference_md.any_missing_processing_tests():
+            self.reference_md.process_input_files()
+        # Now that the file is sure to exist we return it
         return self._topology_file
     topology_file = property(get_topology_file, None, None, "Topology filename (read only)")
 
@@ -1431,9 +1452,9 @@ class Project:
             input_trajectory_filename = self.trajectory_file.path,
             inputs_filename = self.inputs_file.filename, # DANI: No sería mejor pasarle los inputs?
             structure = self.structure,
-            snapshots = self.snapshots,
+            snapshots = self.reference_md.snapshots,
             residues_map = self.residues_map,
-            interactions = self.interactions,
+            interactions = self.reference_md.interactions,
             register = self.register,
             output_metadata_filename = OUTPUT_METADATA_FILENAME,
         )
@@ -1620,8 +1641,5 @@ def workflow (
         # Remove gromacs backups
         # DANI: Esto iría mejor en otro sitio
         remove_trash()
-
-    # Save the register
-    project.save_register()
 
     sys.stdout.write("Done!\n")

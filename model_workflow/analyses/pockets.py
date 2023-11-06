@@ -19,6 +19,7 @@
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 import os
+from os.path import exists, getsize
 import re
 import collections
 import math
@@ -31,23 +32,21 @@ from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
-CURSOR_UP_ONE = '\x1b[1A'
-ERASE_LINE = '\x1b[2K'
-ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
-
-# Get only the 10 first pockets since the analysis is quite slow by now
-# DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
-maximum_pockets_number = 10
 
 # Perform the pockets analysis
 def pockets (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
     output_analysis_filename : str,
+    pockets_prefix : str,
+    mdpocket_folder : str,
     structure : 'Structure',
     pbc_residues : List[int],
     snapshots : int,
-    frames_limit : int):
+    frames_limit : int = 100,
+    # Get only the 10 first pockets since the analysis is quite slow by now
+    # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
+    maximum_pockets_number : int = 10):
 
     # DANI: De momento, no se hacen pockets para simulaciones con residuos en PBC (e.g. membrana)
     # DANI: Esto es debido a que los átomos donde NO queremos que encuentre pockets no se pueden descartar
@@ -59,19 +58,16 @@ def pockets (
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
-    pockets_trajectory = input_trajectory_filename
-    frames_limit = 100
     pockets_trajectory, step, frames = get_reduced_trajectory(
-        input_topology_filename,
-        input_trajectory_filename,
+        structure_file.path,
+        trajectory_file.path,
         snapshots,
         frames_limit,
     )
 
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
-    mdpocket_folder = 'mdpocket'
-    if not os.path.exists(mdpocket_folder):
+    if not exists(mdpocket_folder):
         logs = run([
             "mkdir",
             mdpocket_folder,
@@ -84,22 +80,33 @@ def pockets (
     # Skip this step if the output file already exists and is not empty
     # WARNING: The file is created as soon as mdpocket starts to run
     # WARNING: However the file remains empty until the end of mdpocket
-    if not os.path.exists(grid_filename) or os.path.getsize(grid_filename) == 0:
+    if not exists(grid_filename) or getsize(grid_filename) == 0:
         print('Searching new pockets')
-        logs = run([
+        process = run([
             "mdpocket",
             "--trajectory_file",
             pockets_trajectory,
             "--trajectory_format",
             "xtc",
             "-f",
-            input_topology_filename,
+            # WARNING: There is a silent sharp limit of characters here
+            # To avoid the problem we must use the relative path instead of the absolute path
+            structure_file.relative_path,
             "-o",
             mdpocket_output,
-        ], stdout=PIPE, stderr=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE)
+        logs = process.stdout.decode()
+
+        # If file does not exist or is still empty at this point then somethin went wrong
+        if not exists(grid_filename) or getsize(grid_filename) == 0:
+            print(logs)
+            error_logs = process.stderr.decode()
+            print(error_logs)
+            raise Exception('Something went wrong with mdpocket')
+            
 
     # Read and harvest the gird file
-    with open(grid_filename,'r') as file:
+    with open(grid_filename, 'r') as file:
 
         # First, mine the grid dimensions and origin
         dimensions = None
@@ -115,6 +122,8 @@ def pockets (
                 origin = (float(search.group(1)),float(search.group(2)),float(search.group(3)))
             if origin and dimensions:
                 break
+        if not dimensions:
+            raise Exception('Falied to mine dimensions')
 
         # Next, mine the grid values
         grid_values = []
@@ -292,16 +301,14 @@ def pockets (
     # Set the dict where all output data will be stored
     output_analysis = []
 
-    # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
-    print()
-
     # Next, we analyze each selected pocket independently. The steps for each pocket are:
     # 1 - Create a new grid file
     # 2 - Conver the grid to pdb
     # 3 - Analyze this pdb with mdpocket
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
     for i, p in enumerate(biggest_pockets):
-        pocket_name = "p" + str(i+1)
+        # WARNING: This name must match the final name of the pocket file once loaded in the database
+        pocket_name = 'pocket_' + str(i+1).zfill(2)
         pocket_output = mdpocket_folder + '/' + pocket_name
         # Check if current pocket files already exist and are complete. If so, skip this pocket
         # Output files:
@@ -311,11 +318,10 @@ def pockets (
         # - pX_mdpocket.pdb: it is completed at the begining but remains size 0 until the end of mdpocket
         # Note that checking pX_mdpocket_atoms.pdb or pX_mdpocket.pdb is enought to know if mdpocket was completed
         checking_filename = pocket_output + '_mdpocket.pdb'
-        if not (os.path.exists(checking_filename) and os.path.getsize(checking_filename) > 0):
+        if not (exists(checking_filename) and getsize(checking_filename) > 0):
 
             # Update the logs
-            print(ERASE_PREVIOUS_LINE)
-            print(' Analyzing ' + pocket_name + ' (' + str(i+1) + '/' + str(pockets_number) + ')')
+            print(' Analyzing pocket ' + str(i+1) + '/' + str(pockets_number), end='\r')
             
             # Create the new grid for this pocket, where all values from other pockets are set to 0
             pocket_value = p[0]
@@ -349,7 +355,7 @@ def pockets (
             # Convert the grid coordinates to pdb
             new_pdb_lines = []
             lines_count = 0
-            new_pdb_filename = pocket_name + '.pdb'
+            new_pdb_filename = pockets_prefix + '_' + str(i+1).zfill(2) + '.pdb'
             for i, pocket in enumerate(pockets):
                 if pocket != pocket_value:
                     continue
@@ -375,7 +381,9 @@ def pockets (
                 "--trajectory_format",
                 "xtc",
                 "-f",
-                input_topology_filename,
+                # WARNING: There is a silent sharp limit of characters here
+                # To avoid the problem we must use the relative path instead of the absolute path
+                structure_file.relative_path,
                 "-o",
                 pocket_output,
                 "--selected_pocket",
