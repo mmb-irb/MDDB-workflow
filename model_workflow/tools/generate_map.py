@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import urllib.request
 
@@ -8,11 +9,23 @@ from pathlib import Path
 
 from model_workflow.tools.residues_library import residue_name_2_letter
 
+import xmltodict
+
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
-from Bio.SubsMat import MatrixInfo
 from Bio.Blast import NCBIWWW
-import xmltodict
+
+# Bio.SubsMat library shows a huge deprecation warning
+# This is disturbing so we supress its output while importing it
+
+# Save current stderr to further restore it
+stderr_backup = sys.stderr
+# Suppress stderr
+sys.stderr = None
+# Import the function
+from Bio.SubsMat import MatrixInfo
+# Restore stderr
+sys.stderr = stderr_backup
 
 # from Bio import Align
 # from Bio.Align import substitution_matrices

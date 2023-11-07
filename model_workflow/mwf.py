@@ -3,7 +3,7 @@
 # This is the starter script
 
 # Import python libraries
-from os import chdir, remove, symlink
+from os import chdir, remove, symlink, walk
 from os.path import exists, isabs
 import sys
 import io
@@ -24,7 +24,7 @@ from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
-from model_workflow.tools.generate_metadata import generate_metadata
+from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_map import generate_map_online
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
@@ -72,6 +72,20 @@ sys.stdout = unbuffered
 # Set an special exception for input errors
 missing_input_exception = Exception('Missing input')
 
+# Set a custom exception for user input errors to avoid showing traceback in the terminal
+class InputError (Exception):
+    pass
+
+# Set a custom exception handler where our input error exception has a quiet behaviour
+def custom_excepthook (exception, message, traceback):
+    # Quite behaviour if it is our input error exception
+    if exception == InputError:
+        print('{0}: {1}'.format(exception.__name__, message))  # Only print Error Type and Message
+        return
+    # Default behaviour otherwise
+    sys.__excepthook__(exception, message, traceback)
+sys.excepthook = custom_excepthook
+
 # Set the project fields to be inherited by MDs 
 inheritables = ['filter_selection', 'image', 'fit', 'translation', 'mercy', 'trust',
     'pca_selection', 'pca_fit_selection', 'rmsd_cutoff', 'interaction_cutoff', 'sample_trajectory']
@@ -94,9 +108,12 @@ class MD:
         # Save the inputs
         self.project = project
         if not project:
-            raise Exception('Project is mandatory to instantiate a new MD')
+            raise InputError('Project is mandatory to instantiate a new MD')
         self.number = number
         self.directory = directory
+        # If the directory does not exists then raise an error here
+        if not exists(self.directory):
+            raise InputError('MD directory ' + self.directory + ' does not exist') from None
         # Input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
@@ -125,6 +142,7 @@ class MD:
             setattr(self, inheritable, project_value)
 
         # Other values which may be found/calculated on demand
+        self._md_inputs = None
         self._available_files = None
         self._snapshots = None
         self._structure = None
@@ -152,14 +170,14 @@ class MD:
     def get_input_structure_file (self) -> str:
         # There must be an input structure filename
         if not self._input_structure_file:
-            raise Exception('Not defined input structure filename')
+            raise InputError('Not defined input structure filename')
         # If the file already exists then we are done
         if self._input_structure_file.exists:
             return self._input_structure_file
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise Exception('Missing inputs file "' + self._input_structure_file.filename + '"')
+            raise InputError('Missing inputs file "' + self._input_structure_file.filename + '"')
         sys.stdout.write('Downloading structure (' + self._input_structure_file.filename + ')\n')
         # Set the download URL
         structure_url = self.url + '/files/' + self._input_structure_file.filename
@@ -184,7 +202,7 @@ class MD:
     def get_input_trajectory_files (self) -> str:
         # There must be an input structure filename
         if not self._input_trajectory_files or len(self._input_trajectory_files) == 0:
-            raise Exception('Not defined input trajectory filenames')
+            raise InputError('Not defined input trajectory filenames')
         # Find missing trajectory files
         missing_input_trajectory_files = []
         for trajectory_file in self._input_trajectory_files:
@@ -197,7 +215,7 @@ class MD:
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
             missing_filenames = [ trajectory_file.filename for trajectory_file in missing_input_trajectory_files ]
-            raise Exception('Missing input trajectory files: ' + ', '.join(missing_filenames))
+            raise InputError('Missing input trajectory files: ' + ', '.join(missing_filenames))
         # Download each trajectory file (ususally it will be just one)
         for trajectory_file in self._input_trajectory_files:
             sys.stdout.write('Downloading trajectory (' + trajectory_file.filename + ')\n')
@@ -216,6 +234,22 @@ class MD:
                 raise Exception('Something went wrong with the MDposit request: ' + trajectory_url)
         return self._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
+
+    # MD specific inputs
+    def get_md_inputs (self) -> dict:
+        # If we already have a value stored then return it
+        if self._md_inputs:
+            return self._md_inputs
+        # Otherwise we must find its value
+        for md in self.project.input_mds:
+            name = md['name']
+            directory = name_2_directory(name)
+            if directory == self.directory:
+                self._md_inputs = md
+                return self._md_inputs
+        raise InputError('No MD input matches the current directory (' + self.directory + ')')
+
+    md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
 
     # ---------------------------------
 
@@ -297,7 +331,7 @@ class MD:
         # Input trajectories should have all the same format
         input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
         if len(input_trajectory_formats) > 1:
-            raise Exception('All input trajectory files must have the same format')
+            raise InputError('All input trajectory files must have the same format')
         input_trajectories_format = list(input_trajectory_formats)[0]
         output_trajectory_format = output_trajectory_file.format
         converted_trajectory_filepath = self.md_pathify(CONVERTED_TRAJECTORY)
@@ -383,7 +417,7 @@ class MD:
         # WARNING:
         # For the correcting function we need the number of snapshots and at this point it should not be defined
         # Snapshots are calculated by default from the already processed structure and trajectory
-        # For this reason we can not rely on the public snaphsots getter
+        # For this reason we can not rely on the public snapshots getter
         # We must calculate snapshots here using last step structure and trajectory
         self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
 
@@ -584,6 +618,24 @@ class MD:
         )
         return average_structure_file
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
+
+    # MD metadata filename
+    def get_metadata_filename (self) -> str:
+        # If the file already exists then send it
+        metadata_filepath = self.md_pathify(OUTPUT_METADATA_FILENAME)
+        if exists(metadata_filepath):
+            return metadata_filepath
+        print('-> Generating MD metadata')
+        # Otherwise, generate it
+        generate_md_metadata(
+            md_inputs = self.md_inputs, # DANI: No sería mejor pasarle los inputs?
+            structure = self.structure,
+            snapshots = self.snapshots,
+            register = self.register,
+            output_metadata_filename = metadata_filepath,
+        )
+        return metadata_filepath
+    metadata_filename = property(get_metadata_filename, None, None, "Project metadata filename (read only)")
 
     # The interactions
     # This is a bit exceptional since it is a value to be used and an analysis file to be generated
@@ -982,13 +1034,13 @@ class Project:
         # Input trajectory filepaths
         # These files are searched in every MD directory so the path MUST be relative
         input_trajectory_filepaths : str = [ TRAJECTORY_FILENAME ],
-        # Set the different MD directories
-        # Each MD directory must contain a structure and a trajectory
-        md_directories : List[str] = ['.'],
+        # Set the different MD directories to be run
+        # Each MD directory must contain a trajectory and may contain a structure
+        md_directories : Optional[List[str]] = None,
         # Reference MD directory
         # Project functions which require structure or trajectory will use the ones from the reference MD
         # If no reference is passed then the first directory is used
-        reference_md_directory : str = None,        
+        reference_md_index : Optional[int] = None,        
         # Input populations and transitions (MSM only)
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
@@ -1036,11 +1088,11 @@ class Project:
         elif type(input_trajectory_filepaths) == str:
             self.input_trajectory_filepaths = [ input_trajectory_filepaths ]
         else:
-            raise Exception('Input trajectory filepaths must be a list of strings or a string')
+            raise InputError('Input trajectory filepaths must be a list of strings or a string')
         # Check no trajectory path is absolute
         for path in self.input_trajectory_filepaths:
             if path[0] == '/':
-                raise Exception('Trajectory paths MUST be relative, not absolute (' + path + ')')
+                raise InputError('Trajectory paths MUST be relative, not absolute (' + path + ')')
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
         self._populations_file = File(self.populations_filepath)
@@ -1055,22 +1107,14 @@ class Project:
         # Set the standard topology file
         self._standard_topology_file = None
 
-        # Set the MDs configuration
-        self.md_directories = md_directories
-        self.reference_md_directory = reference_md_directory
-        # Check there is at least one MD
-        if len(self.md_directories) < 1:
-            raise Exception('There must be at least one MD')
-        # Check there are not duplicated MD directories
-        if len(set(self.md_directories)) != len(self.md_directories):
-            raise Exception('There are duplicated MD directories')
-        # If a reference MD directory was provided then check it exists in the MD directories list
-        if self.reference_md_directory:
-            if self.reference_md_directory not in self.md_directories:
-                raise Exception('The reference MD ' + self.reference_md_directory + ' is not in the MD directories list')
-        # Set the first MD directory as the reference MD directory in case none was provided
-        else:
-            self.reference_md_directory = self.md_directories[0]
+        # Set the MD directories
+        self._md_directories = md_directories
+        if self._md_directories:
+            self.check_md_directories()
+
+        # Set the reference MD
+        self._reference_md = None
+        self._reference_md_index = reference_md_index
 
         # Set the rest of inputs
         self.filter_selection = filter_selection
@@ -1109,6 +1153,7 @@ class Project:
         self._populations = None
         self._transitions = None
         self._residues_map = None
+        self._mds = None
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
@@ -1117,19 +1162,86 @@ class Project:
             register_inputs[input_name] = getattr(self, input_name)
         self.register = Register(inputs=register_inputs)
 
-        # Now instantiate a new MD for each MD found and save the reference MD
-        # Note that this is done at the end since every MD instance inherits several values from the project instance
-        self.mds = []
-        self.reference_md = None
+    # Check MD directories to be right
+    # If there is any problem then directly raise an input error
+    def check_md_directories (self):
+        # Check there is at least one MD
+        if len(self._md_directories) < 1:
+            raise InputError('There must be at least one MD')
+        # Check there are not duplicated MD directories
+        if len(set(self._md_directories)) != len(self._md_directories):
+            raise InputError('There are duplicated MD directories')
+
+    # Set a function to get MD directories
+    def get_md_directories (self) -> list:
+        # If MD directories are already declared then return them
+        if self._md_directories:
+            return self._md_directories
+        # Otherwise use the default MDs
+        self._md_directories = []
+        # Use the MDs from the inputs file when available
+        if self.is_inputs_file_available():
+            for input_md in self.input_mds:
+                # Set the directory from the MD name
+                name = input_md['name']
+                directory = name_2_directory(name)
+                self._md_directories.append(directory)
+        # Otherwise, guess MD directories by checking which directories include a register file
+        else:
+            available_directories = next(walk(self.directory))[1]
+            for directory in available_directories:
+                if exists(directory + '/' + REGISTER_FILENAME):
+                    self._md_directories.append(directory)
+            # If we found no MD directory then it means MDs were never declared before
+            if len(self._md_directories) == 0:
+                raise SystemExit('Impossible to know which are the MD directories'
+                    'You can either declare them using the "-mdir" option or by providing and inputs file')
+        self.check_md_directories()
+        return self._md_directories
+    md_directories = property(get_md_directories, None, None, "MD directories (read only)")
+
+    # Set the reference MD index
+    def get_reference_md_index (self) -> int:
+        # If we are already have a value then return it
+        if self._reference_md_index:
+            return self._reference_md_index
+        # Otherwise we must find the reference MD index
+        # If the inputs file is available then it must declare the reference MD index
+        if self.is_inputs_file_available():
+            self._reference_md_index = self.input_reference_md_index
+        # Otherwise we simply set the first MD as the reference and warn the user about this
+        else:
+            print('WARNING: No reference MD was specified. The first MD will be used as reference.')
+            self._reference_md_index = 0
+        return self._reference_md_index
+    reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
+
+    # Set the reference MD
+    def get_reference_md (self) -> int:
+        # If we are already have a value then return it
+        if self._reference_md:
+            return self._reference_md
+        # Otherwise we must find the reference MD
+        self._reference_md = self.mds[self.reference_md_index]
+        return self._reference_md
+    reference_md = property(get_reference_md, None, None, "Reference MD (read only)")
+
+    # Setup the MDs
+    def get_mds (self) -> list:
+        # If MDs are already declared then return them
+        if self._mds:
+            return self._mds
+        # Now instantiate a new MD for each declared MD and save the reference MD
+        self._mds = []
         for n, md_directory in enumerate(self.md_directories, 1):
             md = MD(
                 project = self, number = n, directory = md_directory,
                 input_structure_filepath = self.input_structure_filepath,
                 input_trajectory_filepaths = self.input_trajectory_filepaths,
             )
-            self.mds.append(md)
-            if md_directory == self.reference_md_directory:
-                self.reference_md = md
+            self._mds.append(md)
+        return self._mds
+    mds = property(get_mds, None, None, "Available MDs (read only)")
 
     # Check input files exist when their filenames are read
     # If they do not exist then try to download them
@@ -1137,18 +1249,32 @@ class Project:
 
     # Inputs filename ------------
 
+    # Set a function to check if inputs file is available
+    # Note that asking for it when it is not available will lead to raising an input error
+    def is_inputs_file_available (self) -> bool:
+        # If name is not declared then it is impossible to reach it
+        if not self._inputs_file:
+            return False
+        # If the file already exists then it is available
+        if self._inputs_file.exists:
+            return True
+        # If it does not exist but it may be downloaded then it is available
+        if self.url:
+            return True
+        return False
+
     # Set a function to load the inputs file
     def get_inputs_file (self) -> File:
         # There must be an inputs filename
         if not self._inputs_file:
-            raise Exception('Not defined inputs filename')
+            raise InputError('Not defined inputs filename')
         # If the file already exists then we are done
         if self._inputs_file.exists:
             return self._inputs_file
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise Exception('Missing inputs file "' + self._inputs_file.filename + '"')
+            raise InputError('Missing inputs file "' + self._inputs_file.filename + '"')
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + self._inputs_file.filename + ')\n')
         inputs_url = self.url + '/inputs/'
@@ -1196,7 +1322,7 @@ class Project:
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise Exception('Missing input topology file "' + self._input_topology_file.filename + '"')
+            raise InputError('Missing input topology file "' + self._input_topology_file.filename + '"')
         # If the input topology name is the standard then download it from the topology endpoint
         if self._input_topology_file.filename == TOPOLOGY_FILENAME:
             # Check if the project has a topology and download it in json format if so
@@ -1307,7 +1433,7 @@ class Project:
         def getter (self):
             value = self.inputs.get(name, missing_input_callback)
             if value == missing_input_exception:
-                raise Exception('Missing input "' + name + '"')
+                raise InputError('Missing input "' + name + '"')
             return value
         return getter
 
@@ -1317,6 +1443,8 @@ class Project:
     forced_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
     pdb_ids = property(input_getter('type'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
+    input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
+    input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
 
     # Set additional values infered from input values
 
@@ -1445,21 +1573,20 @@ class Project:
         # If the file already exists then send it
         if exists(OUTPUT_METADATA_FILENAME):
             return OUTPUT_METADATA_FILENAME
-        print('-> Generating metadata')
+        print('-> Generating project metadata')
         # Otherwise, generate it
-        generate_metadata(
+        generate_project_metadata(
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             inputs_filename = self.inputs_file.filename, # DANI: No sería mejor pasarle los inputs?
             structure = self.structure,
-            snapshots = self.reference_md.snapshots,
             residues_map = self.residues_map,
             interactions = self.reference_md.interactions,
             register = self.register,
             output_metadata_filename = OUTPUT_METADATA_FILENAME,
         )
         return OUTPUT_METADATA_FILENAME
-    metadata_filename = property(get_metadata_filename, None, None, "Metadata filename (read only)")
+    metadata_filename = property(get_metadata_filename, None, None, "Project metadata filename (read only)")
 
     # Standard topology filename
     def get_standard_topology_file (self) -> str:
@@ -1513,6 +1640,15 @@ def read_file (target_file : File) -> dict:
         with open(target_file.path, 'r') as file:
             return json.load(file)
 
+# Set a function to convert an MD name into an equivalent MD directory
+def name_2_directory (name : str) -> str:
+    # Make all letters lower and replace white spaces by underscores
+    directory = name.lower().replace(' ', '_')
+    # Remove problematic characters
+    for character in FORBIDEN_DIRECTORY_CHARACTERS:
+        directory = directory.replace(character, '')
+    return directory
+
 # Input files
 input_files = {
     'istructure': MD.get_input_structure_file,
@@ -1560,9 +1696,9 @@ requestables = {
     'mapping': Project.get_residues_map,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
-    'metadata': Project.get_metadata_filename
+    'pmeta': Project.get_metadata_filename,
+    'mdmeta': MD.get_metadata_filename
 }
-
 
 # The actual main function
 def workflow (
@@ -1581,7 +1717,7 @@ def workflow (
     exclude : Optional[List[str]] = None,
 ):
 
-    # Move the current directroy to the working directory
+    # Move the current directory to the working directory
     chdir(working_directory)
 
     # Initiate the project project
@@ -1623,7 +1759,8 @@ def workflow (
         # Request all the analysis, the metadata, the standard topology and the screenshot
         requests = [
             *analyses.keys(),
-            'metadata',
+            'mdmeta',
+            'pmeta',
             'stopology',
             'screenshot'
         ]

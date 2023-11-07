@@ -46,7 +46,7 @@ REGISTER_INPUTS = [
     'populations_filepath',
     'transitions_filepath',
     'md_directories',
-    'reference_md_directory',
+    'reference_md_index',
     'filter_selection',
     'image',
     'fit',
@@ -100,6 +100,9 @@ OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
 # Set folder names for some analyses which generate a lot of intermediate step files
 ENERGIES_FOLDER = 'energies'
 POCKETS_FOLDER = 'mdpocket'
+
+# Set problematic signs for directory/folder names
+FORBIDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':']
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9

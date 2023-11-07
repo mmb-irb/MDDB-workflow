@@ -66,5 +66,7 @@ class Register:
         # Add the new entry to the list
         self.entries.append(current_entry)
         # Write entries to disk
+        if not exists(self.file.path):
+            raise Exception('Cannot save register since register path does not exist')
         with open(self.file.path, 'w') as file:
             json.dump(self.entries, file, indent=4)

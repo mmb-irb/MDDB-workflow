@@ -26,7 +26,7 @@ class File:
         # When simply a path is requested we return the absolute path
         self.path = self.absolute_path
         # Capture the filename
-        self.filename = split(relative_or_basolute_path)[-1]
+        self.basepath, self.filename = split(self.path)
         # Set the file extension
         self.extension = self.filename.split('.')[-1]
         if self.extension == self.filename:

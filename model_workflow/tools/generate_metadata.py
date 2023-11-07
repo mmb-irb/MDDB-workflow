@@ -5,13 +5,12 @@ from model_workflow.tools.generate_map import get_sequence_metadata
 import json
 from pathlib import Path
 
-# Generate a JSON file with all the metadata
-def generate_metadata (
+# Generate a JSON file with all project metadata
+def generate_project_metadata (
     input_structure_filename : str,
     input_trajectory_filename : str,
     inputs_filename : str,
     structure : 'Structure',
-    snapshots : int,
     residues_map : dict,
     interactions : list,
     register : dict,
@@ -88,7 +87,6 @@ def generate_metadata (
         'THANKS': get_input('thanks'),
         'FRAMESTEP': get_input('framestep'),
         'TIMESTEP': get_input('timestep'),
-        'SNAPSHOTS': snapshots,
         'FF': forcefields,
         'TEMP': get_input('temp'),
         'WAT': get_input('wat'),
@@ -126,6 +124,28 @@ def generate_metadata (
         'CV19_NANOBS': get_input('cv19_nanobs'),
         'CV19_VARIANT': sequence_metadata['cv19_variant']
     }
-    metadata_filename = 'metadata.json'
-    with open(metadata_filename, 'w') as file:
+    
+    # Write metadata to a file
+    with open(output_metadata_filename, 'w') as file:
+        json.dump(metadata, file)
+
+# Generate a JSON file with MD metadata
+def generate_md_metadata (
+    md_inputs : dict,
+    structure : 'Structure',
+    snapshots : int,
+    register : dict,
+    output_metadata_filename : str
+    ):
+
+    # Write the metadata file
+    metadata = {
+        'name': md_inputs['name'],
+        'frames': snapshots,
+        'atoms': len(structure.atoms), # Should be always the same but we better have explicit confirmation
+        'warnings': register.warnings,
+    }
+
+    # Write metadata to a file
+    with open(output_metadata_filename, 'w') as file:
         json.dump(metadata, file)
