@@ -6,7 +6,7 @@ from typing import Union
 
 import pytraj as pt
 
-from model_workflow.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from model_workflow.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
 from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
 
 from mdtoolbelt.selections import Selection
@@ -177,7 +177,7 @@ def vmd_selection_2_pytraj_mask (topology_filename : str, filter_selection : str
         commands_filename,
         "-dispdev",
         "none"
-    ], stdout=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE).stdout.decode()
 
     # Mine and parse the VMD logs into an atoms indices list
     atom_indices_line = None
@@ -295,16 +295,20 @@ def pdb_filter (
         '-n',
         index_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()
 
 # Filter atoms in a xtc file
+# Note that here we do not hide the stderr
+# This is because it shows the progress
+# Instead we color the output grey
 def xtc_filter(
     structure_filename : str,
     input_trajectory_filename : str,
     output_trajectory_filename : str,
     index_filename : str
 ):
+    print(GREY_HEADER)
     # Filter the trajectory
     p = Popen([
         "echo",
@@ -324,6 +328,7 @@ def xtc_filter(
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+    print(COLOR_END)
 
 # Filter atoms in both a pdb and a xtc file
 def tpr_filter(
@@ -346,5 +351,5 @@ def tpr_filter(
         '-n',
         index_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()

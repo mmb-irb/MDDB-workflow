@@ -61,12 +61,15 @@ class Register:
 
     # Save the register to a json file
     def save (self):
+        # If path does not exist then do nothing
+        # WARNING: I know this looks a bit silent 
+        # WARNING: Otherwise it is a constant spam when something goes wrong close to beginning
+        if not exists(self.file.basepath):
+            return
         # Set a new entry for the current run
         current_entry = self.to_dict()
         # Add the new entry to the list
         self.entries.append(current_entry)
         # Write entries to disk
-        if not exists(self.file.path):
-            raise Exception('Cannot save register since register path does not exist')
         with open(self.file.path, 'w') as file:
             json.dump(self.entries, file, indent=4)

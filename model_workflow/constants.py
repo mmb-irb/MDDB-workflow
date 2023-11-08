@@ -176,6 +176,7 @@ GREEN_HEADER = '\033[92m'
 CYAN_HEADER = '\033[96m'
 YELLOW_HEADER = '\033[93m'
 RED_HEADER = '\033[91m'
+GREY_HEADER = '\033[90m'
 COLOR_END = '\033[0m'
 
 # Set a dictionary to parse an internal raw name to a pretty human firendly name

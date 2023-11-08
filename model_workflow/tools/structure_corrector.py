@@ -44,8 +44,6 @@ def structure_corrector (
     trust : List[str]
 ):
 
-    print('--- Correcting structure ---')
-
     # Track if there has been any modification and then the structure must be rewritten
     modified = False
 
@@ -225,13 +223,11 @@ def structure_corrector (
 
     # Write a new structure if any modification was done
     if modified:
-        print(' The structure file has been modificated -> ' + output_structure_file.filename)
+        print(' The structure file has been modified -> ' + output_structure_file.filename)
     else:
         print(' Everything is fine')
     # Generate the file anyway so this new structure is used and not reclaulcated
     structure.generate_pdb_file(output_structure_file.path)
-
-    print('-------------------------------')
 
 
 # Set a function to get the next letter from an input letter in alphabetic order

@@ -3,7 +3,7 @@
 # This is the starter script
 
 # Import python libraries
-from os import chdir, remove, symlink, walk
+from os import chdir, remove, symlink, rename, walk, mkdir, getcwd
 from os.path import exists, isabs
 import sys
 import io
@@ -12,6 +12,7 @@ from pathlib import Path
 import urllib.request
 import json
 import numpy
+from glob import glob
 from typing import Optional, Union, List, Callable
 
 # Constants
@@ -86,10 +87,6 @@ def custom_excepthook (exception, message, traceback):
     sys.__excepthook__(exception, message, traceback)
 sys.excepthook = custom_excepthook
 
-# Set the project fields to be inherited by MDs 
-inheritables = ['filter_selection', 'image', 'fit', 'translation', 'mercy', 'trust',
-    'pca_selection', 'pca_fit_selection', 'rmsd_cutoff', 'interaction_cutoff', 'sample_trajectory']
-
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
 # Note that an MD is always defined inside of a Project and thus it has additional topology and metadata
@@ -109,11 +106,26 @@ class MD:
         self.project = project
         if not project:
             raise InputError('Project is mandatory to instantiate a new MD')
+        # Save the MD number
         self.number = number
+        # Set the MD accession and request URL
+        self.accession = None
+        self.url = None
+        if self.project.database_url and self.project.accession:
+            self.accession = self.project.accession + '.' + str(self.number)
+            self.url = self.project.database_url + '/rest/current/projects/' + self.accession
+        # Save the directory
         self.directory = directory
-        # If the directory does not exists then raise an error here
+        # If the directory does not exists then we may have 2 different scenarios
         if not exists(self.directory):
-            raise InputError('MD directory ' + self.directory + ' does not exist') from None
+            # If we have an URL to donwload then it means we must download input files
+            # Thus we simpy create the missing directroy and it be filled further
+            if self.url:
+                mkdir(self.directory)
+            # Otherwise we are supposed to find input files locally
+            # If the directory does not exist we have nothing to do so we raise an error
+            else:
+                raise InputError('MD directory ' + self.directory + ' does not exist')
         # Input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
@@ -123,23 +135,17 @@ class MD:
             self._input_structure_file = File(self.md_pathify(input_structure_filepath))
         # Input trajectory filepaths
         # They are always relative
-        self._input_trajectory_files = [ File(self.md_pathify(path)) for path in input_trajectory_filepaths ]
+        self.input_trajectory_filepaths = [ self.md_pathify(path) for path in input_trajectory_filepaths ]
+        # Now parse the filepaths to actual files
+        # In case there are glob characters we must parse the paths
+        self._input_trajectory_files = []
+        for path in self.input_trajectory_filepaths:
+            for parsed_path in glob(path):
+                self._input_trajectory_files.append( File(parsed_path) )
 
         # Processed structure and trajectory files
         self._structure_file = None
         self._trajectory_file = None
-
-        # Set the MD accession and request URL
-        self.accession = None
-        self.url = None
-        if self.project.database_url and self.project.accession:
-            self.accession = self.project.accession + '.' + str(self.number)
-            self.url = self.project.database_url + '/rest/current/projects/' + self.accession
-
-        # Inherit some project parameters
-        for inheritable in inheritables:
-            project_value = getattr(self.project, inheritable)
-            setattr(self, inheritable, project_value)
 
         # Other values which may be found/calculated on demand
         self._md_inputs = None
@@ -153,7 +159,12 @@ class MD:
         self._trajectory_integrity = None
 
         # Set a new MD specific register
-        self.register = Register(file_path = self.md_pathify(REGISTER_FILENAME))
+        # In case the directory is the project directory itself, use the project register
+        register_file = File(self.md_pathify(REGISTER_FILENAME))
+        if register_file.path == self.project.register.file.path:
+            self.register = self.project.register
+        else:
+            self.register = Register(file_path = register_file.path)
 
 
     def __repr__ (self):
@@ -186,7 +197,7 @@ class MD:
             structure_url = self.url + '/structure'
         # Download the file
         try:
-            urllib.request.urlretrieve(structure_url, input_structure_file.path)
+            urllib.request.urlretrieve(structure_url, self._input_structure_file.path)
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 raise Exception('Missing input pdb file "' + self._input_structure_file.filename + '"')
@@ -214,8 +225,8 @@ class MD:
         # Try to download the missing files
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            missing_filenames = [ trajectory_file.filename for trajectory_file in missing_input_trajectory_files ]
-            raise InputError('Missing input trajectory files: ' + ', '.join(missing_filenames))
+            missing_filepaths = [ trajectory_file.relative_path for trajectory_file in missing_input_trajectory_files ]
+            raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
         # Download each trajectory file (ususally it will be just one)
         for trajectory_file in self._input_trajectory_files:
             sys.stdout.write('Downloading trajectory (' + trajectory_file.filename + ')\n')
@@ -223,11 +234,11 @@ class MD:
             trajectory_url = self.url + '/files/' + trajectory_file.filename
             if trajectory_file.filename == TRAJECTORY_FILENAME:
                 trajectory_url = self.url + '/trajectory?format=xtc'
-                if self.sample_trajectory:
+                if self.project.sample_trajectory:
                     trajectory_url += '&frames=1:10:1'
             # Download the file
             try:
-                urllib.request.urlretrieve(trajectory_url, trajectory_path)
+                urllib.request.urlretrieve(trajectory_url, trajectory_file.path)
             except urllib.error.HTTPError as error:
                 if error.code == 404:
                     raise Exception('Missing input trajectory file "' + trajectory_file.filename + '"')
@@ -336,14 +347,14 @@ class MD:
         output_trajectory_format = output_trajectory_file.format
         converted_trajectory_filepath = self.md_pathify(CONVERTED_TRAJECTORY)
         # If input trajectory already matches the output format and is unique then avoid the renaming
-        if input_trajectories_format == output_trajectory_format and len(self.input_trajectory_files) == 1:
-            converted_trajectory_filepath = self.input_trajectory_files[0].path
+        if input_trajectories_format == output_trajectory_format and len(input_trajectory_files) == 1:
+            converted_trajectory_filepath = input_trajectory_files[0].path
         converted_trajectory_file = File(converted_trajectory_filepath)
         input_trajectory_absolute_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
 
         # Convert input structure and trajectories to output structure and trajectory
         if not converted_structure_file.exists or not converted_trajectory_file.exists:
-            print(' -> Converting and merging')
+            print(' * Converting and merging')
             convert(
                 input_structure_filename = input_structure_file.path,
                 output_structure_filename = converted_structure_file.path,
@@ -358,7 +369,7 @@ class MD:
         # Find out if we need to filter
         # i.e. check if there is a selection filter and it matches some atoms
         converted_structure = Structure.from_pdb_file(converted_structure_file.path)
-        must_filter = bool(self.filter_selection and converted_structure.select(self.filter_selection))
+        must_filter = bool(self.project.filter_selection and converted_structure.select(self.project.filter_selection))
 
         # Set output filenames for the already filtered structure and trajectory
         # Note that this is the only step affecting topology and thus here we output the definitive topology
@@ -368,7 +379,7 @@ class MD:
         
         # Filter atoms in structure, trajectory and topology if required and not done yet
         if must_filter and (not filtered_structure_file.exists or not filtered_trajectory_file.exists):
-            print(' -> Filtering atoms')
+            print(' * Filtering atoms')
             filter_atoms(
                 input_structure_file = converted_structure_file,
                 input_trajectory_file = converted_trajectory_file,
@@ -376,14 +387,14 @@ class MD:
                 output_structure_file = filtered_structure_file,
                 output_trajectory_file = filtered_trajectory_file,
                 output_topology_file = filtered_topology_file, # We genereate the definitive topology
-                filter_selection = self.filter_selection
+                filter_selection = self.project.filter_selection
             )
 
         # --- IMAGING AND FITTING ------------------------------------------------------------
 
         # There is no logical way to know if the trajectory is already imaged or it must be imaged
         # We rely exclusively in input flags
-        must_image = self.image or self.fit
+        must_image = self.project.image or self.project.fit
 
         # Set output filenames for the already filtered structure and trajectory
         imaged_structure_file = File(self.md_pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
@@ -393,16 +404,16 @@ class MD:
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
         if must_image and (not imaged_structure_file.exists or not imaged_trajectory_file.exists):
-            print(' -> Imaging and fitting')
+            print(' * Imaging and fitting')
             image_and_fit(
                 input_structure_file = filtered_structure_file,
                 input_trajectory_file = filtered_trajectory_file,
                 input_topology_file = filtered_topology_file, # This is optional if there are no PBC residues
                 output_structure_file = imaged_structure_file,
                 output_trajectory_file = imaged_trajectory_file,
-                image = self.image,
-                fit = self.fit,
-                translation = self.translation,
+                image = self.project.image,
+                fit = self.project.fit,
+                translation = self.project.translation,
                 pbc_selection = self.project.pbc_selection
             )
 
@@ -421,6 +432,8 @@ class MD:
         # We must calculate snapshots here using last step structure and trajectory
         self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
 
+        print(' * Correcting structure')
+
         # Correct the structure
         structure_corrector(
             input_structure_file = imaged_structure_file,
@@ -430,22 +443,28 @@ class MD:
             output_trajectory_file = output_trajectory_file,
             snapshots = self._snapshots,
             register = self.register,
-            mercy = self.mercy,
-            trust = self.trust
+            mercy = self.project.mercy,
+            trust = self.project.trust
         )
 
-        # At this point, there is a chance that the input files have not been modified
-        # This means the input format has already the output format and it is not to be imaged, fitted or corrected
-        # However we need the output files to exist and we dont want to rename the original ones to conserve them
-        # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
+        # Now we must rename files to match the output file in case there is any missmatch
+        # Some processed files may remain with some intermediate filename
         input_and_output_files = [
-            (imaged_structure_file, output_structure_file),
-            (imaged_trajectory_file, output_trajectory_file),
-            (filtered_topology_file, output_topology_file)
+            (input_structure_file, imaged_structure_file, output_structure_file),
+            (input_trajectory_files[0], imaged_trajectory_file, output_trajectory_file),
+            (input_topology_file, filtered_topology_file, output_topology_file)
         ]
-        for input_file, output_file in input_and_output_files:
+        for input_file, processed_file, output_file in input_and_output_files:
             if not output_file.exists:
-                symlink(input_file.path, output_file.path)
+                # There is also a chance that the input files have not been modified
+                # This means the input format has already the output format and it is not to be imaged, fitted or corrected
+                # However we need the output files to exist and we dont want to rename the original ones to conserve them
+                # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
+                if processed_file == input_file:
+                    symlink(processed_file.relative_path, output_file.path)
+                # Some processed files may remain with some intermediate filename
+                else:
+                    rename(processed_file.relative_path, output_file.path)
 
         # Save the internal variables
         self._structure_file = output_structure_file
@@ -652,9 +671,9 @@ class MD:
             structure = self.structure,
             snapshots = self.snapshots,
             interactions_file = self.md_pathify(OUTPUT_INTERACTIONS_FILENAME),
-            mercy = self.mercy,
+            mercy = self.project.mercy,
             frames_limit = 1000,
-            interaction_cutoff = self.interaction_cutoff
+            interaction_cutoff = self.project.interaction_cutoff
         )
         return self._interactions
     interactions = property(get_interactions, None, None, "Interactions (read only)")
@@ -694,22 +713,25 @@ class MD:
     # ---------------------------------------------------------------------------------
 
     # Sudden jumps test
-    def is_trajectory_integral (self) -> bool:
+    def is_trajectory_integral (self) -> Optional[bool]:
         # If we already have a stored value then return it
         if self._trajectory_integrity != None:
             return self._trajectory_integrity
+        # If we are missing the inputs file then we are missing the PBC residues se we skip this analysis by now
+        if not self.project.is_inputs_file_available():
+            return None
         # Otherwise we must find the value
         self._trajectory_integrity = check_trajectory_integrity(
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
-            mercy = self.mercy,
-            trust = self.trust,
+            mercy = self.project.mercy,
+            trust = self.project.trust,
             register = self.register,
             # time_length = self.time_length,
             check_selection = PROTEIN_AND_NUCLEIC,
-            standard_deviations_cutoff = self.rmsd_cutoff,
+            standard_deviations_cutoff = self.project.rmsd_cutoff,
         )
         return self._trajectory_integrity
 
@@ -813,8 +835,8 @@ class MD:
             snapshots = self.snapshots,
             frames_limit = 2000,
             structure = self.structure,
-            fit_selection = self.pca_fit_selection,
-            analysis_selection = self.pca_selection,
+            fit_selection = self.project.pca_fit_selection,
+            analysis_selection = self.project.pca_selection,
             pbc_residues = self.pbc_residues,
         )
 
@@ -1118,12 +1140,19 @@ class Project:
 
         # Set the rest of inputs
         self.filter_selection = filter_selection
+        # Fix the filter selection input, if needed
+        # If a boolean is passed instead of a string then we set its corresponding value
+        if type(filter_selection) == bool:
+            if filter_selection:
+                self.filter_selection = PROTEIN_AND_NUCLEIC
+            else:
+                self.filter_selection = None
         self.image = image
         self.fit = fit
         self.translation = translation
         self.mercy = mercy
         # Fix the mercy input, if needed
-        # If a boolean is passed instead of a list we set its corresponding value
+        # If a boolean is passed instead of a list then we set its corresponding value
         if type(mercy) == bool:
             if mercy:
                 self.mercy = AVAILABLE_FAILURES
@@ -1131,7 +1160,7 @@ class Project:
                 self.mercy = []
         self.trust = trust
         # Fix the trust input, if needed
-        # If a boolean is passed instead of a list we set its corresponding value
+        # If a boolean is passed instead of a list then we set its corresponding value
         if type(trust) == bool:
             if trust:
                 self.trust = AVAILABLE_CHECKINGS
@@ -1211,7 +1240,7 @@ class Project:
             self._reference_md_index = self.input_reference_md_index
         # Otherwise we simply set the first MD as the reference and warn the user about this
         else:
-            print('WARNING: No reference MD was specified. The first MD will be used as reference.')
+            #print('WARNING: No reference MD was specified. The first MD will be used as reference.')
             self._reference_md_index = 0
         return self._reference_md_index
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
@@ -1274,7 +1303,7 @@ class Project:
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise InputError('Missing inputs file "' + self._inputs_file.filename + '"')
+            raise Exception('Missing inputs file "' + self._inputs_file.filename + '"')
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + self._inputs_file.filename + ')\n')
         inputs_url = self.url + '/inputs/'
@@ -1719,14 +1748,18 @@ def workflow (
 
     # Move the current directory to the working directory
     chdir(working_directory)
+    current_absolute_path = getcwd()
+    current_directory_name = current_absolute_path.split('/')[-1]
+    print('Running workflow for project at ' + current_directory_name)
 
     # Initiate the project project
     project = Project(**project_parameters)
+    print('  ' + str(len(project.mds)) + ' MDs are to be run')
 
     # Now iterate over the different MDs
     for md in project.mds:
 
-        print('\n' + CYAN_HEADER + ' ** MD ' + md.directory + ' ** ' + COLOR_END)
+        print('\n' + CYAN_HEADER + 'Running workflow for MD at ' + md.directory + COLOR_END)
 
         # Set a function to call getters with the proper instance
         def call_getter (getter : Callable):

@@ -34,37 +34,36 @@ parser.add_argument(
 parser.add_argument(
     "-mdir", "--md_directories",
     nargs='*',
-    default=['.'],
+    default=None,
     help="Path to the different MD directories. Each directory is to contain an independent trajectory and structure."
 )
 
 parser.add_argument(
     "-proj", "--accession",
     default=None,
-    help="If given a project name, trajectory and "
-    "topology files will be downloaded from remote server.")
+    help="Project accession to download missing input files from the database.")
 
 parser.add_argument(
     "-url", "--database_url",
     default=DEFAULT_API_URL,
-    help="URL from where to download project")
+    help="API URL to download missing data")
 
 parser.add_argument(
     "-stru", "--input_structure_filepath",
     default=STRUCTURE_FILENAME,
-    help="Path to input structure file")
+    help="Path to input structure file. It may be relative to the project or to each MD directory.")
 
 parser.add_argument(
     "-traj", "--input_trajectory_filepaths",
     #type=argparse.FileType('r'),
     nargs='*',
     default=TRAJECTORY_FILENAME,
-    help="Path to input trajectory file")
+    help="Path to input trajectory file. It is relative to each MD directory.")
 
 parser.add_argument(
     "-top", "--input_topology_filepath",
     default=None, # There is no default since many formats may be possible
-    help="Path to input topology file")
+    help="Path to input topology file. It is relative to the project directory.")
 
 parser.add_argument(
     "-inp", "--inputs_filepath",
