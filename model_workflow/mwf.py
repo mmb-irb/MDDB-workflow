@@ -117,9 +117,13 @@ class MD:
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
         # If the file does not exist and it is to be downloaded then it is downloaded for each MD
-        self._input_structure_file = File(input_structure_filepath)
-        if not self._input_structure_file.exists and not isabs(input_structure_filepath):
-            self._input_structure_file = File(self.md_pathify(input_structure_filepath))
+        # Priorize the MD directory over the project directory
+        project_structure = File(input_structure_filepath)
+        md_structure = File(self.md_pathify(input_structure_filepath))
+        if isabs(input_structure_filepath) or (project_structure.exists and not md_structure.exists):
+            self._input_structure_file = project_structure
+        else:
+            self._input_structure_file = md_structure
         # Input trajectory filepaths
         # They are always relative
         self.input_trajectory_filepaths = [ self.md_pathify(path) for path in input_trajectory_filepaths ]
@@ -1207,13 +1211,13 @@ class Project:
                 self._md_directories.append(directory)
         # Otherwise, guess MD directories by checking which directories include a register file
         else:
-            available_directories = next(walk(self.directory))[1]
+            available_directories = sorted(next(walk(self.directory))[1])
             for directory in available_directories:
                 if exists(directory + '/' + REGISTER_FILENAME):
                     self._md_directories.append(directory)
             # If we found no MD directory then it means MDs were never declared before
             if len(self._md_directories) == 0:
-                raise SystemExit('Impossible to know which are the MD directories'
+                raise InputError('Impossible to know which are the MD directories. '
                     'You can either declare them using the "-mdir" option or by providing and inputs file')
         self.check_md_directories()
         return self._md_directories
@@ -1473,7 +1477,7 @@ class Project:
             return True
         elif self.input_type == 'ensemble':
             return False
-        raise SystemExit('Not supported input type value: ' + self.input_type)
+        raise InputError('Not supported input type value: ' + self.input_type)
     is_time_dependend = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
     # Processed files ----------------------------------------------------
