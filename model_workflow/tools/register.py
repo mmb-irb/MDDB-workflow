@@ -5,7 +5,8 @@ import json
 import atexit
 
 from model_workflow.constants import REGISTER_FILENAME
-from model_workflow.tools.file import File
+
+from mdtoolbelt.file import File
 
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
 # It is also responsible for storing test failure warnings to be written in metadata

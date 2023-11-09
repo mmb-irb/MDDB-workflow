@@ -37,7 +37,6 @@ from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
 from model_workflow.tools.httpsf import mount
-from model_workflow.tools.file import File
 from model_workflow.tools.register import Register
 
 # Import local analyses
@@ -62,6 +61,8 @@ from model_workflow.analyses.markov import markov
 # Import mdtoolbelt tools
 from mdtoolbelt.conversions import convert
 from mdtoolbelt.structures import Structure
+from mdtoolbelt.file import File
+from mdtoolbelt.auxiliar import InputError
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -72,20 +73,6 @@ sys.stdout = unbuffered
 
 # Set an special exception for input errors
 missing_input_exception = Exception('Missing input')
-
-# Set a custom exception for user input errors to avoid showing traceback in the terminal
-class InputError (Exception):
-    pass
-
-# Set a custom exception handler where our input error exception has a quiet behaviour
-def custom_excepthook (exception, message, traceback):
-    # Quite behaviour if it is our input error exception
-    if exception == InputError:
-        print('{0}: {1}'.format(exception.__name__, message))  # Only print Error Type and Message
-        return
-    # Default behaviour otherwise
-    sys.__excepthook__(exception, message, traceback)
-sys.excepthook = custom_excepthook
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -105,7 +92,7 @@ class MD:
         # Save the inputs
         self.project = project
         if not project:
-            raise InputError('Project is mandatory to instantiate a new MD')
+            raise Exception('Project is mandatory to instantiate a new MD')
         # Save the MD number
         self.number = number
         # Set the MD accession and request URL
@@ -142,6 +129,9 @@ class MD:
         for path in self.input_trajectory_filepaths:
             for parsed_path in glob(path):
                 self._input_trajectory_files.append( File(parsed_path) )
+        # Check we successfully defined some trajectory file
+        if len(self._input_trajectory_files) == 0:
+            raise InputError('No trajectory file was reached in paths ' + ', '.join(self.input_trajectory_filepaths))
 
         # Processed structure and trajectory files
         self._structure_file = None
@@ -165,7 +155,6 @@ class MD:
             self.register = self.project.register
         else:
             self.register = Register(file_path = register_file.path)
-
 
     def __repr__ (self):
         return '<MD (' + str(len(self.structure.atoms)) + ' atoms)>'
@@ -213,6 +202,7 @@ class MD:
     def get_input_trajectory_files (self) -> str:
         # There must be an input structure filename
         if not self._input_trajectory_files or len(self._input_trajectory_files) == 0:
+            print(self._input_trajectory_files)
             raise InputError('Not defined input trajectory filenames')
         # Find missing trajectory files
         missing_input_trajectory_files = []
@@ -356,10 +346,10 @@ class MD:
         if not converted_structure_file.exists or not converted_trajectory_file.exists:
             print(' * Converting and merging')
             convert(
-                input_structure_filename = input_structure_file.path,
-                output_structure_filename = converted_structure_file.path,
-                input_trajectory_filenames = input_trajectory_absolute_paths,
-                output_trajectory_filename = converted_trajectory_file.path,
+                input_structure_filepath = input_structure_file.path,
+                output_structure_filepath = converted_structure_file.path,
+                input_trajectory_filepaths = input_trajectory_absolute_paths,
+                output_trajectory_filepath = converted_trajectory_file.path,
             )
 
         # Topologies are never converted, but they are kept in their original format
@@ -461,7 +451,7 @@ class MD:
                 # However we need the output files to exist and we dont want to rename the original ones to conserve them
                 # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
                 if processed_file == input_file:
-                    symlink(processed_file.relative_path, output_file.path)
+                    symlink(input_file.relative_path, output_file.path)
                 # Some processed files may remain with some intermediate filename
                 else:
                     rename(processed_file.relative_path, output_file.path)
@@ -469,7 +459,7 @@ class MD:
         # Save the internal variables
         self._structure_file = output_structure_file
         self._trajectory_file = output_trajectory_file
-        self._topology_file = output_topology_file
+        self.project._topology_file = output_topology_file
 
         # --- Cleanup intermediate files
 

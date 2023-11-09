@@ -29,7 +29,7 @@ if not os.path.exists(input_pdb_filename):
     raise SystemExit('ERROR: The file does not exist')
 
 # Set he path to a script with all commands needed for vmd to parse the topology file
-commands_filename = 'commands.vmd'
+commands_filename = '.commands.vmd'
 
 # Prepare a script for the VMD to automate the data parsing. This is Tcl lenguage
 # In addition, if chains are missing, this script asigns chains by fragment

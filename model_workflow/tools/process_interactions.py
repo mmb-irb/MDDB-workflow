@@ -204,7 +204,7 @@ def get_interface_atom_indices_vmd (
     total_frames_filename = '.nframes.txt'
 
     # Prepare a script for VMD to run. This is Tcl language
-    commands_filename = 'commands.vmd'
+    commands_filename = '.commands.vmd'
     with open(commands_filename, "w") as file:
         # -------------------------------------------
         # First get the whole selection atom indices
@@ -329,7 +329,7 @@ def get_interface_atom_indices_vmd (
 def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_selection_2 : str) -> list:
 
     # Prepare a script for the VMD to automate the commands. This is Tcl lenguage
-    commands_filename = 'commands.vmd'
+    commands_filename = '.commands.vmd'
     output_index_1_file = 'index1.text'
     output_index_2_file = 'index2.text'
     output_bonds_file = 'bonds.text'

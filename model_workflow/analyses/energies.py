@@ -28,9 +28,9 @@ import json
 from typing import Optional, List, Tuple
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.tools.file import File
 
 from mdtoolbelt.structures import Structure
+from mdtoolbelt.file import File
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'

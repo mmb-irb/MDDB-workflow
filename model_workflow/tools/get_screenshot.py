@@ -47,7 +47,7 @@ def get_screenshot(
     # Prepare a Tcl script in order to execute different commands in the terminal of VMD
 
     # Generate a file name for the commands file
-    commands_filename = 'commands.vmd' 
+    commands_filename = '.commands.vmd' 
 
     # Generate a file to save the result obtained when calculating the center
     center_filename = '.center_point_filename.txt'

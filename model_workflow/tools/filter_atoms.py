@@ -158,7 +158,7 @@ def escape_vmd (selection : str) -> str:
     return escaped_selection
 
 # Set the vmd script filename
-commands_filename = 'commands.vmd'
+commands_filename = '.commands.vmd'
 # Convert a vmd selection to a group of atom indices
 def vmd_selection_2_pytraj_mask (topology_filename : str, filter_selection : str) -> dict:
 
