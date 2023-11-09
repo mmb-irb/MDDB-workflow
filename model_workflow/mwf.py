@@ -36,7 +36,7 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
-from model_workflow.tools.httpsf import mount
+#from model_workflow.tools.httpsf import mount
 from model_workflow.tools.register import Register
 
 # Import local analyses
