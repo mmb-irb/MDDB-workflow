@@ -362,8 +362,7 @@ class MD:
 
         # Find out if we need to filter
         # i.e. check if there is a selection filter and it matches some atoms
-        converted_structure = Structure.from_pdb_file(converted_structure_file.path)
-        must_filter = bool(self.project.filter_selection and converted_structure.select(self.project.filter_selection))
+        must_filter = bool(self.project.filter_selection)
 
         # Set output filenames for the already filtered structure and trajectory
         # Note that this is the only step affecting topology and thus here we output the definitive topology
@@ -1133,14 +1132,9 @@ class Project:
         self._reference_md_index = reference_md_index
 
         # Set the rest of inputs
+        # Note that the filter selection variable is not handled here at all
+        # This is just pased to the filtering function which knows how to handle the default
         self.filter_selection = filter_selection
-        # Fix the filter selection input, if needed
-        # If a boolean is passed instead of a string then we set its corresponding value
-        if type(filter_selection) == bool:
-            if filter_selection:
-                self.filter_selection = PROTEIN_AND_NUCLEIC
-            else:
-                self.filter_selection = None
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1297,7 +1291,7 @@ class Project:
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise Exception('Missing inputs file "' + self._inputs_file.filename + '"')
+            raise InputError('Missing inputs file "' + self._inputs_file.filename + '"')
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + self._inputs_file.filename + ')\n')
         inputs_url = self.url + '/inputs/'

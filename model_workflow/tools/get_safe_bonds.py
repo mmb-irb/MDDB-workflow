@@ -1,5 +1,7 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+
 from mdtoolbelt.vmd_spells import get_covalent_bonds
+from mdtoolbelt.constants import SUPPORTED_ION_ELEMENTS
 
 from typing import List, Optional
 
@@ -8,21 +10,34 @@ from typing import List, Optional
 frames_limit = 10
 
 # Check if two sets of bonds match perfectly
-def do_bonds_match (bonds_1 : List[ List[int] ], bonds_2 : List[ List[int] ], verbose : bool = False) -> bool:
+def do_bonds_match (
+    bonds_1 : List[ List[int] ],
+    bonds_2 : List[ List[int] ],
+    # Atom elements must be passed since we do not evaluate bonds with ions
+    atom_elements : List[str],
+    # Set verbose as true to show which are the atoms preventing the match
+    verbose : bool = False
+) -> bool:
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
         raise ValueError('The number of atoms is not matching in both bond lists')
+    # Find ion atom indices
+    ion_atom_indices = set()
+    for atom_index, atom_element in enumerate(atom_elements):
+        if atom_element in SUPPORTED_ION_ELEMENTS:
+            ion_atom_indices.add(atom_index)
     # For each atom, check bonds to match perfectly
     # Order is not important
     for atom_index, (atom_bonds_1, atom_bonds_2) in enumerate(zip(bonds_1, bonds_2)):
-        if len(atom_bonds_1) != len(atom_bonds_2):
+        # Skip ion bonds
+        if atom_index in ion_atom_indices:
+            continue
+        atom_bonds_set_1 = set(atom_bonds_1) - ion_atom_indices
+        atom_bonds_set_2 = set(atom_bonds_2) - ion_atom_indices
+        # Check atom bonds to match
+        if len(atom_bonds_set_1) != len(atom_bonds_set_2) or any(bond not in atom_bonds_set_2 for bond in atom_bonds_set_1):
             if verbose:
-                print('Missmatch in atom ' + str(atom_index) + ': it is ' + str(atom_bonds_1) + ' -> it must be ' + str(atom_bonds_2))
-                print() # Extra line for the frame logs to not erase the previous log
-            return False
-        if any(bond not in atom_bonds_2 for bond in atom_bonds_1):
-            if verbose:
-                print('Missmatch in atom ' + str(atom_index) + ': it is ' + str(atom_bonds_1) + ' -> it must be ' + str(atom_bonds_2))
+                print('Missmatch in atom ' + str(atom_index) + ': it is ' + str(atom_bonds_set_1) + ' -> it must be ' + str(atom_bonds_set_2))
                 print() # Extra line for the frame logs to not erase the previous log
             return False
     return True
@@ -76,6 +91,7 @@ def get_safe_bonds_canonical_frame (
     trajectory_filename : str,
     snapshots : int,
     safe_bonds : List[ List[int] ],
+    atom_elements : List[str],
     patience : int = 100, # Limit of frames to check before we surrender
 ) -> Optional[int]:
 
@@ -87,7 +103,7 @@ def get_safe_bonds_canonical_frame (
     safe_bonds_frame = None
     for frame_number, frame_pdb in enumerate(frames):
         bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, safe_bonds):
+        if do_bonds_match(bonds, safe_bonds, atom_elements):
             safe_bonds_frame = frame_number
             break
         # If we didn't find a canonical frame at this point we probablty won't

@@ -5,6 +5,7 @@ from json import load
 
 # Import mdtoolbelt tools
 from mdtoolbelt.structures import Structure
+from mdtoolbelt.auxiliar import TestFailure
 
 # Import local tools
 from model_workflow.constants import TOPOLOGY_FILENAME
@@ -84,19 +85,26 @@ def structure_corrector (
         else:
             safe_bonds = structure.bonds
     # If the safe bonds do not match the structure bonds then we have to fix it
-    if must_check_stable_bonds and not do_bonds_match(structure.bonds, safe_bonds):
+    atom_elements = [ atom.element for atom in structure.atoms ]
+    if must_check_stable_bonds and not do_bonds_match(structure.bonds, safe_bonds, atom_elements):
         modified = True
         print('WARNING: Default structure has wrong bonds')
         # Set the safe bonds as the structure bonds
         structure.bonds = safe_bonds
         # Find the first frame in the whole trajectory where safe bonds are respected
-        safe_bonds_frame = get_safe_bonds_canonical_frame(input_structure_file.path, input_trajectory_file.path, snapshots, safe_bonds)
+        safe_bonds_frame = get_safe_bonds_canonical_frame(
+            structure_filename = input_structure_file.path,
+            trajectory_filename = input_trajectory_file.path,
+            snapshots = snapshots,
+            safe_bonds = safe_bonds,
+            atom_elements = atom_elements
+        )
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
             print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
             must_be_killed = stable_bonds_flag not in mercy
             if must_be_killed:
-                raise SystemExit('Failed to find stable bonds')
+                raise TestFailure('Failed to find stable bonds')
             register.tests[stable_bonds_flag] = False
             register.warnings.append(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates.\n'
             'The main PDB structure is the default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
@@ -131,7 +139,7 @@ def structure_corrector (
         print('FAIL: Uncoherent bonds were found')
         must_be_killed = coherent_bonds_flag not in mercy
         if must_be_killed:
-            raise SystemExit('Failed to find coherent bonds')
+            raise TestFailure('Failed to find coherent bonds')
         register.tests[coherent_bonds_flag] = False
         register.warnings.append('Bonds are not coherent. Some atoms may have less/more bonds than they should.')
 
@@ -182,7 +190,7 @@ def structure_corrector (
             # Note that this will never happen because of the pdb itself, duplicated chains are handled further
             # This will only happen if chains were missing and guessed, and there is something very wrong in the structure
             # Check fragments with the VMD and searh for wrong bonds
-            raise SystemExit('ERROR: We are having splitted chains (e.g. ' + chain_name + ')')
+            raise SystemExit('We are having splitted chains (e.g. ' + chain_name + ')')
         checked_chains.append(chain_name)
 
     # ------------------------------------------------------------------------------------------
