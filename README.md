@@ -6,53 +6,45 @@ Both standard files and analysis results are to be uploaded to the database usin
 
 ## Installation
 
-This will install the package and create the entry point `mwf` to be used when executing the workflow.
+This will install the package and create the entry point `mwf` to be used when executing the workflow.<br />
+Note that internet access is required to install the workflow using this protocol. If you are working in a machine where there is not internet then head to the 'Installation in HPC' section.
 
-It is recommended to create a virtual environment. You can do this using Conda and the `environment.yml` file, with:
+First clone the workflow repo:
 
+`git clone https://mmb.irbbarcelona.org/gitlab/d.beltran.anadon/MoDEL-workflow.git`
+
+Now create a new environment using the `environment.yml` file in this repo:
+
+`cd MoDEL-workflow`
 `conda env create --file environment.yml`
 
-From the workflow's directory then execute the following:
-
-In DEVELOPMENT:
+Then install the workflow module in development mode:
 
 `python setup.py develop`
 
-To uninstall the develop mode use:
+There is one last dependency to be installed:
 
-`python setup.py develop -u`
+`cd ..`
+`git clone https://github.com/d-beltran/mdtoolbelt.git`
+`python setup.py develop`
 
-or:
-
-`pip uninstall model-workflow`
-
-To make notebooks fully operative use:
-WARNING: This may break the environment for using the mwf
-
-`conda install -c conda-forge notebook`
-
-In PRODUCTION:
-
-`python setup.py install`
-
-To uninstall the production mode use:
-
-`python setup.py install --record filelist`
-
-`xargs rm -rf < filelist`
 
 ---
 
 ## Installation in HPC
 
-In HPC clusters running conda may be a problem.
+In HPC clusters running conda and having internet may be a problem.
 For those cases there is a a library called 'conda-pack' which allows to run a local lite conda version.
-Conda-pack is installed with:
+
+First install conda-pack in any environment in your locacl machine:
 
 `conda install conda-pack`
 
+Now install in your local machine the conda enviornment as it is explained in the previous section.
+WARNING: Do not install the workflow module in this case.
+
 When packing a conda environment there must be no package installed in development mode.
-If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled (see previous section). You can install in production mode but it is not required for the conda pack.
+If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled with 'pip uninstall model-workflow'.
 Now pack the mwf environment with:
 
 `conda pack -n mwf`
@@ -62,10 +54,6 @@ This will generate a file called 'mwf.tar.gz'. Copy this file in the remote mach
 `mkdir mwf`
 
 `tar -xzf mwf.tar.gz -C mwf` 
-
-At this point you can access python by runinng:
-
-`mwf/bin/python`
 
 Activate the mwf environment:
 
@@ -79,9 +67,12 @@ Now copy the whole workflow repository in the remote machine, same repository th
 Then install it in develop mode with:
 
 `cd workflow`
-
 `../mwf/bin/python setup.py develop`
 
+Repeat the process with the last dependency.
+
+`cd mdtoolbelt`
+`../mwf/bin/python setup.py develop`
 
 ---
 
