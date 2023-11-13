@@ -99,15 +99,15 @@ replica_2/<br />
 
 Note that here we have 2 independent replicas which share a common topology.<br />
 The second replica is actually splitted in 3 consecutive parts but this is not a problem.<br />
+
+### Processing input files
+
 The command to start the processing would be as follows:
 
-```bash
+`mwf run -top raw_topology.prmtop -stru raw_topology.prmtop -mdir replica_* -traj *.nc -s`
 
-mwf -top raw_topology.prmtop -stru raw_topology.prmtop -mdir replica_* -traj *.nc -s
-
-```
-
-The mwf command is the main hanlder of the workflow and its letters stand for 'Model-WorkFlow'.<br />
+The 'mwf' command is the main handler of the workflow and its letters stand for 'Model-WorkFlow'.<br />
+The 'run' subcommand is the one which triggers the main logic and thus run the workflow.<br />
 Now lets explain every argument in this command:<br />
 * Argument -top points to the input topology. No big surprises here.<br />
 * Argument -stru points to the input structure. Here we do not have any 'pdb' or 'gro' file however. For this reason we also point to the raw topology. We are telling the workflow to get the structure from the topology. To do so it will use some coordinates from the trajectory as well.<br />
@@ -140,55 +140,34 @@ Conversions between topology formats are difficult however. For this reason the 
 
 In this example we run the most basic processing, but there are a couple of additional features we may require.
 * Filtering: Argument -filt is used to filter atoms away in all files (topology, structure and trajectory). The -filt argument alone applies the default filtering: water and counter ions. However the -filt argument may be followed by some text to apply a custom filtering selection according to [VMD syntax](https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html).
-* Imaging and fitting: It is not easy to automatize the imaging process. However the workflow is provided with a generic filtering protocol which may be useful in some generic cases. Use the -img argument to image and the -fit argument to fit the trajectory.
+* Imaging and fitting: It is not easy to automatize the imaging process so it is recommended that you manually image your trajectories. However, the workflow is provided with a generic filtering protocol which may be useful in some generic cases. Use the -img argument to image and the -fit argument to fit the trajectory.
 
+Once this process is over some tests are run.<br />
+If they all pass then we can continue with the analyses.
 
----
+### Running the analyses
 
-print help message:
+Before we start, we need one last input file called **inputs.json**.<br />
+This file contains burocratic data, MD parameters and some additional metadata which is used by the workflow to adapt the analyses.
 
-`mwf --help`
+In order to generate this file, a Jupyter Notebook to build the file explaining every field in detail is provided. You can find it in the workflow repository, at model_workflow/utils/input_setter.ipynb or open it by simply running the following command:
 
-or  `mwf -h`
+`mwf inputs`
 
-Run the workflow:
+Fill every field and then run the whole notebook to generate the inputs.json file.
+Now we are ready to run the analyses by just running the following command:
 
-`mwf`
+`mwf run`
 
-By default, the workflow is run on current directory which is asumed to contain input files: topology, trajectory and the 'inputs.json' file.
+Note that no input files pointers are provided now.<br />
+The workflow will guess which are the processed files since they have standard names.<br />
+The workflow will also remember which are the MD directories.<br />
+In addition, the workflow has some cache in these directories thus remembering some precalculated values and not having to repeat all the process.
 
-A different directory may be specified with the `-dir` or `--working_dir` options.
+Note that this process will also generate some additional files such as 'metadata.json' and 'topology.json' by default. These files are also to be uploaded to the database.
 
-Input files may be download from an already uploaded project:
+If you want to run only a few specific analyses or exclude some analyses you can use the include (-i) and exclude (-e) arguments.<br />
+To see additional arguments and how to use them you can request help by just running `mwf run -h`
 
-`mwf -proj <project id>`
-
-By default, data files will be downloaded from `https://mdposit-dev.mddbr.eu`. Another URL can be specified with the `-url` option.
-
-By default, the whole workflow is run.
-The exit may be forced after downloading input files with the `-d` option.
-The exit may be forced after downloading input files and/or running mandatory input files processing with the `-s` option.
-
-Run the workflow but include only specific analyses or tools:
-
-`mwf -i <some analysis> <some other analysis> <some tool> ...`
-
-Run the workflow but exlcude some specific analyses:
-
-`mwf -e <some analysis> <some other analysis> ...`
-
-_Other options:_
-
-`-stru`: input topology filename. Default: `structure.pdb`
-
-`-traj`: input trajectory filename. Default: `trajectory.xtc`
-
-`-top`: inputs charges filename. Default: `topology.XXX`
-
-`-in`: inputs filename. Default: `inputs.json`
-
-`-img`: is to be imaged. Default: False
-
-`-fit`: is to be fitted. Default: False
-
-`-trans`: Imaging translation. Default: 0 0 0
+Once you are done with this process is time to load your files to the database.<br />
+To do so, you must head to the [loader](https://mmb.irbbarcelona.org/gitlab/aluciani/MoDEL-CNS_DB_loader).
