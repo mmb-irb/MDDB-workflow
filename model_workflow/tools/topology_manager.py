@@ -37,7 +37,7 @@ def setup_structure (pdb_filename : str) -> 'Structure':
         if (residue_number == pytraj_residue.original_resid and residue_name == pytraj_residue.name):
             return residue_index + 1
         # If not, we must iterate over all pytraj residues to find a match
-        for index, pytraj_residue in enumerate(self.pytraj_residues):
+        for index, pytraj_residue in enumerate(pytraj_residues):
             if (residue_number == pytraj_residue.original_resid and residue_name == pytraj_residue.name):
                 return index + 1
         # Return None if there is no match
