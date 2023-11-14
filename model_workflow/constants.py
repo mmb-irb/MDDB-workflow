@@ -48,6 +48,7 @@ REGISTER_INPUTS = [
     'md_directories',
     'reference_md_index',
     'filter_selection',
+    'pbc_selection',
     'image',
     'fit',
     'translation',

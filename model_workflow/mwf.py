@@ -1259,7 +1259,7 @@ class Project:
             # If we found no MD directory then it means MDs were never declared before
             if len(self._md_directories) == 0:
                 raise InputError('Impossible to know which are the MD directories. '
-                    'You can either declare them using the "-mdir" option or by providing and inputs file')
+                    'You can either declare them using the "-mdir" option or by providing an inputs file')
         self.check_md_directories()
         return self._md_directories
     md_directories = property(get_md_directories, None, None, "MD directories (read only)")

@@ -26,7 +26,7 @@ There is one last dependency to be installed:
 
 `cd ..`
 `git clone https://github.com/d-beltran/mdtoolbelt.git`
-`python setup.py develop`
+`python mdtoolbelt/setup.py develop`
 
 
 ---
@@ -44,15 +44,17 @@ Now install in your local machine the conda enviornment as it is explained in th
 WARNING: Do not install the workflow module in this case.
 
 When packing a conda environment there must be no package installed in development mode.
-If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled with 'pip uninstall model-workflow'.
+If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled with 'pip uninstall model-workflow'.<br />
+<span style="color:blue">Don't worry, you can reinstall it later with just 'python MoDEL-workflow/setup.py develop'</span>
+
+
 Now pack the mwf environment with:
 
 `conda pack -n mwf`
 
 This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
 
-`mkdir mwf`
-
+`mkdir mwf`<br />
 `tar -xzf mwf.tar.gz -C mwf` 
 
 Activate the mwf environment:
@@ -63,16 +65,20 @@ Make a conda unpack
 
 `conda-unpack`
 
-Now copy the whole workflow repository in the remote machine, same repository than before.
+Now copy the whole workflow repository from your local machine to the remote machine.
+
+`git clone https://mmb.irbbarcelona.org/gitlab/d.beltran.anadon/MoDEL-workflow.git`<br />
+`rsync -avP MoDEL-workflow <remote>:<path>`
+
 Then install it in develop mode with:
 
-`cd workflow`
-`../mwf/bin/python setup.py develop`
+`mwf/bin/python MoDEL-workflow/setup.py develop`
 
 Repeat the process with the last dependency.
 
-`cd mdtoolbelt`
-`../mwf/bin/python setup.py develop`
+`git clone https://github.com/d-beltran/mdtoolbelt.git`<br />
+`rsync -avP mdtoolbelt <remote>:<path>`<br />
+`mwf/bin/python mdtoolbelt/setup.py develop`
 
 ---
 
