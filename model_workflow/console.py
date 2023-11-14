@@ -131,6 +131,12 @@ run_parser.add_argument(
         "If the argument is passed alone (i.e. with no selection) then water and counter ions are filtered"))
 
 run_parser.add_argument(
+    "-pbc", "--pbc_selection",
+    default=None,
+    help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory.\n"
+        "e.g. remianing solvent and counter ion molecules, membrane lipids, etc."))
+
+run_parser.add_argument(
     "-pcafit", "--pca_fit_selection",
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
     help="Atom selection for the pca fitting in vmd syntax")

@@ -710,9 +710,6 @@ class MD:
         # If we already have a stored value then return it
         if self._trajectory_integrity != None:
             return self._trajectory_integrity
-        # If we are missing the inputs file then we are missing the PBC residues se we skip this analysis by now
-        if not self.project.is_inputs_file_available():
-            return None
         # Otherwise we must find the value
         self._trajectory_integrity = check_trajectory_integrity(
             input_structure_filename = self.structure_file.path,
@@ -1061,6 +1058,7 @@ class Project:
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
         # Processing and analysis instructions
         filter_selection : Union[bool, str] = False,
+        pbc_selection : Optional[str] = None,
         image : bool = False,
         fit : bool = False,
         translation : List[float] = [0, 0, 0],
@@ -1135,6 +1133,8 @@ class Project:
         # Note that the filter selection variable is not handled here at all
         # This is just pased to the filtering function which knows how to handle the default
         self.filter_selection = filter_selection
+        # PBC selection may come from the console or from the inputs
+        self._pbc_selection = pbc_selection
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1456,12 +1456,26 @@ class Project:
 
     # Assign the getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
-    pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     forced_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
     pdb_ids = property(input_getter('type'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
     input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
+
+    # PBC selection may come from the console or from the inputs file
+    # Console has priority over the inputs file
+    def get_pbc_selection (self) -> Optional[str]:
+        # If we have an internal value then return it
+        if self._pbc_selection:
+            return self._pbc_selection
+        # As an exception, we avoid asking for the inputs file if it is not available
+        # This input is required for some early processing steps where we do not need the inputs file for anything else
+        if not self.is_inputs_file_available():
+            return None
+        # Otherwise, find it in the inputs
+        self._pbc_selection = input_getter('pbc_selection')()
+        return self._pbc_selection
+    pbc_selection = property(get_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
     # Set additional values infered from input values
 
