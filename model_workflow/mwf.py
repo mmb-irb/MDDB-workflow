@@ -318,7 +318,7 @@ class MD:
         # Set the output filepaths
         output_structure_file = File(self.md_pathify(STRUCTURE_FILENAME))
         output_trajectory_file = File(self.md_pathify(TRAJECTORY_FILENAME))
-        output_topology_file = File(self.project._topology_filepath)
+        output_topology_file = File(self.project.topology_filepath)
 
         print('-> Processing input files')
 
@@ -1039,13 +1039,13 @@ class Project:
         inputs_filepath : str = DEFAULT_INPUTS_FILENAME,
         # The input topology filename
         # Multiple formats are accepted but the default is our own parsed json topology
-        input_topology_filepath : str = None,
+        input_topology_filepath : Optional[str] = None,
         # Input structure filepath
         # It may be both relative to the project directory or to every MD directory
-        input_structure_filepath : str = STRUCTURE_FILENAME,
+        input_structure_filepath : Optional[str] = None,
         # Input trajectory filepaths
         # These files are searched in every MD directory so the path MUST be relative
-        input_trajectory_filepaths : str = [ TRAJECTORY_FILENAME ],
+        input_trajectory_filepaths : Optional[str] = None,
         # Set the different MD directories to be run
         # Each MD directory must contain a trajectory and may contain a structure
         md_directories : Optional[List[str]] = None,
@@ -1081,31 +1081,19 @@ class Project:
             self.url = database_url + '/rest/current/projects/' + accession
 
         # Save inputs for the register, even if they are not used in the class
-        self.inputs_filepath = inputs_filepath
-        self.input_topology_filepath = input_topology_filepath
 
-
-        # Set internal variables for input filenames
         # Set the inputs file
+        self.inputs_filepath = inputs_filepath
         self._inputs_file = File(inputs_filepath)
         # Set the input topology file
-        self._input_topology_file = File(input_topology_filepath)
-        if not self._input_topology_file:
-            self._input_topology_file = File(self.guess_input_topology_filename())
+        self._input_topology_filepath = input_topology_filepath
+        self._input_topology_file = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
-        self.input_structure_filepath = input_structure_filepath
-        # WARNING: Input trajectory filepaths may be both a list or a single string
-        if type(input_trajectory_filepaths) == list:
-            self.input_trajectory_filepaths = input_trajectory_filepaths 
-        elif type(input_trajectory_filepaths) == str:
-            self.input_trajectory_filepaths = [ input_trajectory_filepaths ]
-        else:
-            raise InputError('Input trajectory filepaths must be a list of strings or a string')
-        # Check no trajectory path is absolute
-        for path in self.input_trajectory_filepaths:
-            if path[0] == '/':
-                raise InputError('Trajectory paths MUST be relative, not absolute (' + path + ')')
+        self._input_structure_filepath = input_structure_filepath
+        self._input_trajectory_filepaths = input_trajectory_filepaths
+        if self._input_trajectory_filepaths:
+            self.check_input_trajectory_filepaths()
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
         self._populations_file = File(self.populations_filepath)
@@ -1114,7 +1102,7 @@ class Project:
 
         # Set the processed topology filepath, which depends on the input topology filename
         # Note that this file is different from the standard topology, although it may be standard as well
-        self._topology_filepath = self.inherit_topology_filename()
+        self._topology_filepath = None
         self._topology_file = None
 
         # Set the standard topology file
@@ -1179,6 +1167,22 @@ class Project:
             register_inputs[input_name] = getattr(self, input_name)
         self.register = Register(inputs=register_inputs)
 
+    # Check input trajectory file paths to be right
+    # If there is any problem then fix it or directly raise an input error
+    def check_input_trajectory_filepaths (self):
+        # WARNING: Input trajectory filepaths may be both a list or a single string
+        # However we must keep a list
+        if type(self._input_trajectory_filepaths) == list:
+            pass 
+        elif type(self._input_trajectory_filepaths) == str:
+            self._input_trajectory_filepaths = [ self._input_trajectory_filepaths ]
+        else:
+            raise InputError('Input trajectory filepaths must be a list of strings or a string')
+        # Check no trajectory path is absolute
+        for path in self._input_trajectory_filepaths:
+            if path[0] == '/':
+                raise InputError('Trajectory paths MUST be relative, not absolute (' + path + ')')
+
     # Check MD directories to be right
     # If there is any problem then directly raise an input error
     def check_md_directories (self):
@@ -1188,6 +1192,49 @@ class Project:
         # Check there are not duplicated MD directories
         if len(set(self._md_directories)) != len(self._md_directories):
             raise InputError('There are duplicated MD directories')
+
+    # Set a function to get input structure file path
+    def get_input_structure_filepath (self) -> str:
+        # If we already have a value then return it
+        # If this value was passed through command line then it would be set as the internal value already
+        if self._input_structure_filepath:
+            return self._input_structure_filepath
+        # Otherwise we must find it
+        # Check if the inputs file has the value
+        if self.is_inputs_file_available():
+            # Get the input value, whose key must exist
+            inputs_value = self.inputs.get('input_structure_filepath', missing_input_exception)
+            if inputs_value == missing_input_exception:
+                raise InputError('Missing input "input_structure_filepath"')
+            # If there is a valid input then use it
+            if inputs_value:
+                self._input_structure_filepath = inputs_value
+                return self._input_structure_filepath
+        # If there is not any input then return the default
+        return STRUCTURE_FILENAME
+    input_structure_filepath = property(get_input_structure_filepath, None, None, "Input structure file path (read only)")
+
+    # Set a function to get input trajectory file paths
+    def get_input_trajectory_filepaths (self) -> str:
+        # If we already have a value then return it
+        # If this value was passed through command line then it would be set as the internal value already
+        if self._input_trajectory_filepaths:
+            return self._input_trajectory_filepaths
+        # Otherwise we must find it
+        # Check if the inputs file has the value
+        if self.is_inputs_file_available():
+            # Get the input value, whose key must exist
+            inputs_value = self.inputs.get('input_trajectory_filepaths', missing_input_exception)
+            if inputs_value == missing_input_exception:
+                raise InputError('Missing input "input_trajectory_filepaths"')
+            # If there is a valid input then use it
+            if inputs_value:
+                self._input_trajectory_filepaths = inputs_value
+                self.check_input_trajectory_filepaths()
+                return self._input_trajectory_filepaths
+        # If there is not any input then return the default
+        return [ TRAJECTORY_FILENAME ]
+    input_trajectory_filepaths = property(get_input_trajectory_filepaths, None, None, "Input trajectory file paths (read only)")
 
     # Set a function to get MD directories
     def get_md_directories (self) -> list:
@@ -1327,12 +1374,39 @@ class Project:
                 return topology_filename
         return None        
 
-    # Get the input charges filename from the inputs
+    # Get the input topology filepath from the inputs
+    def get_input_topology_filepath (self) -> File:
+        # If we already have a value then return it
+        # If this value was passed through command line then it would be set as the internal value already
+        if self._input_topology_filepath:
+            return self._input_topology_filepath
+        # Otherwise we must find it
+        # Check if the inputs file has the value
+        if self.is_inputs_file_available():
+            # Get the input value, whose key must exist
+            inputs_value = self.inputs.get('input_topology_filepath', missing_input_exception)
+            if inputs_value == missing_input_exception:
+                raise InputError('Missing input "input_topology_filepath"')
+            # If there is a valid input then use it
+            if inputs_value:
+                self._input_topology_filepath = inputs_value
+                return self._input_topology_filepath
+        # Otherwise we must guess which is the topology file
+        guess = self.guess_input_topology_filename()
+        if guess:
+            self._input_topology_filepath = guess
+            return self._input_topology_filepath
+        raise InputError('Missing input topology file path')
+    input_topology_filepath = property(get_input_topology_filepath, None, None, "Input topology file path (read only)")
+
+    # Get the input topology file
     # If the file is not found try to download it
     def get_input_topology_file (self) -> File:
-        # There must be a topology filename
-        if not self._input_topology_file:
-            return None
+        # If we already have a value then return it
+        if self._input_topology_file:
+            return self._input_topology_file
+        # Set the file
+        self._input_topology_file = File(self.input_topology_filepath)
         # If the file already exists then we are done
         if self._input_topology_file.exists:
             return self._input_topology_file
@@ -1373,7 +1447,7 @@ class Project:
                 itp_url = self.url + '/files/' + itp_filename
                 urllib.request.urlretrieve(itp_url, itp_filename)
         return self._input_topology_file
-    input_topology_file = property(get_input_topology_file, None, None, "Input topology filename (read only)")
+    input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
     # Input structure filename ------------
 
@@ -1473,7 +1547,10 @@ class Project:
         if not self.is_inputs_file_available():
             return None
         # Otherwise, find it in the inputs
-        self._pbc_selection = input_getter('pbc_selection')()
+        # Get the input value, whose key must exist
+        self._pbc_selection = self.inputs.get('pbc_selection', missing_input_exception)
+        if self._pbc_selection == missing_input_exception:
+            raise InputError('Missing input "pbc_selection"')
         return self._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
@@ -1493,31 +1570,41 @@ class Project:
     # Set the expected output topology filename given the input topology filename
     # Note that topology formats are conserved
     def inherit_topology_filename (self) -> str:
-        filename = self._input_topology_file.filename
+        filename = self.input_topology_file.filename
         if not filename:
             return None
         if filename == TOPOLOGY_FILENAME:
             return filename
         if filename == RAW_CHARGES_FILENAME:
             return filename
-        standard_format = self._input_topology_file.format
+        standard_format = self.input_topology_file.format
         return 'topology.' + standard_format
 
-    # Get the processed topology
+    # Get the processed topology file path
+    def get_topology_filepath (self) -> str:
+        # If we have a stored value then return it
+        if self._topology_filepath:
+            return self._topology_filepath
+        # Otherwise we must find it
+        self._topology_filepath = self.inherit_topology_filename()
+        return self._topology_filepath
+    topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
+
+    # Get the processed topology file
     def get_topology_file (self) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._topology_file:
             return self._topology_file
         # If the file already exists then we are done
-        self._topology_file = File(self._topology_filepath)
+        self._topology_file = File(self.topology_filepath)
         # If file does not exist then run the processing logic to generate it
         # Also run it if any of the tests is missing or failed since tests are run in the processing logic
         if not self._topology_file.exists or self.reference_md.any_missing_processing_tests():
             self.reference_md.process_input_files()
         # Now that the file is sure to exist we return it
         return self._topology_file
-    topology_file = property(get_topology_file, None, None, "Topology filename (read only)")
+    topology_file = property(get_topology_file, None, None, "Topology file (read only)")
 
     # Get the processed structure from the reference MD
     def get_structure_file (self) -> str:

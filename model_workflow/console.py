@@ -75,15 +75,17 @@ run_parser.add_argument(
 
 run_parser.add_argument(
     "-stru", "--input_structure_filepath",
-    default=STRUCTURE_FILENAME,
-    help="Path to input structure file. It may be relative to the project or to each MD directory.")
+    default=None,
+    help=("Path to input structure file. It may be relative to the project or to each MD directory.\n"
+        "If this value is not passed then the standard structure file is used as input by default"))
 
 run_parser.add_argument(
     "-traj", "--input_trajectory_filepaths",
     #type=argparse.FileType('r'),
     nargs='*',
-    default=TRAJECTORY_FILENAME,
-    help="Path to input trajectory file. It is relative to each MD directory.")
+    default=None,
+    help=("Path to input trajectory file. It is relative to each MD directory.\n"
+        "If this value is not passed then the standard trajectory file path is used as input by default"))
 
 run_parser.add_argument(
     "-top", "--input_topology_filepath",
