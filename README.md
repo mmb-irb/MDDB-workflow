@@ -15,7 +15,7 @@ First clone the workflow repo:
 
 Now create a new environment using the `environment.yml` file in this repo:
 
-`cd MoDEL-workflow`
+`cd MoDEL-workflow`<br />
 `conda env create --file environment.yml`
 
 Then install the workflow module in development mode:
@@ -24,9 +24,10 @@ Then install the workflow module in development mode:
 
 There is one last dependency to be installed:
 
-`cd ..`
-`git clone https://github.com/d-beltran/mdtoolbelt.git`
-`python mdtoolbelt/setup.py develop`
+`cd ..`<br />
+`git clone https://github.com/d-beltran/mdtoolbelt.git`<br />
+`cd mdtoolbelt`<br />
+`python setup.py develop`
 
 
 ---
@@ -45,7 +46,7 @@ WARNING: Do not install the workflow module in this case.
 
 When packing a conda environment there must be no package installed in development mode.
 If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled with 'pip uninstall model-workflow'.<br />
-<span style="color:blue">Don't worry, you can reinstall it later with just 'python MoDEL-workflow/setup.py develop'</span>
+<span style="color:blue">Don't worry, you can reinstall it later with just 'cd MoDEL-workflow; python setup.py develop'</span>
 
 
 Now pack the mwf environment with:
@@ -72,13 +73,15 @@ Now copy the whole workflow repository from your local machine to the remote mac
 
 Then install it in develop mode with:
 
-`mwf/bin/python MoDEL-workflow/setup.py develop`
+`cd MoDEL-workflow`<br />
+`mwf/bin/python setup.py develop`
 
 Repeat the process with the last dependency.
 
 `git clone https://github.com/d-beltran/mdtoolbelt.git`<br />
 `rsync -avP mdtoolbelt <remote>:<path>`<br />
-`mwf/bin/python mdtoolbelt/setup.py develop`
+`cd mdtoolbelt`<br />
+`mwf/bin/python setup.py develop`
 
 ---
 
