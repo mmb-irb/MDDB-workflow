@@ -10,6 +10,8 @@ def get_frames_count (
     input_topology_filename : str,
     input_trajectory_filename : str) -> int:
     
+    print('Counting number of frames...')
+
     # Load the trajectory from pytraj
     pt_trajectory = pt.iterload(
         input_trajectory_filename,

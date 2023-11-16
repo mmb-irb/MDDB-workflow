@@ -23,6 +23,7 @@ from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
+from model_workflow.tools.get_bonds import get_safe_bonds
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
@@ -428,7 +429,7 @@ class MD:
         print(' * Correcting structure')
 
         # Correct the structure
-        structure_corrector(
+        corrector_values = structure_corrector(
             input_structure_file = imaged_structure_file,
             input_trajectory_file = imaged_trajectory_file,
             input_topology_file = filtered_topology_file,
@@ -439,6 +440,9 @@ class MD:
             mercy = self.project.mercy,
             trust = self.project.trust
         )
+
+        # Save the returned corrector values
+        self._safe_bonds = corrector_values['safe_bonds']
 
         # Now we must rename files to match the output file in case there is any missmatch
         # Some processed files may remain with some intermediate filename
@@ -559,7 +563,7 @@ class MD:
     def get_snapshots (self) -> str:
         # If we already have a stored value then return it
         # WARNING: Do not remove the self.trajectory_file checking
-        # Note that checking if the trajectory filename exists triggers all the processing logic
+        # Note that checking if the trajectory file exists triggers all the processing logic
         # The processing logic is able to set the internal snapshots value as well so this avoid repeating the process
         if self.trajectory_file and self._snapshots != None:
             return self._snapshots
@@ -576,6 +580,27 @@ class MD:
         return self._snapshots
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
+    # Safe bonds
+    def get_safe_bonds (self) -> List[List[int]]:
+        # If we already have a stored value then return it
+        # WARNING: Do not remove the self.topology_file checking
+        # Note that checking if the topology file exists triggers all the processing logic
+        # The processing logic is able to set the internal safe bonds value as well so this avoid repeating the process
+        if self.topology_file and self._safe_bonds:
+            return self._safe_bonds
+        # Otherwise we must find safe bonds value
+        # This should only happen if we are working with already processed files
+        self._safe_bonds = get_safe_bonds(
+            input_topology_file=self.topology_file,
+            input_structure_file=self.structure_file,
+            input_trajectory_file=self.trajectory_file,
+            must_check_stable_bonds=(STABLE_BONDS_FLAG not in self.project.trust),
+            snapshots=self.snapshots,
+            structure=self.structure,
+        )
+        return self._safe_bonds
+    safe_bonds = property(get_safe_bonds, None, None, "Atom bonds to be trusted (read only)")
+
     # Parsed structure
     def get_structure (self) -> 'Structure':
         # If we already have a stored value then return it
@@ -584,6 +609,11 @@ class MD:
         # Otherwise we must set the structure
         # Note that this is not only the mdtoolbelt structure, but it also contains additional logic
         self._structure = setup_structure(self.structure_file.path)
+        # If the stable bonds test failed and we had mercy then it is sure out structure will have wrong bonds
+        # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
+        # If we fail to get bonds from topology then just go along with the default structure bonds
+        if self.register.tests[STABLE_BONDS_FLAG] == False:
+            self._structure.bonds = self.safe_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 

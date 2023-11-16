@@ -1,5 +1,6 @@
 from subprocess import Popen
 from pathlib import Path
+from typing import List
 
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 from model_workflow.mwf import workflow, Project, requestables
@@ -48,7 +49,7 @@ parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHel
 subparsers = parser.add_subparsers(help='Name of the subcommand to be used', dest="subcommand")
 
 # Set the run subcommand
-run_parser = subparsers.add_parser("run", help="Run the workflow")
+run_parser = subparsers.add_parser("run", help="Run the workflow", formatter_class=RawTextHelpFormatter)
 
 # Set optional arguments
 run_parser.add_argument(
@@ -171,6 +172,13 @@ class custom (Action):
         else:
             setattr(namespace, self.dest, self.const)
 
+# Set a function to pretty print a list of available checkings / failures
+def pretty_list (availables : List[str]) -> str:
+    final_line = 'Available protocols:'
+    for available in availables:
+        final_line += '\n - ' + available + ' -> ' +  NICE_NAMES[available]
+    return final_line
+
 run_parser.add_argument(
     "-t", "--trust",
     type=str,
@@ -179,11 +187,7 @@ run_parser.add_argument(
     action=custom,
     const=AVAILABLE_CHECKINGS,
     choices=AVAILABLE_CHECKINGS,
-    help=("If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n"
-        "Available protocols:\n"
-        "- stabonds - Stable bonds\n"
-        "- cohbonds - Coherent bonds\n"
-        "- intrajrity - Trajectory integrity")
+    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n" + pretty_list(AVAILABLE_CHECKINGS)
 )
 
 run_parser.add_argument(
@@ -196,11 +200,7 @@ run_parser.add_argument(
     choices=AVAILABLE_FAILURES,
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
         "Note that all checkings are allowed to fail if the argument is passed alone.\n"
-        "Available protocols:\n"
-        "- stabonds - Stable bonds\n"
-        "- cohbonds - Coherent bonds\n"
-        "- intrajrity - Trajectory integrity\n"
-        "- refseq - Reference sequence")
+        "Available protocols:" + pretty_list(AVAILABLE_FAILURES))
 )
 
 run_parser.add_argument(
@@ -239,4 +239,4 @@ run_parser.add_argument(
         "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
 
 # Add a new to command to aid in the inputs.json setup
-inputs_parser = subparsers.add_parser("inputs", help="Set the inputs.json file")
+inputs_parser = subparsers.add_parser("inputs", help="Set the inputs.json file", formatter_class=RawTextHelpFormatter)

@@ -8,12 +8,10 @@ from mdtoolbelt.structures import Structure
 from mdtoolbelt.auxiliar import TestFailure
 
 # Import local tools
-from model_workflow.constants import TOPOLOGY_FILENAME
-from model_workflow.tools.get_safe_bonds import do_bonds_match, get_safe_bonds, get_safe_bonds_canonical_frame
+from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-
-# Import other software
-import pytraj as pt
+from model_workflow.tools.auxiliar import get_new_letter
+from model_workflow.constants import STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 
 # Analyze the structure looking for irregularities and then modify the structure to standarize the format
 #
@@ -31,7 +29,10 @@ import pytraj as pt
 # * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
 # * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
 
-# Note that the 'mercy' flag may be passed for crticial checkings to not kill the process on fail
+# Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail
+# Note that the 'trust' flag may be passed for critical checkings to skip them
+
+# This function also return some values obtained during the processing
 
 def structure_corrector (
     input_structure_file : 'File',
@@ -43,7 +44,7 @@ def structure_corrector (
     register : 'Register',
     mercy : List[str],
     trust : List[str]
-):
+) -> dict:
 
     # Track if there has been any modification and then the structure must be rewritten
     modified = False
@@ -65,26 +66,23 @@ def structure_corrector (
     # ------------------------------------------------------------------------------------------
 
     # Set if stable bonds have to be checked
-    stable_bonds_flag = 'stabonds'
-    must_check_stable_bonds = stable_bonds_flag not in trust
+    must_check_stable_bonds = STABLE_BONDS_FLAG not in trust
 
     # If this analysis has been already passed then we skip the process
-    if register.tests.get(stable_bonds_flag, None) == True:
+    if register.tests.get(STABLE_BONDS_FLAG, None) == True:
         must_check_stable_bonds = False
 
-    # Try to get bonds from the topology before guessing
-    safe_bonds = get_bonds(input_topology_file)
-    # If failed to mine topology bonds then guess stable bonds
-    if not safe_bonds:
-        print('Bonds will be guessed by atom distances and radius')
-        # Find stable bonds if necessary
-        if must_check_stable_bonds:
-            # Using the trajectory, find the safe bonds (i.e. bonds stable along several frames)
-            safe_bonds = get_safe_bonds(input_structure_file.path, input_trajectory_file.path, snapshots)
-        # If we trust stable bonds then simply use structure bonds
-        else:
-            safe_bonds = structure.bonds
-    # If the safe bonds do not match the structure bonds then we have to fix it
+    # Get safe bonds
+    safe_bonds = get_safe_bonds(
+        input_topology_file,
+        input_structure_file,
+        input_trajectory_file,
+        must_check_stable_bonds,
+        snapshots,
+        structure
+    )
+    # If safe bonds do not match the structure bonds then we have to fix it
+    safe_bonds_frame = None
     atom_elements = [ atom.element for atom in structure.atoms ]
     if must_check_stable_bonds and not do_bonds_match(structure.bonds, safe_bonds, atom_elements):
         modified = True
@@ -92,20 +90,20 @@ def structure_corrector (
         # Set the safe bonds as the structure bonds
         structure.bonds = safe_bonds
         # Find the first frame in the whole trajectory where safe bonds are respected
-        safe_bonds_frame = get_safe_bonds_canonical_frame(
+        safe_bonds_frame = get_bonds_canonical_frame(
             structure_filename = input_structure_file.path,
             trajectory_filename = input_trajectory_file.path,
             snapshots = snapshots,
-            safe_bonds = safe_bonds,
+            reference_bonds = safe_bonds,
             atom_elements = atom_elements
         )
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
             print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
-            must_be_killed = stable_bonds_flag not in mercy
+            must_be_killed = STABLE_BONDS_FLAG not in mercy
             if must_be_killed:
                 raise TestFailure('Failed to find stable bonds')
-            register.tests[stable_bonds_flag] = False
+            register.tests[STABLE_BONDS_FLAG] = False
             register.warnings.append(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates.\n'
             'The main PDB structure is the default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
         else:
@@ -119,33 +117,32 @@ def structure_corrector (
             remove(safe_bonds_frame_filename)
 
     # Tag the test as succeed if we did not skip it
-    if must_check_stable_bonds and register.tests.get(stable_bonds_flag, None) != False:
-        register.tests[stable_bonds_flag] = True
+    if must_check_stable_bonds and register.tests.get(STABLE_BONDS_FLAG, None) != False:
+        register.tests[STABLE_BONDS_FLAG] = True
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     # Set if coherent bonds have to be checked
-    coherent_bonds_flag = 'cohbonds'
-    must_check_coherent_bonds = coherent_bonds_flag not in trust
+    must_check_coherent_bonds = COHERENT_BONDS_FLAG not in trust
 
     # If this analysis has been already passed then we skip the process
-    if register.tests.get(coherent_bonds_flag, None) == True:
+    if register.tests.get(COHERENT_BONDS_FLAG, None) == True:
         must_check_stable_bonds = False
 
     # Run the coherent bonds analysis if necessary
     if must_check_coherent_bonds and structure.check_incoherent_bonds():
         print('FAIL: Uncoherent bonds were found')
-        must_be_killed = coherent_bonds_flag not in mercy
+        must_be_killed = COHERENT_BONDS_FLAG not in mercy
         if must_be_killed:
             raise TestFailure('Failed to find coherent bonds')
-        register.tests[coherent_bonds_flag] = False
+        register.tests[COHERENT_BONDS_FLAG] = False
         register.warnings.append('Bonds are not coherent. Some atoms may have less/more bonds than they should.')
 
     # Tag the test as succeed if we did not skip it
-    if must_check_coherent_bonds and register.tests.get(coherent_bonds_flag, None) != False:
-        register.tests[coherent_bonds_flag] = True
+    if must_check_coherent_bonds and register.tests.get(COHERENT_BONDS_FLAG, None) != False:
+        register.tests[COHERENT_BONDS_FLAG] = True
 
     # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------
@@ -237,43 +234,5 @@ def structure_corrector (
     # Generate the file anyway so this new structure is used and not reclaulcated
     structure.generate_pdb_file(output_structure_file.path)
 
-
-# Set a function to get the next letter from an input letter in alphabetic order
-letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
-def get_new_letter(current_letters : list) -> str:
-    new_letter = next((letter for letter in letters if letter not in current_letters), None)
-    if not new_letter:
-        raise SystemExit("There are no more letters")
-    return new_letter
-
-# Extract bonds from a source file
-def get_bonds (bonds_source_file : 'File') -> list:
-    if not bonds_source_file or not bonds_source_file.exists:
-        return None
-    # If we have the standard topology then get bonds from it
-    if bonds_source_file.filename == TOPOLOGY_FILENAME:
-        print('Bonds in the "' + bonds_source_file.filename + '" file will be used')
-        standard_topology = None
-        with open(bonds_source_file.path, 'r') as file:
-            standard_topology = load(file)
-        bonds = standard_topology.get('atom_bonds', None)
-        if bonds:
-            return bonds
-    # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
-    if bonds_source_file.is_pytraj_supported:
-        print('Bonds will be mined from "' + bonds_source_file.path + '"')
-        pt_topology = pt.load_topology(filename=bonds_source_file.path)
-        atom_bonds = [ [] for i in range(pt_topology.n_atoms) ]
-        for bond in pt_topology.bonds:
-            a,b = bond.indices
-            atom_bonds[a].append(b)
-            atom_bonds[b].append(a)
-        # If there is any bonding data then return bonds
-        if any(len(bonds) > 0 for bonds in atom_bonds):
-            return atom_bonds
-        # If all bonds are empty then it means the parsing failed or the pytraj topology has no bonds
-        # We must guess them
-        print(' Bonds could not be mined')
-    # If we can not mine bonds then return None and they will be guessed further
-    return None
+    # Return some values
+    return { 'safe_bonds': safe_bonds, 'safe_bonds_frame': safe_bonds_frame }

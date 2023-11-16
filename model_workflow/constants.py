@@ -109,10 +109,17 @@ FORBIDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':']
 DEFAULT_RMSD_CUTOFF = 9
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
+# Set the different test flags
+STABLE_BONDS_FLAG = 'stabonds'
+COHERENT_BONDS_FLAG = 'cohbonds'
+TRAJECTORY_INTEGRITY_FLAG = 'intrajrity'
+REFERENCE_SEQUENCE_FLAG = 'refseq'
+STABLE_INTERACTIONS_FLAG = 'interact'
+
 # State all the available checkings, which may be trusted
-AVAILABLE_CHECKINGS = [ 'stabonds', 'cohbonds', 'intrajrity' ]
+AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG ]
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ 'refseq', 'interact' ]
+AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG ]
 
 # Terminal colors
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
@@ -125,7 +132,9 @@ COLOR_END = '\033[0m'
 
 # Set a dictionary to parse an internal raw name to a pretty human firendly name
 NICE_NAMES = {
-    'stabonds': 'Stable bonds test',
-    'cohbonds': 'Coherent bonds test',
-    'intrajrity': 'Trajectory integrity test'
+    STABLE_BONDS_FLAG: 'Stable bonds test',
+    COHERENT_BONDS_FLAG: 'Coherent bonds test',
+    TRAJECTORY_INTEGRITY_FLAG: 'Trajectory integrity test',
+    REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
+    STABLE_INTERACTIONS_FLAG: 'Interactions are stable'
 }

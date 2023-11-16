@@ -3,7 +3,7 @@ from numpy import mean, std
 
 from typing import List
 
-test_name = 'intrajrity'
+from model_workflow.constants import TRAJECTORY_INTEGRITY_FLAG
 
 # LORE
 # This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep
@@ -28,11 +28,11 @@ def check_trajectory_integrity (
     standard_deviations_cutoff : float) -> bool:
 
     # Skip the test if we trust
-    if test_name in trust:
+    if TRAJECTORY_INTEGRITY_FLAG in trust:
         return True
 
     # Skip the test if it is already passed according to the register
-    if register.tests.get(test_name, None):
+    if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
         return True
 
     # Parse the selection in VMD selection syntax
@@ -74,7 +74,7 @@ def check_trajectory_integrity (
 
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if len(rmsd_jumps) <= 1:
-        register.tests[test_name] = True
+        register.tests[TRAJECTORY_INTEGRITY_FLAG] = True
         return True
 
     # Get the maximum RMSD value and check it is a reasonable deviation from the average values
@@ -118,9 +118,9 @@ def check_trajectory_integrity (
     if outliers_count > 0:
         # Add a warning an return True since the test failed in case we have mercy
         message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
-        if test_name in mercy:
+        if TRAJECTORY_INTEGRITY_FLAG in mercy:
             register.warnings.append(message)
-            register.tests[test_name] = False
+            register.tests[TRAJECTORY_INTEGRITY_FLAG] = False
             return False
         # Otherwise kill the process right away
         raise Exception(message)
@@ -131,5 +131,5 @@ def check_trajectory_integrity (
         register.warnings.append('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     print(' Test has passed successfully')
-    register.tests[test_name] = True
+    register.tests[TRAJECTORY_INTEGRITY_FLAG] = True
     return True

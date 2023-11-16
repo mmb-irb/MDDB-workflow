@@ -1,13 +1,13 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.constants import TOPOLOGY_FILENAME
 
 from mdtoolbelt.vmd_spells import get_covalent_bonds
 from mdtoolbelt.constants import SUPPORTED_ION_ELEMENTS
 
 from typing import List, Optional
 
+import pytraj as pt
 
-# A few frames should be enough
-frames_limit = 10
 
 # Check if two sets of bonds match perfectly
 def do_bonds_match (
@@ -45,10 +45,15 @@ def do_bonds_match (
 # Get covalent bonds using VMD along different frames
 # This way we avoid having false positives because 2 atoms are very close in one frame by accident
 # This way we avoid having false negatives because 2 atoms are very far in one frame by accident
-def get_safe_bonds (structure_filename : str, trajectory_filename : str, snapshots : int) -> List[ List[int] ]:
+def get_most_stable_bonds (
+    structure_filename : str,
+    trajectory_filename : str,
+    snapshots : int,
+    frames_limit : int = 10
+) -> List[ List[int] ]:
 
     # Get each frame in pdb format to run VMD
-    print('Finding safe bonds')
+    print('Finding most stable bonds')
     frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots, frames_limit)
 
     # Track bonds along frames
@@ -66,7 +71,7 @@ def get_safe_bonds (structure_filename : str, trajectory_filename : str, snapsho
     # It should not happend that a bond is formed around half of times
     majority_cut = count / 2
     atom_count = len(frame_bonds[0])
-    safe_bonds = []
+    most_stable_bonds = []
     for atom in range(atom_count):
         total_bonds = []
         # Accumulate all bonds
@@ -75,22 +80,22 @@ def get_safe_bonds (structure_filename : str, trajectory_filename : str, snapsho
             total_bonds += atom_bonds
         # Keep only those bonds with more occurrences than half the number of frames
         unique_bonds = set(total_bonds)
-        atom_safe_bonds = []
+        atom_most_stable_bonds = []
         for bond in unique_bonds:
             occurrences = total_bonds.count(bond)
             if occurrences > majority_cut:
-                atom_safe_bonds.append(bond)
+                atom_most_stable_bonds.append(bond)
         # Add current atom safe bonds to the total
-        safe_bonds.append(atom_safe_bonds)
+        most_stable_bonds.append(atom_most_stable_bonds)
 
-    return safe_bonds
+    return most_stable_bonds
 
 # Return a canonical frame number where all bonds are exactly as they should
-def get_safe_bonds_canonical_frame (
+def get_bonds_canonical_frame (
     structure_filename : str,
     trajectory_filename : str,
     snapshots : int,
-    safe_bonds : List[ List[int] ],
+    reference_bonds : List[ List[int] ],
     atom_elements : List[str],
     patience : int = 100, # Limit of frames to check before we surrender
 ) -> Optional[int]:
@@ -100,19 +105,77 @@ def get_safe_bonds_canonical_frame (
     frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots)
 
     # We check all frames but we stop as soon as we find a match
-    safe_bonds_frame = None
+    reference_bonds_frame = None
     for frame_number, frame_pdb in enumerate(frames):
         bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, safe_bonds, atom_elements):
-            safe_bonds_frame = frame_number
+        if do_bonds_match(bonds, reference_bonds, atom_elements):
+            reference_bonds_frame = frame_number
             break
         # If we didn't find a canonical frame at this point we probablty won't
         if frame_number > patience:
             return None
     # If no frame has the canonical bonds then we return None
-    if safe_bonds_frame == None:
+    if reference_bonds_frame == None:
         return None
 
-    print(' Got it -> Frame ' + str(safe_bonds_frame + 1))
+    print(' Got it -> Frame ' + str(reference_bonds_frame + 1))
 
-    return safe_bonds_frame
+    return reference_bonds_frame
+
+# Extract bonds from a source file
+def mine_topology_bonds (bonds_source_file : 'File') -> list:
+    if not bonds_source_file or not bonds_source_file.exists:
+        return None
+    # If we have the standard topology then get bonds from it
+    if bonds_source_file.filename == TOPOLOGY_FILENAME:
+        print('Bonds in the "' + bonds_source_file.filename + '" file will be used')
+        standard_topology = None
+        with open(bonds_source_file.path, 'r') as file:
+            standard_topology = load(file)
+        bonds = standard_topology.get('atom_bonds', None)
+        if bonds:
+            return bonds
+    # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
+    if bonds_source_file.is_pytraj_supported:
+        print('Bonds will be mined from "' + bonds_source_file.path + '"')
+        pt_topology = pt.load_topology(filename=bonds_source_file.path)
+        atom_bonds = [ [] for i in range(pt_topology.n_atoms) ]
+        for bond in pt_topology.bonds:
+            a,b = bond.indices
+            atom_bonds[a].append(b)
+            atom_bonds[b].append(a)
+        # If there is any bonding data then return bonds
+        if any(len(bonds) > 0 for bonds in atom_bonds):
+            return atom_bonds
+        # If all bonds are empty then it means the parsing failed or the pytraj topology has no bonds
+        # We must guess them
+        print(' Bonds could not be mined')
+    # If we can not mine bonds then return None and they will be guessed further
+    return None
+
+# Get safe bonds
+# First try to mine bonds from a topology files
+# If the mining fails then search for the most stable bonds
+# If we turst in stable bonds then simply return the structure bonds
+def get_safe_bonds (
+    input_topology_file : 'File',
+    input_structure_file : 'File',
+    input_trajectory_file : 'File',
+    must_check_stable_bonds : bool,
+    snapshots : int,
+    structure : 'Structure'
+) -> List[List[int]]:
+    # Try to get bonds from the topology before guessing
+    safe_bonds = mine_topology_bonds(input_topology_file)
+    if safe_bonds:
+        return safe_bonds
+    # If failed to mine topology bonds then guess stable bonds
+    print('Bonds will be guessed by atom distances and radius')
+    # Find stable bonds if necessary
+    if must_check_stable_bonds:
+        # Using the trajectory, find the most stable bonds
+        safe_bonds = get_most_stable_bonds(input_structure_file.path, input_trajectory_file.path, snapshots)
+        return safe_bonds
+    # If we trust stable bonds then simply use structure bonds
+    safe_bonds = structure.bonds
+    return safe_bonds
