@@ -41,26 +41,21 @@ First install conda-pack in any environment in your locacl machine:
 
 `conda install conda-pack`
 
-Now install in your local machine the conda enviornment as it is explained in the previous section.
-WARNING: Do not install the workflow module in this case.
-
-When packing a conda environment there must be no package installed in development mode.
-If the model workflow is installed in development mode (it can be checked with 'conda list model-workflow') then it must be uninstalled with 'pip uninstall model-workflow'.<br />
-<span style="color:blue">Don't worry, you can reinstall it later with just 'cd MoDEL-workflow; python setup.py develop'</span>
-
+Now install in your local machine the conda enviornment as it is explained in the previous section.<br />
+Note that there is no need to install the workflow module in this case.
 
 Now pack the mwf environment with:
 
-`conda pack -n mwf`
+`conda pack -n mwf --ignore-editable-packages`
 
 This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
 
-`mkdir mwf`<br />
-`tar -xzf mwf.tar.gz -C mwf` 
+`mkdir mwf_environment`<br />
+`tar -xzf mwf.tar.gz -C mwf_environment` 
 
 Activate the mwf environment:
 
-`source mwf/bin/activate`
+`source mwf_environment/bin/activate`
 
 Make a conda unpack
 
@@ -74,14 +69,14 @@ Now copy the whole workflow repository from your local machine to the remote mac
 Then install it in develop mode with:
 
 `cd MoDEL-workflow`<br />
-`mwf/bin/python setup.py develop`
+`python setup.py develop`
 
 Repeat the process with the last dependency.
 
 `git clone https://github.com/d-beltran/mdtoolbelt.git`<br />
 `rsync -avP mdtoolbelt <remote>:<path>`<br />
 `cd mdtoolbelt`<br />
-`mwf/bin/python setup.py develop`
+`python setup.py develop`
 
 ---
 
