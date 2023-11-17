@@ -100,8 +100,8 @@ def get_bonds_canonical_frame (
     patience : int = 100, # Limit of frames to check before we surrender
 ) -> Optional[int]:
 
-    # Now that we have the safe bonds, we must find a frame where bonds are exactly the canonical ones
-    print('Searching safe bonds canonical frame')
+    # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
+    print('Searching reference bonds canonical frame. Only first ' + str(patience) + ' frames will be checked.')
     frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots)
 
     # We check all frames but we stop as soon as we find a match
