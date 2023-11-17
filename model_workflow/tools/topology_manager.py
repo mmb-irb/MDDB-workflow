@@ -1,7 +1,7 @@
 # Topology/Structure management tools
 
-# Import tools from mdtoolbelt
-from mdtoolbelt.structures import Structure
+# Import local utils
+from model_workflow.utils.structures import Structure
 
 # Set a pair of independent functions to save and recover chains from a pdb file
 # WARNING: These functions must be used only when the pdb has not changed in number of atoms
@@ -20,7 +20,7 @@ def set_chains (pdb_filename : str, chains : list):
 
 # This is the new system to handle the topology
 def setup_structure (pdb_filename : str) -> 'Structure':
-    # Set the structure using mdtoolbelt
+    # Set the structure
     structure = Structure.from_pdb_file(pdb_filename)
     # Set a reference system to handle conversions to pytraj topology
     # First set the pytraj topology

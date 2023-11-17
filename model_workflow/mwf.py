@@ -37,8 +37,14 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
-#from model_workflow.tools.httpsf import mount
+
+# Import local utils
+#from model_workflow.utils.httpsf import mount
 from model_workflow.utils.register import Register
+from model_workflow.utils.conversions import convert
+from model_workflow.utils.structures import Structure
+from model_workflow.utils.file import File
+from model_workflow.utils.auxiliar import InputError
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -58,12 +64,6 @@ from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
 #from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
-
-# Import mdtoolbelt tools
-from mdtoolbelt.conversions import convert
-from mdtoolbelt.structures import Structure
-from mdtoolbelt.file import File
-from mdtoolbelt.auxiliar import InputError
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -614,7 +614,7 @@ class MD:
         if self._structure:
             return self._structure
         # Otherwise we must set the structure
-        # Note that this is not only the mdtoolbelt structure, but it also contains additional logic
+        # Note that this is not only the structure class, but it also contains additional logic
         self._structure = setup_structure(self.structure_file.path)
         # If the stable bonds test failed and we had mercy then it is sure out structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure

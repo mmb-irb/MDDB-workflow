@@ -3,7 +3,7 @@ import os
 from typing import List, Tuple
 from PIL import Image
 import math
-from mdtoolbelt.structures import Structure
+from model_workflow.utils.structures import Structure
 import numpy as np
 
 # The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon. 

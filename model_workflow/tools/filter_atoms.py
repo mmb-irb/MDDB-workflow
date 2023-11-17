@@ -9,7 +9,7 @@ import pytraj as pt
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
 from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
 
-from mdtoolbelt.selections import Selection
+from model_workflow.utils.selections import Selection
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'

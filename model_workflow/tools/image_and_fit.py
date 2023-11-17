@@ -7,9 +7,8 @@ from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.topology_manager import get_chains, set_chains
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
-
-from mdtoolbelt.structures import Structure
-from mdtoolbelt.auxiliar import InputError
+from model_workflow.utils.structures import Structure
+from model_workflow.utils.auxiliar import InputError
 
 # Set the default centering/fitting selection (vmd syntax): protein and nucleic acids
 center_selection = 'protein or nucleic'

@@ -1,9 +1,10 @@
 # Get frames count
 
 import pytraj as pt
+
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 
-from mdtoolbelt.auxiliar import InputError
+from model_workflow.utils.auxiliar import InputError
 
 # Get the trajectory frames number using pytraj
 def get_frames_count (

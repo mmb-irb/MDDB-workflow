@@ -3,11 +3,9 @@ from os import remove
 from os.path import exists
 from json import load
 
-# Import mdtoolbelt tools
-from mdtoolbelt.structures import Structure
-from mdtoolbelt.auxiliar import TestFailure
-
 # Import local tools
+from model_workflow.utils.structures import Structure
+from model_workflow.utils.auxiliar import TestFailure
 from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import get_new_letter

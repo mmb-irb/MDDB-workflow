@@ -1,8 +1,6 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.constants import TOPOLOGY_FILENAME
-
-from mdtoolbelt.vmd_spells import get_covalent_bonds
-from mdtoolbelt.constants import SUPPORTED_ION_ELEMENTS
+from model_workflow.utils.constants import TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
+from model_workflow.utils.vmd_spells import get_covalent_bonds
 
 from typing import List, Optional
 

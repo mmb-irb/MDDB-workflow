@@ -112,3 +112,177 @@ NICE_NAMES = {
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable'
 }
+
+# Set the "standard" file format of every possible file extension
+# Note that some formats have different possible extension (e.g. nc, cdf, netcdf)
+EXTENSION_FORMATS = {
+    # Topologies
+    'top': 'top',
+    'psf': 'psf',
+    'prmtop': 'prmtop',
+    'prm7': 'prmtop',
+    'txt': 'txt', # charges.txt
+    # Structures
+    'pdb': 'pdb',
+    'gro': 'gro',
+    # Trajectories
+    'xtc': 'xtc',
+    'trr': 'trr',
+    'dcd': 'dcd',
+    'nc': 'nc',
+    'cdf': 'nc',
+    'netcdf': 'nc',
+    'crd': 'crd',
+    'mdcrd': 'crd',
+    'trj': 'crd',
+    # Other
+    'json': 'json',
+    'npy': 'npy',
+    'in': 'txt'
+}
+
+# Topology and trajectory file formats supported by PyTraj
+PYTRAJ_SUPPORTED_FORMATS = set([
+    # Topologies
+    'prmtop', 'top', 'psf', 'pdb'
+    # Trajectories
+    'nc', 'crd', 'dcd', 'trr', 'xtc'
+])
+
+# From GitHub:
+# ParmFormatDict = {
+#     "AMBERPARM": AMBERPARM,
+#     "PDBFILE": PDBFILEPARM,
+#     "MOL2FILE": MOL2FILEPARM,
+#     "CHARMMPSF": CHARMMPSF,
+#     "CIFFILE": CIFFILE,
+#     "GMXTOP": GMXTOP,
+#     "SDFFILE": SDFFILE,
+#     "TINKER": TINKERPARM,
+#     "UNKNOWN_PARM": UNKNOWN_PARM,
+# }
+
+# Set some flags requeired to write files with pytraj
+PYTRAJ_PARM_FORMAT = {
+    'prmtop': 'AMBERPARM',
+    'psf': 'CHARMMPSF',
+    'top': 'GMXTOP',
+    'pdb': 'PDBFILE'
+}
+
+# Elements supported while correcting atom elements
+SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S' ])
+SUPPORTED_ION_ELEMENTS = set([ 'K', 'F', 'Cl', 'Na', 'Zn', 'Mg', 'Fe', 'Br', 'Mn', 'I', 'Ca' ])
+SUPPORTED_ELEMENTS = SUPPORTED_POLYMER_ELEMENTS.union(SUPPORTED_ION_ELEMENTS)
+
+# Set a dictionary with all residue names and their equivalent letters
+RESIDUE_NAME_LETTERS = {
+    # Amino acids
+    'ALA':'A',
+    'ALAN':'A',
+    'ALAC':'A',
+    'ARG':'R',
+    'ARGN':'R',
+    'ARGC':'R',
+    'ASN':'N',
+    'ASNN':'N',
+    'ASNC':'N',
+    'ASP':'D',
+    'ASPN':'D',
+    'ASPC':'D',
+    'CYS':'C',
+    'CYSN':'C',
+    'CYSC':'C',
+    'CYH':'C',
+    'CSH':'C',
+    'CSS':'C',
+    'CYX':'C',
+    'CYP':'C',
+    'GLN':'Q',
+    'GLNN':'Q',
+    'GLNC':'Q',
+    'GLU':'E',
+    'GLUN':'E',
+    'GLUC':'E',
+    'GLY':'G',
+    'GLYN':'G',
+    'GLYC':'G',
+    'HIS':'H',
+    'HISN':'H',
+    'HISC':'H',
+    'HID':'H',
+    'HIE':'H',
+    'HIP':'H',
+    'HSD':'H',
+    'HSE':'H',
+    'ILE':'I',
+    'ILEN':'I',
+    'ILEC':'I',
+    'ILU':'I',
+    'LEU':'L',
+    'LEUN':'L',
+    'LEUC':'L',
+    'LYS':'K',
+    'LYSN':'K',
+    'LYSC':'K',
+    'MET':'M',
+    'METN':'M',
+    'METC':'M',
+    'PHE':'F',
+    'PHEN':'F',
+    'PHEC':'F',
+    'PRO':'P',
+    'PRON':'P',
+    'PROC':'P',
+    'PRØ':'P',
+    'PR0':'P',
+    'PRZ':'P',
+    'SER':'S',
+    'SERN':'S',
+    'SERC':'S',
+    'THR':'T',
+    'THRN':'T',
+    'THRC':'R',
+    'TRP':'W',
+    'TRPN':'W',
+    'TRPC':'W',
+    'TRY':'W',
+    'TYR':'Y',
+    'TYRN':'Y',
+    'TYRC':'Y',
+    'VAL':'V',
+    'VALN':'V',
+    'VALC':'V',
+    # Nucleotides
+    'A': 'A',
+    'A3': 'A',
+    'A5': 'A',
+    'DA': 'A',
+    'RA': 'A',
+    'C': 'C',
+    'C3': 'C',
+    'C5': 'C',
+    'DC': 'C',
+    'RC': 'C',
+    'T': 'T',
+    'T3': 'T',
+    'T5': 'T',
+    'DT': 'T',
+    'G': 'G',
+    'G3': 'G',
+    'G5': 'G',
+    'DG': 'G',
+    'RG': 'G',
+    'U': 'U',
+    'U3': 'U',
+    'U5': 'U',
+    'RU': 'U',
+    'DA3': 'A',
+    'DA5': 'A',
+    'DT3': 'T',
+    'DT5': 'T',
+    'DC3': 'C',
+    'DC5': 'C',
+    'DG3': 'G',
+    'DG5': 'G',
+}

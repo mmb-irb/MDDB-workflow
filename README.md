@@ -22,13 +22,6 @@ Then install the workflow module in development mode:
 
 `python setup.py develop`
 
-There is one last dependency to be installed:
-
-`cd ..`<br />
-`git clone https://github.com/d-beltran/mdtoolbelt.git`<br />
-`cd mdtoolbelt`<br />
-`python setup.py develop`
-
 
 ---
 
@@ -69,13 +62,6 @@ Now copy the whole workflow repository from your local machine to the remote mac
 Then install it in develop mode with:
 
 `cd MoDEL-workflow`<br />
-`python setup.py develop`
-
-Repeat the process with the last dependency.
-
-`git clone https://github.com/d-beltran/mdtoolbelt.git`<br />
-`rsync -avP mdtoolbelt <remote>:<path>`<br />
-`cd mdtoolbelt`<br />
 `python setup.py develop`
 
 ---
