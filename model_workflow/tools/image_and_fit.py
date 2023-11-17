@@ -6,8 +6,10 @@ from os.path import exists
 from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.topology_manager import get_chains, set_chains
+from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 
 from mdtoolbelt.structures import Structure
+from mdtoolbelt.auxiliar import InputError
 
 # Set the default centering/fitting selection (vmd syntax): protein and nucleic acids
 center_selection = 'protein or nucleic'
@@ -64,7 +66,7 @@ def image_and_fit (
     is_tpr_available = input_topology_file and input_topology_file.format == 'tpr'
     has_pbc_residues = bool(pbc_selection)
     if has_pbc_residues and not is_tpr_available:
-        raise SystemExit('In order to image a simulation with PBC residues it is mandatory to provide a .tpr file')
+        raise InputError('In order to image a simulation with PBC residues it is mandatory to provide a .tpr file')
 
     # Imaging --------------------------------------------------------------------------------------
 
@@ -75,7 +77,7 @@ def image_and_fit (
 
         # If so run the imaging process without the '-center' flag
         if must_translate:
-
+            print(GREY_HEADER)
             # Run Gromacs
             p = Popen([
                 "echo",
@@ -101,10 +103,11 @@ def image_and_fit (
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
+            print(COLOR_END)
 
         # Otherwise, center the custom selection
         else:
-
+            print(GREY_HEADER)
             # Run Gromacs
             p = Popen([
                 "echo",
@@ -128,13 +131,14 @@ def image_and_fit (
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
+            print(COLOR_END)
 
         # Select the first frame of the recently imaged trayectory as the new topology
         reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
 
         # If there are PBC residues then run a '-pbc mol' to make all residues stay inside the box anytime
         if has_pbc_residues:
-
+            print(GREY_HEADER)
             # Run Gromacs
             p = Popen([
                 "echo",
@@ -156,6 +160,7 @@ def image_and_fit (
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
+            print(COLOR_END)
 
             # Select the first frame of the recently translated and imaged trayectory as the new topology
             reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
@@ -165,6 +170,8 @@ def image_and_fit (
 
         # If there are no PBC residues then run a '-pbc nojump' to avoid non-sense jumping of any molecule
         else:
+            print(GREY_HEADER)
+            # Run Gromacs
             p = Popen([
                 "echo",
                 "System",
@@ -189,6 +196,7 @@ def image_and_fit (
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE).stdout.decode()
             p.stdout.close()
+            print(COLOR_END)
 
     # Fitting --------------------------------------------------------------------------------------
 
@@ -198,8 +206,10 @@ def image_and_fit (
 
         # The trajectory to fit is the already imaged trajectory
         # However, if there was no imaging, the trajectory to fit is the input trajectory
-        trajectroy_to_fit = output_trajectory_file.path if image else input_trajectory_file.path
+        structure_to_fit = output_structure_file if image else input_structure_file
+        trajectroy_to_fit = output_trajectory_file if image else input_trajectory_file
 
+        print(GREY_HEADER)
         # Run Gromacs
         p = Popen([
             "echo",
@@ -210,9 +220,9 @@ def image_and_fit (
             "gmx",
             "trjconv",
             "-s",
-            output_structure_file.path,
+            structure_to_fit.path,
             "-f",
-            trajectroy_to_fit,
+            trajectroy_to_fit.path,
             '-o',
             output_trajectory_file.path,
             '-fit',
@@ -222,6 +232,11 @@ def image_and_fit (
             '-quiet'
         ], stdin=p.stdout, stdout=PIPE).stdout.decode()
         p.stdout.close()
+        print(COLOR_END)
+        
+        # If there is no output structure at this time (i.e. there was no imaging) then set symlink here
+        if not output_structure_file.exists:
+            output_structure_file.set_symlink_to(input_structure_file)
 
     # Recover chains
     set_chains(output_structure_file.path, chains_backup)

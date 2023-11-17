@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, remove, symlink, rename, walk, mkdir, getcwd
-from os.path import exists, isabs
+from os.path import exists, islink, isabs
 import sys
 import io
 import math
@@ -484,7 +484,7 @@ class MD:
         ]
         for filename in intermediate_filenames:
             file_path = self.md_pathify(filename)
-            if exists(file_path):
+            if exists(file_path) or islink(file_path):
                 remove(file_path)
 
         # --- RUNNING FINAL TESTS ------------------------------------------------------------
