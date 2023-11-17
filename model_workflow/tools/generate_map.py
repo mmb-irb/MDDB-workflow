@@ -650,7 +650,7 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 1. Get structure sequences
 # 2. Calculate which reference domains are covered by the previous sequence
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
-from model_workflow.utils.covid_variants import get_variants
+from model_workflow.resources.covid_variants import get_variants
 def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict:
     # First mine the sequences from the structure
     # Set a different sequence for each chain

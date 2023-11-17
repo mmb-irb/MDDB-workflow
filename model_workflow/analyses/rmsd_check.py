@@ -3,7 +3,7 @@ from numpy import mean, std
 
 from typing import List
 
-from model_workflow.constants import TRAJECTORY_INTEGRITY_FLAG
+from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 
 # LORE
 # This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep

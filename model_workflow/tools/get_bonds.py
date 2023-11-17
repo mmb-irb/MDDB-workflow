@@ -1,5 +1,5 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.constants import TOPOLOGY_FILENAME
+from model_workflow.utils.constants import TOPOLOGY_FILENAME
 
 from mdtoolbelt.vmd_spells import get_covalent_bonds
 from mdtoolbelt.constants import SUPPORTED_ION_ELEMENTS

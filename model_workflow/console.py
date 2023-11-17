@@ -4,10 +4,10 @@ from typing import List
 
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 from model_workflow.mwf import workflow, Project, requestables
-from model_workflow.constants import *
+from model_workflow.utils.constants import *
 
 # Set the path to the input setter jupyter notebook
-input_setter = str(Path(__file__).parent / "utils" / "input_setter.ipynb")
+input_setter = str(Path(__file__).parent / "resources" / "input_setter.ipynb")
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 

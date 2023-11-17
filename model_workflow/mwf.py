@@ -16,7 +16,7 @@ from glob import glob
 from typing import Optional, Union, List, Callable
 
 # Constants
-from model_workflow.constants import *
+from model_workflow.utils.constants import *
 
 # Import local tools
 from model_workflow.tools.topology_manager import setup_structure
@@ -38,7 +38,7 @@ from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
 #from model_workflow.tools.httpsf import mount
-from model_workflow.tools.register import Register
+from model_workflow.utils.register import Register
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds

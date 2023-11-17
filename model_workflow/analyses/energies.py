@@ -39,7 +39,7 @@ ERASE_2_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE
 # distance_cutoff = 5
 
 # Set the path to auxiliar files required for this analysis
-resources = str(Path(__file__).parent.parent / "utils" / "resources")
+resources = str(Path(__file__).parent.parent / "resources")
 #preppdb_source = resources + '/preppdb.pl'
 preppdb_source = resources + '/old_preppdb.pl' # DANI: Este no renombra los terminales
 cmip_inputs_checkonly_source = resources + '/check.in'

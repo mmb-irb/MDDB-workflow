@@ -10,8 +10,8 @@ from mdtoolbelt.auxiliar import TestFailure
 # Import local tools
 from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-from model_workflow.tools.auxiliar import get_new_letter
-from model_workflow.constants import STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
+from model_workflow.utils.auxiliar import get_new_letter
+from model_workflow.utils.constants import STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 
 # Analyze the structure looking for irregularities and then modify the structure to standarize the format
 #

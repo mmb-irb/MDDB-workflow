@@ -6,7 +6,7 @@ from pathlib import Path
 from subprocess import Popen, PIPE
 import re
 
-from model_workflow.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser

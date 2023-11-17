@@ -5,7 +5,7 @@ from typing import Optional
 import json
 import atexit
 
-from model_workflow.constants import REGISTER_FILENAME
+from model_workflow.utils.constants import REGISTER_FILENAME
 
 from mdtoolbelt.file import File
 
