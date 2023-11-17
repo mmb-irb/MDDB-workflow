@@ -424,7 +424,14 @@ class MD:
         # Snapshots are calculated by default from the already processed structure and trajectory
         # For this reason we can not rely on the public snapshots getter
         # We must calculate snapshots here using last step structure and trajectory
-        self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
+        # If we already have a value in the register cache then use it
+        field_name = 'snapshots'
+        if field_name in self.register.cache:
+            self._snapshots = self.register.cache[field_name]
+        else:
+            self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
+        # Save the snapshots value in the register cache as well
+        self.register.cache[field_name] = self._snapshots
 
         print(' * Correcting structure')
 
