@@ -34,32 +34,6 @@ TRAJECTORY_FILENAME = 'trajectory.xtc'
 
 # Intermediate filenames
 REGISTER_FILENAME = '.register.json'
-# Set the input values to be saved in the project register
-REGISTER_INPUTS = [
-    'directory',
-    'accession',
-    'database_url',
-    'inputs_filepath',
-    'input_topology_filepath',
-    'input_structure_filepath',
-    'input_trajectory_filepaths',
-    'populations_filepath',
-    'transitions_filepath',
-    'md_directories',
-    'reference_md_index',
-    'filter_selection',
-    'pbc_selection',
-    'image',
-    'fit',
-    'translation',
-    'mercy',
-    'trust',
-    'pca_selection',
-    'pca_fit_selection',
-    'rmsd_cutoff',
-    'interaction_cutoff',
-    'sample_trajectory',
-]
 
 # An old system for when original topology is very wrong and charges must be provided manually
 RAW_CHARGES_FILENAME = 'charges.txt'

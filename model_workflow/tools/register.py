@@ -1,3 +1,4 @@
+from sys import argv
 from os.path import exists
 from datetime import datetime
 from typing import Optional
@@ -11,13 +12,13 @@ from mdtoolbelt.file import File
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
 # It is also responsible for storing test failure warnings to be written in metadata
 class Register:
-    def __init__ (self, inputs : Optional[dict] = None, file_path : str = REGISTER_FILENAME):
+    def __init__ (self, file_path : str = REGISTER_FILENAME):
         # Save the previous register
         self.file = File(file_path)
+        # Save the current workflow call
+        self.call = ' '.join(argv)
         # Save the current date
         self.date = datetime.today().strftime('%d-%m-%Y %H:%M:%S')
-        # Save the inputs, if passed
-        self.inputs = inputs
         # Set a cache for some already calculated values
         self.cache = {}
         # Set the tests tracker
@@ -49,15 +50,12 @@ class Register:
     def to_dict (self) -> dict:
         # Set a dictionary with the current values
         dictionary = {
-            'inputs': self.inputs,
+            'call': self.call,
             'date': self.date,
             'cache': self.cache,
             'tests': self.tests,
             'warnings': self.warnings,
         }
-        # Remove inputs if it is empty
-        if not dictionary['inputs']:
-            del dictionary['inputs']
         return dictionary
 
     # Save the register to a json file

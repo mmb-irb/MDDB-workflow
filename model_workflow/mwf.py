@@ -1192,10 +1192,7 @@ class Project:
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        register_inputs = {}
-        for input_name in REGISTER_INPUTS:
-            register_inputs[input_name] = getattr(self, input_name)
-        self.register = Register(inputs=register_inputs)
+        self.register = Register()
 
     # Check input trajectory file paths to be right
     # If there is any problem then fix it or directly raise an input error
