@@ -176,7 +176,10 @@ class custom (Action):
 def pretty_list (availables : List[str]) -> str:
     final_line = 'Available protocols:'
     for available in availables:
-        final_line += '\n - ' + available + ' -> ' +  NICE_NAMES[available]
+        nice_name = NICE_NAMES.get(available, None)
+        if not nice_name:
+            raise Exception('Flag "' + available + '" has not a defined nice name')
+        final_line += '\n - ' + available + ' -> ' +  nice_name
     return final_line
 
 run_parser.add_argument(

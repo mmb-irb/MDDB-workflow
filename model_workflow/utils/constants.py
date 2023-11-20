@@ -87,13 +87,14 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 STABLE_BONDS_FLAG = 'stabonds'
 COHERENT_BONDS_FLAG = 'cohbonds'
 TRAJECTORY_INTEGRITY_FLAG = 'intrajrity'
+CORRECT_ELEMENTS = 'elements'
 REFERENCE_SEQUENCE_FLAG = 'refseq'
 STABLE_INTERACTIONS_FLAG = 'interact'
 
 # State all the available checkings, which may be trusted
 AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG ]
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG ]
+AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG ]
 
 # Terminal colors
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
@@ -109,6 +110,7 @@ NICE_NAMES = {
     STABLE_BONDS_FLAG: 'Stable bonds test',
     COHERENT_BONDS_FLAG: 'Coherent bonds test',
     TRAJECTORY_INTEGRITY_FLAG: 'Trajectory integrity test',
+    CORRECT_ELEMENTS: 'Correct elements',
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable'
 }

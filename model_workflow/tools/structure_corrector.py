@@ -9,7 +9,7 @@ from model_workflow.utils.auxiliar import TestFailure
 from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import get_new_letter
-from model_workflow.utils.constants import STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
+from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 
 # Analyze the structure looking for irregularities and then modify the structure to standarize the format
 #
@@ -56,7 +56,7 @@ def structure_corrector (
 
     # It is important to fix elements before trying to fix bonds, since elements have an impact on bonds
     # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
-    if structure.fix_atom_elements(trust=False):
+    if structure.fix_atom_elements(trust=(CORRECT_ELEMENTS in trust)):
         modified = True
 
     # ------------------------------------------------------------------------------------------

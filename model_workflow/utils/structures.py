@@ -227,18 +227,19 @@ class Atom:
     def is_ion (self) -> bool:
         return len(self.bonds) == 0
 
-    # Guess an atom element from its name and the fact that it is the unique atom in the residue (i.e. an ion) or not
-    def guess_element (self, flexible : bool = False) -> str:
-        # Set the supported elements
-        if flexible:
-            # If we are flexible then allow all defined elements
-            supported_elements = SUPPORTED_ELEMENTS
-        else:
-            # Set the supported elements according to if it is an ion or not
-            # Note that this distinction between ion and polymer elements allows to support elements like calcium
-            # Otherwise all alpha carbon, whose name is CA, would be considered as calcium
-            # Another example is ligands with nitrogens called 'NA' which would be considered as sodium
-            supported_elements = SUPPORTED_ION_ELEMENTS if self.is_ion() else SUPPORTED_POLYMER_ELEMENTS
+    # Guess an atom element from its name and number of bonds
+    def guess_element (self) -> str:
+        element = self.get_name_suggested_element()
+        # CA may refer to calcium or alpha carbon, so the number of bonds is decisive
+        if element == 'Ca' and len(self.bonds) >= 2:
+            return 'C'
+        # NA may refer to sodium or some ligand nitrogen, so the number of bonds is decisive
+        if element == 'Na' and len(self.bonds) >= 2:
+            return 'N'
+        return element
+
+    # Guess an atom element from its name only
+    def get_name_suggested_element (self) -> str:
         # Get the atom name and its characters length
         name = self.name
         length = len(name)
@@ -258,19 +259,16 @@ class Atom:
                 # Start with the second letter in caps
                 next_character = next_character.upper()
                 both = character + next_character
-                if both in supported_elements:
+                if both in SUPPORTED_ELEMENTS:
                     return both
                 # Continue with the second letter in lowers
                 next_character = next_character.lower()
                 both = character + next_character
-                if both in supported_elements:
+                if both in SUPPORTED_ELEMENTS:
                     return both
             # Finally, try with the first character alone
-            if character in supported_elements:
+            if character in SUPPORTED_ELEMENTS:
                 return character
-        # If we did not try with the flexible solve yet then give it a last try
-        if not flexible:
-            return self.guess_element(flexible=True)
         raise InputError("Not recognized element in '" + name + "'")
 
 # A residue
