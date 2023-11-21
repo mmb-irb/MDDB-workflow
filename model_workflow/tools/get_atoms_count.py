@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 # Load the reference for protein residue names
-resources = str(Path(__file__).parent.parent / "utils" / "resources")
+resources = str(Path(__file__).parent.parent / "resources") # / "utils"
 residues_source = resources + '/residues.json'
 
 # This script is used to count different type of atoms and residues in a pdb topology
