@@ -58,6 +58,10 @@ def generate_map_online (
     forced_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
+    # Forced references must be list or dict
+    # If it is none then we set it as an empty list
+    if forced_references == None:
+        forced_references = []
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
     strict_references = type(forced_references) == dict
     # Check the "no referable" flag not to be passed when references are not strict
