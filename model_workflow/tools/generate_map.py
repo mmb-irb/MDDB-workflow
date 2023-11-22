@@ -91,30 +91,30 @@ def generate_map_online (
         for k,v in imported_references.items():
             references[k] = v
     # Get the structure chain sequences
-    structure_sequences = get_chain_sequences(structure)
+    parsed_chains = get_parsed_chains(structure)
     # Find out which chains are protein
-    protein_sequences = []
-    for structure_sequence in structure_sequences:
-        sequence = structure_sequence['sequence']
+    protein_parsed_chains = []
+    for chain_data in parsed_chains:
+        sequence = chain_data['sequence']
         if next((letter for letter in sequence if letter != 'X'), None):
-            structure_sequence['match'] = { 'ref': None, 'map': None, 'score': 0 }
-            protein_sequences.append(structure_sequence)
+            chain_data['match'] = { 'ref': None, 'map': None, 'score': 0 }
+            protein_parsed_chains.append(chain_data)
     # If there are no protein sequences then there is no need to map anything
-    if len(protein_sequences) == 0:
+    if len(protein_parsed_chains) == 0:
         print(' There are no protein sequences')
-        return format_topology_data(structure, protein_sequences)
+        return format_topology_data(structure, protein_parsed_chains)
     # For each input forced reference, get the reference sequence
     reference_sequences = {}
     # Save already tried alignments to not repeat the alignment further
-    tried_alignments = { structure_sequence['name']: [] for structure_sequence in protein_sequences }
+    tried_alignments = { chain_data['name']: [] for chain_data in protein_parsed_chains }
     # Set a function to try to match all protein sequences with the available reference sequences
-    # In case of match, objects in the 'protein_sequences' list are modified by adding the result
+    # In case of match, objects in the 'protein_parsed_chains' list are modified by adding the result
     # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
     def match_sequences () -> bool:
         # Track each chain-reference alignment match and keep the score of successful alignments
         # Now for each structure sequence, align all reference sequences and keep the best alignment (if it meets the minimum)
-        for structure_sequence in protein_sequences:
-            chain = structure_sequence['name']
+        for chain_data in protein_parsed_chains:
+            chain = chain_data['name']
             chain_tried_alignments = tried_alignments[chain]
             # In case references are forced per chain check if there is a reference for this chain and match according to this
             if strict_references:
@@ -123,30 +123,35 @@ def generate_map_online (
                 if forced_reference:
                     # If the chain has a specific forced reference then we must align it just once
                     # Skip this process in further matches
-                    if structure_sequence['match']['ref']:
+                    if chain_data['match']['ref']:
                         continue
                     # In case the forced reference is the "no referable" flag
                     # Thus it has no reference sequence and we must not try to match it
                     # Actually, any match would be accidental and not correct
                     if forced_reference == no_referable_flag:
-                        structure_sequence['match'] = { 'ref': no_referable_flag }
+                        chain_data['match'] = { 'ref': no_referable_flag }
                         continue
                     # In case the forced reference is the "not found" flag
                     # This should not happend but we may be using references as forced references, so just in case
                     if forced_reference == not_found_flag:
-                        structure_sequence['match'] = { 'ref': not_found_flag }
+                        chain_data['match'] = { 'ref': not_found_flag }
                         continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
                     reference_sequence = reference_sequences[forced_reference]
                     print(' Aligning chain ' + chain + ' with ' + forced_reference + ' reference sequence')
-                    align_results = align(reference_sequence, structure_sequence['sequence'])
+                    align_results = align(reference_sequence, chain_data['sequence'])
                     # The align must match or we stop here and warn the user
                     if not align_results:
                         raise SystemExit('Forced reference ' + chain + ' -> ' + forced_reference + ' does not match in sequence')
                     sequence_map, align_score = align_results
                     reference = references[forced_reference]
-                    structure_sequence['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
+                    chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
                     continue
+            # If the chain has already a match and this match is among the forced references then stop here
+            # Forced references have priority and this avoids having a match with a not forced reference further
+            if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in forced_references:
+                continue
+            # Iterate over the deifferent available reference sequences
             for uniprot_id, reference_sequence in reference_sequences.items():
                 # If this alignment has been tried already then skip it
                 if uniprot_id in chain_tried_alignments:
@@ -154,27 +159,27 @@ def generate_map_online (
                 # Align the structure sequence with the reference sequence
                 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
                 print(' Aligning chain ' + chain + ' with ' + uniprot_id + ' reference sequence')
-                align_results = align(reference_sequence, structure_sequence['sequence'])
+                align_results = align(reference_sequence, chain_data['sequence'])
                 tried_alignments[chain].append(uniprot_id) # Save the alignment try, no matter if it works or not
                 if not align_results:
                     continue
                 # In case we have a valid alignment, check the alignment score is better than the current reference score (if any)
                 sequence_map, align_score = align_results
-                current_reference = structure_sequence['match']
+                current_reference = chain_data['match']
                 if current_reference['score'] > align_score:
                     continue
                 reference = references[uniprot_id]
                 # If the alignment is better then we impose the new reference
-                structure_sequence['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
+                chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
         # Sum up the current matching
         print(' Reference summary:')
-        for structure_sequence in structure_sequences:
-            name = structure_sequence['name']
-            match = structure_sequence.get('match', None)
+        for chain_data in parsed_chains:
+            name = chain_data['name']
+            match = chain_data.get('match', None)
             if not match:
                 print('   ' + name + ' -> Not protein')
                 continue
-            reference = structure_sequence['match'].get('ref', None)
+            reference = chain_data['match'].get('ref', None)
             if not reference:
                 print('   ' + name + ' -> ¿?')
                 continue
@@ -187,9 +192,9 @@ def generate_map_online (
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
         # Export already matched references
-        export_references(protein_sequences)
+        export_references(protein_parsed_chains)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-        allright = all([ structure_sequence['match']['ref'] for structure_sequence in protein_sequences ])            
+        allright = all([ chain_data['match']['ref'] for chain_data in protein_parsed_chains ])            
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
@@ -217,7 +222,7 @@ def generate_map_online (
         # If we have every protein chain matched with a reference then we stop here
         print(' Using only forced references from inputs.json')
         if match_sequences():
-            return format_topology_data(structure, protein_sequences)
+            return format_topology_data(structure, protein_parsed_chains)
     # Now add the imported references to reference sequences. Thus now they will be 'matchable'
     # Thus now they will be 'matchable', so try to match sequences again in case any of the imported references has not been tried
     # It was not done before since we want forced references to have priority
@@ -234,7 +239,7 @@ def generate_map_online (
         if need_rematch:
             print(' Using also references imported from references.json')
             if match_sequences():
-                return format_topology_data(structure, protein_sequences)
+                return format_topology_data(structure, protein_parsed_chains)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot codes associated to the pdb codes, if any
     if len(pdb_ids) > 0:
@@ -254,18 +259,18 @@ def generate_map_online (
         # If we have every protein chain matched with a reference already then we stop here
         print(' Using also references related to PDB ids from inputs.json')
         if match_sequences():
-            return format_topology_data(structure, protein_sequences)
+            return format_topology_data(structure, protein_parsed_chains)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, we run a blast with each orphan chain sequence
-    for structure_sequence in protein_sequences:
+    for chain_data in protein_parsed_chains:
         # Skip already references chains
-        if structure_sequence['match']['ref']:
+        if chain_data['match']['ref']:
             continue
         # Run the blast
-        sequence = structure_sequence['sequence']
+        sequence = chain_data['sequence']
         uniprot_id = blast(sequence)
         if not uniprot_id:
-            structure_sequence['match'] = { 'ref': not_found_flag }
+            chain_data['match'] = { 'ref': not_found_flag }
             continue
         # Build a new reference from the resulting uniprot
         reference, already_loaded = get_reference(uniprot_id)
@@ -275,7 +280,7 @@ def generate_map_online (
         # If we have every protein chain matched with a reference already then we stop here
         print(' Using also references from blast')
         if match_sequences():
-            return format_topology_data(structure, protein_sequences)
+            return format_topology_data(structure, protein_parsed_chains)
     # At this point we should have macthed all sequences
     # If not, kill the process unless mercy was given
     must_be_killed = 'refseq' not in mercy
@@ -283,7 +288,7 @@ def generate_map_online (
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
     print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
     register.warnings.append('There is at least one protein region which is not mapped to any reference sequence')
-    return format_topology_data(structure, protein_sequences)
+    return format_topology_data(structure, protein_parsed_chains)
 
 # Export reference objects data to a json file
 # This file is used by the loader to load new references to the database
@@ -381,8 +386,8 @@ def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
 
 # Get each chain name and aminoacids sequence in a topology
 # Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]
-def get_chain_sequences (structure : 'Structure') -> list:
-    sequences = []
+def get_parsed_chains (structure : 'Structure') -> list:
+    parsed_chains = []
     chains = structure.chains
     for chain in chains:
         name = chain.name
@@ -392,10 +397,9 @@ def get_chain_sequences (structure : 'Structure') -> list:
             letter = residue_name_2_letter(residue.name, 'aminoacids')
             sequence += letter
             residue_indices.append(residue.index)
-        # Save sequences by chain name (i.e. chain id or chain letter)
         sequence_object = { 'name': name, 'sequence': sequence, 'residue_indices': residue_indices }
-        sequences.append(sequence_object)
-    return sequences
+        parsed_chains.append(sequence_object)
+    return parsed_chains
 
 # Align two aminoacid sequences
 # Return a list with the reference residue indexes (values)
