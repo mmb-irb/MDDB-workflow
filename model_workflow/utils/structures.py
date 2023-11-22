@@ -453,6 +453,7 @@ class Residue:
     # - ion
     # - solvent
     # - acetyl
+    # - amide
     # - other
     def get_classification (self) -> str:
         # Return the internal value, if any
@@ -567,6 +568,11 @@ class Residue:
         # Check if it is an acetylation capping terminal
         if self.name == 'ACE':
             self._classification = 'acetyl'
+            return self._classification
+        # -------------------------------------------------------------------------------------------------------
+        # Check if it is an N-methyl amide capping terminal
+        if self.name == 'NME':
+            self._classification = 'amide'
             return self._classification
         # -------------------------------------------------------------------------------------------------------
         self._classification = 'other'
@@ -1896,6 +1902,7 @@ class Structure:
         'ion': Warning('Ion is covalently bonded to protein'), # DANI: esto no es "correcto" pero si habitual
         'solvent': Warning('Solvent is covalently bonded to protein'), # DANI: probablemente sea un error
         'acetyl': 'Acetylation', # Typical N-capping terminals
+        'amide': 'Amidation', # Typical C-capping terminals
         'other': Warning('Unknow type of PTM'), # Something not supported
     }
 
