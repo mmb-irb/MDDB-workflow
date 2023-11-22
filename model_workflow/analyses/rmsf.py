@@ -8,6 +8,7 @@ from numpy import mean, std
 from typing import List
 
 from model_workflow.tools.xvg_parse import xvg_parse
+from model_workflow.utils.auxiliar import save_json
 
 # Set an auxiliar data filename
 rmsf_data_filename = '.rmsf_data.xvg'
