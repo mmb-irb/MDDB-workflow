@@ -4,12 +4,12 @@
 # This is finding the most populated frames and calculating an RMSD matrix between these frames
 
 from typing import List
-from json import dump
 from os import remove
 
 import mdtraj as mdt
 
-from model_workflow.tools.get_screenshot import get_screenshot 
+from model_workflow.tools.get_screenshot import get_screenshot
+from model_workflow.utils.auxiliar import save_json
 
 auxiliar_pdb_filename = '.model.pdb'
 
@@ -99,5 +99,4 @@ def markov (
         'populations': highest_populations,
         'rmsd_matrix': rmsd_matrix
     }
-    with open(output_analysis_filename, 'w') as file:
-        dump(data, file)
+    save_json(data, output_analysis_filename)

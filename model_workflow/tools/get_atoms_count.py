@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from model_workflow.utils.auxiliar import load_json
+
 # Load the reference for protein residue names
 resources = str(Path(__file__).parent.parent / "resources") # / "utils"
 residues_source = resources + '/residues.json'
@@ -8,9 +10,7 @@ residues_source = resources + '/residues.json'
 # This script is used to count different type of atoms and residues in a pdb topology
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb
-def get_atoms_count (
-    input_topology_filename : str,
-    ) -> tuple:
+def get_atoms_count (input_topology_filename : str) -> tuple:
 
     # Number of system atoms
     systats = 0
@@ -34,9 +34,7 @@ def get_atoms_count (
     cl = 0
 
     # List all possible aminoacids
-    aminoacids = None
-    with open(residues_source, 'r') as file:
-        aminoacids = json.load(file)
+    aminoacids = load_json(residues_source)
 
     # Read the first frame pdb file and get the desired data
     # Residue count in the pdb file is reset after residue 9999

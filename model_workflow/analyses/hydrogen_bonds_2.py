@@ -13,10 +13,10 @@ import pytraj as pt
 import numpy
 import re
 from math import ceil
-import json
 from typing import List, Optional
 
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
+from model_workflow.utils.auxiliar import save_json
 
 # Perform an hydrogen bonds analysis for each interaction interface
 # The 'interactions' input may be an empty list (i.e. there are no interactions)
@@ -172,5 +172,4 @@ def hydrogen_bonds (
         output_analysis.append(interaction_data)
 
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
+    save_json({ 'data': output_analysis }, output_analysis_filename)

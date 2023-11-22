@@ -1,4 +1,5 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.utils.auxiliar import load_json
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 
@@ -127,9 +128,7 @@ def mine_topology_bonds (bonds_source_file : 'File') -> list:
     # If we have the standard topology then get bonds from it
     if bonds_source_file.filename == TOPOLOGY_FILENAME:
         print('Bonds in the "' + bonds_source_file.filename + '" file will be used')
-        standard_topology = None
-        with open(bonds_source_file.path, 'r') as file:
-            standard_topology = load(file)
+        standard_topology = load_json(bonds_source_file.path)
         bonds = standard_topology.get('atom_bonds', None)
         if bonds:
             return bonds
@@ -140,8 +139,9 @@ def mine_topology_bonds (bonds_source_file : 'File') -> list:
         atom_bonds = [ [] for i in range(pt_topology.n_atoms) ]
         for bond in pt_topology.bonds:
             a,b = bond.indices
-            atom_bonds[a].append(b)
-            atom_bonds[b].append(a)
+            # Make sure atom indices are regular integers so they are JSON serializables
+            atom_bonds[a].append(int(b))
+            atom_bonds[b].append(int(a))
         # If there is any bonding data then return bonds
         if any(len(bonds) > 0 for bonds in atom_bonds):
             return atom_bonds

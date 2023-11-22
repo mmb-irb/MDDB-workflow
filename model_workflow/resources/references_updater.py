@@ -3,6 +3,7 @@ import json
 from os.path import exists
 
 from model_workflow.tools.generate_map import get_uniprot_reference
+from model_workflow.utils.auxiliar import save_json
 
 # Set the database API URL
 database_api_url = 'https://mdposit-dev.mddbr.eu/api/rest/v1'
@@ -63,7 +64,6 @@ def updater ():
                 new_reference[custom_field] = old_value
         new_references.append(new_reference)
     # Write references to a new file
-    with open(references_filename, 'w') as file:
-        json.dump(new_references, file)
+    save_json(new_references, references_filename)
 
 updater()

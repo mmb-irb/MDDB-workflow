@@ -26,11 +26,10 @@ import math
 
 from subprocess import run, PIPE, Popen
 
-import json
-
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.utils.auxiliar import save_json
 
 
 # Perform the pockets analysis
@@ -460,5 +459,4 @@ def pockets (
     start = 0
 
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis, 'start': start, 'step': step }, file)
+    save_json({ 'data': output_analysis, 'start': start, 'step': step }, output_analysis_filename)

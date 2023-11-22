@@ -5,11 +5,10 @@
 
 import pytraj as pt
 
-import json
-
 from typing import List
 
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+from model_workflow.utils.auxiliar import save_json
 
 # Perform an analysis for the overall structure and then one more analysis for each interaction
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
@@ -84,5 +83,4 @@ def rmsd_pairwise(
     # By default the first frame in the reduced trajectory is the first frame (0)
 
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({'data': output_analysis, 'start': 0, 'step': frame_step}, file)
+    save_json({'data': output_analysis, 'start': 0, 'step': frame_step}, output_analysis_filename)

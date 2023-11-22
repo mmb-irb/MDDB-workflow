@@ -6,7 +6,7 @@
 import pytraj as pt
 import numpy
 
-import json
+from model_workflow.utils.auxiliar import save_json
 
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
 
@@ -98,5 +98,4 @@ def distance_per_residue (
         }
         output_analysis.append(output)
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'data': output_analysis }, file)
+    save_json({ 'data': output_analysis }, output_analysis_filename)

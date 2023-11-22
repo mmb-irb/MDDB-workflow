@@ -1,8 +1,8 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.generate_map import get_sequence_metadata
+from model_workflow.utils.auxiliar import load_json, save_json
 
-import json
 from pathlib import Path
 
 # Generate a JSON file with all project metadata
@@ -18,9 +18,7 @@ def generate_project_metadata (
     ):
 
     # Set a function to retrieve 'inputs' values and handle missing keys
-    inputs = None
-    with open(inputs_filename, 'r') as file:
-        inputs = json.load(file)
+    inputs = load_json(inputs_filename)
     def get_input(input: str):
         return inputs.get(input, None)
 
@@ -126,8 +124,7 @@ def generate_project_metadata (
     }
     
     # Write metadata to a file
-    with open(output_metadata_filename, 'w') as file:
-        json.dump(metadata, file)
+    save_json(metadata, output_metadata_filename)
 
 # Generate a JSON file with MD metadata
 def generate_md_metadata (
@@ -147,5 +144,4 @@ def generate_md_metadata (
     }
 
     # Write metadata to a file
-    with open(output_metadata_filename, 'w') as file:
-        json.dump(metadata, file)
+    save_json(metadata, output_metadata_filename)

@@ -1,8 +1,8 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.utils.auxiliar import save_json
 
 import os
-import json
 import numpy
 from subprocess import run, PIPE, Popen
 from typing import List
@@ -140,5 +140,4 @@ def sasa(
     }
 
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump(output, file)
+    save_json(output, output_analysis_filename)

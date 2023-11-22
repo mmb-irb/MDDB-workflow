@@ -24,10 +24,10 @@ import re
 import numpy
 import math
 from subprocess import run, PIPE, Popen
-import json
 from typing import Optional, List, Tuple
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 
@@ -240,8 +240,7 @@ def energies (
             #     'agent2': { 'energies': agent2_atom_energies, 'pdb': agent2_cmip },
             #     'box': { 'origin': box_origin, 'size': box_size } 
             # }
-            # with open('energies-sample.json', 'w') as file:
-            #     json.dump(sample, file)
+            # save_json(sample, 'energies_sample.json')
 
             data.append({ 'agent1': agent1_residue_energies, 'agent2': agent2_residue_energies })
 
@@ -257,8 +256,7 @@ def energies (
     # Load backup data in case there is a backup file
     if energies_backup.exists:
         print(' Recovering energies backup')
-        with open(energies_backup.path, 'r') as file:
-            interactions_data = json.load(file)
+        interactions_data = load_json(energies_backup.path)
     else:
         interactions_data = [[] for interaction in non_exceeding_interactions]
     for frame_number, current_frame_pdb in enumerate(frames):
@@ -272,8 +270,7 @@ def energies (
         for i, data in enumerate(frame_energies_data):
             interactions_data[i].append(data)
         # Save a backup just in case the process is interrupted further
-        with open(energies_backup.path, 'w') as file:
-            json.dump(interactions_data, file)
+        save_json(interactions_data, energies_backup.path)
 
     # Now calculated residue average values through all frames for each pair of interaction agents
     output_analysis = []
@@ -299,8 +296,7 @@ def energies (
         output_analysis.append(output)
 
     # Finally, export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({'data': output_analysis}, file)
+    save_json({'data': output_analysis}, output_analysis_filename)
 
     # Finally remove the reduced topology
     energies_structure_file.remove()

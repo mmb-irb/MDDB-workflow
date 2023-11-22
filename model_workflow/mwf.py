@@ -40,11 +40,11 @@ from model_workflow.tools.structure_corrector import structure_corrector
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
+from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
-from model_workflow.utils.auxiliar import InputError
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -1378,11 +1378,8 @@ class Project:
         inputs_url = self.url + '/inputs/'
         urllib.request.urlretrieve(inputs_url, self._inputs_file.path)
         # Rewrite the inputs file in a pretty formatted way
-        with open(self._inputs_file.path, 'r+') as file:
-            file_content = json.load(file)
-            file.seek(0)
-            json.dump(file_content, file, indent=4)
-            file.truncate()
+        file_content = load_json(self._inputs_file.path)
+        save_json(file_content, self._inputs_file.path, indent = 4)
         return self._inputs_file
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
@@ -1456,11 +1453,8 @@ class Project:
                 sys.stdout.write('Downloading topology (' + self._input_topology_file.filename + ')\n')
                 urllib.request.urlretrieve(topology_url, self._input_topology_file.path)
                 # Rewrite the topology file in a pretty formatted way
-                with open(self._input_topology_file.path, 'r+') as file:
-                    file_content = json.load(file)
-                    file.seek(0)
-                    json.dump(file_content, file, indent=4)
-                    file.truncate()
+                file_content = load_json(self._input_topology_file.path)
+                save_json(file_content, self._input_topology_file.path, indent = 4)
             except:
                 raise Exception('Something where wrong while downloading the topology')
             return self._input_topology_file
@@ -1544,9 +1538,8 @@ class Project:
         if self._inputs:
             return self._inputs
         # Otherwise, load inputs from the inputs file
-        with open(self.inputs_file.path, 'r') as file:
-            inputs_data = json.load(file)
-            self._inputs = inputs_data
+        inputs_data = load_json(self.inputs_file.path)
+        self._inputs = inputs_data            
         # Finally return the updated inputs
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
@@ -1789,8 +1782,7 @@ def read_file (target_file : File) -> dict:
         return numpy.load(target_file.path)
     # Read JSON files
     if file_format == 'json':
-        with open(target_file.path, 'r') as file:
-            return json.load(file)
+        return load_json(target_file.path)
 
 # Set a function to convert an MD name into an equivalent MD directory
 def name_2_directory (name : str) -> str:

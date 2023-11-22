@@ -1,12 +1,12 @@
 import tmscoring
 
 from subprocess import run, PIPE, Popen
-import json
 import os
 
 from typing import List
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from model_workflow.utils.auxiliar import save_json
 
 # TM scores
 # 
@@ -134,5 +134,4 @@ def tmscores (
         os.remove(grouped_reference)
 
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'start': start, 'step': step, 'data': output_analysis }, file)
+    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filename)

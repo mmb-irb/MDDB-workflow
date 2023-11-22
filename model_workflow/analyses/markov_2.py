@@ -9,12 +9,12 @@
 # DANI: Se podrían prerocesar los datos para hacer clusters o algo similar
 
 from typing import List
-from json import dump
 from os import remove
 
 import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot 
+from model_workflow.utils.auxiliar import save_json
 
 auxiliar_pdb_filename = '.model.pdb'
 
@@ -94,5 +94,4 @@ def markov (
         'populations': highest_populations,
         'transitions': transitions_matrix
     }
-    with open(output_analysis_filename, 'w') as file:
-        dump(data, file)
+    save_json(data, output_analysis_filename)

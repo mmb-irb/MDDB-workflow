@@ -1,9 +1,9 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.utils.auxiliar import save_json
 
 import os
 from subprocess import run, PIPE, Popen
-import json
 
 from typing import List
 
@@ -87,8 +87,7 @@ def rmsds(
             os.remove(rmsd_analysis)
 
     # Export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({ 'start': start, 'step': step, 'data': output_analysis }, file)
+    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filename)
 
 # RMSD
 # 

@@ -3,10 +3,10 @@
 
 from subprocess import run, PIPE, Popen
 import os
-import json
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.utils.auxiliar import load_json, save_json
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
@@ -144,40 +144,39 @@ def process_interactions (
         'interface_indices_2',
         'strong_bonds'
     ]
-    with open(interactions_file, 'w') as file:
-        file_interactions = []
-        for interaction in interactions:
-            file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
-            file_interactions.append(file_interaction)
-        json.dump(file_interactions, file, indent=4)
+
+    file_interactions = []
+    for interaction in interactions:
+        file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
+        file_interactions.append(file_interaction)
+    save_json(file_interactions, interactions_file, indent = 4)
 
     return interactions
 
 # Load interactions from an already existing interactions file
 def load_interactions (interactions_file : str, structure : 'Structure') -> list:
-    with open(interactions_file, 'r') as file:
-        # The stored interactions should carry only residue indices and strong bonds
-        interactions = json.load(file)
-        # Now we must complete every interactions dict by adding residues in source format and pytraj format
-        for interaction in interactions:
-            # Get residues from their indices
-            residues = structure.residues
-            interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
-            interaction['residues_2'] = [ residues[index] for index in interaction['residue_indices_2'] ]
-            # Check residue lists to not be empty, which should never happen
-            if len(interaction['residues_1']) == 0:
-                raise ValueError('Empty selection for agent "' + interaction['agent_1'] + '" in interaction "' + interaction['name'] + '"')
-            if len(interaction['residues_2']) == 0:
-                raise ValueError('Empty selection for agent "' + interaction['agent_2'] + '" in interaction "' + interaction['name'] + '"')
-            interaction['interface_1'] = [ residues[index] for index in interaction['interface_indices_1'] ]
-            interaction['interface_2'] = [ residues[index] for index in interaction['interface_indices_2'] ]
-            # Transform to pytraj
-            converter = structure.residue_2_pytraj_residue_index
-            interaction['pt_residues_1'] = list(map(converter, interaction['residues_1']))
-            interaction['pt_residues_2'] = list(map(converter, interaction['residues_2']))
-            interaction['pt_interface_1'] = list(map(converter, interaction['interface_1']))
-            interaction['pt_interface_2'] = list(map(converter, interaction['interface_2']))
-        return interactions
+    # The stored interactions should carry only residue indices and strong bonds
+    interactions = load_json(interactions_file)
+    # Now we must complete every interactions dict by adding residues in source format and pytraj format
+    for interaction in interactions:
+        # Get residues from their indices
+        residues = structure.residues
+        interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
+        interaction['residues_2'] = [ residues[index] for index in interaction['residue_indices_2'] ]
+        # Check residue lists to not be empty, which should never happen
+        if len(interaction['residues_1']) == 0:
+            raise ValueError('Empty selection for agent "' + interaction['agent_1'] + '" in interaction "' + interaction['name'] + '"')
+        if len(interaction['residues_2']) == 0:
+            raise ValueError('Empty selection for agent "' + interaction['agent_2'] + '" in interaction "' + interaction['name'] + '"')
+        interaction['interface_1'] = [ residues[index] for index in interaction['interface_indices_1'] ]
+        interaction['interface_2'] = [ residues[index] for index in interaction['interface_indices_2'] ]
+        # Transform to pytraj
+        converter = structure.residue_2_pytraj_residue_index
+        interaction['pt_residues_1'] = list(map(converter, interaction['residues_1']))
+        interaction['pt_residues_2'] = list(map(converter, interaction['residues_2']))
+        interaction['pt_interface_1'] = list(map(converter, interaction['interface_1']))
+        interaction['pt_interface_2'] = list(map(converter, interaction['interface_2']))
+    return interactions
 
 # Given two atom selections, find interface atoms and return their indices
 # Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory

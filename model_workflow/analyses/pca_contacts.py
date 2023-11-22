@@ -1,4 +1,3 @@
-import json
 from itertools import product
 
 import mdtraj as md
@@ -6,6 +5,8 @@ import pytraj as pt
 import numpy as np
 # from scipy.special import expit
 from sklearn.decomposition import PCA
+
+from model_workflow.utils.auxiliar import save_json
 
 
 def pytraj_residue_pairs(resid_1, resid_2):
@@ -145,5 +146,4 @@ def pca_contacts(
 
     if output_analysis:
         # Export the analysis in json format
-        with open(output_analysis_filename, 'w') as f:
-            json.dump(output_analysis, f)
+        save_json(output_analysis, output_analysis_filename)

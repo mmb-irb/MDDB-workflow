@@ -1,6 +1,8 @@
 import json
 from typing import List
 
+from model_workflow.utils.auxiliar import save_json
+
 # Generate a json file to be uploaded to the database (mongo) with topology data
 def generate_topology (
     structure : 'Structure',
@@ -75,5 +77,4 @@ def generate_topology (
         # Save also the pbc residues here
         'pbc_residues': pbc_residues
     }
-    with open(output_topology_filepath, 'w') as file:
-        json.dump(topology, file)
+    save_json(topology, output_topology_filepath)

@@ -46,10 +46,13 @@ AVERAGE_STRUCTURE_FILENAME = 'average.pdb'
 
 # Set output files generated to be uploaded to the database
 
-# Set the output metadata file
+# Set the references filename
+OUTPUT_REFERENCES_FILENAME = 'references.json'
+
+# Set the metadata filename
 OUTPUT_METADATA_FILENAME = 'metadata.json'
 
-# Set the output screenshot filename
+# Set the screenshot filename
 OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 
 # Set analyses files to be generated

@@ -8,6 +8,8 @@ from typing import List, Tuple, Optional, Union
 from pathlib import Path
 
 from model_workflow.tools.residues_library import residue_name_2_letter
+from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.constants import OUTPUT_REFERENCES_FILENAME
 
 import xmltodict
 
@@ -35,9 +37,6 @@ sys.stderr = stderr_backup
 # aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
 # aligner.open_gap_score = -10
 # aligner.extend_gap_score = -0.5
-
-# Set the name of the json file which will store the used reference objects
-references_filename = 'references.json'
 
 # Set a flag to represent a protein which is not referable (e.g. antibodies, synthetic constructs)
 no_referable_flag = 'noref'
@@ -85,7 +84,7 @@ def generate_map_online (
         return reference, False
     # Import local references, in case the references json file already exists
     imported_references = None
-    if os.path.exists(references_filename):
+    if os.path.exists(OUTPUT_REFERENCES_FILENAME):
         imported_references = import_references()
         # Append the imported references to the overall references pool
         for k,v in imported_references.items():
@@ -312,15 +311,13 @@ def export_references (mapping_data : list):
     if len(final_references) == 0:
         return
     # Write references to a json file
-    with open(references_filename, 'w') as file:
-        json.dump(final_references, file, indent=4)
+    save_json(final_references, OUTPUT_REFERENCES_FILENAME, indent = 4)
 
 # Import reference json file so we do not have to rerun this process
 def import_references () -> list:
-    print(' Importing references from ' + references_filename)
+    print(' Importing references from ' + OUTPUT_REFERENCES_FILENAME)
     # Read the file
-    with open(references_filename, 'r') as file:
-        file_content = json.load(file)
+    file_content = load_json(OUTPUT_REFERENCES_FILENAME)
     # Format data as the process expects to find it
     references = {}
     for reference in file_content:
@@ -668,7 +665,7 @@ def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict
     residue_reference_numbers = residues_map['residue_reference_numbers']
     residue_reference_indices = residues_map['residue_reference_indices']
     # Load references data, which should already be save to the references data file
-    references_data = import_references() if os.path.exists(references_filename) else {}
+    references_data = import_references() if os.path.exists(OUTPUT_REFERENCES_FILENAME) else {}
     # In case we have the SARS-CoV-2 spike among the references, check also which is the variant it belongs to
     # DANI: Esto es un parche. En un futuro buscaremos una manera mejor de comprovar variantes en cualquier contexto
     variant = None

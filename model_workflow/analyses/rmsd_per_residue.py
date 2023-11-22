@@ -5,12 +5,12 @@
 
 import pytraj as pt
 import re
-import json
 from typing import List
 
 from distutils.version import StrictVersion
 
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+from model_workflow.utils.auxiliar import save_json
 
 # The pytraj trajectory may be reduced
 def rmsd_per_residue (
@@ -83,5 +83,4 @@ def rmsd_per_residue (
 
     # Export the analysis in json format
     output_analysis = { 'step': frame_step, 'rmsdpr': rmsd_per_residue }
-    with open(output_analysis_filename, 'w') as file:
-        json.dump(output_analysis, file)
+    save_json(output_analysis, output_analysis_filename)

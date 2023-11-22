@@ -1,13 +1,13 @@
 # Principal component analysis (PCA)
 from sklearn.decomposition import PCA
 import numpy as np
-import json
 
 from typing import List
 
 import mdtraj as md
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.utils.auxiliar import save_json
 
 # Perform the PCA analysis
 def pca (
@@ -113,8 +113,7 @@ def pca (
         'projections': projections
     }
     # Finally, export the analysis in json format
-    with open(output_analysis_filename, 'w') as file:
-        json.dump({'data': data}, file)
+    save_json({'data': data}, output_analysis_filename)
 
 # Given an array with numbers, get the index of the value which is closer
 def get_closer_value_index (list : list, value : float) -> int:

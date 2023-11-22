@@ -5,7 +5,6 @@ from subprocess import run, PIPE, Popen
 from os.path import exists
 from os import remove
 from numpy import mean, std
-from json import dump
 from typing import List
 
 from model_workflow.tools.xvg_parse import xvg_parse
@@ -78,8 +77,7 @@ def rmsf (
     }
 
     # Export formatted data to a json file
-    with open(output_analysis_filename, 'w') as file:
-        dump(rmsf_data, file)
+    save_json(rmsf_data, output_analysis_filename)
 
     # Cleanup both the auxiliar and the residual files
     remove(rmsf_data_filename)

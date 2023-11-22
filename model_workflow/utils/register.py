@@ -2,9 +2,9 @@ from sys import argv
 from os.path import exists
 from datetime import datetime
 from typing import Optional
-import json
 import atexit
 
+from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.constants import REGISTER_FILENAME
 from model_workflow.utils.file import File
 
@@ -31,9 +31,8 @@ class Register:
         self.last_entry = None
         if exists(self.file.path):
             # Read the register in disk
-            with open(self.file.path, 'r') as file:
-                self.entries = json.load(file)
-                self.last_entry = self.entries[-1]
+            self.entries = load_json(self.file.path)
+            self.last_entry = self.entries[-1]
             # Inherit the cache
             for field_name, field_value in self.last_entry['cache'].items():
                 self.cache[field_name] = field_value
@@ -69,5 +68,4 @@ class Register:
         # Add the new entry to the list
         self.entries.append(current_entry)
         # Write entries to disk
-        with open(self.file.path, 'w') as file:
-            json.dump(self.entries, file, indent=4)
+        save_json(self.entries, self.file.path, indent = 4)

@@ -2,7 +2,10 @@
 
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS
 
+from os import remove
 import sys
+import json
+from typing import Optional
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -44,3 +47,24 @@ def get_new_letter(current_letters : list) -> str:
 # Given a residue name, return its single letter
 def residue_name_to_letter (residue_name : str) -> str:
     return RESIDUE_NAME_LETTERS.get(residue_name, 'X')
+
+# Set a JSON loader with additional logic to better handle problems
+def load_json (filepath : str):
+    try:
+        with open(filepath, 'r') as file:
+            content = json.load(file)
+        return content
+    except:
+        raise Exception('Something went wrong when loading JSON file ' + filepath)
+    
+# Set a JSON saver with additional logic to better handle problems
+def save_json (content, filepath : str, indent : Optional[int] = None):
+    try:
+        with open(filepath, 'w') as file:
+            content = json.dump(content, file, indent=indent)
+        return content
+    except:
+        # Remove the JSON file since it will be half written thus giving problems when loaded
+        # Eventually it may be useful to comment this line to debug where the JSON file fails to parse
+        remove(filepath)
+        raise Exception('Something went wrong when saving JSON file ' + filepath)
