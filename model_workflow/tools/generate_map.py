@@ -635,7 +635,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
 def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
     # Request the MMB service to retrieve pdb data
-    request_url = 'https://mmb.irbbarcelona.org/api/pdb/' + pdb_id + '/entry'
+    request_url = 'http://mdb-login.bsc.es/api/pdb/' + pdb_id + '/entry'
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
