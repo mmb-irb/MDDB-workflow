@@ -132,8 +132,16 @@ class MD:
         # In case there are glob characters we must parse the paths
         self._input_trajectory_files = []
         for path in self.input_trajectory_filepaths:
-            for parsed_path in glob(path):
-                self._input_trajectory_files.append( File(parsed_path) )
+            has_spread_syntax = '*' in path
+            if has_spread_syntax and self.url:
+                raise InputError('Spread syntax in trajectory input filepaths is not supported when downloading remote files')
+            if has_spread_syntax:
+                for parsed_path in glob(path):
+                    trajectory_file = File(parsed_path)
+                    self._input_trajectory_files.append(trajectory_file)
+            else:
+                trajectory_file = File(path)
+                self._input_trajectory_files.append(trajectory_file)
         # Check we successfully defined some trajectory file
         if len(self._input_trajectory_files) == 0:
             raise InputError('No trajectory file was reached in paths ' + ', '.join(self.input_trajectory_filepaths))
