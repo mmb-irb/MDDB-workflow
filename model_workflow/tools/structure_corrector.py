@@ -102,7 +102,7 @@ def structure_corrector (
             if must_be_killed:
                 raise TestFailure('Failed to find stable bonds')
             register.tests[STABLE_BONDS_FLAG] = False
-            register.warnings.append(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates.\n'
+            register.add_warning(('Could not find a frame in the trajectory respecting all bonds if bonds were predicted according to atom coordinates and radius.\n'
             'The main PDB structure is the default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
         else:
             # Set also the safe bonds frame structure to mine its coordinates
@@ -136,7 +136,7 @@ def structure_corrector (
         if must_be_killed:
             raise TestFailure('Failed to find coherent bonds')
         register.tests[COHERENT_BONDS_FLAG] = False
-        register.warnings.append('Bonds are not coherent. Some atoms may have less/more bonds than they should.')
+        register.add_warning('Bonds are not coherent. Some atoms may have less or more bonds than they should according to their elements.')
 
     # Tag the test as succeed if we did not skip it
     if must_check_coherent_bonds and register.tests.get(COHERENT_BONDS_FLAG, None) != False:
@@ -205,7 +205,7 @@ def structure_corrector (
         # Sort trajectory coordinates in case atoms were sorted
         if input_trajectory_file.path and structure.trajectory_atom_sorter:
             # Save a warning in the register
-            register.warnings.append('Atoms have been sorted to solve splitted residues')
+            register.add_warning('Atoms have been sorted to solve splitted residues')
             # Save the new order in the register
             # DANI: Dado que no reordenamos las topologías orignales (muchos formatos, mucho marrón) hay que guardar esto
             # DANI: Es para curarnos en salud, pero lo suyo sería poder exportar topologías de la API que ya tengan los datos bien

@@ -5,7 +5,7 @@ from typing import Optional
 import atexit
 
 from model_workflow.utils.auxiliar import load_json, save_json
-from model_workflow.utils.constants import REGISTER_FILENAME
+from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
 from model_workflow.utils.file import File
 
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
@@ -55,6 +55,12 @@ class Register:
             'warnings': self.warnings,
         }
         return dictionary
+
+    # Add warnings with the right format
+    def add_warning (self, message : str):
+        print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+        warning = { 'message': message }
+        self.warnings.append(warning)
 
     # Save the register to a json file
     def save (self):
