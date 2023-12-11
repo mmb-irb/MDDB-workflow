@@ -122,6 +122,7 @@ NICE_NAMES = {
 # Note that some formats have different possible extension (e.g. nc, cdf, netcdf)
 EXTENSION_FORMATS = {
     # Topologies
+    'tpr': 'tpr',
     'top': 'top',
     'psf': 'psf',
     'prmtop': 'prmtop',

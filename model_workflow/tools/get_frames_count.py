@@ -1,5 +1,7 @@
 # Get frames count
 
+from os.path import exists
+
 import pytraj as pt
 
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
@@ -12,6 +14,12 @@ def get_frames_count (
     input_trajectory_filename : str) -> int:
     
     print('Counting number of frames...')
+
+    if not exists(input_trajectory_filename):
+        raise InputError('Missing trajectroy file when counting frames: ' + input_trajectory_filename)
+    
+    if not exists(input_topology_filename):
+        raise InputError('Missing topology file when counting frames: ' + input_topology_filename)
 
     # Load the trajectory from pytraj
     pt_trajectory = pt.iterload(
