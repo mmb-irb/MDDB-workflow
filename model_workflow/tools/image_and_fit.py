@@ -64,7 +64,7 @@ def image_and_fit (
     # This is because there is a '-pbc mol' step which only works with a .tpr file
     is_tpr_available = input_topology_file and input_topology_file.format == 'tpr'
     has_pbc_residues = bool(pbc_selection)
-    if has_pbc_residues and not is_tpr_available:
+    if image and has_pbc_residues and not is_tpr_available:
         raise InputError('In order to image a simulation with PBC residues it is mandatory to provide a .tpr file')
 
     # Imaging --------------------------------------------------------------------------------------

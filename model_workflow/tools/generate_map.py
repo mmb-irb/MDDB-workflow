@@ -286,7 +286,7 @@ def generate_map_online (
     if must_be_killed:
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
     print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
-    register.warnings.append('There is at least one protein region which is not mapped to any reference sequence')
+    register.add_warning('There is at least one protein region which is not mapped to any reference sequence')
     return format_topology_data(structure, protein_parsed_chains)
 
 # Export reference objects data to a json file

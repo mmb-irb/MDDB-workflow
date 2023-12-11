@@ -132,8 +132,16 @@ class MD:
         # In case there are glob characters we must parse the paths
         self._input_trajectory_files = []
         for path in self.input_trajectory_filepaths:
-            for parsed_path in glob(path):
-                self._input_trajectory_files.append( File(parsed_path) )
+            has_spread_syntax = '*' in path
+            if has_spread_syntax and self.url:
+                raise InputError('Spread syntax in trajectory input filepaths is not supported when downloading remote files')
+            if has_spread_syntax:
+                for parsed_path in glob(path):
+                    trajectory_file = File(parsed_path)
+                    self._input_trajectory_files.append(trajectory_file)
+            else:
+                trajectory_file = File(path)
+                self._input_trajectory_files.append(trajectory_file)
         # Check we successfully defined some trajectory file
         if len(self._input_trajectory_files) == 0:
             raise InputError('No trajectory file was reached in paths ' + ', '.join(self.input_trajectory_filepaths))
@@ -515,6 +523,25 @@ class MD:
             
             print(' - ' + test_nice_name + ' -> ' + test_nice_result)
 
+        # Issue some warnings if failed or never run tests are skipped
+        for test_name in AVAILABLE_CHECKINGS:
+            # If test was not skipped then proceed
+            if test_name not in self.project.trust:
+                continue
+            # If test passed in a previous run the proceed
+            test_result = self.register.tests.get(test_name)
+            if test_result == True:
+                continue
+            # Get test pretty name
+            test_nice_name = NICE_NAMES[test_name]
+            # Issue the corresponding warnings
+            if test_result == False:
+                self.register.add_warning(test_nice_name + ' was skipped and failed before')
+            elif test_result == None:
+                self.register.add_warning(test_nice_name + ' was skipped and never run before')
+            else:
+                raise ValueError()
+
     # Check if any of the available tests is missing or failed
     def any_missing_processing_tests (self) -> bool:
         for checking in AVAILABLE_CHECKINGS:
@@ -709,9 +736,15 @@ class MD:
     interactions = property(get_interactions, None, None, "Interactions (read only)")
 
     # Indices of residues in periodic boundary conditions
-    # Inherited from project
+    # WARNING: Do not inherit project pbc residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
     def get_pbc_residues (self) -> List[int]:
-        return self.project.pbc_residues
+        # If we already have a stored value then return it
+        if self.project._pbc_residues:
+            return self.project._pbc_residues
+        # Otherwise we must find the value
+        self.project._pbc_residues = get_pbc_residues(self.structure, self.project.pbc_selection)
+        return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
     # Atom charges

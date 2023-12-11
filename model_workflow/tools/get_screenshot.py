@@ -326,17 +326,20 @@ def get_screenshot(
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    process = run([
         "vmd",
         input_structure_filename,
         "-e",
         commands_filename,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
     # If the output file does not exist at this point then it means something went wrong with VMD
     if not os.path.exists(auxiliary_tga_filename):
         print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
         raise SystemExit('Something went wrong with VMD')
 
     im = Image.open(auxiliary_tga_filename)
