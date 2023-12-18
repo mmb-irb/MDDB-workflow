@@ -829,11 +829,10 @@ class MD:
         print('-> Running TM scores analysis')
         # Here we set a small frames limit since this anlaysis is a bit slow
         tmscores(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
+            input_trajectory_file = self.trajectory_file,
             output_analysis_filename = output_analysis_filepath,
-            first_frame_filename = self.first_frame_file.path,
-            average_structure_filename = self.average_structure_file.path,
+            first_frame_file = self.first_frame_file,
+            average_structure_file = self.average_structure_file,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
             snapshots = self.snapshots,

@@ -44,6 +44,12 @@ ACCEPTED_TOPOLOGY_FORMATS = ['top', 'psf', 'prmtop', 'prm7']
 FIRST_FRAME_FILENAME = 'first_frame.pdb'
 AVERAGE_STRUCTURE_FILENAME = 'average.pdb'
 
+# Set the reference labels according to the reference file used
+REFERENCE_LABELS = {
+    FIRST_FRAME_FILENAME: 'firstframe',
+    AVERAGE_STRUCTURE_FILENAME: 'average'
+}
+
 # Set output files generated to be uploaded to the database
 
 # Set the references filename

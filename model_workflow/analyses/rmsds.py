@@ -1,6 +1,7 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import REFERENCE_LABELS
 
 import os
 from subprocess import run, PIPE, Popen
@@ -60,7 +61,7 @@ def rmsds(
     # Iterate over each reference and group
     for reference in rmsd_references:
         # Get a standarized reference name
-        reference_name = reference.filename[0:-4].lower()
+        reference_name = REFERENCE_LABELS[reference.filename]
         for i, group in enumerate(selections):
             # If the selection is empty then skip this rmsd
             parsed_selection = pbc_free_parse_selections[i]

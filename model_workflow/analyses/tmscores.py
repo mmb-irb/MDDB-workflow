@@ -7,22 +7,22 @@ from typing import List
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import REFERENCE_LABELS
 
 # TM scores
 # 
 # Perform the tm score using the tmscoring package
 def tmscores (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
+    input_trajectory_file : 'File',
     output_analysis_filename : str,
-    first_frame_filename : str,
-    average_structure_filename : str,
+    first_frame_file : 'File',
+    average_structure_file : 'File',
     structure : 'Structure',
     pbc_residues: List[int],
     snapshots : int,
     frames_limit : int):
 
-    tmscore_references  = [first_frame_filename, average_structure_filename]
+    tmscore_references  = [first_frame_file, average_structure_file]
 
     # Set the alpha carbon selection
     selection = structure.select('name CA', syntax='vmd')
@@ -53,7 +53,7 @@ def tmscores (
 
     # Iterate over each reference and group
     for reference in tmscore_references:
-        print(' Running TM score using ' + reference + ' as reference')
+        print(' Running TM score using ' + reference.filename + ' as reference')
         # Create a reference topology with only the group atoms
         # WARNING: Yes, TM score would work also with the whole reference, but it takes more time!!
         # This has been experimentally tested and it may take more than the double of time
@@ -66,9 +66,9 @@ def tmscores (
             "gmx",
             "trjconv",
             "-s",
-            reference,
+            reference.path,
             "-f",
-            reference,
+            reference.path,
             '-o',
             grouped_reference,
             '-n',
@@ -85,7 +85,7 @@ def tmscores (
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
-        frames, step, count = get_pdb_frames(reference, input_trajectory_filename, snapshots, frames_limit)
+        frames, step, count = get_pdb_frames(reference.path, input_trajectory_file.path, snapshots, frames_limit)
         for current_frame in frames:
 
             # Filter atoms in the current frame
@@ -122,7 +122,7 @@ def tmscores (
             os.remove(filtered_frame)
 
         # Get a standarized reference name
-        reference_name = reference[0:-4].lower()
+        reference_name = REFERENCE_LABELS[reference.filename]
         # Save the tmscores in the output object
         data = {
             'values': tmscores,
