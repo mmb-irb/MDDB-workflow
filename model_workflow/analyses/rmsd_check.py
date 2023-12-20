@@ -35,6 +35,9 @@ def check_trajectory_integrity (
     if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
         return True
 
+    # Remove old warnings
+    register.remove_warnings(TRAJECTORY_INTEGRITY_FLAG)
+
     # Parse the selection in VMD selection syntax
     parsed_selection = structure.select(check_selection, syntax='vmd')
 
@@ -119,7 +122,7 @@ def check_trajectory_integrity (
         # Add a warning an return True since the test failed in case we have mercy
         message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
-            register.add_warning(message)
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
             register.tests[TRAJECTORY_INTEGRITY_FLAG] = False
             return False
         # Otherwise kill the process right away
@@ -127,7 +130,7 @@ def check_trajectory_integrity (
 
     # Warn the user if we had bypassed frames
     if bypassed_frames > 0:
-        register.add_warning('First ' + str(bypassed_frames) + ' frames may be not equilibrated')
+        register.add_warning(TRAJECTORY_INTEGRITY_FLAG, 'First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     print(' Test has passed successfully')
     register.tests[TRAJECTORY_INTEGRITY_FLAG] = True

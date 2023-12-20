@@ -1,7 +1,7 @@
 from sys import argv
 from os.path import exists
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import atexit
 
 from model_workflow.utils.auxiliar import load_json, save_json
@@ -24,9 +24,7 @@ class Register:
         self.tests = {}
         # Set the warnings list, which will be filled by failing tests
         self.warnings = []
-        # Inherit cache and test results from the register last entry
-        # Note that warnings are not inherited from the last entry
-        # Falied tests are to be repeated and they raise the warnings
+        # Inherit cache, test results and warning from the register last entry
         self.entries = []
         self.last_entry = None
         if exists(self.file.path):
@@ -39,7 +37,13 @@ class Register:
             # Inherit test results
             for test_name, test_result in self.last_entry['tests'].items():
                 self.tests[test_name] = test_result
-        # Set the save function to bre unned when the process is over
+            # Inherit warnings
+            for warning in self.last_entry['warnings']:
+                # DANI: Para quitarnos de encima warnings con el formato antiguo
+                if not warning.get('tag', None):
+                    continue
+                self.warnings.append(warning)
+        # Set the save function to be runned when the process is over
         atexit.register(self.save)
 
     def __repr__ (self):
@@ -56,11 +60,20 @@ class Register:
         }
         return dictionary
 
+    # Get current warnings filtered by tag
+    def get_warnings (self, tag : str) -> List[dict]:
+        return [ warning for warning in self.warnings if warning['tag'] == tag ]
+
     # Add warnings with the right format
-    def add_warning (self, message : str):
+    # A flag is to be passed to handle further removal of warnings
+    def add_warning (self, tag : str, message : str):
         print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
-        warning = { 'message': message }
+        warning = { 'tag': tag, 'message': message }
         self.warnings.append(warning)
+
+    # Remove warnings filtered by tag
+    def remove_warnings (self, tag : str):
+        self.warnings = [ warning for warning in self.warnings if warning['tag'] != tag ]
 
     # Save the register to a json file
     def save (self):

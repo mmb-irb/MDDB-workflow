@@ -9,7 +9,7 @@ from pathlib import Path
 
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json
-from model_workflow.utils.constants import OUTPUT_REFERENCES_FILENAME
+from model_workflow.utils.constants import OUTPUT_REFERENCES_FILENAME, REFERENCE_SEQUENCE_FLAG
 
 import xmltodict
 
@@ -57,6 +57,8 @@ def generate_map_online (
     forced_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
+    # Remove previous warnings, if any
+    register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict
     # If it is none then we set it as an empty list
     if forced_references == None:
@@ -282,11 +284,11 @@ def generate_map_online (
             return format_topology_data(structure, protein_parsed_chains)
     # At this point we should have macthed all sequences
     # If not, kill the process unless mercy was given
-    must_be_killed = 'refseq' not in mercy
+    must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
     print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
-    register.add_warning('There is at least one protein region which is not mapped to any reference sequence')
+    register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
     return format_topology_data(structure, protein_parsed_chains)
 
 # Export reference objects data to a json file

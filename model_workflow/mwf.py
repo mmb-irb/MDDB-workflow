@@ -532,15 +532,21 @@ class MD:
             test_result = self.register.tests.get(test_name)
             if test_result == True:
                 continue
-            # Get test pretty name
-            test_nice_name = NICE_NAMES[test_name]
-            # Issue the corresponding warnings
-            if test_result == False:
-                self.register.add_warning(test_nice_name + ' was skipped and failed before')
+            # If test failed in a previous run we can also proceed
+            # The failing warning must be among the inherited warnings, so there is no need to add more warnings here
+            elif test_result == False:
+                continue
+            # If the test has been always skipped then issue a warning
             elif test_result == None:
-                self.register.add_warning(test_nice_name + ' was skipped and never run before')
+                # Set the test skip flag and remove previous warnings
+                test_skip_flag = 'skip_' + test_name
+                self.remove_warnings(test_skip_flag)
+                # Get test pretty name
+                test_nice_name = NICE_NAMES[test_name]
+                # Issue the corresponding warning            
+                self.register.add_warning(test_skip_flag, test_nice_name + ' was skipped and never run before')
             else:
-                raise ValueError()
+                raise ValueError('Test value is not supported')
 
     # Check if any of the available tests is missing or failed
     def any_missing_processing_tests (self) -> bool:
