@@ -1,4 +1,5 @@
 import os
+from os.path import exists, getsize
 from subprocess import run, PIPE
 from typing import List
 
@@ -32,8 +33,9 @@ def merge_and_convert_trajectories (
         output_trajectory_filename,
         *input_trajectory_filenames,
     ], stderr=PIPE).stderr.decode()
+
     # If output has not been generated then warn the user
-    if not os.path.exists(output_trajectory_filename):
+    if not exists(output_trajectory_filename) or getsize(output_trajectory_filename) == 0:
         print(logs)
         raise SystemExit('Something went wrong with MDTraj')
         
@@ -79,7 +81,7 @@ def merge_and_convert_trajectories_alternative (
 
     # If the output trajectory file already exists at this point then we must stop here
     # The raw trjcat implementation will not join things to the end of it
-    if os.path.exists(output_trajectory_filename):
+    if exists(output_trajectory_filename):
         raise SystemExit('The output file already exists and overwrite is not supported for this functionality')
     # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
     print()
@@ -97,7 +99,7 @@ def merge_and_convert_trajectories_alternative (
             merge_xtc_files(output_trajectory_filename, frame_filename)
     # Remove the residual file
     # WARNING: It may not exist if the trajectory has 1 frame
-    if os.path.exists(frame_filename):
+    if exists(frame_filename):
         os.remove(frame_filename)
 merge_and_convert_trajectories_alternative.format_sets = [
     {
@@ -353,7 +355,7 @@ def sort_trajectory_atoms (
 
     # If the output trajectory file already exists at this point then we must stop here
     # The raw trjcat implementation will not join things to the end of it
-    if os.path.exists(output_trajectory_filename):
+    if exists(output_trajectory_filename):
         raise SystemExit('The output file already exists and overwrite is not supported for this functionality')
 
     # Load the trajectory frame by frame
@@ -387,5 +389,5 @@ def sort_trajectory_atoms (
 
     # Remove the residual file
     # WARNING: It may not exist if the trajectory has 1 frame
-    if os.path.exists(frame_filename):
+    if exists(frame_filename):
         os.remove(frame_filename)

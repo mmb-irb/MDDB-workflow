@@ -113,7 +113,7 @@ def filter_atoms (
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
                 tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
-                charges = get_tpr_charges(input_topology_fil.path)
+                charges = get_tpr_charges(output_topology_file.path)
             filtered_topology_atoms_count = len(charges)
         else:
             raise ValueError('Topology file (' + input_topology_file.filename + ') is in a non supported format')
@@ -122,7 +122,7 @@ def filter_atoms (
 
         # Both filtered structure and topology must have the same number of atoms
         if filtered_structure_atoms_count != filtered_topology_atoms_count:
-            print('Filtered topology atoms: ' + str(filtered_structure_atoms_count))
+            print('Filtered structure atoms: ' + str(filtered_structure_atoms_count))
             raise ValueError('Filtered atom counts in topology and charges does not match')
 
     # Remove the index file in case it was created
