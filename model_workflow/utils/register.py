@@ -5,7 +5,7 @@ from typing import Optional, List
 import atexit
 
 from model_workflow.utils.auxiliar import load_json, save_json
-from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
+from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END, AVAILABLE_CHECKINGS
 from model_workflow.utils.file import File
 
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
@@ -21,7 +21,7 @@ class Register:
         # Set a cache for some already calculated values
         self.cache = {}
         # Set the tests tracker
-        self.tests = {}
+        self.tests = { checking: None for checking in AVAILABLE_CHECKINGS }
         # Set the warnings list, which will be filled by failing tests
         self.warnings = []
         # Inherit cache, test results and warning from the register last entry
