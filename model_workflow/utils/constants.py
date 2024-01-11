@@ -18,6 +18,8 @@ DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
 # This allows us to know where we were in case the process was interrupted and not repeat steps on reset
 # Intermediate files are removed at the end of the process if it was successful
 
+INCOMPLETE_PREFIX = '.incomplete_'
+
 CONVERTED_STRUCTURE = 'converted.pdb'
 CONVERTED_TRAJECTORY = 'converted.xtc'
 

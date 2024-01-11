@@ -333,27 +333,38 @@ class MD:
 
         # --- CONVERTING AND MERGING ------------------------------------------------------------
 
-        # Set output filenames for the already converted structure
+        # Set the output format for the already converted structure
         input_structure_format = self.input_structure_file.format
         output_structure_format = output_structure_file.format
         converted_structure_filepath = self.md_pathify(CONVERTED_STRUCTURE)
         # If input structure already matches the output format then avoid the renaming
         if input_structure_format == output_structure_format:
             converted_structure_filepath = input_structure_file.path
+        # Set the output file for the already converted structure
         converted_structure_file = File(converted_structure_filepath)
-        # Set output filenames for the already converted structure
         # Input trajectories should have all the same format
         input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
         if len(input_trajectory_formats) > 1:
             raise InputError('All input trajectory files must have the same format')
+        # Set the output format for the already converted trajectory
         input_trajectories_format = list(input_trajectory_formats)[0]
         output_trajectory_format = output_trajectory_file.format
+        # Set the output file for the already converted trajectory
         converted_trajectory_filepath = self.md_pathify(CONVERTED_TRAJECTORY)
         # If input trajectory already matches the output format and is unique then avoid the renaming
         if input_trajectories_format == output_trajectory_format and len(input_trajectory_files) == 1:
             converted_trajectory_filepath = input_trajectory_files[0].path
         converted_trajectory_file = File(converted_trajectory_filepath)
+        # Join all input trajectory paths
         input_trajectory_absolute_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
+
+        # Set an intermeidate file for the trajectory while it is being converted
+        # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
+        incompleted_converted_trajectory_filepath = self.md_pathify(INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY)
+        incompleted_converted_trajectory_file = File(incompleted_converted_trajectory_filepath)
+        # If there is an incomplete trajectory then remove it
+        if incompleted_converted_trajectory_file.exists:
+            incompleted_converted_trajectory_file.remove()
 
         # Convert input structure and trajectories to output structure and trajectory
         if not converted_structure_file.exists or not converted_trajectory_file.exists:
@@ -362,8 +373,10 @@ class MD:
                 input_structure_filepath = input_structure_file.path,
                 output_structure_filepath = converted_structure_file.path,
                 input_trajectory_filepaths = input_trajectory_absolute_paths,
-                output_trajectory_filepath = converted_trajectory_file.path,
+                output_trajectory_filepath = incompleted_converted_trajectory_file.path,
             )
+            # Once converted, rename the trajectory file as completed
+            rename(incompleted_converted_trajectory_file.path, converted_trajectory_file.path)
 
         # Topologies are never converted, but they are kept in their original format
 
@@ -378,6 +391,14 @@ class MD:
         filtered_structure_file = File(self.md_pathify(FILTERED_STRUCTURE)) if must_filter else converted_structure_file
         filtered_trajectory_file = File(self.md_pathify(FILTERED_TRAJECTORY)) if must_filter else converted_trajectory_file
         filtered_topology_file = output_topology_file if must_filter else input_topology_file
+
+        # Set an intermeidate file for the trajectory while it is being filtered
+        # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while filtering
+        incompleted_filtered_trajectory_filepath = self.md_pathify(INCOMPLETE_PREFIX + FILTERED_TRAJECTORY)
+        incompleted_filtered_trajectory_file = File(incompleted_filtered_trajectory_filepath)
+        # If there is an incomplete trajectory then remove it
+        if incompleted_filtered_trajectory_file.exists:
+            incompleted_filtered_trajectory_file.remove()
         
         # Filter atoms in structure, trajectory and topology if required and not done yet
         if must_filter and (not filtered_structure_file.exists or not filtered_trajectory_file.exists):
@@ -387,10 +408,12 @@ class MD:
                 input_trajectory_file = converted_trajectory_file,
                 input_topology_file = input_topology_file, # We use input topology
                 output_structure_file = filtered_structure_file,
-                output_trajectory_file = filtered_trajectory_file,
+                output_trajectory_file = incompleted_filtered_trajectory_file,
                 output_topology_file = filtered_topology_file, # We genereate the definitive topology
                 filter_selection = self.project.filter_selection
             )
+            # Once filetered, rename the trajectory file as completed
+            rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
 
         # --- IMAGING AND FITTING ------------------------------------------------------------
 
@@ -402,6 +425,14 @@ class MD:
         imaged_structure_file = File(self.md_pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
         imaged_trajectory_file = File(self.md_pathify(IMAGED_TRAJECTORY)) if must_image else filtered_trajectory_file
 
+        # Set an intermeidate file for the trajectory while it is being imaged
+        # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while imaging
+        incompleted_imaged_trajectory_filepath = self.md_pathify(INCOMPLETE_PREFIX + IMAGED_TRAJECTORY)
+        incompleted_imaged_trajectory_file = File(incompleted_imaged_trajectory_filepath)
+        # If there is an incomplete trajectory then remove it
+        if incompleted_imaged_trajectory_file.exists:
+            incompleted_imaged_trajectory_file.remove()
+
         # Image the trajectory if it is required
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
@@ -412,12 +443,14 @@ class MD:
                 input_trajectory_file = filtered_trajectory_file,
                 input_topology_file = filtered_topology_file, # This is optional if there are no PBC residues
                 output_structure_file = imaged_structure_file,
-                output_trajectory_file = imaged_trajectory_file,
+                output_trajectory_file = incompleted_imaged_trajectory_file,
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
                 pbc_selection = self.project.pbc_selection
             )
+            # Once imaged, rename the trajectory file as completed
+            rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
 
         # --- CORRECTING STRUCTURE ------------------------------------------------------------
 

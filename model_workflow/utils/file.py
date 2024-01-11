@@ -1,4 +1,4 @@
-from os import remove, symlink
+from os import remove, symlink, rename
 from os.path import exists, isabs, abspath, relpath, split
 from typing import Optional
 
@@ -69,6 +69,7 @@ class File:
         return exists(self.absolute_path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
 
+    # Remove the file
     def remove (self):
         remove(self.absolute_path)
 
