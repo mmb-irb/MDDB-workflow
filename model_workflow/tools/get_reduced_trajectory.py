@@ -11,21 +11,23 @@ import math
 # If the reduced trajectory already exists do not build it again but return its filename
 # In addition returns always the step and the expected final number of frames
 def get_reduced_trajectory (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
+    input_topology_file : 'File',
+    input_trajectory_file : 'File',
     snapshots : int,
     reduced_trajectory_frames_limit : int,
     ) -> list:
 
-    # if the trajectory already has the reduced number of frames or less return here
+    # If the trajectory already has the reduced number of frames or less return here
     if reduced_trajectory_frames_limit >= snapshots:
-        output_trajectory_filename = input_trajectory_filename
+        output_trajectory_filepath = input_trajectory_file.path
         step = 1
         frames = snapshots
-        return output_trajectory_filename, step, frames
+        return output_trajectory_filepath, step, frames
 
     # Set the reduced trajectory filename
     output_trajectory_filename = 'f' + str(reduced_trajectory_frames_limit) + '.trajectory.xtc'
+    # Set the output path in the same directory than the input trajectory
+    output_trajectory_filepath = input_trajectory_file.basepath + '/' + output_trajectory_filename
 
     # Calculate the step between frames in the reduced trajectory to match the final number of frames
     # WARNING: Since the step must be an integer the thorical step must be rounded
@@ -40,7 +42,7 @@ def get_reduced_trajectory (
     step = math.ceil(snapshots / reduced_trajectory_frames_limit)
 
     # Create the reduced trajectory if it does not exist yet
-    if not os.path.exists(output_trajectory_filename):
+    if not os.path.exists(output_trajectory_filepath):
         print('Reducing trajectory from ' + str(snapshots) + ' to less than ' + str(reduced_trajectory_frames_limit) + ' frames')
         # Run Gromacs
         p = Popen([
@@ -51,11 +53,11 @@ def get_reduced_trajectory (
             "gmx",
             "trjconv",
             "-s",
-            input_topology_filename,
+            input_topology_file.path,
             "-f",
-            input_trajectory_filename,
+            input_trajectory_file.path,
             '-o',
-            output_trajectory_filename,
+            output_trajectory_filepath,
             '-skip',
             str(step),
             '-quiet'
@@ -70,4 +72,4 @@ def get_reduced_trajectory (
     frames = math.ceil(snapshots / step)
 
     # Return gromacs logs
-    return output_trajectory_filename, step, frames
+    return output_trajectory_filepath, step, frames

@@ -19,7 +19,7 @@ def rmsds(
     trajectory_file : 'File',
     first_frame_file : 'File',
     average_structure_file : 'File',
-    output_analysis_filename : str,
+    output_analysis_filepath : str,
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
@@ -45,9 +45,9 @@ def rmsds(
     # Reduce the trajectory according to the frames limit
     # Use a reduced trajectory in case the original trajectory has many frames
     # Note that it makes no difference which reference is used here
-    reduced_trajectory_filename, step, frames = get_reduced_trajectory(
-        first_frame_file.path,
-        trajectory_file.path,
+    reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
+        first_frame_file,
+        trajectory_file,
         snapshots,
         frames_limit,
     )
@@ -72,7 +72,7 @@ def rmsds(
             # Set the analysis filename
             rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name + '.xvg'
             # Run the rmsd
-            rmsd(reference.path, reduced_trajectory_filename, parsed_selection, rmsd_analysis)
+            rmsd(reference.path, reduced_trajectory_filepath, parsed_selection, rmsd_analysis)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output
@@ -88,7 +88,7 @@ def rmsds(
             os.remove(rmsd_analysis)
 
     # Export the analysis in json format
-    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filename)
+    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)
 
 # RMSD
 # 
@@ -97,7 +97,7 @@ def rmsd (
     reference_filepath : str,
     trajectory_filepath : str,
     selection : 'Selection', # This selection will never be empty, since this is checked previously
-    output_analysis_filename : str):
+    output_analysis_filepath : str):
 
     # Convert the selection to a ndx file gromacs can read
     selection_name = 'rmsd_selection'
@@ -120,7 +120,7 @@ def rmsd (
         "-f",
         trajectory_filepath,
         '-o',
-        output_analysis_filename,
+        output_analysis_filepath,
         '-n',
         ndx_filename,
         '-quiet'
@@ -131,7 +131,7 @@ def rmsd (
     p.stdout.close()
 
     # If the output does not exist at this point it means something went wrong with gromacs
-    if not os.path.exists(output_analysis_filename):
+    if not os.path.exists(output_analysis_filepath):
         print(output_logs)
         error_logs = process.stderr.decode()
         print(error_logs)

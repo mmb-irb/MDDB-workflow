@@ -11,9 +11,9 @@ from model_workflow.utils.auxiliar import save_json
 
 # Perform the PCA analysis
 def pca (
-    input_topology_filename: str,
-    input_trajectory_filename: str,
-    output_analysis_filename: str,
+    input_topology_file : 'File',
+    input_trajectory_file : 'File',
+    output_analysis_filepath : str,
     output_trajectory_projections_prefix : str,
     snapshots : int,
     frames_limit : int,
@@ -24,12 +24,10 @@ def pca (
     projection_frames : int = 20
 ) -> dict:
 
-    # By default we set the whole trajectory as PCA trajectory
-    pca_trajectory_filename = input_trajectory_filename
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
-    pca_trajectory_filename, step, frames = get_reduced_trajectory(
-        input_topology_filename,
-        input_trajectory_filename,
+    pca_trajectory_filepath, step, frames = get_reduced_trajectory(
+        input_topology_file,
+        input_trajectory_file,
         snapshots,
         frames_limit,
     )
@@ -43,7 +41,7 @@ def pca (
     parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd') - pbc_selection
 
     # Load the trajectory
-    mdtraj_trajectory = md.load(pca_trajectory_filename, top=input_topology_filename)
+    mdtraj_trajectory = md.load(pca_trajectory_filepath, top=input_topology_file.path)
     # Fit the trajectory according to the specified fit selection
     mdtraj_trajectory.superpose(mdtraj_trajectory, frame=0, atom_indices=parsed_fit_selection.atom_indices)
     # Filter the atoms to be analized
@@ -113,7 +111,7 @@ def pca (
         'projections': projections
     }
     # Finally, export the analysis in json format
-    save_json({'data': data}, output_analysis_filename)
+    save_json({'data': data}, output_analysis_filepath)
 
 # Given an array with numbers, get the index of the value which is closer
 def get_closer_value_index (list : list, value : float) -> int:

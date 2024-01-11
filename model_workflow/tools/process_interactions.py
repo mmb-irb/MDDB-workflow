@@ -15,11 +15,11 @@ from model_workflow.utils.auxiliar import load_json, save_json
 # In addition, this file may be used to force interactions with custom interface residues manually
 def process_interactions (
     input_interactions : list,
-    structure_filename : str,
-    trajectory_filename : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
     structure : 'Structure',
     snapshots : int,
-    interactions_file : str,
+    interactions_file : 'File',
     mercy : List[str],
     frames_limit : int,
     # Percent of frames where an interaction must have place (from 0 to 1)
@@ -30,7 +30,7 @@ def process_interactions (
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
-    if os.path.exists(interactions_file):
+    if interactions_file.exists:
         loaded_interactions = load_interactions(interactions_file, structure)
         # Merge the loaded interactions with the input interactions to cover all fields
         complete_interactions = []
@@ -47,9 +47,9 @@ def process_interactions (
     failed_interaction_names = []
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
-    reduced_trajectory, step, frames = get_reduced_trajectory(
-        structure_filename,
-        trajectory_filename,
+    reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
+        structure_file,
+        trajectory_file,
         snapshots,
         frames_limit,
     )
@@ -61,8 +61,8 @@ def process_interactions (
     for interaction in interactions:
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices_vmd(
-            structure_filename,
-            reduced_trajectory,
+            structure_file.path,
+            reduced_trajectory_filepath,
             interaction['selection_1'],
             interaction['selection_2'],
             distance_cutoff
@@ -107,7 +107,7 @@ def process_interactions (
 
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
-        strong_bonds = get_strong_bonds(structure_filename, interaction['selection_1'], interaction['selection_2'])
+        strong_bonds = get_strong_bonds(structure_file.path, interaction['selection_1'], interaction['selection_2'])
 
         # Translate all residues selections to pytraj notation
         # These values are used along the workflow but not added to metadata
@@ -149,14 +149,14 @@ def process_interactions (
     for interaction in interactions:
         file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
         file_interactions.append(file_interaction)
-    save_json(file_interactions, interactions_file, indent = 4)
+    save_json(file_interactions, interactions_file.path, indent = 4)
 
     return interactions
 
 # Load interactions from an already existing interactions file
-def load_interactions (interactions_file : str, structure : 'Structure') -> list:
+def load_interactions (interactions_file : 'File', structure : 'Structure') -> list:
     # The stored interactions should carry only residue indices and strong bonds
-    interactions = load_json(interactions_file)
+    interactions = load_json(interactions_file.path)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
         # Get residues from their indices
@@ -182,8 +182,8 @@ def load_interactions (interactions_file : str, structure : 'Structure') -> list
 # Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
 # Return also atom indices for the whole selections
 def get_interface_atom_indices_vmd (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
+    input_structure_filepath : str,
+    input_trajectory_filepath : str,
     selection_1 : str,
     selection_2 : str,
     distance_cutoff : float,
@@ -272,8 +272,8 @@ def get_interface_atom_indices_vmd (
     # Run VMD
     logs = run([
         "vmd",
-        input_structure_filename,
-        input_trajectory_filename,
+        input_structure_filepath,
+        input_trajectory_filepath,
         "-e",
         commands_filename,
         "-dispdev",
@@ -325,7 +325,7 @@ def get_interface_atom_indices_vmd (
 
 # Set a function to retrieve strong bonds between 2 atom selections
 # Atom selections must be in VMD selection syntax
-def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_selection_2 : str) -> list:
+def get_strong_bonds (structure_filepath : str, atom_selection_1 : str, atom_selection_2 : str) -> list:
 
     # Prepare a script for the VMD to automate the commands. This is Tcl lenguage
     commands_filename = '.commands.vmd'
@@ -357,7 +357,7 @@ def get_strong_bonds (structure_filename : str, atom_selection_1 : str, atom_sel
     # Run VMD
     logs = run([
         "vmd",
-        structure_filename,
+        structure_filepath,
         "-e",
         commands_filename,
         "-dispdev",

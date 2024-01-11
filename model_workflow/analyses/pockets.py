@@ -36,7 +36,7 @@ from model_workflow.utils.auxiliar import save_json
 def pockets (
     structure_file : 'File',
     trajectory_file : 'File',
-    output_analysis_filename : str,
+    output_analysis_filepath : str,
     pockets_prefix : str,
     mdpocket_folder : str,
     structure : 'Structure',
@@ -58,8 +58,8 @@ def pockets (
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
     pockets_trajectory, step, frames = get_reduced_trajectory(
-        structure_file.path,
-        trajectory_file.path,
+        structure_file,
+        trajectory_file,
         snapshots,
         frames_limit,
     )
@@ -459,4 +459,4 @@ def pockets (
     start = 0
 
     # Export the analysis in json format
-    save_json({ 'data': output_analysis, 'start': start, 'step': step }, output_analysis_filename)
+    save_json({ 'data': output_analysis, 'start': start, 'step': step }, output_analysis_filepath)

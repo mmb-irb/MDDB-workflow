@@ -2,16 +2,12 @@ import glob
 import os
 
 # Remove trash files
-def remove_trash():
+def remove_trash (md_directory : str):
     trash = []
     # Find gromacs backups
-    trash += glob.glob('#*')
+    trash += glob.glob(md_directory + '/#*')
     # Find reduced trajectories
-    trash += glob.glob('f*.trajectory.xtc')
-    # Find the last frame file
-    last_frame_filename = 'last_frame.pdb'
-    if os.path.exists(last_frame_filename):
-        trash.append(last_frame_filename)
+    trash += glob.glob(md_directory + '/f*.trajectory.xtc')
     # Remove each trash file
-    for filename in trash:
-        os.remove(filename)
+    for filepath in trash:
+        os.remove(filepath)

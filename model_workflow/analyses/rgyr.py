@@ -16,18 +16,18 @@ rgyr_data_filename = '.rgyr_data.xvg'
 # Perform the RMSd analysis 
 # Use the first trajectory frame in .pdb format as a reference
 def rgyr (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    input_topology_file : 'File',
+    input_trajectory_file : 'File',
+    output_analysis_filepath : str,
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
     pbc_residues : List[int]):
 
     # Use a reduced trajectory in case the original trajectory has many frames
-    reduced_trajectory_filename, step, frames = get_reduced_trajectory(
-        input_topology_filename,
-        input_trajectory_filename,
+    reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
+        input_topology_file,
+        input_trajectory_file,
         snapshots,
         frames_limit,
     )
@@ -50,9 +50,9 @@ def rgyr (
         "gmx",
         "gyrate",
         "-s",
-        input_topology_filename,
+        input_topology_file.path,
         "-f",
-        reduced_trajectory_filename,
+        reduced_trajectory_filepath,
         '-o',
         rgyr_data_filename,
         '-n',
@@ -106,7 +106,7 @@ def rgyr (
     }
 
     # Export formatted data to a json file
-    save_json(rgyr_data, output_analysis_filename)
+    save_json(rgyr_data, output_analysis_filepath)
 
     # Remove residual files
     remove(rgyr_data_filename)
