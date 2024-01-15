@@ -595,9 +595,17 @@ def get_cmip_energies (directory : str, cmip_inputs : str, pr : str, hs : str) -
             chain = line[21:22]
             residue_id = line[22:28]
             residue = chain + ':' + residue_id.strip() # strip removes white spaces
-            vdw = float(line[42:53])
-            es = float(line[57:68])
-            both = float(line[72:83])
+            # WARNING: This works most times but there is an exception
+            # vdw = float(line[42:53])
+            # es = float(line[57:68])
+            # both = float(line[72:83])
+            # Numbers may become larger than expected when they are close to 0 since they are expressed in E notation
+            # e.g. 0.1075E-04
+            # For this reason we must mine these last values relying on whitespaces between them
+            line_splits = line.split()
+            vdw = float(line_splits[-3])
+            es = float(line_splits[-2])
+            both = float(line_splits[-1])
             # Values greater than 100 are represented as 0
             # This step is performed to filter 'infinity' values
             energies = (vdw, es, both)
@@ -612,8 +620,6 @@ def get_cmip_energies (directory : str, cmip_inputs : str, pr : str, hs : str) -
                 residue_energies[residue] = tuple([a+b for a, b in zip(energies, residue_energies[residue])])
             else:
                 residue_energies[residue] = energies
-    # Remove the oupt file since it is not needed anymore
-    cmip_output_file.remove()
     return residue_energies, atom_energies
     
 
