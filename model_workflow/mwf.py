@@ -1094,7 +1094,6 @@ class MD:
             pockets_prefix = self.md_pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
             output_analysis_filepath = output_analysis_filepath,
             mdpocket_folder = self.md_pathify(POCKETS_FOLDER),
-            structure = self.structure,
             pbc_residues = self.pbc_residues,
             snapshots = self.snapshots,
             frames_limit = 100,

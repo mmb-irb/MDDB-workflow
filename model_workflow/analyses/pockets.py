@@ -18,11 +18,9 @@
 # Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, “MDpocket: open-source cavity detection 
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
-import os
 from os.path import exists, getsize
 import re
 import collections
-import math
 
 from subprocess import run, PIPE, Popen
 
@@ -30,6 +28,8 @@ from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.file import File
+from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 
 
 # Perform the pockets analysis
@@ -39,7 +39,6 @@ def pockets (
     output_analysis_filepath : str,
     pockets_prefix : str,
     mdpocket_folder : str,
-    structure : 'Structure',
     pbc_residues : List[int],
     snapshots : int,
     frames_limit : int = 100,
@@ -63,6 +62,8 @@ def pockets (
         snapshots,
         frames_limit,
     )
+    # Save the pockets trajectory as a file
+    pockets_trajectory_file = File(pockets_trajectory)
 
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
@@ -81,10 +82,13 @@ def pockets (
     # WARNING: However the file remains empty until the end of mdpocket
     if not exists(grid_filename) or getsize(grid_filename) == 0:
         print('Searching new pockets')
+        print(GREY_HEADER)
         process = run([
             "mdpocket",
             "--trajectory_file",
-            pockets_trajectory,
+            # WARNING: There is a silent sharp limit of characters here
+            # To avoid the problem we must use the relative path instead of the absolute path
+            pockets_trajectory_file.relative_path,
             "--trajectory_format",
             "xtc",
             "-f",
@@ -93,15 +97,14 @@ def pockets (
             structure_file.relative_path,
             "-o",
             mdpocket_output,
-        ], stdout=PIPE, stderr=PIPE)
-        logs = process.stdout.decode()
+        ], stderr=PIPE)
+        error_logs = process.stderr.decode()
+        print(COLOR_END)
 
         # If file does not exist or is still empty at this point then somethin went wrong
         if not exists(grid_filename) or getsize(grid_filename) == 0:
-            print(logs)
-            error_logs = process.stderr.decode()
             print(error_logs)
-            raise Exception('Something went wrong with mdpocket')
+            raise Exception('Something went wrong with mdpocket while searching pockets')
             
 
     # Read and harvest the gird file
@@ -355,10 +358,10 @@ def pockets (
             new_pdb_lines = []
             lines_count = 0
             new_pdb_filename = pockets_prefix + '_' + str(i+1).zfill(2) + '.pdb'
-            for i, pocket in enumerate(pockets):
+            for j, pocket in enumerate(pockets):
                 if pocket != pocket_value:
                     continue
-                x,y,z = get_coordinates(i)
+                x,y,z = get_coordinates(j)
                 lines_count += 1
                 atom_num = str(lines_count).rjust(6,' ')
                 x_coordinates = str(round((origin[0] + x) * 1000) / 1000).rjust(8, ' ')
@@ -373,10 +376,11 @@ def pockets (
                     file.write(line)
 
             # Run the mdpocket analysis focusing in this specific pocket
-            logs = run([
+            print(GREY_HEADER)
+            error_logs = run([
                 "mdpocket",
                 "--trajectory_file",
-                pockets_trajectory,
+                pockets_trajectory_file.relative_path,
                 "--trajectory_format",
                 "xtc",
                 "-f",
@@ -387,7 +391,13 @@ def pockets (
                 pocket_output,
                 "--selected_pocket",
                 new_pdb_filename,
-            ], stdout=PIPE, stderr=PIPE).stdout.decode()
+            ], stderr=PIPE).stderr.decode()
+            print(COLOR_END)
+
+            # If file does not exist or is still empty at this point then somethin went wrong
+            if not exists(checking_filename) or getsize(checking_filename) == 0:
+                print(error_logs)
+                raise Exception('Something went wrong with mdpocket while analysing pocket ' + str(i+1))
 
         # Mine data from the mdpocket 'descriptors' output file
         descriptors_data = {}
