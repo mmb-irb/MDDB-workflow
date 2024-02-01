@@ -46,7 +46,7 @@ def rgyr (
         "echo",
         selection_name,
     ], stdout=PIPE)
-    logs = run([
+    process = run([
         "gmx",
         "gyrate",
         "-s",
@@ -58,12 +58,15 @@ def rgyr (
         '-n',
         ndx_filename,
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
     p.stdout.close()
 
     # If the output does not exist at this point it means something went wrong with gromacs
     if not exists(rgyr_data_filename):
         print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
         raise SystemExit('Something went wrong with GROMACS')
 
     # Read the output file and parse it
