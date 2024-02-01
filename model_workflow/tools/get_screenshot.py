@@ -34,24 +34,34 @@ def get_screenshot(
     #input_scale_matrix : List[float],
     #input_global_matrix : List[float],
 ):
+
+    # Check the output screenshot file extension is JPG
+    if output_screenshot_filename.split('.')[-1] != 'jpg':
+        raise SystemExit('You must provide a .jpg file name!')
+
     # Number of pixels to scale in x 
     x_number_pixels = 350
     # Number of pixels to scale in y
     y_number_pixels = 350
+
+    # Set an enviornment variable to handle the window size
+    # WARNING: Use this system instead of the 'display resize' command
+    # This command silently kills VMD when it is run in sbatch (but not in salloc)
+    # The cause is not clear but this command may depend on OpenGL rendering features which are not supported in sbatch
+    # https://www.ks.uiuc.edu/Training/Tutorials/vmd/tutorial-html/node8.html
+    os.environ['VMDSCRSIZE'] = str(x_number_pixels) + " " + str(y_number_pixels)
+
     # Change the scale factor as wished, since some big molecules may overfill in the VMD window
     scale_factor = 2
-    if output_screenshot_filename.split('.')[-1] != 'jpg':
-        raise SystemExit('You must provide a .jpg file name!')
-
 
     # Prepare a Tcl script in order to execute different commands in the terminal of VMD
 
     # Generate a file name for the commands file
-    commands_filename = '.commands.vmd' 
+    commands_filename_1 = '.commands_1.vmd'
 
-    # Generate a file to save the result obtained when calculating the center
+    # Set a file to save the result obtained when calculating the center
     center_filename = '.center_point_filename.txt'
-    with open(commands_filename, "w") as file:
+    with open(commands_filename_1, "w") as file:
         # Select the whole molecule
         file.write('set sel [atomselect 0 all] \n')
         # Find the center
@@ -66,7 +76,7 @@ def get_screenshot(
         "vmd",
         input_structure_filename,
         "-e",
-        commands_filename,
+        commands_filename_1,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -76,12 +86,15 @@ def get_screenshot(
         line = [float(i) for i in line]
     vmd_center_coordinates = line
 
+    # Set a file name for the commands file
+    commands_filename_2 = '.commands_2.vmd'
+
     # Now write the VMD script for the rotation
-    with open(commands_filename, "w") as file:
+    with open(commands_filename_2, "w") as file:
         # Set the Background of the molecule to white color
-        file.write('color Display Background white \n') 
+        file.write('color Display Background white \n')
         # Delete the axes drawing in the VMD window
-        file.write('axes location Off \n') 
+        file.write('axes location Off \n')
         # Eliminate the molecule to perform changes in the representation, color and material 
         file.write('mol delrep 0 top \n')
         # Change the default representation model to Newcartoon
@@ -94,8 +107,6 @@ def get_screenshot(
         file.write('mol material Opaque \n')
         # Using the new changes performed previously add a new representation to the new molecule
         file.write('mol addrep top \n') 
-        # Adjust the VMD window to the desired size
-        file.write(f'display resize {x_number_pixels} {y_number_pixels} \n') 
         # Change projection from perspective (used by VMD by default) to orthographic
         file.write('display projection orthographic \n')
         # Select all atoms
@@ -325,12 +336,19 @@ def get_screenshot(
         # Exit VMD
         file.write('exit\n')
 
+    # Set an enviornment variable to handle the window size
+    # WARNING: Use this system instead of the 'display resize' command
+    # This command silently kills VMD when it is run in sbatch (but not in salloc)
+    # The cause is not clear but this command may depend on OpenGL rendering features which are not supported in sbatch
+    # https://www.ks.uiuc.edu/Training/Tutorials/vmd/tutorial-html/node8.html
+    os.environ['VMDSCRSIZE'] = "350 350"
+
     # Run VMD
     process = run([
         "vmd",
         input_structure_filename,
         "-e",
-        commands_filename,
+        commands_filename_2,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE)
@@ -349,7 +367,7 @@ def get_screenshot(
     rgb_im.save(output_screenshot_filename)
 
     # Remove trash files
-    trash_files = [ commands_filename, auxiliary_tga_filename, center_filename ]
+    trash_files = [ commands_filename_1, commands_filename_2, auxiliary_tga_filename, center_filename ]
     for trash_file in trash_files:
         os.remove(trash_file)
 
