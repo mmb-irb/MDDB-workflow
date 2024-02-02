@@ -336,13 +336,6 @@ def get_screenshot(
         # Exit VMD
         file.write('exit\n')
 
-    # Set an enviornment variable to handle the window size
-    # WARNING: Use this system instead of the 'display resize' command
-    # This command silently kills VMD when it is run in sbatch (but not in salloc)
-    # The cause is not clear but this command may depend on OpenGL rendering features which are not supported in sbatch
-    # https://www.ks.uiuc.edu/Training/Tutorials/vmd/tutorial-html/node8.html
-    os.environ['VMDSCRSIZE'] = "350 350"
-
     # Run VMD
     process = run([
         "vmd",
@@ -370,6 +363,9 @@ def get_screenshot(
     trash_files = [ commands_filename_1, commands_filename_2, auxiliary_tga_filename, center_filename ]
     for trash_file in trash_files:
         os.remove(trash_file)
+
+    # Remove the environment variable to not cause problem in possible future uses of VMD
+    os.environ['VMDSCRSIZE'] = ""
 
 # Return the rotated vector
 # https://stackoverflow.com/questions/6802577/rotation-of-3d-vector
