@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, remove, symlink, rename, walk, mkdir, getcwd
-from os.path import exists, islink, isabs
+from os.path import exists, islink, isabs, relpath
 import sys
 import io
 import math
@@ -500,16 +500,17 @@ class MD:
             (input_topology_file, filtered_topology_file, output_topology_file)
         ]
         for input_file, processed_file, output_file in input_and_output_files:
-            if not output_file.exists:
-                # There is also a chance that the input files have not been modified
-                # This means the input format has already the output format and it is not to be imaged, fitted or corrected
-                # However we need the output files to exist and we dont want to rename the original ones to conserve them
-                # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
-                if processed_file == input_file:
-                    symlink(input_file.relative_path, output_file.path)
-                # Some processed files may remain with some intermediate filename
-                else:
-                    rename(processed_file.relative_path, output_file.path)
+            if output_file.exists:
+                continue
+            # There is also a chance that the input files have not been modified
+            # This means the input format has already the output format and it is not to be imaged, fitted or corrected
+            # However we need the output files to exist and we dont want to rename the original ones to conserve them
+            # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
+            if processed_file == input_file:
+                symlink(input_file.path, output_file.path)
+            # Some processed files may remain with some intermediate filename
+            else:
+                rename(processed_file.relative_path, output_file.path)
 
         # Save the internal variables
         self._structure_file = output_structure_file
