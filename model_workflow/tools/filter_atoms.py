@@ -130,6 +130,16 @@ def filter_atoms (
     if exists(index_filename):
         remove(index_filename)
 
+    # Check if any of the output files does not exist
+    # If so, then it means there was nothing to filter
+    # However the output file is expected, so me make symlink
+    if not output_structure_file.exists:
+        output_structure_file.set_symlink_to(input_structure_file)
+    if not output_trajectory_file.exists:
+        output_trajectory_file.set_symlink_to(input_trajectory_file)
+    if not output_topology_file.exists:
+        output_topology_file.set_symlink_to(input_topology_file)
+
 # Set the pytraj mask to filter the desired atoms from a specific topology
 def get_filter_mask (topology_filename : str, filter_selection : str) -> str:
     # If the default filtering was rquested
