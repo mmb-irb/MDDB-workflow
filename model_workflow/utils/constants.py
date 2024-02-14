@@ -40,7 +40,7 @@ REGISTER_FILENAME = '.register.json'
 # An old system for when original topology is very wrong and charges must be provided manually
 RAW_CHARGES_FILENAME = 'charges.txt'
 # Accepted topology formats for atomic charges mining
-ACCEPTED_TOPOLOGY_FORMATS = ['top', 'psf', 'prmtop', 'prm7']
+ACCEPTED_TOPOLOGY_FORMATS = ['tpr', 'top', 'psf', 'prmtop', 'prm7']
 
 # Set generated file names
 FIRST_FRAME_FILENAME = 'first_frame.pdb'
