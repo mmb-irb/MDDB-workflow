@@ -300,3 +300,7 @@ RESIDUE_NAME_LETTERS = {
     'DG3': 'G',
     'DG5': 'G',
 }
+
+# Set typical residue names to guess what residues are
+STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3'}
+STANDARD_COUNTER_ION_ATOM_NAMES = {'K', 'NA', 'CL', 'CLA', 'SOD', 'POT'}

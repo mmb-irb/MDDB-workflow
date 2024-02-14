@@ -7,6 +7,7 @@ from typing import Union
 import pytraj as pt
 
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
+from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
 
 from model_workflow.utils.selections import Selection
@@ -139,7 +140,7 @@ def get_filter_mask (topology_filename : str, filter_selection : str) -> str:
     return filter_mask
 
 # Set the pytraj selection for not water
-water_mask = '(:SOL,WAT,HOH,TIP)'
+water_mask = '(:' + ','.join(STANDARD_SOLVENT_RESIDUE_NAMES) + ')'
 # Set the pytraj mask to filter default atoms
 # i.e. water and counter ions with standard residue names
 def get_default_filter_mask (topology_filename : str) -> str:
@@ -197,7 +198,6 @@ def vmd_selection_2_pytraj_mask (topology_filename : str, filter_selection : str
     return filter_mask
 
 # Get a pytraj selection with all counter ions
-counter_ions = ['K', 'NA', 'CL', 'CLA', 'SOD', 'POT']
 def get_counter_ions_mask (structure_filename : str) -> str:
     pt_topology = pt.load_topology(filename=structure_filename)
 
@@ -218,7 +218,7 @@ def get_counter_ions_mask (structure_filename : str) -> str:
         atom_name = atom.name.upper()
         # Remove possible '+' and '-' signs by keeping only letters
         simple_atom_name = ''.join(filter(str.isalpha, atom_name))
-        if simple_atom_name in counter_ions:
+        if simple_atom_name in STANDARD_COUNTER_ION_ATOM_NAMES:
             # Atom indices go from 0 to n-1
             # Add +1 to the index since the mask selection syntax counts from 1 to n
             counter_ion_atoms.append(str(atom_index +1))

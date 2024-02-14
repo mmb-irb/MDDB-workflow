@@ -12,6 +12,7 @@ from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
 from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter
 from model_workflow.utils.constants import SUPPORTED_POLYMER_ELEMENTS, SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
+from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 
 import pytraj
 # Import these libraries if they are available
@@ -46,10 +47,6 @@ coherent_bonds_without_hydrogen = {
     'S': { 'min': 1, 'max': 4 },
     'P': { 'min': 2, 'max': 4 },
 }
-
-# Set typical residue names to guess what residues are
-standard_water_residue_names = {'SOL', 'WAT', 'HOH', 'TIP'}
-standard_counter_ion_atom_names = {'K', 'NA', 'CL', 'CLA', 'SOD', 'POT'}
 
 # Set the limit of residue numbers according to PDB format (4 characters, starts count at 1)
 # This means the last number is 9999 and it is equivalent to index 9998
@@ -1196,7 +1193,7 @@ class Structure:
     # Select water atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
     def select_water (self) -> 'Selection':
-        water_residues_indices = [ residue.index for residue in self.residues if residue.name in standard_water_residue_names ]
+        water_residues_indices = [ residue.index for residue in self.residues if residue.name in STANDARD_SOLVENT_RESIDUE_NAMES ]
         return self.select_residue_indices(water_residues_indices)
 
     # Select counter ion atoms
@@ -1210,7 +1207,7 @@ class Structure:
             # Get a simplified version of the atom name
             # Set all letters upper and remove non-letter characters (e.g. '+' and '-' symbols)
             simple_atom_name = ''.join(filter(str.isalpha, atom.name.upper()))
-            if simple_atom_name in standard_counter_ion_atom_names:
+            if simple_atom_name in STANDARD_SOLVENT_RESIDUE_NAMES:
                 counter_ion_indices.append(atom.index)
         return Selection(counter_ion_indices)
 
