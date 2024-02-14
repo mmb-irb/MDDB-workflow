@@ -15,7 +15,7 @@ def get_first_frame (input_structure_filename : str, input_trajectory_filename :
             "echo",
             "System",
         ], stdout=PIPE)
-        logs = run([
+        process = run([
             "gmx",
             "trjconv",
             "-s",
@@ -27,9 +27,9 @@ def get_first_frame (input_structure_filename : str, input_trajectory_filename :
             "-dump",
             "0",
             "-quiet"
-        ], stdin=p.stdout, stderr=PIPE).stderr.decode()
+        ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
     else:
-        logs = run([
+        process = run([
             "gmx",
             "trjconv",
             "-f",
@@ -39,10 +39,14 @@ def get_first_frame (input_structure_filename : str, input_trajectory_filename :
             "-dump",
             "0",
             "-quiet"
-        ], stderr=PIPE).stderr.decode()
+        ], stdout=PIPE, stderr=PIPE)
+    # Make the process run as logs are saved and decoded
+    logs = process.stdout.decode()
     # If output has not been generated then warn the user
     if not exists(output_frame_filename):
         print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
         raise SystemExit('Something went wrong with Gromacs')
 
 # Set function supported formats
