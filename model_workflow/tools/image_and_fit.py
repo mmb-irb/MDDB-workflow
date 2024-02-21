@@ -76,13 +76,11 @@ def image_and_fit (
 
         # If so run the imaging process without the '-center' flag
         if must_translate:
-            print(GREY_HEADER)
-            # Run Gromacs
             p = Popen([
                 "echo",
                 "System",
             ], stdout=PIPE)
-            logs = run([
+            process = run([
                 "gmx",
                 "trjconv",
                 "-s",
@@ -100,20 +98,35 @@ def image_and_fit (
                 #'-ur', # WARNING: This makes everything stay the same
                 #'compact', # WARNING: This makes everything stay the same
                 '-quiet'
-            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-            p.stdout.close()
-            print(COLOR_END)
-
-        # Otherwise, center the custom selection
-        else:
-            print(GREY_HEADER)
-            # Run Gromacs
+            ], stdin=p.stdout, stdout=PIPE)
+        # If no translation is required and we have a tpr then use it to make molecules whole
+        elif is_tpr_available:
             p = Popen([
                 "echo",
                 center_selection_name,
                 "System",
             ], stdout=PIPE)
-            logs = run([
+            process = run([
+                "gmx",
+                "trjconv",
+                "-s",
+                input_topology_file.path,
+                "-f",
+                input_trajectory_file.path,
+                '-o',
+                output_trajectory_file.path,
+                '-pbc',
+                'whole',
+                '-quiet'
+            ], stdin=p.stdout, stdout=PIPE)
+        # Otherwise, center the custom selection
+        else:
+            p = Popen([
+                "echo",
+                center_selection_name,
+                "System",
+            ], stdout=PIPE)
+            process = run([
                 "gmx",
                 "trjconv",
                 "-s",
@@ -128,9 +141,17 @@ def image_and_fit (
                 '-n',
                 center_selection_filename,
                 '-quiet'
-            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-            p.stdout.close()
-            print(COLOR_END)
+            ], stdin=p.stdout, stdout=PIPE)
+        # Run the defined process
+        print(GREY_HEADER)
+        logs = process.stdout.decode()
+        p.stdout.close()
+        print(COLOR_END)
+
+        # Check the output exists
+        if not output_trajectory_file.exists:
+            print(logs)
+            raise Exception('Something went wrong with Gromacs')
 
         # Select the first frame of the recently imaged trayectory as the new topology
         reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
