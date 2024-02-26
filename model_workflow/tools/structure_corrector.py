@@ -227,7 +227,7 @@ def structure_corrector (
             # DANI: Es para curarnos en salud, pero lo suyo sería poder exportar topologías de la API que ya tengan los datos bien
             register.cache['new_atom_order'] = structure.new_atom_order
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
-            structure.trajectory_atom_sorter(input_structure_file.path, input_trajectory_file.path, output_trajectory_file.path)
+            structure.trajectory_atom_sorter(input_structure_file, input_trajectory_file, output_trajectory_file)
 
     # ------------------------------------------------------------------------------------------
     # Repeated atoms ---------------------------------------------------------------------------

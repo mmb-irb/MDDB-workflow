@@ -86,6 +86,10 @@ class File:
             symlink(self.relative_path, standard_file.path)
         return standard_file
 
+    # Get a prefixed file using this file name as the name base
+    def get_prefixed_file (self, prefix : str) -> 'File':
+        return File(self.basepath + '/' + prefix + self.filename)
+
     # Set this file a symlink to another file
     def set_symlink_to (self, other_file : 'File'):
         # Self file must not exist

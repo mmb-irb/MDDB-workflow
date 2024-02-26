@@ -320,10 +320,8 @@ class Residue:
         for atom in self.atoms:
             atom._residue_index = index
         # Update residue chain
-        current_index = self._index
-        chain = self.chain
-        residue_chain_index = chain._residue_indices.index(current_index)
-        chain._residue_indices[residue_chain_index] = index
+        chain_residue_index = self.chain._residue_indices.index(self._index)
+        self.chain._residue_indices[chain_residue_index] = index
         # Finally update self index
         self._index = index
     index = property(get_index, set_index, None, "The residue index according to parent structure residues (read only)")
@@ -402,19 +400,19 @@ class Residue:
         # WARNING: It is critical to find both current and new chains before removing/adding residues
         # WARNING: It may happend that we remove the last residue in the current chain and the current chain is purged
         # WARNING: Thus the 'new_chain_index' would be obsolete since the structure.chains list would have changed
-        current_chain = self.chain
+        if self.chain:
+            self.chain.remove_residue(self)
         new_chain = self.structure.chains[new_chain_index]
-        current_chain.remove_residue(self)
         new_chain.add_residue(self)
     chain_index = property(get_chain_index, set_chain_index, None, "The residue chain index according to parent structure chains")
 
     # The residue chain
     # If chain is set then make changes in all the structure to make this change coherent
-    def get_chain (self) -> 'Chain':
-        # If there is not strucutre yet it means the residue is beeing set before the structure
+    def get_chain (self) -> Optional['Chain']:
+        # If there is not strucutre yet then it means the residue is set before the structure
         # In this case it is not possible to get related chain in the structure
-        if not self.structure:
-            return []
+        if not self.structure or self.chain_index == None:
+            return None
         # Get the chain in the structure according to the chain index
         return self.structure.chains[self.chain_index]
     def set_chain (self, new_chain : Union['Chain', str]):
@@ -476,7 +474,7 @@ class Residue:
         # -------------------------------------------------------------------------------------------------------
         # Protein definition according to vmd:
         # a residue with atoms named C, N, CA, and O
-        # In our case we accept OC1 or OC2 instead of O for terminal resdiues
+        # In our case we accept OC1 or OC2 instead of O for terminal residues
         atom_names = set([ atom.name for atom in self.atoms ])
         if all((name in atom_names) for name in ['C', 'N', 'CA']) and any((name in atom_names) for name in ['O', 'OC1', 'OC2']):
             self._classification = 'protein'
@@ -612,6 +610,86 @@ class Residue:
     # Find rings in the residue
     def find_rings (self) -> Generator[ List[Atom], None, None ]:
         return self.structure.find_rings(selection=self.get_selection())
+
+    # Split this residue in 2 residues and return them in a tuple
+    # Keep things coherent in the structure (renumerate all residues below this one)
+    # Note that all residue atoms must be covered by the splits
+    def split (self,
+        first_residue_atom_indices : List[int],
+        second_residue_atom_indices : List[int],
+        first_residue_name : Optional[str] = None,
+        second_residue_name : Optional[str] = None,
+        first_residue_number : Optional[int] = None,
+        second_residue_number : Optional[int] = None,
+        first_residue_icode : Optional[str] = None,
+        second_residue_icode : Optional[str] = None,
+    ) -> Tuple['Residue', 'Residue']:
+        # This function is expected to be called in a residue with an already set structure
+        if not self.structure:
+            raise InputError('The split function should be called when the residue has an already defined structure')
+        # Make sure all atoms in the residue are covered between both the first and the second residue
+        if set(self.atom_indices) != set(first_residue_atom_indices + second_residue_atom_indices):
+            print('Residue atoms: ' + ', '.join([ str(v) for v in set(self.atom_indices) ]))
+            print('Covered atoms: ' + ', '.join([ str(v) for v in set(first_residue_atom_indices + second_residue_atom_indices) ]))
+            raise InputError('All atom indices must be covered between both the first and the second residue')
+        # Reuse this first residue instead of creating a new one
+        if first_residue_name:
+            self.name = first_residue_name
+        if first_residue_number:
+            self.number = first_residue_number
+        if first_residue_icode:
+            self.icode = first_residue_icode
+        # Set the new second residue
+        _second_residue_name = second_residue_name if second_residue_name else self.name
+        _second_residue_number = second_residue_number if second_residue_number else self.number
+        _second_residue_icode = second_residue_icode if second_residue_icode else get_next_letter(self.icode)
+        second_residue = Residue(_second_residue_name, _second_residue_number, _second_residue_icode)
+        second_residue._structure = self.structure
+        new_residue_index = self.index + 1
+        second_residue._index = new_residue_index
+        # Insert the second residue in the structure residues list right after this residue
+        self.structure.residues.insert(new_residue_index, second_residue)
+        # Set the second residue index
+        # Update the index of all residues which have been shifted after the insertion
+        for residue_index in range(new_residue_index + 1, len(self.structure.residues)):
+            residue = self.structure.residues[residue_index]
+            residue.index = residue_index
+        # Now transfer atoms from residue 1 to residue 2 as it is specified
+        # Note that this will automatically update every atom
+        second_residue.atom_indices = second_residue_atom_indices
+        # Now add the new residue to the chain
+        self.chain.add_residue(second_residue)
+
+    # Parse atom names to atom indices and then call the split function
+    def split_by_atom_names (self,
+        first_residue_atom_names : List[str],
+        second_residue_atom_names : List[str],
+        first_residue_name : Optional[str] = None,
+        second_residue_name : Optional[str] = None,
+        first_residue_number : Optional[int] = None,
+        second_residue_number : Optional[int] = None,
+        first_residue_icode : Optional[str] = None,
+        second_residue_icode : Optional[str] = None,
+    ) -> Tuple['Residue', 'Residue']:
+        # Check all atom names to exist in the residue
+        input_atom_names = set(first_residue_atom_names + second_residue_atom_names)
+        residue_atom_names = set([ atom.name for atom in self.atoms ])
+        if input_atom_names != residue_atom_names:
+            print(self)
+            print(self.atoms)
+            print('Input atom names: ' + ', '.join(input_atom_names))
+            print('Residue atom names: ' + ', '.join(residue_atom_names))
+            raise InputError('All residue atoms must be covered between both the first and the second residue atom names')
+        # Convert atom names to atom indices
+        first_residue_atom_indices = [ self.get_atom_by_name(name).index for name in first_residue_atom_names ]
+        second_residue_atom_indices = [ self.get_atom_by_name(name).index for name in second_residue_atom_names ]
+        # Call the actual split logic
+        return self.split(first_residue_atom_indices, second_residue_atom_indices, first_residue_name,
+            second_residue_name, first_residue_number, second_residue_number, first_residue_icode, second_residue_icode)
+
+    # Get a residue atom given its name
+    def get_atom_by_name (self, atom_name : str) -> 'Atom':
+        return next(( atom for atom in self.atoms if atom.name == atom_name ), None)
 
 # A chain
 class Chain:
@@ -1531,7 +1609,7 @@ class Structure:
 
     # Splitted residues are found in some pdbs and they are supported by some tools
     # These tools consider all atoms with the same 'record' as the same residue
-    # However, there are other tools which would consider the splitted residue as two different resdiues
+    # However, there are other tools which would consider the splitted residue as two different residues
     # This causes inconsistency along different tools besides a long list of problems
     # The only possible is fix is changing the order of atoms in the topology
     # Note that this is a breaking change for associated trajectories, which must change the order of coordinates
@@ -1586,7 +1664,7 @@ class Structure:
                     # print('Setting icode ' + next_icode + ' to residue ' + str(residue))
                     residue.icode = next_icode
                 modified = True
-        # Grouped resdiues with more than 1 result are considered as repeated
+        # Grouped residues with more than 1 result are considered as repeated
         repeated_residues = [ residues for residues in grouped_residues.values() if len(residues) > 1 ]
         if len(repeated_residues) == 0:
             return modified
@@ -1664,14 +1742,14 @@ class Structure:
                 # Prepare the trajectory atom sorter which must be returned
                 # Include atom indices already so the user has to provide only the structure and trajectory filenames
                 def trajectory_atom_sorter (
-                    input_structure_filename : str,
-                    input_trajectory_filename : str,
-                    output_trajectory_filename : str
+                    input_structure_file : 'File',
+                    input_trajectory_file : 'File',
+                    output_trajectory_file : 'File'
                 ):
                     sort_trajectory_atoms(
-                        input_structure_filename,
-                        input_trajectory_filename,
-                        output_trajectory_filename,
+                        input_structure_file,
+                        input_trajectory_file,
+                        output_trajectory_file,
                         new_atom_indices
                     )
                 self.trajectory_atom_sorter = trajectory_atom_sorter
@@ -1955,8 +2033,10 @@ def calculate_distance (atom_1 : Atom, atom_2 : Atom) -> float:
 
 # Set a function to get the next letter from an input letter in alphabetic order
 def get_next_letter (letter : str) -> str:
+    if not letter:
+        return 'A'
     if letter == 'z' or letter == 'Z':
-        raise ValueError("Limit of chain letters has been reached")
+        raise InputError("Limit of chain letters has been reached")
     next_letter = chr(ord(letter) + 1)
     return next_letter
 

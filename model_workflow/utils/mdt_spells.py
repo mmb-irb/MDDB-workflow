@@ -326,40 +326,32 @@ def split_merged_trajectories (
 # Sort atoms in a trajectory file by sorting its coordinates
 # A new atom indices list is expected in order to do the sorting
 def sort_trajectory_atoms (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    output_trajectory_filename : str,
+    input_structure_file : 'File',
+    input_trajectory_file : 'File',
+    output_trajectory_file : 'File',
     new_atom_indices : List[int]
 ):
 
-    # Assert we have input values
-    if not input_structure_filename:
-        raise SystemExit('ERROR: Missing input structure filename')
-    if not input_trajectory_filename:
-        raise SystemExit('ERROR: Missing input trajectory filename')
-    if not output_trajectory_filename:
-        raise SystemExit('ERROR: Missing output trajectory filename')
-
     # Load the topology, which is used further
-    topology = mdt.load_topology(input_structure_filename)
+    topology = mdt.load_topology(input_structure_file.path)
 
     # Check the new atom indices to match the number of atoms in the topology
     if len(new_atom_indices) != topology.n_atoms:
         raise ValueError('The number of atom indices (' + str(len(new_atom_indices)) + ') does not match the number of atoms in topology(' + str(topology.n_atoms) + ')' )
 
     # If the input and the output trajectory filenames are equal then we must rename the input filename to not overwrite it
-    if input_trajectory_filename == output_trajectory_filename:
-        backup_filename = 'backup.' + input_trajectory_filename
-        os.rename(input_trajectory_filename, backup_filename)
-        input_trajectory_filename = backup_filename
+    if input_trajectory_file.path == output_trajectory_file.path:
+        backup_file = input_trajectory_file.get_prefixed_file('backup.')
+        os.rename(input_trajectory_file.path, backup_file.path)
+        input_trajectory_file = backup_file
 
     # If the output trajectory file already exists at this point then we must stop here
     # The raw trjcat implementation will not join things to the end of it
-    if exists(output_trajectory_filename):
+    if output_trajectory_file.exists:
         raise SystemExit('The output file already exists and overwrite is not supported for this functionality')
 
     # Load the trajectory frame by frame
-    trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
+    trajectory = mdt.iterload(input_trajectory_file.path, top=input_structure_file.path, chunk=1)
     frame_filename = '.frame.xtc'
 
     # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
@@ -385,7 +377,7 @@ def sort_trajectory_atoms (
         )
         new_frame.save(frame_filename)
         # Join current frame to the output trajectory
-        merge_xtc_files(output_trajectory_filename, frame_filename)
+        merge_xtc_files(output_trajectory_file.path, frame_filename)
 
     # Remove the residual file
     # WARNING: It may not exist if the trajectory has 1 frame
