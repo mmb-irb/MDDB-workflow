@@ -37,6 +37,11 @@ TRAJECTORY_FILENAME = 'trajectory.xtc'
 # Intermediate filenames
 REGISTER_FILENAME = '.register.json'
 
+# Files saving resorted bonds and charges when we have to resort atoms
+# Note that these files have priority when loading both bonds and charges
+RESORTED_CHARGES_FILENAME = 'resorted_charges.json'
+RESORTED_BONDS_FILENAME = 'resorted_bonds.json'
+
 # An old system for when original topology is very wrong and charges must be provided manually
 RAW_CHARGES_FILENAME = 'charges.txt'
 # Accepted topology formats for atomic charges mining

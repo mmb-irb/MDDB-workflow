@@ -472,25 +472,27 @@ class MD:
         else:
             self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
         # Save the snapshots value in the register cache as well
-        self.register.cache[field_name] = self._snapshots
+        self.register.update_cache(field_name, self._snapshots)
+
+        # WARNING:
+        # We may need to resort atoms in the structure corrector function
+        # In such case, bonds and charges must be resorted as well and saved apart to keep values coherent
+        # Bonds are calculated during the structure corrector but atom charges must be extracted no
+        self._charges = get_charges(self.topology_file)
 
         print(' * Correcting structure')
 
         # Correct the structure
-        corrector_values = structure_corrector(
+        # This function reads and or modifies the following MD variables:
+        #   snapshots, safe_bonds, register, mercy, trust
+        structure_corrector(
             input_structure_file = imaged_structure_file,
             input_trajectory_file = imaged_trajectory_file,
             input_topology_file = filtered_topology_file,
             output_structure_file = output_structure_file,
             output_trajectory_file = output_trajectory_file,
-            snapshots = self._snapshots,
-            register = self.register,
-            mercy = self.project.mercy,
-            trust = self.project.trust
+            MD = self
         )
-
-        # Save the returned corrector values
-        self._safe_bonds = corrector_values['safe_bonds']
 
         # Now we must rename files to match the output file in case there is any missmatch
         # Some processed files may remain with some intermediate filename
@@ -650,7 +652,7 @@ class MD:
         # This happens when the input files are already porcessed and thus we did not yet count the frames
         self._snapshots = get_frames_count(self.structure_file.path, self.trajectory_file.path)
         # Save the snapshots value in the register cache as well
-        self.register.cache[field_name] = self._snapshots
+        self.register.update_cache(field_name, self._snapshots)
         return self._snapshots
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
@@ -659,8 +661,15 @@ class MD:
         # If we already have a stored value then return it
         # WARNING: Do not remove the self.topology_file checking
         # Note that checking if the topology file exists triggers all the processing logic
-        # The processing logic is able to set the internal safe bonds value as well so this avoid repeating the process
+        # The processing logic is able to set the internal safe bonds value as well so this avoids repeating the process
+        # Besides it generates the resorted files, if needed
         if self.topology_file and self._safe_bonds:
+            return self._safe_bonds
+        # If we have a resorted file then use it
+        # Note that this is very excepcional
+        if self.project.resorted_bonds_file.exists:
+            print('Using resorted safe bonds')
+            self._safe_bonds = load_json(self.project.resorted_bonds_file.path)
             return self._safe_bonds
         # Otherwise we must find safe bonds value
         # This should only happen if we are working with already processed files
@@ -1271,6 +1280,10 @@ class Project:
         self._residues_map = None
         self._mds = None
 
+        # Force a couple of extraordinary files which is generated if atoms are resorted
+        self.resorted_bonds_file = File(RESORTED_BONDS_FILENAME)
+        self.resorted_charges_file = File(RESORTED_CHARGES_FILENAME)
+
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
         self.register = Register()
@@ -1739,7 +1752,17 @@ class Project:
     # Atom charges
     def get_charges (self) -> List[float]:
         # If we already have a stored value then return it
-        if self._charges:
+        # WARNING: Do not remove the self.topology_file checking
+        # Note that checking if the topology file exists triggers all the processing logic
+        # The processing logic is able to set the internal atom charges value as well so this avoids repeating the process
+        # Besides it generates the resorted files, if needed
+        if self.topology_file and self._charges:
+            return self._charges
+        # If we have a resorted file then use it
+        # Note that this is very excepcional
+        if self.resorted_charges_file.exists:
+            print('Using resorted atom charges')
+            self._charges = load_json(self.resorted_charges_file.path)
             return self._charges
         # Otherwise we must find the value
         self._charges = get_charges(self.topology_file)

@@ -8,7 +8,7 @@ from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import TestFailure
 from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-from model_workflow.utils.auxiliar import get_new_letter
+from model_workflow.utils.auxiliar import get_new_letter, save_json
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 
 # Analyze the structure looking for irregularities and then modify the structure to standarize the format
@@ -30,7 +30,7 @@ from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, 
 # Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail
 # Note that the 'trust' flag may be passed for critical checkings to skip them
 
-# This function also return some values obtained during the processing
+# This function also sets some values in the passed MD
 
 def structure_corrector (
     input_structure_file : 'File',
@@ -38,11 +38,14 @@ def structure_corrector (
     input_topology_file : Optional['File'],
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
-    snapshots : int,
-    register : 'Register',
-    mercy : List[str],
-    trust : List[str]
+    MD : 'MD'
 ) -> dict:
+
+    # Extract some MD features
+    snapshots = MD._snapshots
+    register = MD.register
+    mercy = MD.project.mercy
+    trust = MD.project.trust
 
     # Track if there has been any modification and then the structure must be rewritten
     modified = False
@@ -129,6 +132,10 @@ def structure_corrector (
         # Set the modified variable as true since we have changes the structure
         modified = True
     check_stable_bonds()
+
+    # Write safe bonds back to the MD
+    MD._safe_bonds = safe_bonds
+    MD._safe_bonds_frame = safe_bonds_frame
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
@@ -222,10 +229,14 @@ def structure_corrector (
         if input_trajectory_file.path and structure.trajectory_atom_sorter:
             # Save a warning in the register
             print('WARNING: Atoms have been sorted to solve splitted residues')
-            # Save the new order in the register
-            # DANI: Dado que no reordenamos las topologías orignales (muchos formatos, mucho marrón) hay que guardar esto
-            # DANI: Es para curarnos en salud, pero lo suyo sería poder exportar topologías de la API que ya tengan los datos bien
-            register.cache['new_atom_order'] = structure.new_atom_order
+            register.update_cache('resorted_atoms', True)
+            print('Creating resorted files for atom bonds and charges')
+            # Bonds are already resorted
+            save_json(safe_bonds, MD.project.resorted_bonds_file.path, indent=4)
+            # Charges are to be resorted
+            resorted_charges = [ MD._charges[index] for index in structure.new_atom_order ]
+            MD._charges = resorted_charges
+            save_json(resorted_charges, MD.project.resorted_charges_file.path, indent=4)
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
             structure.trajectory_atom_sorter(input_structure_file, input_trajectory_file, output_trajectory_file)
 
@@ -247,6 +258,3 @@ def structure_corrector (
         print(' Everything is fine')
     # Generate the file anyway so this new structure is used and not reclaulcated
     structure.generate_pdb_file(output_structure_file.path)
-
-    # Return some values
-    return { 'safe_bonds': safe_bonds, 'safe_bonds_frame': safe_bonds_frame }

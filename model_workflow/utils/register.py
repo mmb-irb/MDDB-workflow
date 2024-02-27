@@ -43,8 +43,8 @@ class Register:
                 if not warning.get('tag', None):
                     continue
                 self.warnings.append(warning)
-        # Set the save function to be runned when the process is over
-        atexit.register(self.save)
+        # Save the entry for the first time
+        self.save()
 
     def __repr__ (self):
         return str(self.to_dict())
@@ -64,16 +64,23 @@ class Register:
     def get_warnings (self, tag : str) -> List[dict]:
         return [ warning for warning in self.warnings if warning['tag'] == tag ]
 
-    # Add warnings with the right format
+    # Add warnings with the right format and save the register
     # A flag is to be passed to handle further removal of warnings
     def add_warning (self, tag : str, message : str):
         print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
         warning = { 'tag': tag, 'message': message }
         self.warnings.append(warning)
+        self.save()
 
-    # Remove warnings filtered by tag
+    # Remove warnings filtered by tag and save the register
     def remove_warnings (self, tag : str):
         self.warnings = [ warning for warning in self.warnings if warning['tag'] != tag ]
+        self.save()
+
+    # Update the cache and save the register
+    def update_cache (self, key : str, value):
+        self.cache[key] = value
+        self.save()
 
     # Save the register to a json file
     def save (self):
