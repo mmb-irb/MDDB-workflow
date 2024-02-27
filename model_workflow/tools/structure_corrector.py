@@ -95,7 +95,7 @@ def structure_corrector (
         register.remove_warnings(STABLE_BONDS_FLAG)
         # If bonds match from the begining we are done as well
         if do_bonds_match(structure.bonds, safe_bonds, atom_elements):
-            register.tests[STABLE_BONDS_FLAG] = True
+            register.update_test(STABLE_BONDS_FLAG, True)
             return
         print('WARNING: Default structure has wrong bonds')
         # Set the safe bonds as the structure bonds
@@ -114,7 +114,7 @@ def structure_corrector (
             must_be_killed = STABLE_BONDS_FLAG not in mercy
             if must_be_killed:
                 raise TestFailure('Failed to find stable bonds')
-            register.tests[STABLE_BONDS_FLAG] = False
+            register.update_test(STABLE_BONDS_FLAG, False)
             register.add_warning(STABLE_BONDS_FLAG, ('Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.\n'
                 'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
             return
@@ -128,7 +128,7 @@ def structure_corrector (
         # Remove the safe bonds frame since it is not required anymore
         remove(safe_bonds_frame_filename)
         # Tag the test as succeed if we did not skip it
-        register.tests[STABLE_BONDS_FLAG] = True
+        register.update_test(STABLE_BONDS_FLAG, True)
         # Set the modified variable as true since we have changes the structure
         modified = True
     check_stable_bonds()
@@ -158,11 +158,11 @@ def structure_corrector (
             must_be_killed = COHERENT_BONDS_FLAG not in mercy
             if must_be_killed:
                 raise TestFailure('Failed to find coherent bonds')
-            register.tests[COHERENT_BONDS_FLAG] = False
+            register.update_test(COHERENT_BONDS_FLAG, False)
             register.add_warning(COHERENT_BONDS_FLAG, 'Some atoms may have a higher or lower number of bonds than they should according to their element.')
         # Tag the test as succeed if all was good
         else:
-            register.tests[COHERENT_BONDS_FLAG] = True
+            register.update_test(COHERENT_BONDS_FLAG, True)
         
 
     # ------------------------------------------------------------------------------------------

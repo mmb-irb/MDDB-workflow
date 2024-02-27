@@ -77,7 +77,7 @@ def check_trajectory_integrity (
 
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if len(rmsd_jumps) <= 1:
-        register.tests[TRAJECTORY_INTEGRITY_FLAG] = True
+        register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
         return True
 
     # Get the maximum RMSD value and check it is a reasonable deviation from the average values
@@ -123,7 +123,7 @@ def check_trajectory_integrity (
         message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
             register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
-            register.tests[TRAJECTORY_INTEGRITY_FLAG] = False
+            register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
             return False
         # Otherwise kill the process right away
         raise Exception(message)
@@ -133,5 +133,5 @@ def check_trajectory_integrity (
         register.add_warning(TRAJECTORY_INTEGRITY_FLAG, 'First ' + str(bypassed_frames) + ' frames may be not equilibrated')
 
     print(' Test has passed successfully')
-    register.tests[TRAJECTORY_INTEGRITY_FLAG] = True
+    register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
     return True

@@ -2,7 +2,6 @@ from sys import argv
 from os.path import exists
 from datetime import datetime
 from typing import Optional, List
-import atexit
 
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END, AVAILABLE_CHECKINGS
@@ -60,6 +59,16 @@ class Register:
         }
         return dictionary
 
+    # Update the cache and save the register
+    def update_cache (self, key : str, value):
+        self.cache[key] = value
+        self.save()
+
+    # Update a test result and save the register
+    def update_test (self, key : str, value : Optional[bool]):
+        self.tests[key] = value
+        self.save()
+
     # Get current warnings filtered by tag
     def get_warnings (self, tag : str) -> List[dict]:
         return [ warning for warning in self.warnings if warning['tag'] == tag ]
@@ -82,6 +91,11 @@ class Register:
         self.cache[key] = value
         self.save()
 
+    # Update a test result and save the register
+    def update_test (self, key : str, value : Optional[bool]):
+        self.tests[key] = value
+        self.save()
+
     # Save the register to a json file
     def save (self):
         # If path does not exist then do nothing
@@ -91,7 +105,5 @@ class Register:
             return
         # Set a new entry for the current run
         current_entry = self.to_dict()
-        # Add the new entry to the list
-        self.entries.append(current_entry)
         # Write entries to disk
-        save_json(self.entries, self.file.path, indent = 4)
+        save_json(self.entries + [ current_entry ], self.file.path, indent = 4)
