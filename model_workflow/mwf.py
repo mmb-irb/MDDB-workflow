@@ -478,7 +478,7 @@ class MD:
         # We may need to resort atoms in the structure corrector function
         # In such case, bonds and charges must be resorted as well and saved apart to keep values coherent
         # Bonds are calculated during the structure corrector but atom charges must be extracted no
-        self._charges = get_charges(self.topology_file)
+        self.project._charges = get_charges(filtered_topology_file)
 
         print(' * Correcting structure')
 
@@ -658,30 +658,7 @@ class MD:
 
     # Safe bonds
     def get_safe_bonds (self) -> List[List[int]]:
-        # If we already have a stored value then return it
-        # WARNING: Do not remove the self.topology_file checking
-        # Note that checking if the topology file exists triggers all the processing logic
-        # The processing logic is able to set the internal safe bonds value as well so this avoids repeating the process
-        # Besides it generates the resorted files, if needed
-        if self.topology_file and self._safe_bonds:
-            return self._safe_bonds
-        # If we have a resorted file then use it
-        # Note that this is very excepcional
-        if self.project.resorted_bonds_file.exists:
-            print('Using resorted safe bonds')
-            self._safe_bonds = load_json(self.project.resorted_bonds_file.path)
-            return self._safe_bonds
-        # Otherwise we must find safe bonds value
-        # This should only happen if we are working with already processed files
-        self._safe_bonds = get_safe_bonds(
-            input_topology_file=self.topology_file,
-            input_structure_file=self.structure_file,
-            input_trajectory_file=self.trajectory_file,
-            must_check_stable_bonds=(STABLE_BONDS_FLAG not in self.project.trust),
-            snapshots=self.snapshots,
-            structure=self.structure,
-        )
-        return self._safe_bonds
+        return self.project.safe_bonds
     safe_bonds = property(get_safe_bonds, None, None, "Atom bonds to be trusted (read only)")
 
     # Parsed structure
@@ -1274,6 +1251,7 @@ class Project:
         # Other values which may be found/calculated on demand
         self._available_files = None
         self._pbc_residues = None
+        self._safe_bonds = None
         self._charges = None
         self._populations = None
         self._transitions = None
@@ -1748,6 +1726,34 @@ class Project:
         self._pbc_residues = get_pbc_residues(self.structure, self.pbc_selection)
         return self._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
+
+     # Safe bonds
+    def get_safe_bonds (self) -> List[List[int]]:
+        # If we already have a stored value then return it
+        # WARNING: Do not remove the self.topology_file checking
+        # Note that checking if the topology file exists triggers all the processing logic
+        # The processing logic is able to set the internal safe bonds value as well so this avoids repeating the process
+        # Besides it generates the resorted files, if needed
+        if self.topology_file and self._safe_bonds:
+            return self._safe_bonds
+        # If we have a resorted file then use it
+        # Note that this is very excepcional
+        if self.resorted_bonds_file.exists:
+            print('Using resorted safe bonds')
+            self._safe_bonds = load_json(self.resorted_bonds_file.path)
+            return self._safe_bonds
+        # Otherwise we must find safe bonds value
+        # This should only happen if we are working with already processed files
+        self._safe_bonds = get_safe_bonds(
+            input_topology_file=self.topology_file,
+            input_structure_file=self.structure_file,
+            input_trajectory_file=self.trajectory_file,
+            must_check_stable_bonds=(STABLE_BONDS_FLAG not in self.trust),
+            snapshots=self.reference_md.snapshots,
+            structure=self.structure,
+        )
+        return self._safe_bonds
+    safe_bonds = property(get_safe_bonds, None, None, "Atom bonds to be trusted (read only)")
 
     # Atom charges
     def get_charges (self) -> List[float]:

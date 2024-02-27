@@ -134,8 +134,8 @@ def structure_corrector (
     check_stable_bonds()
 
     # Write safe bonds back to the MD
-    MD._safe_bonds = safe_bonds
-    MD._safe_bonds_frame = safe_bonds_frame
+    MD.project._safe_bonds = safe_bonds
+    MD.project._safe_bonds_frame = safe_bonds_frame
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
@@ -234,8 +234,8 @@ def structure_corrector (
             # Bonds are already resorted
             save_json(safe_bonds, MD.project.resorted_bonds_file.path, indent=4)
             # Charges are to be resorted
-            resorted_charges = [ MD._charges[index] for index in structure.new_atom_order ]
-            MD._charges = resorted_charges
+            resorted_charges = [ MD.project._charges[index] for index in structure.new_atom_order ]
+            MD.project._charges = resorted_charges
             save_json(resorted_charges, MD.project.resorted_charges_file.path, indent=4)
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
             structure.trajectory_atom_sorter(input_structure_file, input_trajectory_file, output_trajectory_file)
