@@ -6,7 +6,6 @@ from typing import Optional, List
 
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
-from model_workflow.utils.file import File
 
 # Set dates format
 date_style = '%d-%m-%Y %H:%M:%S'
@@ -14,9 +13,9 @@ date_style = '%d-%m-%Y %H:%M:%S'
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
 # It is also responsible for storing test failure warnings to be written in metadata
 class Register:
-    def __init__ (self, file_path : str = REGISTER_FILENAME):
+    def __init__ (self, register_file : 'File'):
         # Save the previous register
-        self.file = File(file_path)
+        self.file = register_file
         # Save the current workflow call
         self.call = ' '.join(argv)
         # Save the current date
@@ -32,7 +31,7 @@ class Register:
         self.warnings = []
         # Inherit cache, test results and warning from the register last entry
         self.entries = []
-        if exists(self.file.path):
+        if self.file.exists:
             # Read the register in disk
             self.entries = load_json(self.file.path)
             last_entry = self.entries[-1]
@@ -69,14 +68,14 @@ class Register:
         return dictionary
 
     # Get new and previous mtimes of a target file
-    def get_mtime (self, target_file : File) -> tuple:
+    def get_mtime (self, target_file : 'File') -> tuple:
         new_raw_mtime = getmtime(target_file.path)
         new_mtime = strftime(date_style, gmtime(new_raw_mtime))
         previous_mtime = self.mtimes.get(target_file.filename, None)
         return new_mtime, previous_mtime
 
     # Update a modification time
-    def update_mtime (self, target_file : File):
+    def update_mtime (self, target_file : 'File'):
         # Get the new and the previous value
         new_mtime, previous_mtime = self.get_mtime(target_file)
         # If the new value is already the previous value then do nothing
@@ -87,7 +86,7 @@ class Register:
         self.save()
 
     # Check if a file does not match the already registered modification time
-    def is_file_modified (self, target_file : File) -> bool:
+    def is_file_modified (self, target_file : 'File') -> bool:
         # Get the new and the previous value
         new_mtime, previous_mtime = self.get_mtime(target_file)
         # If the new value is already the previous value then it has not been modified

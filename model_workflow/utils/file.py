@@ -5,6 +5,8 @@ from typing import Optional
 from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
 from model_workflow.utils.auxiliar import InputError
 
+LOCAL_PATH = '.'
+
 # A file handler
 # Absolute paths are used in runtime
 # Relative paths are used to store paths
@@ -15,21 +17,26 @@ class File:
         self.basepath = self.filename = None
         self.extension = self.format = None
         self.extensionless_filename = None
-        # If there is no path then leave everythin as none
+        # If there is no path then leave everything as none
         if not relative_or_basolute_path:
             return
         # If input path is absolute
         if isabs(relative_or_basolute_path[0]):
             self.absolute_path = relative_or_basolute_path
-            self.relative_path = relpath(self.absolute_path, '.')
+            self.relative_path = relpath(self.absolute_path, LOCAL_PATH)
         # If it is relative
         else:
             self.relative_path = relative_or_basolute_path
             self.absolute_path = abspath(self.relative_path)
         # When simply a path is requested we return the absolute path
-        self.path = self.absolute_path
-        # Capture the filename
+        self.path = self.relative_path
+        # Capture the filename and the basepath
         self.basepath, self.filename = split(self.path)
+        # If the basepath is empty then it means the file is in the local directroy
+        # WARNING: If the basepath is left empty an exists(basepath) would return false
+        # WARNING: For this reason we must replace '' by '.'
+        if not self.basepath:
+            self.basepath = LOCAL_PATH
         # Set the file extension
         self.extension = self.filename.split('.')[-1]
         if self.extension == self.filename:
@@ -66,12 +73,12 @@ class File:
         return False
 
     def check_existence (self) -> bool:
-        return exists(self.absolute_path)
+        return exists(self.path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
 
     # Remove the file
     def remove (self):
-        remove(self.absolute_path)
+        remove(self.path)
 
     # Given a file who has non-standard extension of a supported format we set a symlink with the standard extension
     def get_standard_file (self) -> 'File':

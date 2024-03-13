@@ -19,19 +19,19 @@ def get_charges (charges_source_file : 'File') -> list:
     charges = None
     # If we have the standard topology then get charges from it
     if charges_source_file.filename == TOPOLOGY_FILENAME:
-        with open(charges_source_file.absolute_path, 'r') as file:
+        with open(charges_source_file.path, 'r') as file:
             standard_topology = load(file)
             charges = standard_topology['atom_charges']
     # In some ocasions, charges may come inside a raw charges file
     elif charges_source_file.filename == RAW_CHARGES_FILENAME:
-        charges = get_raw_charges(charges_source_file.absolute_path)
+        charges = get_raw_charges(charges_source_file.path)
     # In some ocasions, charges may come inside a topology which can be parsed through pytraj
     elif charges_source_file.is_pytraj_supported:
-        charges = get_topology_charges(charges_source_file.absolute_path)
+        charges = get_topology_charges(charges_source_file.path)
         # DANI: De momento ya no generaré más charges.txt ahora que las cargas estan en la topologia json
         #generate_raw_energies_file(charges)
     elif charges_source_file.format == 'tpr':
-        charges = get_tpr_charges(charges_source_file.absolute_path)
+        charges = get_tpr_charges(charges_source_file.path)
     else:
         raise ValueError('Charges file (' + charges_source_file.filename + ') is in a non supported format')
     return charges

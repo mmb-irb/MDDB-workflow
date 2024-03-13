@@ -167,7 +167,7 @@ class MD:
         if register_file.path == self.project.register.file.path:
             self.register = self.project.register
         else:
-            self.register = Register(file_path = register_file.path)
+            self.register = Register(register_file)
 
     def __repr__ (self):
         return '<MD (' + str(len(self.structure.atoms)) + ' atoms)>'
@@ -228,7 +228,7 @@ class MD:
         # Try to download the missing files
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            missing_filepaths = [ trajectory_file.relative_path for trajectory_file in missing_input_trajectory_files ]
+            missing_filepaths = [ trajectory_file.path for trajectory_file in missing_input_trajectory_files ]
             raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
         # Download each trajectory file (ususally it will be just one)
         for trajectory_file in self._input_trajectory_files:
@@ -356,7 +356,7 @@ class MD:
             converted_trajectory_filepath = input_trajectory_files[0].path
         converted_trajectory_file = File(converted_trajectory_filepath)
         # Join all input trajectory paths
-        input_trajectory_absolute_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
+        input_trajectory_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
 
         # Set an intermeidate file for the trajectory while it is being converted
         # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
@@ -372,7 +372,7 @@ class MD:
             convert(
                 input_structure_filepath = input_structure_file.path,
                 output_structure_filepath = converted_structure_file.path,
-                input_trajectory_filepaths = input_trajectory_absolute_paths,
+                input_trajectory_filepaths = input_trajectory_paths,
                 output_trajectory_filepath = incompleted_converted_trajectory_file.path,
             )
             # Once converted, rename the trajectory file as completed
@@ -513,7 +513,7 @@ class MD:
                 symlink(input_file.path, output_file.path)
             # Some processed files may remain with some intermediate filename
             else:
-                rename(processed_file.relative_path, output_file.path)
+                rename(processed_file.path, output_file.path)
 
         # Save the internal variables
         self._structure_file = output_structure_file
@@ -1299,7 +1299,8 @@ class Project:
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        self.register = Register()
+        register_file = File(REGISTER_FILENAME)
+        self.register = Register(register_file)
 
     # Check input trajectory file paths to be right
     # If there is any problem then fix it or directly raise an input error
@@ -2019,8 +2020,7 @@ def workflow (
 
     # Move the current directory to the working directory
     chdir(working_directory)
-    current_absolute_path = getcwd()
-    current_directory_name = current_absolute_path.split('/')[-1]
+    current_directory_name = getcwd().split('/')[-1]
     print('Running workflow for project at ' + current_directory_name)
 
     # Initiate the project project
