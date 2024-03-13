@@ -31,6 +31,10 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.file import File
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 
+CURSOR_UP_ONE = '\x1b[1A'
+ERASE_LINE = '\x1b[2K'
+ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE
+ERASE_4_PREVIOUS_LINES = ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + CURSOR_UP_ONE
 
 # Perform the pockets analysis
 def pockets (
@@ -398,6 +402,9 @@ def pockets (
             if not exists(checking_filename) or getsize(checking_filename) == 0:
                 print(error_logs)
                 raise Exception('Something went wrong with mdpocket while analysing pocket ' + str(i+1))
+
+            # Remove previous lines
+            print(ERASE_4_PREVIOUS_LINES)
 
         # Mine data from the mdpocket 'descriptors' output file
         descriptors_data = {}
