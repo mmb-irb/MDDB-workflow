@@ -1,11 +1,15 @@
 from sys import argv
-from os.path import exists
+from os.path import exists, getmtime
 from datetime import datetime
+from time import strftime, gmtime
 from typing import Optional, List
 
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
 from model_workflow.utils.file import File
+
+# Set dates format
+date_style = '%d-%m-%Y %H:%M:%S'
 
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
 # It is also responsible for storing test failure warnings to be written in metadata
@@ -16,7 +20,10 @@ class Register:
         # Save the current workflow call
         self.call = ' '.join(argv)
         # Save the current date
-        self.date = datetime.today().strftime('%d-%m-%Y %H:%M:%S')
+        self.date = datetime.today().strftime(date_style)
+        # Set record for the modification times of processed input files
+        # This allows to know if any of those files have been modified and thus we must reset some register fields
+        self.mtimes = {}
         # Set a cache for some already calculated values
         self.cache = {}
         # Set the tests tracker
@@ -25,19 +32,20 @@ class Register:
         self.warnings = []
         # Inherit cache, test results and warning from the register last entry
         self.entries = []
-        self.last_entry = None
         if exists(self.file.path):
             # Read the register in disk
             self.entries = load_json(self.file.path)
-            self.last_entry = self.entries[-1]
+            last_entry = self.entries[-1]
+            # Inherit modification times
+            self.mtimes = last_entry.get('mtimes', {})
             # Inherit the cache
-            for field_name, field_value in self.last_entry['cache'].items():
+            for field_name, field_value in last_entry['cache'].items():
                 self.cache[field_name] = field_value
             # Inherit test results
-            for test_name, test_result in self.last_entry['tests'].items():
+            for test_name, test_result in last_entry['tests'].items():
                 self.tests[test_name] = test_result
             # Inherit warnings
-            for warning in self.last_entry['warnings']:
+            for warning in last_entry['warnings']:
                 # DANI: Para quitarnos de encima warnings con el formato antiguo
                 if not warning.get('tag', None):
                     continue
@@ -53,11 +61,39 @@ class Register:
         dictionary = {
             'call': self.call,
             'date': self.date,
+            'mtimes': self.mtimes,
             'cache': self.cache,
             'tests': self.tests,
             'warnings': self.warnings,
         }
         return dictionary
+
+    # Get new and previous mtimes of a target file
+    def get_mtime (self, target_file : File) -> tuple:
+        new_raw_mtime = getmtime(target_file.path)
+        new_mtime = strftime(date_style, gmtime(new_raw_mtime))
+        previous_mtime = self.mtimes.get(target_file.filename, None)
+        return new_mtime, previous_mtime
+
+    # Update a modification time
+    def update_mtime (self, target_file : File):
+        # Get the new and the previous value
+        new_mtime, previous_mtime = self.get_mtime(target_file)
+        # If the new value is already the previous value then do nothing
+        if new_mtime == previous_mtime:
+            return
+        # Overwrite previous value and save the register
+        self.mtimes[target_file.filename] = new_mtime
+        self.save()
+
+    # Check if a file does not match the already registered modification time
+    def is_file_modified (self, target_file : File) -> bool:
+        # Get the new and the previous value
+        new_mtime, previous_mtime = self.get_mtime(target_file)
+        # If the new value is already the previous value then it has not been modified
+        if new_mtime == previous_mtime:
+            return False
+        return True
 
     # Update the cache and save the register
     def update_cache (self, key : str, value):
@@ -84,16 +120,6 @@ class Register:
     # Remove warnings filtered by tag and save the register
     def remove_warnings (self, tag : str):
         self.warnings = [ warning for warning in self.warnings if warning['tag'] != tag ]
-        self.save()
-
-    # Update the cache and save the register
-    def update_cache (self, key : str, value):
-        self.cache[key] = value
-        self.save()
-
-    # Update a test result and save the register
-    def update_test (self, key : str, value : Optional[bool]):
-        self.tests[key] = value
         self.save()
 
     # Save the register to a json file

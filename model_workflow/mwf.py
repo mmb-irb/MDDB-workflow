@@ -585,12 +585,44 @@ class MD:
             else:
                 raise ValueError('Test value is not supported')
 
+        # Register the last modification times of the recently processed files
+        # This way we know if they have been modifed in the future and checkings need to be rerun
+        self.register.update_mtime(output_structure_file)
+        self.register.update_mtime(output_trajectory_file)
+        self.project.register.update_mtime(output_topology_file)
+
     # Check if any of the available tests is missing or failed
     def any_missing_processing_tests (self) -> bool:
         for checking in AVAILABLE_CHECKINGS:
             test_result = self.register.tests.get(checking, None)
             if not test_result:
                 return True
+        return False
+
+    # Check if the structure file was modified and, if so, reset the corresponding tests
+    def is_structure_modified (self) -> bool:
+        if self.register.is_file_modified(self._structure_file):
+            affected_test = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
+            message = 'Structure was modified since the last processing'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            print('  The following tests will be run again: ' + ', '.join(affected_test))
+            for test in affected_test:
+                self.register.update_test(test, None)
+            return True
+        return False
+
+    # Check if the trajectory file was modified and, if so, reset the corresponding tests
+    def is_trajectory_modified (self) -> bool:
+        if self.register.is_file_modified(self._trajectory_file):
+            affected_test = [STABLE_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG]
+            message = 'Trajectory was modified since the last processing'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            print('  The following tests will be run again: ' + ', '.join(affected_test))
+            for test in affected_test:
+                self.register.update_test(test, None)
+            # Also reset the number of snapshots
+            self.register.update_cache(SNAPSHOTS_FLAG, None)
+            return True
         return False
 
     # Get the processed structure
@@ -603,8 +635,9 @@ class MD:
         structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
         self._structure_file = File(structure_filepath)
         # If file does not exist then run the processing logic to generate it
+        # Also run it if the file exists but it has been modified since the last time
         # Also run it if any of the tests is missing or failed since tests are run in the processing logic
-        if not self._structure_file.exists or self.any_missing_processing_tests():
+        if not self._structure_file.exists or self.is_structure_modified() or self.any_missing_processing_tests():
             self.process_input_files()
         # Now that the file is sure to exist we return it
         return self._structure_file
@@ -620,8 +653,9 @@ class MD:
         trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
         self._trajectory_file = File(trajectory_filepath)
         # If file does not exist then run the processing logic to generate it
+        # Also run it if the file exists but it has been modified since the last time
         # Also run it if any of the tests is missing or failed since tests are run in the processing logic
-        if not self._trajectory_file.exists or self.any_missing_processing_tests():
+        if not self._trajectory_file.exists or self.is_trajectory_modified() or self.any_missing_processing_tests():
             self.process_input_files()
         # Now that the file is sure to exist we return it
         return self._trajectory_file
@@ -1683,6 +1717,20 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
+    # Check if the topology file was modified and, if so, reset the corresponding tests
+    def is_topology_modified (self) -> bool:
+        if self.register.is_file_modified(self._topology_file):
+            # Note that if topology file is modified all MDs are affected
+            affected_test = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
+            message = 'Topology was modified since the last processing'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            print('  The following tests will be run again in every MD: ' + ', '.join(affected_test))
+            for test in affected_test:
+                for md in self.mds:
+                    md.register.update_test(test, None)
+            return True
+        return False
+
     # Get the processed topology file
     def get_topology_file (self) -> str:
         # If we have a stored value then return it
@@ -1692,8 +1740,9 @@ class Project:
         # If the file already exists then we are done
         self._topology_file = File(self.topology_filepath)
         # If file does not exist then run the processing logic to generate it
+        # Also run it if the file exists but it has been modified since the last time
         # Also run it if any of the tests is missing or failed since tests are run in the processing logic
-        if not self._topology_file.exists or self.reference_md.any_missing_processing_tests():
+        if not self._topology_file.exists or self.is_topology_modified() or self.reference_md.any_missing_processing_tests():
             self.reference_md.process_input_files()
         # Now that the file is sure to exist we return it
         return self._topology_file
@@ -1856,6 +1905,9 @@ class Project:
             pbc_residues = self.pbc_residues,
             output_topology_filepath = self._standard_topology_file.path
         )
+        # Register the last modification times of the new generated standard topology file
+        # Note that this may be already the topology file, but it may be not
+        self.register.update_mtime(self._standard_topology_file)
         return self._standard_topology_file
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
