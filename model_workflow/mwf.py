@@ -544,7 +544,7 @@ class MD:
         # Make a final summary
         print('Tests summary:')
         for test_name in AVAILABLE_CHECKINGS:
-            test_result = self.register.tests.get(test_name)
+            test_result = self.register.tests.get(test_name, None)
             # Print things pretty
             test_nice_name = NICE_NAMES[test_name]
             test_nice_result = None
