@@ -466,13 +466,14 @@ class MD:
         # For this reason we can not rely on the public snapshots getter
         # We must calculate snapshots here using last step structure and trajectory
         # If we already have a value in the register cache then use it
-        field_name = 'snapshots'
-        if field_name in self.register.cache:
-            self._snapshots = self.register.cache[field_name]
+        cached_snapshots = self.register.cache.get(SNAPSHOTS_FLAG, None)
+        if cached_snapshots != None:
+            self._snapshots = cached_snapshots
+        # Othwerise count the number of snaphsots
         else:
             self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
-        # Save the snapshots value in the register cache as well
-        self.register.update_cache(field_name, self._snapshots)
+            # Save the snapshots value in the register cache as well
+            self.register.update_cache(SNAPSHOTS_FLAG, self._snapshots)
 
         # WARNING:
         # We may need to resort atoms in the structure corrector function
@@ -644,15 +645,15 @@ class MD:
         if self.trajectory_file and self._snapshots != None:
             return self._snapshots
         # If we already have a value in the register cache then use it
-        field_name = 'snapshots'
-        if field_name in self.register.cache:
-            return self.register.cache[field_name]
+        cached_value = self.register.cache.get(SNAPSHOTS_FLAG, None)
+        if cached_value != None:
+            return cached_value
         print('-> Counting snapshots')
         # Otherwise we must find the value
         # This happens when the input files are already porcessed and thus we did not yet count the frames
         self._snapshots = get_frames_count(self.structure_file.path, self.trajectory_file.path)
         # Save the snapshots value in the register cache as well
-        self.register.update_cache(field_name, self._snapshots)
+        self.register.update_cache(SNAPSHOTS_FLAG, self._snapshots)
         return self._snapshots
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 

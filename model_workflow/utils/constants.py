@@ -99,6 +99,9 @@ FORBIDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':']
 DEFAULT_RMSD_CUTOFF = 9
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
+# Set register cache flags
+SNAPSHOTS_FLAG = 'snapshots'
+
 # Set the different test flags
 STABLE_BONDS_FLAG = 'stabonds'
 COHERENT_BONDS_FLAG = 'cohbonds'
