@@ -20,6 +20,7 @@ from os import mkdir, remove
 from os.path import exists
 from shutil import copyfile
 from pathlib import Path
+from glob import glob
 import re
 import numpy
 import math
@@ -465,7 +466,9 @@ def energies (
     restart_file.remove()
     # Remove fortran unit files generated when running CMIP
     # Note that we can not define where these files are written but they appear where CMIP is run
-    remove('fort.*')
+    fortran_unit_files += glob('fort.*')
+    for filepath in fortran_unit_files:
+        remove(filepath)
 
     # Now calculated residue average values through all frames for each pair of interaction agents
     output_analysis = []
