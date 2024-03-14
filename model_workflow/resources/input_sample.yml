@@ -1,0 +1,491 @@
+---
+# Inputs setter
+#
+# This notebook is a tool to manually set the workflow inputs with descriptions and examples.
+# Values set here are then exported to a json file which is mandatory to run the MoDEL analyses workflow.
+#
+# Inputs:
+# 1. [Project metadata](#project)
+# 2. [Simulation metadata](#simulation)
+# 3. [Analysis parameters](#analysis)
+# 4. [Representation parameters](#representation)
+# 5. [Collections](#collections)
+# 6. [Input files](#inputs)
+
+#------------------------------------------------------------------------------------------------------------
+# PROJECT METADATA
+#------------------------------------------------------------------------------------------------------------
+# The following metadata has no effect on the workflow itself, but it will be written to the output metadata file.
+# These values will be uploaded to the database and then exposed in the project overview.
+# They may be also useful to search this simulation in the browser.
+
+# Write a breif description or title for this trajectory for the overview page
+# This name may be used by the client to search the trajectory in the database
+# The name is displayed in the overview page
+
+  name: SARS-CoV2 spike glycoprotein homotrimeric head- in an open conformation with ACE2 bound (1µs)
+
+# Write additional comments
+# The description is displayed in the overview page
+
+  description: 1µs simulation trajectory (500 frames collected with a stride of 2ns) of the spike glycoprotein head based on the structure released on the SwissModel website to which 18 N-glycans were added on each subunit based on the experimentally determined glycomic profile (PDB numbering = 1-1287 subunit A and N-glycans covalently attached; 1288-2571 subunit B and N-glycans covalently attached; 2572-3857 subunit C and N-glycans covalently attached). ACE2 was superimposed to on spike subunit, while 6 N-glycans were added based on the experimentally determined glycomic profile (PDB numbering heparin chains 3858 - 4510). The C- and N-peptide termini of each subunit are capped with amide and acetyl groups, respectively. The simulation was carried out using the Amber ff14SB force field and GLYCAM_06j for the protein and N-glycans/heparin, respectively. The periodic-cubic water box was solvated with TIP3P water molecules. The system was neutralized with NaCl to attain an ionic concentration of 0.15M. The simulations were conducted at 310 K in the NPT ensemble
+
+# Write author names
+# Authors are displayed in the overview page
+
+  authors:
+    - Giulia Paiardi
+    - Matheus Ferraz
+    - Marco Rusnati
+    - Rebecca Wade"
+
+# Write author group name/s
+# The group is displayed in the overview page
+
+  groups:
+    - (1) Molecular and Cellular Modeling Group, Heidelberg Institute for Theoretical Studies (HITS), Heidelberg, Germany. (2) Experimental Oncology and Immunology, Department of Molecular and Translational Medicine, University of Brescia, Brescia, Italy.
+
+# How to contact the authors. The contact is displayed in the overview page
+
+  contact:
+    - giulia.paiardi@h-its.org
+    - rebecca.wade@h-its.org
+
+# Program (software) name which carried the trajectory and its version
+# Program and version are both displayed in the overview page
+# WARNING: Check the database search page in order to see current values
+
+  program: Amber
+  version: 20
+
+# Type of molecular dynamics.
+# At this moment there are only two options in this field: 'trajectory' and 'ensemble'.
+# Note that this field has an effect on the client. Some time-dependent analysis will change the labels of their axes in order to make sense. e.g. RMSD X axis will be 'frames' instead of 'time'.
+
+  type: trajectory
+
+# MD method
+# e.g. 'Classical MD', 'Targeted MD', 'Biased MD (Accelerated Weighted Ensemble)', Enhanced sampling (Hamiltonian Replica Exchange) ...
+# MD method is displayed in the overview
+
+  method: Classical MD
+
+# License and link to the license web page
+# The license is displayed in the overview page. Under the license there is a 'More information' button. The link is used to redirect the user when the button is clicked.
+#
+# #### Example:
+#
+# license: This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License
+# linkcense: https://creativecommons.org/licenses/by/4.0/
+
+  license: This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License
+  linkcense: https://creativecommons.org/licenses/by/4.0/
+
+# Citation for refering this simulation. The citation is displayed in the overview page
+# To set a citation use the following instructions:
+# To add a line break type '(br)' inside the citation string
+# To add superior text type '^' before each character
+
+  citation: Heparan sulfates and N-glycans enhance SARS-CoV-2 spike-ACE2 receptor binding and virus priming. Giulia Paiardi, Matheus Ferraz, Marco Rusnati, Rebecca C. Wade. In preparation.
+
+# Acknowledgements to be shown in the overview page
+
+  thanks: The technical support of Stefan Richter from Heidelberg Institute for Theoretical Studies is gratefully acknowledged. We thank the Klaus Tschira Foundation for support. G.P. was supported by Deutsche Forschungsgemeinschaft (DFG, German Research Foundation—Project number 458623378 to R. C. W.)
+
+# Links to somewhere related to the simulation
+#
+#
+# WARNING: This field has no effect anywhere in our work stream BUT others may rely on it.
+# MolSSI uses this field to find simulations in our database and then to place the embed viewer in their website.
+# You must fit to the standard when adding a new MolSSI simulation.
+#
+# #### Example:
+#
+# [
+#     {
+#         'name': 'Data source',
+#         'url': 'https://data.source.org/'
+#     },
+#     {...}
+# ]
+
+  links: []
+
+# Set the source pdb ids of the trajectory structure
+# Additional data from the pdb is harvested by the loader while uploading to the database
+# This data is displayed in the overview page
+#
+# #### Example:
+#
+# ```python
+# ['2AJF', '6M17']
+# ```
+
+  pdbIds:
+    - 6ACS
+    - 6M0J
+
+#------------------------------------------------------------------------------------------------------------
+# SIMULATION METADATA
+#------------------------------------------------------------------------------------------------------------
+#
+# These inputs may be automatically mined from the topology and trajectory files
+# However they also may be forced here
+# DANI: Todo mentira. El minado de metadata para estos valores no funciona casi nunca<
+# DANI: Dejé de mantenerlo hace tiempo y hay que poner todos los valores a mano
+
+# Time framestep in nanoseconds (ns). May be None if this is not a trajectory, but an ensemble.
+# Framestep is an important value since it is used in many graph axes in the web client.
+
+  framestep: 0.02 # In nanoseconds (ns)
+
+# The rest of values are displayed in the web client as trajectory metadata
+# These values do not affect other outcomes
+# <span style="color:red">WARNING: Check the database search page in order to see current values</span>
+# <span style="color:red">WARNING: Specially check already existing force fields and how they are named</span>
+
+  temp: 310 # In Kelvin (K)
+  ensemble: NPT # e.g. NVT, NPT, etc.
+  timestep: 4 # In fs (fs/step)
+  ff: # Force fields (e.g. ['CHARMM36'])
+    - Amber ff14SB
+    - GLYCAM-06j
+  wat: TIP3P # Water force field (e.g. TIP3P)
+  boxtype: Cubic # e.g. Triclinic, Cubic, Dodecahedron
+
+# ## Analysis parameters <a name="analysis"></a>
+#
+# These fields have an impact in the analysis workflow.
+
+# ### MDs <a name="mds"></a>
+#
+# Set the different Molecular Dynamics (MD) belonging to this project.
+# Each MD must have a different name, which will be used also to assign directories in the workflow.
+#
+# MDs may include additional metadata to overwrite the project metadata for a specific case.
+#
+# #### Example:
+# {
+#     'name': 'replica 1
+# }
+# ```
+# Also the reference MD is to be defined by providing the index of the MDs list. If there is not an MD which is more important than others then simply set the first MD (0) as the reference.
+
+  mds:
+    - name: replica 1
+    - name: replica 2
+    - name: replica 3
+    - name: replica 4
+  mdref: 0
+
+#------------------------------------------------------------------------------------------------------------
+# INTERACTIONS
+#------------------------------------------------------------------------------------------------------------
+#
+# Set which are the interesting interactions to be analyzed
+# A bunch of interaction-specific analyses will be run for each interaction and displayed in the web client
+#
+# Interactions are defined by the 'agents' which are meant to interact pairwise. An 'agent' may be anything, even a group of unrelated molecules. The only condition is that agents must be defined by residues. The workflow will find out which residues of each agent are close enought to be considered as interface residues. These residues will be the ones considered in interface analyses
+#
+# Interactions are uploaded to the database as part of the project metadata. They include the interaction name, agents name, residues selection of both whole agents and the residue selections of both agent interfaces
+#
+# Each interaction has the following attributes:
+#    - name: a string tag used to relate interaction analyses data with their corresponding residues.
+#     In addition, the name is used to label the corresponding analyses in the web client
+#    - type: for instance 'protein-protein', 'protein-ligand', etc. This field was requested by a referee
+#    - agent_1: the name of the first agent in the interaction, which is used to label in the client
+#    - selection_1: the VMD selection of the first agent in the interaction
+#    - agent_2: the name of the second agent in the interaction, which is used to label in the client
+#    - selection_2: the VMD selection of the second agent in the interaction
+#
+# VMD atom selection language:
+# https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
+#
+# #### Example:
+#
+# ```python
+# {
+#     'name': 'protein-ligand interaction',
+#     'type': 'protein-ligand',
+#     'agent_1': 'protein',
+#     'selection_1': 'not resname lig',
+#     'agent_2': 'ligand',
+#     'selection_2': 'resname lig',
+# },
+# {
+#     'name': 'domain-domain interaction',
+#     'type': 'protein interdomain interaction'
+#     'agent_1': 'domain 1',
+#     'selection_1': 'resid 2 to 291',
+#     'agent_2': 'domain 2',
+#     'selection_2': 'resid 2 to 291',
+# },
+# ```
+
+  interactions:
+    - name: Spike-ACE2 interaction
+      agent_1: Spike
+      selection_1: chain A or chain B or chain C
+      agent_2: ACE2
+      selection_2: chain D
+
+#------------------------------------------------------------------------------------------------------------
+# PERIODIC BOUNDARY CONDITIONS SELECTION
+#------------------------------------------------------------------------------------------------------------
+#
+# [EXPERIMENTAL INPUT]
+#
+# Set those residues which are under periodic boundary conditions (PBC)
+# These residues are excluded from the imaging centering and fitting
+# These residues are excluded in the follwoing analyses:
+#    - RMSD: Sudden jumps in PBC residues result in non-sense high peaks
+#    - RMSD per residue: Sudden jumps in PBC residues result in non-sense high peaks
+#    - RMSD pairwise: Sudden jumps in PBC residues result in non-sense high peaks
+#    - TM score: Sudden jumps in PBC residues result in non-sense high peaks
+#    - RGYR: Sudden jumps in PBC residues result in non-sense high changes
+#    - RMSF: Sudden jumps in PBC residues result in non-sense high peaks
+#    - PCA: Sudden jumps make not sense in PCA and they eclipse non-PBC movements
+#    - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
+#    - Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
+#
+# Note that this input is used mostly for membranes since the most tipical residues under periodic boundary conditions (solvent and counter ions) are usually removed from the trajectory. They are to be included in this field as well when they are not removed. This field is also useful for those scenarions with several protein or nucleic acid molecules floating around and crossing boundaries. In this situation you can not image and fit all molecules. You must focus in one molecule and let the others stay in PBC.
+#
+# These residues are defined using VMD selection lenguage.
+#
+# VMD atom selection language:
+# https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
+
+  pbc_selection: []
+
+#------------------------------------------------------------------------------------------------------------
+# REPRESENTATION PARAMETERS
+#------------------------------------------------------------------------------------------------------------
+#
+# These fields have an impact in the display of the simulation once in the web client.
+#
+# Forced reference sequences
+#
+# Set which reference sequences must be used in order to map residues in the structure of the simulation.
+# EMBL/UniProt accession ids are accepted. If forced references are not provided (which is totally acceptable) or
+# the provided forced references do not fully cover the structure then a blast will be run for each orphan chain sequence.
+#
+# In addition, accessions may be guessed from the PDB ids, when provided.
+# Note that forced references may be provided as a list (then it is guessed where each reference belongs to) os
+# as a dictionary (then the user specifies which reference belongs to each chain).
+# Use the "noref" flag to mark a chain as "no referable" (e.g. antibodies, synthetic constructs).
+#
+# #### Example:
+#
+# [ "Q9BYF1", "P0DTC2" ]
+# { "A": "Q9BYF1", "B": "P0DTC2" }
+# { "A": "Q9BYF1", "B": "noref" }
+  forced_references:
+    - A0A679G9E9
+
+#------------------------------------------------------------------------------------------------------------
+# MULTIMERIC FORMS
+#------------------------------------------------------------------------------------------------------------
+#
+# Set if we have any multimeric form (e.g. monomer, dimer, trimer...)</br >
+# This field was requested by the referees.</br >
+# <span style="color:red">DANI: Esto es provisional, no quedará así
+#
+# [ "Monomer", "Trimer" ]
+# [ "Pentamer" ]
+
+  multimeric:
+    - monomer
+    - trimer
+
+#------------------------------------------------------------------------------------------------------------
+# CHAIN NAMES
+#------------------------------------------------------------------------------------------------------------
+#
+# Set the chain names
+# This names are used to label chains in the web client
+#
+# #### Example:
+#
+# {
+#     'A':'Protein',
+#     'B':'Protein',
+#     'G':'Glycans'
+# }
+  chainnames:
+    A: Spike
+    B: Spike
+    C: Spike
+    D: ACE2
+
+#------------------------------------------------------------------------------------------------------------
+# LIGANDS
+#------------------------------------------------------------------------------------------------------------
+#
+# Set all ligands in the simulation. Each ligand has the following attributes:
+#     - name: this is used as the ligand NGL representation label
+#     - ngl: NGL selection used to represent the ligand on the NGL viewer in the client
+#     - drugbank (Optional): the drugbank accession which is used in the overview to make a link
+#     - chembl (Optional): the chembl accession which is used in the overview to make a link
+#
+# At this moment, ligands are used nowhere in the workflow
+#
+# NGL viewer selection:
+# http://nglviewer.org/ngl/api/manual/usage/selection-language.html
+#
+# <span style="color:green">LORE: This field is the predecessor of the 'interactions' field. Now it is deprecated but we are still maintaining it since one day this information may be useful, we already have it in the database and the web client is still relying on it to better represent small ligands.
+#
+# #### Example:
+#
+# {
+#     'name': 'Some compount',
+#     'ngl': ':L',
+#     'drugbank': 'DB00945',
+#     'chembl': 'CHEMBL25'
+# },
+# {
+#     'name': 'Some nucleic acid',
+#     'ngl': ':A or :B'
+# }
+# ```
+#
+  ligands: []
+
+#------------------------------------------------------------------------------------------------------------
+# MEMBRANES
+#------------------------------------------------------------------------------------------------------------
+#
+# Set those elements which must be considered membrane
+# These elements will be representated in the web client with a specific pattern:
+# - Licorice
+# - Purple color
+# - Low opacity
+#
+# To define a membrane it is required a name and a selection in VMD selection lenguage
+#
+# VMD atom selection language:
+# https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
+#
+# LORE: This field is the predecessor of the 'pbc_selection' field. Now it is deprecated but we are still maintaining it
+#       since one day this information may be useful and we already have it in the database.
+#
+# DANI: Aunque este campo ya no debería tener efecto en el workflow sigue teniendo uno: el análisis de pockets no se corre si hay membranas
+# DANI: Esto no está implementado relamente, pero va bien tener estos valores en la db para el día que nos pongamos a ello
+#
+# #### Example:
+#
+# {
+#     'name': 'Cell membrane',
+#     'selection': 'chain M',
+# }
+
+  membranes: []
+
+#------------------------------------------------------------------------------------------------------------
+# CUSTOM REPRESENTATIONS
+#------------------------------------------------------------------------------------------------------------
+#
+# The web client sets some default representations (ngl configurations) to highlight important features in the structure according to the topology reference or interactions.
+#
+# In addition, you may set extra customized representations which are interesting and thus must have an independent highlight system. This has no effect in the workflow, but it is very visual in the client.
+# <span style="color:red">WARNING: Make sure whatever you want to highlight is not already highlighted by default or it would be duplicated</span>
+#
+# #### Example:
+#
+# [
+#     {
+#         "name" : "Remdesivir",
+#         "representations" : [
+#             {
+#                 "name" : "Remdesivir",
+#                 "selection" : "REM",
+#                 "type" : "licorice"
+#             }
+#         ]
+#     }
+# ]
+
+  customs: []
+
+#------------------------------------------------------------------------------------------------------------
+# CURATED ORIENTATIONS
+#------------------------------------------------------------------------------------------------------------
+#
+# Set a specific starting orientation for the web client viewer.
+# Normally this is done once the simulation has been uploaded since there is no easy way to get the orientation before.
+#
+# #### Example:
+#
+# [
+#     72.05997406618104,
+#     21.871748915422142,
+#     47.89720038949639,
+#     0,
+#     34.3234627961572,
+#     42.053333152877315,
+#     -70.84188126104011,
+#     0,
+#     -39.93012781662099,
+#     75.61943426331311,
+#     25.542927052994127,
+#     0,
+#     -63.015499114990234,
+#     -33.07249975204468,
+#     -39.439000606536865,
+#     1
+# ]
+
+  orientation: []
+
+#------------------------------------------------------------------------------------------------------------
+# COLLECTIONS
+#------------------------------------------------------------------------------------------------------------
+#
+# Set to which collection does this simulation belong to.
+# Set also additional collection_related metadata values.
+#
+# Currently supported collections:
+#    - cv19
+#    - mcns
+
+  collections:
+    - cv19
+
+# ### BioExcel-CV19 specific metadata fields
+
+# Set which family does this trajectory belong to.
+#
+# Supported units:
+# - RBD-ACE2
+# - RBD
+# - ACE2
+# - Spike
+# - 3CLpro
+# - PLpro
+# - Polymerase
+# - E protein
+# - Exoribonuclease
+# - Other
+
+  cv19_unit: RBD-ACE2
+
+# Set some additional inputs requested by the referees
+#
+# - Starting conformation of the spike (e.g. '1 open 2 close')
+# - Are there antibodies? (e.g. true)
+# - Are there nanobodies? (e.g. false)
+
+  cv19_startconf: 1 open
+  cv19_abs: False
+  cv19_nanobs: False
+
+#------------------------------------------------------------------------------------------------------------
+# INPUT FILES
+#------------------------------------------------------------------------------------------------------------
+#
+# Input file paths for topology, trajectory and structure.
+
+# These files have been passed to the workflow through command line traditionally but inputs file also provides this option.
+
+  input_topology_filepath:
+  input_structure_filepath:
+  input_trajectory_filepaths:
