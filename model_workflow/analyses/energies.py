@@ -463,7 +463,8 @@ def energies (
 
     # Cleanup here some CMIP residual files since it is not to be run again
     # Remove the restart file since we do not use it and it may be heavy sometimes
-    restart_file.remove()
+    if restart_file.exists:
+        restart_file.remove()
     # Remove fortran unit files generated when running CMIP
     # Note that we can not define where these files are written but they appear where CMIP is run
     fortran_unit_files += glob('fort.*')
