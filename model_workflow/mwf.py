@@ -1943,8 +1943,8 @@ def read_file (target_file : File) -> dict:
 
 # Set a function to convert an MD name into an equivalent MD directory
 def name_2_directory (name : str) -> str:
-    # Make all letters lower and replace white spaces by underscores
-    directory = name.lower().replace(' ', '_')
+    # Replace white spaces with underscores
+    directory = name.replace(' ', '_')
     # Remove problematic characters
     for character in FORBIDEN_DIRECTORY_CHARACTERS:
         directory = directory.replace(character, '')
