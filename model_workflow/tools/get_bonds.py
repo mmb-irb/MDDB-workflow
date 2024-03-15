@@ -132,6 +132,7 @@ def mine_topology_bonds (bonds_source_file : 'File') -> list:
         bonds = standard_topology.get('atom_bonds', None)
         if bonds:
             return bonds
+        print('  There were no bonds in the topology file. Is this an old file?')
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
     if bonds_source_file.is_pytraj_supported:
         print('Bonds will be mined from "' + bonds_source_file.path + '"')
