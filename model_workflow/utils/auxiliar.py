@@ -5,6 +5,7 @@ from model_workflow.utils.constants import RESIDUE_NAME_LETTERS
 from os import remove
 import sys
 import json
+import yaml
 from typing import Optional
 
 # Check if a module has been imported
@@ -68,3 +69,13 @@ def save_json (content, filepath : str, indent : Optional[int] = None):
         # Eventually it may be useful to comment this line to debug where the JSON file fails to parse
         remove(filepath)
         raise Exception('Something went wrong when saving JSON file ' + filepath)
+
+# Set a YAML loader with additional logic to better handle problems
+# DANI: Por algún motivo yaml.load también funciona con archivos en formato JSON
+def load_yaml (filepath : str):
+    try:
+        with open(filepath, 'r') as file:
+            content = yaml.load(file, Loader=yaml.CLoader)
+        return content
+    except:
+        raise Exception('Something went wrong when loading YAML file ' + filepath)

@@ -1,13 +1,16 @@
-from subprocess import Popen
 from pathlib import Path
+from os.path import exists
+from shutil import copyfile
+from subprocess import call
 from typing import List
 
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
+
 from model_workflow.mwf import workflow, Project, requestables
 from model_workflow.utils.constants import *
 
 # Set the path to the input setter jupyter notebook
-input_setter = str(Path(__file__).parent / "resources" / "input_setter.ipynb")
+inputs_template = str(Path(__file__).parent / "resources" / "inputs_file_template.yml")
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
@@ -40,8 +43,11 @@ def main ():
         workflow(project_parameters = project_args, **workflow_args)
     # If user wants to setup the inputs
     elif subcommand == "inputs":
-        command = "jupyter-notebook " + input_setter
-        Popen(command, shell=True)
+        # Make a copy of the template in the local directory if there is not an inputs file yet
+        if not exists(DEFAULT_INPUTS_FILENAME):
+            copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
+        # Open a text editor for the user
+        call(["vim", DEFAULT_INPUTS_FILENAME])
 
 
 # Define console arguments to call the workflow

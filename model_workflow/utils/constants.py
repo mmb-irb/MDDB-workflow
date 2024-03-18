@@ -8,8 +8,15 @@ DEFAULT_API_URL = 'https://mdposit-dev.mddbr.eu/api'
 PROTEIN_AND_NUCLEIC = 'protein or nucleic'
 PROTEIN_AND_NUCLEIC_BACKBONE = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
 
-# Purely input filenames
-DEFAULT_INPUTS_FILENAME = 'inputs.json'
+# Inputs file
+DEFAULT_INPUTS_FILENAME = 'inputs.yaml'
+ACCEPTED_INPUT_FILENAMES = [
+    DEFAULT_INPUTS_FILENAME, # The default
+    'inputs.yml', # Another extension of yaml files
+    'inputs.json' # Legacy inputs file
+]
+
+# Markov State Model input filenames
 DEFAULT_POPULATIONS_FILENAME = 'populations.json'
 DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
 
@@ -159,6 +166,8 @@ EXTENSION_FORMATS = {
     'trj': 'crd',
     # Other
     'json': 'json',
+    'yaml': 'yaml',
+    'yml': 'yaml',
     'npy': 'npy',
     'in': 'txt'
 }

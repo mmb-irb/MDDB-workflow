@@ -19,6 +19,7 @@ dependencies:
   - sqlite=3.37.2
   - vmd
   - xmltodict
+  - pyyaml
   - pip:
     - argparse
     - iminuit<2

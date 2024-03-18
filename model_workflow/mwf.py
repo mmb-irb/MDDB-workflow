@@ -40,7 +40,7 @@ from model_workflow.tools.structure_corrector import structure_corrector
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, load_json, save_json
+from model_workflow.utils.auxiliar import InputError, load_json, save_json, load_yaml
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -1168,7 +1168,7 @@ class Project:
         # URL to query for missing files when an accession is provided
         database_url : str = DEFAULT_API_URL,
         # A file containing a lof of inputs related to metadata, MD simulation parameters and analysis configurations
-        inputs_filepath : str = DEFAULT_INPUTS_FILENAME,
+        inputs_filepath : str = None,
         # The input topology filename
         # Multiple formats are accepted but the default is our own parsed json topology
         input_topology_filepath : Optional[str] = None,
@@ -1215,8 +1215,16 @@ class Project:
         # Save inputs for the register, even if they are not used in the class
 
         # Set the inputs file
-        self.inputs_filepath = inputs_filepath
-        self._inputs_file = File(inputs_filepath)
+        # If there is an input filepath then use it
+        if inputs_filepath:
+            self._inputs_file = File(inputs_filepath)
+        # Otherwise guess the inputs file using the accepted filenames
+        else:
+            for filename in ACCEPTED_INPUT_FILENAMES:
+                inputs_file = File(inputs_filepath)
+                if inputs_file.exists:
+                    self._inputs_file = inputs_file
+                    break
         # Set the input topology file
         self._input_topology_filepath = input_topology_filepath
         self._input_topology_file = None
@@ -1639,8 +1647,14 @@ class Project:
         if self._inputs:
             return self._inputs
         # Otherwise, load inputs from the inputs file
-        inputs_data = load_json(self.inputs_file.path)
-        self._inputs = inputs_data            
+        inputs_data = None
+        if self.inputs_file.format == 'json':
+            inputs_data = load_json(self.inputs_file.path)
+        elif self.inputs_file.format == 'yaml':
+            inputs_data = load_yaml(self.inputs_file.path)
+        else:
+            raise InputError('Input file format is not supported. Please use json or yaml files.')
+        self._inputs = inputs_data
         # Finally return the updated inputs
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
