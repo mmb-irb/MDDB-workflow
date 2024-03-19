@@ -268,6 +268,12 @@ class Atom:
                 return character
         raise InputError("Not recognized element in '" + name + "'")
 
+    # Get a standard label
+    def get_label (self) -> str:
+        return f'{self.residue.label}.{self.name}'
+    # The atom standard label (read only)
+    label = property(get_label, None, None)
+
 # A residue
 class Residue:
     def __init__ (self,
@@ -437,7 +443,7 @@ class Residue:
         self.set_chain_index(new_chain_index)
     chain = property(get_chain, set_chain, None, "The residue chain")
 
-    # Get the reside biochemistry classification
+    # Get the residue biochemistry classification
     # WARNING: Note that this logic will not work in a structure without hydrogens
     # Available classifications:
     # - protein
@@ -574,7 +580,7 @@ class Residue:
         return self._classification
 
 
-    # The reside biochemistry classification (read only)
+    # The residue biochemistry classification (read only)
     classification = property(get_classification, None, None)
 
     # Generate a selection for this residue
@@ -690,6 +696,13 @@ class Residue:
     # Get a residue atom given its name
     def get_atom_by_name (self, atom_name : str) -> 'Atom':
         return next(( atom for atom in self.atoms if atom.name == atom_name ), None)
+
+    # Get a standard label
+    def get_label (self) -> str:
+        chainname = self.chain.name if self.chain.name.strip() else ''
+        return f'{chainname}{self.number}{self.icode}({self.name})'
+    # The residue standard label (read only)
+    label = property(get_label, None, None)
 
 # A chain
 class Chain:
@@ -1834,7 +1847,15 @@ class Structure:
                 continue
             # Check the actual number of bonds is insdie the accepted range
             if nbonds < element_coherent_bonds['min'] or nbonds > element_coherent_bonds['max']:
-                print(' Atom ' + str(atom.index) + ' with element ' + element + ' has ' + str(nbonds) + ' bonds but it should have between ' + str(element_coherent_bonds['min']) + ' and ' + str(element_coherent_bonds['max']) + ' bonds')
+                print(f' An atom with element {element} has {nbonds} bonds')
+                min_bonds = element_coherent_bonds['min']
+                max_bonds = element_coherent_bonds['max']
+                if min_bonds == max_bonds:
+                    plural_sufix = '' if min_bonds == 1 else 's'
+                    print(f' It should have {min_bonds} bond{plural_sufix}')
+                else:
+                    print(f' It should have between {min_bonds} and {max_bonds} bonds')
+                print(f' -> Atom {atom.label} (index {atom.index})')
                 return True
         return False
 
