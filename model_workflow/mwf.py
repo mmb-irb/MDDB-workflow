@@ -190,7 +190,7 @@ class MD:
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise InputError('Missing inputs file "' + self._input_structure_file.filename + '"')
+            raise InputError('Missing input structure file "' + self._input_structure_file.filename + '"')
         sys.stdout.write('Downloading structure (' + self._input_structure_file.filename + ')\n')
         # Set the download URL
         structure_url = self.url + '/files/' + self._input_structure_file.filename
@@ -510,7 +510,7 @@ class MD:
             # However we need the output files to exist and we dont want to rename the original ones to conserve them
             # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
             if processed_file == input_file:
-                symlink(input_file.path, output_file.path)
+                output_file.set_symlink_to(input_file)
             # Some processed files may remain with some intermediate filename
             else:
                 rename(processed_file.path, output_file.path)
@@ -704,10 +704,10 @@ class MD:
         # Otherwise we must set the structure
         # Note that this is not only the structure class, but it also contains additional logic
         self._structure = setup_structure(self.structure_file.path)
-        # If the stable bonds test failed and we had mercy then it is sure out structure will have wrong bonds
+        # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds
-        if self.register.tests[STABLE_BONDS_FLAG] == False:
+        if self.register.tests.get(STABLE_BONDS_FLAG, None) == False:
             self._structure.bonds = self.safe_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
@@ -1221,7 +1221,7 @@ class Project:
         # Otherwise guess the inputs file using the accepted filenames
         else:
             for filename in ACCEPTED_INPUT_FILENAMES:
-                inputs_file = File(inputs_filepath)
+                inputs_file = File(filename)
                 if inputs_file.exists:
                     self._inputs_file = inputs_file
                     break
@@ -2076,11 +2076,13 @@ def workflow (
         # Set the default requests, when there are not specific requests
         # Request all the analysis, the metadata, the standard topology and the screenshot
         requests = [
-            *analyses.keys(),
-            'mdmeta',
-            'pmeta',
+            'mapping',
             'stopology',
-            'screenshot'
+            'screenshot',
+            'pmeta',
+            'interactions',
+            'mdmeta',
+            *analyses.keys(),
         ]
 
         # If the exclude parameter was passed then remove excluded requests from the default requests

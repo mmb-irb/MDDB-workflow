@@ -403,12 +403,12 @@ class Residue:
             return
         # Relational indices are updated through a top-down hierarchy
         # Affected chains are the ones to update this residue internal chain index
-        # WARNING: It is critical to find both current and new chains before removing/adding residues
+        # WARNING: It is critical to find the new chain before removing/adding residues
         # WARNING: It may happend that we remove the last residue in the current chain and the current chain is purged
         # WARNING: Thus the 'new_chain_index' would be obsolete since the structure.chains list would have changed
+        new_chain = self.structure.chains[new_chain_index]
         if self.chain:
             self.chain.remove_residue(self)
-        new_chain = self.structure.chains[new_chain_index]
         new_chain.add_residue(self)
     chain_index = property(get_chain_index, set_chain_index, None, "The residue chain index according to parent structure chains")
 
@@ -1546,7 +1546,8 @@ class Structure:
     # WARNING: These fixes are possible only if there are less chains than the number of letters in the alphabet
     # Although there is no limitation in this code for chain names, setting long chain names is not compatible with pdb format
     
-    # Check repeated chains and return True if there were any repeats
+    # Check repeated chains (two chains with the same name) and return True if there were any repeats
+    # Check splitted chains (a chains with non consecuitve residues) and try to fix them if requested
     def check_repeated_chains (self, fix_chains : bool = False, display_summary : bool = False) -> bool:
         # Order chains according to their names
         # Save also those chains which have a previous duplicate
@@ -1590,7 +1591,6 @@ class Structure:
             if residue_indices[-1] - residue_indices[0] + 1 == len(residue_indices):
                 continue
             print('WARNING: splitted chain ' + chain.name)
-            # DANI: Esto no se ha provado que funcione
             # If indices are not consecutive then we must find ranges of consecutive residues and create new chains for them
             previous_residue_index = residue_indices[0]
             consecutive_residues = [previous_residue_index]
@@ -1605,7 +1605,9 @@ class Structure:
                     consecutive_residues = [residue_index]
                 # Update the previous index
                 previous_residue_index = residue_index
-            # Now create new chains and reasing residues
+            # Add the last split
+            overall_consecutive_residues.append(consecutive_residues)
+            # Now create new chains and reasign residues
             # Skip the first set of consecutive residues since they will stay in the original chain
             for residues_indices in overall_consecutive_residues[1:]:
                 chain_name = self.get_next_available_chain_name()

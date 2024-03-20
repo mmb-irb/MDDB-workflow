@@ -101,7 +101,7 @@ run_parser.add_argument(
 
 run_parser.add_argument(
     "-inp", "--inputs_filepath",
-    default=DEFAULT_INPUTS_FILENAME,
+    default=None,
     help="Path to inputs file")
 
 run_parser.add_argument(

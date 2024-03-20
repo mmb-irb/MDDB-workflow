@@ -15,7 +15,8 @@ def do_bonds_match (
     # Atom elements must be passed since we do not evaluate bonds with ions
     atom_elements : List[str],
     # Set verbose as true to show which are the atoms preventing the match
-    verbose : bool = False
+    verbose : bool = False,
+    atoms : Optional[ List['Atom'] ] = None
 ) -> bool:
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
@@ -36,8 +37,19 @@ def do_bonds_match (
         # Check atom bonds to match
         if len(atom_bonds_set_1) != len(atom_bonds_set_2) or any(bond not in atom_bonds_set_2 for bond in atom_bonds_set_1):
             if verbose:
-                print('Missmatch in atom ' + str(atom_index) + ': it is ' + str(atom_bonds_set_1) + ' -> it must be ' + str(atom_bonds_set_2))
-                print() # Extra line for the frame logs to not erase the previous log
+                if atoms:
+                    missmatch_atom_label = atoms[atom_index].label
+                    print(f' Missmatch in atom {missmatch_atom_label}:')
+                    it_is_atom_labels = ', '.join([ atoms[index].label for index in atom_bonds_set_1 ])
+                    print(f' It is bonded to atoms {it_is_atom_labels}')
+                    it_should_be_atom_labels = ', '.join([ atoms[index].label for index in atom_bonds_set_2 ])
+                    print(f' It should be bonded to atoms {it_should_be_atom_labels}')
+                else:
+                    print(f' Missmatch in atom with index {atom_index}:')
+                    it_is_atom_indices = ','.join(atom_bonds_set_1)
+                    print(f' It is bondes to atoms with indices {it_is_atom_indices}')
+                    it_should_be_atom_indices = ','.join(atom_bonds_set_2)
+                    print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
             return False
     return True
 
@@ -173,8 +185,10 @@ def get_safe_bonds (
     # Find stable bonds if necessary
     if must_check_stable_bonds:
         # Using the trajectory, find the most stable bonds
+        print('Checking bonds along trajectory to determine which are stable')
         safe_bonds = get_most_stable_bonds(input_structure_file.path, input_trajectory_file.path, snapshots)
         return safe_bonds
     # If we trust stable bonds then simply use structure bonds
+    print('Default structure bonds will be used since they have been marked as trusted')
     safe_bonds = structure.bonds
     return safe_bonds
