@@ -2076,7 +2076,8 @@ def workflow (
         # Set the default requests, when there are not specific requests
         # Request all the analysis, the metadata, the standard topology and the screenshot
         requests = [
-            'mapping',
+            # Mapping is not included here
+            # It does more things than generating the references file and it takes time
             'stopology',
             'screenshot',
             'pmeta',
