@@ -28,6 +28,7 @@ description: My project description
 
 # Write author names
 # Authors are displayed in the overview page
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 authors:
   - My name
@@ -35,6 +36,7 @@ authors:
 
 # Write author group name/s
 # The group is displayed in the overview page
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 groups:
   - My group
@@ -46,7 +48,7 @@ contact: Our mails
 
 # Program (software) name which carried the trajectory and its version
 # Program and version are both displayed in the overview page
-# WARNING: Check the database search page in order to see current values
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 program: e.g. Gromacs
 version: e.g. 2023.1
@@ -132,8 +134,6 @@ framestep: 0.01 # ns
 
 # The rest of values are displayed in the web client as trajectory metadata
 # These values do not affect other outcomes in the workflow
-# WARNING: Check the database search page in order to see current values
-# WARNING: Specially check already existing force fields and how they are named
 
 # Temperature in Kelvin (K)
 
@@ -141,6 +141,7 @@ temp: 310 # K
 
 # Ensemble
 # e.g. NVT, NPT, etc.
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 ensemble: NPT
 
@@ -149,7 +150,7 @@ ensemble: NPT
 timestep: 2 # fs
 
 # Force fields
-# WARNING: See the currently available values in the database before to avoid duplicates
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 #
 # Example
 #
@@ -160,11 +161,13 @@ timestep: 2 # fs
 ff:
 
 # Water force fields
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 wat: TIP3P
 
 # Boxtype
 # e.g. Triclinic, Cubic, Dodecahedron
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 boxtype:
 
