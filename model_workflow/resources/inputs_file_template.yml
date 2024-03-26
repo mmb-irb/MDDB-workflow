@@ -29,12 +29,16 @@ description: My project description
 # Write author names
 # Authors are displayed in the overview page
 
-authors: Our names
+authors:
+  - My name
+  - My partner's name
 
 # Write author group name/s
 # The group is displayed in the overview page
 
-groups: Our lab names
+groups:
+  - My group
+  - My partner's group
 
 # How to contact the authors. The contact is displayed in the overview page
 
