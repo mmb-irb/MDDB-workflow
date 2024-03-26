@@ -1215,6 +1215,8 @@ class Project:
         # Save inputs for the register, even if they are not used in the class
 
         # Set the inputs file
+        # Set the expected default name in case there is no inputs file since it may be downloaded
+        self._inputs_file = File(DEFAULT_INPUTS_FILENAME)
         # If there is an input filepath then use it
         if inputs_filepath:
             self._inputs_file = File(inputs_filepath)
@@ -1484,11 +1486,16 @@ class Project:
             raise InputError('Missing inputs file "' + self._inputs_file.filename + '"')
         # Download the inputs json file if it does not exists
         sys.stdout.write('Downloading inputs (' + self._inputs_file.filename + ')\n')
-        inputs_url = self.url + '/inputs/'
+        inputs_url = self.url + '/inputs'
+        # In case this is a json file we must specify the format in the query
+        is_json = self._inputs_file.format == 'json'
+        if is_json:
+            inputs_url += '?format=json'
         urllib.request.urlretrieve(inputs_url, self._inputs_file.path)
-        # Rewrite the inputs file in a pretty formatted way
-        file_content = load_json(self._inputs_file.path)
-        save_json(file_content, self._inputs_file.path, indent = 4)
+        # Rewrite the inputs file in a pretty formatted way in case it is a JSON file
+        if is_json:
+            file_content = load_json(self._inputs_file.path)
+            save_json(file_content, self._inputs_file.path, indent = 4)
         return self._inputs_file
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
