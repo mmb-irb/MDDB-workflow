@@ -128,14 +128,14 @@ If they all pass then we can continue with the analyses.
 
 ### Running the analyses
 
-Before we start, we need one last input file called **inputs.json**.<br />
+Before we start, we need the **inputs file**.<br />
 This file contains burocratic data, MD parameters and some additional metadata which is used by the workflow to adapt the analyses.
 
-In order to generate this file, a Jupyter Notebook to build the file explaining every field in detail is provided. You can find it in the workflow repository, at model_workflow/utils/input_setter.ipynb or open it by simply running the following command:
+In order to generate this file, a template to build the file explaining every field in detail is provided. You can find it in the workflow repository, at model_workflow/resources/inputs_file_template.yml or open it by simply running the following command:
 
 `mwf inputs`
 
-Fill every field and then run the whole notebook to generate the inputs.json file.
+Fill every field and then run the whole notebook to generate the inputs file.
 Now we are ready to run the analyses by just running the following command:
 
 `mwf run`

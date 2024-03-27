@@ -247,5 +247,5 @@ run_parser.add_argument(
     help=("Set the cutoff for the interactions analysis to fail (default " + str(DEFAULT_INTERACTION_CUTOFF) + ").\n"
         "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
 
-# Add a new to command to aid in the inputs.json setup
-inputs_parser = subparsers.add_parser("inputs", help="Set the inputs.json file", formatter_class=RawTextHelpFormatter)
+# Add a new to command to aid in the inputs file setup
+inputs_parser = subparsers.add_parser("inputs", help="Set the inputs file", formatter_class=RawTextHelpFormatter)

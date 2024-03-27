@@ -221,7 +221,7 @@ def generate_map_online (
             references[reference['uniprot']] = reference
         # Now that we have all forced references data perform the matching
         # If we have every protein chain matched with a reference then we stop here
-        print(' Using only forced references from inputs.json')
+        print(' Using only forced references from the inputs file')
         if match_sequences():
             return format_topology_data(structure, protein_parsed_chains)
     # Now add the imported references to reference sequences. Thus now they will be 'matchable'
@@ -258,7 +258,7 @@ def generate_map_online (
                 # Save the current whole reference object for later
                 references[reference['uniprot']] = reference
         # If we have every protein chain matched with a reference already then we stop here
-        print(' Using also references related to PDB ids from inputs.json')
+        print(' Using also references related to PDB ids from the inputs file')
         if match_sequences():
             return format_topology_data(structure, protein_parsed_chains)
     # If there are still any chain which is not matched with a reference then we need more references
