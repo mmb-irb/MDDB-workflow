@@ -87,6 +87,18 @@ citation: My paper
 
 thanks: I would like to thank my funders
 
+# OPTIONAL
+# Accession is a short code to refer this project in your local database 
+# If no accession is forced then a default formatted accession will be generated when loading the project
+
+forced_accession:
+
+#------------------------------------------------------------------------------------------------------------
+# REFERENCES
+#------------------------------------------------------------------------------------------------------------
+
+# References to other databases to enrich our data
+
 # Links to somewhere related to the simulation
 # These links are displayed in the overview page
 #
@@ -115,9 +127,58 @@ links:
 #   - 6M0J
 
 pdbIds:
-  - 6ACS
-  - 6M0J
 
+# Set which reference sequences must be used in order to map residues in the structure of the simulation
+# UniProt accession ids are accepted
+# Forced references may be not provided or just cover the structure partially
+# Then a blast will be run for each orphan chain sequence
+# In addition, UniProt accession ids may be guessed from the PDB ids, when provided
+# Forced references may be provided as a list
+# In this scenario UniProt sequences are aligned to chain sequences to guess which UniProt belongs to each chain
+# Forced references may be provided as a dictionary
+# Tthen the user specifies which reference belongs to each chain
+# Use the "noref" flag to mark a chain as "no referable" (e.g. antibodies, synthetic constructs)
+#
+# Examples:
+#
+# forced_references:
+#   - Q9BYF1
+#   - P0DTC2
+#
+# forced_references:
+#   - A: Q9BYF1
+#   - B: P0DTC2
+#   - C: noref
+
+forced_references:
+
+# Set all ligands in the simulation. Each ligand has the following attributes:
+#   - name: this is used as the ligand NGL representation label
+#   - ngl: NGL selection used to represent the ligand on the NGL viewer in the client
+#   - drugbank (Optional): the drugbank accession which is used in the overview to make a link
+#   - chembl (Optional): the chembl accession which is used in the overview to make a link
+#
+# At this moment, ligands are used nowhere in the workflow
+#
+# NGL viewer selection:
+# http://nglviewer.org/ngl/api/manual/usage/selection-language.html
+#
+# LORE
+# This field is the predecessor of the 'interactions' field
+# Now it is deprecated but we are still maintaining it since one day this information may be useful
+# We already have it in the database and the web client is still relying on it to better represent small ligands
+#
+# Example:
+#
+# ligands:
+#   - name: My compound
+#     ngl: :L
+#   - name: Some drug
+#     ngl: :D
+#     drugbank: DB00945
+#     chembl: CHEMBL25
+
+ligands:
 
 #------------------------------------------------------------------------------------------------------------
 # SIMULATION METADATA
@@ -135,6 +196,10 @@ framestep: 0.01 # ns
 # The rest of values are displayed in the web client as trajectory metadata
 # These values do not affect other outcomes in the workflow
 
+# Simulation timestep in femtoseconds (fs)
+
+timestep: 2 # fs
+
 # Temperature in Kelvin (K)
 
 temp: 310 # K
@@ -144,10 +209,6 @@ temp: 310 # K
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 ensemble: NPT
-
-# Simulation timestep in femtoseconds (fs)
-
-timestep: 2 # fs
 
 # Force fields
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
@@ -255,44 +316,7 @@ pbc_selection:
 #------------------------------------------------------------------------------------------------------------
 #
 # These fields have an impact in the display of the simulation once in the web client
-#
-#
-# Set which reference sequences must be used in order to map residues in the structure of the simulation.
-# UniProt accession ids are accepted
-# Forced references may be not provided or just cover the structure partially
-# Then a blast will be run for each orphan chain sequence
-# In addition, UniProt accession ids may be guessed from the PDB ids, when provided
-# Forced references may be provided as a list
-# In this scenario UniProt sequences are aligned to chain sequences to guess which UniProt belongs to each chain
-# Forced references may be provided as a dictionary
-# Tthen the user specifies which reference belongs to each chain
-# Use the "noref" flag to mark a chain as "no referable" (e.g. antibodies, synthetic constructs)
-#
-# Examples:
-#
-# forced_references:
-#   - Q9BYF1
-#   - P0DTC2
-#
-# forced_references:
-#   - A: Q9BYF1
-#   - B: P0DTC2
-#   - C: noref
 
-forced_references:
-
-# Set if we have any multimeric form
-# e.g. monomer, dimer, trimer
-# This field was requested by the referees
-# Its only use for now is as a parameter in project queries
-# DANI: Esto lo he puesto aquí pero en realidad no afecta a la representación
-# DANI: Esto es provisional, lo suyo sería automatizarlo
-#
-# multimeric:
-#   - monomer
-#   - trimer
-
-multimeric:
 
 # Set optional custom chain names which may be longer than a single letter
 # This names are used to label chains in the web client
@@ -302,34 +326,6 @@ multimeric:
 #   B: Ligand
 
 chainnames:
-
-# Set all ligands in the simulation. Each ligand has the following attributes:
-#   - name: this is used as the ligand NGL representation label
-#   - ngl: NGL selection used to represent the ligand on the NGL viewer in the client
-#   - drugbank (Optional): the drugbank accession which is used in the overview to make a link
-#   - chembl (Optional): the chembl accession which is used in the overview to make a link
-#
-# At this moment, ligands are used nowhere in the workflow
-#
-# NGL viewer selection:
-# http://nglviewer.org/ngl/api/manual/usage/selection-language.html
-#
-# LORE
-# This field is the predecessor of the 'interactions' field
-# Now it is deprecated but we are still maintaining it since one day this information may be useful
-# We already have it in the database and the web client is still relying on it to better represent small ligands
-#
-# Example:
-#
-# ligands:
-#   - name: My compound
-#     ngl: :L
-#   - name: Some drug
-#     ngl: :D
-#     drugbank: DB00945
-#     chembl: CHEMBL25
-
-ligands:
 
 # Set those elements which must be considered membrane
 # These elements will be representated in the web client with a specific pattern:
@@ -405,6 +401,22 @@ customs:
 # ]
 
 orientation:
+
+#------------------------------------------------------------------------------------------------------------
+# OTHERS
+#------------------------------------------------------------------------------------------------------------
+
+# Set if we have any multimeric form
+# e.g. monomer, dimer, trimer
+# This field was requested by the referees
+# Its only use for now is as a parameter in project queries
+# DANI: Esto es provisional, lo suyo sería automatizarlo
+#
+# multimeric:
+#   - monomer
+#   - trimer
+
+multimeric:
 
 #------------------------------------------------------------------------------------------------------------
 # COLLECTIONS

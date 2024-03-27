@@ -1894,11 +1894,14 @@ class Project:
         if exists(OUTPUT_METADATA_FILENAME):
             return OUTPUT_METADATA_FILENAME
         print('-> Generating project metadata')
+        # Set an input getter that gets the input as soon as called
+        def get_input (name : str):
+            return Project.input_getter(name)(self)
         # Otherwise, generate it
         generate_project_metadata(
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
-            inputs_filename = self.inputs_file.filename, # DANI: No sería mejor pasarle los inputs?
+            get_input = get_input,
             structure = self.structure,
             residues_map = self.residues_map,
             interactions = self.reference_md.interactions,

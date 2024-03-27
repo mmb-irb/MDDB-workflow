@@ -1,26 +1,22 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.generate_map import get_sequence_metadata
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import save_json
 
 from pathlib import Path
+from typing import Callable
 
 # Generate a JSON file with all project metadata
 def generate_project_metadata (
     input_structure_filename : str,
     input_trajectory_filename : str,
-    inputs_filename : str,
+    get_input : Callable,
     structure : 'Structure',
     residues_map : dict,
     interactions : list,
     register : dict,
     output_metadata_filename : str
     ):
-
-    # Set a function to retrieve 'inputs' values and handle missing keys
-    inputs = load_json(inputs_filename)
-    def get_input(input: str):
-        return inputs.get(input, None)
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
@@ -51,9 +47,11 @@ def generate_project_metadata (
     # Metadata interactions are simply the input interactions
     # Final interactions are used only to check which interactions were discarded
     # Thus failed interactions are removed from metadata
-    metadata_interactions = get_input('interactions')
     final_interaction_names = [ interaction['name'] for interaction in interactions ]
-    metadata_interactions = [ interaction for interaction in metadata_interactions if interaction['name'] in final_interaction_names ]
+    final_metadata_interactions = []
+    for input_interaction in get_input('interactions'):
+        if input_interaction['name'] in final_interaction_names:
+            final_metadata_interactions.append(input_interaction)
 
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, residues_map)
@@ -68,9 +66,7 @@ def generate_project_metadata (
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
-        'PDBIDS': get_input('pdbIds'),
         'NAME': get_input('name'),
-        'COLLECTIONS': collections,
         'DESCRIPTION': get_input('description'),
         'AUTHORS': get_input('authors'),
         'GROUPS': get_input('groups'),
@@ -83,16 +79,24 @@ def generate_project_metadata (
         'LINKCENSE': get_input('linkcense'),
         'CITATION': get_input('citation'),
         'THANKS': get_input('thanks'),
+        'FORCED_ACCESSION': get_input('forced_accession'),
+        'LINKS': get_input('links'),
+        'PDBIDS': get_input('pdbIds'),
+        'FORCED_REFERENCES': get_input('forced_references'),
+        'REFERENCES': references,
+        'SEQUENCES': sequence_metadata['sequences'],
+        'DOMAINS': sequence_metadata['domains'],
+        'LIGANDS': ligands,
         'FRAMESTEP': get_input('framestep'),
         'TIMESTEP': get_input('timestep'),
-        'FF': forcefields,
         'TEMP': get_input('temp'),
+        'ENSEMBLE': get_input('ensemble'),
+        'FF': forcefields,
         'WAT': get_input('wat'),
         'BOXTYPE': get_input('boxtype'),
         'BOXSIZEX': boxsizex,
         'BOXSIZEY': boxsizey,
         'BOXSIZEZ': boxsizez,
-        'ENSEMBLE': get_input('ensemble'),
         'SYSTATS': systats,
         'PROTATS': protats,
         'PROT': prot,
@@ -100,28 +104,27 @@ def generate_project_metadata (
         'SOL': sol,
         'NA': na,
         'CL': cl,
-        'LIGANDS': ligands,
-        'CUSTOMS': get_input('customs'),
-        'INTERACTIONS': metadata_interactions,
+        'INTERACTIONS': final_metadata_interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
-        'FORCED_REFERENCES': get_input('forced_references'),
-        'REFERENCES': references,
-        'SEQUENCES': sequence_metadata['sequences'],
-        'DOMAINS': sequence_metadata['domains'],
-        'PTM': ptm_names,
-        'MULTIMERIC' : get_input('multimeric'),
         'CHAINNAMES': get_input('chainnames'),
         'MEMBRANES': get_input('membranes'),
-        'LINKS': get_input('links'),
+        'CUSTOMS': get_input('customs'),
         'ORIENTATION': get_input('orientation'),
+        'PTM': ptm_names,
+        'MULTIMERIC' : get_input('multimeric'),
+        'COLLECTIONS': collections,
         'WARNINGS': register.warnings,
-        # Collection specifics
-        'CV19_UNIT': get_input('cv19_unit'),
-        'CV19_STARTCONF': get_input('cv19_startconf'),
-        'CV19_ABS': get_input('cv19_abs'),
-        'CV19_NANOBS': get_input('cv19_nanobs'),
-        'CV19_VARIANT': sequence_metadata['cv19_variant']
     }
+
+    # Add collection specific fields
+    if 'cv19' in collections:
+        metadata = { **metadata,
+            'CV19_UNIT': get_input('cv19_unit'),
+            'CV19_STARTCONF': get_input('cv19_startconf'),
+            'CV19_ABS': get_input('cv19_abs'),
+            'CV19_NANOBS': get_input('cv19_nanobs'),
+            'CV19_VARIANT': sequence_metadata['cv19_variant']
+        }
     
     # Write metadata to a file
     save_json(metadata, output_metadata_filename)
