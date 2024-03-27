@@ -30,7 +30,7 @@ Then install the workflow module in development mode:
 In HPC clusters running conda and having internet may be a problem.
 For those cases there is a a library called 'conda-pack' which allows to run a local lite conda version.
 
-First install conda-pack in any environment in your locacl machine:
+First install conda-pack in any environment in your local machine:
 
 `conda install conda-pack`
 
