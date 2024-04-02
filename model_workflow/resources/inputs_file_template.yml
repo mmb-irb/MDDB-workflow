@@ -87,11 +87,11 @@ citation: My paper
 
 thanks: I would like to thank my funders
 
-# OPTIONAL
+# OPTIONAL: Use this field to force a custom accession
 # Accession is a short code to refer this project in your local database 
 # If no accession is forced then a default formatted accession will be generated when loading the project
 
-forced_accession:
+accession:
 
 #------------------------------------------------------------------------------------------------------------
 # REFERENCES

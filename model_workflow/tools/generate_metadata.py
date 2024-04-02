@@ -79,7 +79,6 @@ def generate_project_metadata (
         'LINKCENSE': get_input('linkcense'),
         'CITATION': get_input('citation'),
         'THANKS': get_input('thanks'),
-        'FORCED_ACCESSION': get_input('forced_accession'),
         'LINKS': get_input('links'),
         'PDBIDS': get_input('pdbIds'),
         'FORCED_REFERENCES': get_input('forced_references'),
