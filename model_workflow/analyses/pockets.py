@@ -19,6 +19,7 @@
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 from os.path import exists, getsize
+from os import mkdir
 import re
 import collections
 
@@ -72,10 +73,7 @@ def pockets (
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
     if not exists(mdpocket_folder):
-        logs = run([
-            "mkdir",
-            mdpocket_folder,
-        ], stdout=PIPE, stderr=PIPE).stdout.decode()
+        mkdir(mdpocket_folder)
 
     # Run the mdpocket analysis to find new pockets
     mdpocket_output = mdpocket_folder + '/mdpout'
@@ -92,13 +90,13 @@ def pockets (
             "--trajectory_file",
             # WARNING: There is a silent sharp limit of characters here
             # To avoid the problem we must use the relative path instead of the absolute path
-            pockets_trajectory_file.relative_path,
+            pockets_trajectory_file.path,
             "--trajectory_format",
             "xtc",
             "-f",
             # WARNING: There is a silent sharp limit of characters here
             # To avoid the problem we must use the relative path instead of the absolute path
-            structure_file.relative_path,
+            structure_file.path,
             "-o",
             mdpocket_output,
         ], stderr=PIPE)
@@ -384,13 +382,13 @@ def pockets (
             error_logs = run([
                 "mdpocket",
                 "--trajectory_file",
-                pockets_trajectory_file.relative_path,
+                pockets_trajectory_file.path,
                 "--trajectory_format",
                 "xtc",
                 "-f",
                 # WARNING: There is a silent sharp limit of characters here
                 # To avoid the problem we must use the relative path instead of the absolute path
-                structure_file.relative_path,
+                structure_file.path,
                 "-o",
                 pocket_output,
                 "--selected_pocket",
