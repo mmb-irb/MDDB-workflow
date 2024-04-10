@@ -78,7 +78,7 @@ From now on, you can access the `mwf` command from anywhere in your computer as 
 
 ## How to use
 
-All you need to start processing your files is a topology file (prmtop, tpr, psf, etc.) and any number of trajectory files (nc, xtc, dcd, etc.). If we want to process more than one topology then we need to repeat this process for every different topology. Every independent trajectory must be in a different directory, where several output files will be generated for every trajectory. Here is an example of a directory we are about to analyze:
+All you need to start processing your files is a topology file (prmtop, tpr, psf, etc.) and any number of trajectory files (nc, xtc, dcd, etc.). Every independent trajectory must be in a different directory, where several output files will be generated for every trajectory. Here is an example of a directory we are about to analyze:
 
 raw_topology.prmtop<br />
 replica_1/<br />
@@ -91,7 +91,9 @@ replica_2/<br />
 Note that here we have 2 independent replicas which share a common topology.<br />
 The second replica is actually splitted in 3 consecutive parts but this is not a problem.<br />
 
-> Keeping data organized like in the example is important for the workflow to work. If you don't want to reorganizse all your data to fit this structure we recommend using symlinks. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`. This way you keep your files safe and still while not duplicating data. Original files should never be modified by the workflow, however.
+> [!IMPORTANT] 
+> Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`.
+Note that the workflow will generate output files where your input trajectories are.
 
 ### Processing input files
 

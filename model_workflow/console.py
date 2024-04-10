@@ -67,7 +67,8 @@ run_parser.add_argument(
     "-mdir", "--md_directories",
     nargs='*',
     default=None,
-    help="Path to the different MD directories. Each directory is to contain an independent trajectory and structure."
+    help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
+        "Several output files will be generated in every MD directory")
 )
 
 run_parser.add_argument(
