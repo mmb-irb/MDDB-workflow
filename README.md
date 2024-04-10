@@ -91,9 +91,10 @@ replica_2/<br />
 Note that here we have 2 independent replicas which share a common topology.<br />
 The second replica is actually splitted in 3 consecutive parts but this is not a problem.<br />
 
-> [!IMPORTANT] 
-> Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`.
+{{% alert title="Warning" color="warning" %}}
+Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`.
 Note that the workflow will generate output files where your input trajectories are.
+{{% /alert %}}
 
 ### Processing input files
 
