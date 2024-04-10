@@ -91,10 +91,9 @@ replica_2/<br />
 Note that here we have 2 independent replicas which share a common topology.<br />
 The second replica is actually splitted in 3 consecutive parts but this is not a problem.<br />
 
-{{% alert title="Warning" color="warning" %}}
-Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`.
+> :warning: WARNING<br />
+> Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`.
 Note that the workflow will generate output files where your input trajectories are.
-{{% /alert %}}
 
 ### Processing input files
 
@@ -131,6 +130,7 @@ First of all, note that trajectory parts have been automatically merged and a st
 Note also that the not-raw (or just 'processed') topology is still in amber format (.prmtop) while the processed trajectory is converted to gromacs (.xtc) format. One of the standards in the workflow is that the trajectory is to be called 'trajectory.xtc' as well as the structure is to be called 'structure.pdb'. Thus the trajectory and the structure are to be in 'xtc' and 'pdb' formats respectively.
 
 > The workflow has a wide variety of tools and every tool supports a different range of input formats. Both xtc and pdb formats are extensively used and validated formats. Converting all input formats to a unique format to work along the workflow and thus not having to support every possible structure and trajectory format saves a lot of work.<br />
+>
 > Conversions between topology formats are difficult however. For this reason the topology is not converted and then used as little as possible. The only processing in topologies is the atom filtering to keep them coherent with both structure and trajectory.
 
 In this example we run the most basic processing, but there are a couple of additional features we may require.
