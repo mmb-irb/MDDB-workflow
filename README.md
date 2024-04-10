@@ -18,6 +18,10 @@ Now create a new environment using the `environment.yml` file in this repo:
 `cd MoDEL-workflow`<br />
 `conda env create --file environment.yml`
 
+Activate the enviornment
+
+`conda activate mwf_env`
+
 Then install the workflow module in development mode:
 
 `python setup.py develop`
