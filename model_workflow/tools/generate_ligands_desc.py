@@ -5,13 +5,12 @@ import urllib.request
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, Callable
 
 from pathlib import Path
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json
 from urllib.request import Request, urlopen
-from more_itertools import split_when, pairwise
 from itertools import chain
 from collections import Counter
 from model_workflow.utils.constants import STRUCTURE_FILENAME
@@ -331,22 +330,12 @@ def nest_brackets(tokens, i = 0):
         i += 1
     return i,l
 
-def parse_compound(s):
-    tokens = [''.join(t) for t in split_when(s, lambda a,b: b.isupper() or b in '()' or (b.isdigit() and not a.isdigit()))]
+def parse_compound(formula : str) -> List[str]:
+    tokens = [''.join(t) for t in split_when(formula, lambda a,b: b.isupper() or b in '()' or (b.isdigit() and not a.isdigit()))]
     tokens = [(int(t) if t.isdigit() else t) for t in tokens]
     i, l = nest_brackets(tokens)
     assert(i == len(tokens)) # crash if unmatched ')'
     return l
-
-def count_elems(parsed_compound):
-    c = Counter()
-    for a,b in pairwise(chain(parsed_compound, (1,))):
-        if not isinstance(a, int):
-            subcounter = count_elems(a) if isinstance(a, list) else {a: 1}
-            n = b if isinstance(b, int) else 1
-            for elem,k in subcounter.items():
-                c[elem] += k * n
-    return dict(c)
 
 def count_atom_elements_per_ligand (pubchem_id_list : List[str]) -> dict:
     atom_elements_per_ligand_dict = {}
@@ -354,7 +343,7 @@ def count_atom_elements_per_ligand (pubchem_id_list : List[str]) -> dict:
         _, molecular_formula = get_pubchem_smiles(id_pubchem)
         molecular_formula = molecular_formula.replace("+", "").replace("-", "")
         l = parse_compound(molecular_formula)
-        c = count_elems(l)
+        c = parseSplits(l)
         atom_elements_per_ligand_dict[id_pubchem] = c
     return atom_elements_per_ligand_dict
 
@@ -420,3 +409,31 @@ def ligands_residues (structure : 'Structure', pubchem_id_list : List[str]) -> L
     # print(ligands)
     return ligands
 
+def parseSplits (splits : List[str]) -> dict:
+    parsed = {}
+    previous_key = None
+    for split in splits:
+        if type(split) == str:
+            if previous_key:
+                parsed[previous_key] = 1
+            previous_key = split
+        elif type(split) == int:
+            parsed[previous_key] = split
+            previous_key = None
+        else:
+            raise ValueError('Not supported type ' + type(split))
+    if previous_key:
+        parsed[previous_key] = 1
+    return parsed
+
+def split_when(string : str, func : Callable) -> List[str]:
+    splits = []
+    last_split = string[0]
+    for s in string[1:]:
+        if func(last_split, s):
+            splits.append(last_split)
+            last_split = s
+        else:
+            last_split += s
+    splits.append(last_split)
+    return splits
