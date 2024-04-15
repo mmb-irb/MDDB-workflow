@@ -68,6 +68,8 @@ REFERENCE_LABELS = {
 
 # Set the references filename
 OUTPUT_REFERENCES_FILENAME = 'references.json'
+# Set the ligands filename
+OUTPUT_LIGANDS_FILENAME = 'ligands.json'
 
 # Set the metadata filename
 OUTPUT_METADATA_FILENAME = 'metadata.json'
@@ -321,3 +323,11 @@ RESIDUE_NAME_LETTERS = {
 # Set typical residue names to guess what residues are
 STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3'}
 STANDARD_COUNTER_ION_ATOM_NAMES = {'K', 'NA', 'CL', 'CLA', 'SOD', 'POT'}
+
+# Topology flags
+
+# Set a flag to represent a protein which is not referable (e.g. antibodies, synthetic constructs)
+NO_REFERABLE_FLAG = 'noref'
+
+# Set a flag to represent a not found reference
+NOT_FOUND_FLAG = 'notfound'

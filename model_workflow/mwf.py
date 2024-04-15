@@ -27,7 +27,7 @@ from model_workflow.tools.get_bonds import get_safe_bonds
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
-from model_workflow.tools.generate_map import generate_map_online
+from model_workflow.tools.generate_map import generate_protein_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_frames_count import get_frames_count
@@ -37,6 +37,7 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
+from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
@@ -831,9 +832,9 @@ class MD:
 
     # Residues mapping
     # Inherited from project
-    def get_residues_map (self) -> dict:
-        return self.project.residues_map
-    residues_map = property(get_residues_map, None, None, "Residues mapping (read only)")
+    def get_protein_map (self) -> dict:
+        return self.project.protein_map
+    protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
     # ---------------------------------------------------------------------------------
     # Tests
@@ -1300,7 +1301,8 @@ class Project:
         self._charges = None
         self._populations = None
         self._transitions = None
-        self._residues_map = None
+        self._protein_map = None
+        self._ligand_map = None
         self._mds = None
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
@@ -1684,6 +1686,7 @@ class Project:
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
     input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
+    input_ligands = property(input_getter('ligands'), None, None, "Input ligand references (read only)")
 
     # PBC selection may come from the console or from the inputs file
     # Console has priority over the inputs file
@@ -1872,21 +1875,37 @@ class Project:
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
     # Residues mapping
-    def get_residues_map (self) -> dict:
+    def get_protein_map (self) -> dict:
         # If we already have a stored value then return it
-        if self._residues_map:
-            return self._residues_map
-        print('-> Mapping')
+        if self._protein_map:
+            return self._protein_map
+        print('-> Getting protein references')
         # Otherwise we must find the value
-        self._residues_map = generate_map_online(
+        self._protein_map = generate_protein_mapping(
             structure = self.structure,
             register = self.register,
             mercy = self.mercy,
             forced_references = self.forced_references,
             pdb_ids = self.pdb_ids,
         )
-        return self._residues_map
-    residues_map = property(get_residues_map, None, None, "Residues mapping (read only)")
+        return self._protein_map
+    protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
+
+    # Ligand reference
+    def get_ligand_map (self) -> List[dict]:
+        # If we already have a stored value then return it
+        if self._ligand_map:
+            return self._ligand_map
+        self.output_mordred_filepath = self.directory + '/' + OUTPUT_LIGANDS_FILENAME
+        print('-> Getting ligand references')
+        # Otherwise we must find the value
+        self._ligand_map = generate_ligand_mapping(
+            input_ligands = self.input_ligands,
+            structure = self.structure,
+            output_mordred_filepath = self.output_mordred_filepath, 
+        )
+        return self._ligand_map
+    ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
 
     # Metadata filename
     def get_metadata_filename (self) -> str:
@@ -1903,7 +1922,7 @@ class Project:
             input_trajectory_filename = self.trajectory_file.path,
             get_input = get_input,
             structure = self.structure,
-            residues_map = self.residues_map,
+            protein_map = self.protein_map,
             interactions = self.reference_md.interactions,
             register = self.register,
             output_metadata_filename = OUTPUT_METADATA_FILENAME,
@@ -1926,7 +1945,8 @@ class Project:
         generate_topology(
             structure = self.structure,
             charges = self.charges,
-            residues_map = self.residues_map,
+            protein_map = self.protein_map,
+            ligand_map = self.ligand_map,
             pbc_residues = self.pbc_residues,
             output_topology_filepath = self._standard_topology_file.path
         )
@@ -2018,11 +2038,12 @@ requestables = {
     'interactions': MD.get_interactions,
     'snapshots': MD.get_snapshots,
     'charges': Project.get_charges,
-    'mapping': Project.get_residues_map,
+    'mapping': Project.get_protein_map,
+    'ligands': Project.get_ligand_map,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_filename,
-    'mdmeta': MD.get_metadata_filename
+    'mdmeta': MD.get_metadata_filename,
 }
 
 # The actual main function
@@ -2091,6 +2112,7 @@ def workflow (
             'stopology',
             'screenshot',
             'pmeta',
+            'ligands',
             'interactions',
             'mdmeta',
             *analyses.keys(),

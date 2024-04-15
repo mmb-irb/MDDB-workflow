@@ -9,7 +9,7 @@ from pathlib import Path
 
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json
-from model_workflow.utils.constants import OUTPUT_REFERENCES_FILENAME, REFERENCE_SEQUENCE_FLAG
+from model_workflow.utils.constants import OUTPUT_REFERENCES_FILENAME, REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 
 import xmltodict
 
@@ -38,19 +38,13 @@ sys.stderr = stderr_backup
 # aligner.open_gap_score = -10
 # aligner.extend_gap_score = -0.5
 
-# Set a flag to represent a protein which is not referable (e.g. antibodies, synthetic constructs)
-no_referable_flag = 'noref'
-
-# Set a flag to represent a not found reference
-not_found_flag = 'notfound'
-
 # Map the structure aminoacids sequences against the standard reference sequences
 # References are uniprot accession ids and they are optional
 # For each reference, align the reference sequence with the topology sequence
 # Chains which do not match any reference sequence will be blasted
 # Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
-def generate_map_online (
+def generate_protein_mapping (
     structure : 'Structure',
     register : dict,
     mercy : List[str] = [],
@@ -66,8 +60,8 @@ def generate_map_online (
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
     strict_references = type(forced_references) == dict
     # Check the "no referable" flag not to be passed when references are not strict
-    if not strict_references and no_referable_flag in forced_references:
-        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"' + no_referable_flag + '"})')
+    if not strict_references and NO_REFERABLE_FLAG in forced_references:
+        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
@@ -103,7 +97,7 @@ def generate_map_online (
     # If there are no protein sequences then there is no need to map anything
     if len(protein_parsed_chains) == 0:
         print(' There are no protein sequences')
-        return format_topology_data(structure, protein_parsed_chains)
+        return protein_parsed_chains
     # For each input forced reference, get the reference sequence
     reference_sequences = {}
     # Save already tried alignments to not repeat the alignment further
@@ -129,13 +123,13 @@ def generate_map_online (
                     # In case the forced reference is the "no referable" flag
                     # Thus it has no reference sequence and we must not try to match it
                     # Actually, any match would be accidental and not correct
-                    if forced_reference == no_referable_flag:
-                        chain_data['match'] = { 'ref': no_referable_flag }
+                    if forced_reference == NO_REFERABLE_FLAG:
+                        chain_data['match'] = { 'ref': NO_REFERABLE_FLAG }
                         continue
                     # In case the forced reference is the "not found" flag
                     # This should not happend but we may be using references as forced references, so just in case
-                    if forced_reference == not_found_flag:
-                        chain_data['match'] = { 'ref': not_found_flag }
+                    if forced_reference == NOT_FOUND_FLAG:
+                        chain_data['match'] = { 'ref': NOT_FOUND_FLAG }
                         continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
                     reference_sequence = reference_sequences[forced_reference]
@@ -184,10 +178,10 @@ def generate_map_online (
             if not reference:
                 print('   ' + name + ' -> ¿?')
                 continue
-            if reference == no_referable_flag:
+            if reference == NO_REFERABLE_FLAG:
                 print('   ' + name + ' -> No referable')
                 continue
-            if reference == not_found_flag:
+            if reference == NOT_FOUND_FLAG:
                 print('   ' + name + ' -> Not found')
                 continue
             uniprot_id = reference['uniprot']
@@ -203,11 +197,11 @@ def generate_map_online (
         forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
         for uniprot_id in forced_uniprot_ids:
             # If instead of a uniprot id there is a 'no referable' flag then we skip this process
-            if uniprot_id == no_referable_flag:
+            if uniprot_id == NO_REFERABLE_FLAG:
                 continue
             # If instead of a uniprot id there is a 'not found' flag then we skip this process
             # This should not happend but we may be using references as forced references, so just in case
-            if uniprot_id == not_found_flag:
+            if uniprot_id == NOT_FOUND_FLAG:
                 continue
             # If reference is already in the list (i.e. it has been imported) then skip this process
             reference = references.get(uniprot_id, None)
@@ -223,7 +217,7 @@ def generate_map_online (
         # If we have every protein chain matched with a reference then we stop here
         print(' Using only forced references from the inputs file')
         if match_sequences():
-            return format_topology_data(structure, protein_parsed_chains)
+            return protein_parsed_chains
     # Now add the imported references to reference sequences. Thus now they will be 'matchable'
     # Thus now they will be 'matchable', so try to match sequences again in case any of the imported references has not been tried
     # It was not done before since we want forced references to have priority
@@ -240,7 +234,7 @@ def generate_map_online (
         if need_rematch:
             print(' Using also references imported from references.json')
             if match_sequences():
-                return format_topology_data(structure, protein_parsed_chains)
+                return protein_parsed_chains
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot codes associated to the pdb codes, if any
     if len(pdb_ids) > 0:
@@ -260,7 +254,7 @@ def generate_map_online (
         # If we have every protein chain matched with a reference already then we stop here
         print(' Using also references related to PDB ids from the inputs file')
         if match_sequences():
-            return format_topology_data(structure, protein_parsed_chains)
+            return protein_parsed_chains
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, we run a blast with each orphan chain sequence
     for chain_data in protein_parsed_chains:
@@ -271,7 +265,7 @@ def generate_map_online (
         sequence = chain_data['sequence']
         uniprot_id = blast(sequence)
         if not uniprot_id:
-            chain_data['match'] = { 'ref': not_found_flag }
+            chain_data['match'] = { 'ref': NOT_FOUND_FLAG }
             continue
         # Build a new reference from the resulting uniprot
         reference, already_loaded = get_reference(uniprot_id)
@@ -281,7 +275,7 @@ def generate_map_online (
         # If we have every protein chain matched with a reference already then we stop here
         print(' Using also references from blast')
         if match_sequences():
-            return format_topology_data(structure, protein_parsed_chains)
+            return protein_parsed_chains
     # At this point we should have macthed all sequences
     # If not, kill the process unless mercy was given
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
@@ -289,7 +283,7 @@ def generate_map_online (
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
     print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
     register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
-    return format_topology_data(structure, protein_parsed_chains)
+    return protein_parsed_chains
 
 # Export reference objects data to a json file
 # This file is used by the loader to load new references to the database
@@ -302,7 +296,7 @@ def export_references (mapping_data : list):
     for data in mapping_data:
         match = data['match']
         ref = match['ref']
-        if not ref or ref == no_referable_flag or ref == not_found_flag:
+        if not ref or ref == NO_REFERABLE_FLAG or ref == NOT_FOUND_FLAG:
             continue
         uniprot = ref['uniprot']
         if uniprot in final_uniprots:
@@ -326,62 +320,6 @@ def import_references () -> list:
         uniprot = reference['uniprot']
         references[uniprot] = reference
     return references
-
-# Reformat mapping data to the topology system (introduced later)
-def format_topology_data (structure : 'Structure', mapping_data : list) -> dict:
-    # Get the count of residues from the structure
-    residues_count = len(structure.residues)
-    # Now format data
-    reference_ids = []
-    residue_reference_indices = [ None ] * residues_count
-    residue_reference_numbers = [ None ] * residues_count
-    for data in mapping_data:
-        match = data['match']
-        # Get the reference index
-        # Note that several matches may belong to the same reference and thus have the same index
-        reference = match['ref']
-        # If reference is missing at this point then it means we failed to find a matching reference
-        if reference == None:
-            continue
-        # If we have the "no referable" flag
-        if reference == no_referable_flag:
-            if no_referable_flag not in reference_ids:
-                reference_ids.append(no_referable_flag)
-            reference_index = reference_ids.index(no_referable_flag)
-            for residue_index in data['residue_indices']:
-                residue_reference_indices[residue_index] = reference_index
-            continue
-        # If we have the "not found" flag
-        if reference == not_found_flag:
-            if not_found_flag not in reference_ids:
-                reference_ids.append(not_found_flag)
-            reference_index = reference_ids.index(not_found_flag)
-            for residue_index in data['residue_indices']:
-                residue_reference_indices[residue_index] = reference_index
-            continue
-        # If we have a regular uniprot id
-        uniprot_id = reference['uniprot']
-        if uniprot_id not in reference_ids:
-            reference_ids.append(reference['uniprot'])
-        reference_index = reference_ids.index(uniprot_id)
-        # Set the topology reference number and index for each residue
-        for residue_index, residue_number in zip(data['residue_indices'], match['map']):
-            if residue_number == None:
-                continue
-            residue_reference_indices[residue_index] = reference_index
-            residue_reference_numbers[residue_index] = residue_number
-    # If there are not references at the end then set all fields as None, in order to save space
-    if len(reference_ids) == 0:
-        reference_ids = None
-        residue_reference_indices = None
-        residue_reference_numbers = None
-    # Return the 3 topology fields as they are in the database
-    residues_map = {
-        'references': reference_ids,
-        'residue_reference_indices': residue_reference_indices,
-        'residue_reference_numbers': residue_reference_numbers,
-    }
-    return residues_map
 
 # Get each chain name and aminoacids sequence in a topology
 # Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]
@@ -700,10 +638,10 @@ def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict
     domains = []
     for reference_index, reference_id in enumerate(reference_ids):
         # If this is not referable then there are no domains to mine
-        if reference_id == no_referable_flag:
+        if reference_id == NO_REFERABLE_FLAG:
             continue
         # If the reference was not found then there are no domains to mine
-        if reference_id == not_found_flag:
+        if reference_id == NOT_FOUND_FLAG:
             continue
         # Get residue numbers of residues which belong to the current reference in th residue map
         residue_numbers = []
