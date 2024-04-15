@@ -18,9 +18,16 @@ Now create a new environment using the `environment.yml` file in this repo:
 `cd MoDEL-workflow`<br />
 `conda env create --file environment.yml`
 
+Activate the new enviornment
+
+`conda activate mwf_env`
+
 Then install the workflow module in development mode:
 
 `python setup.py develop`
+
+At this point your environment is ready to use and it includes the `mwf` command.<br />
+From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
 
 
 ---
@@ -43,12 +50,12 @@ Now pack the mwf environment with:
 
 This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
 
-`mkdir mwf_environment`<br />
-`tar -xzf mwf.tar.gz -C mwf_environment` 
+`mkdir mwf_env`<br />
+`tar -xzf mwf.tar.gz -C mwf_env` 
 
 Activate the mwf environment:
 
-`source mwf_environment/bin/activate`
+`source mwf_env/bin/activate`
 
 Make a conda unpack
 
@@ -64,11 +71,14 @@ Then install it in develop mode with:
 `cd MoDEL-workflow`<br />
 `python setup.py develop`
 
+At this point your environment is ready to use and it includes the `mwf` command.<br />
+From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
+
 ---
 
 ## How to use
 
-All you need to start processing your files is a topology file (prmtop, tpr, psf, etc.) and any number of trajectory files (nc, xtc, dcd, etc.). Ideally, every independent trajectory should be in a different directory. Here is an example of a directory we are about to analyze:
+All you need to start processing your files is a topology file (prmtop, tpr, psf, etc.) and any number of trajectory files (nc, xtc, dcd, etc.). Every independent trajectory must be in a different directory, where several output files will be generated for every trajectory. Here is an example of a directory we are about to analyze:
 
 raw_topology.prmtop<br />
 replica_1/<br />
@@ -80,6 +90,10 @@ replica_2/<br />
 
 Note that here we have 2 independent replicas which share a common topology.<br />
 The second replica is actually splitted in 3 consecutive parts but this is not a problem.<br />
+
+> :warning: WARNING<br />
+> Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. `ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc`.
+Note that the workflow will generate output files where your input trajectories are.
 
 ### Processing input files
 
@@ -96,32 +110,33 @@ Now lets explain every argument in this command:<br />
 * Argument -traj is pointing the workflow towards the input trajectroy files. Note that the path is not relative to our current directory, but to every MD directory.<br />
 * Argument -s is just telling the workflow to stop after doing the basic processing steps. Otherwise it would continute running analyses and so on, but we are lacking one last input file to keep going. This is explained further.<br />
 
-If everything is fine after the processing the directory should look like this:
+If everything is fine after the processing some <span style="color: green;">new files</span> may have been generated and now the directory should look like this:
 
 raw_topology.prmtop<br />
-topology.prmtop<br />
+<span style="color: green;">topology.prmtop</span><br />
 replica_1/<br />
 &nbsp;&nbsp;&nbsp;&nbsp;raw_trajectory.nc<br />
-&nbsp;&nbsp;&nbsp;&nbsp;structure.pdb<br />
-&nbsp;&nbsp;&nbsp;&nbsp;trajectory.xtc<br />
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: green;">structure.pdb</span><br />
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: green;">trajectory.xtc</span><br />
 replica_2/<br />
 &nbsp;&nbsp;&nbsp;&nbsp;raw_trajectory_part01.nc<br />
 &nbsp;&nbsp;&nbsp;&nbsp;raw_trajectory_part02.nc<br />
 &nbsp;&nbsp;&nbsp;&nbsp;raw_trajectory_part03.nc<br />
-&nbsp;&nbsp;&nbsp;&nbsp;structure.pdb<br />
-&nbsp;&nbsp;&nbsp;&nbsp;trajectory.xtc<br />
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: green;">structure.pdb</span><br />
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: green;">trajectory.xtc</span><br />
 
 Here we must explain a few things more.<br />
 First of all, note that trajectory parts have been automatically merged and a structure have been generated for every MD directory.
-Note also that the not-raw (or just 'processed') topology is still in amber format (.prmtop) while the processed trajectory is converted to gromacs (.xtc) format. One of the standards in the workflow is that the trajectory is to be called 'trajectory.xtc' as well as the structure is to be called 'structure.pdb'. Thus the trajectory and the structure are to be in 'xtc' and 'pdb' formats respectively. 
+Note also that the not-raw (or just 'processed') topology is still in amber format (.prmtop) while the processed trajectory is converted to gromacs (.xtc) format. One of the standards in the workflow is that the trajectory is to be called 'trajectory.xtc' as well as the structure is to be called 'structure.pdb'. Thus the trajectory and the structure are to be in 'xtc' and 'pdb' formats respectively.
 
-<span style="color:blue">The workflow has a wide variety of tools and every tool supports a different range of input formats. Both xtc and pdb formats are extensively used and validated formats. Converting all input formats to a unique format to work along the workflow and thus not having to support every possible structure and trajectory format saves a lot of work.</span>
-
-Conversions between topology formats are difficult however. For this reason the topology is not converted and then used as little as possible. The only processing in topologies is the atom filtering to keep them coherent with both structure and trajectory.
+> The workflow has a wide variety of tools and every tool supports a different range of input formats. Both xtc and pdb formats are extensively used and validated formats. Converting all input formats to a unique format to work along the workflow and thus not having to support every possible structure and trajectory format saves a lot of work.<br />
+>
+> Conversions between topology formats are difficult however. For this reason the topology is not converted and then used as little as possible. The only processing in topologies is the atom filtering to keep them coherent with both structure and trajectory.
 
 In this example we run the most basic processing, but there are a couple of additional features we may require.
-* Filtering: Argument -filt is used to filter atoms away in all files (topology, structure and trajectory). The -filt argument alone applies the default filtering: water and counter ions. However the -filt argument may be followed by some text to apply a custom filtering selection according to [VMD syntax](https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html).
-* Imaging and fitting: It is not easy to automatize the imaging process so it is recommended that you manually image your trajectories. However, the workflow is provided with a generic filtering protocol which may be useful in some generic cases. Use the -img argument to image and the -fit argument to fit the trajectory.
+* Filtering: Argument -filt is used to filter atoms away in all files (topology, structure and trajectory). The -filt argument alone applies the default filtering: water and counter ions. However the -filt argument may be followed by some text to apply a custom filtering selection according to [VMD syntax](https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html). Here is an example:<br />
+`mwf run (...) -filt 'not protein'`
+* Imaging and fitting: It is not easy to automatize the imaging process so it is recommended that you manually image your trajectories. However, the workflow is provided with a generic imaging protocol which may be useful in some generic cases. Use the -img argument to image and the -fit argument to fit the trajectory.
 
 Once this process is over some tests are run.<br />
 If they all pass then we can continue with the analyses.

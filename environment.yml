@@ -1,4 +1,4 @@
-name: test_mwf
+name: mwf_env
 channels:
   - anaconda
   - bioconda
@@ -25,4 +25,3 @@ dependencies:
     - iminuit<2
     - pytraj
     - tmscoring
-prefix: /home/dbeltran/mambaforge/envs/mwf
