@@ -27,6 +27,8 @@ from model_workflow.tools.get_bonds import get_safe_bonds
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
+from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
+from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
@@ -37,7 +39,6 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
-from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
@@ -1303,6 +1304,7 @@ class Project:
         self._transitions = None
         self._protein_map = None
         self._ligand_map = None
+        self._residue_map = None
         self._mds = None
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
@@ -1874,7 +1876,7 @@ class Project:
         return self._transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
-    # Residues mapping
+    # Protein residues mapping
     def get_protein_map (self) -> dict:
         # If we already have a stored value then return it
         if self._protein_map:
@@ -1891,7 +1893,7 @@ class Project:
         return self._protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
-    # Ligand reference
+    # Ligand residues mapping
     def get_ligand_map (self) -> List[dict]:
         # If we already have a stored value then return it
         if self._ligand_map:
@@ -1906,6 +1908,22 @@ class Project:
         )
         return self._ligand_map
     ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
+
+    # Build the residue map from both proteins and ligands maps
+    # This is formatted as both the standard topology and metadata generators expect them
+    def get_residue_map (self) -> List[dict]:
+        # If we already have a stored value then return it
+        if self._residue_map:
+            return self._residue_map
+        print('-> Getting residue references')
+        # Otherwise we must find the value
+        self._residue_map = generate_residue_mapping(
+            protein_map = self.protein_map,
+            ligand_map = self.ligand_map,
+            structure = self.structure,
+        )
+        return self._residue_map
+    residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
     # Metadata filename
     def get_metadata_filename (self) -> str:
@@ -1922,7 +1940,7 @@ class Project:
             input_trajectory_filename = self.trajectory_file.path,
             get_input = get_input,
             structure = self.structure,
-            protein_map = self.protein_map,
+            residue_map = self.residue_map,
             interactions = self.reference_md.interactions,
             register = self.register,
             output_metadata_filename = OUTPUT_METADATA_FILENAME,
@@ -1945,8 +1963,7 @@ class Project:
         generate_topology(
             structure = self.structure,
             charges = self.charges,
-            protein_map = self.protein_map,
-            ligand_map = self.ligand_map,
+            residue_map = self.residue_map,
             pbc_residues = self.pbc_residues,
             output_topology_filepath = self._standard_topology_file.path
         )

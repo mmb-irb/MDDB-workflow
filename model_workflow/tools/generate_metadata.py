@@ -12,7 +12,7 @@ def generate_project_metadata (
     input_trajectory_filename : str,
     get_input : Callable,
     structure : 'Structure',
-    residues_map : dict,
+    residue_map : dict,
     interactions : list,
     register : dict,
     output_metadata_filename : str
@@ -26,13 +26,15 @@ def generate_project_metadata (
     (systats, protats, prot, dppc, sol, na,
      cl) = get_atoms_count(input_structure_filename)
 
-    # Extract some additional metadata from the inputs file which is required further
-    ligands = get_input('ligands')
-    if not ligands:
-        ligands = []
-
-    # Get the references from the residues map
-    references = residues_map['references'] if residues_map else []
+    # Get protein references from the residues map
+    # Get ligand references from the residues map
+    protein_references = []
+    ligand_references = []
+    for ref, ref_type in zip(residue_map['references'], residue_map['reference_types']):
+        if ref_type == 'protein':
+            protein_references.append(ref)
+        elif ref_type == 'ligand':
+            ligand_references.append(ref)
 
     # Make the forcefields a list in case it is a single string
     forcefields = get_input('ff')
@@ -54,7 +56,7 @@ def generate_project_metadata (
             final_metadata_interactions.append(input_interaction)
 
     # Get additional metadata related to the aminoacids sequence
-    sequence_metadata = get_sequence_metadata(structure, residues_map)
+    sequence_metadata = get_sequence_metadata(structure, residue_map)
 
     # Find the PTMs
     # Save only their names for now
@@ -82,10 +84,11 @@ def generate_project_metadata (
         'LINKS': get_input('links'),
         'PDBIDS': get_input('pdbIds'),
         'FORCED_REFERENCES': get_input('forced_references'),
-        'REFERENCES': references,
+        'REFERENCES': protein_references,
+        'INPUT_LIGANDS': get_input('ligands'),
+        'LIGANDS': ligand_references,
         'SEQUENCES': sequence_metadata['sequences'],
         'DOMAINS': sequence_metadata['domains'],
-        'LIGANDS': ligands,
         'FRAMESTEP': get_input('framestep'),
         'TIMESTEP': get_input('timestep'),
         'TEMP': get_input('temp'),

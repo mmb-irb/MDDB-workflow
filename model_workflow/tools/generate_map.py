@@ -596,14 +596,18 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 2. Calculate which reference domains are covered by the previous sequence
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
 from model_workflow.resources.covid_variants import get_variants
-def get_sequence_metadata (structure : 'Structure', residues_map : dict) -> dict:
+def get_sequence_metadata (structure : 'Structure', residue_map : dict) -> dict:
     # First mine the sequences from the structure
     # Set a different sequence for each chain
     sequences = [ chain.get_sequence() for chain in structure.chains ]
     # Get values from the residue map
-    reference_ids = residues_map['references'] if residues_map['references'] else []
-    residue_reference_numbers = residues_map['residue_reference_numbers']
-    residue_reference_indices = residues_map['residue_reference_indices']
+    # Get protein references from the residues map
+    reference_ids = []
+    for ref, ref_type in zip(residue_map['references'], residue_map['reference_types']):
+        if ref_type == 'protein':
+            reference_ids.append(ref)
+    residue_reference_numbers = residue_map['residue_reference_numbers']
+    residue_reference_indices = residue_map['residue_reference_indices']
     # Load references data, which should already be save to the references data file
     references_data = import_references() if os.path.exists(OUTPUT_REFERENCES_FILENAME) else {}
     # In case we have the SARS-CoV-2 spike among the references, check also which is the variant it belongs to
