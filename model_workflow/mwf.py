@@ -105,11 +105,11 @@ class MD:
             self.accession = self.project.accession + '.' + str(self.number)
             self.url = self.project.database_url + '/rest/current/projects/' + self.accession
         # Save the directory
-        self.directory = directory
+        self.directory = remove_final_slash(directory)
         # If the directory does not exists then we may have 2 different scenarios
         if not exists(self.directory):
             # If we have an URL to donwload then it means we must download input files
-            # Thus we simpy create the missing directroy and it be filled further
+            # Thus we simpy create the missing directory and it be filled further
             if self.url:
                 mkdir(self.directory)
             # Otherwise we are supposed to find input files locally
@@ -1206,7 +1206,7 @@ class Project:
         sample_trajectory : bool = False
     ):
         # Save input parameters
-        self.directory = directory
+        self.directory = remove_final_slash(directory)
         self.accession = accession
         self.database_url = database_url
         # Set the project URL in case we have the required data
@@ -2009,6 +2009,12 @@ def name_2_directory (name : str) -> str:
     # Remove problematic characters
     for character in FORBIDEN_DIRECTORY_CHARACTERS:
         directory = directory.replace(character, '')
+    return directory
+
+# Remove the final slash if exists since it may cuse problems when recognizing input directories
+def remove_final_slash (directory : str) -> str:
+    if directory[-1] == '/':
+        return directory[:-1]
     return directory
 
 # Input files
