@@ -15,7 +15,6 @@ from itertools import chain
 from collections import Counter
 from model_workflow.utils.constants import STRUCTURE_FILENAME
 import re
-import requests
 
 ########################
 # Hacer: 
@@ -148,21 +147,29 @@ def get_pubchem_smiles (id_pubchem : str) -> Optional[str]:
 
 
 def find_drugbank_pubchem (drugbank_id):
-    response = requests.get(f'https://go.drugbank.com/drugs/{drugbank_id}', headers={'User-Agent': 'Mozilla/5.0'})
-
-    if response.status_code == 200:
-        content = response.content
-        pattern = re.compile("http\:\/\/pubchem.ncbi.nlm.nih.gov\/summary\/summary.cgi\?cid\=([0-9]*)")
-        match = re.search(pattern, str(content))
-        #print(match[0])
-        #print(match[1])
-        pubchem_id = match[1]
-        if pubchem_id:
+    # Request Drugbank
+    request_url = Request(
+        url= f'https://go.drugbank.com/drugs/{drugbank_id}',
+        headers={'User-Agent': 'Mozilla/5.0'}
+    )
+    pubchem_id = None
+    try:
+        with urlopen(request_url) as response:
+            content = response.read().decode("utf-8")
+            pattern = re.compile("http\:\/\/pubchem.ncbi.nlm.nih.gov\/summary\/summary.cgi\?cid\=([0-9]*)")
+            match = re.search(pattern, str(content))
+            pubchem_id = match[1]
+            if not pubchem_id:
+                raise ValueError("No se encontró información sobre el Pubchem compound en esta página.")
             print("Pubchem compound:", pubchem_id)
-        else:
-            print("No se encontró información sobre el Pubchem compound en esta página.")
-    else:
-        print("La solicitud no fue exitosa. Código de estado:", response.status_code)
+    # If the accession is not found in the database then we stop here
+    except urllib.error.HTTPError as error:
+        # If the drugbank ID is not yet in the Drugbank references then return None
+        raise ValueError(f'Wrong request. Code: {error.code}')
+    # This error may occur if there is no internet connection
+    except urllib.error.URLError as error:
+        print('Error when requesting ' + request_url)
+        raise ValueError('Something went wrong with the DrugBank request')
     
     return pubchem_id
 
@@ -261,7 +268,7 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> dict:
 
     return results_dict, morgan_fp
 
-def generate_json (name : str, results_dict : str, morgan_fp : list, pubchem_id : str) -> dict:
+def generate_dict (name : str, results_dict : str, morgan_fp : list, pubchem_id : str) -> dict:
     dic = {}
     dic['Name'] = name
     dic['Mordred'] = results_dict
@@ -272,11 +279,12 @@ def generate_json (name : str, results_dict : str, morgan_fp : list, pubchem_id 
 
 
 def generate_ligand_mapping (
-    input_ligands : list,
+    input_ligands : List[dict],
     structure : 'Structure',
     output_mordred_filepath : str,
 ) -> dict:
-    drugbank_dict,  pubchem_dict, chembl_dict, chembl_id, pubchem_id_list = obtain_ligands_id(input_ligands)
+
+    drugbank_dict, pubchem_dict, chembl_dict, chembl_id, pubchem_id_list = obtain_ligands_id(input_ligands)
     ligand_list  = []
     
     # REALMENTE TODA LA INFORMACIÓN SE SACARÁ DE AQUÍ
@@ -284,14 +292,14 @@ def generate_ligand_mapping (
         for ligand in pubchem_dict:
             smiles, _ = get_pubchem_smiles(pubchem_dict[ligand])
             results_dict, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
-            ligand_dict = generate_json(ligand, results_dict, morgan_fp, pubchem_dict[ligand])
+            ligand_dict = generate_dict(ligand, results_dict, morgan_fp, pubchem_dict[ligand])
             ligand_list.append(ligand_dict)
             #pubchem_id_list.append(pubchem_dict[ligand])
-    else:
-        pass
 
     ligands = ligands_residues(structure, pubchem_id_list)
+    # Write the ligands reference file
     save_json(ligand_list, output_mordred_filepath)
+    # Return the mapping
     return ligands
     
 # For each residue, count the number of atom elements
@@ -337,6 +345,19 @@ def parse_compound(formula : str) -> List[str]:
     assert(i == len(tokens)) # crash if unmatched ')'
     return l
 
+# Split a string using a function
+def split_when(string : str, func : Callable) -> List[str]:
+    splits = []
+    last_split = string[0]
+    for s in string[1:]:
+        if func(last_split, s):
+            splits.append(last_split)
+            last_split = s
+        else:
+            last_split += s
+    splits.append(last_split)
+    return splits
+
 def count_atom_elements_per_ligand (pubchem_id_list : List[str]) -> dict:
     atom_elements_per_ligand_dict = {}
     for id_pubchem in pubchem_id_list:
@@ -346,6 +367,26 @@ def count_atom_elements_per_ligand (pubchem_id_list : List[str]) -> dict:
         c = parseSplits(l)
         atom_elements_per_ligand_dict[id_pubchem] = c
     return atom_elements_per_ligand_dict
+
+# This function associates elements in a list
+# If a string is followed by a number then they go together
+# If a string has no number then the number is 1 for this specific string
+def parseSplits (splits : List[str]) -> dict:
+    parsed = {}
+    previous_key = None
+    for split in splits:
+        if type(split) == str:
+            if previous_key:
+                parsed[previous_key] = 1
+            previous_key = split
+        elif type(split) == int:
+            parsed[previous_key] = split
+            previous_key = None
+        else:
+            raise ValueError('Not supported type ' + type(split))
+    if previous_key:
+        parsed[previous_key] = 1
+    return parsed
 
 
 def match_ligandsID_to_res (ligand_atom_element_count : dict, residue_atom_element_count : dict) -> bool:
@@ -408,32 +449,3 @@ def ligands_residues (structure : 'Structure', pubchem_id_list : List[str]) -> L
     # print('Matched:', len(ligands),'/', len(atom_elements_per_ligand),'of the ligands.')
     # print(ligands)
     return ligands
-
-def parseSplits (splits : List[str]) -> dict:
-    parsed = {}
-    previous_key = None
-    for split in splits:
-        if type(split) == str:
-            if previous_key:
-                parsed[previous_key] = 1
-            previous_key = split
-        elif type(split) == int:
-            parsed[previous_key] = split
-            previous_key = None
-        else:
-            raise ValueError('Not supported type ' + type(split))
-    if previous_key:
-        parsed[previous_key] = 1
-    return parsed
-
-def split_when(string : str, func : Callable) -> List[str]:
-    splits = []
-    last_split = string[0]
-    for s in string[1:]:
-        if func(last_split, s):
-            splits.append(last_split)
-            last_split = s
-        else:
-            last_split += s
-    splits.append(last_split)
-    return splits
