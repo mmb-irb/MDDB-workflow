@@ -39,6 +39,7 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
+from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
@@ -76,6 +77,10 @@ sys.stdout = unbuffered
 
 # Set an special exception for input errors
 missing_input_exception = Exception('Missing input')
+
+# Run a fix in gromacs if not done before
+# Note that this is run always at the moment the code is read, no matter the command or calling origin
+fix_gromacs_masses()
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible

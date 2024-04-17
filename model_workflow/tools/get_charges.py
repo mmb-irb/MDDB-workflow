@@ -26,7 +26,7 @@ def get_charges (charges_source_file : 'File') -> list:
     elif charges_source_file.filename == RAW_CHARGES_FILENAME:
         charges = get_raw_charges(charges_source_file.path)
     # In some ocasions, charges may come inside a topology which can be parsed through pytraj
-    elif charges_source_file.is_pytraj_supported:
+    elif charges_source_file.is_pytraj_supported():
         charges = get_topology_charges(charges_source_file.path)
         # DANI: De momento ya no generaré más charges.txt ahora que las cargas estan en la topologia json
         #generate_raw_energies_file(charges)

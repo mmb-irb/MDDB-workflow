@@ -84,7 +84,7 @@ def filter_atoms (
             filtered_topology_atoms_count = len(charges)
             print('Topology atoms count: ' + str(filtered_topology_atoms_count))
         # Pytraj supported formats
-        elif input_topology_file.is_pytraj_supported:
+        elif input_topology_file.is_pytraj_supported():
             # Load the topology and count its atoms
             pt_topology = pt.load_topology(filename=input_topology_file.path)
             topology_atoms_count = pt_topology.n_atoms
@@ -98,7 +98,7 @@ def filter_atoms (
                 pt.write_parm(
                     filename=output_topology_file.path,
                     top=filtered_pt_topology,
-                    format=input_topology_file.pytraj_parm_format,
+                    format=input_topology_file.get_pytraj_parm_format(),
                     overwrite=True
                 )
         # Gromacs format format

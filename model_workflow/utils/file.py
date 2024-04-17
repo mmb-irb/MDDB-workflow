@@ -1,5 +1,6 @@
 from os import remove, symlink, rename
-from os.path import exists, isabs, abspath, relpath, split
+from os.path import exists, isabs, abspath, relpath, split, islink
+from shutil import copyfile
 from typing import Optional
 
 from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
@@ -15,7 +16,7 @@ class File:
         # Declare all attributes as none by default
         self.absolute_path = self.relative_path = self.path = None
         self.basepath = self.filename = None
-        self.extension = self.format = None
+        self.extension = None
         self.extensionless_filename = None
         # If there is no path then leave everything as none
         if not relative_or_basolute_path:
@@ -46,15 +47,6 @@ class File:
         if self.extension:
             extension_size = len(self.extension) + 1 # We include here the dot
             self.extensionless_filename = self.filename[-extension_size:]
-        # Set the file format
-        if self.extension:
-            extension_format = EXTENSION_FORMATS.get(self.extension, None)
-            if not extension_format:
-                raise InputError('Not recognized format extension "' + self.extension + '" from file "' + self.filename + '"')
-            self.format = extension_format
-        # Set a couple of additional values according to pytraj format requirements
-        self.is_pytraj_supported = self.format in PYTRAJ_SUPPORTED_FORMATS
-        self.pytraj_parm_format = PYTRAJ_PARM_FORMAT.get(self.format, None)
 
     def __repr__ (self) -> str:
         if not self.filename:
@@ -72,9 +64,27 @@ class File:
             return self.path == other.path
         return False
 
+    # Check if file exists
     def check_existence (self) -> bool:
         return exists(self.path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
+
+    # Get file format based on the extension
+    # If the extension is not recognized then raise an error
+    def get_format (self) -> Optional[str]:
+        if not self.extension:
+            return None
+        extension_format = EXTENSION_FORMATS.get(self.extension, None)
+        if not extension_format:
+            raise InputError(f'Not recognized format extension "{self.extension}" from file "{self.filename}"')
+        return extension_format
+    format = property(get_format, None, None, "File standard format (read only)")
+
+    # Set a couple of additional functions according to pytraj format requirements
+    def is_pytraj_supported (self) -> bool:
+        return self.format in PYTRAJ_SUPPORTED_FORMATS
+    def get_pytraj_parm_format (self) -> Optional[str]:
+        return PYTRAJ_PARM_FORMAT.get(self.format, None)
 
     # Remove the file
     def remove (self):
@@ -106,3 +116,15 @@ class File:
         relative_path = relpath(other_file.path, self.basepath)
         # Set the symlink
         symlink(relative_path, self.path)
+
+    # Check if a file is already a symlink
+    def is_symlink (self) -> bool:
+        return islink(self.path)
+
+    # Copy a file to another
+    def copy_to (self, other_file : 'File'):
+        copyfile(self.path, other_file.path)
+
+    # Rename a file to another
+    def rename_to (self, other_file : 'File'):
+        rename(self.path, other_file.path)
