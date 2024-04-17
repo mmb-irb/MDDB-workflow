@@ -3,7 +3,7 @@ import pytraj as pt
 from os.path import exists
 from json import load
 from pathlib import Path
-from subprocess import Popen, PIPE
+from subprocess import run, PIPE
 import re
 
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
@@ -98,7 +98,7 @@ def get_tpr_charges (topology_filename : str) -> list:
 def get_tpr_charges_manual (topology_filename : str) -> list:
     charges = []
     # Read the tpr file making a 'dump'
-    process = Popen([
+    process = run([
         "gmx",
         "dump",
         "-s",
