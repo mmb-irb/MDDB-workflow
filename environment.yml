@@ -1,4 +1,4 @@
-name: mwf_env_test17
+name: mwf_env
 channels:
   - anaconda
   - conda-forge
