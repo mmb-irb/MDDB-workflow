@@ -1,27 +1,50 @@
-name: mwf_env
+name: mwf_env_test17
 channels:
   - anaconda
-  - bioconda
   - conda-forge
 dependencies:
-  - biopython=1.79
-  - cmip
-  - curves
-  - fpocket
-  - gromacs
-  - mdanalysis
-  - mdtraj
-  - numpy
-  - pip
-  - pocl
-  - python=3.7
-  - scipy
-  - sqlite=3.37.2
-  - vmd
-  - xmltodict
+  - python=3.9
+  # Use pyyaml to read the inputs.yaml file
   - pyyaml
+  # From ambertools we use pytraj mostly
+  - ambertools
+  # From biopython we use the sequence alignment tools
+  # WARNING: Functions we use from biopython do not exist in further versions
+  # WARNING: Implementation of new versions is half done (code is comented) but limitations were found
+  # WARNING: Upgrading this dependency may be difficult
+  - biopython=1.79
+  # CMIP is used for the energies analysis
+  - bioconda::cmip
+  # Fpocket is used for the pockets analysis
+  - fpocket
+  # Gromacs is used for several processing and analysis steps
+  - gromacs
+  # MDanalysis is used for some processing steps
+  # WARNING: Further versions require biopython 1.8
+  # WARNING: Further versions of python do not allow MDanalysis to keep working with biopython 1.79
+  - mdanalysis=2.3
+  # MDtraj is used for several processing and analysis steps
+  - mdtraj
+  # Numpy and scipy are usually already included but they are required
+  - numpy
+  - scipy
+  # VMD is used for some processing steps
+  - vmd
+  # Parser to read blast results
+  - xmltodict
+  # Ligands analyses
+  - rdkit
+  - mordred
+  # Curves does not fit in this environment anymore
+  # DANI: Habrá que hacerle un environment a parte. Será nuestro primer use case de esto.
+  # - curves
+  # Dependency of tmscoring
+  # WARNING: This version of iminuit is not supported in further versions of python
+  - iminuit<2
+  # We must declare pip explicitly according to a warning
+  - pip
   - pip:
-    - argparse
-    - iminuit<2
-    - pytraj
+    # This library is used to calculate TM scores and it is not in conda
+    # WARNING: this library is not mantained and it depends in an outdated version of iminuit
+    # WARNING: we would have to maintain it ourselves in further python versions
     - tmscoring

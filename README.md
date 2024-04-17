@@ -26,6 +26,11 @@ Then install the workflow module in development mode:
 
 `python setup.py develop`
 
+Although this should work at this moment, it is very common having a bug at this time (undefined symbol: sqlite3_errstr)<br/>
+If this is your case then simply run the following comand and you should be good to go:
+
+`conda install sqlite=3.38 --force-reinstall`
+
 At this point your environment is ready to use and it includes the `mwf` command.<br />
 From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
 
