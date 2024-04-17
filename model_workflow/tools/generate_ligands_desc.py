@@ -237,8 +237,8 @@ def obtain_ligands_id (input_ligands : dict) -> dict:
             pubchem_dic[ligand_name] = find_chembl_pubchem(chembl_id)
             pubchem_id_list.append(pubchem_dic[ligand_name])
 
-    print(drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list)
-    return drugbank_dic,  pubchem_dic, chembl_dic, chembl_id, pubchem_id_list
+    #print(drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list)
+    return drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list
 
 
 def obtain_mordred_morgan_descriptors (smiles : str) -> dict:
@@ -284,7 +284,7 @@ def generate_ligand_mapping (
     output_mordred_filepath : str,
 ) -> dict:
 
-    drugbank_dict, pubchem_dict, chembl_dict, chembl_id, pubchem_id_list = obtain_ligands_id(input_ligands)
+    drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list = obtain_ligands_id(input_ligands)
     ligand_list  = []
     
     # REALMENTE TODA LA INFORMACIÓN SE SACARÁ DE AQUÍ

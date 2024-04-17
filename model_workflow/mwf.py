@@ -1896,7 +1896,7 @@ class Project:
     # Ligand residues mapping
     def get_ligand_map (self) -> List[dict]:
         # If we already have a stored value then return it
-        if self._ligand_map:
+        if self._ligand_map == None:
             return self._ligand_map
         self.output_mordred_filepath = self.directory + '/' + OUTPUT_LIGANDS_FILENAME
         print('-> Getting ligand references')
