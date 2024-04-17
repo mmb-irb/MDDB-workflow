@@ -87,7 +87,7 @@ def get_chembl_smiles (id_chembl : str) -> Optional[str]:
 
 
 # Given a PUBChem ID, use the uniprot API to request its data and then mine what is needed for the database
-def get_pubchem_smiles (id_pubchem : str) -> Optional[str]:
+def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     # Request PUBChem
     parsed_response = None
     request_url = Request(
@@ -290,7 +290,7 @@ def generate_ligand_mapping (
     # REALMENTE TODA LA INFORMACIÓN SE SACARÁ DE AQUÍ
     if len(pubchem_dict) >= 1:
         for ligand in pubchem_dict:
-            smiles, _ = get_pubchem_smiles(pubchem_dict[ligand])
+            smiles, _ = get_pubchem_data(pubchem_dict[ligand])
             results_dict, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
             ligand_dict = generate_dict(ligand, results_dict, morgan_fp, pubchem_dict[ligand])
             ligand_list.append(ligand_dict)
@@ -361,7 +361,7 @@ def split_when(string : str, func : Callable) -> List[str]:
 def count_atom_elements_per_ligand (pubchem_id_list : List[str]) -> dict:
     atom_elements_per_ligand_dict = {}
     for id_pubchem in pubchem_id_list:
-        _, molecular_formula = get_pubchem_smiles(id_pubchem)
+        _, molecular_formula = get_pubchem_data(id_pubchem)
         molecular_formula = molecular_formula.replace("+", "").replace("-", "")
         l = parse_compound(molecular_formula)
         c = parseSplits(l)
