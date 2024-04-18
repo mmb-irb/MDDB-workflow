@@ -105,9 +105,9 @@ def get_tpr_charges_manual (topology_filename : str) -> list:
         topology_filename,
         "-quiet"
     ], stdout=PIPE, stderr=PIPE)
-    readable_tpr = process.stdout
+    readable_tpr = process.stdout.decode()
     # Mine the atomic charges
-    for line in readable_tpr:
+    for line in readable_tpr.split('\n'):
         line = line.decode()
         # Skip everything which is not atomic charges data
         if line[0:16] != '            atom':
