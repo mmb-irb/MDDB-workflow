@@ -7,6 +7,7 @@ from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
@@ -78,7 +79,7 @@ def process_interactions (
                 '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
                 '   - Agent 2 selection: ' + interaction['selection_2'])
             # Check if we must have mercy in case of interaction failure
-            must_be_killed = 'interact' not in mercy
+            must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
             if must_be_killed:
                 raise SystemExit('FAIL: an interaction failed to be set.\n'
                     'Use the "--mercy interact" flag for the workflow to continue.\n'
