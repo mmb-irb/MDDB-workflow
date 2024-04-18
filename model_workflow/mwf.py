@@ -140,9 +140,9 @@ class MD:
         self._input_trajectory_files = []
         for path in self.input_trajectory_filepaths:
             has_spread_syntax = '*' in path
-            if has_spread_syntax and self.url:
-                raise InputError('Spread syntax in trajectory input filepaths is not supported when downloading remote files')
             if has_spread_syntax:
+                if self.url:
+                    raise InputError('Spread syntax in trajectory input filepaths is not supported when downloading remote files')
                 for parsed_path in glob(path):
                     trajectory_file = File(parsed_path)
                     self._input_trajectory_files.append(trajectory_file)
