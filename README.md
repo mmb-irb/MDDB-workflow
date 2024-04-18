@@ -139,8 +139,8 @@ Note also that the not-raw (or just 'processed') topology is still in amber form
 > Conversions between topology formats are difficult however. For this reason the topology is not converted and then used as little as possible. The only processing in topologies is the atom filtering to keep them coherent with both structure and trajectory.
 
 In this example we run the most basic processing, but there are a couple of additional features we may require.
-* Filtering: Argument -filt is used to filter atoms away in all files (topology, structure and trajectory). The -filt argument alone applies the default filtering: water and counter ions. However the -filt argument may be followed by some text to apply a custom filtering selection according to [VMD syntax](https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html). Here is an example:<br />
-`mwf run (...) -filt 'not protein'`
+* Filtering: Argument -filt is used to filter atoms you want to keep in all files (topology, structure and trajectory). The -filt argument alone applies the default filtering: water and counter ions. However the -filt argument may be followed by some text to apply a custom filtering selection according to [VMD syntax](https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html). Here is an example on how to filter away everything which is not protein or nucleic acids:<br />
+`mwf run (...) -filt 'protein or nucleic'`
 * Imaging and fitting: It is not easy to automatize the imaging process so it is recommended that you manually image your trajectories. However, the workflow is provided with a generic imaging protocol which may be useful in some generic cases. Use the -img argument to image and the -fit argument to fit the trajectory.
 
 Once this process is over some tests are run.<br />
@@ -172,3 +172,77 @@ To see additional arguments and how to use them you can request help by just run
 
 Once you are done with this process is time to load your files to the database.<br />
 To do so, you must head to the [loader](https://mmb.irbbarcelona.org/gitlab/aluciani/MoDEL-CNS_DB_loader).
+
+### Tests and other checking processes
+
+Some tests and checkings are run along the workflow to ensure data quality.<br />
+By default, a falied test will kill the workflow in the spot.<br />
+Tests may be skipped with the -t or --trust argument.<br />
+Tests may be allowed to fail with the -m or --mercy argument.<br />
+Either if a test is skipped or failed it will write a warning log in the metadata.<br />
+Note that some tests may not be skipped, but only allowed to fail and vice versa.<br />
+Both the trust and the mercy arguments have the same behaviour:<br />
+They may be followed by the name of the test to be skipped/allowed to fail.<br />
+If they are passed alone then they are applied to all available tests.<br />
+For example, if you want to allow bonds to be wrong, you may skip both the stable bonds test and the coherent bonds test:
+`mwf run --trust stabonds cohbonds`
+
+These are the available tests:<br />
+
+- **stabonds** - Stable bonds test
+
+Check atom bonds to be stable along the trajectory.<br />
+Bonds are mined from the topology when possible.<br />
+Otherwise they are guessed by atom distance and radii ([VMD logic](https://www.ks.uiuc.edu/Research/vmd/current/ug/node27.html). under the hood) 10 frames along the trajectory are checked and bonds happening in most of these frames are the ones to be considered real. This way we avoid taking atom clashes as real bonds.<br />
+Then, either if bonds are mined or guessed, we search for the first frame in the trajectory which respects all these bonds using again the atom distance and radii logic. This frame is set as the "reference frame" and it is usually found among the first 10 frames in the trajectory. If no frame matches all bonds after checking the first 100 frames then the test fails.<br />
+If this test is skipped or allowed to fail then the first frame in the trajectory is set as the reference frame.
+
+- **cohbonds** - Coherent bonds
+
+Check number of bonds per atom to be coherent according to chemistry knowledge:<br />
+<li>Hydrogen atoms must have 1 and only 1 bond</li>
+<li>Oxygen atoms must have between 1 and 2 bonds</li>
+<li>Nitrogen atoms must have between 1 and 4 bonds</li>
+<li>Carbon atoms must have between 2 and 4 bonds</li>
+<li>Sulfur atoms must have between 1 and 6 bonds</li>
+<li>Phosphorus atoms must have between 2 and 6 bonds</li>
+
+If any of these rules is not respected then the test fails.
+
+- **intrajrity** - Trajectory integrity
+
+Make sure there are no sudden jumps in the middle of the trajectory due to imaging problems.<br />
+Compute the RMSD between every pair of consecuitve frames in the trajectory.<br />
+Then calculate the standard deviation among all RMSD differences.<br />
+If there is at least one jump which is greater than 9 times the standard deviation then the test fails.<br />
+First frames are excepcionally allowed to reach this limit since they may be part of the equilibration proccess.<br />
+
+- **elements** - Correct elements (skip only)
+
+Set wrong or missing atom elements to make them standard.<br />
+This process relies in guessing mostly but it is smart enough to not set alpha carbons as calcium (Ca).<br />
+This process logs warnings for every element which is guessed to be wrong.<br />
+If this process is skipped it raises warning anyway but it keeps the original elements intact.<br />
+
+- **refseq** - Reference sequence match (mercy only)
+
+Make sure all protein chains are matched with their corresponding UniProt id.<br />
+UniProt ids may be passed through the inputs file.<br />
+Additional UniProt ids may be mined from the PDB in case PDB ids are passed through the inputs file.<br />
+If there is a protein chain which finds no match among the available UniProt ids then a BLAST is run against reviewed UniProt sequences only.<br />
+If the BLAST also fails then the matching process fails.<br />
+If this process is allowed to fail then the unmatched protein region will remain with no UniProt reference.<br />
+Note that proteins which are not to match anything such as antibodies or artifical constructs are to be tagged as 'no referable' in the inputs file.
+
+- **interact** - Stable interactions (mercy only)
+
+Make sure defined interactions are actually happening and stable enough to be computed.<br />
+In order to find interface residues, interactions are checked to happend 100 frames along the trajectory.<br />
+Two residues are considered to be in the interface when they are close enough at least in one of these frames.<br />
+If no interface residues are found then the process is killed and this can not be allowed.<br />
+This means you defined an interaction which does not exist and thus it must be removed from the inputs file.<br />
+However, it may happen that an interaction has interface residues but it is almost not happening.<br />
+For example, a ligand which is fitted in a protein pocket but it leaves its place as soon as the trajectroy starts playing.<br />
+For this reason, it is computed the number of frames that the interaction actually happens.<br />
+If the interaction takes place less than the 10% of the total trajectory then the process fails.<br />
+If it is allowed to fail then the wrong interaction is removed from metadata anyway and interaction analyses are not run for this specific interaction.

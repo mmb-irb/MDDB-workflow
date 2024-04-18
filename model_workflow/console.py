@@ -14,6 +14,8 @@ inputs_template = str(Path(__file__).parent / "resources" / "inputs_file_templat
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
+test_docs_url = 'https://mmb.irbbarcelona.org/gitlab/d.beltran.anadon/MoDEL-workflow#tests-and-other-checking-processes'
+
 # Main ---------------------------------------------------------------------------------            
 
 # Function called through argparse
@@ -187,6 +189,7 @@ def pretty_list (availables : List[str]) -> str:
         if not nice_name:
             raise Exception('Flag "' + available + '" has not a defined nice name')
         final_line += '\n - ' + available + ' -> ' +  nice_name
+    final_line += f'\nTo know more about each test please visit:\n{test_docs_url}'
     return final_line
 
 run_parser.add_argument(
@@ -209,8 +212,7 @@ run_parser.add_argument(
     const=AVAILABLE_FAILURES,
     choices=AVAILABLE_FAILURES,
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
-        "Note that all checkings are allowed to fail if the argument is passed alone.\n"
-        "Available protocols:" + pretty_list(AVAILABLE_FAILURES))
+        "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
 )
 
 run_parser.add_argument(
