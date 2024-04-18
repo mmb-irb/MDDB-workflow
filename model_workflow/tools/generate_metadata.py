@@ -44,7 +44,7 @@ def generate_project_metadata (
     # Collections must be null in case there are not collections
     collections = get_input('collections')
     if not collections:
-        collections = None
+        collections = []
 
     # Metadata interactions are simply the input interactions
     # Final interactions are used only to check which interactions were discarded

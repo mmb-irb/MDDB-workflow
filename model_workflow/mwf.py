@@ -1398,7 +1398,7 @@ class Project:
         # Otherwise use the default MDs
         self._md_directories = []
         # Use the MDs from the inputs file when available
-        if self.is_inputs_file_available():
+        if self.is_inputs_file_available() and self.input_mds:
             for input_md in self.input_mds:
                 # Set the directory from the MD name
                 name = input_md['name']

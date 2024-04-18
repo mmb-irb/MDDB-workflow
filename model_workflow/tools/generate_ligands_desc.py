@@ -279,10 +279,14 @@ def generate_dict (name : str, results_dict : str, morgan_fp : list, pubchem_id 
 
 
 def generate_ligand_mapping (
-    input_ligands : List[dict],
+    input_ligands : Optional[List[dict]],
     structure : 'Structure',
     output_mordred_filepath : str,
 ) -> dict:
+
+    # If no input ligands are passed then stop here
+    if not input_ligands:
+        return []
 
     drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list = obtain_ligands_id(input_ligands)
     ligand_list  = []

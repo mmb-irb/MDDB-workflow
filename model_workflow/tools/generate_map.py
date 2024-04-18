@@ -237,7 +237,7 @@ def generate_protein_mapping (
                 return protein_parsed_chains
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot codes associated to the pdb codes, if any
-    if len(pdb_ids) > 0:
+    if pdb_ids and len(pdb_ids) > 0:
         for pdb_id in pdb_ids:
             # Ask PDB
             uniprot_ids = pdb_to_uniprot(pdb_id)
