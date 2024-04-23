@@ -16,22 +16,6 @@ from collections import Counter
 from model_workflow.utils.constants import STRUCTURE_FILENAME
 import re
 
-########################
-# Hacer: 
-#       una función para leer cada tipo de web (drugbank, pubchem, chembl) ######### DONE
-#       otra para leer el json y que sepa encontrar el ID que se le da
-#       otra para leer el SMILES y ejecutar el workflow ########## DONE
-
-# Intentar sacar el SMILES de cada una, algo más ??
-
-# CHEMBL : https://www.ebi.ac.uk/chembl/interface_api/es_proxy/es_data/get_es_document/chembl_molecule/CHEMBL421556
-# PUBCHEM : https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/1986/JSON/
-# DRUGBANK : https://go.drugbank.com/structures/small_molecule_drugs/DB00819.smiles
-
-
-# PENDIENTE
-# CHEBI: https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:26355
-
 
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
     # Request Drugbank
@@ -270,9 +254,9 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> dict:
 
 def generate_dict (name : str, results_dict : str, morgan_fp : list, pubchem_id : str) -> dict:
     dic = {}
-    dic['Name'] = name
-    dic['Mordred'] = results_dict
-    dic['Morgan'] = list(morgan_fp)
+    dic['name'] = name
+    dic['mordred'] = results_dict
+    dic['morgan'] = list(morgan_fp)
     dic['pubchem'] = pubchem_id
     # Añadir aqui lo que se quiera
     return dic
@@ -282,7 +266,7 @@ def generate_ligand_mapping (
     input_ligands : Optional[List[dict]],
     structure : 'Structure',
     output_mordred_filepath : str,
-) -> dict:
+    ) -> dict:
 
     # If no input ligands are passed then stop here
     if not input_ligands:
@@ -291,19 +275,28 @@ def generate_ligand_mapping (
     drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list = obtain_ligands_id(input_ligands)
     ligand_list  = []
     
-    # REALMENTE TODA LA INFORMACIÓN SE SACARÁ DE AQUÍ
+    # Obtain all the information here and append it to a list
     if len(pubchem_dict) >= 1:
         for ligand in pubchem_dict:
+            # Get information from PubChem database
             smiles, _ = get_pubchem_data(pubchem_dict[ligand])
-            results_dict, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
-            ligand_dict = generate_dict(ligand, results_dict, morgan_fp, pubchem_dict[ligand])
-            ligand_list.append(ligand_dict)
-            #pubchem_id_list.append(pubchem_dict[ligand])
 
-    ligands = ligands_residues(structure, pubchem_id_list)
+            # Get morgan and mordred descriptors, the SMILES is needed for this part
+            results_dict, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
+
+            # Create a diccionary with the info obtained and refered to a ligand
+            ligand_dict = generate_dict(ligand, results_dict, morgan_fp, pubchem_dict[ligand])
+
+            # Append the diccionary to a list
+            ligand_list.append(ligand_dict)
+
     # Write the ligands reference file
     save_json(ligand_list, output_mordred_filepath)
-    # Return the mapping
+
+    # Match the residues of the protein (PDB) to the ligands to identify it
+    # This function returns a list of ligands that matched some of the PDB residues (index list)
+    ligands = ligands_residues(structure, pubchem_id_list)
+    
     return ligands
     
 # For each residue, count the number of atom elements
@@ -433,12 +426,13 @@ def match_ligandsID_to_res (ligand_atom_element_count : dict, residue_atom_eleme
         return True
 
 def ligands_residues (structure : 'Structure', pubchem_id_list : List[str]) -> List[dict]:
-    # Load the structure where the atoms will be mined and obtain a residues dict
+    # Load the structure where the atoms will be minresidue.indexed and obtain a residues dict
     atom_elements_per_residue = count_atom_elements_per_residue(structure)
     # From pubchem mine the atoms of the ligands and save it in a dict
     atom_elements_per_ligand = count_atom_elements_per_ligand(pubchem_id_list)
     print('Ligands: ', atom_elements_per_ligand)
     matches = {}
+
     for pubchem, ligand_atom_element_count in atom_elements_per_ligand.items():
         for residue, residue_atom_element_count in atom_elements_per_residue.items():
             if match_ligandsID_to_res(ligand_atom_element_count, residue_atom_element_count):
@@ -447,9 +441,10 @@ def ligands_residues (structure : 'Structure', pubchem_id_list : List[str]) -> L
                     previous_match.append(residue.index)
                 else:
                     matches[pubchem] = [ residue.index ]
+    
     # Format the output as we expect it
     ligands = [ { 'name': key, 'residue_indices': value, 'match': { 'ref': { 'pubchem': key } } } for key, value in matches.items() ]
-    # print('A total of',len(atom_elements_per_residue), 'residues and', len(atom_elements_per_ligand), 'ligands were found.')
-    # print('Matched:', len(ligands),'/', len(atom_elements_per_ligand),'of the ligands.')
+    print('A total of',len(atom_elements_per_residue), 'residues and', len(atom_elements_per_ligand), 'ligands were found.')
+    print('Matched:', len(ligands),'/', len(atom_elements_per_ligand),'of the ligands.')
     # print(ligands)
     return ligands
