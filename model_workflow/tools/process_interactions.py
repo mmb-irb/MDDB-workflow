@@ -29,6 +29,10 @@ def process_interactions (
     # The cutoff distance is in Ångstroms (Å)
     distance_cutoff : float = 5) -> list:
 
+    # If there are no interactions return an empty list
+    if not input_interactions or len(input_interactions) == 0:
+        return []
+
     # If there is a backup then use it
     # Load the backup and return its content as it is
     if interactions_file.exists:
@@ -39,10 +43,6 @@ def process_interactions (
             complete_interaction = { **input_interaction, **loaded_interaction }
             complete_interactions.append(complete_interaction)
         return complete_interactions
-
-    # If there are no interactions return an empty list
-    if not input_interactions or len(input_interactions) == 0:
-        return []
 
     # Set a list to save names of failed interactions (this is used only when mercy is passed)
     failed_interaction_names = []
