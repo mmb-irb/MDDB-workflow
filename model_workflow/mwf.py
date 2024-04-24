@@ -268,7 +268,11 @@ class MD:
             if directory == self.directory:
                 self._md_inputs = md
                 return self._md_inputs
-        raise InputError('No MD input matches the current directory (' + self.directory + ')')
+        # If this MD directory has not associated inputs then it means it was forced through command line
+        # We set a provisional MD inputs for it
+        provisional_name = directory_2_name(self.directory)
+        self._md_inputs = { 'name': provisional_name }
+        return self._md_inputs
 
     md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
 
@@ -2015,6 +2019,12 @@ def name_2_directory (name : str) -> str:
     for character in FORBIDEN_DIRECTORY_CHARACTERS:
         directory = directory.replace(character, '')
     return directory
+
+# Set a function to convert an MD directory into an equivalent MD name
+def directory_2_name (directory : str) -> str:
+    # Replace white spaces with underscores
+    name = directory.replace('_', ' ')
+    return name
 
 # Remove the final slash if exists since it may cuse problems when recognizing input directories
 def remove_final_slash (directory : str) -> str:
