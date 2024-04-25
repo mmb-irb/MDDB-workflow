@@ -24,20 +24,37 @@ def rmsds(
     frames_limit : int,
     structure : 'Structure',
     pbc_residues: List[int],
+    ligand_map : List[dict],
     selections : List[str] = ['protein', 'nucleic'],
     ):
 
-    # VMD selection syntax
-    parsed_selections = [ structure.select(selection, syntax='vmd') for selection in selections ]
+    # Find PBC residues, which are to be removed from parsed selections
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+
+    # Parse the selections to meaningfull atom indices
+    parsed_selections = { selection: structure.select(selection, syntax='vmd') for selection in selections }
+
+    # If there is a ligand map then parse them to selections as well
+    if ligand_map:
+        for ligand in ligand_map:
+            selection_name = 'ligand ' + ligand['name']
+            parsed_selection = structure.select_residue_indices(ligand['residue_indices'])
+            parsed_selections[selection_name] = parsed_selection
 
     # Remove PBC residues from parsed selections
     pbc_selection = structure.select_residue_indices(pbc_residues)
-    pbc_free_parse_selections = []
-    for selection in parsed_selections:
-        if selection:
-            pbc_free_parse_selections.append(selection - pbc_selection)
-        else:
-            pbc_free_parse_selections.append(None)
+    non_pbc_selections = {}
+    for selection_name, selection in parsed_selections.items():
+        # If selection was empty from the begining then discard it
+        if not selection:
+            continue
+        # Substract PBC atoms
+        non_pbc_selection = selection - pbc_selection
+        # If selection after substracting pbc atoms becomes empty then discard it
+        if not non_pbc_selection:
+            continue
+        # Add the the filtered selection to the dict
+        non_pbc_selections[selection_name] = non_pbc_selection
 
     # The start will be always 0 since we start with the first frame
     start = 0
@@ -62,17 +79,11 @@ def rmsds(
     for reference in rmsd_references:
         # Get a standarized reference name
         reference_name = REFERENCE_LABELS[reference.filename]
-        for i, group in enumerate(selections):
-            # If the selection is empty then skip this rmsd
-            parsed_selection = pbc_free_parse_selections[i]
-            if not parsed_selection:
-                continue
-            # Get a standarized group name
-            group_name = group.lower()
+        for group_name, group_selection in non_pbc_selections.items():
             # Set the analysis filename
-            rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name + '.xvg'
+            rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name.lower() + '.xvg'
             # Run the rmsd
-            rmsd(reference.path, reduced_trajectory_filepath, parsed_selection, rmsd_analysis)
+            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output

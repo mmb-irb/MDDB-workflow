@@ -893,6 +893,7 @@ class MD:
             snapshots = self.snapshots,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
+            ligand_map = self.project.ligand_map,
         )
 
     # TM scores
