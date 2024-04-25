@@ -152,31 +152,24 @@ pdbIds:
 
 forced_references:
 
-# Set all ligands in the simulation. Each ligand has the following attributes:
-#   - name: this is used as the ligand NGL representation label
-#   - ngl: NGL selection used to represent the ligand on the NGL viewer in the client
-#   - drugbank (Optional): the drugbank accession which is used in the overview to make a link
-#   - chembl (Optional): the chembl accession which is used in the overview to make a link
+# Set ligands in the simulation
+# The workflow identifies ligands by their pubchem accession
+# If a pubchem accession is passed then it is used
+# Otherwise, the pubchem accession is found using other database accessions
+# Each ligand must have at least one of the following attributes:
+#   - pubchem: the PubChem accession
+#   - drugbank: the DrugBank accession
+#   - chembl: the ChEMBL accession
 #
-# At this moment, ligands are used nowhere in the workflow
+# Ligands are mapped in the standard topology file
+# In addition, an RMSD analysis is run for every defined ligand
 #
-# NGL viewer selection:
-# http://nglviewer.org/ngl/api/manual/usage/selection-language.html
-#
-# LORE
-# This field is the predecessor of the 'interactions' field
-# Now it is deprecated but we are still maintaining it since one day this information may be useful
-# We already have it in the database and the web client is still relying on it to better represent small ligands
 #
 # Example:
 #
 # ligands:
-#   - name: My compound
-#     ngl: :L
-#   - name: Some drug
-#     ngl: :D
-#     drugbank: DB00945
-#     chembl: CHEMBL25
+#   - pubchem: 1986
+#   - drugbank: DB00945
 
 ligands:
 
