@@ -1,7 +1,7 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.generate_map import get_sequence_metadata
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import InputError, save_json
 
 from pathlib import Path
 from typing import Callable
@@ -65,6 +65,13 @@ def generate_project_metadata (
     ptms = structure.find_ptms()
     ptm_names = list(set([ ptm['name'] for ptm in ptms ]))
 
+    # Check chainnames to actually exist in the structure
+    structure_chains = set([ chain.name for chain in structure.chains ])
+    chainnames = get_input('chainnames')
+    for chain in chainnames.keys():
+        if chain not in structure_chains:
+            raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -108,7 +115,7 @@ def generate_project_metadata (
         'CL': cl,
         'INTERACTIONS': final_metadata_interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
-        'CHAINNAMES': get_input('chainnames'),
+        'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),
         'CUSTOMS': get_input('customs'),
         'ORIENTATION': get_input('orientation'),
