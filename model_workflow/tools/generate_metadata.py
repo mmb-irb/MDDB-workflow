@@ -68,9 +68,10 @@ def generate_project_metadata (
     # Check chainnames to actually exist in the structure
     structure_chains = set([ chain.name for chain in structure.chains ])
     chainnames = get_input('chainnames')
-    for chain in chainnames.keys():
-        if chain not in structure_chains:
-            raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
+    if chainnames:
+        for chain in chainnames.keys():
+            if chain not in structure_chains:
+                raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
