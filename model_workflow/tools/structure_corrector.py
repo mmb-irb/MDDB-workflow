@@ -103,8 +103,8 @@ def structure_corrector (
         structure.bonds = safe_bonds
         # Find the first frame in the whole trajectory where safe bonds are respected
         safe_bonds_frame = get_bonds_canonical_frame(
-            structure_filename = input_structure_file.path,
-            trajectory_filename = input_trajectory_file.path,
+            structure_filepath = input_structure_file.path,
+            trajectory_filepath = input_trajectory_file.path,
             snapshots = snapshots,
             reference_bonds = safe_bonds,
             atom_elements = atom_elements
@@ -120,6 +120,8 @@ def structure_corrector (
                 'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
             return
         # If we found a canonical frame then we are good
+        # Save this frame as the reference frame for the current MD
+        MD._reference_frame = safe_bonds_frame
         # Set also the safe bonds frame structure to mine its coordinates
         safe_bonds_frame_filename = get_pdb_frame(input_structure_file.path, input_trajectory_file.path, safe_bonds_frame)
         safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)

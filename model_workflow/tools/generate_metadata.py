@@ -148,6 +148,7 @@ def generate_md_metadata (
     md_inputs : dict,
     structure : 'Structure',
     snapshots : int,
+    reference_frame : int,
     register : dict,
     output_metadata_filename : str
     ):
@@ -157,6 +158,7 @@ def generate_md_metadata (
         'name': md_inputs['name'],
         'frames': snapshots,
         'atoms': len(structure.atoms), # Should be always the same but we better have explicit confirmation
+        'refframe': reference_frame,
         'warnings': register.warnings,
     }
 
