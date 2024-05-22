@@ -603,9 +603,11 @@ def get_sequence_metadata (structure : 'Structure', residue_map : dict) -> dict:
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
-    for ref, ref_type in zip(residue_map['references'], residue_map['reference_types']):
-        if ref_type == 'protein':
-            reference_ids.append(ref)
+    references = residue_map['references']
+    if references and len(references) > 0:
+        for ref, ref_type in zip(references, residue_map['reference_types']):
+            if ref_type == 'protein':
+                reference_ids.append(ref)
     residue_reference_numbers = residue_map['residue_reference_numbers']
     residue_reference_indices = residue_map['residue_reference_indices']
     # Load references data, which should already be save to the references data file

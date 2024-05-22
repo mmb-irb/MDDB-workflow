@@ -30,11 +30,13 @@ def generate_project_metadata (
     # Get ligand references from the residues map
     protein_references = []
     ligand_references = []
-    for ref, ref_type in zip(residue_map['references'], residue_map['reference_types']):
-        if ref_type == 'protein':
-            protein_references.append(ref)
-        elif ref_type == 'ligand':
-            ligand_references.append(ref)
+    references = residue_map['references']
+    if references and len(references) > 0:
+        for ref, ref_type in zip(references, residue_map['reference_types']):
+            if ref_type == 'protein':
+                protein_references.append(ref)
+            elif ref_type == 'ligand':
+                ligand_references.append(ref)
 
     # Make the forcefields a list in case it is a single string
     forcefields = get_input('ff')
