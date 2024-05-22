@@ -53,9 +53,11 @@ def generate_project_metadata (
     # Thus failed interactions are removed from metadata
     final_interaction_names = [ interaction['name'] for interaction in interactions ]
     final_metadata_interactions = []
-    for input_interaction in get_input('interactions'):
-        if input_interaction['name'] in final_interaction_names:
-            final_metadata_interactions.append(input_interaction)
+    input_interactions = get_input('interactions')
+    if input_interactions and len(input_interactions) > 0:
+        for input_interaction in input_interactions:
+            if input_interaction['name'] in final_interaction_names:
+                final_metadata_interactions.append(input_interaction)
 
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, residue_map)
