@@ -1,7 +1,7 @@
 from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.generate_map import get_sequence_metadata
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import InputError, save_json
 
 from pathlib import Path
 from typing import Callable
@@ -30,11 +30,13 @@ def generate_project_metadata (
     # Get ligand references from the residues map
     protein_references = []
     ligand_references = []
-    for ref, ref_type in zip(residue_map['references'], residue_map['reference_types']):
-        if ref_type == 'protein':
-            protein_references.append(ref)
-        elif ref_type == 'ligand':
-            ligand_references.append(ref)
+    references = residue_map['references']
+    if references and len(references) > 0:
+        for ref, ref_type in zip(references, residue_map['reference_types']):
+            if ref_type == 'protein':
+                protein_references.append(ref)
+            elif ref_type == 'ligand':
+                ligand_references.append(ref)
 
     # Make the forcefields a list in case it is a single string
     forcefields = get_input('ff')
@@ -51,9 +53,11 @@ def generate_project_metadata (
     # Thus failed interactions are removed from metadata
     final_interaction_names = [ interaction['name'] for interaction in interactions ]
     final_metadata_interactions = []
-    for input_interaction in get_input('interactions'):
-        if input_interaction['name'] in final_interaction_names:
-            final_metadata_interactions.append(input_interaction)
+    input_interactions = get_input('interactions')
+    if input_interactions and len(input_interactions) > 0:
+        for input_interaction in input_interactions:
+            if input_interaction['name'] in final_interaction_names:
+                final_metadata_interactions.append(input_interaction)
 
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, residue_map)
@@ -64,6 +68,14 @@ def generate_project_metadata (
     # DANI: Cuando esté más maduro también almacenaremos residuo afectado, como mínimo
     ptms = structure.find_ptms()
     ptm_names = list(set([ ptm['name'] for ptm in ptms ]))
+
+    # Check chainnames to actually exist in the structure
+    structure_chains = set([ chain.name for chain in structure.chains ])
+    chainnames = get_input('chainnames')
+    if chainnames:
+        for chain in chainnames.keys():
+            if chain not in structure_chains:
+                raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
@@ -108,7 +120,7 @@ def generate_project_metadata (
         'CL': cl,
         'INTERACTIONS': final_metadata_interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
-        'CHAINNAMES': get_input('chainnames'),
+        'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),
         'CUSTOMS': get_input('customs'),
         'ORIENTATION': get_input('orientation'),
@@ -136,6 +148,7 @@ def generate_md_metadata (
     md_inputs : dict,
     structure : 'Structure',
     snapshots : int,
+    reference_frame : int,
     register : dict,
     output_metadata_filename : str
     ):
@@ -145,6 +158,7 @@ def generate_md_metadata (
         'name': md_inputs['name'],
         'frames': snapshots,
         'atoms': len(structure.atoms), # Should be always the same but we better have explicit confirmation
+        'refframe': reference_frame,
         'warnings': register.warnings,
     }
 

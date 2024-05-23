@@ -23,7 +23,7 @@ from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
-from model_workflow.tools.get_bonds import get_safe_bonds
+from model_workflow.tools.get_bonds import get_safe_bonds, get_bonds_canonical_frame
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
@@ -164,6 +164,7 @@ class MD:
         self._structure = None
         self._pytraj_topology = None
         self._interactions = None
+        self._reference_frame = None
 
         # Tests
         self._trajectory_integrity = None
@@ -779,6 +780,7 @@ class MD:
             md_inputs = self.md_inputs, # DANI: No sería mejor pasarle los inputs?
             structure = self.structure,
             snapshots = self.snapshots,
+            reference_frame = self.reference_frame,
             register = self.register,
             output_metadata_filename = metadata_filepath,
         )
@@ -845,6 +847,35 @@ class MD:
     def get_protein_map (self) -> dict:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
+
+    # Reference frame
+    # Frame to be used when representing the MD
+    def get_reference_frame (self) -> dict:
+        # If we already have a stored value then return it
+        # Note that this value is usually assigned at the structure_corrector
+        if self._reference_frame:
+            return self._reference_frame
+        # Otherwise we must find the value
+        # Get some input values
+        structure_filepath = self.structure_file.path
+        trajectory_filepath = self.trajectory_file.path
+        # If the reference frame was not found because input files were not yet processed then now it should be available
+        if self._reference_frame:
+            return self._reference_frame
+        # Otherwise it means we have input files which are not to be processed
+        # So we must calculate from here the reference frame
+        # Get the rest of inputs
+        atom_elements = [ atom.element for atom in self.structure.atoms ]
+        # Find the first frame in the whole trajectory where safe bonds are respected
+        self._reference_frame = get_bonds_canonical_frame(
+            structure_filepath = structure_filepath,
+            trajectory_filepath = trajectory_filepath,
+            snapshots = self.snapshots,
+            reference_bonds = self.safe_bonds,
+            atom_elements = atom_elements
+        )
+        return self._reference_frame
+    reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
     # ---------------------------------------------------------------------------------
     # Tests

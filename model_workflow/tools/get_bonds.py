@@ -57,15 +57,15 @@ def do_bonds_match (
 # This way we avoid having false positives because 2 atoms are very close in one frame by accident
 # This way we avoid having false negatives because 2 atoms are very far in one frame by accident
 def get_most_stable_bonds (
-    structure_filename : str,
-    trajectory_filename : str,
+    structure_filepath : str,
+    trajectory_filepath : str,
     snapshots : int,
     frames_limit : int = 10
 ) -> List[ List[int] ]:
 
     # Get each frame in pdb format to run VMD
     print('Finding most stable bonds')
-    frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots, frames_limit)
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots, frames_limit)
 
     # Track bonds along frames
     frame_bonds = []
@@ -103,8 +103,8 @@ def get_most_stable_bonds (
 
 # Return a canonical frame number where all bonds are exactly as they should
 def get_bonds_canonical_frame (
-    structure_filename : str,
-    trajectory_filename : str,
+    structure_filepath : str,
+    trajectory_filepath : str,
     snapshots : int,
     reference_bonds : List[ List[int] ],
     atom_elements : List[str],
@@ -113,7 +113,7 @@ def get_bonds_canonical_frame (
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
     print('Searching reference bonds canonical frame. Only first ' + str(patience) + ' frames will be checked.')
-    frames, step, count = get_pdb_frames(structure_filename, trajectory_filename, snapshots)
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots)
 
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None

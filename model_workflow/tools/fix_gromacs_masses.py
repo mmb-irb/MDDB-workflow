@@ -8,6 +8,15 @@ from model_workflow.utils.file import File
 # e.g. Zn and ZN
 # This way we avoid gormacs not finding atoms because names are in caps
 
+# LORE: This was done with a symlink before
+# In the gromacs data directory from the conda enviornment we created a relative symlink to the workflow atommass.dat
+# This worked fine until we had a very specific issue with a cluster (gpucluster at IRB Barcelona)
+# In this cluster there was two different paths to reach the home directory: /home/username and /orozco/homes/username
+# The python __file__ values were using the /orozco/homes/username root despite we were calling it from /home/username
+# Thus relative paths were all passing through the root and the different number of jumps was breaking the paths
+# I spent half a day trying to get __file__ values using the /home/username root and I did not succeed
+# Then we decided to just write the masses file in the conda enviornment every time
+
 # Set the path to our custom masses file
 resources = str(Path(__file__).parent.parent / "resources")
 custom_masses_file = File(resources + '/atommass.dat')
@@ -23,13 +32,9 @@ backup_file = File(gromacs_masses_directory + '/backup_atommass.dat')
 # Replace the original file by a symlink to our custom file if it is not done yet
 def fix_gromacs_masses ():
 
-    # Check if the gromacs masses file is already a symlink
-    # If so, then it means we already did the fix so we can stop here
-    if gromacs_masses_file.is_symlink():
-        return
+    # Check if the backup file exists and, if not, then rename the current masses file as the backup
+    if not backup_file.exists:
+        gromacs_masses_file.rename_to(backup_file)
 
-    # Copy the original file to make a backup
-    gromacs_masses_file.rename_to(backup_file)
-
-    # Now make a symlink to our custom masses file
-    gromacs_masses_file.set_symlink_to(custom_masses_file)
+    # Always copy our custom masses file to the enviornment just in case it was modified since last time
+    custom_masses_file.copy_to(gromacs_masses_file)

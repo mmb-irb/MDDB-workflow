@@ -79,6 +79,7 @@ def generate_residue_mapping(
     # If there are not references at the end then set all fields as None, in order to save space
     if len(reference_ids) == 0:
         reference_ids = None
+        reference_types = None
         residue_reference_indices = None
         residue_reference_numbers = None
 
