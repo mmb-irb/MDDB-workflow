@@ -13,8 +13,21 @@ from model_workflow.utils.auxiliar import load_json, save_json
 from urllib.request import Request, urlopen
 from itertools import chain
 from collections import Counter
-from model_workflow.utils.constants import STRUCTURE_FILENAME
+from model_workflow.utils.constants import STRUCTURE_FILENAME, OUTPUT_LIGANDS_FILENAME
 import re
+
+# Import ligands json file so we do not have to rerun this process
+def import_ligands () -> dict:
+    #print(' Importing ligands from ' + OUTPUT_LIGANDS_FILENAME)
+    # Read the file
+    file_content = load_json(OUTPUT_LIGANDS_FILENAME)
+    # Format data as the process expects to find it
+    ligands = {}
+    for ligand in file_content:
+        pubchem_ID = ligand['pubchem']
+        name = ligand['name']
+        ligands[name] = pubchem_ID
+    return ligands, file_content
 
 
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
@@ -129,6 +142,50 @@ def get_pubchem_data (id_pubchem : str) -> Optional[str]:
 
     return smiles, molecular_formula
 
+def get_pubchem_name (id_pubchem : str) -> Optional[str]:
+    # Request PUBChem
+    parsed_response = None
+    request_url = Request(
+        url= f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{id_pubchem}/JSON/', #'https://pubchem.ncbi.nlm.nih.gov/compound/1986#section=Canonical-SMILES&fullscreen=true'
+        headers={'User-Agent': 'Mozilla/5.0'}
+    )
+    try:
+        with urlopen(request_url) as response:
+            #parsed_response = json.loads(response.read().decode("windows-1252"))
+            parsed_response = json.loads(response.read().decode("utf-8"))
+    # If the accession is not found in PUBChem then the id is not valid
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            print('WARNING: Cannot find PUBChem entry for accession ', id_pubchem)
+            return None
+        print('Error when requesting ', request_url)
+        raise ValueError('Something went wrong with the PUBChem request (error ', str(error.code), ')')
+    # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
+    if parsed_response == None:
+        print('WARNING: Cannot find PUBChem entry for accession ' + id_pubchem)
+        return None
+    # Mine target data: NAME
+    record = parsed_response.get('Record', None)
+    if record == None:
+        raise RuntimeError('Wrong Pubchem data structure: no record')
+    sections = record.get('Section', None)
+    if sections == None:
+        raise RuntimeError('Wrong Pubchem data structure: no sections')
+    names_and_ids_section = next((section for section in sections if section.get('TOCHeading', None) == 'Names and Identifiers'), None)
+    if names_and_ids_section == None:
+        raise RuntimeError('Wrong Pubchem data structure: no name and ids section')
+    names_and_ids_subsections = names_and_ids_section.get('Section', None)
+    if names_and_ids_subsections == None:
+        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+    computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Synonyms'), None)
+    names_and_ids_subsubsections = computed_descriptors_subsection.get('Section', None)
+    if names_and_ids_subsubsections == None:
+        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+    computed_descriptors_subsection = next((s for s in names_and_ids_subsubsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
+    name_substance = computed_descriptors_subsection.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[1].get('String', None)
+
+    return name_substance
+
 
 def find_drugbank_pubchem (drugbank_id):
     # Request Drugbank
@@ -191,37 +248,76 @@ def find_chembl_pubchem (id_chembl):
     
     return pubchem_id
 
-def obtain_ligands_id (input_ligands : dict) -> dict:
+def obtain_ligands_id (input_ligands : list, ligands_to_include) -> dict:
 
     drugbank_dic = {}
     pubchem_dic = {}
     chembl_dic = {}
     pubchem_id_list = []
+
+    ligands_to_add = []
+    for id in ligands_to_include:
+        for ligand in input_ligands:
+            if ligand['pubchem'] == id:
+                ligands_to_add.append(ligand)
+    
     # Save in a dictionary the name of the ligand as key and the ID as value
     # The ID can be of the databases: 'drugbank' , 'pubchem' , 'chembl'
     # Also, generate a list with all the pubchems IDs which will be used
-    for ligand in input_ligands:
+    for ligand in ligands_to_add:
         
-        ligand_name = ligand.get('name')
+        # Define the needed variables to check if the ligand has a database ID or it is None
+        drugbank_id = None
+        pubchem_id = None
+        chembl_id = None
+        ligand_name = None
 
-        drugbank_id = ligand.get('drugbank')
+        # If the user defined a ligand name, it will be respected, if not, it will be mined from PubChem
+        if 'name' in ligand:
+            ligand_name = ligand.get('name')
+        else:
+            ligand_name = get_pubchem_name(ligand.get('pubchem'))
+            print(f'A ligand number ID has been identified {ligand} without associated name, assuming that is a PubChem ID...')
+            print(f'Retrieved name of ligand ID {ligand}: {ligand_name}.')
+        try:
+            drugbank_id = ligand.get('drugbank')
+        except AttributeError:
+            pass
         if drugbank_id:
             drugbank_dic[ligand_name] = drugbank_id
             pubchem_dic[ligand_name] = find_drugbank_pubchem(drugbank_id)
             pubchem_id_list.append(pubchem_dic[ligand_name])
 
-        pubchem_id = ligand.get('pubchem')
+        try:
+            pubchem_id = ligand.get('pubchem')
+        except AttributeError:
+            pass
         if pubchem_id:
             pubchem_dic[ligand_name] = pubchem_id
             pubchem_id_list.append(pubchem_id)
-
-        chembl_id = ligand.get('chembl')
+        
+        try:
+            chembl_id = ligand.get('chembl')
+        except AttributeError:
+            pass
         if chembl_id:
             chembl_dic[ligand_name] = chembl_id
             pubchem_dic[ligand_name] = find_chembl_pubchem(chembl_id)
             pubchem_id_list.append(pubchem_dic[ligand_name])
 
-    #print(drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list)
+        if (drugbank_id is None) and (pubchem_id is None) and (chembl_id is None):
+            print('The ligand name or ID is confusing.')
+            if type(ligand) == int:
+                print(f'A ligand number ID has been identified {ligand}, assuming that is a PubChem ID...')
+                pubchem_id_list.append(ligand)
+                ligand_name = get_pubchem_name(ligand)
+                pubchem_dic[ligand_name] = ligand
+                print(f'Retrieved name of ligand ID {ligand}: {ligand_name}.')
+            elif type(ligand) == str:
+                raise ValueError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
+            else:
+                raise ValueError('None of the ligand IDs are defined. Please provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
+
     return drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list
 
 
@@ -268,11 +364,21 @@ def generate_ligand_mapping (
     output_mordred_filepath : str,
     ) -> dict:
 
+    ligands = {}
+    imported_ligands = None
+    if os.path.exists(OUTPUT_LIGANDS_FILENAME):
+        imported_ligands, _ = import_ligands()
+        # Append the imported references to the overall ligands pool
+        for k,v in imported_ligands.items():
+            ligands[k] = v
+
     # If no input ligands are passed then stop here
     if not input_ligands:
         return []
 
-    drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list = obtain_ligands_id(input_ligands)
+    ligands_to_include, ligands_to_exclude = check_ligands_done(ligands, input_ligands)
+
+    drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list = obtain_ligands_id(input_ligands, ligands_to_include)
     ligand_list  = []
     
     # Obtain all the information here and append it to a list
@@ -291,14 +397,50 @@ def generate_ligand_mapping (
             ligand_list.append(ligand_dict)
 
     # Write the ligands reference file
-    save_json(ligand_list, output_mordred_filepath)
+    # If there was a previous ligands.json, we have to check if these ligands match with the ligands defined in the inputs file and respect it
+    if os.path.exists(OUTPUT_LIGANDS_FILENAME):
+        _, file_content = import_ligands()
+        file_content = file_content + ligand_list
+        if ligands_to_exclude:
+            for ligand in file_content:
+                for id in ligands_to_exclude:
+                    if ligand['pubchem'] == id:
+                        file_content.remove(ligand)
+        save_json(file_content, output_mordred_filepath)
+    else:
+        save_json(ligand_list, output_mordred_filepath)
 
+   
     # Match the residues of the protein (PDB) to the ligands to identify it
     # This function returns a list of ligands that matched some of the PDB residues (index list)
     ligands = ligands_residues(structure, pubchem_id_list)
     
     return ligands
     
+
+# If a 'ligands.json' exists, we need to check if it has the ligands according to the inputs
+def check_ligands_done( ligands: dict, input_ligands: list ) -> list:
+
+    ids_json = list(ligands.values())
+
+    ids_inputs = []
+    for ligand_id in input_ligands:
+        if isinstance(ligand_id, int):
+            # Assuming the number is pubchem 
+            ids_inputs.append(ligand_id)
+        elif isinstance(ligand_id, dict) and 'pubchem' in ligand_id:
+            ids_inputs.append(ligand_id['pubchem'])
+        elif isinstance(ligand_id, dict) and 'drugbank' in ligand_id:
+            ids_inputs.append(find_drugbank_pubchem(ligand_id['pubchem']))
+        elif isinstance(ligand_id, dict) and 'chembl' in ligand_id:
+            ids_inputs.append(find_chembl_pubchem(ligand_id['pubchem']))
+
+    ligands_to_include = [id for id in ids_inputs if id not in ids_json]
+    ligands_to_exclude = [id for id in ids_json if id not in ids_inputs]
+
+    return ligands_to_include, ligands_to_exclude
+
+
 # For each residue, count the number of atom elements
 def count_atom_elements_per_residue ( structure : 'Structure' ) -> dict:
     # Obtain a list of residues of ligand candidates
@@ -319,6 +461,7 @@ def count_atom_elements_per_residue ( structure : 'Structure' ) -> dict:
                 atoms_count[atom] = 1
         # Define the key of the dictionary as the residue name and save it in a list with the all the residues
         residue_element_count[residue] = atoms_count
+
     return residue_element_count
 
 
@@ -430,7 +573,7 @@ def ligands_residues (structure : 'Structure', pubchem_id_list : List[str]) -> L
     atom_elements_per_residue = count_atom_elements_per_residue(structure)
     # From pubchem mine the atoms of the ligands and save it in a dict
     atom_elements_per_ligand = count_atom_elements_per_ligand(pubchem_id_list)
-    print('Ligands: ', atom_elements_per_ligand)
+    #print('Ligands: ', atom_elements_per_ligand)
     matches = {}
 
     for pubchem, ligand_atom_element_count in atom_elements_per_ligand.items():
@@ -444,7 +587,8 @@ def ligands_residues (structure : 'Structure', pubchem_id_list : List[str]) -> L
     
     # Format the output as we expect it
     ligands = [ { 'name': key, 'residue_indices': value, 'match': { 'ref': { 'pubchem': key } } } for key, value in matches.items() ]
+    print('Ligands: ', ligands)
     print('A total of',len(atom_elements_per_residue), 'residues and', len(atom_elements_per_ligand), 'ligands were found.')
     print('Matched:', len(ligands),'/', len(atom_elements_per_ligand),'of the ligands.')
-    # print(ligands)
+
     return ligands
