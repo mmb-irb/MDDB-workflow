@@ -124,6 +124,11 @@ AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEG
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
 AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG ]
 
+# Set which tests are to be run when some input files are modified
+STRUCTURE_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
+TRAJECTORY_TESTS = [STABLE_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG]
+TOPOLOGY_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
+
 # Terminal colors
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
 GREEN_HEADER = '\033[92m'
