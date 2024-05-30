@@ -3,7 +3,7 @@ import os
 import math
 from scipy.special import comb # DANI: Substituye al math.comb porque fué añadido en python 3.8 y nosotros seguimos en 3.7
 from bisect import bisect
-from typing import Optional, Union, Tuple, List, Generator
+from typing import Optional, Union, Tuple, List, Generator, Set
 Coords = Tuple[float, float, float]
 
 from model_workflow.utils.file import File
@@ -150,12 +150,13 @@ class Atom:
     chain = property(get_chain, None, None, "The atom chain (read only)")
 
     # Get indices of other atoms in the structure which are covalently bonded to this atom
-    def get_bonds (self) -> Optional[ List[int] ]:
+    def get_bonds (self, skip_ions : bool = False) -> Optional[ List[int] ]:
         if not self.structure:
             raise ValueError('The atom has not a structure defined')
         if self.index == None:
             raise ValueError('The atom has not an index defined')
-        return self.structure.bonds[self.index]
+        bonds = set(self.structure.bonds[self.index]) - self.structure.ion_atom_indices
+        return list(bonds)
 
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
     bonds = property(get_bonds, None, None, 'Atoms indices of atoms in the structure which are covalently bonded to this atom')
@@ -861,6 +862,8 @@ class Structure:
         self.new_atom_order = None
         # Track when atom elements have been fixed
         self._fixed_atom_elements = False
+        # Save indices of supported ion atoms
+        self._ion_atom_indices = None
 
     def __repr__ (self):
         return '<Structure (' + str(len(self.atoms)) + ' atoms)>'
@@ -1169,6 +1172,20 @@ class Structure:
         # Set atom elements as fixed in order to avoid repeating this process
         self._fixed_atom_elements = True
         return modified
+    
+    # Get all supported ion atom indices together in a set
+    def get_ion_atom_indices (self) -> Set:
+        # If we already did this then return the stored value
+        if self._ion_atom_indices != None:
+            return self._ion_atom_indices
+        # Find ion atom indices
+        indices = set()
+        for atom in self.atoms:
+            if atom.element in SUPPORTED_ION_ELEMENTS:
+                indices.add(atom.index)
+        self._ion_atom_indices = indices
+        return self._ion_atom_indices
+    ion_atom_indices = property(get_ion_atom_indices, None, None, "Atom indices for what we consider supported ions")
 
     # Generate a pdb file with current structure
     def generate_pdb_file (self, pdb_filename : str):
@@ -1839,8 +1856,12 @@ class Structure:
         coherent_bonds = coherent_bonds_with_hydrogen if has_hydrogen else coherent_bonds_without_hydrogen
         # Cechk coherent bonds atom by atom
         for atom in self.atoms:
+            # Do not check this atom bonds if this may be an ion
+            # Most authors "force" dummy bonds in these atoms to make them stable
+            if atom.element in SUPPORTED_ION_ELEMENTS:
+                continue
             # Get actual number of bonds in the current atom
-            nbonds = len(atom.get_bonds())
+            nbonds = len(atom.get_bonds(skip_ions = True))
             # Get the accepted range of number of bonds for the current atom according to its element
             element = atom.element
             element_coherent_bonds = coherent_bonds.get(element, None)
