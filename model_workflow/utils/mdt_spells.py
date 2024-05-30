@@ -27,16 +27,19 @@ def merge_and_convert_trajectories (
     ):
 
     # Run MDtraj
-    logs = run([
+    process = run([
         "mdconvert",
         "-o",
         output_trajectory_filename,
         *input_trajectory_filenames,
-    ], stderr=PIPE).stderr.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
 
     # If output has not been generated then warn the user
     if not exists(output_trajectory_filename) or getsize(output_trajectory_filename) == 0:
         print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
         raise SystemExit('Something went wrong with MDTraj')
         
 # NEVER FORGET: mdconvert does not handle mdcrd format
