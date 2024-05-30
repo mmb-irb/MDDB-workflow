@@ -79,3 +79,11 @@ def load_yaml (filepath : str):
         return content
     except:
         raise Exception('Something went wrong when loading YAML file ' + filepath)
+
+# Set a function to reprint in the same line
+CURSOR_UP_ONE = '\x1b[1A'
+ERASE_LINE = '\x1b[2K'
+ERASE_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+def reprint (text : str):
+    print(ERASE_PREVIOUS_LINES)
+    print(text)

@@ -341,6 +341,53 @@ class MD:
         output_trajectory_file = File(self.md_pathify(TRAJECTORY_FILENAME))
         output_topology_file = File(self.project.topology_filepath)
 
+        # If all output files already exist we may skip the processing
+        outputs_exist = output_structure_file.exists and output_trajectory_file.exists and output_topology_file.exists
+
+        # Check which tests are to be run
+        required_tests = set()
+
+        # If there is no structure then we must run some tests
+        if not output_structure_file.exists:
+            required_tests.update(STRUCTURE_TESTS)
+        # If the structure was modified since the last time then we must run these tests as well
+        elif self.register.is_file_modified(output_structure_file):
+            message = 'Structure was modified since the last processing or is new'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            required_tests.update(STRUCTURE_TESTS)
+
+        # If there is no trajectory then we must run some tests
+        if not output_trajectory_file.exists:
+            required_tests.update(TRAJECTORY_TESTS)
+        # If the trajectory was modified since the last time then we must run these tests as well
+        elif self.register.is_file_modified(output_trajectory_file):
+            message = 'Trajectory was modified since the last processing or is new'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            required_tests.update(TRAJECTORY_TESTS)
+
+        # If there is no topology then we must run some tests
+        if not output_topology_file.exists:
+            required_tests.update(TOPOLOGY_TESTS)
+        # If the topology was modified since the last time then we must run these tests as well
+        elif self.register.is_file_modified(output_topology_file):
+            message = 'Topology was modified since the last processing or is new'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            required_tests.update(TOPOLOGY_TESTS)
+
+        # If any of the required tests was already passed then reset its value and warn the user
+        repeated_tests = [ test for test in required_tests if self.register.tests.get(test, None) == True ]
+        if len(repeated_tests) > 0:
+            print('  The following tests will be run again: ' + ', '.join(repeated_tests))
+            for test in repeated_tests:
+                self.register.update_test(test, None)
+
+        # If output files already exist and not test is to be run then we skip the processing
+        # Check also if all availables tests were actually passed in the last run
+        # They may be skipped or allowed to fail
+        if outputs_exist and len(required_tests) == 0 and self.all_tests_succeeded():
+            print('There is no need to process input files')
+            return
+
         print('-> Processing input files')
 
         # --- CONVERTING AND MERGING ------------------------------------------------------------
@@ -603,39 +650,13 @@ class MD:
         self.register.update_mtime(output_trajectory_file)
         self.project.register.update_mtime(output_topology_file)
 
-    # Check if any of the available tests is missing or failed
-    def any_missing_processing_tests (self) -> bool:
+    # Check all tests to be succeeded in the last run
+    def all_tests_succeeded (self) -> bool:
         for checking in AVAILABLE_CHECKINGS:
             test_result = self.register.tests.get(checking, None)
-            if not test_result:
-                return True
-        return False
-
-    # Check if the structure file was modified and, if so, reset the corresponding tests
-    def is_structure_modified (self) -> bool:
-        if self.register.is_file_modified(self._structure_file):
-            affected_test = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
-            message = 'Structure was modified since the last processing'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
-            print('  The following tests will be run again: ' + ', '.join(affected_test))
-            for test in affected_test:
-                self.register.update_test(test, None)
-            return True
-        return False
-
-    # Check if the trajectory file was modified and, if so, reset the corresponding tests
-    def is_trajectory_modified (self) -> bool:
-        if self.register.is_file_modified(self._trajectory_file):
-            affected_test = [STABLE_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG]
-            message = 'Trajectory was modified since the last processing'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
-            print('  The following tests will be run again: ' + ', '.join(affected_test))
-            for test in affected_test:
-                self.register.update_test(test, None)
-            # Also reset the number of snapshots
-            self.register.update_cache(SNAPSHOTS_FLAG, None)
-            return True
-        return False
+            if test_result != True:
+                return False
+        return True
 
     # Get the processed structure
     def get_structure_file (self) -> str:
@@ -646,11 +667,8 @@ class MD:
         # Set the file
         structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
         self._structure_file = File(structure_filepath)
-        # If file does not exist then run the processing logic to generate it
-        # Also run it if the file exists but it has been modified since the last time
-        # Also run it if any of the tests is missing or failed since tests are run in the processing logic
-        if not self._structure_file.exists or self.is_structure_modified() or self.any_missing_processing_tests():
-            self.process_input_files()
+        # Run the processing logic
+        self.process_input_files()
         # Now that the file is sure to exist we return it
         return self._structure_file
     structure_file = property(get_structure_file, None, None, "Structure filename (read only)")
@@ -664,11 +682,8 @@ class MD:
         # If the file already exists then we are done
         trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
         self._trajectory_file = File(trajectory_filepath)
-        # If file does not exist then run the processing logic to generate it
-        # Also run it if the file exists but it has been modified since the last time
-        # Also run it if any of the tests is missing or failed since tests are run in the processing logic
-        if not self._trajectory_file.exists or self.is_trajectory_modified() or self.any_missing_processing_tests():
-            self.process_input_files()
+        # Run the processing logic
+        self.process_input_files()
         # Now that the file is sure to exist we return it
         return self._trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory filename (read only)")
@@ -1786,20 +1801,6 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    # Check if the topology file was modified and, if so, reset the corresponding tests
-    def is_topology_modified (self) -> bool:
-        if self.register.is_file_modified(self._topology_file):
-            # Note that if topology file is modified all MDs are affected
-            affected_test = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
-            message = 'Topology was modified since the last processing'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
-            print('  The following tests will be run again in every MD: ' + ', '.join(affected_test))
-            for test in affected_test:
-                for md in self.mds:
-                    md.register.update_test(test, None)
-            return True
-        return False
-
     # Get the processed topology file
     def get_topology_file (self) -> str:
         # If we have a stored value then return it
@@ -1808,11 +1809,8 @@ class Project:
             return self._topology_file
         # If the file already exists then we are done
         self._topology_file = File(self.topology_filepath)
-        # If file does not exist then run the processing logic to generate it
-        # Also run it if the file exists but it has been modified since the last time
-        # Also run it if any of the tests is missing or failed since tests are run in the processing logic
-        if not self._topology_file.exists or self.is_topology_modified() or self.reference_md.any_missing_processing_tests():
-            self.reference_md.process_input_files()
+        # Run the processing logic
+        self.reference_md.process_input_files()
         # Now that the file is sure to exist we return it
         return self._topology_file
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")

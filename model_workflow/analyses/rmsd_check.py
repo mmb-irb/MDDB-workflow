@@ -3,6 +3,7 @@ from numpy import mean, std
 
 from typing import List
 
+from model_workflow.utils.auxiliar import reprint
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 
 # LORE
@@ -62,11 +63,15 @@ def check_trajectory_integrity (
     previous_frame = next(trajectory)
 
     # Save all RMSD jumps
-    rmsd_jumps = []    
+    rmsd_jumps = []
 
+    # Add an extra breakline before the first log
+    print()
+
+    # Iterate trajectory frames
     for f, frame in enumerate(trajectory, 1):
         # Update the current frame log
-        print(' Frame ' + str(f), end='\r')
+        reprint(f' Frame {f}')
 
         # Calculate RMSD value between previous and current frame
         rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
@@ -111,11 +116,11 @@ def check_trajectory_integrity (
             if outliers_count >= 4:
                 print(' etc...')
                 break
-            print(' FAIL: Sudden RMSD jump between frames ' + str(i) + ' and ' + str(i+1))
+            print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}')
             outliers_count += 1
 
     # Always print the maximum z score and its frames
-    print(' Maximum z score (' + str(max_z_score) + ') reported between frames ' + str(max_z_score_frame) + ' and ' + str(max_z_score_frame + 1))
+    print(f' Maximum z score {max_z_score} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
 
     # If there were any outlier then the check has failed
     if outliers_count > 0:
