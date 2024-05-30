@@ -254,6 +254,7 @@ def obtain_ligands_id (input_ligands : list, ligands_to_include) -> dict:
     pubchem_dic = {}
     chembl_dic = {}
     pubchem_id_list = []
+    pubchem_name_list = []
 
     ligands_to_add = []
     for id in ligands_to_include:
@@ -272,9 +273,15 @@ def obtain_ligands_id (input_ligands : list, ligands_to_include) -> dict:
         chembl_id = None
         ligand_name = None
 
-        # If the user defined a ligand name, it will be respected, if not, it will be mined from PubChem
+        # If the user defined a ligand name, it will be respectedand added to the metadata 
+        # if there isn't a defined name, it will be mined from PubChem
         if 'name' in ligand:
-            ligand_name = ligand.get('name')
+            ligand_name_metadata = {ligand.get('pubchem'): ligand.get('name')}
+            ligand_name = get_pubchem_name(ligand.get('pubchem'))
+            pubchem_name_list.append(ligand_name_metadata)
+            ligand_customized_name = ligand.get('name')
+            print(f'A customized ligand name has been identified: {ligand_customized_name}. Adding to metadata.')
+            print(f'Retrieved name of ligand ID {ligand}: {ligand_name}.')
         else:
             ligand_name = get_pubchem_name(ligand.get('pubchem'))
             print(f'A ligand number ID has been identified {ligand} without associated name, assuming that is a PubChem ID...')
@@ -317,8 +324,7 @@ def obtain_ligands_id (input_ligands : list, ligands_to_include) -> dict:
                 raise ValueError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
             else:
                 raise ValueError('None of the ligand IDs are defined. Please provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
-
-    return drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list
+    return drugbank_dic,  pubchem_dic, chembl_dic, pubchem_id_list, pubchem_name_list
 
 
 def obtain_mordred_morgan_descriptors (smiles : str) -> dict:
@@ -378,7 +384,7 @@ def generate_ligand_mapping (
 
     ligands_to_include, ligands_to_exclude = check_ligands_done(ligands, input_ligands)
 
-    drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list = obtain_ligands_id(input_ligands, ligands_to_include)
+    drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list, pubchem_name_list = obtain_ligands_id(input_ligands, ligands_to_include)
     ligand_list  = []
     
     # Obtain all the information here and append it to a list
@@ -415,7 +421,8 @@ def generate_ligand_mapping (
     # This function returns a list of ligands that matched some of the PDB residues (index list)
     ligands = ligands_residues(structure, pubchem_id_list)
     
-    return ligands
+    # Also, it's needed to return a list of custom names for the ligands, if there were defined
+    return ligands, pubchem_name_list
     
 
 # If a 'ligands.json' exists, we need to check if it has the ligands according to the inputs

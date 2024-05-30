@@ -1345,6 +1345,7 @@ class Project:
         self._transitions = None
         self._protein_map = None
         self._ligand_map = None
+        self.pubchem_name_list = None
         self._residue_map = None
         self._mds = None
 
@@ -1942,7 +1943,7 @@ class Project:
         self.output_mordred_filepath = self.directory + '/' + OUTPUT_LIGANDS_FILENAME
         print('-> Getting ligand references')
         # Otherwise we must find the value
-        self._ligand_map = generate_ligand_mapping(
+        self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             input_ligands = self.input_ligands,
             structure = self.structure,
             output_mordred_filepath = self.output_mordred_filepath, 
@@ -1985,6 +1986,7 @@ class Project:
             interactions = self.reference_md.interactions,
             register = self.register,
             output_metadata_filename = OUTPUT_METADATA_FILENAME,
+            ligand_customized_names = self.pubchem_name_list,
         )
         return OUTPUT_METADATA_FILENAME
     metadata_filename = property(get_metadata_filename, None, None, "Project metadata filename (read only)")

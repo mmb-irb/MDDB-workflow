@@ -15,7 +15,8 @@ def generate_project_metadata (
     residue_map : dict,
     interactions : list,
     register : dict,
-    output_metadata_filename : str
+    output_metadata_filename : str,
+    ligand_customized_names : str
     ):
 
     # Find out the box size (x, y and z)
@@ -37,6 +38,11 @@ def generate_project_metadata (
                 protein_references.append(ref)
             elif ref_type == 'ligand':
                 ligand_references.append(ref)
+
+    # Get ligand names if any
+    input_ligands = get_input('ligands')
+    if len(ligand_customized_names) == 0:
+        ligand_customized_names = None
 
     # Make the forcefields a list in case it is a single string
     forcefields = get_input('ff')
@@ -97,8 +103,9 @@ def generate_project_metadata (
         'PDBIDS': get_input('pdbIds'),
         'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': protein_references,
-        'INPUT_LIGANDS': get_input('ligands'),
+        'INPUT_LIGANDS': input_ligands,
         'LIGANDS': ligand_references,
+        'LIGANDNAMES': ligand_customized_names,
         'SEQUENCES': sequence_metadata['sequences'],
         'DOMAINS': sequence_metadata['domains'],
         'FRAMESTEP': get_input('framestep'),
@@ -129,7 +136,7 @@ def generate_project_metadata (
         'COLLECTIONS': collections,
         'WARNINGS': register.warnings,
     }
-
+    print('ligand refertences:', ligand_references)
     # Add collection specific fields
     if 'cv19' in collections:
         metadata = { **metadata,
