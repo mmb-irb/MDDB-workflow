@@ -369,7 +369,7 @@ class MD:
         if not output_topology_file.exists:
             required_tests.update(TOPOLOGY_TESTS)
         # If the topology was modified since the last time then we must run these tests as well
-        elif self.register.is_file_modified(output_topology_file):
+        elif self.project.register.is_file_modified(output_topology_file):
             message = 'Topology was modified since the last processing or is new'
             print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
             required_tests.update(TOPOLOGY_TESTS)
