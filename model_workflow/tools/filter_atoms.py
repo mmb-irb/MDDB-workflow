@@ -2,15 +2,17 @@ from os import remove
 from os.path import exists
 from subprocess import run, PIPE, Popen
 from json import load
-from typing import Union
+from typing import Union, List
 
 import pytraj as pt
 
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
-from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
-
+from model_workflow.utils.structures import Structure
 from model_workflow.utils.selections import Selection
+from model_workflow.utils.auxiliar import save_json
+
+from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -67,16 +69,16 @@ def filter_atoms (
         print('Filtering topology...')
         # Already parsed topology
         if input_topology_file.filename == TOPOLOGY_FILENAME:
+            standard_topology = None
             with open(input_topology_file.path, 'r') as file:
                 standard_topology = load(file)
             charges = standard_topology['atom_charges']
             print('Topology atoms count: ' + str(len(charges)))
             # Make it match since there is no problem when these 2 do not match
             filtered_topology_atoms_count = filtered_structure_atoms_count
-            # If the number of charges does not match the number of atoms then just remove the standard topology file
-            # This way it will be generated again further but from the new filtered structure
+            # If the number of charges does not match the number of atoms then filter the topology
             if len(charges) != filtered_structure_atoms_count:
-                remove(input_topology_file.path)
+                standard_topology_filter(input_topology_file, input_structure_file, filter_selection, output_topology_file)
         # Raw charges
         elif input_topology_file.filename == RAW_CHARGES_FILENAME:
             charges = get_raw_charges(input_topology_file.path)
@@ -363,3 +365,114 @@ def tpr_filter(
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
     p.stdout.close()
+
+# Set a function to filter the standard topology file
+# WARNING: This function has not been checked in depth to work properly
+def standard_topology_filter (
+    input_topology_file : 'File',
+    reference_structure_file : 'File',
+    filter_selection : str,
+    output_topology_file : 'File'):
+
+    # Load the topology
+    topology = None
+    with open(input_topology_file.path, 'r') as file:
+        topology = load(file)
+
+    # Load the reference structure
+    reference_structure = Structure.from_pdb_file(reference_structure_file.path)
+
+    # Parse the VMD selection to a list of atom indices
+    parsed_selection = reference_structure.select(filter_selection)
+
+    # Get filtered atom, residues and chain indices
+    atom_indices = parsed_selection.atom_indices
+    residue_indices = reference_structure.get_selection_residue_indices(parsed_selection)
+    chain_indices = reference_structure.get_selection_chain_indices(parsed_selection)
+
+    # Set backmapping
+    atom_backmapping = { old_index: new_index for new_index, old_index in enumerate(atom_indices) }
+    residue_backmapping = { old_index: new_index for new_index, old_index in enumerate(residue_indices) }
+    chain_backmapping = { old_index: new_index for new_index, old_index in enumerate(chain_indices) }
+
+    # Set a function to get substract specific values of a list given by its indices
+    def filter_by_indices (values : list, indices : List[int]) -> list:
+        if values == None:
+            return None
+        return [ values[i] for i in indices ]
+
+    # Filter atomwise fields
+    atom_names = filter_by_indices(topology['atom_names'], atom_indices)
+    atom_elements = filter_by_indices(topology['atom_elements'], atom_indices)
+    atom_charges = filter_by_indices(topology['atom_charges'], atom_indices)
+
+    # Handle atom fields which require backmapping
+    old_atom_residue_indices = filter_by_indices(topology['atom_residue_indices'], atom_indices)
+    atom_residue_indices = [ residue_backmapping[index] for index in old_atom_residue_indices ]
+    atom_bonds = None
+    raw_atom_bonds = topology.get('atom_bonds', None)
+    if raw_atom_bonds:
+        old_atom_bonds = filter_by_indices(raw_atom_bonds, atom_indices)
+        atom_bonds = [ [ atom_backmapping(bond) for bond in bonds ] for bonds in old_atom_bonds ]
+
+    # Filter residuewise fields
+    residue_names = filter_by_indices(topology['residue_names'], residue_indices)
+    residue_numbers = filter_by_indices(topology['residue_numbers'], residue_indices)
+
+    # Handle residue fields which require backmapping
+    residue_indices_set = set(residue_indices)
+    old_residue_chain_indices = filter_by_indices(topology['residue_chain_indices'], residue_indices)
+    residue_chain_indices = [ chain_backmapping[index] for index in old_residue_chain_indices ]
+    # Handle icodes if they exist
+    residue_icodes = None
+    raw_residue_icodes = topology['residue_icodes']
+    if raw_residue_icodes:
+        # Filter icodes
+        old_residue_icodes = { index: icode for index, icode in raw_residue_icodes.items if index in residue_indices_set }
+        # Backmap icodes
+        residue_icodes = { residue_backmapping(index): icode for index, icode in old_residue_icodes.items() }
+    # Handle PBC residues
+    pbc_residues = [ residue_backmapping(index) for index in topology.get('pbc_residues', []) if index in residue_indices_set ]
+
+    # Handle chainwise fields
+    chain_names = filter_by_indices(topology['chain_names'], chain_indices)
+
+    # Handle references
+    references = None
+    reference_types = None
+    residue_reference_indices = None
+    residue_reference_numbers = None
+    # If they exist
+    raw_references = topology['references']
+    if raw_references:
+        residue_reference_numbers = filter_by_indices(topology['residue_reference_numbers'], residue_indices)
+        old_residue_reference_indices = filter_by_indices(topology['residue_reference_indices'], residue_indices)
+        reference_indices = [ index for index in set(old_residue_reference_indices) if index != None ]
+        references_backmapping = { old_index: new_index for new_index, old_index in enumerate(reference_indices) }
+        references = [ raw_references[old_index] for old_index in references_backmapping.keys() ]
+        raw_reference_types = topology.get('reference_types', None)
+        if raw_reference_types:
+            reference_types = [ raw_reference_types[old_index] for old_index in references_backmapping.keys() ]
+        references_backmapping[None] = None # To residues with no reference
+        residue_reference_indices = [ references_backmapping[index] for index in old_residue_reference_indices ]
+
+    # Set the filtered topology
+    output_topology = {
+        'atom_names': atom_names,
+        'atom_elements': atom_elements,
+        'atom_charges': atom_charges,
+        'atom_residue_indices': atom_residue_indices,
+        'atom_bonds': atom_bonds,
+        'residue_names': residue_names,
+        'residue_numbers': residue_numbers,
+        'residue_icodes': residue_icodes,
+        'residue_chain_indices': residue_chain_indices,
+        'chain_names': chain_names,
+        'references': references,
+        'reference_types': reference_types,
+        'residue_reference_indices': residue_reference_indices,
+        'residue_reference_numbers': residue_reference_numbers,
+        'pbc_residues': pbc_residues,
+    }
+    # Wrtie the new topology
+    save_json(output_topology, output_topology_file.path)
