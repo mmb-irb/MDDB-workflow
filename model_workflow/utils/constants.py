@@ -27,14 +27,19 @@ DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
 
 INCOMPLETE_PREFIX = '.incomplete_'
 
+CONVERTED = 'converted'
 CONVERTED_STRUCTURE = 'converted.pdb'
 CONVERTED_TRAJECTORY = 'converted.xtc'
 
+FILTERED = 'filtered'
 FILTERED_STRUCTURE = 'filtered.pdb'
 FILTERED_TRAJECTORY = 'filtered.xtc'
 
+IMAGED = 'imaged'
 IMAGED_STRUCTURE = 'imaged.pdb'
 IMAGED_TRAJECTORY = 'imaged.xtc'
+
+PROCESSED = 'processed'
 
 # Input and output core files
 TOPOLOGY_FILENAME = 'topology.json'

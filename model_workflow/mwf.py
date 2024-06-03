@@ -381,10 +381,27 @@ class MD:
             for test in repeated_tests:
                 self.register.update_test(test, None)
 
+        # Check if the processing parameters (filter, image, etc.) have changed since the last time
+        # If so, then we must reset all tests and rerun the processing
+        previous_processed_parameters = self.register.cache.get(PROCESSED, None)
+        current_processed_parameters = {
+            'filter': self.project.filter_selection,
+            'image': self.project.image,
+            'fit': self.project.fit,
+        }
+        # Compare current and previous values parameter by parameters
+        same_processed_paramaters = previous_processed_parameters == current_processed_parameters
+        if previous_processed_parameters and not same_processed_paramaters:
+            # Warn the user that there has been a change in input parameters
+            message = 'There is a change in the processing parameters'
+            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            print(' Processed files will be remade')
+
         # If output files already exist and not test is to be run then we skip the processing
         # Check also if all availables tests were actually passed in the last run
         # They may be skipped or allowed to fail
-        if outputs_exist and len(required_tests) == 0 and self.all_tests_succeeded():
+        # Also make sure processing parameters are the same that the last time
+        if outputs_exist and len(required_tests) == 0 and self.all_tests_succeeded() and same_processed_paramaters:
             print('There is no need to process input files')
             return
 
@@ -458,9 +475,18 @@ class MD:
         # If there is an incomplete trajectory then remove it
         if incompleted_filtered_trajectory_file.exists:
             incompleted_filtered_trajectory_file.remove()
+
+        # Check if any output file is missing
+        missing_filter_output = not filtered_structure_file.exists or not filtered_trajectory_file.exists
+
+        # Check if parameters have changed
+        # Note that for this specific step only filtering is important
+        previous_filtered_parameters = self.register.cache.get(FILTERED, None)
+        current_filtered_parameters = { 'filter': self.project.filter_selection }
+        same_filtered_parameters = previous_filtered_parameters == current_filtered_parameters
         
         # Filter atoms in structure, trajectory and topology if required and not done yet
-        if must_filter and (not filtered_structure_file.exists or not filtered_trajectory_file.exists):
+        if must_filter and (missing_filter_output or not same_filtered_parameters):
             print(' * Filtering atoms')
             filter_atoms(
                 input_structure_file = converted_structure_file,
@@ -473,6 +499,8 @@ class MD:
             )
             # Once filetered, rename the trajectory file as completed
             rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
+            # Update the cache
+            self.register.update_cache(FILTERED, current_filtered_parameters)
 
         # --- IMAGING AND FITTING ------------------------------------------------------------
 
@@ -492,10 +520,23 @@ class MD:
         if incompleted_imaged_trajectory_file.exists:
             incompleted_imaged_trajectory_file.remove()
 
+        # Check if any output file is missing
+        missing_imaged_output = not imaged_structure_file.exists or not imaged_trajectory_file.exists
+
+        # Check if parameters have changed
+        # Note that for this step the filter parameters is also important
+        previous_imaged_parameters = self.register.cache.get(IMAGED, None)
+        current_imaged_parameters = {
+            'filter': self.project.filter_selection,
+            'image': self.project.image,
+            'fit': self.project.fit,
+        }
+        same_imaged_parameters = previous_imaged_parameters == current_imaged_parameters
+
         # Image the trajectory if it is required
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
-        if must_image and (not imaged_structure_file.exists or not imaged_trajectory_file.exists):
+        if must_image and (missing_imaged_output or not same_imaged_parameters):
             print(' * Imaging and fitting')
             image_and_fit(
                 input_structure_file = filtered_structure_file,
@@ -510,6 +551,8 @@ class MD:
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
+            # Update the cache
+            self.register.update_cache(IMAGED, current_imaged_parameters)
 
         # --- CORRECTING STRUCTURE ------------------------------------------------------------
 
@@ -579,6 +622,15 @@ class MD:
         self._trajectory_file = output_trajectory_file
         self.project._topology_file = output_topology_file
 
+        # Register the last modification times of the recently processed files
+        # This way we know if they have been modifed in the future and checkings need to be rerun
+        self.register.update_mtime(output_structure_file)
+        self.register.update_mtime(output_trajectory_file)
+        self.project.register.update_mtime(output_topology_file)
+
+        # Update the parameters used to get the last processed structure and trajectory files
+        self.register.update_cache(PROCESSED, current_processed_parameters)
+
         # --- Cleanup intermediate files
 
         intermediate_filenames = [
@@ -643,12 +695,6 @@ class MD:
                 self.register.add_warning(test_skip_flag, test_nice_name + ' was skipped and never run before')
             else:
                 raise ValueError('Test value is not supported')
-
-        # Register the last modification times of the recently processed files
-        # This way we know if they have been modifed in the future and checkings need to be rerun
-        self.register.update_mtime(output_structure_file)
-        self.register.update_mtime(output_trajectory_file)
-        self.project.register.update_mtime(output_topology_file)
 
     # Check all tests to be succeeded in the last run
     def all_tests_succeeded (self) -> bool:
