@@ -1986,6 +1986,9 @@ class Structure:
             # It must be heavy atom
             if candidate_atom.element == 'H':
                 continue
+            # Ignore supported ions
+            if candidate_atom_index in self.ion_atom_indices:
+                continue
             # It must not be a dead end already
             bonded_atoms = list(candidate_atom.get_bonded_atoms())
             bonded_atoms = [ atom for atom in bonded_atoms if atom.element != 'H' ]
