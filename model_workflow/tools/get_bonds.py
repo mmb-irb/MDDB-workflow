@@ -20,7 +20,7 @@ def do_bonds_match (
 ) -> bool:
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
-        raise ValueError('The number of atoms is not matching in both bond lists')
+        raise ValueError(f'The number of atoms is not matching in both bond lists ({len(bonds_1)} and {len(bonds_2)})')
     # Find ion atom indices
     ion_atom_indices = set()
     for atom_index, atom_element in enumerate(atom_elements):
