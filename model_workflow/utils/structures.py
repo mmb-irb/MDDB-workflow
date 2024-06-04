@@ -155,8 +155,11 @@ class Atom:
             raise ValueError('The atom has not a structure defined')
         if self.index == None:
             raise ValueError('The atom has not an index defined')
-        bonds = set(self.structure.bonds[self.index]) - self.structure.ion_atom_indices
-        return list(bonds)
+        bonds = self.structure.bonds[self.index]
+        # If the skip ions argument is passed then remove atom indices of supported ion atoms
+        if skip_ions:
+            bonds = list(set(bonds) - self.structure.ion_atom_indices)
+        return bonds
 
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
     bonds = property(get_bonds, None, None, 'Atoms indices of atoms in the structure which are covalently bonded to this atom')
@@ -1985,9 +1988,6 @@ class Structure:
             candidate_atom = self.atoms[candidate_atom_index]
             # It must be heavy atom
             if candidate_atom.element == 'H':
-                continue
-            # Ignore supported ions
-            if candidate_atom_index in self.ion_atom_indices:
                 continue
             # It must not be a dead end already
             bonded_atoms = list(candidate_atom.get_bonded_atoms())
