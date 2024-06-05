@@ -199,6 +199,8 @@ def find_drugbank_pubchem (drugbank_id):
             content = response.read().decode("utf-8")
             pattern = re.compile("http\:\/\/pubchem.ncbi.nlm.nih.gov\/summary\/summary.cgi\?cid\=([0-9]*)")
             match = re.search(pattern, str(content))
+            if not match:
+                raise ValueError("No se encontró información sobre el Pubchem compound en esta página.")
             pubchem_id = match[1]
             if not pubchem_id:
                 raise ValueError("No se encontró información sobre el Pubchem compound en esta página.")
@@ -259,14 +261,16 @@ def obtain_ligands_id (input_ligands : list, ligands_to_include) -> dict:
     ligands_to_add = []
     for id in ligands_to_include:
         for ligand in input_ligands:
-            if ligand['pubchem'] == id:
-                ligands_to_add.append(ligand)
-    
+            if ligand.get('pubchem'):
+                if ligand['pubchem'] == id:
+                    ligands_to_add.append(ligand)
+            else:
+                continue
     # Save in a dictionary the name of the ligand as key and the ID as value
     # The ID can be of the databases: 'drugbank' , 'pubchem' , 'chembl'
     # Also, generate a list with all the pubchems IDs which will be used
-    for ligand in ligands_to_add:
-        
+    for ligand in input_ligands:
+        ''' This function is on working. It has to be adapted to the new features.'''
         # Define the needed variables to check if the ligand has a database ID or it is None
         drugbank_id = None
         pubchem_id = None
@@ -381,7 +385,7 @@ def generate_ligand_mapping (
     # If no input ligands are passed then stop here
     if not input_ligands:
         return []
-
+    
     ligands_to_include, ligands_to_exclude = check_ligands_done(ligands, input_ligands)
 
     drugbank_dict, pubchem_dict, chembl_dict, pubchem_id_list, pubchem_name_list = obtain_ligands_id(input_ligands, ligands_to_include)
@@ -435,16 +439,17 @@ def check_ligands_done( ligands: dict, input_ligands: list ) -> list:
         if isinstance(ligand_id, int):
             # Assuming the number is pubchem 
             ids_inputs.append(ligand_id)
-        elif isinstance(ligand_id, dict) and 'pubchem' in ligand_id:
+        if isinstance(ligand_id, dict) and 'pubchem' in ligand_id:
             ids_inputs.append(ligand_id['pubchem'])
-        elif isinstance(ligand_id, dict) and 'drugbank' in ligand_id:
-            ids_inputs.append(find_drugbank_pubchem(ligand_id['pubchem']))
-        elif isinstance(ligand_id, dict) and 'chembl' in ligand_id:
-            ids_inputs.append(find_chembl_pubchem(ligand_id['pubchem']))
+        if isinstance(ligand_id, dict) and 'drugbank' in ligand_id:
+            ids_inputs.append(find_drugbank_pubchem(ligand_id['drugbank']))
+            ligand_id['pubchem'] = find_drugbank_pubchem(ligand_id['drugbank'])
+        if isinstance(ligand_id, dict) and 'chembl' in ligand_id:
+            ids_inputs.append(find_chembl_pubchem(ligand_id['chembl']))
+            ligand_id['pubchem'] = find_chembl_pubchem(ligand_id['chembl'])
 
     ligands_to_include = [id for id in ids_inputs if id not in ids_json]
     ligands_to_exclude = [id for id in ids_json if id not in ids_inputs]
-
     return ligands_to_include, ligands_to_exclude
 
 
