@@ -1984,13 +1984,13 @@ class Project:
         # If we already have a stored value then return it
         if self._ligand_map != None:
             return self._ligand_map
-        self.output_mordred_filepath = self.directory + '/' + OUTPUT_LIGANDS_FILENAME
+        self.output_ligands_filepath = self.directory + '/' + OUTPUT_LIGANDS_FILENAME
         print('-> Getting ligand references')
         # Otherwise we must find the value
         self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             input_ligands = self.input_ligands,
             structure = self.structure,
-            output_mordred_filepath = self.output_mordred_filepath, 
+            output_ligands_filepath = self.output_ligands_filepath, 
         )
         return self._ligand_map
     ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
