@@ -41,6 +41,7 @@ def generate_project_metadata (
 
     # Get ligand names if any
     input_ligands = get_input('ligands')
+    print('names', ligand_customized_names)
     if len(ligand_customized_names) == 0:
         ligand_customized_names = None
 
@@ -136,7 +137,6 @@ def generate_project_metadata (
         'COLLECTIONS': collections,
         'WARNINGS': register.warnings,
     }
-    print('ligand refertences:', ligand_references)
     # Add collection specific fields
     if 'cv19' in collections:
         metadata = { **metadata,

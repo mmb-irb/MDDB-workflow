@@ -27,6 +27,7 @@ def generate_residue_mapping(
     residue_reference_numbers = [ None ] * residues_count
 
     for data in protein_map + ligand_map:
+        print(data)
         match = data['match']
         # Get the reference index
         # Note that several matches may belong to the same reference and thus have the same index
