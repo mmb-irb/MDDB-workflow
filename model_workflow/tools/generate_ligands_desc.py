@@ -63,11 +63,20 @@ def get_chembl_smiles (id_chembl : str) -> Optional[str]:
         return None
     return smiles
 
+def purgeNonUtf8 (filename : str):
+    with open(filename, mode="r+", encoding="utf-8", errors= 'ignore') as file:
+        lines = file.readlines()
+        file.seek(0)
+        for line in lines:
+            file.write(line)
+        file.truncate()
+
 
 # Given a PUBChem ID, use the uniprot API to request its data and then mine what is needed for the database
 def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     # Request PUBChem
     parsed_response = None
+    print(id_pubchem)
     request_url = Request(
         url= f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{id_pubchem}/JSON/', #'https://pubchem.ncbi.nlm.nih.gov/compound/1986#section=Canonical-SMILES&fullscreen=true'
         headers={'User-Agent': 'Mozilla/5.0'}
@@ -75,7 +84,7 @@ def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     try:
         with urlopen(request_url) as response:
             #parsed_response = json.loads(response.read().decode("windows-1252"))
-            parsed_response = json.loads(response.read().decode("utf-8"))
+            parsed_response = json.loads(response.read().decode("utf-8", errors='ignore'))
     # If the accession is not found in PUBChem then the id is not valid
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -151,7 +160,6 @@ def find_drugbank_pubchem (drugbank_id):
             pubchem_id = match[1]
             if not pubchem_id:
                 raise ValueError("No se encontró información sobre el Pubchem compound en esta página.")
-            print("Pubchem compound:", pubchem_id)
     # If the accession is not found in the database then we stop here
     except urllib.error.HTTPError as error:
         # If the drugbank ID is not yet in the Drugbank references then return None
