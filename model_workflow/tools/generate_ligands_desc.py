@@ -76,7 +76,6 @@ def purgeNonUtf8 (filename : str):
 def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     # Request PUBChem
     parsed_response = None
-    print(id_pubchem)
     request_url = Request(
         url= f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{id_pubchem}/JSON/', #'https://pubchem.ncbi.nlm.nih.gov/compound/1986#section=Canonical-SMILES&fullscreen=true'
         headers={'User-Agent': 'Mozilla/5.0'}
@@ -245,18 +244,18 @@ def generate_ligand_mapping (
         return []
     
     # Save data from all ligands to be saved in a file
+    json_ligands_data = []
     ligands_data = []
 
     # Load the ligands file if exists already
     if os.path.exists(output_ligands_filepath):
-        ligands_data += import_ligands(output_ligands_filepath)
+        json_ligands_data += import_ligands(output_ligands_filepath)
 
     # Save apart ligand names forced by the user
     ligand_names = {}
 
     # Save the maps of every ligand
     ligand_maps = []
-
     # Iterate input ligands
     for input_ligand in input_ligands:
         # If input ligand is not a dict but a single int/string then handle it
@@ -266,7 +265,7 @@ def generate_ligand_mapping (
         elif type(input_ligand) == str:
             raise InputError(f'A name of ligand has been identified: {input_ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
         # Check if we already have this ligand data
-        ligand_data = obtain_ligand_data_from_file(ligands_data, input_ligand)
+        ligand_data = obtain_ligand_data_from_file(json_ligands_data, input_ligand)
         # If we do not have its data yet then get data from pubchem
         if not ligand_data:
             ligand_data = obtain_ligand_data_from_pubchem(input_ligand)
@@ -310,6 +309,7 @@ def import_ligands (output_ligands_filepath : str) -> dict:
         for expected_field in LIGAND_DATA_FIELDS:
             if expected_field not in imported_ligand:
                 imported_ligand[expected_field] = None
+    print('imported ', imported_ligands)
     return imported_ligands
 
 # Check if the current input ligand is already among the ligands we already have data for
