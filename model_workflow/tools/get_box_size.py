@@ -4,6 +4,8 @@
 import os
 from subprocess import run, PIPE, Popen
 
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
+
 # Set the box analysis filename
 # This analysis is used here to mine the box size data
 # It is never used further
@@ -28,7 +30,7 @@ def get_box_size(
         "System",
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "traj",
         "-s",
         input_topology_filename,

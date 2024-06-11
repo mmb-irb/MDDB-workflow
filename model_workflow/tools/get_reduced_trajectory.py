@@ -4,7 +4,7 @@ from os import rename
 from os.path import exists
 from math import ceil
 
-from model_workflow.utils.constants import INCOMPLETE_PREFIX, GREY_HEADER, COLOR_END
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, INCOMPLETE_PREFIX, GREY_HEADER, COLOR_END
 
 # Get a reduced version of the provided trajectory
 # Frames are taken along the whole trajectory
@@ -59,7 +59,7 @@ def get_reduced_trajectory (
             "System",
         ], stdout=PIPE)
         logs = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "trjconv",
             "-s",
             input_topology_file.path,

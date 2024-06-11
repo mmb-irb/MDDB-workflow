@@ -6,7 +6,7 @@ from pathlib import Path
 from subprocess import run, PIPE
 import re
 
-from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
@@ -99,7 +99,7 @@ def get_tpr_charges_manual (topology_filename : str) -> list:
     charges = []
     # Read the tpr file making a 'dump'
     process = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "dump",
         "-s",
         topology_filename,

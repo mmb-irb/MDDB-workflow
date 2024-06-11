@@ -1,7 +1,7 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import REFERENCE_LABELS
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS
 
 import os
 from subprocess import run, PIPE, Popen
@@ -124,7 +124,7 @@ def rmsd (
         selection_name, # Select group for RMSD calculation
     ], stdout=PIPE)
     process = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "rms",
         "-s",
         reference_filepath,

@@ -9,6 +9,7 @@ from typing import List
 
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
 
 # Set an auxiliar data filename
 rmsf_data_filename = '.rmsf_data.xvg'
@@ -33,7 +34,7 @@ def rmsf (
         "System",
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "rmsf",
         "-s",
         input_topology_filename,

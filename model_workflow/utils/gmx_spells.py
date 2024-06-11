@@ -5,6 +5,7 @@ from subprocess import run, PIPE, Popen
 
 from typing import List
 
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.file import File
 
 # Get the first frame from a trajectory
@@ -16,7 +17,7 @@ def get_first_frame (input_structure_filename : str, input_trajectory_filename :
             "System",
         ], stdout=PIPE)
         process = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "trjconv",
             "-s",
             input_structure_filename,
@@ -30,7 +31,7 @@ def get_first_frame (input_structure_filename : str, input_trajectory_filename :
         ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
     else:
         process = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "trjconv",
             "-f",
             input_trajectory_filename,
@@ -131,7 +132,7 @@ def merge_and_convert_trajectories (input_trajectory_filenames : List[str], outp
     if len(input_trajectory_filenames) > 1:
         single_trajectory_filename = auxiliar_single_trajectory_filename
         logs = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "trjcat",
             "-f",
             *input_trajectory_filenames,
@@ -148,7 +149,7 @@ def merge_and_convert_trajectories (input_trajectory_filenames : List[str], outp
     # In case input and output formats are different we must convert the trajectory
     if input_trajectories_format != output_trajectory_format:
         logs = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "trjconv",
             "-f",
             single_trajectory_filename,
@@ -216,7 +217,7 @@ def get_trajectory_subset (
         "System",
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjconv",
         "-f",
         input_trajectory_filename,
@@ -267,7 +268,7 @@ def filter_structure (
         filter_selection_name,
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "editconf",
         "-f",
         input_structure_filename,
@@ -319,7 +320,7 @@ def filter_trajectory (
         filter_selection_name,
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
         input_structure_filename,
@@ -373,7 +374,7 @@ def filter_tpr (
         filter_selection_name,
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "convert-tpr",
         "-f",
         input_tpr_filename,
@@ -414,7 +415,7 @@ def merge_xtc_files (current_file : str, new_file : str):
         return
     # Run trjcat
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjcat",
         "-f",
         new_file,

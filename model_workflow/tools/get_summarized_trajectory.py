@@ -4,6 +4,8 @@
 
 from subprocess import run, PIPE, Popen
 
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
+
 # input_topology_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb and .tpr
 # input_trajectory_filename - The name string of the input trajectory file (path)
@@ -23,7 +25,7 @@ def get_summarized_trajectory (
     ], stdout=PIPE)
     # Run Gromacs
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
         input_topology_filename,

@@ -8,6 +8,7 @@ import pytraj as pt
 
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.auxiliar import save_json
@@ -298,7 +299,7 @@ def pdb_filter (
         filter_group_name,
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "editconf",
         "-f",
         input_pdb_filename,
@@ -327,7 +328,7 @@ def xtc_filter(
         filter_group_name,
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
         structure_filename,
@@ -354,7 +355,7 @@ def tpr_filter(
         filter_group_name,
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "convert-tpr",
         "-s",
         input_tpr_filename,

@@ -1,6 +1,7 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
 
 import os
 import numpy
@@ -59,7 +60,7 @@ def sasa(
         # For this reason we must always rely on atom numeration, which is the same along different tools
         current_frame_sasa = 'sasa' + str(f) + '.xvg'
         logs = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "sasa",
             "-s",
             current_frame,

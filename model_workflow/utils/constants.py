@@ -1,4 +1,24 @@
+from os import environ
+from shutil import which
+
 # CONSTANTS ---------------------------------------------------------------------------
+
+# Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
+GROMACS_EXECUTABLE_COMMON_NAMES = ['gmx', 'gmx_mpi']
+# Set the name of the environmental variable which is read by the workflow to know the gromacs path
+GROMACS_ENV = 'MWF_GMX'
+# Set the gromacs executable path
+# This may be forced by the user thorugh an enviornment variable
+GROMACS_EXECUTABLE = environ.get(GROMACS_ENV, None)
+# Otherwise we try with the known common gromacs executable names until we find an existing one
+if not GROMACS_EXECUTABLE:
+    for common_name in GROMACS_EXECUTABLE_COMMON_NAMES:
+        if which(common_name):
+            GROMACS_EXECUTABLE = common_name
+            break
+# If we do not find it then complain
+if not GROMACS_EXECUTABLE:
+    raise RuntimeError(f'Cannot find gromacs. Is gromacs installed? Set the env variable {GROMACS_ENV} as the gromacs executable path')
 
 # Database
 DEFAULT_API_URL = 'https://mmb-dev.mddbr.eu/api'

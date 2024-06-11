@@ -6,7 +6,7 @@ from os.path import exists
 from subprocess import run, PIPE, Popen
 
 from model_workflow.tools.topology_manager import get_chains, set_chains
-from model_workflow.utils.constants import GREY_HEADER, COLOR_END
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import InputError
 
@@ -81,7 +81,7 @@ def image_and_fit (
                 "System",
             ], stdout=PIPE)
             process = run([
-                "gmx",
+                GROMACS_EXECUTABLE,
                 "trjconv",
                 "-s",
                 input_structure_file.path,
@@ -107,7 +107,7 @@ def image_and_fit (
                 "System",
             ], stdout=PIPE)
             process = run([
-                "gmx",
+                GROMACS_EXECUTABLE,
                 "trjconv",
                 "-s",
                 input_topology_file.path,
@@ -127,7 +127,7 @@ def image_and_fit (
                 "System",
             ], stdout=PIPE)
             process = run([
-                "gmx",
+                GROMACS_EXECUTABLE,
                 "trjconv",
                 "-s",
                 input_structure_file.path,
@@ -165,7 +165,7 @@ def image_and_fit (
                 "System",
             ], stdout=PIPE)
             logs = run([
-                "gmx",
+                GROMACS_EXECUTABLE,
                 "trjconv",
                 "-s",
                 input_topology_file.path,
@@ -197,7 +197,7 @@ def image_and_fit (
                 "System",
             ], stdout=PIPE)
             logs = run([
-                "gmx",
+                GROMACS_EXECUTABLE,
                 "trjconv",
                 "-s",
                 output_structure_file.path,
@@ -237,7 +237,7 @@ def image_and_fit (
             "System",
         ], stdout=PIPE)
         logs = run([
-            "gmx",
+            GROMACS_EXECUTABLE,
             "trjconv",
             "-s",
             structure_to_fit.path,
@@ -277,7 +277,7 @@ def reset_structure (
         "System",
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
         input_structure_filename,

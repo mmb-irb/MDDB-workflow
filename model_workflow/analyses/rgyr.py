@@ -7,6 +7,7 @@ from typing import List
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
 
 # Set an auxiliar data filename
 rgyr_data_filename = '.rgyr_data.xvg'
@@ -47,7 +48,7 @@ def rgyr (
         selection_name,
     ], stdout=PIPE)
     process = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "gyrate",
         "-s",
         input_topology_file.path,

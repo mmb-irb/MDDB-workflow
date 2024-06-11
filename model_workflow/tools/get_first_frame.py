@@ -4,6 +4,8 @@
 import os
 from subprocess import run, PIPE, Popen
 
+from model_workflow.utils.constants import GROMACS_EXECUTABLE
+
 # input_structure_filename - The name string of the input topology file (path)
 # Tested supported formats are .pdb and .tpr
 # input_trajectory_filename - The name string of the input trajectory file (path)
@@ -26,7 +28,7 @@ def get_first_frame (
         "System",
     ], stdout=PIPE)
     logs = run([
-        "gmx",
+        GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
         input_structure_filename,
