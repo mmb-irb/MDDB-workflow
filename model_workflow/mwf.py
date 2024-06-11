@@ -1768,6 +1768,8 @@ class Project:
             inputs_data = load_yaml(self.inputs_file.path)
         else:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
+        if not inputs_data:
+            raise InputError('Input file is empty')
         self._inputs = inputs_data
         # Finally return the updated inputs
         return self._inputs
