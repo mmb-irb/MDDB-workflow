@@ -241,7 +241,7 @@ def generate_ligand_mapping (
 
     # If no input ligands are passed then stop here
     if not input_ligands:
-        return []
+        return [], {}
     
     # Save data from all ligands to be saved in a file
     json_ligands_data = []
