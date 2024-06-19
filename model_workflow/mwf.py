@@ -689,7 +689,7 @@ class MD:
             elif test_result == None:
                 # Set the test skip flag and remove previous warnings
                 test_skip_flag = 'skip_' + test_name
-                self.remove_warnings(test_skip_flag)
+                self.register.remove_warnings(test_skip_flag)
                 # Get test pretty name
                 test_nice_name = NICE_NAMES[test_name]
                 # Issue the corresponding warning            
