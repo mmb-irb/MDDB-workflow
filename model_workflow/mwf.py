@@ -263,12 +263,13 @@ class MD:
         if self._md_inputs:
             return self._md_inputs
         # Otherwise we must find its value
-        for md in self.project.input_mds:
-            name = md['name']
-            directory = name_2_directory(name)
-            if directory == self.directory:
-                self._md_inputs = md
-                return self._md_inputs
+        if self.project.input_mds:
+            for md in self.project.input_mds:
+                name = md['name']
+                directory = name_2_directory(name)
+                if directory == self.directory:
+                    self._md_inputs = md
+                    return self._md_inputs
         # If this MD directory has not associated inputs then it means it was forced through command line
         # We set a provisional MD inputs for it
         provisional_name = directory_2_name(self.directory)
