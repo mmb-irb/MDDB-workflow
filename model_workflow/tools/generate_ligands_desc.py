@@ -241,7 +241,7 @@ def generate_ligand_mapping (
 
     # If no input ligands are passed then stop here
     if not input_ligands:
-        return []
+        return [], {}
     
     # Save data from all ligands to be saved in a file
     json_ligands_data = []
@@ -309,7 +309,6 @@ def import_ligands (output_ligands_filepath : str) -> dict:
         for expected_field in LIGAND_DATA_FIELDS:
             if expected_field not in imported_ligand:
                 imported_ligand[expected_field] = None
-    print('imported ', imported_ligands)
     return imported_ligands
 
 # Check if the current input ligand is already among the ligands we already have data for
@@ -486,7 +485,6 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
     atom_elements_per_residue = count_atom_elements_per_residue(structure)
     # From pubchem mine the atoms of the ligands and save it in a dict
     ligand_atom_element_count = count_atom_elements(ligand_data['formula'])
-    #print('Ligands: ', atom_elements_per_ligand)
     matched_residues = []
     # Get ligand pubchem id
     pubchem_id = ligand_data['pubchem']

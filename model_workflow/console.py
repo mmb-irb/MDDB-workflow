@@ -235,6 +235,11 @@ run_parser.add_argument(
     choices=choices,
     help="Set the analyses or tools to be skipped. All other steps will be run")
 
+run_parser.add_argument(
+    "-ow", "--overwrite",
+    nargs='*',
+    default=[],
+    help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool")
 
 run_parser.add_argument(
     "-rcut", "--rmsd_cutoff",

@@ -1306,7 +1306,9 @@ class Project:
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         # Set it we must download just a few frames instead of the whole trajectory
-        sample_trajectory : bool = False
+        sample_trajectory : bool = False,
+        # Overwrite already existing output files
+        overwrite : List[str] = []
     ):
         # Save input parameters
         self.directory = remove_final_slash(directory)
@@ -1394,6 +1396,7 @@ class Project:
         self.rmsd_cutoff = rmsd_cutoff
         self.interaction_cutoff = interaction_cutoff
         self.sample_trajectory = sample_trajectory
+        self.overwrite = overwrite
 
         # Set the inputs, where values from the inputs file will be stored
         self._inputs = None
@@ -2046,8 +2049,13 @@ class Project:
             return self._standard_topology_file
         # If the file already exists then send it
         self._standard_topology_file = File(TOPOLOGY_FILENAME)
+        # Check if the output is to be overwritten
+        must_overwrite = TOPOLOGY_FILENAME in self.overwrite
         if self._standard_topology_file.exists:
-            return self._standard_topology_file
+            if must_overwrite:
+                print('Overwritting standard topology')
+            else:
+                return self._standard_topology_file
         print('-> Generating topology')
         # Otherwise, generate it
         generate_topology(
