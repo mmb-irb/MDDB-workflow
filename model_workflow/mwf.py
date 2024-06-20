@@ -403,7 +403,6 @@ class MD:
         # They may be skipped or allowed to fail
         # Also make sure processing parameters are the same that the last time
         if outputs_exist and len(required_tests) == 0 and self.all_tests_succeeded() and same_processed_paramaters:
-            print('There is no need to process input files')
             return
 
         print('-> Processing input files')
