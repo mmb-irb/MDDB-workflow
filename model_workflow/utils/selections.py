@@ -65,7 +65,13 @@ class Selection:
 
     # Generate the file content of gromacs ndx file
     def to_ndx (self, selection_name : str = 'Selection') -> str:
-        # Add a header 
+        # Add a header
+        # WARNING: Sometimes (and only sometimes) if the selection name includes white spaces there is an error
+        # WARNING: Gromacs may get the wirst word only as the name of the selection, so we must pruge white spaces
+        # WARNING: However, if a call to this function passes a s election names it will expect it to be in the index file
+        # WARNING: For this reason we must kill here the proccess and warn the user
+        if ' ' in selection_name:
+            raise ValueError(f'A Gromacs index file selection name must never include white spaces: {selection_name}')
         content = '[ ' + selection_name + ' ]\n'
         count = 0
         for index in self.atom_indices:
