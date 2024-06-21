@@ -1,5 +1,7 @@
 from typing import List, Optional
 
+from model_workflow.utils.auxiliar import ranger
+
 # A selection is a list of atom indices from a structure
 class Selection:
 
@@ -48,7 +50,9 @@ class Selection:
 
     def to_pytraj (self) -> str:
         # NEVER FORGET: Pytraj counts atoms starting at 1, not at 0
-        return '@' + ','.join([ str(index+1) for index in self.atom_indices ])
+        indices = [ index + 1 for index in self.atom_indices ]
+        # Make ranges for atoms in a row
+        return '@' + ranger(indices)
 
     # Get a string made of all indexes separated by underscores
     # This string can be then passed as a bash argument and easily parsed by other programms

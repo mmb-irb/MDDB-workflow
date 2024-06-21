@@ -1,5 +1,8 @@
 import pytraj as pyt
 from distutils.version import StrictVersion
+from typing import Optional
+
+from model_workflow.utils.selections import Selection
 
 # Set pytraj supported formats
 pytraj_supported_structure_formats = {'prmtop', 'pdb', 'parm7', 'mol2', 'psf', 'cif', 'top', 'sdf'}
@@ -8,13 +11,15 @@ pytraj_supported_trajectory_formats = {'xtc', 'trr', 'crd', 'mdcrd', 'nc', 'dcd'
 # Get the whole trajectory as a generator
 def get_pytraj_trajectory (
     input_topology_filename : str,
-    input_trajectory_filename : str):
+    input_trajectory_filename : str,
+    atom_selection : Optional['Selection'] = None):
 
     # Topology is mandatory to setup the pytraj trajectory
     if not input_topology_filename:
         raise SystemExit('Missing topology file to setup PyTraj trajectory')
     
     # Set the pytraj trayectory and get the number of frames
+    # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atomos later
     pyt_trajectory = pyt.iterload(input_trajectory_filename, input_topology_filename)
     
     # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
@@ -23,6 +28,18 @@ def get_pytraj_trajectory (
     # DANI: Esto es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
     if StrictVersion(pyt.__version__) <= StrictVersion('2.0.5'):
         pyt_trajectory.top.start_new_mol()
+
+    # Filter away atoms which ARE NOT in the atom selection
+    if atom_selection:
+        # Get atom indices for all atoms but the ones in the atom selection
+        topology = pyt_trajectory.top
+        all_atoms = set(range(topology.n_atoms))
+        keep_atoms = set(atom_selection.atom_indices)
+        strip_atoms = all_atoms - keep_atoms
+        if len(strip_atoms) > 0:
+            # Convert the strip atom indices to a pytraj mask string and strip the iterator
+            mask = Selection(strip_atoms).to_pytraj()
+            pyt_trajectory = pyt_trajectory.strip(mask)
 
     return pyt_trajectory
 

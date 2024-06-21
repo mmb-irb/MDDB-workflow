@@ -6,7 +6,7 @@ import os
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 
 # Find interfaces by computing a minimum distance between residues along the trajectory

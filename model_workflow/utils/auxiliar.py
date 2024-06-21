@@ -6,7 +6,7 @@ from os import remove
 import sys
 import json
 import yaml
-from typing import Optional
+from typing import Optional, List
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -87,3 +87,54 @@ ERASE_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 def reprint (text : str):
     print(ERASE_PREVIOUS_LINES)
     print(text)
+
+# Round a number to hundredths
+def round_to_hundredths (number : float) -> float:
+    return round(number * 100) / 100
+
+# Round a number to hundredths
+def round_to_thousandths (number : float) -> float:
+    return round(number * 1000) / 1000
+
+# Given a list with numbers,  create a string where number in a row are represented rangedly
+# e.g. [1, 3, 5, 6, 7, 8] => "1, 3, 5-8"
+def ranger (numbers : List[int]) -> str:
+    # Remove duplicates and sort numbers
+    sorted_numbers = sorted(list(set(numbers)))
+    # Get the number of numbers in the list
+    number_count = len(sorted_numbers)
+    # If there is only one number then finish here
+    if number_count == 1:
+        return str(sorted_numbers[0])
+    # Start the parsing otherwise
+    ranged = ''
+    last_number = -1
+    # Iterate numbers
+    for i, number in enumerate(sorted_numbers):
+        # Skip this number if it was already included in a previous serie
+        if i <= last_number: continue
+        # Add current number to the ranged string
+        ranged += ',' + str(number)
+        # Now iterate numbers after the current number
+        next_index = i+1
+        for j, next_number in enumerate(sorted_numbers[next_index:], next_index):
+            # Set the length of the serie
+            length = j - i
+            # End of the serie
+            if next_number - number != length:
+                # The length here is the length which broke the serie
+                # i.e. if the length here is 2 the actual serie length is 1
+                serie_length = length - 1
+                if serie_length > 1:
+                    last_serie_number = j - 1
+                    previous_number = sorted_numbers[last_serie_number]
+                    ranged += '-' + str(previous_number)
+                    last_number = last_serie_number
+                break
+            # End of the selection
+            if j == number_count - 1:
+                if length > 1:
+                    ranged += '-' + str(next_number)
+                    last_number = j
+    # Remove the first coma before returning the ranged string
+    return ranged[1:]

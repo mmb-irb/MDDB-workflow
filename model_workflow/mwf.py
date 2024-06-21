@@ -58,6 +58,7 @@ from model_workflow.analyses.pca import pca
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
+from model_workflow.analyses.clusters import clusters_analysis
 from model_workflow.analyses.distance_per_residue import distance_per_residue
 #from model_workflow.analyses.hydrogen_bonds_2 import hydrogen_bonds
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
@@ -1125,6 +1126,21 @@ class MD:
             overall_selection = "name CA or name C5"
         )
 
+    # Clusters
+    def genereate_clusters_analysis (self):
+        # Do not run the analysis if the output file already exists
+        output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
+        if exists(output_analysis_filepath):
+            return
+        print('-> Running clusters analysis')
+        clusters_analysis(
+            input_structure_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
+            structure = self.structure,
+            output_analysis_filename = output_analysis_filepath,
+            interactions = self.interactions
+        )
+
     # Distance per residue
     def generate_dist_perres_analysis (self):
         # Do not run the analysis if the output file already exists
@@ -2139,6 +2155,7 @@ processed_files = {
 
 # List of available analyses
 analyses = {
+    'clusters': MD.genereate_clusters_analysis,
     'dist': MD.generate_dist_perres_analysis,
     'energies': MD.generate_energies_analysis,
     'hbonds': MD.generate_hbonds_analysis,

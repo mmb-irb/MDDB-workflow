@@ -447,3 +447,58 @@ def generate_frames_ndx (frames : List[int], filename : str):
     # Write the file
     with open(filename, 'w') as file:
         file.write(content)
+
+# DANI: No se usa, pero me costó un rato ponerla a punto así que la conservo
+# Set a function to read and parse xpm files with a single matrix
+# Inspired in https://gromacswrapper.readthedocs.io/en/latest/_modules/gromacs/fileformats/xpm.html#XPM
+def parse_xpm (filename : str) -> List[ List[float] ]:
+    with open(filename) as file:
+        # First lines include metadata such as the title, description and legend
+        # Read lines until we find the start of the array
+        metadata = [file.readline()]
+        while not metadata[-1].startswith("static char *gromacs_xpm[]"):
+            metadata.append(file.readline())
+        # The next line will contain the dimensions of the matrix
+        # e.g. "7 7   14 1",
+        dimensions = file.readline().replace('"','').replace(',','').split()
+        x_dimension, y_dimension, entity_count, x_stride = [ int(i) for i in dimensions ]
+        # Next lines contain every entity definition
+        # Every entity has the following:
+        # - A letter which is used to refer this entity later in the matrix
+        # - A color in #XXXXXX format
+        # - The actual value of the entity
+        # e.g. "A  c #FFFFFF " /* "0" */,
+        # e.g. "B  c #EBEBFF " /* "1" */,
+        entities = {}
+        for i in range(entity_count):
+            line = file.readline()
+            entity_id = line[1]
+            entity_color = line[6:13]
+            entity_value = line[18:].split('"')[1]
+            entities[entity_id] = { 'value': entity_value, 'color': entity_color }
+        # Next lines are the matrix axis values
+        x_axis = []
+        y_axis = []
+        # Every line has a maximum of 80 labels
+        x_lines = ceil(x_dimension / 80)
+        for l in range(x_lines):
+            line = file.readline()[12:-3].split()
+            x_axis += [ int(v) for v in line ]
+        y_lines = ceil(y_dimension / 80)
+        for l in range(y_lines):
+            line = file.readline()[12:-3].split()
+            y_axis += [ int(v) for v in line ]
+        # Next lines are the matrix rows
+        matrix = []
+        for l in range(y_dimension):
+            line = file.readline()[1:1+x_dimension]
+            row = [ letter for letter in line ]
+            matrix.append(row)
+        # Check the final matrix size is as expected
+        if len(matrix) != y_dimension:
+            raise ValueError('Different number of rows than expected')
+        sample_row = matrix[-1]
+        if len(sample_row) != x_dimension:
+            raise ValueError('Different number of columns than expected')
+        # Return the output
+        return { 'entities': entities, 'x_axis': x_axis, 'y_axis': y_axis, 'matrix': matrix }
