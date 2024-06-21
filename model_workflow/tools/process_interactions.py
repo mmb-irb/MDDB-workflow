@@ -33,6 +33,15 @@ def process_interactions (
     if not input_interactions or len(input_interactions) == 0:
         return []
 
+    # Check input interactions to be correct
+    for interaction in input_interactions:
+        # Check agents have different names
+        if interaction['agent_1'] == interaction['agent_2']:
+            raise InputError(f'Interaction agents must have different names at {interaction["name"]}')
+        # Check agents have different selections
+        if interaction['selection_1'] == interaction['selection_2']:
+            raise InputError(f'Interaction agents must have different selections at {interaction["name"]}')
+
     # If there is a backup then use it
     # Load the backup and return its content as it is
     if interactions_file.exists:
