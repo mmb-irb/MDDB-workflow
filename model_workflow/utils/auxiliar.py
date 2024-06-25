@@ -12,11 +12,11 @@ from typing import Optional, List
 def is_imported (module_name : str) -> bool:
     return module_name in sys.modules
 
-# Set a custom exception for user input errors to avoid showing traceback in the terminal
+# Set custom exception which are to be quiet because they are not caused by an error in the code
 class QuietException (Exception):
     pass
 
-# Set custom exception which are to be quiet because they are not caused by an error in the code
+# Set a custom exception for user input errors to avoid showing traceback in the terminal
 class InputError (QuietException):
     pass
 
