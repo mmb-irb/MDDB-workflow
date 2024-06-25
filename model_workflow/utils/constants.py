@@ -25,6 +25,7 @@ DEFAULT_API_URL = 'https://mmb-dev.mddbr.eu/api'
 
 # Selections
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
+ALL_ATOMS = 'all'
 PROTEIN_AND_NUCLEIC = 'protein or nucleic'
 PROTEIN_AND_NUCLEIC_BACKBONE = "(protein and name N CA C) or (nucleic and name P O5' O3' C5' C4' C3')"
 

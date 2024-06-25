@@ -958,7 +958,7 @@ class MD:
             trust = self.project.trust,
             register = self.register,
             # time_length = self.time_length,
-            check_selection = PROTEIN_AND_NUCLEIC,
+            check_selection = ALL_ATOMS,
             standard_deviations_cutoff = self.project.rmsd_cutoff,
         )
         return self._trajectory_integrity

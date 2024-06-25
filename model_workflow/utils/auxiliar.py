@@ -80,12 +80,18 @@ def load_yaml (filepath : str):
     except:
         raise Exception('Something went wrong when loading YAML file ' + filepath)
 
-# Set a function to reprint in the same line
+# Set a few constants to erase previou logs in the terminal
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
-def reprint (text : str):
+
+# Set a function to remove previous line
+def delete_previous_log ():
     print(ERASE_PREVIOUS_LINES)
+
+# Set a function to reprint in the same line
+def reprint (text : str):
+    delete_previous_log()
     print(text)
 
 # Round a number to hundredths

@@ -4,7 +4,7 @@ import numpy as np
 
 from typing import List
 
-from model_workflow.utils.auxiliar import reprint
+from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
 
@@ -133,7 +133,7 @@ def check_trajectory_integrity (
             register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
             return False
         # Otherwise kill the process right away
-        raise Exception(message)
+        raise TestFailure(message)
 
     # Warn the user if we had bypassed frames
     if bypassed_frames > 0:
@@ -145,8 +145,8 @@ def check_trajectory_integrity (
 
 
 # Compute every residue RMSD to check if there are sudden jumps along the trajectory
-#def check_trajectory_integrity_per_residue (
-def check_trajectory_integrity (
+# HARDCODE: This function is not fully implemented but enabled manually for specific cases
+def check_trajectory_integrity_per_residue (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
@@ -156,9 +156,12 @@ def check_trajectory_integrity (
     register : 'Register',
     #time_length : float,
     check_selection : str,
-    # DANI: He visto saltos 'correctos' pasar de 6
-    # DANI: He visto saltos 'incorrectos' no bajar de 10
+    # DANI: He visto saltos 'correctos' pasar de 11
+    # DANI: He visto saltos 'incorrectos' no bajar de 14
     standard_deviations_cutoff : float):
+
+    # HARDCODE: The default value does not work for a single residue
+    standard_deviations_cutoff = 12
 
     # Skip the test if we trust
     if TRAJECTORY_INTEGRITY_FLAG in trust:
@@ -213,7 +216,12 @@ def check_trajectory_integrity (
     # These numbers may not match when ions are included so we better check
     # NEVER FORGET: The pytraj TrajectoryIterator is not an iterator
     first_frame = pt_trajectory[0:1]
+    # DANI: When the 'resname' argument is missing it prints "Error: Range::SetRange(None): Range is -1 for None"
+    # DANI: However there is no problem and the analysis runs flawlessly
+    # DANI: For this reason we call this function with no resname and then we remove the log
     data_sample = pt.rmsd_perres(first_frame, ref=first_frame, perres_mask=pytraj_selection)
+    # We remove the previous error log
+    delete_previous_log()
     # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
     del data_sample[0]
     if n_residues != len(data_sample):
@@ -240,9 +248,14 @@ def check_trajectory_integrity (
         # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
         # This class has keys but its attributes can not be accessed through the key
         # They must be accessed thorugh the index
-        # DANI: Esto devuelve "Error: Range::SetRange(None): Range is -1 for None"
-        # DANI: No se por que pasa pero aparentemente funciona bien
+        # DANI: When the 'resname' argument is missing it prints "Error: Range::SetRange(None): Range is -1 for None"
+        # DANI: However there is no problem and the analysis runs flawlessly
+        # DANI: Adding resrage as a list/range was tried and did not work, only string works
+        # DANI: Adding a string resrange however strongly impacts the speed when this function is called repeatedly
+        # DANI: For this reason we call this function with no resname and then we remove the log
         rmsd_per_residue = pt.rmsd_perres(frame_trajectory, ref=previous_frame_trajectory, mask=pytraj_selection)
+        # We remove the previous error log
+        delete_previous_log()
         # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
         del rmsd_per_residue[0]
         # Add last values to the list
@@ -274,8 +287,15 @@ def check_trajectory_integrity (
     # Keep the overall maximum bypassed frames number
     overall_bypassed_frames = 0
 
+    # Keep the overall count of residues with outliers
+    overall_outliered_residues = 0
+
+    # Add an extra breakline before the next log
+    print()
+
     # Now check there are not sudden jumps for each residue separattely
     for residue_number in range(n_residues):
+        reprint(f' Residue {residue_number+1}')
         # Get the rmsd jumps for each frame for this specific residue
         rmsd_jumps = [ frame[residue_number] for frame in rmsd_per_residue_per_frame ]
 
@@ -307,22 +327,9 @@ def check_trajectory_integrity (
                 if i == bypassed_frames:
                     bypassed_frames += 1
                     continue
-                if outliers_count >= 4:
-                    print(' etc...')
-                    break
-                print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}')
+                # Otherwise we consider this as an outlier and thus the test has failed
+                # However we keep checking just to find and report the highest outlier
                 outliers_count += 1
-
-        # If there were any outlier then the check has failed
-        if outliers_count > 0:
-            # Add a warning an return True since the test failed in case we have mercy
-            message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
-            if TRAJECTORY_INTEGRITY_FLAG in mercy:
-                register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
-                register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
-                return False
-            # Otherwise kill the process right away
-            raise Exception(message)
 
         # Update the overall bypassed frames if we overcomed it
         if overall_bypassed_frames < bypassed_frames:
@@ -334,9 +341,24 @@ def check_trajectory_integrity (
             overall_max_z_score_frame = max_z_score_frame
             overall_max_z_score_residue = residue_number
 
+        # If there were any outlier then add one to the overall count
+        if outliers_count > 0:
+            overall_outliered_residues += 1
+
     # Always print the overall maximum z score and its frames and residue
     overall_max_z_score_residue_label = pt_trajectory.top.residue(overall_max_z_score_residue)
     print(f' Maximum z score {overall_max_z_score} reported for residue {overall_max_z_score_residue_label} between frames {overall_max_z_score_frame} and {overall_max_z_score_frame + 1}')
+
+    # If there were any outlier then the check has failed
+    if overall_outliered_residues > 0:
+        # Add a warning an return True since the test failed in case we have mercy
+        message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
+        if TRAJECTORY_INTEGRITY_FLAG in mercy:
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
+            register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
+            return False
+        # Otherwise kill the process right away
+        raise TestFailure(message)
 
     # Warn the user if we had bypassed frames
     if overall_bypassed_frames > 0:

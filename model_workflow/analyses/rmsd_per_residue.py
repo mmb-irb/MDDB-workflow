@@ -10,7 +10,7 @@ from typing import List
 from distutils.version import StrictVersion
 
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import delete_previous_log, save_json
 
 # The pytraj trajectory may be reduced
 def rmsd_per_residue (
@@ -61,9 +61,12 @@ def rmsd_per_residue (
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
     # This class has keys but its attributes can not be accessed through the key
     # They must be accessed thorugh the index
-    # DANI: Esto devuelve "Error: Range::SetRange(None): Range is -1 for None"
-    # DANI: No se por que pasa pero aparentemente funciona bien
+    # DANI: When the 'resname' argument is missing it prints "Error: Range::SetRange(None): Range is -1 for None"
+    # DANI: However there is no problem and the analysis runs flawlessly
+    # DANI: For this reason we call this function with no resname and then we remove the log
     data = pt.rmsd_perres(filtered_pt_trajectory)
+    # We remove the previous error log
+    delete_previous_log()
 
     # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
     del data[0]
