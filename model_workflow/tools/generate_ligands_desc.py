@@ -108,15 +108,23 @@ def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     names_and_ids_subsections = names_and_ids_section.get('Section', None)
     if names_and_ids_subsections == None:
         raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
-    
+
     # Mine the name
     synonims = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Synonyms'), None)
-    synonims_subsections = synonims.get('Section', None)
-    if synonims_subsections == None:
-        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
-    depositor_supplied_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
-    name_substance = depositor_supplied_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
-    
+    if synonims == None:
+        descriptors = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
+        descriptors_subsections = descriptors.get('Section', None)
+        if descriptors_subsections == None:
+            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+        depositor_supplied_descriptors = next((s for s in descriptors_subsections if s.get('TOCHeading', None) == 'IUPAC Name'), None)
+        name_substance = depositor_supplied_descriptors.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    else:
+        synonims_subsections = synonims.get('Section', None)
+        if synonims_subsections == None:
+            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+        depositor_supplied_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
+        name_substance = depositor_supplied_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+        
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
     if computed_descriptors_subsection == None:
