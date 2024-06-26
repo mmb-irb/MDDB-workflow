@@ -1863,24 +1863,32 @@ class Structure:
             # Most authors "force" dummy bonds in these atoms to make them stable
             if atom.element in SUPPORTED_ION_ELEMENTS:
                 continue
-            # Get actual number of bonds in the current atom
-            nbonds = len(atom.get_bonds(skip_ions = True))
+            # Get actual number of bonds in the current atom both with and without ion bonds
+            # LORE: This was a problem since some ions are force-bonded but bonds are actually not real
+            # LORE: When an ion is forced we may end up with hyrogens with 2 bonds or carbons with 5 bonds
+            # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbonds (e.g. weird ligands)
+            min_nbonds = len(atom.get_bonds(skip_ions = True))
+            max_nbonds = len(atom.get_bonds(skip_ions = False))
             # Get the accepted range of number of bonds for the current atom according to its element
             element = atom.element
             element_coherent_bonds = coherent_bonds.get(element, None)
             # If there are no specficiations for the current atom element then skip it
             if not element_coherent_bonds:
                 continue
+            # Get the range of accepted number of bonds
+            min_allowed_bonds = element_coherent_bonds['min']
+            max_allowed_bonds = element_coherent_bonds['max']
             # Check the actual number of bonds is insdie the accepted range
-            if nbonds < element_coherent_bonds['min'] or nbonds > element_coherent_bonds['max']:
-                print(f' An atom with element {element} has {nbonds} bonds')
-                min_bonds = element_coherent_bonds['min']
-                max_bonds = element_coherent_bonds['max']
-                if min_bonds == max_bonds:
-                    plural_sufix = '' if min_bonds == 1 else 's'
-                    print(f' It should have {min_bonds} bond{plural_sufix}')
+            if max_nbonds < min_allowed_bonds or min_nbonds > max_allowed_bonds:
+                if min_nbonds == max_nbonds:
+                    print(f' An atom with element {element} has {min_nbonds} bonds')
                 else:
-                    print(f' It should have between {min_bonds} and {max_bonds} bonds')
+                    print(f' An atom with element {element} has between {min_nbonds} bonds (withou ions) and {max_nbonds} bonds (with ions)')
+                if min_allowed_bonds == max_allowed_bonds:
+                    plural_sufix = '' if min_allowed_bonds == 1 else 's'
+                    print(f' It should have {min_allowed_bonds} bond{plural_sufix}')
+                else:
+                    print(f' It should have between {min_allowed_bonds} and {max_allowed_bonds} bonds')
                 print(f' -> Atom {atom.label} (index {atom.index})')
                 return True
         return False
