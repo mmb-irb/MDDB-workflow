@@ -83,6 +83,11 @@ def generate_project_metadata (
             if chain not in structure_chains:
                 raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
 
+    # Get the MD type
+    md_type = get_input('type')
+    # In case this is an ensemble and not a time related trajectory and not an ensemble, the framestep may be missing
+    framestep = None if md_type == 'ensemble' else get_input('framestep')
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -93,7 +98,7 @@ def generate_project_metadata (
         'CONTACT': get_input('contact'),
         'PROGRAM': get_input('program'),
         'VERSION': get_input('version'),
-        'TYPE': get_input('type'),
+        'TYPE': md_type,
         'METHOD': get_input('method'),
         'LICENSE': get_input('license'),
         'LINKCENSE': get_input('linkcense'),
@@ -108,7 +113,7 @@ def generate_project_metadata (
         'LIGANDNAMES': ligand_customized_names,
         'SEQUENCES': sequence_metadata['sequences'],
         'DOMAINS': sequence_metadata['domains'],
-        'FRAMESTEP': get_input('framestep'),
+        'FRAMESTEP': framestep,
         'TIMESTEP': get_input('timestep'),
         'TEMP': get_input('temp'),
         'ENSEMBLE': get_input('ensemble'),
