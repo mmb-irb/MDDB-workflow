@@ -2010,6 +2010,7 @@ class Project:
         # Otherwise we must find the value
         self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             input_ligands = self.input_ligands,
+            input_pdb_ids = self.pdb_ids,
             structure = self.structure,
             output_ligands_filepath = self.output_ligands_filepath, 
         )
