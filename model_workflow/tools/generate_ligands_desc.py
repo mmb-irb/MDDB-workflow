@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import urllib.request
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
@@ -9,6 +8,8 @@ from typing import List, Tuple, Optional, Callable
 
 from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode
+from urllib.error import HTTPError, URLError
 import re
 
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
@@ -21,7 +22,7 @@ def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
         with urlopen(request_url) as response:
             smiles = response.read()
     # If the accession is not found in the database then we stop here
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         # If the drugbank ID is not yet in the Drugbank references then return None
         if error.code == 404:
             return None
@@ -29,7 +30,7 @@ def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
             print('Error when requesting ' + request_url)
             raise ValueError('Something went wrong with the Drugbank request (error ' + str(error.code) + ')')
     # This error may occur if there is no internet connection
-    except urllib.error.URLError as error:
+    except URLError as error:
         print('Error when requesting ' + request_url)
         raise ValueError('Something went wrong with the MDposit request')
 
@@ -51,7 +52,7 @@ def get_chembl_smiles (id_chembl : str) -> Optional[str]:
             smiles = parsed_response['_source']['molecule_structures']['canonical_smiles']
             pubchem_id = parsed_response['_source']['_metadata']['unichem'][8]['id']
     # If the accession is not found in ChemBL then the id is not valid
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         if error.code == 404:
             print('WARNING: Cannot find ChemBL entry for accession ' + id_chembl)
             return None
@@ -76,7 +77,7 @@ def get_pubchem_data (id_pubchem : str) -> Optional[str]:
             #parsed_response = json.loads(response.read().decode("windows-1252"))
             parsed_response = json.loads(response.read().decode("utf-8", errors='ignore'))
     # If the accession is not found in PUBChem then the id is not valid
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         if error.code == 404:
             print('WARNING: Cannot find PUBChem entry for accession ', id_pubchem)
             return None
@@ -159,11 +160,11 @@ def find_drugbank_pubchem (drugbank_id):
             if not pubchem_id:
                 raise ValueError("No se encontró información sobre el Pubchem compound en esta página.")
     # If the accession is not found in the database then we stop here
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         # If the drugbank ID is not yet in the Drugbank references then return None
         raise ValueError(f'Wrong request. Code: {error.code}')
     # This error may occur if there is no internet connection
-    except urllib.error.URLError as error:
+    except URLError as error:
         print('Error when requesting ' + request_url)
         raise ValueError('Something went wrong with the DrugBank request')
     
@@ -190,7 +191,7 @@ def find_chembl_pubchem (id_chembl):
             if pubchem_id == None:
                 raise RuntimeError('Wrong Pubchem data structure: no pubchem ID')
     # If the accession is not found in ChemBL then the id is not valid
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         if error.code == 404:
             print('WARNING: Cannot find ChemBL entry for accession ' + id_chembl)
             return None
@@ -541,13 +542,15 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
 # Given a smiles, get the pubchem id
 # e.g. CC1=C(C=NC=C1)NC(=O)CC2=CC(=CC(=C2)Cl)OC -> 154876006
 def smiles_to_pubchem_id (smiles : str) -> str:
-    # Request the PubChem service
-    request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{smiles}/JSON'
+    # Set the request URL
+    request_url = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/JSON'
+    # Set the POST data
+    data = urlencode({ 'smiles': smiles }).encode()
     try:
-        with urllib.request.urlopen(request_url) as response:
+        with urlopen(request_url, data=data) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the smiles is not found in pubchem then we can stop here
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         if error.code == 404:
             print(f' Smiles {smiles} not found')
             return None
@@ -583,10 +586,10 @@ def pdb_to_smiles (pdb_id : str) -> Optional[ List[str] ]:
     # Request the MMB service to retrieve pdb data
     request_url = 'http://mdb-login.bsc.es/api/pdb/' + pdb_id + '/entry'
     try:
-        with urllib.request.urlopen(request_url) as response:
+        with urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in the PDB then we can stop here
-    except urllib.error.HTTPError as error:
+    except HTTPError as error:
         if error.code == 404:
             print(' PDB code ' + pdb_id + ' not found')
             return None
