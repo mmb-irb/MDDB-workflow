@@ -239,15 +239,19 @@ def generate_ligand_mapping (
     output_ligands_filepath : str,
     ) -> dict:
 
+    # Merge input ligands and pdb ligands
+    ligands = []
+    if input_ligands:
+        ligands += input_ligands
     # Get input ligands from the pdb ids, if any
-    pdb_ligands = []
-    for pdb_id in input_pdb_ids:
-        pubchem_ids = pdb_to_pubchem(pdb_id)
-        for pubchem_id in pubchem_ids:
-            pdb_ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
+    if input_pdb_ids:
+        for pdb_id in input_pdb_ids:
+            pubchem_ids = pdb_to_pubchem(pdb_id)
+            for pubchem_id in pubchem_ids:
+                ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
 
     # If no input ligands are passed then stop here
-    if not input_ligands and not pdb_ligands:
+    if len(ligands) == 0:
         return [], {}
     
     # Save data from all ligands to be saved in a file
@@ -268,18 +272,18 @@ def generate_ligand_mapping (
     # Save the maps of every ligand
     ligand_maps = []
     # Iterate input ligands
-    for input_ligand in input_ligands + pdb_ligands:
+    for ligand in ligands:
         # If input ligand is not a dict but a single int/string then handle it
-        if type(input_ligand) == int:
-            print(f'A ligand number ID has been identified {input_ligand}, assuming that is a PubChem ID...')
-            input_ligand = { 'pubchem': str(input_ligand) }
-        elif type(input_ligand) == str:
-            raise InputError(f'A name of ligand has been identified: {input_ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
+        if type(ligand) == int:
+            print(f'A ligand number ID has been identified {ligand}, assuming that is a PubChem ID...')
+            ligand = { 'pubchem': str(ligand) }
+        elif type(ligand) == str:
+            raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
         # Check if we already have this ligand data
-        ligand_data = obtain_ligand_data_from_file(json_ligands_data, input_ligand)
+        ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
         # If we do not have its data yet then get data from pubchem
         if not ligand_data:
-            ligand_data = obtain_ligand_data_from_pubchem(input_ligand)
+            ligand_data = obtain_ligand_data_from_pubchem(ligand)
             # Get morgan and mordred descriptors, the SMILES is needed for this part
             smiles = ligand_data['smiles']
             mordred_results, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
@@ -307,14 +311,14 @@ def generate_ligand_mapping (
         visited_formulas.append(formula)
         # If the user defined a ligand name, it will be respectedand added to the metadata
         # if there isn't a defined name, it will be mined from PubChem
-        user_forced_ligand_name = input_ligand.get('name', None)
+        user_forced_ligand_name = ligand.get('name', None)
         if user_forced_ligand_name:
             ligand_names[pubchem_id] = user_forced_ligand_name        
         # Map structure residues with the current ligand
         ligand_map = map_ligand_residues(structure, ligand_data)
         # If the ligand did not map then discard it
         if len(ligand_map['residue_indices']) == 0:
-            if not input_ligand.get('pdb', False):
+            if not ligand.get('pdb', False):
                 raise InputError(f'Ligand with PubChem Id {pubchem_id} did not map with any residue')
             ligands_data.pop()
             continue
@@ -345,11 +349,11 @@ def import_ligands (output_ligands_filepath : str) -> dict:
     return imported_ligands
 
 # Check if the current input ligand is already among the ligands we already have data for
-def obtain_ligand_data_from_file ( ligands_data : List[dict], input_ligand: dict ) -> Optional[dict]:
+def obtain_ligand_data_from_file ( ligands_data : List[dict], ligand: dict ) -> Optional[dict]:
     for ligand_data in ligands_data:
-        if (input_ligand.get('pubchem') and input_ligand['pubchem'] == ligand_data.get('pubchem')) or \
-        (input_ligand.get('drugbank') and input_ligand['drugbank'] == ligand_data.get('drugbank')) or \
-        (input_ligand.get('chembl') and input_ligand['chembl'] == ligand_data.get('chembl')):
+        if (ligand.get('pubchem') and ligand['pubchem'] == ligand_data.get('pubchem')) or \
+        (ligand.get('drugbank') and ligand['drugbank'] == ligand_data.get('drugbank')) or \
+        (ligand.get('chembl') and ligand['chembl'] == ligand_data.get('chembl')):
             return ligand_data
     return None
 
