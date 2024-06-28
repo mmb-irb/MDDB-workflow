@@ -258,6 +258,9 @@ def check_trajectory_integrity_per_residue (
         delete_previous_log()
         # We remove the first result, which is meant to be the whole rmsd and whose key is 'RMSD_00001'
         del rmsd_per_residue[0]
+        # Check we have no NaNs
+        if np.isnan(rmsd_per_residue[0][0]):
+            raise ValueError(f'We are having NaNs at frame {frame_number}')
         # Add last values to the list
         rmsd_per_residue_per_frame.append(rmsd_per_residue)
         # rmsd_per_residue_per_frame[:, frame]
