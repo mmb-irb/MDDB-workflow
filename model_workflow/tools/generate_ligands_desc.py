@@ -15,8 +15,8 @@ import re
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
     # Request Drugbank
     request_url = Request(
-         url= f'https://go.drugbank.com/structures/small_molecule_drugs/{id_drugbank}.smiles',
-         headers={'User-Agent': 'Mozilla/5.0'}
+        url= f'https://go.drugbank.com/structures/small_molecule_drugs/{id_drugbank}.smiles',
+        headers={'User-Agent': 'Mozilla/5.0'}
     )
     try:
         with urlopen(request_url) as response:
@@ -43,8 +43,8 @@ def get_chembl_smiles (id_chembl : str) -> Optional[str]:
     # Request ChemBL
     parsed_response = None
     request_url = Request(
-         url= f'https://www.ebi.ac.uk/chembl/interface_api/es_proxy/es_data/get_es_document/chembl_molecule/{id_chembl}',
-         headers={'User-Agent': 'Mozilla/5.0'}
+        url= f'https://www.ebi.ac.uk/chembl/interface_api/es_proxy/es_data/get_es_document/chembl_molecule/{id_chembl}',
+        headers={'User-Agent': 'Mozilla/5.0'}
     )
     try:
         with urlopen(request_url) as response:
@@ -541,7 +541,8 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
 
 # Given a smiles, get the pubchem id
 # e.g. CC1=C(C=NC=C1)NC(=O)CC2=CC(=CC(=C2)Cl)OC -> 154876006
-def smiles_to_pubchem_id (smiles : str) -> str:
+# e.g. O=C4N3C(C(=O)Nc2cc(nn2c1ccccc1)C)C(SC3CC=CC4NC(=O)C(NC)C)(C)C -> None
+def smiles_to_pubchem_id (smiles : str) -> Optional[str]:
     # Set the request URL
     request_url = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/JSON'
     # Set the POST data
@@ -559,39 +560,37 @@ def smiles_to_pubchem_id (smiles : str) -> str:
     # Get the PubChem id
     compounds = parsed_response.get('PC_Compounds', None)
     if not compounds:
-        raise RuntimeError('Something went wrong when mining pubchem data')
+        raise RuntimeError(f'Something went wrong when mining pubchem data for SMILES {smiles}')
     # Make sure there is only 1 compound
     # DANI: Esto algún día podría no ser así, ya lo gestionaremos
     if len(compounds) != 1:
-        raise RuntimeError('There should be one and only one compound')
+        raise RuntimeError(f'There should be one and only one compound for SMILES {smiles}')
     # Keep mining
     compound = compounds[0]
     first_id = compound.get('id', None)
+    # If there is no first id then it means there is no direct match with pubchem
     if not first_id:
-        raise RuntimeError('Missing first id when mining pubchem data')
+        return None
     second_id = first_id.get('id', None)
     if not second_id:
-        raise RuntimeError('Missing second id when mining pubchem data')
+        raise RuntimeError(f'Missing second id when mining pubchem data for SMILES {smiles}')
     pubchem_id = second_id.get('cid', None)
     if not pubchem_id:
-        raise RuntimeError('Missing pubchem id when mining pubchem data')
+        raise RuntimeError(f'Missing pubchem id when mining pubchem data for SMILES {smiles}')
     return str(pubchem_id)
-
-
-
 
 # Given a pdb Id, get its ligand smiles
 # e.g. 4YDF -> O=S(=O)(N(C3C(N(Cc1ccccc1)S(=O)(=O)c2ccc([N+]([O-])=O)cc2)CNC3)Cc4ccccc4)c5cc([N+]([O-])=O)ccc5, [O-]S([O-])(=O)=O
 def pdb_to_smiles (pdb_id : str) -> Optional[ List[str] ]:
     # Request the MMB service to retrieve pdb data
-    request_url = 'http://mdb-login.bsc.es/api/pdb/' + pdb_id + '/entry'
+    request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
     try:
         with urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in the PDB then we can stop here
     except HTTPError as error:
         if error.code == 404:
-            print(' PDB code ' + pdb_id + ' not found')
+            print(f' PDB code {pdb_id} not found')
             return None
         else:
             raise ValueError('Something went wrong with the PDB request: ' + request_url)
@@ -613,16 +612,113 @@ def pdb_to_smiles (pdb_id : str) -> Optional[ List[str] ]:
 
     return smiles_list
 
-# Given a pdb Id, get its ligand smiles
+# Given a PDB ligand code, get its pubchem
+# DANI: Me rindo, he perdido demasiado tiempo con esto
+# DANI: La api del pdb solo me devuelve errores 400 que no me dicen cual es el problema
+def pdb_ligand_to_pubchem (pdb_ligand_id : str) -> str:
+    # Set the request URL
+    request_url = 'https://data.rcsb.org/graphql'
+    request = Request(url = request_url, headers={
+        'Authorization': 'Bearer 5959649b3b067a55a3c1ffad',
+        'contentType': 'application/json'
+    })
+    # Set the POST data
+    data = urlencode({
+        "operationName": "molecule",
+        #'query': 'query molecule($id:String!){chem_comp(comp_id:$id){rcsb_chem_comp_related{resource_name resource_accession_code}}}',
+        "query": "query molecule($id:String!){\n chem_comp(comp_id:$id) {\n rcsb_chem_comp_related{\n resource_name\n resource_accession_code\n }\n }\n}\n",
+        "variables": { "id": pdb_ligand_id }
+    }).encode()
+    # Run the query
+    parsed_response = None
+    try:
+        with urlopen(request, data=data) as response:
+            parsed_response = json.loads(response.read().decode("utf-8"))
+    # If the accession is not found in the PDB then we can stop here
+    except HTTPError as error:
+        if error.code == 404:
+            print(f' PDB ligand {pdb_ligand_id} not found')
+            return None
+        else:
+            print(error.msg)
+            raise ValueError('Something went wrong with the PDB ligand request: ' + request_url)
+    print(parsed_response)
+
+# Given a PDB ligand code, get its pubchem
+# Use a web crawler to avoid having to use the PDB API
+def pdb_ligand_to_pubchem_RAW (pdb_ligand_id : str) -> Optional[str]:
+    # Set the request URL
+    request_url = f'https://www.rcsb.org/ligand/{pdb_ligand_id}'
+    # Run the query
+    parsed_response = None
+    try:
+        with urlopen(request_url) as response:
+            parsed_response = response.read().decode("utf-8")
+    # If the accession is not found in the PDB then we can stop here
+    except HTTPError as error:
+        if error.code == 404:
+            print(f' PDB ligand {pdb_ligand_id} not found')
+            return None
+        else:
+            print(error.msg)
+            raise ValueError('Something went wrong with the PDB ligand request: ' + request_url)
+    # Mine the pubchem id out of the whole response
+    pattern = re.compile('pubchem.ncbi.nlm.nih.gov\/compound\/([0-9]*)\"')
+    match = re.search(pattern, parsed_response)
+    # If there is no pubchem id then return none
+    # This is normal for some ligands such as counter ions (e.g. LI)
+    if not match:
+        return None
+    pubchem_id = match[1]
+    return pubchem_id
+
+# Given a PDB code, get all its ligand codes
+def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
+    # Request the MMB service to retrieve pdb data
+    request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
+    try:
+        with urlopen(request_url) as response:
+            parsed_response = json.loads(response.read().decode("utf-8"))
+    # If the accession is not found in the PDB then we can stop here
+    except HTTPError as error:
+        if error.code == 404:
+            print(f' PDB code {pdb_id} not found')
+            return None
+        else:
+            raise ValueError('Something went wrong with the PDB request: ' + request_url)
+    # Get the 'het' hits or ligands available
+    ligand_codes = []
+    hets = parsed_response.get('hets', None)
+    if not hets:
+        raise RuntimeError('Failed to mine pdb data: missing hets section')
+    # If there are more than one ligand, iterate over them
+    for het in hets:
+        ligand_code = het.get('_id', None)
+        if ligand_code == None:
+            raise RuntimeError('Failed to mine pdb data: missing id')
+        ligand_codes.append(ligand_code)
+    return ligand_codes
+
+# Given a pdb Id, get its pubchem ids
 # e.g. 4YDF -> 
 def pdb_to_pubchem (pdb_id : str) -> List[str]:
     print(f'Searching PubChem Ids for PDB {pdb_id}')
-    # If there are more than one PDB ID, iterate over them and generate the pubchem ID list
     pubchem_ids = []
-    smiles_list = pdb_to_smiles(pdb_id)
-    # Iterate over the diferents SMILES to obtain the pubchem ID 
-    for smiles in smiles_list:
-        pubchem_id = smiles_to_pubchem_id(smiles)
-        print(f' Found {pubchem_id}')
-        pubchem_ids.append(pubchem_id)
+    # Iterate over pdb ligand codes
+    ligand_codes = get_pdb_ligand_codes(pdb_id)
+    for ligand_code in ligand_codes:
+        pubchem_id = pdb_ligand_to_pubchem_RAW(ligand_code)
+        if pubchem_id:
+            pubchem_ids.append(pubchem_id)
+    print(' Found ' + ', '.join(pubchem_ids))
     return pubchem_ids
+    # DANI: De momento no usamos las SMILES que alguna vez me han dado problemas (e.g. 2I3I)
+    # smiles_list = pdb_to_smiles(pdb_id)
+    # # Iterate over the diferents SMILES to obtain the pubchem ID 
+    # for smiles in smiles_list:
+    #     pubchem_id = smiles_to_pubchem_id(smiles)
+    #     if not pubchem_id:
+    #         raise RuntimeError(f'SMILES {smiles} has no PubChem id')
+    #     print(f' Found {pubchem_id}')
+    #     pubchem_ids.append(pubchem_id)
+    # return pubchem_ids
