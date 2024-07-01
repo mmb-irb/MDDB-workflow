@@ -689,8 +689,9 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     # Get the 'het' hits or ligands available
     ligand_codes = []
     hets = parsed_response.get('hets', None)
+    # If the PDB has no ligands at all then there is no 'hets' section
     if not hets:
-        raise RuntimeError('Failed to mine pdb data: missing hets section')
+        return []
     # If there are more than one ligand, iterate over them
     for het in hets:
         ligand_code = het.get('_id', None)
