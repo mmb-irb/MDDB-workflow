@@ -1318,7 +1318,7 @@ class Structure:
             # Get a simplified version of the atom name
             # Set all letters upper and remove non-letter characters (e.g. '+' and '-' symbols)
             simple_atom_name = ''.join(filter(str.isalpha, atom.name.upper()))
-            if simple_atom_name in STANDARD_SOLVENT_RESIDUE_NAMES:
+            if simple_atom_name in STANDARD_COUNTER_ION_ATOM_NAMES:
                 counter_ion_indices.append(atom.index)
         return Selection(counter_ion_indices)
 

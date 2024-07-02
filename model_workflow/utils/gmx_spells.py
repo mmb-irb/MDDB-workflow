@@ -5,7 +5,7 @@ from subprocess import run, PIPE, Popen
 
 from typing import List
 
-from model_workflow.utils.constants import GROMACS_EXECUTABLE
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.file import File
 
 # Get the first frame from a trajectory
@@ -251,8 +251,8 @@ get_trajectory_subset.format_sets = [
 
 # Filter trajectory atoms
 def filter_structure (
-    input_structure_filename : str,
-    output_structure_filename : str,
+    input_structure_file : 'File',
+    output_structure_file : 'File',
     input_selection : 'Selection'
 ):
     # Generate a ndx file with the desired selection
@@ -263,6 +263,7 @@ def filter_structure (
         file.write(filter_index_content)
 
     # Filter the structure
+    print(GREY_HEADER, end='\r')
     p = Popen([
         "echo",
         filter_selection_name,
@@ -271,18 +272,19 @@ def filter_structure (
         GROMACS_EXECUTABLE,
         "editconf",
         "-f",
-        input_structure_filename,
+        input_structure_file.path,
         '-o',
-        output_structure_filename,
+        output_structure_file.path,
         '-n',
         filter_index_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+    print(COLOR_END, end='\r')
 
     # Check the output file exists at this point
     # If not then it means something went wrong with gromacs
-    if not exists(output_structure_filename):
+    if not output_structure_file.exists:
         print(logs)
         raise SystemExit('Something went wrong with Gromacs')
 
@@ -302,9 +304,9 @@ filter_structure.format_sets = [
 
 # Filter trajectory atoms
 def filter_trajectory (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    output_trajectory_filename : str,
+    input_structure_file : 'File',
+    input_trajectory_file : 'File',
+    output_trajectory_file : 'File',
     input_selection : 'Selection'
 ):
     # Generate a ndx file with the desired selection
@@ -315,6 +317,7 @@ def filter_trajectory (
         file.write(filter_index_content)
 
     # Filter the trajectory
+    print(GREY_HEADER, end='\r')
     p = Popen([
         "echo",
         filter_selection_name,
@@ -323,20 +326,21 @@ def filter_trajectory (
         GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
-        input_structure_filename,
+        input_structure_file.path,
         "-f",
-        input_trajectory_filename,
+        input_trajectory_file.path,
         '-o',
-        output_trajectory_filename,
+        output_trajectory_file.path,
         '-n',
         filter_index_filename,
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE).stdout.decode()
     p.stdout.close()
+    print(COLOR_END, end='\r')
 
     # Check the output file exists at this point
     # If not then it means something went wrong with gromacs
-    if not exists(output_trajectory_filename):
+    if not output_trajectory_file.exists:
         print(logs)
         raise SystemExit('Something went wrong with Gromacs')
 

@@ -7,6 +7,8 @@ from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 
 from model_workflow.mwf import workflow, Project, requestables
+from model_workflow.utils.file import File
+from model_workflow.utils.filters import filter_atoms
 from model_workflow.utils.constants import *
 
 # Set the path to the input setter jupyter notebook
@@ -50,6 +52,19 @@ def main ():
             copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
         # Open a text editor for the user
         call(["vim", DEFAULT_INPUTS_FILENAME])
+
+    # In case the filter tool was called
+    if subcommand == 'filter':
+        # Run the convert command
+        filter_atoms(
+            input_structure_file = File(args.input_structure),
+            output_structure_file = File(args.output_structure),
+            input_trajectory_file = File(args.input_trajectory),
+            output_trajectory_file = File(args.output_trajectory),
+            selection_string = args.selection_string,
+            selection_syntax = args.selection_syntax
+        )
+        print('There you have it :)')
 
 
 # Define console arguments to call the workflow
@@ -257,3 +272,25 @@ run_parser.add_argument(
 
 # Add a new to command to aid in the inputs file setup
 inputs_parser = subparsers.add_parser("inputs", help="Set the inputs file", formatter_class=RawTextHelpFormatter)
+
+# The filter command
+filter_parser = subparsers.add_parser("filter",
+    help="Filter atoms in a structure and/or a trajectory\n")
+filter_parser.add_argument(
+    "-is", "--input_structure", required=True,
+    help="Path to input structure file")
+filter_parser.add_argument(
+    "-os", "--output_structure",
+    help="Path to output structure file")
+filter_parser.add_argument(
+    "-it", "--input_trajectory",
+    help="Path to input trajectory file")
+filter_parser.add_argument(
+    "-ot", "--output_trajectory",
+    help="Path to output trajectory file")
+filter_parser.add_argument(
+    "-sel", "--selection_string",
+    help="Atom selection formula")
+filter_parser.add_argument(
+    "-syn", "--selection_syntax", default='vmd',
+    help="Atom selection formula (vmd by default)")
