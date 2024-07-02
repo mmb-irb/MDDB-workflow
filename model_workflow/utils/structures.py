@@ -10,7 +10,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
-from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter
+from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise
 from model_workflow.utils.constants import SUPPORTED_POLYMER_ELEMENTS, SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 
@@ -2102,13 +2102,6 @@ def first_cap_only (name : str) -> str:
     first_character = name[0].upper()
     second_character = name[1].lower()
     return first_character + second_character
-
-# Set a special iteration system
-# Return one value of the array and a new array with all other values for each value
-def otherwise (values : list) -> Generator[tuple, None, None]:
-    for v, value in enumerate(values):
-        others = values[0:v] + values[v+1:]
-        yield value, others
 
 # Convert numbers to lower text characters (chr 8020-8029)
 lower_numbers = {

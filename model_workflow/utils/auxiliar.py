@@ -6,7 +6,7 @@ from os import remove
 import sys
 import json
 import yaml
-from typing import Optional, List
+from typing import Optional, List, Generator
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -62,8 +62,7 @@ def load_json (filepath : str):
 def save_json (content, filepath : str, indent : Optional[int] = None):
     try:
         with open(filepath, 'w') as file:
-            content = json.dump(content, file, indent=indent)
-        return content
+            json.dump(content, file, indent=indent)
     except:
         # Remove the JSON file since it will be half written thus giving problems when loaded
         # Eventually it may be useful to comment this line to debug where the JSON file fails to parse
@@ -79,6 +78,11 @@ def load_yaml (filepath : str):
         return content
     except:
         raise Exception('Something went wrong when loading YAML file ' + filepath)
+
+# Set a YAML saver with additional logic to better handle problems
+def save_yaml (content, filepath : str):
+    with open(filepath, 'w') as file:
+        yaml.dump(content, file)
 
 # Set a few constants to erase previou logs in the terminal
 CURSOR_UP_ONE = '\x1b[1A'
@@ -144,3 +148,10 @@ def ranger (numbers : List[int]) -> str:
                     last_number = j
     # Remove the first coma before returning the ranged string
     return ranged[1:]
+
+# Set a special iteration system
+# Return one value of the array and a new array with all other values for each value
+def otherwise (values : list) -> Generator[tuple, None, None]:
+    for v, value in enumerate(values):
+        others = values[0:v] + values[v+1:]
+        yield value, others
