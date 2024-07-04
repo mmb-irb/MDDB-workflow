@@ -9,6 +9,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter, Action
 from model_workflow.mwf import workflow, Project, requestables
 from model_workflow.utils.file import File
 from model_workflow.utils.filters import filter_atoms
+from model_workflow.utils.subsets import get_trajectory_subset
 from model_workflow.utils.constants import *
 
 # Set the path to the input setter jupyter notebook
@@ -66,6 +67,19 @@ def main ():
         )
         print('There you have it :)')
 
+     # In case the subset tool was called
+    if subcommand == 'subset':
+        output_trajectory = args.output_trajectory if args.output_trajectory else args.input_trajectory
+        get_trajectory_subset(
+            input_structure_file=File(args.input_structure),
+            input_trajectory_file=File(args.input_trajectory),
+            output_trajectory_file=File(output_trajectory),
+            start=args.start,
+            end=args.end,
+            step=args.step,
+            skip=args.skip,
+            frames=args.frames
+        )
 
 # Define console arguments to call the workflow
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
@@ -294,3 +308,31 @@ filter_parser.add_argument(
 filter_parser.add_argument(
     "-syn", "--selection_syntax", default='vmd',
     help="Atom selection formula (vmd by default)")
+
+# The subset command
+subset_parser = subparsers.add_parser("subset",
+    help="Get a subset of frames from the current trajectory.")
+subset_parser.add_argument(
+    "-is", "--input_structure", required=True,
+    help="Path to input structure file")
+subset_parser.add_argument(
+    "-it", "--input_trajectory",
+    help="Path to input trajectory file")
+subset_parser.add_argument(
+    "-ot", "--output_trajectory",
+    help="Path to output trajectory file")
+subset_parser.add_argument(
+    "-start", "--start", type=int, default=0,
+    help="Start frame")
+subset_parser.add_argument(
+    "-end", "--end", type=int, default=None,
+    help="End frame")
+subset_parser.add_argument(
+    "-step", "--step", type=int, default=1,
+    help="Frame step")
+subset_parser.add_argument(
+    "-skip", "--skip", nargs='*', type=int, default=[],
+    help="Frames to be skipped")
+subset_parser.add_argument(
+    "-fr", "--frames", nargs='*', type=int, default=[],
+    help="Frames to be returned. Input frame order is ignored as original frame order is conserved.")
