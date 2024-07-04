@@ -2,6 +2,7 @@ import pytraj as pyt
 from distutils.version import StrictVersion
 from typing import Optional
 
+from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.selections import Selection
 
 # Set pytraj supported formats
@@ -43,18 +44,34 @@ def get_pytraj_trajectory (
 
     return pyt_trajectory
 
-# Get the trajectory frames number using pytraj
+# Get the trajectory frames number
+# LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 def get_frames_count (
-    input_topology_filename : str,
-    input_trajectory_filename : str) -> int:
+    input_topology_file : 'File',
+    input_trajectory_file : 'File') -> int:
+    
+    print('Counting number of frames...')
+
+    if not input_trajectory_file.exists:
+        raise InputError('Missing trajectroy file when counting frames: ' + input_trajectory_file.path)
+    
+    if not input_topology_file.exists:
+        raise InputError('Missing topology file when counting frames: ' + input_topology_file.path)
 
     # Load the trajectory from pytraj
-    pyt_trajectory = get_pytraj_trajectory(
-        input_topology_filename,
-        input_trajectory_filename)
+    pyt_trajectory = pyt.iterload(
+        input_trajectory_file.path,
+        input_topology_file.path)
 
     # Return the frames number
-    return pyt_trajectory.n_frames
+    frames = pyt_trajectory.n_frames
+    print(' Frames: ' + str(frames))
+
+    # If 0 frames were counted then there is something wrong with the file
+    if frames == 0:
+        raise InputError('Something went wrong when reading the trajectory')
+
+    return frames
 # Set function supported formats
 get_frames_count.format_sets = [
     {

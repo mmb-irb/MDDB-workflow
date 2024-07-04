@@ -32,7 +32,6 @@ from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
-from model_workflow.tools.get_frames_count import get_frames_count
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
@@ -48,6 +47,7 @@ from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
+from model_workflow.utils.pyt_spells import get_frames_count
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -574,7 +574,7 @@ class MD:
             self._snapshots = cached_snapshots
         # Othwerise count the number of snaphsots
         else:
-            self._snapshots = get_frames_count(imaged_structure_file.path, imaged_trajectory_file.path)
+            self._snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
             # Save the snapshots value in the register cache as well
             self.register.update_cache(SNAPSHOTS_FLAG, self._snapshots)
 
@@ -759,7 +759,7 @@ class MD:
         print('-> Counting snapshots')
         # Otherwise we must find the value
         # This happens when the input files are already porcessed and thus we did not yet count the frames
-        self._snapshots = get_frames_count(self.structure_file.path, self.trajectory_file.path)
+        self._snapshots = get_frames_count(self.structure_file, self.trajectory_file)
         # Save the snapshots value in the register cache as well
         self.register.update_cache(SNAPSHOTS_FLAG, self._snapshots)
         return self._snapshots
