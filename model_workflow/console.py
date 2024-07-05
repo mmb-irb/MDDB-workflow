@@ -31,9 +31,8 @@ def main ():
     # If there is not subcommand then print help
     if not subcommand:
         parser.print_help()
-        return
     # If user wants to run the workflow
-    if subcommand == "run":
+    elif subcommand == "run":
         dict_args = vars(args)
         del dict_args['subcommand']
         # Find out which arguments are for the Project class and which ones are for the workflow
@@ -55,7 +54,7 @@ def main ():
         call(["vim", DEFAULT_INPUTS_FILENAME])
 
     # In case the filter tool was called
-    if subcommand == 'filter':
+    elif subcommand == 'filter':
         # Run the convert command
         filter_atoms(
             input_structure_file = File(args.input_structure),
@@ -68,7 +67,7 @@ def main ():
         print('There you have it :)')
 
      # In case the subset tool was called
-    if subcommand == 'subset':
+    elif subcommand == 'subset':
         output_trajectory = args.output_trajectory if args.output_trajectory else args.input_trajectory
         get_trajectory_subset(
             input_structure_file=File(args.input_structure),
@@ -80,6 +79,7 @@ def main ():
             skip=args.skip,
             frames=args.frames
         )
+        print('All done :)')
 
 # Define console arguments to call the workflow
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
