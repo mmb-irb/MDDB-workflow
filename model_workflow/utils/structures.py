@@ -379,6 +379,11 @@ class Residue:
         self.set_atom_indices(new_atom_indices)
     atoms = property(get_atoms, set_atoms, None, "The atoms in this residue")
 
+    # Set the number of atoms in the residue
+    def get_atom_count (self) -> int:
+        return len(self.atom_indices)
+    atom_count = property(get_atom_count, None, None, "The number of atoms in the residue (read only)")
+
     # Add an atom to the residue
     def add_atom (self, new_atom : 'Atom'):
         # Insert the new atom index in the list of atom indices keeping the order
@@ -1144,6 +1149,11 @@ class Structure:
             pdb_content = file.read()
         return cls.from_pdb(pdb_content)
 
+    # Set the number of atoms in the structure
+    def get_atom_count (self) -> int:
+        return len(self.atoms)
+    atom_count = property(get_atom_count, None, None, "The number of atoms in the structure (read only)")
+
     # Fix atom elements by gueesing them when missing
     # Set all elements with the first letter upper and the second (if any) lower
     # Also check if atom elements are coherent with atom names
@@ -1281,10 +1291,10 @@ class Structure:
     # Set a function to make selections using atom indices
     def select_atom_indices (self, atom_indices : List[int]) -> 'Selection':
         # Check atom indices to be in the structure
-        atom_count = len(self.atoms)
+        atom_count = self.atom_count
         for atom_index in atom_indices:
             if atom_index >= atom_count:
-                raise InputError('Atom index ' + str(atom_index) + ' is out of range (' + str(atom_count) + ')')
+                raise InputError(f'Atom index {atom_index} is out of range ({atom_count})')
         return Selection(atom_indices)
 
     # Set a function to make selections using residue indices
@@ -1298,8 +1308,7 @@ class Structure:
 
     # Get a selection with all atoms
     def select_all (self) -> 'Selection':
-        atom_count = len(self.atoms)
-        return Selection(list(range(atom_count)))
+        return Selection(list(range(self.atom_count)))
 
     # Select water atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
