@@ -1,6 +1,6 @@
 from itertools import product
 
-import mdtraj as md
+import mdtraj as mdt
 import pytraj as pt
 import numpy as np
 # from scipy.special import expit
@@ -29,7 +29,7 @@ def pytraj_distances(traj, residue_pairs):
 
 
 def mdtraj_distances(traj, residue_pairs):
-    dists, _ = md.compute_contacts(traj, contacts=residue_pairs)
+    dists, _ = mdt.compute_contacts(traj, contacts=residue_pairs)
     return dists
 
 
@@ -85,7 +85,7 @@ def pca_contacts(
             residue_pairs = pytraj_residue_pairs(*residue_lists)
             dists = pytraj_distances(traj, residue_pairs)
         else:
-            traj = md.load(trajectory, top=topology)
+            traj = mdt.load(trajectory, top=topology)
             residue_pairs = mdtraj_residue_pairs(*residue_lists)
             dists = mdtraj_distances(traj, residue_pairs)
 

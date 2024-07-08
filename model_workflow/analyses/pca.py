@@ -4,7 +4,7 @@ import numpy as np
 
 from typing import List
 
-import mdtraj as md
+import mdtraj as mdt
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
@@ -41,7 +41,7 @@ def pca (
     parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd') - pbc_selection
 
     # Load the trajectory
-    mdtraj_trajectory = md.load(pca_trajectory_filepath, top=input_topology_file.path)
+    mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=input_topology_file.path)
     # Fit the trajectory according to the specified fit selection
     mdtraj_trajectory.superpose(mdtraj_trajectory, frame=0, atom_indices=parsed_fit_selection.atom_indices)
     # Filter the atoms to be analized
@@ -94,7 +94,7 @@ def pca (
         selected_projections = [ min_projection + projection_step * s for s in range(projection_frames) ]
         selected_coordinates = [ coordinates[get_closer_value_index(frame_projections, p)] for p in selected_projections ]
         # Load coordinates in mdtraj and export the trajectory to xtc
-        trajectory_projection = md.Trajectory(selected_coordinates, mdtraj_trajectory.topology)
+        trajectory_projection = mdt.Trajectory(selected_coordinates, mdtraj_trajectory.topology)
         trajectory_projection_filename = output_trajectory_projections_prefix + '_' + str(i+1).zfill(2) + '.xtc'
         trajectory_projection.save_xtc(trajectory_projection_filename)
         # Save projections to be further exported to json
