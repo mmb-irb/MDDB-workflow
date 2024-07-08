@@ -231,11 +231,11 @@ class Atom:
     # Guess an atom element from its name and number of bonds
     def guess_element (self) -> str:
         element = self.get_name_suggested_element()
-        # CA may refer to calcium or alpha carbon, so the number of bonds is decisive
-        if element == 'Ca' and len(self.bonds) >= 2:
+        # CA may refer to calcium or alpha carbon, so the number of atoms in the residue is decisive
+        if element == 'Ca' and self.residue.atom_count >= 2:
             return 'C'
-        # NA may refer to sodium or some ligand nitrogen, so the number of bonds is decisive
-        if element == 'Na' and len(self.bonds) >= 2:
+        # NA may refer to sodium or some ligand nitrogen, so the number of atoms in the residue is decisive
+        if element == 'Na' and self.residue.atom_count >= 2:
             return 'N'
         return element
 
@@ -1906,6 +1906,9 @@ class Structure:
     # Bonds are defined as a list of atom indices for each atom in the structure
     # Rely on VMD logic to do so
     def get_covalent_bonds (self, selection : Optional['Selection'] = None) -> List[ List[int] ]:
+        # It is important to fix elements before trying to fix bonds, since elements have an impact on bonds
+        # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
+        self.fix_atom_elements()
         # Generate a pdb strucutre to feed vmd
         auxiliar_pdb_filename = '.structure.pdb'
         self.generate_pdb_file(auxiliar_pdb_filename)
