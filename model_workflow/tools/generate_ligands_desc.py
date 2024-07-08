@@ -68,10 +68,7 @@ def get_chembl_smiles (id_chembl : str) -> Optional[str]:
 def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     # Request PUBChem
     parsed_response = None
-    request_url = Request(
-        url= f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{id_pubchem}/JSON/',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
+    request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{id_pubchem}/JSON/'
     try:
         with urlopen(request_url) as response:
             #parsed_response = json.loads(response.read().decode("windows-1252"))
