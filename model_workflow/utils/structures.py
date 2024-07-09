@@ -472,7 +472,7 @@ class Residue:
         # If we dont have a value then we must classify the residue
         # -------------------------------------------------------------------------------------------------------
         # Ions are single atom residues
-        if len(self.atom_indices) == 1:
+        if self.atom_count == 1:
             self._classification = 'ion'
             return self._classification
         # -------------------------------------------------------------------------------------------------------
@@ -481,7 +481,7 @@ class Residue:
         if self.structure._fixed_atom_elements == False:
             self.structure.fix_atom_elements()
         # Solvent is water molecules
-        if len(self.atom_indices) == 3:
+        if self.atom_count == 3:
             atom_elements = [ atom.element for atom in self.atoms ]
             if atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
                 self._classification = 'solvent'
@@ -874,7 +874,7 @@ class Structure:
         self._ion_atom_indices = None
 
     def __repr__ (self):
-        return '<Structure (' + str(len(self.atoms)) + ' atoms)>'
+        return f'<Structure ({self.atom_count} atoms)>'
 
     # The bonds between atoms
     def get_bonds (self) -> List[ List[int] ]:
@@ -950,7 +950,7 @@ class Structure:
     # Set a new atom in the structure
     def set_new_atom (self, atom : 'Atom'):
         atom._structure = self
-        new_atom_index = len(self.atoms)
+        new_atom_index = self.atom_count
         self.atoms.append(atom)
         atom._index = new_atom_index
 
@@ -1333,7 +1333,7 @@ class Structure:
 
     # Invert a selection
     def invert_selection (self, selection : 'Selection') -> 'Selection':
-        atom_indices = list(range(len(self.atoms)))
+        atom_indices = list(range(self.atom_count))
         for atom_index in selection.atom_indices:
             atom_indices[atom_index] = None
         return Selection([ atom_index for atom_index in atom_indices if atom_index != None ])
@@ -1555,7 +1555,7 @@ class Structure:
 
     # Get a summary of the structure
     def display_summary (self):
-        print('Atoms: ' + str(len(self.atoms)))
+        print('Atoms: ' + str(self.atom_count))
         print('Residues: ' + str(len(self.residues)))
         print('Chains: ' + str(len(self.chains)))
         for chain in self.chains:
@@ -2003,7 +2003,7 @@ class Structure:
                 for ring in find_rings_recursive(atom_path=new_path):
                     yield ring
         # Find a starting atom and run the recursive logic
-        candidate_atom_indices = selected_atom_indices if selected_atom_indices else range(len(self.atoms))
+        candidate_atom_indices = selected_atom_indices if selected_atom_indices else range(self.atom_count)
         for candidate_atom_index in candidate_atom_indices:
             candidate_atom = self.atoms[candidate_atom_index]
             # It must be heavy atom
