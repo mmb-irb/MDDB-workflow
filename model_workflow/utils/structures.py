@@ -96,6 +96,10 @@ class Atom:
     def get_residue_index (self) -> int:
         return self._residue_index
     def set_residue_index (self, new_residue_index : int):
+        # If the new residue index is the current residue index then do nothing
+        # WARNING: It is important to stop this here or it could delete a residue which is not to be deleted
+        if new_residue_index == self.residue_index:
+            return
         # If there is not strucutre yet it means the residue is beeing set before the structure
         # We just save the residue index and wait for the structure to be set
         if not self.structure:
@@ -405,6 +409,10 @@ class Residue:
     def get_chain_index (self) -> int:
         return self._chain_index
     def set_chain_index (self, new_chain_index : int):
+        # If the new chain index is the current chain index do nothing
+        # WARNING: It is important to stop this here or it could delete a chain which is not to be deleted
+        if new_chain_index == self.chain_index:
+            return
         # If there is not strucutre yet it means the chain is beeing set before the structure
         # We just save the chain index and wait for the structure to be set
         if not self.structure:
