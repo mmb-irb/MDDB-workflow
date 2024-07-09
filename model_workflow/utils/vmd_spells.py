@@ -15,7 +15,7 @@ commands_filename = '.commands.vmd'
 
 # List all the vmd supported trajectory formats
 vmd_supported_structure_formats = {'pdb', 'prmtop', 'psf', 'parm', 'gro'} # DANI: Esto lo he hecho rápido, hay muchas más
-vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf'}
+vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb'}
 
 # Set a vmd format translator
 vmd_format = {
