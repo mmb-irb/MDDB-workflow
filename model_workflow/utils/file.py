@@ -56,6 +56,9 @@ class File:
     def __str__ (self) -> str:
         return self.__repr__()
 
+    def __hash__ (self) -> str:
+        return hash(self.path)
+
     def __bool__ (self) -> bool:
         return bool(self.filename)
 

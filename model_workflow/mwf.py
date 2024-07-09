@@ -3,8 +3,8 @@
 # This is the starter script
 
 # Import python libraries
-from os import chdir, remove, symlink, rename, walk, mkdir, getcwd
-from os.path import exists, islink, isabs, relpath
+from os import chdir, symlink, rename, walk, mkdir, getcwd
+from os.path import exists, isabs
 import sys
 import io
 import math
@@ -634,15 +634,21 @@ class MD:
 
         # --- Cleanup intermediate files
 
-        intermediate_filenames = [
-            CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY,
-            FILTERED_STRUCTURE, FILTERED_TRAJECTORY,
-            IMAGED_STRUCTURE, IMAGED_TRAJECTORY
-        ]
-        for filename in intermediate_filenames:
-            file_path = self.md_pathify(filename)
-            if exists(file_path) or islink(file_path):
-                remove(file_path)
+        # Set a list of intermediate files
+        intermediate_files = set([
+            converted_structure_file, converted_trajectory_file,
+            filtered_structure_file, filtered_trajectory_file,
+            imaged_structure_file, imaged_trajectory_file,
+        ])
+        # Set also a list of input files
+        inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
+        # We must make sure an intermediate file is not actually an input file before deleting it
+        removable_files = intermediate_files - inputs_files
+        # Now delete every removable file
+        for removable_file in removable_files:
+            # Note that a broken symlink does not 'exists'
+            if removable_file.exists or removable_file.is_symlink():
+                removable_file.remove()
 
         # --- RUNNING FINAL TESTS ------------------------------------------------------------
 
