@@ -97,12 +97,23 @@ def get_screenshot(
         file.write('axes location Off \n')
         # Eliminate the molecule to perform changes in the representation, color and material 
         file.write('mol delrep 0 top \n')
+        # First add a spcific representation for polymers (protein and nucleic acids)
         # Change the default representation model to Newcartoon
         file.write('mol representation Newcartoon \n')
         # Change the default atom coloring method setting to Chain
         file.write('mol color Chain \n')
         # Set the default atom selection setting to all
-        file.write('mol selection {all} \n')
+        file.write('mol selection "protein or nucleic" \n')
+        # Change the current material of the representation of the molecule
+        file.write('mol material Opaque \n')
+        # Using the new changes performed previously add a new representation to the new molecule
+        file.write('mol addrep top \n')
+        # Change the default representation model to Newcartoon
+        file.write('mol representation cpk \n')
+        # Change the default atom coloring method setting to Chain
+        file.write('mol color element \n')
+        # Set the default atom selection setting to all
+        file.write('mol selection "not protein and not nucleic" \n')
         # Change the current material of the representation of the molecule
         file.write('mol material Opaque \n')
         # Using the new changes performed previously add a new representation to the new molecule
