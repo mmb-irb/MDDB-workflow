@@ -64,25 +64,26 @@ def get_chembl_smiles (id_chembl : str) -> Optional[str]:
         return None
     return smiles
 
-# Given a PUBChem ID, use the uniprot API to request its data and then mine what is needed for the database
-def get_pubchem_data (id_pubchem : str) -> Optional[str]:
-    # Request PUBChem
+# Given a PubChem ID, use the uniprot API to request its data and then mine what is needed for the database
+def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
+    # Request PubChem
     parsed_response = None
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{id_pubchem}/JSON/'
     try:
         with urlopen(request_url) as response:
             #parsed_response = json.loads(response.read().decode("windows-1252"))
             parsed_response = json.loads(response.read().decode("utf-8", errors='ignore'))
-    # If the accession is not found in PUBChem then the id is not valid
+    # If the accession is not found in PubChem then the id is not valid
+    # This may happen with pubchem ids of non-discrete compounds (e.g. 483927498)
     except HTTPError as error:
         if error.code == 404:
-            print('WARNING: Cannot find PUBChem entry for accession ', id_pubchem)
+            print('WARNING: Cannot find PubChem entry for accession ', id_pubchem)
             return None
         print('Error when requesting ', request_url)
-        raise ValueError('Something went wrong with the PUBChem request (error ', str(error.code), ')')
+        raise ValueError('Something went wrong with the PubChem request (error ', str(error.code), ')')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
     if parsed_response == None:
-        print('WARNING: Cannot find PUBChem entry for accession ' + id_pubchem)
+        print('WARNING: Cannot find PubChem entry for accession ' + id_pubchem)
         return None
     # Mine target data: SMILES
     record = parsed_response.get('Record', None)
@@ -136,7 +137,8 @@ def get_pubchem_data (id_pubchem : str) -> Optional[str]:
     if molecular_formula == None:
         raise RuntimeError('Wrong Pubchem data structure: no molecular formula')
 
-    return name_substance, smiles, molecular_formula
+    # Prepare the pubchem data to be returned
+    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula }
 
 
 def find_drugbank_pubchem (drugbank_id):
@@ -382,11 +384,12 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
         raise InputError('None of the ligand IDs are defined. Please provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
  
     # Request ligand data from pubchem
-    ligand_name, smiles, molecular_formula = get_pubchem_data(ligand_data['pubchem'])
-    ligand_data['name'] = ligand_name
-    ligand_data['smiles'] = smiles
-    ligand_data['formula'] = molecular_formula
-    #ligand_data[ligand_name] = ligand_data['pubchem'] # DANI: no se que hace
+    pubchem_data = get_pubchem_data(ligand_data['pubchem'])
+    if not pubchem_data:
+        raise RuntimeError('No PubChem data avilable')
+
+    # Add pubchem data to ligand data
+    ligand_data = { **ligand_data, **pubchem_data }
     
     return ligand_data
 
