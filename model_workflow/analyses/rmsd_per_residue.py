@@ -45,7 +45,22 @@ def rmsd_per_residue (
     filter_out_atom_indices = ion_atom_indices + pbc_atom_indices
     filter_out_selection = structure.select_atom_indices(filter_out_atom_indices)
     filter_in_selection = structure.invert_selection(filter_out_selection)
+
+    # Calculate the residue indices of the overall structure remaining in the filtered trajectory
+    residue_indices = structure.get_selection_residue_indices(filter_in_selection)
+    # Count the number of residues
+    residue_count = len(residue_indices)
+
+    # Make sure we have more than 1 residue left at this point
+    # Otherwise it makes not sense running this analysis for a single residue
+    if residue_count <= 1:
+        tail = 'no resiudes at all' if residue_count == 0 else 'one residue only'
+        print('  The RMSD per residue analysis will be skipped since it would be applied to ' + tail)
+        return
+
+    # Convert the selection to a pytraj mask
     pytraj_selection = filter_in_selection.to_pytraj()
+    # Apply the mask to the trajectory
     filtered_pt_trajectory = pt_trajectory[pytraj_selection]
     # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
     # This happens with some random pdbs which pytraj considers to have 0 Mols
@@ -53,9 +68,6 @@ def rmsd_per_residue (
     # IMPORTANT: This is critical for pytraj <= 2.0.5 but it makes the code fail for pytraj 2.0.6
     if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
         filtered_pt_trajectory.top.start_new_mol()
-
-    # Calculate the residue indices of the overall structure remaining in the filtered trajectory
-    residue_indices = structure.get_selection_residue_indices(filter_in_selection)
 
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
@@ -72,8 +84,8 @@ def rmsd_per_residue (
     del data[0]
 
     # Check the expected output number of residues to match with the pytraj results
-    if len(residue_indices) != len(data):
-        raise ValueError('Number of residues in structure (' + str(len(residue_indices)) + ') does not match number of residues in RMSD-perres results (' + str(len(data)) + ')')
+    if residue_count != len(data):
+        raise ValueError(f'Number of residues in structure ({residue_count}) does not match number of residues in RMSD-perres results ({len(data)})')
 
     # Mine the analysis data
     whole_structure_residues_count = len(structure.residues)
