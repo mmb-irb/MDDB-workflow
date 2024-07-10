@@ -1,6 +1,6 @@
 # Auxiliar generic functions and classes used along the workflow
 
-from model_workflow.utils.constants import RESIDUE_NAME_LETTERS
+from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
 
 from os import remove
 import sys
@@ -97,6 +97,10 @@ def delete_previous_log ():
 def reprint (text : str):
     delete_previous_log()
     print(text)
+
+# Set a function to print a messahe with a colored warning header
+def warn (message : str):
+    print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
 
 # Round a number to hundredths
 def round_to_hundredths (number : float) -> float:

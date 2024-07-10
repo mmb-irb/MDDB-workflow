@@ -42,7 +42,7 @@ from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, load_json, save_json, load_yaml
+from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, load_yaml
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -355,7 +355,7 @@ class MD:
         # If the structure was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_structure_file):
             message = 'Structure was modified since the last processing or is new'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            warn(message)
             required_tests.update(STRUCTURE_TESTS)
 
         # If there is no trajectory then we must run some tests
@@ -364,7 +364,7 @@ class MD:
         # If the trajectory was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_trajectory_file):
             message = 'Trajectory was modified since the last processing or is new'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            warn(message)
             required_tests.update(TRAJECTORY_TESTS)
 
         # If there is no topology then we must run some tests
@@ -373,7 +373,7 @@ class MD:
         # If the topology was modified since the last time then we must run these tests as well
         elif self.project.register.is_file_modified(output_topology_file):
             message = 'Topology was modified since the last processing or is new'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+            warn(message)
             required_tests.update(TOPOLOGY_TESTS)
 
         # If any of the required tests was already passed then reset its value and warn the user
