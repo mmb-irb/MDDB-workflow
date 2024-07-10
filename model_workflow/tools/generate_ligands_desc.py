@@ -371,13 +371,13 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
 
     # Set ligand data pubchem id, even if the input id is not from pubhcme (e.g. drugbakn, chembl)
     if 'pubchem' in ligand:
-        ligand_data['pubchem'] = ligand.get('pubchem')
+        ligand_data['pubchem'] = str(ligand.get('pubchem'))
     elif 'drugbank' in ligand:
         ligand_data['drugbank'] = ligand.get('drugbank')
-        ligand_data['pubchem'] = find_drugbank_pubchem(ligand_data['drugbank'])
+        ligand_data['pubchem'] = str(find_drugbank_pubchem(ligand_data['drugbank']))
     elif 'chembl' in ligand:
         ligand_data['chembl'] = ligand.get('chembl')
-        ligand_data['pubchem'] = find_chembl_pubchem(ligand_data['chembl'])
+        ligand_data['pubchem'] = str(find_chembl_pubchem(ligand_data['chembl']))
     else:
         raise InputError('None of the ligand IDs are defined. Please provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
  
