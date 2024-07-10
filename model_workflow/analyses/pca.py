@@ -7,7 +7,7 @@ from typing import List
 import mdtraj as mdt
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import warn, save_json
 
 # Perform the PCA analysis
 def pca (
@@ -32,13 +32,23 @@ def pca (
         frames_limit,
     )
 
-    # Parse PBC residues into a selection to be removed from further PCA selections
-    pbc_selection = structure.select_residue_indices(pbc_residues)
-
     # Parse the string selections
     # VMD selection syntax
-    parsed_fit_selection = structure.select(fit_selection, syntax='vmd') - pbc_selection
-    parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd') - pbc_selection
+    parsed_fit_selection = structure.select(fit_selection, syntax='vmd')
+    if not parsed_fit_selection:
+        print(f'PCA fit selection: {fit_selection}')
+        warn('PCA fit selection is empty -> Using all atoms instead')
+        parsed_fit_selection = structure.select_all()
+    parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd')
+    if not parsed_analysis_selection:
+        print(f'PCA analysis selection: {analysis_selection}')
+        warn('PCA analysis selection is empty -> Using all atoms instead')
+        parsed_analysis_selection = structure.select_all()
+
+    # Parse PBC residues into a selection to be removed from PCA selections
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+    parsed_fit_selection -= pbc_selection
+    parsed_analysis_selection -= pbc_selection
 
     # Load the trajectory
     mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=input_topology_file.path)
