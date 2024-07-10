@@ -19,7 +19,7 @@
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 from os.path import exists, getsize
-from os import mkdir
+from os import mkdir, remove
 import re
 import collections
 
@@ -28,7 +28,7 @@ from subprocess import run, PIPE, Popen
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import warn, ToolError, save_json
 from model_workflow.utils.file import File
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 
@@ -36,6 +36,13 @@ CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE
 ERASE_4_PREVIOUS_LINES = ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + CURSOR_UP_ONE
+
+# Set some known error logs to check if we are having them
+KNOWN_ERRORS = set([
+    'No Pockets Found while refining',
+    'No pocket to reindex',
+    'Error in creating clustering tree, return NULL pointer...breaking up'
+])
 
 # Perform the pockets analysis
 def pockets (
@@ -106,8 +113,22 @@ def pockets (
         # If file does not exist or is still empty at this point then somethin went wrong
         if not exists(grid_filename) or getsize(grid_filename) == 0:
             print(error_logs)
-            raise Exception('Something went wrong with mdpocket while searching pockets')
-            
+            raise ToolError('Something went wrong with mdpocket while searching pockets')
+
+        # Check if we are having concerning error logs
+        errored = False
+        for error in KNOWN_ERRORS:
+            matches = re.findall(error, error_logs)
+            count = len(matches)
+            if count > 0:
+                warn(f'We are having "{error}" ({count})')
+                errored = True
+
+        # If so we can stop here since we will not be able to mine the grid filename
+        if errored:
+            if exists(grid_filename):
+                remove(grid_filename)
+            raise ToolError('We had errors with mdpocket while searching pockets')
 
     # Read and harvest the gird file
     with open(grid_filename, 'r') as file:
@@ -127,7 +148,11 @@ def pockets (
             if origin and dimensions:
                 break
         if not dimensions:
-            raise Exception('Falied to mine dimensions')
+            # This may happend when one of the dimensions is negative, which an mdpocket error
+            # DANI: El origen de esto no está claro pero cuando me pasó vino acompañado de muchos errores:
+            # DANI: '! No Pockets Found while refining' y '! No pocket to reindex.'
+            # DANI: Además de algún 'Error in creating clustering tree, return NULL pointer...breaking up!'
+            raise Exception('Failed to mine dimensions')
 
         # Next, mine the grid values
         grid_values = []

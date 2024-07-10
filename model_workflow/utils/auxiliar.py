@@ -12,18 +12,21 @@ from typing import Optional, List, Generator
 def is_imported (module_name : str) -> bool:
     return module_name in sys.modules
 
-# Set custom exception which are to be quiet because they are not caused by an error in the code
+# Set custom exception which is not to print traceback
+# They are used when the problem is not in our code
 class QuietException (Exception):
     pass
 
-# Set a custom exception for user input errors to avoid showing traceback in the terminal
+# Set a custom quite exception for when user input is wrong
 class InputError (QuietException):
     pass
 
+# Set a custom quite exception for when MD data has not passed a quality check test
 class TestFailure (QuietException):
     pass
 
-class MissingDependency (QuietException):
+# Set a custom quite exception for when the problem comes from a third party dependency
+class ToolError (QuietException):
     pass
 
 # Set a custom exception handler where our input error exception has a quiet behaviour
