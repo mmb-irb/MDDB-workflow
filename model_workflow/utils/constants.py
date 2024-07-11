@@ -270,6 +270,7 @@ RESIDUE_NAME_LETTERS = {
     'GLU':'E',
     'GLUN':'E',
     'GLUC':'E',
+    'GLUP':'E',
     'GLY':'G',
     'GLYN':'G',
     'GLYC':'G',
