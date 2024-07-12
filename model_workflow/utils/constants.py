@@ -103,6 +103,9 @@ OUTPUT_METADATA_FILENAME = 'metadata.json'
 # Set the screenshot filename
 OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 
+# Additional screenshot filenames
+OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.cluster_screenshot_*.jpg'
+
 # Set analyses files to be generated
 OUTPUT_INTERACTIONS_FILENAME = 'mda.interactions.json'
 OUTPUT_RMSDS_FILENAME = 'mda.rmsds.json'
@@ -114,7 +117,7 @@ OUTPUT_PCA_PROJECTION_PREFIX = 'mdt.pca_trajectory'
 OUTPUT_PCA_CONTACTS_FILENAME = 'mda.pca_contacts.json'
 OUTPUT_RMSD_PERRES_FILENAME = 'mda.rmsd_perres.json'
 OUTPUT_RMSD_PAIRWISE_FILENAME = 'mda.rmsd_pairwise.json'
-OUTPUT_CLUSTERS_FILENAME = 'mda.clusters.json'
+OUTPUT_CLUSTERS_FILENAME = 'mda.clusters_*.json'
 OUTPUT_DIST_PERRES_FILENAME = 'mda.dist_perres.json'
 OUTPUT_HBONDS_FILENAME = 'mda.hbonds.json'
 OUTPUT_SASA_FILENAME = 'mda.sasa.json'
@@ -183,6 +186,7 @@ EXTENSION_FORMATS = {
     'top': 'top',
     'psf': 'psf',
     'prmtop': 'prmtop',
+    'parm7': 'prmtop',
     'prm7': 'prmtop',
     'txt': 'txt', # charges.txt
     # Structures
