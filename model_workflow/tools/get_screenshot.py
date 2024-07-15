@@ -1,6 +1,7 @@
 from subprocess import run, PIPE
-import os
-from typing import List, Tuple
+from os import environ, remove
+from os.path import exists
+from typing import List, Tuple, Optional
 from PIL import Image
 import math
 from model_workflow.utils.structures import Structure
@@ -20,20 +21,17 @@ auxiliary_tga_filename = '.transition_screenshot.tga'
 # This is useful for debugging purposes only
 debug = False
 
-# Set a function to write a tuple of numbers (point coorinates) as VMD expect these value: a string separated by space
-def tuple_to_vmd (point : tuple) -> str:
-    return str(point[0]) + ' ' + str(point[1]) + ' ' + str(point[2])
-
 # Python function to obtain a screenshot from the pdb file using VMD a molecular modelling and visualization computer program
-def get_screenshot(
+# Return the rotation values used to take the photo so they can be saved and reused
+def get_screenshot (
     input_structure_filename : str,
-    # input_coordinates_filename : List[float] 
-    # Remains like this as we are not able to use a set of values for the rotation, translation and zoom and apply them to the molecule
     output_screenshot_filename : str,
-    #input_rotate_matrix : List[float],
-    #input_scale_matrix : List[float],
-    #input_global_matrix : List[float],
-):
+    # You may pass the camera rotation, translation and zoom parameters so they are not calculated again
+    # This is useful to keep screenshots coherent between different clusters/markov states
+    # Note that a slight movement in the molecule may make the rotation logic here use a different angle
+    # Thus the image could be radically different and misleading, since the change could be minimal
+    parameters : Optional[dict] = None
+) -> dict:
 
     # Check the output screenshot file extension is JPG
     if output_screenshot_filename.split('.')[-1] != 'jpg':
@@ -44,12 +42,15 @@ def get_screenshot(
     # Number of pixels to scale in y
     y_number_pixels = 350
 
+    # Save the current value of the VMDSCRSIZE enviornmental variable
+    VMDSCRSIZE_backup = environ.get('VMDSCRSIZE', '')
+
     # Set an enviornment variable to handle the window size
     # WARNING: Use this system instead of the 'display resize' command
     # This command silently kills VMD when it is run in sbatch (but not in salloc)
     # The cause is not clear but this command may depend on OpenGL rendering features which are not supported in sbatch
     # https://www.ks.uiuc.edu/Training/Tutorials/vmd/tutorial-html/node8.html
-    os.environ['VMDSCRSIZE'] = str(x_number_pixels) + " " + str(y_number_pixels)
+    environ['VMDSCRSIZE'] = str(x_number_pixels) + " " + str(y_number_pixels)
 
     # Change the scale factor as wished, since some big molecules may overfill in the VMD window
     scale_factor = 2
@@ -71,57 +72,48 @@ def get_screenshot(
         file.write('puts $center_file $center \n')
         # Exit VMD 
         file.write('exit \n')
+
     # Run VMD
-    logs = run([
+    process = run([
         "vmd",
         input_structure_filename,
         "-e",
         commands_filename_1,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
+
+    # If the center file was not generated then something went wrong with VMD
+    if not exists(center_filename):
+        print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
+        raise ToolError('Something went wrong with VMD while generating the center point file')
+    
     # Read the generated file to get the center
-    with open(".center_point_filename.txt","r") as file:
+    with open(center_filename,"r") as file:
         line = file.readline().split()
         line = [float(i) for i in line]
     vmd_center_coordinates = line
 
-    # Set a file name for the commands file
-    commands_filename_2 = '.commands_2.vmd'
+    # Set the camera rotation, translation and zoom values to get the optimal picture
+    angle = None
+    angle2 = None
+    y_axis_difference_vector = None        
+    x_axis_difference_vector = None
+    scale = None
+    
+    # If precalculated values are passed then use them
+    if parameters:
+        angle = parameters['angle']
+        angle2 = parameters['angle2']
+        y_axis_difference_vector = parameters['y_axis_difference_vector']
+        x_axis_difference_vector = parameters['x_axis_difference_vector']
+        scale = parameters['scale']
 
-    # Now write the VMD script for the rotation
-    with open(commands_filename_2, "w") as file:
-        # Set the Background of the molecule to white color
-        file.write('color Display Background white \n')
-        # Delete the axes drawing in the VMD window
-        file.write('axes location Off \n')
-        # Eliminate the molecule to perform changes in the representation, color and material 
-        file.write('mol delrep 0 top \n')
-        # First add a spcific representation for polymers (protein and nucleic acids)
-        # Change the default representation model to Newcartoon
-        file.write('mol representation Newcartoon \n')
-        # Change the default atom coloring method setting to Chain
-        file.write('mol color Chain \n')
-        # Set the default atom selection setting to all
-        file.write('mol selection "protein or nucleic" \n')
-        # Change the current material of the representation of the molecule
-        file.write('mol material Opaque \n')
-        # Using the new changes performed previously add a new representation to the new molecule
-        file.write('mol addrep top \n')
-        # Change the default representation model to Newcartoon
-        file.write('mol representation cpk \n')
-        # Change the default atom coloring method setting to Chain
-        file.write('mol color element \n')
-        # Set the default atom selection setting to all
-        file.write('mol selection "not protein and not nucleic" \n')
-        # Change the current material of the representation of the molecule
-        file.write('mol material Opaque \n')
-        # Using the new changes performed previously add a new representation to the new molecule
-        file.write('mol addrep top \n') 
-        # Change projection from perspective (used by VMD by default) to orthographic
-        file.write('display projection orthographic \n')
-        # Select all atoms
-        file.write('set sel [atomselect 0 all] \n')
+    # We must calculate these values otherwise
+    else:
 
         # Load the whole structure
         # WARNING: Note that custom atoms selection is not yet supported, although we could do it one day
@@ -165,7 +157,7 @@ def get_screenshot(
         # Note that the hypotenuse is calculated as a projection of the segment in the x-z plane
         # This is lower than the actual distance between the points
         hypotenuse = calculate_distance(first_point, second_point, ['x', 'z'])
-    
+
         # Get the z-side which it is just the difference in the z coordinates
         z_side = abs(first_point[2] - second_point[2])
 
@@ -178,9 +170,6 @@ def get_screenshot(
         most_negative_z_point = first_point if first_point[2] <= second_point[2] else second_point
         if most_negative_x_point != most_negative_z_point:
             angle = -angle
-
-        # First rotation of the molecule to set it perpendicular with respect to z axis
-        file.write(f'rotate y by {angle} \n')
 
         # SECOND ROTATION
         # Now looking at the x-y plane, consider we have a rectangle triangle where the segment between the
@@ -212,9 +201,6 @@ def get_screenshot(
             angle2 = -angle2
         # As we want it diagonal with respect y and x we add 45 degrees
         angle2 += 45
-
-        # Second rotatoin of the molecule to set it diagonal with respect to z axis
-        file.write(f'rotate z by {angle2} \n')
 
         # Vector that we are going to use as x axis 
         absolute_x_axis = (1,0,0)
@@ -283,9 +269,7 @@ def get_screenshot(
         y_axis_projected_center = get_projected_point(vmd_center_coordinates)
         # Calculate the difference between the molecule center and the view center in the rotated y axis
         y_axis_difference_vector = [y_axis_projected_center[i] - y_axis_center[i] for i in range(3)]
-        # Move to rectify the difference
-        file.write('$sel moveby { ' + tuple_to_vmd(y_axis_difference_vector) + ' } \n')
-        
+
         # Repeat the whole process with the rotated x axis
 
         # Project all atom coordinates in the rotated x axis
@@ -304,10 +288,7 @@ def get_screenshot(
         x_axis_projected_center = get_projected_point(vmd_center_coordinates)
         # Calculate the difference between the molecule center and the view center in the rotated x axis
         x_axis_difference_vector = [x_axis_projected_center[i] - x_axis_center[i] for i in range(3)]
-        
-        # Move to rectify the difference
-        file.write('$sel moveby { ' + tuple_to_vmd(x_axis_difference_vector) + ' } \n')
-        
+
         # Calculate height and width and get the widest dimension
         width = calculate_distance(max_xpoint, min_xpoint, ['x','y','z'])
         height = calculate_distance(max_ypoint, min_ypoint, ['x','y','z'])
@@ -317,9 +298,55 @@ def get_screenshot(
         zoom = 2.8
         # Set the scale
         scale = zoom / widest
+
+    # Set a file name for the VMD script file
+    commands_filename_2 = '.commands_2.vmd'
+
+    # Now write the VMD script for the rotation
+    with open(commands_filename_2, "w") as file:
+        # Set the Background of the molecule to white color
+        file.write('color Display Background white \n')
+        # Delete the axes drawing in the VMD window
+        file.write('axes location Off \n')
+        # Eliminate the molecule to perform changes in the representation, color and material 
+        file.write('mol delrep 0 top \n')
+        # First add a spcific representation for polymers (protein and nucleic acids)
+        # Change the default representation model to Newcartoon
+        file.write('mol representation Newcartoon \n')
+        # Change the default atom coloring method setting to Chain
+        file.write('mol color Chain \n')
+        # Set the default atom selection setting to all
+        file.write('mol selection "protein or nucleic" \n')
+        # Change the current material of the representation of the molecule
+        file.write('mol material Opaque \n')
+        # Using the new changes performed previously add a new representation to the new molecule
+        file.write('mol addrep top \n')
+        # Change the default representation model to Newcartoon
+        file.write('mol representation cpk \n')
+        # Change the default atom coloring method setting to Chain
+        file.write('mol color element \n')
+        # Set the default atom selection setting to all
+        file.write('mol selection "not protein and not nucleic" \n')
+        # Change the current material of the representation of the molecule
+        file.write('mol material Opaque \n')
+        # Using the new changes performed previously add a new representation to the new molecule
+        file.write('mol addrep top \n') 
+        # Change projection from perspective (used by VMD by default) to orthographic
+        file.write('display projection orthographic \n')
+        # Select all atoms
+        file.write('set sel [atomselect 0 all] \n')
+        # First rotation of the molecule to set it perpendicular with respect to z axis
+        file.write(f'rotate y by {angle} \n')
+        # Second rotatoin of the molecule to set it diagonal with respect to z axis
+        file.write(f'rotate z by {angle2} \n')
+        # Move to rectify the difference
+        file.write('$sel moveby { ' + tuple_to_vmd(y_axis_difference_vector) + ' } \n')        
+        # Move to rectify the difference
+        file.write('$sel moveby { ' + tuple_to_vmd(x_axis_difference_vector) + ' } \n')
+        # Set the scale
         file.write(f'scale to {scale} \n')
 
-        # Show the theoretical view center
+        # Show the theoretical view center if we are debugging
         if debug:
             # Note that all draw commands work with coordinates and thus they are absolute, not relative to camera
             # Draw the center
@@ -343,7 +370,7 @@ def get_screenshot(
             # file.write('draw line {' + tuple_to_vmd(min_ypoint) + '} {' + tuple_to_vmd(max_ypoint) + '}\n')
 
         # Finally generate the image from the current view
-        file.write('render TachyonInternal ' + auxiliary_tga_filename + ' \n')
+        file.write(f'render TachyonInternal {auxiliary_tga_filename} \n')
         # Exit VMD
         file.write('exit\n')
 
@@ -358,11 +385,11 @@ def get_screenshot(
     ], stdout=PIPE, stderr=PIPE)
     logs = process.stdout.decode()
     # If the output file does not exist at this point then it means something went wrong with VMD
-    if not os.path.exists(auxiliary_tga_filename):
+    if not exists(auxiliary_tga_filename):
         print(logs)
         error_logs = process.stderr.decode()
         print(error_logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise SystemExit('Something went wrong with VMD while taking the screenshot')
 
     im = Image.open(auxiliary_tga_filename)
     # converting to jpg
@@ -373,10 +400,23 @@ def get_screenshot(
     # Remove trash files
     trash_files = [ commands_filename_1, commands_filename_2, auxiliary_tga_filename, center_filename ]
     for trash_file in trash_files:
-        os.remove(trash_file)
+        remove(trash_file)
 
-    # Remove the environment variable to not cause problem in possible future uses of VMD
-    os.environ['VMDSCRSIZE'] = ""
+    # Restore the environment variable to not cause problem in possible future uses of VMD
+    environ['VMDSCRSIZE'] = VMDSCRSIZE_backup
+
+    # Return the camera rotation, translation and zoom values we just used to get the picture
+    return {
+        'angle': angle,
+        'angle2': angle2,
+        'y_axis_difference_vector': y_axis_difference_vector,
+        'x_axis_difference_vector': x_axis_difference_vector,
+        'scale': scale
+    }
+
+# Set a function to write a tuple of numbers (point coorinates) as VMD expect these value: a string separated by space
+def tuple_to_vmd (point : tuple) -> str:
+    return str(point[0]) + ' ' + str(point[1]) + ' ' + str(point[2])
 
 # Return the rotated vector
 # https://stackoverflow.com/questions/6802577/rotation-of-3d-vector

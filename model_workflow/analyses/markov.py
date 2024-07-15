@@ -81,6 +81,8 @@ def markov (
         rmsd_matrix.append(rmsd_row)
     print(' Taking screenshots of selected frames')
     frame_count = str(len(frame_coordinates))
+    # Save the screenshot parameters so we can keep images coherent between states
+    screenshot_parameters = None
     # For each frame coordinates, generate PDB file, take a scrrenshot and delete it
     for i, coordinates in enumerate(frame_coordinates.values(), 1):
         # Update the current frame log
@@ -90,7 +92,7 @@ def markov (
         # Set the screenshot filename
         screenshot_filename = 'markov_screenshot_' + str(i).zfill(2) + '.jpg'
         # Generate the screenshot
-        get_screenshot(auxiliar_pdb_filename, screenshot_filename)
+        screenshot_parameters = get_screenshot(auxiliar_pdb_filename, screenshot_filename, parameters=screenshot_parameters)
         # Remove the pdb file
         remove(auxiliar_pdb_filename)
     # Export the analysis data to a json file
