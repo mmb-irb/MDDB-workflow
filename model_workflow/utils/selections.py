@@ -9,19 +9,30 @@ class Selection:
         self.atom_indices = atom_indices
 
     def __repr__ (self):
-        return '<Selection (' + str(len(self.atom_indices)) + ' atoms)>'
+        return f'<Selection ({len(self.atom_indices)} atoms)>'
 
     def __len__ (self):
         return len(self.atom_indices)
 
+    # Return true if there is at least one atom index on the selection and false otherwise
     def __bool__ (self):
         return len(self.atom_indices) > 0
 
+    # Return a new selection with atom indices from both self and the other selection
     def __add__ (self, other):
         return self.merge(other)
 
+    # Return a new selection with self atom indices except for those atom indices in other
     def __sub__ (self, other):
         return self.substract(other)
+
+    # Return a new selection with the intersection of both selections
+    def __and__ (self, other):
+        return self.intersection(other)
+
+    # Return a new selection with atom indices from both self and the other selection (same as add)
+    def __or__ (self, other):
+        return self.merge(other)
 
     @classmethod
     def from_prody (cls, prody_selection):
@@ -41,6 +52,15 @@ class Selection:
             return self
         remaining_atom_indices = [ atom_index for atom_index in self.atom_indices if atom_index not in other.atom_indices ]
         return Selection(remaining_atom_indices)
+
+    # Return a new selection with the intersection of both selections
+    def intersection (self, other : Optional['Selection']) -> 'Selection':
+        if not other:
+            return self
+        self_atom_indices = set(self.atom_indices)
+        other_atom_indices = set(other.atom_indices)
+        intersection_atom_indices = list(self_atom_indices.intersection(other_atom_indices))
+        return Selection(intersection_atom_indices)
 
     def to_prody (self) -> str:
         return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
