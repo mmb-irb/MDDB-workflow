@@ -52,7 +52,6 @@ def generate_residue_mapping(
             continue
         # Get the reference type
         reference_type = data['type']
-        reference_types.append(reference_type)
         # Get the reference id
         reference_id = None
         if reference_type == 'protein':
@@ -64,6 +63,7 @@ def generate_residue_mapping(
         # If we have a regular reference id (i.e. not a no referable / not found flag)
         if reference_id not in reference_ids:
             reference_ids.append(reference_id)
+            reference_types.append(reference_type)
         reference_index = reference_ids.index(reference_id)
         # Set the topology reference number and index for each residue
         # Note that ligands do not have any residue reference numbering
