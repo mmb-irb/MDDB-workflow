@@ -113,7 +113,11 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
         if synonims_subsections == None:
             raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
         depositor_supplied_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
-        name_substance = depositor_supplied_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+        if depositor_supplied_synonims == None:
+            removed_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Removed Synonyms'), None)
+            name_substance = removed_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+        else:
+            name_substance = depositor_supplied_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
         
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
@@ -249,7 +253,6 @@ def generate_ligand_mapping (
             pubchem_ids = pdb_to_pubchem(pdb_id)
             for pubchem_id in pubchem_ids:
                 ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
-
     # If no input ligands are passed then stop here
     if len(ligands) == 0:
         return [], {}
@@ -371,7 +374,7 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
         'formula': None
     }
 
-    # Set ligand data pubchem id, even if the input id is not from pubhcme (e.g. drugbakn, chembl)
+    # Set ligand data pubchem id, even if the input id is not from pubhcme (e.g. drugbank, chembl)
     if 'pubchem' in ligand:
         ligand_data['pubchem'] = str(ligand.get('pubchem'))
     elif 'drugbank' in ligand:
@@ -382,7 +385,7 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
         ligand_data['pubchem'] = str(find_chembl_pubchem(ligand_data['chembl']))
     else:
         raise InputError('None of the ligand IDs are defined. Please provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
- 
+    
     # Request ligand data from pubchem
     pubchem_data = get_pubchem_data(ligand_data['pubchem'])
     if not pubchem_data:
@@ -524,7 +527,6 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
     # Get the ligand formula
     ligand_formula = ligand_data['formula']
     if not ligand_formula:
-        print(ligand_data)
         raise RuntimeError(f'Ligand with PubChem id {ligand_data["pubchem"]} is missing formula')
     # From pubchem mine the atoms of the ligands and save it in a dict
     ligand_atom_element_count = count_atom_elements(ligand_data['formula'])

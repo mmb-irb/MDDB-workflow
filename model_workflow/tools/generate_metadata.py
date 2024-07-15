@@ -135,7 +135,7 @@ def generate_project_metadata (
         'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),
         'CUSTOMS': get_input('customs'),
-        'ORIENTATION': get_input('orientation'),
+        'ORIENTATION': get_input('orientation', optional=True),
         'PTM': ptm_names,
         'MULTIMERIC' : get_input('multimeric'),
         'COLLECTIONS': collections,
@@ -143,13 +143,27 @@ def generate_project_metadata (
     }
     # Add collection specific fields
     if 'cv19' in collections:
-        metadata = { **metadata,
-            'CV19_UNIT': get_input('cv19_unit'),
-            'CV19_STARTCONF': get_input('cv19_startconf'),
-            'CV19_ABS': get_input('cv19_abs'),
-            'CV19_NANOBS': get_input('cv19_nanobs'),
-            'CV19_VARIANT': sequence_metadata['cv19_variant']
-        }
+        # metadata['CV19_UNIT'] = get_input('cv19_unit')
+        # metadata['CV19_STARTCONF'] = get_input('cv19_startconf', optional=True)
+        # metadata['CV19_ABS'] = get_input('cv19_abs', optional=True)
+        # metadata['CV19_NANOBS'] = get_input('cv19_nanobs', optional=True)
+        # metadata['CV19_VARIANT'] = sequence_metadata['cv19_variant']
+        cv19_startconf = get_input('cv19_startconf', optional=True)
+        cv19_abs = get_input('cv19_abs', optional=True)
+        cv19_nanobs = get_input('cv19_nanobs', optional=True)
+        cv19_variant = sequence_metadata['cv19_variant']
+
+        if cv19_startconf is not None:
+            metadata['CV19_STARTCONF'] = cv19_startconf
+
+        if cv19_abs is not None:
+            metadata['CV19_ABS'] = cv19_abs
+
+        if cv19_nanobs is not None:
+            metadata['CV19_NANOBS'] = cv19_nanobs
+
+        if cv19_variant is not None:
+            metadata['CV19_VARIANT'] = cv19_variant
     
     # Write metadata to a file
     save_json(metadata, output_metadata_filename)

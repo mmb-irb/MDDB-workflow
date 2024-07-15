@@ -2048,7 +2048,9 @@ class Project:
             return OUTPUT_METADATA_FILENAME
         print('-> Generating project metadata')
         # Set an input getter that gets the input as soon as called
-        def get_input (name : str):
+        def get_input (name : str, optional : bool = False):
+            if optional:
+                return Project.input_getter(name, None)(self)
             return Project.input_getter(name)(self)
         # Otherwise, generate it
         generate_project_metadata(
