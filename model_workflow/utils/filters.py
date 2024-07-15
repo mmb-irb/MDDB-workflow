@@ -1,6 +1,7 @@
 from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.formats import get_format_set_suitable_function
 from model_workflow.utils.gmx_spells import filter_structure, filter_trajectory, filter_tpr
+from model_workflow.utils.pyt_spells import filter_topology
 from model_workflow.utils.structures import Structure
 
 from typing import Optional
@@ -10,7 +11,7 @@ from inspect import getfullargspec
 # These functions must have 'input_structure_file' and 'output_structure_file' keywords
 # These functions must have the 'format_sets' property
 # These functions may have the 'input_trajectory_file' keyword
-structure_filtering_functions = [ filter_structure, filter_tpr ]
+structure_filtering_functions = [ filter_structure, filter_tpr, filter_topology ]
 
 # Set functions to performe trajectory conversions
 # These functions must have 'input_trajectory_file' and 'output_trajectory_file' keywords
@@ -48,7 +49,6 @@ def filter_atoms (
     selection = None
     # Hope the input structure is in a supported format
     structure = Structure.from_file(input_structure_file.path)
-    print(structure)
     if selection_string:
         selection = structure.select(selection_string, syntax=selection_syntax)
         # If the selection is empty then war the user
@@ -102,7 +102,6 @@ def filter_atoms (
             else:
                 raise InputError(f'Filtering structure from {input_structure_file.format} to {output_structure_file.format} is not supported')
         filtering_function, formats = suitable
-        print(filtering_function)
         # Find the function keywords
         # This is important since some functions may need a trajectory input in addition
         filtering_function_keywords = getfullargspec(filtering_function)[0]

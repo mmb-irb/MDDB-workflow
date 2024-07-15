@@ -359,7 +359,7 @@ filter_trajectory.format_sets = [
     }
 ]
 
-# Filter trajectory atoms
+# Filter topology atoms
 # DANI: Note that a TPR file is not a structure but a topology
 # DANI: However it is important that the argument is called 'structure' for the format finder
 def filter_tpr (

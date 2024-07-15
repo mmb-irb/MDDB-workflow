@@ -6,7 +6,7 @@ from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.selections import Selection
 
 # Set pytraj supported formats
-pytraj_supported_structure_formats = {'prmtop', 'pdb', 'parm7', 'mol2', 'psf', 'cif', 'top', 'sdf'}
+pytraj_supported_structure_formats = {'prmtop', 'pdb', 'mol2', 'psf', 'cif', 'sdf'}
 pytraj_supported_trajectory_formats = {'xtc', 'trr', 'crd', 'mdcrd', 'nc', 'dcd'}
 
 # Get the whole trajectory as a generator
@@ -78,6 +78,43 @@ get_frames_count.format_sets = [
         'inputs': {
             'input_structure_filename': pytraj_supported_structure_formats,
             'input_trajectory_filename': pytraj_supported_trajectory_formats
+        }
+    }
+]
+
+# Filter topology atoms
+# DANI: Note that a PRMTOP file is not a structure but a topology
+# DANI: However it is important that the argument is called 'structure' for the format finder
+def filter_topology (
+    input_structure_file : str,
+    output_structure_file : str,
+    input_selection : 'Selection'
+):
+    # Generate a pytraj mask with the desired selection
+    mask = input_selection.to_pytraj()
+
+    # Load the topology
+    topology = pyt.load_topology(input_structure_file.path)
+
+    # Apply the filter mask
+    filtered_topology = topology[mask]
+
+    # Write the filtered topology to disk
+    filtered_topology.save(output_structure_file.path)
+
+    # Check the output file exists at this point
+    # If not then it means something went wrong with gromacs
+    if not output_structure_file.exists:
+        raise SystemExit('Something went wrong with PyTraj')
+
+
+filter_topology.format_sets = [
+    {
+        'inputs': {
+            'input_structure_file': pytraj_supported_structure_formats,
+        },
+        'outputs': {
+            'output_structure_file': pytraj_supported_structure_formats
         }
     }
 ]
