@@ -2,7 +2,7 @@
 
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
 
-from os import remove
+from os import remove, rename
 import sys
 import json
 import yaml
@@ -67,9 +67,8 @@ def save_json (content, filepath : str, indent : Optional[int] = None):
         with open(filepath, 'w') as file:
             json.dump(content, file, indent=indent)
     except:
-        # Remove the JSON file since it will be half written thus giving problems when loaded
-        # Eventually it may be useful to comment this line to debug where the JSON file fails to parse
-        remove(filepath)
+        # Rename the JSON file since it will be half written thus giving problems when loaded
+        rename(filepath, filepath + '.wrong')
         raise Exception('Something went wrong when saving JSON file ' + filepath)
 
 # Set a YAML loader with additional logic to better handle problems
