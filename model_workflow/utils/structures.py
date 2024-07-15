@@ -22,6 +22,10 @@ try:
     import prody
 except:
     pass
+try:
+    import MDAnalysis
+except:
+    pass
 
 # Set all available chains according to pdb standards
 available_caps = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
@@ -1027,10 +1031,7 @@ class Structure:
 
     # Set the structure from a ProDy topology
     @classmethod
-    def from_prody(cls, prody_topology):
-        # In we do not have prody in our environment then we cannot proceed
-        if not is_imported('prody'):
-            raise InputError('Missing dependency error: prody')
+    def from_prody (cls, prody_topology):
         parsed_atoms = []
         parsed_residues = []
         parsed_chains = []
@@ -1148,14 +1149,106 @@ class Structure:
     def from_pdb_file (cls, pdb_filename : str):
         pdb_file = File(pdb_filename)
         if not pdb_file.exists:
-            raise InputError('File "' + pdb_filename + '" not found')
+            raise InputError(f'File "{pdb_filename}" not found')
         if not pdb_file.format == 'pdb':
-            raise InputError('"' + pdb_filename + '" is not a name for a pdb file')
+            raise InputError(f'"{pdb_filename}" is not a name for a pdb file')
         # Read the pdb file
         pdb_content = None
         with open(pdb_filename, 'r') as file:
             pdb_content = file.read()
         return cls.from_pdb(pdb_content)
+
+    # Set the structure from an MD analysis object
+    @classmethod
+    def from_mdanalysis (cls, mdanalysis_universe):
+        # Set the final list of atoms to be included in the structure
+        parsed_atoms = []
+        parsed_residues = []
+        parsed_chains = []
+        # Setup atoms
+        for atom in mdanalysis_universe.atoms:
+            name = atom.name
+            element = atom.element
+            #coords = atom.position # DANI: Esto da error si no hay coordenadas
+            parsed_atom = Atom(name=name, element=element)
+            parsed_atoms.append(parsed_atom)
+        # Setup residues
+        for residue in mdanalysis_universe.residues:
+            name = residue.resname
+            number = residue.resnum
+            icode = residue.icode if hasattr(residue, 'icode') else None # DANI: No se ha provado
+            parsed_residue = Residue(name=name, number=number, icode=icode)
+            atom_indices = [ atom.index for atom in residue.atoms ]
+            parsed_residue.atom_indices = atom_indices
+            parsed_residues.append(parsed_residue)
+        # Setup chains
+        for segment in mdanalysis_universe.segments:
+            name = segment.segid
+            parsed_chain = Chain(name=name)
+            residue_indices = [ residue.resindex for residue in segment.residues ]
+            parsed_chain.residue_indices = residue_indices
+            parsed_chains.append(parsed_chain)
+        # Setup the structure
+        structure = cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
+        # Add bonds and charges which are also available in a topology
+        atom_count = len(mdanalysis_universe.atoms)
+        atom_bonds = [ [] for i in range(atom_count) ]
+        for bond in mdanalysis_universe.bonds:
+            a,b = bond.indices
+            # Make sure atom indices are regular integers so they are JSON serializables
+            atom_bonds[a].append(int(b))
+            atom_bonds[b].append(int(a))
+        structure.bonds = atom_bonds
+        structure.charges = list(mdanalysis_universe._topology.charges.values)
+        return structure
+
+    # Set the structure from a prmtop file
+    @classmethod
+    def from_prmtop_file (cls, prmtop_filepath : str):
+        # Make sure the input file exists and has the right format
+        prmtop_file = File(prmtop_filepath)
+        if not prmtop_file.exists:
+            raise InputError(f'File "{prmtop_filepath}" not found')
+        if not prmtop_file.format == 'prmtop':
+            raise InputError(f'"{prmtop_filepath}" is not a name for a prmtop file')
+        # In we do not have mdanalysis in our environment then we cannot proceed
+        if not is_imported('MDAnalysis'):
+            raise InputError('Missing dependency error: MDAnalysis')
+        # Parse the topology using MDanalysis
+        parser = MDAnalysis.topology.TOPParser.TOPParser(prmtop_filepath)
+        mdanalysis_topology = parser.parse()
+        mdanalysis_universe = MDAnalysis.Universe(mdanalysis_topology)
+        return cls.from_mdanalysis(mdanalysis_universe)
+
+     # Set the structure from a tpr file
+    @classmethod
+    def from_tpr_file (cls, tpr_filepath : str):
+        # Make sure the input file exists and has the right format
+        tpr_file = File(tpr_filepath)
+        if not tpr_file.exists:
+            raise InputError(f'File "{tpr_filepath}" not found')
+        if not tpr_file.format == 'tpr':
+            raise InputError(f'"{tpr_filepath}" is not a name for a tpr file')
+        # In we do not have mdanalysis in our environment then we cannot proceed
+        if not is_imported('MDAnalysis'):
+            raise InputError('Missing dependency error: MDAnalysis')
+        # Parse the topology using MDanalysis
+        parser = MDAnalysis.topology.TPRParser.TPRParser(tpr_filepath)
+        mdanalysis_topology = parser.parse()
+        mdanalysis_universe = MDAnalysis.Universe(mdanalysis_topology)
+        return cls.from_mdanalysis(mdanalysis_universe)
+
+    # Set the structure from a file if the file format is supported
+    @classmethod
+    def from_file (cls, mysterious_filepath : str):
+        mysterious_file = File(mysterious_filepath)
+        if mysterious_file.format == 'pdb':
+            return cls.from_pdb_file(mysterious_file.path)
+        if mysterious_file.format == 'prmtop':
+            return cls.from_prmtop_file(mysterious_file.path)
+        if mysterious_file.format == 'tpr':
+            return cls.from_tpr_file(mysterious_file.path)
+        raise InputError(f'Not supported format ({mysterious_file.format}) to setup a Structure')
 
     # Set the number of atoms in the structure
     def get_atom_count (self) -> int:

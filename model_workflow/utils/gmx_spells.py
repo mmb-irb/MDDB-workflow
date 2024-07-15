@@ -294,10 +294,10 @@ def filter_structure (
 filter_structure.format_sets = [
     {
         'inputs': {
-            'input_structure_filename': {'pdb', 'gro'},
+            'input_structure_file': {'pdb', 'gro'},
         },
         'outputs': {
-            'output_structure_filename': {'pdb', 'gro'}
+            'output_structure_file': {'pdb', 'gro'}
         }
     }
 ]
@@ -350,19 +350,21 @@ def filter_trajectory (
 filter_trajectory.format_sets = [
     {
         'inputs': {
-            'input_structure_filename': {'tpr', 'pdb', 'gro'},
-            'input_trajectory_filename': {'xtc', 'trr'}
+            'input_structure_file': {'tpr', 'pdb', 'gro'},
+            'input_trajectory_file': {'xtc', 'trr'}
         },
         'outputs': {
-            'output_trajectory_filename': {'xtc', 'trr'}
+            'output_trajectory_file': {'xtc', 'trr'}
         }
     }
 ]
 
 # Filter trajectory atoms
+# DANI: Note that a TPR file is not a structure but a topology
+# DANI: However it is important that the argument is called 'structure' for the format finder
 def filter_tpr (
-    input_tpr_filename : str,
-    output_tpr_filename : str,
+    input_structure_file : str,
+    output_structure_file : str,
     input_selection : 'Selection'
 ):
     # Generate a ndx file with the desired selection
@@ -380,10 +382,10 @@ def filter_tpr (
     logs = run([
         GROMACS_EXECUTABLE,
         "convert-tpr",
-        "-f",
-        input_tpr_filename,
+        "-s",
+        input_structure_file.path,
         '-o',
-        output_tpr_filename,
+        output_structure_file.path,
         '-n',
         filter_index_filename,
         '-quiet'
@@ -392,7 +394,7 @@ def filter_tpr (
 
     # Check the output file exists at this point
     # If not then it means something went wrong with gromacs
-    if not exists(output_tpr_filename):
+    if not output_structure_file.exists:
         print(logs)
         raise SystemExit('Something went wrong with Gromacs')
 
@@ -402,10 +404,10 @@ def filter_tpr (
 filter_tpr.format_sets = [
     {
         'inputs': {
-            'input_tpr_filename': {'tpr'},
+            'input_structure_file': {'tpr'},
         },
         'outputs': {
-            'output_tpr_filename': {'tpr'}
+            'output_structure_file': {'tpr'}
         }
     }
 ]

@@ -166,7 +166,8 @@ def structure_corrector (
             register.update_test(COHERENT_BONDS_FLAG, False)
             register.add_warning(COHERENT_BONDS_FLAG, 'Some atoms may have a higher or lower number of bonds than they should according to their element.')
         # Set the test as succeed if all was good
-        register.update_test(COHERENT_BONDS_FLAG, True)
+        else:
+            register.update_test(COHERENT_BONDS_FLAG, True)
 
     # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------

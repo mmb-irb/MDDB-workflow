@@ -1,43 +1,43 @@
 from model_workflow.utils.auxiliar import InputError
-from model_workflow.utils.gmx_spells import filter_structure, filter_trajectory
+from model_workflow.utils.formats import get_format_set_suitable_function
+from model_workflow.utils.gmx_spells import filter_structure, filter_trajectory, filter_tpr
 from model_workflow.utils.structures import Structure
 
-# Note tha this function only accepts pdb/gro structures and xtc/trr trajectories
-accepted_structure_formats = ['pdb']
-accepted_trajectory_formats = ['xtc', 'trr']
+from typing import Optional
+from inspect import getfullargspec
 
-# Filter both structure and trajectory
-# Note that this function is not format-smart
+# Set functions to performe structure conversions
+# These functions must have 'input_structure_file' and 'output_structure_file' keywords
+# These functions must have the 'format_sets' property
+# These functions may have the 'input_trajectory_file' keyword
+structure_filtering_functions = [ filter_structure, filter_tpr ]
+
+# Set functions to performe trajectory conversions
+# These functions must have 'input_trajectory_file' and 'output_trajectory_file' keywords
+# These functions must have the 'format_sets' property
+trajectory_filtering_functions = [ filter_trajectory ]
+
+# Handle filterings of different structure and trajectory formats
 def filter_atoms (
-    input_structure_file : 'File',
-    input_trajectory_file : 'File',
-    output_structure_file : 'File',
-    output_trajectory_file : 'File',
-    selection_string : str,
-    selection_syntax : str
-):  
+    input_structure_file :  Optional['File'] = None,
+    output_structure_file : Optional['File'] = None,
+    input_trajectory_file :  Optional['File'] = None,
+    output_trajectory_file : Optional['File'] = None,
+    selection_string : Optional[str] = None,
+    selection_syntax : str = 'vmd'
+):
 
-    # Check formats are as expected
-    # Check also input files exist
-    if not input_structure_file:
-        raise InputError('Missing input structure filename')
-    if input_structure_file.format not in accepted_structure_formats:
-        raise InputError(f'Not valid input structure format ({input_structure_file.format}). Accepted structure formats: ' + ','.join(accepted_structure_formats))
-    if not input_structure_file.exists:
-        raise InputError('Missing input file ' + input_structure_file.path)
-    if input_trajectory_file:
-        if input_trajectory_file.format not in accepted_trajectory_formats:
-            raise InputError(f'Not valid input trajectory format ({input_trajectory_file.format}). Accepted trajectory formats: ' + ','.join(accepted_trajectory_formats))
-        if not input_trajectory_file.exists:
-            raise InputError('Missing input file ' + input_trajectory_file)
-    if output_structure_file:
-        if output_structure_file.format not in accepted_structure_formats:
-            raise InputError(f'Not valid output structure format ({output_structure_file.format}). Accepted structure formats: ' + ','.join(accepted_structure_formats))
-    if output_trajectory_file:
-        if output_trajectory_file.format not in accepted_trajectory_formats:
-            raise InputError(f'Not valid output trajectory format ({output_trajectory_file.format}). Accepted trajectory formats: ' + ','.join(accepted_trajectory_formats))
-    if not output_structure_file and not output_trajectory_file:
-        raise InputError('Missing output')
+    # If we have output but not input we must complain
+    if output_structure_file and not input_structure_file:
+        raise InputError('Missing input structure when output structure is requested')
+    if output_trajectory_file and not input_trajectory_file:
+        raise InputError('Missing input trajectory when output trajectory is requested')
+
+    # Check input files to exist
+    for input_file in [ input_structure_file, input_trajectory_file ]:
+        if input_file and not input_file.exists:
+            raise InputError('Could not find input file ' + input_file.path)
+
     # Check we are not missing additional inputs
     if not selection_string:
         print('Missing input selection string -> Water and counter ions will be filtered')
@@ -45,7 +45,10 @@ def filter_atoms (
         raise InputError('Missing input selection syntax')
 
     # Parse the selection
-    structure = Structure.from_pdb_file(input_structure_file.path)
+    selection = None
+    # Hope the input structure is in a supported format
+    structure = Structure.from_file(input_structure_file.path)
+    print(structure)
     if selection_string:
         selection = structure.select(selection_string, syntax=selection_syntax)
         # If the selection is empty then war the user
@@ -61,8 +64,121 @@ def filter_atoms (
         if not selection:
             raise InputError('There are no water or counter ions')
 
-    # Run the filters
+    # Check if any input file has an non-standard extension of a supported format
+    # If so then we create a symlink with the standard extension
+    # Save created symlinks to remove them at then of the process
+    symlink_files = []
+    if input_structure_file and input_structure_file.extension != input_structure_file.format:
+        input_structure_file = input_structure_file.get_standard_file()
+        symlink_files.append(input_structure_file)
+    if input_trajectory_file and input_trajectory_file.extension != input_trajectory_file.format:
+        input_trajectory_file = input_trajectory_file.get_standard_file()
+        symlink_files.append(input_trajectory_file)
+
+    # Filter the structure if an output structure file was provided
     if output_structure_file:
-        filter_structure(input_structure_file, output_structure_file, selection)
-    if input_trajectory_file and output_trajectory_file:
-        filter_trajectory(input_structure_file, input_trajectory_file, output_trajectory_file, selection)
+        print(f'Filtering structure {input_structure_file.path} to {output_structure_file.path}')
+        # Find a suitable function according to the formats
+        # Note than given the nature of this logic we may encounter a function which converts the file format
+        # This function is not intended for that but this is not a problem either
+        # If the user specifies different input/output formats and the function can do it then go ahead
+        request_format_set = {
+            'inputs': {
+                'input_structure_file': { input_structure_file.format },
+                'input_trajectory_file': { input_trajectory_file.format }
+            },
+            'outputs': {
+                'output_structure_file': { output_structure_file.format }
+            }
+        }
+        suitable = next(get_format_set_suitable_function(
+            available_functions=structure_filtering_functions,
+            available_request_format_sets=[request_format_set],
+        ), None)
+        # If there is no function to handle this specific conversion we stop here
+        if not suitable:
+            if input_structure_file.format == output_structure_file.format:
+                raise InputError(f'Filtering structure files in {input_structure_file.format} format is not supported')
+            else:
+                raise InputError(f'Filtering structure from {input_structure_file.format} to {output_structure_file.format} is not supported')
+        filtering_function, formats = suitable
+        print(filtering_function)
+        # Find the function keywords
+        # This is important since some functions may need a trajectory input in addition
+        filtering_function_keywords = getfullargspec(filtering_function)[0]
+        required_trajectory = 'input_trajectory_filename' in filtering_function_keywords
+        # If we need a trajectory then pass it as argument as well
+        if required_trajectory:
+            # Make sure an input trajectory was passed
+            if not input_trajectory_file:
+                raise InputError('The structure input format ' + input_structure_format +
+                ' is missing coordinates and the output format ' + output_structure_format +
+                ' needs them. An input trajectory file is required.')
+            filtering_function(
+                input_structure_file=input_structure_file,
+                input_trajectory_file=input_trajectory_file,
+                output_structure_file=output_structure_file,
+                input_selection=selection
+            )
+        # Otherwise use just the structure as input
+        else:
+            filtering_function(
+                input_structure_file=input_structure_file,
+                output_structure_file=output_structure_file,
+                input_selection=selection
+            )
+
+    # Filter the trajectory if an output trajectory file was provided
+    if output_trajectory_file:
+        print(f'Filtering trajectory {output_trajectory_file.path} to {output_trajectory_file.path}')
+        # Otherwise, we must convert
+        # Choose the right conversion function according to input and output formats
+        request_format_set = {
+            'inputs': {
+                'input_structure_file': { input_structure_file.format },
+                'input_trajectory_file': { input_trajectory_file.format }
+            },
+            'outputs': {
+                'output_trajectory_file': { output_trajectory_file.format }
+            }
+        }
+        suitable = next(get_format_set_suitable_function(
+            available_functions=trajectory_filtering_functions,
+            available_request_format_sets=[request_format_set],
+        ), None)
+        # If there is no function to handle the filtering then we stop here
+        if not suitable:
+            if input_trajectory_file.format == output_trajectory_file.format:
+                raise InputError(f'Filtering trajectory files in {input_trajectory_file.format} format is not supported')
+            else:
+                raise InputError(f'Filtering trajectory from {input_trajectory_file.format} to {output_trajectory_file.format} is not supported')
+        filtering_function, formats = suitable
+        # Get the input structure expected format
+        expected_input_structure_formats = formats['inputs'].get('input_structure_file', False)
+        # If the function expects an input structure in any format then pass the structure
+        if expected_input_structure_formats:
+            filtering_function(
+                input_structure_file=input_structure_file,
+                input_trajectory_file=input_trajectory_file,
+                output_trajectory_file=output_trajectory_file,
+                input_selection=selection
+            )
+        # If the function expects an input structure as None then pass None
+        elif expected_input_structure_formats == None:
+            filtering_function(
+                input_structure_file=None,
+                input_trajectory_file=input_trajectory_file,
+                output_trajectory_file=output_trajectory_file,
+                input_selection=selection
+            )
+        # If the function does not expect an input structure then do not pass it
+        else:
+            filtering_function(
+                input_trajectory_file=input_trajectory_file,
+                output_trajectory_file=output_trajectory_file,
+                input_selection=selection
+            )
+
+    # Remove generated symlinks, if any
+    for symlink_file in symlink_files:
+        symlink_file.remove()

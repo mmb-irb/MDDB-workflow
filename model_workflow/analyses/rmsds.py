@@ -56,6 +56,11 @@ def rmsds(
         # Add the the filtered selection to the dict
         non_pbc_selections[selection_name] = non_pbc_selection
 
+    # If there is nothing lo analyze at this point then skip the analysis
+    if len(non_pbc_selections) == 0:
+        print('  The RMSDs analysis will be skipped since there is nothing to analyze')
+        return
+
     # The start will be always 0 since we start with the first frame
     start = 0
 
