@@ -1138,13 +1138,15 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
         if exists(output_analysis_filepath):
             return
+        output_screenshot_filepath = self.md_pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
         print('-> Running clusters analysis')
         clusters_analysis(
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
+            interactions = self.interactions,
             structure = self.structure,
             output_analysis_filename = output_analysis_filepath,
-            interactions = self.interactions
+            output_screenshots_filename = output_screenshot_filepath,
         )
 
     # Distance per residue

@@ -2,15 +2,19 @@ import numpy as np
 
 import mdtraj as mdt
 
-from model_workflow.utils.auxiliar import round_to_thousandths, save_json
+from model_workflow.utils.auxiliar import round_to_thousandths, save_json, otherwise
+from model_workflow.tools.get_screenshot import get_screenshot
+
+AUXILIAR_PDB_FILENAME = '.model.pdb'
 
 # Run the cluster analysis
 def clusters_analysis (
     input_structure_filename : str,
     input_trajectory_filename : str,
+    interactions : list,
     structure : 'Structure',
     output_analysis_filename : str,
-    interactions : list,
+    output_screenshots_filename : str,
     # Set the number of steps between the maximum and minimum RMSD so set how many cutoff are tried and how far they are
     n_steps : int = 100,
     # Set the final amount of desired clusters
@@ -41,14 +45,16 @@ def clusters_analysis (
         })
 
     # Now iterate over the different runs
-    for run in runs:
+    for r, run in enumerate(runs):
+        name = run['name']
+        print(f'Calculating distances for {name}')
         # Get the run selection atom indices
         atom_indices = run['selection'].atom_indices
         
         # Calculate the RMSD matrix
         distance_matrix = np.empty((traj.n_frames, traj.n_frames))
         for i in range(traj.n_frames):
-            print(f'Frame {i+1} out of {traj.n_frames}', end='\r')
+            print(f' Frame {i+1} out of {traj.n_frames}', end='\r')
             # Calculate the RMSD between every frame in the trajectory and the frame 'i'
             distance_matrix[i] = mdt.rmsd(traj, traj, i, atom_indices=atom_indices)
 
@@ -118,16 +124,60 @@ def clusters_analysis (
             current_count = transition_counts.get(transition, 0)
             transition_counts[transition] = current_count + 1
 
+        # Now for every cluster find the most representative frame (i.e. the one with less RMSD distance to its neighbours)
+        # Then make a screenshot for this specific frame
+        representative_frames = []
+        # Save the screenshot parameters so we can keep images coherent between clusters
+        screenshot_parameters = None
+        for c, cluster in enumerate(clusters):
+            most_representative_frame = None
+            min_distance = float('inf') # Positive infinity
+            for frame, neighbour_frames in otherwise(cluster):
+                # Calculate the sum of all rmsd distances
+                total_distance = 0
+                for neighbour_frame in neighbour_frames:
+                    total_distance += distance_matrix[frame][neighbour_frame]
+                # If the distance is inferior the current minimum then set this frame as the most representative
+                if total_distance < min_distance:
+                    most_representative_frame = frame
+                    min_distance = total_distance
+            # Save the most representative frame in the list
+            representative_frames.append(most_representative_frame)
+            # Once we have the most representative frame we take a screenshot
+            # This screenshots will be then uploaded to the database as well
+            # Generate a pdb with coordinates from the most representative frame
+            coordinates = traj[most_representative_frame]
+            coordinates.save(AUXILIAR_PDB_FILENAME)
+            # Set the screenshot filename from the input template
+            screenshot_filename = output_screenshots_filename.replace('*', str(r).zfill(2)).replace('?', str(c).zfill(2))
+            # Generate the screenshot
+            screenshot_parameters = get_screenshot(AUXILIAR_PDB_FILENAME, screenshot_filename, parameters=screenshot_parameters)
+
+        # Set the output clusters which include all frames in the cluster and the main or more representative frame
+        output_clusters = []
+        for frames, most_representative_frame in zip(clusters, representative_frames):
+            output_clusters.append({ 'frames': frames, 'main': most_representative_frame })
+
+        # Set the output transitions in a hashable and json parseable way
+        output_transitions = []
+        for transition, count in transition_counts.items():
+            # Set frames as regular ints to make them json serializable
+            output_transitions.append({ 'from': int(transition[0]), 'to': int(transition[1]), 'count': count })
+
         # Set the output analysis
         output_analysis = {
-            'run': run['name'],
-            'lengths': cluster_lengths,
-            'transitions': transition_counts
+            'subname': name,
+            'cutoff': cutoff,
+            'clusters': output_clusters,
+            'transitions': output_transitions
         }
+
+        # Set the analysis filename from the input template
+        analysis_filename = output_analysis_filename.replace('*', str(r).zfill(2))
 
         # The output filename must be different for every run to avoid overwritting previous results
         # However the filename is not important regarding the database since this analysis is found by its 'run'
-        save_json(output_analysis, output_analysis_filename)
+        save_json(output_analysis, analysis_filename)
 
 # Set a function to cluster frames in a RMSD matrix given a RMSD cutoff
 # https://github.com/boneta/RMSD-Clustering/blob/master/rmsd_clustering/clustering.py

@@ -104,7 +104,7 @@ OUTPUT_METADATA_FILENAME = 'metadata.json'
 OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 
 # Additional screenshot filenames
-OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.cluster_screenshot_*.jpg'
+OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.clusters_*_screenshot_?.jpg'
 
 # Set analyses files to be generated
 OUTPUT_INTERACTIONS_FILENAME = 'mda.interactions.json'
