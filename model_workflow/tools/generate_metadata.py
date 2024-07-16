@@ -13,6 +13,7 @@ def generate_project_metadata (
     get_input : Callable,
     structure : 'Structure',
     residue_map : dict,
+    protein_references_file : 'File',
     interactions : list,
     register : dict,
     output_metadata_filename : str,
@@ -66,7 +67,7 @@ def generate_project_metadata (
                 final_metadata_interactions.append(input_interaction)
 
     # Get additional metadata related to the aminoacids sequence
-    sequence_metadata = get_sequence_metadata(structure, residue_map)
+    sequence_metadata = get_sequence_metadata(structure, protein_references_file, residue_map)
 
     # Find the PTMs
     # Save only their names for now

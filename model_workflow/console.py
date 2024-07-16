@@ -266,22 +266,26 @@ run_parser.add_argument(
 
 run_parser.add_argument(
     "-ow", "--overwrite",
+    type=str,
     nargs='*',
     default=[],
+    action=custom,
+    const=True,
+    choices=choices,
     help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool")
 
 run_parser.add_argument(
     "-rcut", "--rmsd_cutoff",
     type=float,
     default=DEFAULT_RMSD_CUTOFF,
-    help=("Set the cutoff for the RMSD sudden jumps analysis to fail (default " + str(DEFAULT_RMSD_CUTOFF) + ").\n"
+    help=(f"Set the cutoff for the RMSD sudden jumps analysis to fail (default {DEFAULT_RMSD_CUTOFF}).\n"
         "This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.\n"))
 
 run_parser.add_argument(
     "-icut", "--interaction_cutoff",
     type=float,
     default=DEFAULT_INTERACTION_CUTOFF,
-    help=("Set the cutoff for the interactions analysis to fail (default " + str(DEFAULT_INTERACTION_CUTOFF) + ").\n"
+    help=(f"Set the cutoff for the interactions analysis to fail (default {(DEFAULT_INTERACTION_CUTOFF)}).\n"
         "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
 
 # Add a new to command to aid in the inputs file setup
