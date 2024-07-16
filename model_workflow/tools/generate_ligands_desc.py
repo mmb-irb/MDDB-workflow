@@ -702,10 +702,10 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
         ligand_codes.append(ligand_code)
     return ligand_codes
 
-# Given a pdb Id, get its pubchem ids
+# Given a pdb id, get its pubchem ids
 # e.g. 4YDF -> 
 def pdb_to_pubchem (pdb_id : str) -> List[str]:
-    print(f'Searching PubChem Ids for PDB {pdb_id}')
+    print(f'Searching PubChem ids for PDB {pdb_id}')
     pubchem_ids = []
     # Iterate over pdb ligand codes
     ligand_codes = get_pdb_ligand_codes(pdb_id)
@@ -713,7 +713,11 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
         pubchem_id = pdb_ligand_to_pubchem_RAW(ligand_code)
         if pubchem_id:
             pubchem_ids.append(pubchem_id)
-    print(' Found ' + ', '.join(pubchem_ids))
+    # Print the found PubChem ids
+    if len(pubchem_ids) > 0:
+        print(f' Found {len(pubchem_ids) } ids: ' + ', '.join(pubchem_ids))
+    else:
+        print(' No ids were found')
     return pubchem_ids
     # DANI: De momento no usamos las SMILES que alguna vez me han dado problemas (e.g. 2I3I)
     # smiles_list = pdb_to_smiles(pdb_id)
