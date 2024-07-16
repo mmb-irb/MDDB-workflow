@@ -31,17 +31,26 @@ def clusters_analysis (
     runs = []
 
     # Start with the overall selection
+    parsed_overall_selection = structure.select(overall_selection)
+    # If the default selection is empty then use all heavy atoms
+    if not parsed_overall_selection:
+        parsed_overall_selection = structure.select_heavy_atoms()
     runs.append({
         'name': 'Overall',
-        'selection': structure.select(overall_selection)
+        'selection': parsed_overall_selection
     })
 
     # Now setup the interaction runs
     for interaction in interactions:
+        # Get the interface selection
         interface_residue_indices = interaction['interface_indices_1'] + interaction['interface_indices_2']
+        interface_selection = structure.select_residue_indices(interface_residue_indices)
+        heavy_atoms_selection = structure.select_heavy_atoms()
+        # Keep only heavy atoms for the distance calculation
+        final_selection = interface_selection & heavy_atoms_selection
         runs.append({
             'name': interaction['name'],
-            'selection': structure.select_residue_indices(interface_residue_indices)
+            'selection': final_selection
         })
 
     # Now iterate over the different runs
