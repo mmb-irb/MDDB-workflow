@@ -13,6 +13,7 @@ import urllib.request
 import json
 import numpy
 from glob import glob
+from inspect import getfullargspec
 from typing import Optional, Union, List, Callable
 
 # Constants
@@ -29,7 +30,7 @@ from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from model_workflow.tools.residue_mapping import generate_residue_mapping
-from model_workflow.tools.generate_map import generate_protein_mapping
+from model_workflow.tools.generate_map import generate_protein_mapping, get_sequence_metadata
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_charges import get_charges
@@ -121,7 +122,7 @@ class MD:
             # Otherwise we are supposed to find input files locally
             # If the directory does not exist we have nothing to do so we raise an error
             else:
-                raise InputError('MD directory ' + self.directory + ' does not exist')
+                raise InputError(f'MD directory {self.directory} does not exist')
         # Input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
@@ -837,11 +838,13 @@ class MD:
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
     # MD metadata filename
-    def get_metadata_filename (self) -> str:
-        # If the file already exists then send it
+    def get_metadata_file (self, overwrite : bool = False) -> File:
+        # Set the metadata file
         metadata_filepath = self.md_pathify(OUTPUT_METADATA_FILENAME)
-        if exists(metadata_filepath):
-            return metadata_filepath
+        metadata_file = File(metadata_filepath)
+        # If the file already exists then send it
+        if metadata_file.exists and not overwrite:
+            return metadata_file
         print('-> Generating MD metadata')
         # Otherwise, generate it
         generate_md_metadata(
@@ -850,20 +853,24 @@ class MD:
             snapshots = self.snapshots,
             reference_frame = self.reference_frame,
             register = self.register,
-            output_metadata_filename = metadata_filepath,
+            output_metadata_filename = metadata_file.path,
         )
-        return metadata_filepath
-    metadata_filename = property(get_metadata_filename, None, None, "Project metadata filename (read only)")
+        return metadata_file
+    metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
     # The interactions
     # This is a bit exceptional since it is a value to be used and an analysis file to be generated
-    def get_interactions (self) -> List[dict]:
+    def get_interactions (self, overwrite : bool = False) -> List[dict]:
         # If we already have a stored value then return it
         if self._interactions != None:
             return self._interactions
         # Set the interactions file
         interactions_filepath = self.md_pathify(OUTPUT_INTERACTIONS_FILENAME)
         interactions_file = File(interactions_filepath)
+        # If the file already exists then interactions will be read from it
+        # If the overwrite argument is passed we must delete it here
+        if interactions_file.exists and overwrite:
+            interactions_file.remove()
         print('-> Processing interactions')
         # Otherwise, process interactions
         self._interactions = process_interactions(
@@ -974,10 +981,10 @@ class MD:
     # ---------------------------------------------------------------------------------
 
     # RMSDs
-    def generate_rmsds_analysis (self):
+    def run_rmsds_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RMSDS_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running RMSDs analysis')
         # WARNING: This analysis is fast enought to use the full trajectory
@@ -996,10 +1003,10 @@ class MD:
         )
 
     # TM scores
-    def generate_tmscores_analysis (self):
+    def run_tmscores_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_TMSCORES_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running TM scores analysis')
         # Here we set a small frames limit since this anlaysis is a bit slow
@@ -1015,10 +1022,10 @@ class MD:
         )
 
     # RMSF, atom fluctuation
-    def generate_rmsf_analysis (self):
+    def run_rmsf_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RMSF_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running RMSF analysis')
         # This analysis is fast and the output size depends on the number of atoms only
@@ -1032,7 +1039,7 @@ class MD:
         )
 
     # RGYR, radius of gyration
-    def generate_rgyr_analysis (self):
+    def run_rgyr_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RGYR_FILENAME)
         if exists(output_analysis_filepath):
@@ -1052,10 +1059,10 @@ class MD:
         )
 
     # PCA, principal component analysis
-    def generate_pca_analysis (self):
+    def run_pca_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_PCA_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running PCA analysis')
         # WARNING: This analysis will generate several output files
@@ -1079,10 +1086,10 @@ class MD:
     # DANI: Puede saltar un error de imposible alojar tanta memoria
     # DANI: Puede comerse toda la ram y que al final salte un error de 'Terminado (killed)'
     # DANI: De momento me lo salto
-    # def generate_pca_contacts (self):
+    # def run_pca_contacts (self, overwrite : bool = False):
     #     # Do not run the analysis if the output file already exists
     #     output_analysis_filepath = self.md_pathify(OUTPUT_PCA_CONTACTS_FILENAME)
-    #     if exists(output_analysis_filepath):
+    #     if exists(output_analysis_filepath) and not overwrite:
     #         return
     #     print('-> Running PCA contacts analysis')
     #     pca_contacts(
@@ -1093,10 +1100,10 @@ class MD:
     #     )
 
     # RMSD per residue
-    def genereate_rmsd_perres_analysis (self):
+    def run_rmsd_perres_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RMSD_PERRES_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running RMSD per residue analysis')
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
@@ -1112,10 +1119,10 @@ class MD:
         )
 
     # RMSD pairwise
-    def genereate_rmsd_pairwise_analysis (self):
+    def run_rmsd_pairwise_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running RMSD pairwise analysis')
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
@@ -1133,10 +1140,10 @@ class MD:
         )
 
     # Clusters
-    def genereate_clusters_analysis (self):
+    def run_clusters_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         output_screenshot_filepath = self.md_pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
         print('-> Running clusters analysis')
@@ -1150,10 +1157,10 @@ class MD:
         )
 
     # Distance per residue
-    def generate_dist_perres_analysis (self):
+    def run_dist_perres_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_DIST_PERRES_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running distance per residue analysis')
         # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
@@ -1167,10 +1174,10 @@ class MD:
         )
 
     # Hydrogen bonds
-    def generate_hbonds_analysis (self):
+    def run_hbonds_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_HBONDS_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running hydrogen bonds analysis')
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
@@ -1194,10 +1201,10 @@ class MD:
         )
 
     # SASA, solvent accessible surfave analysis
-    def generate_sas_analysis (self):
+    def run_sas_analysis (self):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_SASA_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running SAS analysis')
         # Run the analysis
@@ -1212,10 +1219,10 @@ class MD:
         )
 
     # Energies
-    def generate_energies_analysis (self):
+    def run_energies_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_ENERGIES_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running energies analysis')
         # Run the analysis
@@ -1231,10 +1238,10 @@ class MD:
         )
 
     # Pockets
-    def generate_pockets_analysis (self):
+    def run_pockets_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_POCKETS_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running pockets analysis')
         # Run the analysis
@@ -1251,10 +1258,10 @@ class MD:
 
     # Helical parameters
     # DANI: Al final lo reimplementará Subamoy (en python) osea que esto no lo hacemos de momento
-    # def generate_helical_analysis (self):
+    # def run_helical_analysis (self, overwrite : bool = False):
     #     # Do not run the analysis if the output file already exists
     #     output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
-    #     if exists(output_analysis_filepath):
+    #     if exists(output_analysis_filepath) and not overwrite:
     #         return
     #     print('-> Running helical analysis')
     #     # Run the analysis
@@ -1267,10 +1274,10 @@ class MD:
     #     )
 
     # Markov
-    def generate_markov_analysis (self):
+    def run_markov_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_MARKOV_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         print('-> Running Markov analysis')
         # Run the analysis
@@ -1330,8 +1337,6 @@ class Project:
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : bool = False,
-        # Overwrite already existing output files
-        overwrite : List[str] = []
     ):
         # Save input parameters
         self.directory = remove_final_slash(directory)
@@ -1419,7 +1424,6 @@ class Project:
         self.rmsd_cutoff = rmsd_cutoff
         self.interaction_cutoff = interaction_cutoff
         self.sample_trajectory = sample_trajectory
-        self.overwrite = overwrite
 
         # Set the inputs, where values from the inputs file will be stored
         self._inputs = None
@@ -1445,6 +1449,10 @@ class Project:
         # This is useful to track previous workflow runs and problems
         register_file = File(REGISTER_FILENAME)
         self.register = Register(register_file)
+
+    # Given a filename or relative path, add the project directory path at the beginning
+    def project_pathify (self, filename_or_relative_path : str) -> str:
+        return self.directory + '/' + filename_or_relative_path
 
     # Check input trajectory file paths to be right
     # If there is any problem then fix it or directly raise an input error
@@ -1992,14 +2000,18 @@ class Project:
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
     # Protein residues mapping
-    def get_protein_map (self) -> dict:
+    def get_protein_map (self) -> List[dict]:
         # If we already have a stored value then return it
         if self._protein_map:
             return self._protein_map
         print('-> Getting protein references')
+        # Set the protein references file
+        protein_references_filepath = self.project_pathify(PROTEIN_REFERENCES_FILENAME)
+        protein_references_file = File(protein_references_filepath)
         # Otherwise we must find the value
         self._protein_map = generate_protein_mapping(
             structure = self.structure,
+            protein_references_file = protein_references_file,
             register = self.register,
             mercy = self.mercy,
             forced_references = self.forced_references,
@@ -2008,23 +2020,57 @@ class Project:
         return self._protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
+    # Define the output file of the protein mapping including protein references
+    def get_protein_references_file (self, overwrite : bool = False) -> File:
+        # Set the protein references file
+        protein_references_filepath = self.project_pathify(PROTEIN_REFERENCES_FILENAME)
+        protein_references_file = File(protein_references_filepath)
+        # If the file already exists then return it
+        # However if the overwrite argument is passed then delete it and proceed to produce it again
+        if protein_references_file.exists:
+            if not overwrite:
+                return protein_references_file
+            protein_references_file.remove()
+        # Ask for the protein map thus producing the protein references file
+        self.get_protein_map()
+        return protein_references_file
+    protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
+
     # Ligand residues mapping
     def get_ligand_map (self) -> List[dict]:
         # If we already have a stored value then return it
         if self._ligand_map != None:
             return self._ligand_map
-        self.output_ligands_filepath = self.directory + '/' + OUTPUT_LIGANDS_FILENAME
         print('-> Getting ligand references')
+        # Set the ligand references file
+        ligand_references_filepath = self.project_pathify(LIGAND_REFERENCES_FILENAME)
+        ligand_references_file = File(ligand_references_filepath)
         # Otherwise we must find the value
         self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             structure = self.structure,
             input_ligands = self.input_ligands,
             input_pdb_ids = self.pdb_ids,
-            output_ligands_filepath = self.output_ligands_filepath, 
+            output_ligands_filepath = ligand_references_file.path, 
             mercy = self.mercy,
         )
         return self._ligand_map
     ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
+
+    # Define the output file of the ligand mapping including ligand references
+    def get_ligand_references_file (self, overwrite : bool = False) -> File:
+        # Set the ligand references file
+        ligand_references_filepath = self.project_pathify(LIGAND_REFERENCES_FILENAME)
+        ligand_references_file = File(ligand_references_filepath)
+        # If the file already exists then return it
+        # However if the overwrite argument is passed then delete it and proceed to produce it again
+        if ligand_references_file.exists:
+            if not overwrite:
+                return ligand_references_file
+            ligand_references_file.remove()
+        # Ask for the ligand map thus producing the ligand references file
+        self.get_ligand_map()
+        return ligand_references_file
+    ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
     # Build the residue map from both proteins and ligands maps
     # This is formatted as both the standard topology and metadata generators expect them
@@ -2043,10 +2089,13 @@ class Project:
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
     # Metadata filename
-    def get_metadata_filename (self) -> str:
+    def get_metadata_file (self, overwrite : bool = False) -> File:
+        # Set the metadata file
+        metadata_filepath = self.project_pathify(OUTPUT_METADATA_FILENAME)
+        metadata_file = File(metadata_filepath)
         # If the file already exists then send it
-        if exists(OUTPUT_METADATA_FILENAME):
-            return OUTPUT_METADATA_FILENAME
+        if metadata_file.exists and not overwrite:
+            return metadata_file
         print('-> Generating project metadata')
         # Set an input getter that gets the input as soon as called
         def get_input (name : str, optional : bool = False):
@@ -2060,29 +2109,27 @@ class Project:
             get_input = get_input,
             structure = self.structure,
             residue_map = self.residue_map,
+            protein_references_file = self.protein_references_file,
             interactions = self.reference_md.interactions,
             register = self.register,
-            output_metadata_filename = OUTPUT_METADATA_FILENAME,
+            output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,
         )
-        return OUTPUT_METADATA_FILENAME
-    metadata_filename = property(get_metadata_filename, None, None, "Project metadata filename (read only)")
+        return metadata_file
+    metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
     # Standard topology filename
-    def get_standard_topology_file (self) -> str:
+    def get_standard_topology_file (self, overwrite : bool = False) -> File:
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._standard_topology_file:
             return self._standard_topology_file
-        # If the file already exists then send it
-        self._standard_topology_file = File(TOPOLOGY_FILENAME)
-        # Check if the output is to be overwritten
-        must_overwrite = TOPOLOGY_FILENAME in self.overwrite
-        if self._standard_topology_file.exists:
-            if must_overwrite:
-                print('Overwritting standard topology')
-            else:
-                return self._standard_topology_file
+        # Set the standard topology file
+        standard_topology_filepath = self.project_pathify(TOPOLOGY_FILENAME)
+        self._standard_topology_file = File(standard_topology_filepath)
+        # If the file already exists and is not to be overwirtten then send it
+        if self._standard_topology_file.exists and not overwrite:
+            return self._standard_topology_file
         print('-> Generating topology')
         # Otherwise, generate it
         generate_topology(
@@ -2099,17 +2146,20 @@ class Project:
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
     # Screenshot filename
-    def get_screenshot_filename (self) -> str:
+    def get_screenshot_filename (self, overwrite : bool = False) -> str:
+        # Set the screenshot file
+        screenshot_filepath = self.project_pathify(OUTPUT_SCREENSHOT_FILENAME)
+        screenshot_file = File(screenshot_filepath)
         # If the file already exists then send it
-        if exists(OUTPUT_SCREENSHOT_FILENAME):
-            return OUTPUT_SCREENSHOT_FILENAME
+        if screenshot_file.exists and not overwrite:
+            return screenshot_file
         print('-> Generating screenshot')
         # Otherwise, generate it
         get_screenshot(
             input_structure_filename = self.structure_file.path,
-            output_screenshot_filename = OUTPUT_SCREENSHOT_FILENAME,
+            output_screenshot_filename = screenshot_file.path,
         )
-        return OUTPUT_SCREENSHOT_FILENAME
+        return screenshot_file
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
 
@@ -2167,22 +2217,22 @@ processed_files = {
 
 # List of available analyses
 analyses = {
-    'clusters': MD.genereate_clusters_analysis,
-    'dist': MD.generate_dist_perres_analysis,
-    'energies': MD.generate_energies_analysis,
-    'hbonds': MD.generate_hbonds_analysis,
-    #'helical': MD.generate_helical_analysis,
-    'markov': MD.generate_markov_analysis,
-    'pca': MD.generate_pca_analysis,
-    #'pcacons': MD.generate_pca_contacts,
-    'pockets': MD.generate_pockets_analysis,
-    'rgyr': MD.generate_rgyr_analysis,
-    'rmsds': MD.generate_rmsds_analysis,
-    'perres': MD.genereate_rmsd_perres_analysis,
-    'pairwise': MD.genereate_rmsd_pairwise_analysis,
-    'rmsf': MD.generate_rmsf_analysis,
-    'sas': MD.generate_sas_analysis,
-    'tmscore': MD.generate_tmscores_analysis,
+    'clusters': MD.run_clusters_analysis,
+    'dist': MD.run_dist_perres_analysis,
+    'energies': MD.run_energies_analysis,
+    'hbonds': MD.run_hbonds_analysis,
+    #'helical': MD.run_helical_analysis,
+    'markov': MD.run_markov_analysis,
+    'pca': MD.run_pca_analysis,
+    #'pcacons': MD.run_pca_contacts,
+    'pockets': MD.run_pockets_analysis,
+    'rgyr': MD.run_rgyr_analysis,
+    'rmsds': MD.run_rmsds_analysis,
+    'perres': MD.run_rmsd_perres_analysis,
+    'pairwise': MD.run_rmsd_pairwise_analysis,
+    'rmsf': MD.run_rmsf_analysis,
+    'sas': MD.run_sas_analysis,
+    'tmscore': MD.run_tmscores_analysis,
 }
 
 # List of requestables for the console
@@ -2191,14 +2241,12 @@ requestables = {
     **processed_files,
     **analyses,
     'interactions': MD.get_interactions,
-    'snapshots': MD.get_snapshots,
-    'charges': Project.get_charges,
-    'mapping': Project.get_protein_map,
-    'ligands': Project.get_ligand_map,
+    'mapping': Project.get_protein_references_file,
+    'ligands': Project.get_ligand_references_file,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
-    'pmeta': Project.get_metadata_filename,
-    'mdmeta': MD.get_metadata_filename,
+    'pmeta': Project.get_metadata_file,
+    'mdmeta': MD.get_metadata_file,
 }
 
 # The actual main function
@@ -2216,7 +2264,16 @@ def workflow (
     include : Optional[List[str]] = None,
     # Run everything but specific analyses/processes
     exclude : Optional[List[str]] = None,
+    # Overwrite already existing output files
+    overwrite : Optional[ Union[ List[str], bool ] ] = None,
 ):
+
+    # Check there are not input errors
+
+    # Include and exclude are not compatible
+    # This is to protect the user to do something which makes not sense
+    if include and exclude:
+        raise InputError('Include (-i) and exclude (-e) are not comaptible. Use one of these options.')
 
     # Move the current directory to the working directory
     chdir(working_directory)
@@ -2225,7 +2282,7 @@ def workflow (
 
     # Initiate the project project
     project = Project(**project_parameters)
-    print('  ' + str(len(project.mds)) + ' MDs are to be run')
+    print(f'  {len(project.mds)} MDs are to be run')
 
     # Now iterate over the different MDs
     for md in project.mds:
@@ -2233,9 +2290,9 @@ def workflow (
         print('\n' + CYAN_HEADER + 'Running workflow for MD at ' + md.directory + COLOR_END)
 
         # Set a function to call getters with the proper instance
-        def call_getter (getter : Callable):
+        def call_getter (getter : Callable, **args):
             instance = md if getter.__qualname__[0:3] == 'MD.' else project
-            getter(instance)
+            getter(instance, **args)
 
         # If download is passed as True then just download input files if they are missing and exit
         if download:
@@ -2249,42 +2306,56 @@ def workflow (
                 call_getter(getter)
             continue
 
-        # Run the requested analyses
+        # Set the list of processings and analyses to run
+        tasks = None
+        # If the user included specific tasks then add only these tasks to the list
         if include and len(include) > 0:
             sys.stdout.write(f"Executing specific dependencies: " + ', '.join(include) + '\n')
-            # Include only the specified dependencies
-            requested = [ getter for name, getter in requestables.items() if name in include ]
-            for getter in requested:
-                call_getter(getter)
-            # Exit here
-            continue
+            tasks = include
+        # Set the default tasks otherwise
+        else:
+            # Add all the analysis, the metadata, the standard topology and the screenshot
+            tasks = [
+                # Mapping is not included here
+                # It does more things than generating the references file and it takes time
+                'stopology',
+                'screenshot',
+                'pmeta',
+                'ligands',
+                'interactions',
+                'mdmeta',
+                *analyses.keys(),
+            ]
+            # If the exclude parameter was passed then remove excluded tasks from the default tasks
+            if exclude and len(exclude) > 0:
+                sys.stdout.write(f"Excluding specific dependencies: " + ', '.join(exclude) + '\n')
+                tasks = [ name for name in tasks if name not in exclude ]
 
-        # Set the default requests, when there are not specific requests
-        # Request all the analysis, the metadata, the standard topology and the screenshot
-        requests = [
-            # Mapping is not included here
-            # It does more things than generating the references file and it takes time
-            'stopology',
-            'screenshot',
-            'pmeta',
-            'ligands',
-            'interactions',
-            'mdmeta',
-            *analyses.keys(),
-        ]
-
-        # If the exclude parameter was passed then remove excluded requests from the default requests
-        if exclude and len(exclude) > 0:
-            sys.stdout.write(f"Excluding specific dependencies: " + ', '.join(exclude) + '\n')
-            requests = [ name for name in requests if name not in exclude ]
+        # If the user requested to verwrite something, make sure it is in the tasks list
+        if overwrite and type(overwrite) == list:
+            for task in overwrite:
+                if task not in tasks:
+                    raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
             
-        # Run the requests
-        for request in requests:
-            getter = requestables[request]
+        # Run the tasks
+        for task in tasks:
+            # Get the function to be called
+            getter = requestables[task]
+            # Check if the current task is to run even if output files exists thus overriding them
+            must_overwrite = overwrite == True or ( type(overwrite) == list and task in overwrite )
+            # If we must overwrite then call the function with the overwrite parameter set as true
+            if must_overwrite:
+                # Make sure the function to be called has the overwrite argument
+                function_arguments = getfullargspec(getter)[0]
+                if 'overwrite' not in function_arguments:
+                    raise InputError(f'Task "{task}" does not support overwrite')
+                # Finally call the function
+                call_getter(getter, overwrite=True)
+                continue
+            # Call the function with no additional arguments otherwise
             call_getter(getter)
 
-        # Remove gromacs backups
-        # DANI: Esto iría mejor en otro sitio
+        # Remove gromacs backups and other trash files
         remove_trash(md.directory)
 
     sys.stdout.write("Done!\n")

@@ -1,4 +1,3 @@
-import os
 import sys
 import json
 import urllib.request
@@ -9,7 +8,7 @@ from pathlib import Path
 
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json
-from model_workflow.utils.constants import OUTPUT_REFERENCES_FILENAME, REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
+from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 
 import xmltodict
 
@@ -46,6 +45,7 @@ sys.stderr = stderr_backup
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
 def generate_protein_mapping (
     structure : 'Structure',
+    protein_references_file : 'File',
     register : dict,
     mercy : List[str] = [],
     forced_references : Union[list,dict] = [],
@@ -80,8 +80,8 @@ def generate_protein_mapping (
         return reference, False
     # Import local references, in case the references json file already exists
     imported_references = None
-    if os.path.exists(OUTPUT_REFERENCES_FILENAME):
-        imported_references = import_references()
+    if protein_references_file.exists:
+        imported_references = import_references(protein_references_file)
         # Append the imported references to the overall references pool
         for k,v in imported_references.items():
             references[k] = v
@@ -187,7 +187,7 @@ def generate_protein_mapping (
             uniprot_id = reference['uniprot']
             print('   ' + name + ' -> ' + uniprot_id)
         # Export already matched references
-        export_references(protein_parsed_chains)
+        export_references(protein_parsed_chains, protein_references_file)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
         allright = all([ chain_data['match']['ref'] for chain_data in protein_parsed_chains ])            
         return allright
@@ -290,7 +290,7 @@ def generate_protein_mapping (
 # Note that all references are saved to this json file, even those which are already in the database
 # It is the loader who is the responsible to check which references must be loaded and which ones are loaded already
 # Note that mapping data (i.e. which residue belongs to each reference) is not saved
-def export_references (mapping_data : list):
+def export_references (mapping_data : list, protein_references_file : 'File'):
     final_references = []
     final_uniprots = []
     for data in mapping_data:
@@ -307,13 +307,13 @@ def export_references (mapping_data : list):
     if len(final_references) == 0:
         return
     # Write references to a json file
-    save_json(final_references, OUTPUT_REFERENCES_FILENAME, indent = 4)
+    save_json(final_references, protein_references_file.path, indent = 4)
 
 # Import reference json file so we do not have to rerun this process
-def import_references () -> list:
-    print(' Importing references from ' + OUTPUT_REFERENCES_FILENAME)
+def import_references (protein_references_file : 'File') -> list:
+    print(' Importing references from ' + protein_references_file.path)
     # Read the file
-    file_content = load_json(OUTPUT_REFERENCES_FILENAME)
+    file_content = load_json(protein_references_file.path)
     # Format data as the process expects to find it
     references = {}
     for reference in file_content:
@@ -596,7 +596,7 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 2. Calculate which reference domains are covered by the previous sequence
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
 from model_workflow.resources.covid_variants import get_variants
-def get_sequence_metadata (structure : 'Structure', residue_map : dict) -> dict:
+def get_sequence_metadata (structure : 'Structure', protein_references_file : 'File', residue_map : dict) -> dict:
     # First mine the sequences from the structure
     # Set a different sequence for each chain
     sequences = [ chain.get_sequence() for chain in structure.chains ]
@@ -611,7 +611,7 @@ def get_sequence_metadata (structure : 'Structure', residue_map : dict) -> dict:
     residue_reference_numbers = residue_map['residue_reference_numbers']
     residue_reference_indices = residue_map['residue_reference_indices']
     # Load references data, which should already be save to the references data file
-    references_data = import_references() if os.path.exists(OUTPUT_REFERENCES_FILENAME) else {}
+    references_data = import_references(protein_references_file) if protein_references_file.exists else {}
     # In case we have the SARS-CoV-2 spike among the references, check also which is the variant it belongs to
     # DANI: Esto es un parche. En un futuro buscaremos una manera mejor de comprovar variantes en cualquier contexto
     variant = None

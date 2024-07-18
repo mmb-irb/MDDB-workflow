@@ -1432,6 +1432,15 @@ class Structure:
                 counter_ion_indices.append(atom.index)
         return Selection(counter_ion_indices)
 
+    # Select heavy atoms
+    def select_heavy_atoms (self) -> 'Selection':
+        atom_indices = []
+        for atom in self.atoms:
+            # If the atom is not an hydrogen then add it to the list
+            if atom.element != 'H':
+                atom_indices.append(atom.index)
+        return Selection(atom_indices)
+
     # Invert a selection
     def invert_selection (self, selection : 'Selection') -> 'Selection':
         atom_indices = list(range(self.atom_count))

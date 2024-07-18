@@ -37,13 +37,13 @@ def pca (
     parsed_fit_selection = structure.select(fit_selection, syntax='vmd')
     if not parsed_fit_selection:
         print(f'PCA fit selection: {fit_selection}')
-        warn('PCA fit selection is empty -> Using all atoms instead')
-        parsed_fit_selection = structure.select_all()
+        warn('PCA fit selection is empty -> Using all heavy atoms in the structure instead')
+        parsed_fit_selection = structure.select_heavy_atoms()
     parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd')
     if not parsed_analysis_selection:
         print(f'PCA analysis selection: {analysis_selection}')
-        warn('PCA analysis selection is empty -> Using all atoms instead')
-        parsed_analysis_selection = structure.select_all()
+        warn('PCA analysis selection is empty -> Using all heavy atoms in the structure instead')
+        parsed_analysis_selection = structure.select_heavy_atoms()
 
     # Parse PBC residues into a selection to be removed from PCA selections
     pbc_selection = structure.select_residue_indices(pbc_residues)

@@ -93,9 +93,9 @@ REFERENCE_LABELS = {
 # Set output files generated to be uploaded to the database
 
 # Set the references filename
-OUTPUT_REFERENCES_FILENAME = 'references.json'
+PROTEIN_REFERENCES_FILENAME = 'references.json'
 # Set the ligands filename
-OUTPUT_LIGANDS_FILENAME = 'ligands.json'
+LIGAND_REFERENCES_FILENAME = 'ligands.json'
 
 # Set the metadata filename
 OUTPUT_METADATA_FILENAME = 'metadata.json'
