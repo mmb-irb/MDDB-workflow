@@ -5,7 +5,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
 from typing import List, Tuple, Optional, Callable
-
+from model_workflow.utils.constants import LIGANDS_MATCH_FLAG
 from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
@@ -237,10 +237,11 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
 
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
+    structure : 'Structure',
     input_ligands : Optional[List[dict]],
     input_pdb_ids : List[str],
-    structure : 'Structure',
     output_ligands_filepath : str,
+    mercy : List[str] = [],
     ) -> dict:
 
     # Merge input ligands and pdb ligands
@@ -316,21 +317,30 @@ def generate_ligand_mapping (
         # if there isn't a defined name, it will be mined from PubChem
         user_forced_ligand_name = ligand.get('name', None)
         if user_forced_ligand_name:
-            ligand_names[pubchem_id] = user_forced_ligand_name        
+            ligand_names[pubchem_id] = user_forced_ligand_name
         # Map structure residues with the current ligand
         ligand_map = map_ligand_residues(structure, ligand_data)
-        # If the ligand did not map then discard it
-        if len(ligand_map['residue_indices']) == 0:
-            if not ligand.get('pdb', False):
-                raise InputError(f'Ligand with PubChem Id {pubchem_id} did not map with any residue')
-            ligands_data.pop()
-            continue
         # Add current ligand map to the general list
         ligand_maps.append(ligand_map)
+        # If the ligand did not map then discard it
+        did_not_match = len(ligand_map['residue_indices']) == 0
+        if did_not_match:
+            is_forced_by_user = not bool(ligand.get('pdb', False))
+            if is_forced_by_user:
+                # At this point we should have macthed all sequences
+                # If not, kill the process unless mercy was given
+                must_be_killed = LIGANDS_MATCH_FLAG not in mercy
+                if must_be_killed:
+                    raise InputError(f'Ligand with PubChem Id {pubchem_id} did not map with any residue')
+            # Otherwise simply remove it from the final ligand references file and the forwarded maps 
+            ligands_data.pop()
+            ligand_maps.pop()
+            ligand_name = ligand_names.get(pubchem_id, None)
+            if ligand_name != None:
+                del ligand_names[pubchem_id]
 
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
-
     # print('Ligands: ', ligands)
     # print('A total of',len(atom_elements_per_residue), 'residues and', len(atom_elements_per_ligand), 'ligands were found.')
     # print('Matched:', len(ligands),'/', len(atom_elements_per_ligand),'of the ligands.')
@@ -685,7 +695,7 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     except HTTPError as error:
         if error.code == 404:
             print(f' PDB code {pdb_id} not found')
-            return None
+            raise ValueError('Something went wrong with the PDB request (error ' + str(error.code) + ')')
         else:
             raise ValueError('Something went wrong with the PDB request: ' + request_url)
     # Get the 'het' hits or ligands available
@@ -709,6 +719,7 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
     pubchem_ids = []
     # Iterate over pdb ligand codes
     ligand_codes = get_pdb_ligand_codes(pdb_id)
+    print(' LIGAND CODES    ',  ligand_codes)
     for ligand_code in ligand_codes:
         pubchem_id = pdb_ligand_to_pubchem_RAW(ligand_code)
         if pubchem_id:
