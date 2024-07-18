@@ -1201,7 +1201,7 @@ class MD:
         )
 
     # SASA, solvent accessible surfave analysis
-    def run_sas_analysis (self):
+    def run_sas_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_SASA_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
