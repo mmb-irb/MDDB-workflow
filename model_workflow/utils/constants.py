@@ -60,6 +60,10 @@ IMAGED = 'imaged'
 IMAGED_STRUCTURE = 'imaged.pdb'
 IMAGED_TRAJECTORY = 'imaged.xtc'
 
+CORRECTED = 'corrected'
+CORRECTED_STRUCTURE = 'corrected.pdb'
+CORRECTED_TRAJECTORY = 'corrected.xtc'
+
 PROCESSED = 'processed'
 
 # Input and output core files

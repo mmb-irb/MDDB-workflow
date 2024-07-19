@@ -587,6 +587,10 @@ class MD:
 
         print(' * Correcting structure')
 
+        # Set output filenames for the already filtered structure and trajectory
+        corrected_structure_file = File(self.md_pathify(CORRECTED_STRUCTURE))
+        corrected_trajectory_file = File(self.md_pathify(CORRECTED_TRAJECTORY))
+
         # Correct the structure
         # This function reads and or modifies the following MD variables:
         #   snapshots, safe_bonds, register, mercy, trust
@@ -594,28 +598,31 @@ class MD:
             input_structure_file = imaged_structure_file,
             input_trajectory_file = imaged_trajectory_file,
             input_topology_file = filtered_topology_file,
-            output_structure_file = output_structure_file,
-            output_trajectory_file = output_trajectory_file,
+            output_structure_file = corrected_structure_file,
+            output_trajectory_file = corrected_trajectory_file,
             MD = self
         )
 
-        # Now we must rename files to match the output file in case there is any missmatch
-        # Some processed files may remain with some intermediate filename
+        # If the corrected output exists then use it
+        # Otherwise use the previous step files
+        corrected_structure_file = corrected_structure_file if corrected_structure_file.exists else imaged_structure_file
+        corrected_trajectory_file = corrected_trajectory_file if corrected_trajectory_file.exists else imaged_trajectory_file
+
+        # Now we must rename files to match the output file
+        # Processed files remain with some intermediate filename
         input_and_output_files = [
-            (input_structure_file, imaged_structure_file, output_structure_file),
-            (input_trajectory_files[0], imaged_trajectory_file, output_trajectory_file),
+            (input_structure_file, corrected_structure_file, output_structure_file),
+            (input_trajectory_files[0], corrected_trajectory_file, output_trajectory_file),
             (input_topology_file, filtered_topology_file, output_topology_file)
         ]
         for input_file, processed_file, output_file in input_and_output_files:
-            if output_file.exists:
-                continue
-            # There is also a chance that the input files have not been modified
+            # There is a chance that the input files have not been modified
             # This means the input format has already the output format and it is not to be imaged, fitted or corrected
             # However we need the output files to exist and we dont want to rename the original ones to conserve them
             # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
             if processed_file == input_file:
                 output_file.set_symlink_to(input_file)
-            # Some processed files may remain with some intermediate filename
+            # Otherwise rename the last intermediate file as the output file
             else:
                 rename(processed_file.path, output_file.path)
 
