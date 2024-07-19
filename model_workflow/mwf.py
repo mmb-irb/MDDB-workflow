@@ -392,6 +392,13 @@ class MD:
             'image': self.project.image,
             'fit': self.project.fit,
         }
+        print(current_processed_parameters)
+        # Note that not passing any of these parameters is condiered as 'leave it as it is'
+        # This means if we already filtered and now there is no filter parameter then we consider there is no change
+        for key, value in current_processed_parameters.items():
+            if not value:
+                current_processed_parameters[key] = previous_processed_parameters[key]
+        print(current_processed_parameters)
         # Compare current and previous values parameter by parameters
         same_processed_paramaters = previous_processed_parameters == current_processed_parameters
         if previous_processed_parameters and not same_processed_paramaters:
@@ -605,6 +612,7 @@ class MD:
 
         # If the corrected output exists then use it
         # Otherwise use the previous step files
+        # Corrected files are generated only when changes are made in these files
         corrected_structure_file = corrected_structure_file if corrected_structure_file.exists else imaged_structure_file
         corrected_trajectory_file = corrected_trajectory_file if corrected_trajectory_file.exists else imaged_trajectory_file
 
@@ -616,6 +624,10 @@ class MD:
             (input_topology_file, filtered_topology_file, output_topology_file)
         ]
         for input_file, processed_file, output_file in input_and_output_files:
+            # If the processed file is already the output file then there is nothing to do here
+            # This means it was already the input file and no chnages were made
+            if processed_file == output_file:
+                continue
             # There is a chance that the input files have not been modified
             # This means the input format has already the output format and it is not to be imaged, fitted or corrected
             # However we need the output files to exist and we dont want to rename the original ones to conserve them
