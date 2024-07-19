@@ -342,11 +342,15 @@ def generate_ligand_mapping (
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
 
-    print('Matched ligands:')
-    for ligand_map in ligand_maps:
-        residue_count = len(ligand_map["residue_indices"])
-        plural_sufix = '' if residue_count == 1 else 's'
-        print(f' - {ligand_map["name"]}: {residue_count} residue{plural_sufix}')
+    # Log matched ligands
+    if len(ligand_maps) > 0:
+        print('Matched ligands:')
+        for ligand_map in ligand_maps:
+            residue_count = len(ligand_map["residue_indices"])
+            plural_sufix = '' if residue_count == 1 else 's'
+            print(f' - {ligand_map["name"]}: {residue_count} residue{plural_sufix}')
+    else:
+        print('No ligands were matched')
 
     return ligand_maps, ligand_names
     
@@ -722,7 +726,6 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
     pubchem_ids = []
     # Iterate over pdb ligand codes
     ligand_codes = get_pdb_ligand_codes(pdb_id)
-    print(' LIGAND CODES    ',  ligand_codes)
     for ligand_code in ligand_codes:
         pubchem_id = pdb_ligand_to_pubchem_RAW(ligand_code)
         if pubchem_id:
