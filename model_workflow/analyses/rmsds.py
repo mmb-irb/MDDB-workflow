@@ -25,14 +25,19 @@ def rmsds(
     structure : 'Structure',
     pbc_residues: List[int],
     ligand_map : List[dict],
-    selections : List[str] = ['protein', 'nucleic'],
+    default_selections : List[str] = ['protein', 'nucleic'],
     ):
 
     # Find PBC residues, which are to be removed from parsed selections
     pbc_selection = structure.select_residue_indices(pbc_residues)
 
     # Parse the selections to meaningfull atom indices
-    parsed_selections = { selection: structure.select(selection, syntax='vmd') for selection in selections }
+    parsed_selections = {}
+    for default_selection in default_selections:
+        parsed_selection = structure.select(default_selection, syntax='vmd')
+        # If the default selection is not empty then add it to the list
+        if parsed_selection:
+            parsed_selections[default_selection] = parsed_selection
 
     # If there is a ligand map then parse them to selections as well
     if ligand_map:
@@ -40,14 +45,16 @@ def rmsds(
             selection_name = 'ligand ' + ligand['name']
             parsed_selection = structure.select_residue_indices(ligand['residue_indices'])
             parsed_selections[selection_name] = parsed_selection
+            # If the ligand selection totally overlaps with any default selections then remove the default
+            for default_selection in default_selections:
+                default_parsed_selection = parsed_selections.get(default_selection, None)
+                if default_parsed_selection and default_parsed_selection == parsed_selection:
+                    del parsed_selections[default_selection]
 
     # Remove PBC residues from parsed selections
     pbc_selection = structure.select_residue_indices(pbc_residues)
     non_pbc_selections = {}
     for selection_name, selection in parsed_selections.items():
-        # If selection was empty from the begining then discard it
-        if not selection:
-            continue
         # Substract PBC atoms
         non_pbc_selection = selection - pbc_selection
         # If selection after substracting pbc atoms becomes empty then discard it

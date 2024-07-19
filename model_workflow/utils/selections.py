@@ -18,6 +18,10 @@ class Selection:
     def __bool__ (self):
         return len(self.atom_indices) > 0
 
+    # Two selections are equal if they have the same atom indices
+    def __eq__ (self, other):
+        return set(self.atom_indices) == set(other.atom_indices)
+
     # Return a new selection with atom indices from both self and the other selection
     def __add__ (self, other):
         return self.merge(other)
