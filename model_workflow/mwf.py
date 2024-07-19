@@ -392,13 +392,11 @@ class MD:
             'image': self.project.image,
             'fit': self.project.fit,
         }
-        print(current_processed_parameters)
         # Note that not passing any of these parameters is condiered as 'leave it as it is'
         # This means if we already filtered and now there is no filter parameter then we consider there is no change
         for key, value in current_processed_parameters.items():
             if not value:
                 current_processed_parameters[key] = previous_processed_parameters[key]
-        print(current_processed_parameters)
         # Compare current and previous values parameter by parameters
         same_processed_paramaters = previous_processed_parameters == current_processed_parameters
         if previous_processed_parameters and not same_processed_paramaters:
