@@ -395,7 +395,7 @@ class MD:
         # Note that not passing any of these parameters is condiered as 'leave it as it is'
         # This means if we already filtered and now there is no filter parameter then we consider there is no change
         for key, value in current_processed_parameters.items():
-            if not value:
+            if not value and previous_processed_parameters != None:
                 current_processed_parameters[key] = previous_processed_parameters[key]
         # Compare current and previous values parameter by parameters
         same_processed_paramaters = previous_processed_parameters == current_processed_parameters
