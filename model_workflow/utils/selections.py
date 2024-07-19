@@ -20,6 +20,8 @@ class Selection:
 
     # Two selections are equal if they have the same atom indices
     def __eq__ (self, other):
+        if not isinstance(other, self.__class__):
+            return False
         return set(self.atom_indices) == set(other.atom_indices)
 
     # Return a new selection with atom indices from both self and the other selection
