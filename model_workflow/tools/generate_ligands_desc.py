@@ -341,9 +341,12 @@ def generate_ligand_mapping (
 
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
-    # print('Ligands: ', ligands)
-    # print('A total of',len(atom_elements_per_residue), 'residues and', len(atom_elements_per_ligand), 'ligands were found.')
-    # print('Matched:', len(ligands),'/', len(atom_elements_per_ligand),'of the ligands.')
+
+    print('Matched ligands:')
+    for ligand_map in ligand_maps:
+        residue_count = len(ligand_map["residue_indices"])
+        plural_sufix = '' if residue_count == 1 else 's'
+        print(f' - {ligand_map["name"]}: {residue_count} residue{plural_sufix}')
 
     return ligand_maps, ligand_names
     
