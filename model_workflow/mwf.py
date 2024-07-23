@@ -2215,22 +2215,32 @@ def remove_final_slash (directory : str) -> str:
         return directory[:-1]
     return directory
 
-# Input files
-input_files = {
-    'istructure': MD.get_input_structure_file,
-    'itrajectory': MD.get_input_trajectory_files,
+# Project input files
+project_input_files = {
     'itopology': Project.get_input_topology_file,
     'inputs': Project.get_inputs_file,
     'populations': Project.get_populations_file,
     'transitions': Project.get_transitions_file
 }
+# MD input files
+md_input_files = {
+    'istructure': MD.get_input_structure_file,
+    'itrajectory': MD.get_input_trajectory_files
+}
+# Both project and MD input files
+input_files = { **project_input_files, **md_input_files }
 
-# Processed files
-processed_files = {
-    'structure': MD.get_structure_file,
-    'trajectory': MD.get_trajectory_file,
+# Project processed files
+project_processed_files = {
     'topology': Project.get_topology_file
 }
+# MD processed files
+md_processed_files = {
+    'structure': MD.get_structure_file,
+    'trajectory': MD.get_trajectory_file
+}
+# Both project and MD processed files
+processed_files = { **project_processed_files, **md_processed_files }
 
 # List of available analyses
 analyses = {
@@ -2252,19 +2262,26 @@ analyses = {
     'tmscore': MD.run_tmscores_analysis,
 }
 
-# List of requestables for the console
-requestables = {
-    **input_files,
-    **processed_files,
-    **analyses,
-    'interactions': MD.get_interactions,
+# Project requestable tasks
+project_requestables = {
+    **project_input_files,
+    **project_processed_files,
     'mapping': Project.get_protein_references_file,
     'ligands': Project.get_ligand_references_file,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
+}
+# MD requestable tasks
+md_requestables = {
+    **md_input_files,
+    **md_processed_files,
+    **analyses,
+    'interactions': MD.get_interactions,
     'mdmeta': MD.get_metadata_file,
 }
+# List of requestables for the console
+requestables = { **project_requestables, **md_requestables }
 
 # The actual main function
 def workflow (
@@ -2295,67 +2312,81 @@ def workflow (
     # Move the current directory to the working directory
     chdir(working_directory)
     current_directory_name = getcwd().split('/')[-1]
-    print('Running workflow for project at ' + current_directory_name)
+    print(f'\n{CYAN_HEADER}Running workflow for project at {current_directory_name}{COLOR_END}')
 
     # Initiate the project project
     project = Project(**project_parameters)
     print(f'  {len(project.mds)} MDs are to be run')
 
+    # Set the tasks to be run
+    tasks = None
+    # If the download argument is passed then just make sure input files are available
+    if download:
+        tasks = list(input_files.keys())
+    # If the setup argument is passed then just process input files
+    elif setup:
+        tasks = list(processed_files.keys())
+    # If the include argument then add only the specified tasks to the list
+    elif include and len(include) > 0:
+        tasks = include
+    # Set the default tasks otherwise
+    else:
+        tasks = [
+            # Project tasks
+            'stopology',
+            'screenshot',
+            'pmeta',
+            # MD tasks
+            'mdmeta',
+            'interactions',
+            *analyses.keys(),
+        ]
+        # If the exclude parameter was passed then remove excluded tasks from the default tasks
+        if exclude and len(exclude) > 0:
+            tasks = [ name for name in tasks if name not in exclude ]
+
+    # If the user requested to overwrite something, make sure it is in the tasks list
+    if overwrite and type(overwrite) == list:
+        for task in overwrite:
+            if task not in tasks:
+                raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
+
+    # Run the project tasks now
+    project_tasks = [ task for task in tasks if task in project_requestables ]
+    for task in project_tasks:
+        # Get the function to be called
+        getter = requestables[task]
+        # Check if the current task is to run even if output files exists thus overriding them
+        must_overwrite = overwrite == True or ( type(overwrite) == list and task in overwrite )
+        # If we must overwrite then call the function with the overwrite parameter set as true
+        if must_overwrite:
+            # Make sure the function to be called has the overwrite argument
+            function_arguments = getfullargspec(getter)[0]
+            if 'overwrite' not in function_arguments:
+                raise InputError(f'Task "{task}" does not support overwrite')
+            # Finally call the function
+            getter(project, overwrite=True)
+        # Call the function with no additional arguments otherwise
+        else:
+            getter(project)
+
+    # Remove gromacs backups and other trash files
+    remove_trash(project.directory)
+
+    # Get the MD tasks
+    md_tasks = [ task for task in tasks if task in md_requestables ]
+
+    # If there are no MD tasks then we are done already
+    if len(md_tasks) == 0:
+        print("Finished!")
+        return
+
     # Now iterate over the different MDs
     for md in project.mds:
+        print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
 
-        print('\n' + CYAN_HEADER + 'Running workflow for MD at ' + md.directory + COLOR_END)
-
-        # Set a function to call getters with the proper instance
-        def call_getter (getter : Callable, **args):
-            instance = md if getter.__qualname__[0:3] == 'MD.' else project
-            getter(instance, **args)
-
-        # If download is passed as True then just download input files if they are missing and exit
-        if download:
-            for getter in input_files.values():
-                call_getter(getter)
-            continue
-
-        # If setup is passed as True then process input files and exit here
-        if setup:
-            for getter in processed_files.values():
-                call_getter(getter)
-            continue
-
-        # Set the list of processings and analyses to run
-        tasks = None
-        # If the user included specific tasks then add only these tasks to the list
-        if include and len(include) > 0:
-            sys.stdout.write(f"Executing specific dependencies: " + ', '.join(include) + '\n')
-            tasks = include
-        # Set the default tasks otherwise
-        else:
-            # Add all the analysis, the metadata, the standard topology and the screenshot
-            tasks = [
-                # Mapping is not included here
-                # It does more things than generating the references file and it takes time
-                'stopology',
-                'screenshot',
-                'pmeta',
-                'ligands',
-                'interactions',
-                'mdmeta',
-                *analyses.keys(),
-            ]
-            # If the exclude parameter was passed then remove excluded tasks from the default tasks
-            if exclude and len(exclude) > 0:
-                sys.stdout.write(f"Excluding specific dependencies: " + ', '.join(exclude) + '\n')
-                tasks = [ name for name in tasks if name not in exclude ]
-
-        # If the user requested to verwrite something, make sure it is in the tasks list
-        if overwrite and type(overwrite) == list:
-            for task in overwrite:
-                if task not in tasks:
-                    raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
-            
-        # Run the tasks
-        for task in tasks:
+        # Run the MD tasks
+        for task in md_tasks:
             # Get the function to be called
             getter = requestables[task]
             # Check if the current task is to run even if output files exists thus overriding them
@@ -2367,12 +2398,12 @@ def workflow (
                 if 'overwrite' not in function_arguments:
                     raise InputError(f'Task "{task}" does not support overwrite')
                 # Finally call the function
-                call_getter(getter, overwrite=True)
-                continue
+                getter(md, overwrite=True)
             # Call the function with no additional arguments otherwise
-            call_getter(getter)
+            else:
+                getter(md)
 
         # Remove gromacs backups and other trash files
         remove_trash(md.directory)
 
-    sys.stdout.write("Done!\n")
+    print("Done!")
