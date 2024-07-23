@@ -1459,12 +1459,12 @@ class Project:
         self._mds = None
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
-        self.resorted_bonds_file = File(RESORTED_BONDS_FILENAME)
-        self.resorted_charges_file = File(RESORTED_CHARGES_FILENAME)
+        self.resorted_bonds_file = File(self.project_pathify(RESORTED_BONDS_FILENAME))
+        self.resorted_charges_file = File(self.project_pathify(RESORTED_CHARGES_FILENAME))
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        register_file = File(REGISTER_FILENAME)
+        register_file = File(self.project_pathify(REGISTER_FILENAME))
         self.register = Register(register_file)
 
     # Given a filename or relative path, add the project directory path at the beginning
