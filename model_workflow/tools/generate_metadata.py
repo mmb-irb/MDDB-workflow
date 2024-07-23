@@ -121,9 +121,6 @@ def generate_project_metadata (
         'FF': forcefields,
         'WAT': get_input('wat'),
         'BOXTYPE': get_input('boxtype'),
-        'BOXSIZEX': boxsizex,
-        'BOXSIZEY': boxsizey,
-        'BOXSIZEZ': boxsizez,
         'SYSTATS': systats,
         'PROTATS': protats,
         'PROT': prot,
@@ -142,6 +139,11 @@ def generate_project_metadata (
         'COLLECTIONS': collections,
         'WARNINGS': register.warnings,
     }
+    # Add boxsizes only if any of them is 0
+    if boxsizex > 0 and boxsizey > 0 and boxsizez > 0:
+        metadata['BOXSIZEX'] = boxsizex
+        metadata['BOXSIZEY'] = boxsizey
+        metadata['BOXSIZEZ'] = boxsizez
     # Add collection specific fields
     if 'cv19' in collections:
         # metadata['CV19_UNIT'] = get_input('cv19_unit')
