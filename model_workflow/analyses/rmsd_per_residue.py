@@ -22,6 +22,8 @@ def rmsd_per_residue (
     snapshots : int,
     frames_limit : int):
 
+    print('-> Running RMSD per residue analysis')
+
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
     pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)

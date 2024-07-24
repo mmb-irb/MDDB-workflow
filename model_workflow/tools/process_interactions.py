@@ -29,6 +29,8 @@ def process_interactions (
     # The cutoff distance is in Ångstroms (Å)
     distance_cutoff : float = 5) -> list:
 
+    print('-> Processing interactions')
+
     # If there are no interactions return an empty list
     if not input_interactions or len(input_interactions) == 0:
         return []

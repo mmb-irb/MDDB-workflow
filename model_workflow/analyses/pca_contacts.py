@@ -71,6 +71,8 @@ def pca_contacts(
         frequency_threshold=0.05,
         smooth=5.0):
 
+    print('-> Running PCA contacts analysis')
+
     # Return before doing anything if there are no interactions
     if len(interactions) == 0:
         return

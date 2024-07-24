@@ -27,6 +27,8 @@ def rmsd_pairwise(
     overall_selection : str = "name CA or name C5'", # equivalent to "@CA,C5'" in pytraj
     ):
 
+    print('-> Running RMSD pairwise analysis')
+
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
     pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)

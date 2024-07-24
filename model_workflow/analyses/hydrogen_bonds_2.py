@@ -38,6 +38,8 @@ def hydrogen_bonds (
     most_populated_frames_number : int = 5,
     ):
 
+    print('-> Running hydrogen bonds analysis')
+
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')

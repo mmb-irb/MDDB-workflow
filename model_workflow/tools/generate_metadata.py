@@ -20,6 +20,8 @@ def generate_project_metadata (
     ligand_customized_names : str
     ):
 
+    print('-> Generating project metadata')
+
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
         input_structure_filename, input_trajectory_filename)
@@ -181,6 +183,8 @@ def generate_md_metadata (
     output_metadata_filename : str
     ):
 
+    print('-> Generating MD metadata')
+    
     # Write the metadata file
     metadata = {
         'name': md_inputs['name'],

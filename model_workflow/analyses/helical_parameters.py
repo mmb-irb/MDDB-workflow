@@ -114,6 +114,9 @@ def helical_parameters (
     frames_limit : int,
     dna_selection : str = None
 ):
+
+    print('-> Running helical analysis')
+
     # Get a selection from both chains in the B-DNA
     selection = None
     # In case a selection was provided then use it

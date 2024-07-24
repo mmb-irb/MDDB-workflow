@@ -56,6 +56,8 @@ def energies (
     snapshots : int,
     frames_limit : int):
 
+    print('-> Running energies analysis')
+
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return

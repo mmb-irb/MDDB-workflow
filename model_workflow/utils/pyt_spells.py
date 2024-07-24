@@ -50,7 +50,7 @@ def get_frames_count (
     input_topology_file : 'File',
     input_trajectory_file : 'File') -> int:
     
-    print('Counting number of frames...')
+    print('-> Counting number of frames')
 
     if not input_trajectory_file.exists:
         raise InputError('Missing trajectroy file when counting frames: ' + input_trajectory_file.path)

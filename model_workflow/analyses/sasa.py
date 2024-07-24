@@ -22,6 +22,9 @@ def sasa(
     snapshots : int,
     frames_limit : int,
 ):
+
+    print('-> Running SAS analysis')
+
     # For this analysis me must filter out hydrogens
     heavy_atoms_selection = '( not name "H.*" )'
 
