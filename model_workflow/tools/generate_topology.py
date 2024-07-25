@@ -11,6 +11,9 @@ def generate_topology (
     pbc_residues : List[int],
     output_topology_filepath : str
 ):
+
+    print('-> Generating topology')
+
     # The structure will be a bunch of arrays
     # Atom data
     structure_atoms = structure.atoms

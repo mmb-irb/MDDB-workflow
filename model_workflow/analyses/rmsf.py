@@ -27,6 +27,8 @@ def rmsf (
     output_analysis_filename : str,
     structure : 'Structure',
     pbc_residues : List[int]):
+
+    print('-> Running RMSF analysis')
     
     # Run Gromacs
     p = Popen([

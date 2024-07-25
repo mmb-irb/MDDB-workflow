@@ -28,6 +28,8 @@ def rmsds(
     default_selections : List[str] = ['protein', 'nucleic'],
     ):
 
+    print('-> Running RMSDs analysis')
+
     # Find PBC residues, which are to be removed from parsed selections
     pbc_selection = structure.select_residue_indices(pbc_residues)
 

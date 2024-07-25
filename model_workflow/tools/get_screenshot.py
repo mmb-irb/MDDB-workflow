@@ -33,6 +33,8 @@ def get_screenshot (
     parameters : Optional[dict] = None
 ) -> dict:
 
+    print('-> Generating screenshot')
+
     # Check the output screenshot file extension is JPG
     if output_screenshot_filename.split('.')[-1] != 'jpg':
         raise SystemExit('You must provide a .jpg file name!')

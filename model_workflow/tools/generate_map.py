@@ -51,6 +51,9 @@ def generate_protein_mapping (
     forced_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
+
+    print('-> Getting protein references')
+
     # Remove previous warnings, if any
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict

@@ -26,6 +26,9 @@ def distance_per_residue (
     snapshots : int,
     frames_limit : int
 ):
+
+    print('-> Running distance per residue analysis')
+
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')

@@ -20,6 +20,8 @@ def generate_project_metadata (
     ligand_customized_names : str
     ):
 
+    print('-> Generating project metadata')
+
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
         input_structure_filename, input_trajectory_filename)
@@ -121,9 +123,6 @@ def generate_project_metadata (
         'FF': forcefields,
         'WAT': get_input('wat'),
         'BOXTYPE': get_input('boxtype'),
-        'BOXSIZEX': boxsizex,
-        'BOXSIZEY': boxsizey,
-        'BOXSIZEZ': boxsizez,
         'SYSTATS': systats,
         'PROTATS': protats,
         'PROT': prot,
@@ -142,6 +141,11 @@ def generate_project_metadata (
         'COLLECTIONS': collections,
         'WARNINGS': register.warnings,
     }
+    # Add boxsizes only if any of them is 0
+    if boxsizex > 0 and boxsizey > 0 and boxsizez > 0:
+        metadata['BOXSIZEX'] = boxsizex
+        metadata['BOXSIZEY'] = boxsizey
+        metadata['BOXSIZEZ'] = boxsizez
     # Add collection specific fields
     if 'cv19' in collections:
         # metadata['CV19_UNIT'] = get_input('cv19_unit')
@@ -179,6 +183,8 @@ def generate_md_metadata (
     output_metadata_filename : str
     ):
 
+    print('-> Generating MD metadata')
+    
     # Write the metadata file
     metadata = {
         'name': md_inputs['name'],

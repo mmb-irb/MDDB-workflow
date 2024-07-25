@@ -245,6 +245,8 @@ def generate_ligand_mapping (
     mercy : List[str] = [],
     ) -> dict:
 
+    print('-> Getting ligand references')
+
     # Merge input ligands and pdb ligands
     ligands = []
     if input_ligands:

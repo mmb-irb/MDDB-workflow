@@ -8,6 +8,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter, Action
 
 from model_workflow.mwf import workflow, Project, requestables
 from model_workflow.utils.file import File
+from model_workflow.utils.conversions import convert
 from model_workflow.utils.filters import filter_atoms
 from model_workflow.utils.subsets import get_trajectory_subset
 from model_workflow.utils.constants import *
@@ -52,6 +53,22 @@ def main ():
             copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
         # Open a text editor for the user
         call(["vim", DEFAULT_INPUTS_FILENAME])
+
+    # In case the convert tool was called
+    elif subcommand == 'convert':
+        # If no input arguments are passed print help
+        if args.input_structure == None and args.input_trajectories == None:
+            convert_parser.print_help()
+            return
+        if args.input_trajectories == None:
+            args.input_trajectories = []
+        # Run the convert command
+        convert(
+            input_structure_filepath=args.input_structure,
+            output_structure_filepath=args.output_structure,
+            input_trajectory_filepaths=args.input_trajectories,
+            output_trajectory_filepath=args.output_trajectory,
+        )
 
     # In case the filter tool was called
     elif subcommand == 'filter':
@@ -290,6 +307,23 @@ run_parser.add_argument(
 
 # Add a new to command to aid in the inputs file setup
 inputs_parser = subparsers.add_parser("inputs", help="Set the inputs file", formatter_class=RawTextHelpFormatter)
+
+# The convert command
+convert_parser = subparsers.add_parser("convert",
+    help="Convert a structure and/or several trajectories to other formats\n" +
+        "If several input trajectories are passed they will be merged previously.")
+convert_parser.add_argument(
+    "-is", "--input_structure",
+    help="Path to input structure file")
+convert_parser.add_argument(
+    "-os", "--output_structure",
+    help="Path to output structure file")
+convert_parser.add_argument(
+    "-it", "--input_trajectories", nargs='*',
+    help="Path to input trajectory file(s)")
+convert_parser.add_argument(
+    "-ot", "--output_trajectory",
+    help="Path to output trajectory file")
 
 # The filter command
 filter_parser = subparsers.add_parser("filter",

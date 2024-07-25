@@ -22,6 +22,8 @@ def tmscores (
     snapshots : int,
     frames_limit : int):
 
+    print('-> Running TM scores analysis')
+
     tmscore_references  = [first_frame_file, average_structure_file]
 
     # Set the alpha carbon selection

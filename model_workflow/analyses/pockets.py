@@ -58,6 +58,8 @@ def pockets (
     # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
     maximum_pockets_number : int = 10):
 
+    print('-> Running pockets analysis')
+
     # DANI: De momento, no se hacen pockets para simulaciones con residuos en PBC (e.g. membrana)
     # DANI: Esto es debido a que los átomos donde NO queremos que encuentre pockets no se pueden descartar
     # DANI: Descartarlos significa quitarlos, pero si los quitamos entonces podemos encontrar pockets donde están estos átomos

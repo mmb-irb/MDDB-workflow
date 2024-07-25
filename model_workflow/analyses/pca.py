@@ -24,6 +24,8 @@ def pca (
     projection_frames : int = 20
 ) -> dict:
 
+    print('-> Running PCA analysis')
+
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     pca_trajectory_filepath, step, frames = get_reduced_trajectory(
         input_topology_file,

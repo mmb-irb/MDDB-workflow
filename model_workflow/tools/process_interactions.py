@@ -29,6 +29,8 @@ def process_interactions (
     # The cutoff distance is in Ångstroms (Å)
     distance_cutoff : float = 5) -> list:
 
+    print('-> Processing interactions')
+
     # If there are no interactions return an empty list
     if not input_interactions or len(input_interactions) == 0:
         return []
@@ -41,6 +43,11 @@ def process_interactions (
         # Check agents have different selections
         if interaction['selection_1'] == interaction['selection_2']:
             raise InputError(f'Interaction agents must have different selections at {interaction["name"]}')
+        # Make sure both agents have valid selections
+        if not structure.select(interaction['selection_1']):
+            raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
+        if not structure.select(interaction['selection_2']):
+            raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
@@ -82,8 +89,8 @@ def process_interactions (
         pretty_frames_percent = str(round(frames_percent * 100) / 100)
         if frames_percent < interaction_cutoff:
             meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
-            print('Interaction "' + interaction['name'] + '" is not reaching the frames percent cutoff of ' + str(interaction_cutoff) + ' (' + pretty_frames_percent + ').\n'
-                'This means the interaction ' + meaning_log + '.\n'
+            print(f'Interaction "{interaction["name"]}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
+                f'This means the interaction {meaning_log}.\n'
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
                 '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
                 '   - Agent 2 selection: ' + interaction['selection_2'])
@@ -106,7 +113,7 @@ def process_interactions (
             # Check residue lists to not be empty, which should never happen
             if len(residue_indices) == 0:
                 agent_name = interaction['agent_' + agent]
-                raise ValueError('Empty selection for agent "' + agent_name + '" in interaction "' + interaction['name'] + '": ' + interaction['selection_' + agent])
+                raise ValueError(f'Empty selection for agent "{agent_name}" in interaction "{interaction["name"]}": {interaction["selection_" + agent]}')
             interaction['residue_indices_' + agent] = residue_indices
             interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
@@ -200,8 +207,8 @@ def get_interface_atom_indices_vmd (
 ) -> List[int]:
 
     # Set the interface selections
-    interface_selection_1 = ('(' + selection_1 + ') and within ' + str(distance_cutoff) + ' of (' + selection_2 + ')')
-    interface_selection_2 = ('(' + selection_2 + ') and within ' + str(distance_cutoff) + ' of (' + selection_1 + ')')
+    interface_selection_1 = (f'({selection_1}) and within {distance_cutoff} of ({selection_2})')
+    interface_selection_2 = (f'({selection_2 }) and within {distance_cutoff} of ({selection_1})')
     
     # Set the output txt files for vmd to write the atom indices
     # Note that these output files are deleted at the end of this function
@@ -430,7 +437,7 @@ def get_strong_bonds (structure_filepath : str, atom_selection_1 : str, atom_sel
         
     # At this point indexes and bonds from the first selection should match in number
     if len(index_1) != len(bonds_per_atom):
-        raise ValueError('Indexes (' + str(len(index_1)) + ') and atom bonds (' +  str(len(bonds_per_atom)) + ') do not match in number')
+        raise ValueError(f'Indexes ({len(index_1)}) and atom bonds ({len(bonds_per_atom)}) do not match in number')
         
     # Now get all strong bonds which include an index from the atom selection 2
     crossed_bonds = []

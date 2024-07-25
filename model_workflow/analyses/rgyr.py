@@ -25,6 +25,8 @@ def rgyr (
     structure : 'Structure',
     pbc_residues : List[int]):
 
+    print('-> Running RGYR analysis')
+
     # Use a reduced trajectory in case the original trajectory has many frames
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
         input_topology_file,

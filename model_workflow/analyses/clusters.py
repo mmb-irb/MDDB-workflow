@@ -23,6 +23,8 @@ def clusters_analysis (
     overall_selection : str = "name CA or name C5'",
 ):
 
+    print('-> Running clusters analysis')
+
     # Load the whole trajectory
     traj = mdt.load(input_trajectory_filename, top=input_structure_filename)
 

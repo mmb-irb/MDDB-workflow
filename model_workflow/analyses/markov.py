@@ -23,6 +23,8 @@ def markov (
     nodes_number : int = 20,
 ):
 
+    print('-> Running Markov analysis')
+
     # If there is no populations then we stop here
     if not populations or len(populations) == 0:
         print(' There are no populations')

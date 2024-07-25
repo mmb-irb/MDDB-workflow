@@ -28,30 +28,43 @@ description: My project description
 
 # Write author names
 # Authors are displayed in the overview page
+#
+# Example:
+#
+# authors:
+#   - My name
+#   - My partner's name
+#
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 authors:
-  - My name
-  - My partner's name
 
 # Write author group name/s
 # The group is displayed in the overview page
+#
+# Example:
+#
+# groups:
+#   - My group
+#   - My partner's group
+#
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 groups:
-  - My group
-  - My partner's group
 
-# How to contact the authors. The contact is displayed in the overview page
+# How to contact the authors (e.g. a mail)
+# The contact is displayed in the overview page
 
-contact: Our mails
+contact:
 
 # Program (software) name which carried the trajectory and its version
 # Program and version are both displayed in the overview page
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 
-program: e.g. Gromacs
-version: e.g. 2023.1
+# e.g. Gromacs
+program:
+# e.g. 2023.1
+version:
 
 # Type of molecular dynamics
 # At this moment there are only two options in this field: 'trajectory' and 'ensemble'
@@ -75,17 +88,18 @@ method: Classical MD
 license: This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License
 linkcense: https://creativecommons.org/licenses/by/4.0/
 
-# Citation for refering this simulation
+# Citation for refering this simulation or related paper
 # The citation is displayed in the overview page
 # To set a citation use the following instructions:
 # To add a line break type '(br)' inside the citation string
 # To add superior text type '^' before each character
 
-citation: My paper
+citation:
 
 # Acknowledgements to be shown in the overview page
+# e.g. I would like to thank my funders ...
 
-thanks: I would like to thank my funders
+thanks:
 
 # OPTIONAL: Use this field to force a custom accession
 # Accession is a short code to refer this project in your local database 
