@@ -5,7 +5,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
 from typing import List, Tuple, Optional, Callable
-from model_workflow.utils.constants import LIGANDS_MATCH_FLAG
+from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
@@ -238,6 +238,7 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
     structure : 'Structure',
+    register : 'Register',
     input_ligands : Optional[List[dict]],
     input_pdb_ids : List[str],
     output_ligands_filepath : str,
@@ -248,12 +249,29 @@ def generate_ligand_mapping (
     ligands = []
     if input_ligands:
         ligands += input_ligands
+    # Check we have cached pdb 2 pubchem values
+    pdb_to_pubchem_cache = register.cache.get(PDB_TO_PUBCHEM, {})
     # Get input ligands from the pdb ids, if any
     if input_pdb_ids:
         for pdb_id in input_pdb_ids:
-            pubchem_ids = pdb_to_pubchem(pdb_id)
-            for pubchem_id in pubchem_ids:
+            # Check we have cached this specific pdb
+            pubchem_ids_from_pdb = pdb_to_pubchem_cache.get(pdb_id, None)
+            if pubchem_ids_from_pdb != None:
+                print(f' Retriving from cache PubChem ids for PDB code {pdb_id}: ')
+                if len(pubchem_ids_from_pdb) > 0:
+                    print('  PubChem ids: ' + ', '.join(pubchem_ids_from_pdb))
+                else:
+                    print('  This PDB code has no PubChem ids')
+
+            # If we had no cached pdb 2 pubchem then ask for them
+            if pubchem_ids_from_pdb == None:
+                pubchem_ids_from_pdb = pdb_to_pubchem(pdb_id)
+                # Save the result in the cache
+                pdb_to_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
+                register.update_cache(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
+            for pubchem_id in pubchem_ids_from_pdb:
                 ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
+
     # If no input ligands are passed then stop here
     if len(ligands) == 0:
         return [], {}
@@ -275,8 +293,12 @@ def generate_ligand_mapping (
     visited_formulas = []
     # Save the maps of every ligand
     ligand_maps = []
+    # Get cached ligand data
+    ligand_data_cache = register.cache.get(LIGANDS_DATA, {})
     # Iterate input ligands
     for ligand in ligands:
+        # Set the pubchem id which may be assigned in different steps
+        pubchem_id = None
         # If input ligand is not a dict but a single int/string then handle it
         if type(ligand) == int:
             print(f'A ligand number ID has been identified {ligand}, assuming that is a PubChem ID...')
@@ -285,9 +307,20 @@ def generate_ligand_mapping (
             raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
         # Check if we already have this ligand data
         ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
-        # If we do not have its data yet then get data from pubchem
+        # If we do not have its data try to get from the cache
         if not ligand_data:
-            ligand_data = obtain_ligand_data_from_pubchem(ligand)
+            # If this is a ligand not in ligans.json but in cache it means it comes from PDB, never form user inputs
+            # For this reason, this ligand will always have a PubChem id
+            pubchem_id = ligand.get('pubchem', None)
+            if pubchem_id:
+                ligand_data = ligand_data_cache.get(pubchem_id, None)
+            # If we still have no ligand data then request it to PubChem
+            if not ligand_data:
+                ligand_data = obtain_ligand_data_from_pubchem(ligand)
+                # Save data mined from PubChem in the cache
+                pubchem_id = ligand_data['pubchem']
+                ligand_data_cache[pubchem_id] = { **ligand_data }
+                register.update_cache(LIGANDS_DATA, ligand_data_cache)
             # Get morgan and mordred descriptors, the SMILES is needed for this part
             smiles = ligand_data['smiles']
             mordred_results, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
@@ -338,7 +371,6 @@ def generate_ligand_mapping (
             ligand_name = ligand_names.get(pubchem_id, None)
             if ligand_name != None:
                 del ligand_names[pubchem_id]
-
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
 
