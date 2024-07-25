@@ -631,6 +631,9 @@ class MD:
             # However we need the output files to exist and we dont want to rename the original ones to conserve them
             # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
             if processed_file == input_file:
+                # If output file exists and its the same as the input file, we can not create a symlink from a file to the same file
+                if output_file.exists:
+                    output_file.remove()
                 output_file.set_symlink_to(input_file)
             # Otherwise rename the last intermediate file as the output file
             else:
