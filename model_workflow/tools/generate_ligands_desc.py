@@ -507,7 +507,9 @@ def split_when(string : str, func : Callable) -> List[str]:
 
 # Given a chemical formula, get the count of atoms per element
 def count_atom_elements (molecular_formula : str) -> dict:
-    parsed_molecular_formula = molecular_formula.replace("+", "").replace("-", "")
+    # Clean the formula from charges
+    # These charges include numbers which are not atom counts (e.g. 49867169 -> C18H16NO5PS-2)
+    parsed_molecular_formula = re.sub('[+-][0-9]*', '', molecular_formula)
     l = parse_compound(parsed_molecular_formula)
     c = parse_splits(l)
     return c
