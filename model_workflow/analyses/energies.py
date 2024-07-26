@@ -500,7 +500,7 @@ def energies (
     save_json({'data': output_analysis}, output_analysis_filename)
 
     # Remove the backup to avoid accidentally reusing it when the output file is deleted
-    energies_backup.delete()
+    energies_backup.remove()
 
     # Finally remove the reduced topology
     energies_structure_file.remove()
