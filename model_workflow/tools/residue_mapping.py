@@ -77,7 +77,7 @@ def generate_residue_mapping(
                 residue_reference_numbers[residue_index] = residue_number
         if reference_type == 'ligand':
             for residue_index in data['residue_indices']:
-                residue_reference_indices[residue_index] = reference_index
+                residue_reference_indices[int(residue_index)] = reference_index
     # If there are not references at the end then set all fields as None, in order to save space
     if len(reference_ids) == 0:
         reference_ids = None
