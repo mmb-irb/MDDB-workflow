@@ -769,6 +769,9 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in the PDB then we can stop here
     except HTTPError as error:
+        # This may happen for weird things such as UNX (unknown atom or ion)
+        if error.code == 404:
+            return None
         print(error.msg)
         raise RuntimeError('Something went wrong with the PDB ligand request in PubChem: ' + request_url)
     # Mine the pubchem id
