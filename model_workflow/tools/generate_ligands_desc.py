@@ -765,7 +765,7 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
     compound = compounds[0]
     id1 = compound['id']
     id2 = id1['id']
-    pubchem_id = id2['cid']
+    pubchem_id = str(id2['cid'])
     return pubchem_id
 
 # Given a PDB code, get all its ligand codes
