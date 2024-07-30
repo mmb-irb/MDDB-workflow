@@ -33,6 +33,18 @@ def distance_per_residue (
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
+
+    # Get all not failed interactions
+    valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
+
+    # Make sure we have valid interactions
+    # DANI: Esto es temporal, lo suyo sería que las interacciones válidas si sean analizadas
+    # DANI: Lo que pasa es que pronto cambiaré los análisis de interacciones para que se haga 1 por interacción
+    # DANI: De manera que no merece la pena invertir tiempo en dar soporte a esto ahora
+    if len(valid_interactions) != len(interactions):
+        print('There are no valid interactions -> This analysis will be skipped')
+        return
+
     # First of all, calculate the number of values for each interaction
     # If we have more values than we can store then flag some interactions as reduced
     # Flag interactions one by one starting by the biggest one until we are below the limit of values

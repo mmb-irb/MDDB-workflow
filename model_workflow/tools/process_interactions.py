@@ -22,6 +22,7 @@ def process_interactions (
     snapshots : int,
     interactions_file : 'File',
     mercy : List[str],
+    register : 'Register',
     frames_limit : int,
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
@@ -60,8 +61,10 @@ def process_interactions (
             complete_interactions.append(complete_interaction)
         return complete_interactions
 
-    # Set a list to save names of failed interactions (this is used only when mercy is passed)
-    failed_interaction_names = []
+    # Otherwise we must find the interacting residues
+
+    # Reset warnings related to this analysis
+    register.remove_warnings(STABLE_INTERACTIONS_FLAG)
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
@@ -102,9 +105,9 @@ def process_interactions (
                     'Failed interactions will be removed from both analyses and metadata.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
-            else:
-                failed_interaction_names.append(interaction['name'])
-                continue
+            interaction['failed'] = True
+            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) were not stable enough so their analyses are skipped')
+            continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
         for agent in ['1','2']:
             # First with all atoms/residues
@@ -142,13 +145,6 @@ def process_interactions (
         print(interaction['name'] + ' (' + pretty_frames_percent + ') -> ' + 
            str(sorted(interaction['interface_indices_1'] + interaction['interface_indices_2'])))
 
-    # Remove failed interactions, if any
-    interactions = [ interaction for interaction in interactions if interaction['name'] not in failed_interaction_names ]
-
-    # If there are not valid interactions left then do not generate the interaction file
-    if len(interactions) == 0:
-        return []
-
     # Write the interactions file with the fields to be uploaded to the database only
     # i.e. strong bonds and residue indices
     file_keys = [
@@ -159,7 +155,8 @@ def process_interactions (
         'residue_indices_2',
         'interface_indices_1',
         'interface_indices_2',
-        'strong_bonds'
+        'strong_bonds',
+        'failed'
     ]
 
     file_interactions = []

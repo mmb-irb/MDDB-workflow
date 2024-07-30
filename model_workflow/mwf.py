@@ -898,6 +898,7 @@ class MD:
             snapshots = self.snapshots,
             interactions_file = interactions_file,
             mercy = self.project.mercy,
+            register = self.register,
             frames_limit = 1000,
             interaction_cutoff = self.project.interaction_cutoff
         )
@@ -2111,7 +2112,6 @@ class Project:
             structure = self.structure,
             residue_map = self.residue_map,
             protein_references_file = self.protein_references_file,
-            interactions = self.reference_md.interactions,
             register = self.register,
             output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,

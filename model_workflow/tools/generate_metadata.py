@@ -14,7 +14,6 @@ def generate_project_metadata (
     structure : 'Structure',
     residue_map : dict,
     protein_references_file : 'File',
-    interactions : list,
     register : dict,
     output_metadata_filename : str,
     ligand_customized_names : str
@@ -56,17 +55,6 @@ def generate_project_metadata (
     collections = get_input('collections')
     if not collections:
         collections = []
-
-    # Metadata interactions are simply the input interactions
-    # Final interactions are used only to check which interactions were discarded
-    # Thus failed interactions are removed from metadata
-    final_interaction_names = [ interaction['name'] for interaction in interactions ]
-    final_metadata_interactions = []
-    input_interactions = get_input('interactions')
-    if input_interactions and len(input_interactions) > 0:
-        for input_interaction in input_interactions:
-            if input_interaction['name'] in final_interaction_names:
-                final_metadata_interactions.append(input_interaction)
 
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, protein_references_file, residue_map)
@@ -130,7 +118,7 @@ def generate_project_metadata (
         'SOL': sol,
         'NA': na,
         'CL': cl,
-        'INTERACTIONS': final_metadata_interactions,
+        'INTERACTIONS': get_input('interactions'),
         'PBC_SELECTION': get_input('pbc_selection'),
         'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),

@@ -68,6 +68,18 @@ def rmsd_pairwise(
         }
     ]
 
+    # Get all not failed interactions
+    valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
+    
+    # Make sure we have valid interactions
+    # DANI: Esto es temporal, lo suyo sería que las interacciones válidas si sean analizadas
+    # DANI: Lo que pasa es que pronto cambiaré los análisis de interacciones para que se haga 1 por interacción
+    # DANI: De manera que no merece la pena invertir tiempo en dar soporte a esto ahora
+    if len(valid_interactions) != len(interactions):
+        print('There are no valid interactions -> This analysis will be skipped')
+        save_json({'data': output_analysis, 'start': 0, 'step': frame_step}, output_analysis_filename)
+        return
+
     # Repeat the analysis with the interface residues of each interaction
     for interaction in interactions:
 
