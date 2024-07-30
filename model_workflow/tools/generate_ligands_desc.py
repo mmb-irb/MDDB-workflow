@@ -88,16 +88,16 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
     # Mine target data: SMILES
     record = parsed_response.get('Record', None)
     if record == None:
-        raise RuntimeError('Wrong Pubchem data structure: no record')
+        raise RuntimeError('Wrong Pubchem data structure: no record' + request_url)
     sections = record.get('Section', None)
     if sections == None:
-        raise RuntimeError('Wrong Pubchem data structure: no sections')
+        raise RuntimeError('Wrong Pubchem data structure: no sections' + request_url)
     names_and_ids_section = next((section for section in sections if section.get('TOCHeading', None) == 'Names and Identifiers'), None)
     if names_and_ids_section == None:
-        raise RuntimeError('Wrong Pubchem data structure: no name and ids section')
+        raise RuntimeError('Wrong Pubchem data structure: no name and ids section' + request_url)
     names_and_ids_subsections = names_and_ids_section.get('Section', None)
     if names_and_ids_subsections == None:
-        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections' + request_url)
 
     # Mine the name
     synonims = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Synonyms'), None)
@@ -105,13 +105,13 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
         descriptors = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
         descriptors_subsections = descriptors.get('Section', None)
         if descriptors_subsections == None:
-            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections' + request_url)
         depositor_supplied_descriptors = next((s for s in descriptors_subsections if s.get('TOCHeading', None) == 'IUPAC Name'), None)
         name_substance = depositor_supplied_descriptors.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     else:
         synonims_subsections = synonims.get('Section', None)
         if synonims_subsections == None:
-            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections' + request_url)
         depositor_supplied_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
         if depositor_supplied_synonims == None:
             removed_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Removed Synonyms'), None)
@@ -122,48 +122,49 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
     if computed_descriptors_subsection == None:
-        raise RuntimeError('Wrong Pubchem data structure: no computeed descriptors')
+        raise RuntimeError('Wrong Pubchem data structure: no computeed descriptors' + request_url)
     canonical_smiles_section = computed_descriptors_subsection.get('Section', None)
     if canonical_smiles_section == None:
-        raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES section')
+        raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES section' + request_url)
     canonical_smiles = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'Canonical SMILES'), None)
     if canonical_smiles == None:
-        raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES')
+        raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES' + request_url)
     smiles = canonical_smiles.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     if smiles == None:
-        raise RuntimeError('Wrong Pubchem data structure: no SMILES')
+        raise RuntimeError('Wrong Pubchem data structure: no SMILES' + request_url)
 
     # Mine target data: MOLECULAR FORMULA
     molecular_formula_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Molecular Formula'), None)
     if molecular_formula_subsection == None:
-        raise RuntimeError('Wrong Pubchem data structure: no molecular formula section')
+        raise RuntimeError('Wrong Pubchem data structure: no molecular formula section' + request_url)
     molecular_formula = molecular_formula_subsection.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     if molecular_formula == None:
-        raise RuntimeError('Wrong Pubchem data structure: no molecular formula')
+        raise RuntimeError('Wrong Pubchem data structure: no molecular formula' + request_url)
     
     # Mine target data: PDB ID
+    pdb_id = None
     pdb_id_subsection = next((s for s in sections if s.get('TOCHeading', None) == 'Interactions and Pathways'), None)
-    if pdb_id_subsection == None:
-        raise RuntimeError('Wrong Pubchem data structure: no Interactions and Pathways section')
-    pdb_id_subsections = pdb_id_subsection.get('Section', None)
-    if pdb_id_subsections == None:
-        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
-    bond_structures = next((s for s in pdb_id_subsections if s.get('TOCHeading', None) == 'Protein Bound 3D Structures'), None)
-    if bond_structures == None:
-        raise RuntimeError('Wrong Pubchem data structure: no Protein Bound 3D Structures section')
-    bond_structures_section = bond_structures.get('Section', None)
-    if bond_structures_section == None:
-        raise RuntimeError('Wrong Pubchem data structure: no Protein Bound 3D Structures subsections')
-    ligands_structure = next((s for s in bond_structures_section if s.get('TOCHeading', None) == 'Ligands from Protein Bound 3D Structures'), None)
-    if ligands_structure == None:
-        raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures section')
-    ligands_structure_subsections = ligands_structure.get('Section', None)
-    if ligands_structure_subsections == None:
-        raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures subsections')
-    ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
-    if ligands_pdb == None:
-        raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code')
-    pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    # If this section is missing then it means this PubChem compound has no PDB code
+    if pdb_id_subsection:
+        pdb_id_subsections = pdb_id_subsection.get('Section', None)
+        if pdb_id_subsections == None:
+            raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections' + request_url)
+        bond_structures = next((s for s in pdb_id_subsections if s.get('TOCHeading', None) == 'Protein Bound 3D Structures'), None)
+        if bond_structures == None:
+            raise RuntimeError('Wrong Pubchem data structure: no Protein Bound 3D Structures section' + request_url)
+        bond_structures_section = bond_structures.get('Section', None)
+        # If this section is missing then it means this PubChem compound has no PDB code
+        if bond_structures_section:
+            ligands_structure = next((s for s in bond_structures_section if s.get('TOCHeading', None) == 'Ligands from Protein Bound 3D Structures'), None)
+            if ligands_structure == None:
+                raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures section' + request_url)
+            ligands_structure_subsections = ligands_structure.get('Section', None)
+            if ligands_structure_subsections == None:
+                raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures subsections' + request_url)
+            ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
+            if ligands_pdb == None:
+                raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code' + request_url)
+            pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     
     # Prepare the pubchem data to be returned
     return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id }
@@ -314,9 +315,6 @@ def generate_ligand_mapping (
 
     # Save apart ligand names forced by the user
     ligand_names = {}
-
-    # Visited pubchem ids
-    visited_pubchem_ids = []
     # Visited formulas
     visited_formulas = []
     # Save the maps of every ligand
@@ -349,11 +347,6 @@ def generate_ligand_mapping (
                 pubchem_id = ligand_data['pubchem']
                 ligand_data_cache[pubchem_id] = { **ligand_data }
                 register.update_cache(LIGANDS_DATA, ligand_data_cache)
-            # Get morgan and mordred descriptors, the SMILES is needed for this part
-            smiles = ligand_data['smiles']
-            mordred_results, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
-            ligand_data['mordred'] = mordred_results
-            ligand_data['morgan'] = morgan_fp
         # Add current ligand data to the general list
         ligands_data.append(ligand_data)
         # Get pubchem id
@@ -482,7 +475,6 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
 
     # Add pubchem data to ligand data
     ligand_data = { **ligand_data, **pubchem_data }
-    
     return ligand_data
 
 
