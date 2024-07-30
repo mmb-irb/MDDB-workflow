@@ -35,15 +35,22 @@ def rmsd_pairwise(
 
     # Parse the overall selection
     selection = structure.select(overall_selection, syntax='vmd')
+    # If the default selection is empty then use all atoms instead
     if not selection:
-        raise SystemExit('Selection "' + overall_selection + '" is empty')
+        print(f'Default selection "{overall_selection}" is empty -> All atoms will be used instead')
+        selection = structure.select_all()
+    # If the default selection has one atom only then use all atoms instead
+    # Note that a single atom selection will lead to all RMSD values beeing 0 since there is a previous alignment
+    if len(selection) == 1:
+        print(f'Default selection "{overall_selection}" has 1 atom only -> All atoms will be used instead')
+        selection = structure.select_all()
 
     # Remove PBC residues from the selection
     pbc_selection = structure.select_residue_indices(pbc_residues)
     selection -= pbc_selection
     if not selection:
-        raise SystemExit('Selection "' + overall_selection + '" is empty after substracting PBC residues')
-    print(' Analyzing ' + str(len(selection)) + ' atoms')
+        raise SystemExit(f'Empty selection after substracting PBC residues')
+    print(f' Analyzing {len(selection)} atoms')
 
     # Run the analysis
     data = pt.pairwise_rmsd(pt_trajectory, selection.to_pytraj())
