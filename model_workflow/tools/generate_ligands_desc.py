@@ -727,6 +727,31 @@ def pdb_ligand_to_pubchem_RAW (pdb_ligand_id : str) -> Optional[str]:
     pubchem_id = match[1]
     return pubchem_id
 
+# Given a PDB ligand code, get its pubchem
+# Ask to pubchem if the ligand exists and hope there is only one result
+# DANI: No se ha provado a fondo
+def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
+    # Set the request URL
+    request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{pdb_ligand_id}/json'
+    # Run the query
+    parsed_response = None
+    try:
+        with urlopen(request_url) as response:
+            parsed_response = json.loads(response.read().decode("utf-8"))
+    # If the accession is not found in the PDB then we can stop here
+    except HTTPError as error:
+        print(error.msg)
+        raise RuntimeError('Something went wrong with the PDB ligand request in PubChem: ' + request_url)
+    # Mine the pubchem id
+    compounds = parsed_response['PC_Compounds']
+    if len(compounds) != 1:
+        raise RuntimeError('We are not having 1 and only 1 result from PubChem: ' + request_url)
+    compound = compounds[0]
+    id1 = compound['id']
+    id2 = id1['id']
+    pubchem_id = id2['cid']
+    return pubchem_id
+
 # Given a PDB code, get all its ligand codes
 def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     # Request the MMB service to retrieve pdb data
@@ -763,14 +788,18 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
     # Iterate over pdb ligand codes
     ligand_codes = get_pdb_ligand_codes(pdb_id)
     for ligand_code in ligand_codes:
+        # Try to mine it from PDB
         pubchem_id = pdb_ligand_to_pubchem_RAW(ligand_code)
-        if pubchem_id:
-            pubchem_ids.append(pubchem_id)
-    # Print the found PubChem ids
-    if len(pubchem_ids) > 0:
-        print(f' Found {len(pubchem_ids) } ids: ' + ', '.join(pubchem_ids))
-    else:
-        print(' No ids were found')
+        # If this did not worked then try it from PubChem
+        if not pubchem_id:
+            pubchem_id = pdb_ligand_to_pubchem_RAW_RAW(ligand_code)
+        # Otherwise we surrender
+        if not pubchem_id:
+            print(f' {ligand_code} -> No PubChem id')
+            continue
+        print(f' {ligand_code} -> {pubchem_id}')
+        pubchem_ids.append(pubchem_id)
+            
     return pubchem_ids
     # DANI: De momento no usamos las SMILES que alguna vez me han dado problemas (e.g. 2I3I)
     # smiles_list = pdb_to_smiles(pdb_id)
