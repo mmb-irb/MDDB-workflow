@@ -354,7 +354,18 @@ def generate_ligand_mapping (
         if user_forced_ligand_name:
             ligand_names[pubchem_id] = user_forced_ligand_name
         # Map structure residues with the current ligand
-        ligand_map = map_ligand_residues(structure, ligand_data)
+        # If the user forced the residues then use them
+        forced_residues = ligand.get('residues', None)
+        if forced_residues:
+            # Could be a single residue or a list of residues
+            if type(forced_residues) == list:
+                forced_residues = [int(residue) for residue in forced_residues]
+            else:
+                forced_residues = [int(forced_residues)]
+            ligand_map = { 'name': pubchem_id, 'residue_indices': forced_residues, 'match': { 'ref': { 'pubchem': pubchem_id } } }
+        # If the user did not force the residues then map them
+        else:
+            ligand_map = map_ligand_residues(structure, ligand_data)
         # Add current ligand map to the general list
         ligand_maps.append(ligand_map)
         # If the ligand did not map then discard it
@@ -373,6 +384,12 @@ def generate_ligand_mapping (
             ligand_name = ligand_names.get(pubchem_id, None)
             if ligand_name != None:
                 del ligand_names[pubchem_id]
+        # If the ligand matched then calculate some additional data
+        # Get morgan and mordred descriptors, the SMILES is needed for this part
+        smiles = ligand_data['smiles']
+        mordred_results, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
+        ligand_data['mordred'] = mordred_results
+        ligand_data['morgan'] = morgan_fp
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
 
@@ -587,7 +604,6 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
     for residue, residue_atom_element_count in atom_elements_per_residue.items():
         if match_ligandsID_to_res(ligand_atom_element_count, residue_atom_element_count):
             matched_residues.append(residue.index)
-    
     # Format the output as we expect it
     ligand_map = { 'name': pubchem_id, 'residue_indices': matched_residues, 'match': { 'ref': { 'pubchem': pubchem_id } } }
     return ligand_map
