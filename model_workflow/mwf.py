@@ -1281,6 +1281,9 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_MARKOV_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
+        # If there are no populations file then stop here to avoid the log and calculating dependencies
+        if not self.populations:
+            return
         # Run the analysis
         markov(
             input_topology_filename = self.structure_file.path,
