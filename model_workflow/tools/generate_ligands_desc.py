@@ -140,9 +140,33 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
     molecular_formula = molecular_formula_subsection.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     if molecular_formula == None:
         raise RuntimeError('Wrong Pubchem data structure: no molecular formula')
-
+    
+    # Mine target data: PDB ID
+    pdb_id_subsection = next((s for s in sections if s.get('TOCHeading', None) == 'Interactions and Pathways'), None)
+    if pdb_id_subsection == None:
+        raise RuntimeError('Wrong Pubchem data structure: no Interactions and Pathways section')
+    pdb_id_subsections = pdb_id_subsection.get('Section', None)
+    if pdb_id_subsections == None:
+        raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections')
+    bond_structures = next((s for s in pdb_id_subsections if s.get('TOCHeading', None) == 'Protein Bound 3D Structures'), None)
+    if bond_structures == None:
+        raise RuntimeError('Wrong Pubchem data structure: no Protein Bound 3D Structures section')
+    bond_structures_section = bond_structures.get('Section', None)
+    if bond_structures_section == None:
+        raise RuntimeError('Wrong Pubchem data structure: no Protein Bound 3D Structures subsections')
+    ligands_structure = next((s for s in bond_structures_section if s.get('TOCHeading', None) == 'Ligands from Protein Bound 3D Structures'), None)
+    if ligands_structure == None:
+        raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures section')
+    ligands_structure_subsections = ligands_structure.get('Section', None)
+    if ligands_structure_subsections == None:
+        raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures subsections')
+    ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
+    if ligands_pdb == None:
+        raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code')
+    pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    
     # Prepare the pubchem data to be returned
-    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula }
+    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id }
 
 
 def find_drugbank_pubchem (drugbank_id):
@@ -272,7 +296,9 @@ def generate_ligand_mapping (
                 pdb_to_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
                 register.update_cache(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
             for pubchem_id in pubchem_ids_from_pdb:
-                ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
+                # Ligands in the structure (PDB) and the 'inputs.json' could be the same so it's not necessary to do it twice
+                if not any('pubchem' in ligand and ligand['pubchem'] == pubchem_id for ligand in ligands):
+                    ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
 
     # If no input ligands are passed then stop here
     if len(ligands) == 0:
@@ -332,13 +358,7 @@ def generate_ligand_mapping (
         ligands_data.append(ligand_data)
         # Get pubchem id
         pubchem_id = ligand_data['pubchem']
-        # If we already visited this then skip it
-        # Ligands in the structure (PDB) and the 'inputs.json' could be the same so it's not necessary to do it twice
-        if pubchem_id in visited_pubchem_ids:
-            continue
-        # Add it to the list of visited ids
-        visited_pubchem_ids.append(pubchem_id)
-        # If we already visited a different ligand but with identical formula then we skip this ligand as well
+        # If we already visited a different ligand but with identical formula then we skip this ligand 
         # Note that the mapping will be identical thus overwritting the previous map
         # However, ligands forced by the user are processed before so we keep them as priority
         formula = ligand_data['formula']
@@ -406,7 +426,7 @@ def generate_ligand_mapping (
     return ligand_maps, ligand_names
     
 # Set the expected ligand data fields
-LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred'])
+LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid'])
 
 # Import ligands json file so we do not have to rerun this process
 def import_ligands (output_ligands_filepath : str) -> dict:
@@ -439,7 +459,8 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
         'drugbank': None,
         'chembl': None,
         'smiles': None,
-        'formula': None
+        'formula': None,
+        'pdbid': None,
     }
 
     # Set ligand data pubchem id, even if the input id is not from pubhcme (e.g. drugbank, chembl)
