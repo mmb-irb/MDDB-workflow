@@ -353,23 +353,33 @@ class MD:
         # If there is no structure then we must run some tests
         if not output_structure_file.exists:
             required_tests.update(STRUCTURE_TESTS)
-        # If the structure was modified since the last time then we must run these tests as well
+        # If the file exists but it is new then we must run the tests as well
+        elif self.register.is_file_new(output_structure_file):
+            required_tests.update(STRUCTURE_TESTS)
+        # If the structure exists and it is not new but it was modified since the last time then we also run the tests
         elif self.register.is_file_modified(output_structure_file):
-            message = 'Structure was modified since the last processing or is new'
+            message = 'Structure was modified since the last processing'
             warn(message)
             required_tests.update(STRUCTURE_TESTS)
 
         # If there is no trajectory then we must run some tests
         if not output_trajectory_file.exists:
             required_tests.update(TRAJECTORY_TESTS)
+        # If the file exists but it is new then we must run the tests as well
+        elif self.register.is_file_new(output_trajectory_file):
+            print('MEEEC')
+            required_tests.update(TRAJECTORY_TESTS)
         # If the trajectory was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_trajectory_file):
-            message = 'Trajectory was modified since the last processing or is new'
+            message = 'Trajectory was modified since the last processing'
             warn(message)
             required_tests.update(TRAJECTORY_TESTS)
 
         # If there is no topology then we must run some tests
         if not output_topology_file.exists:
+            required_tests.update(TOPOLOGY_TESTS)
+        # If the file exists but it is new then we must run the tests as well
+        elif self.project.register.is_file_new(output_topology_file):
             required_tests.update(TOPOLOGY_TESTS)
         # If the topology was modified since the last time then we must run these tests as well
         elif self.project.register.is_file_modified(output_topology_file):
