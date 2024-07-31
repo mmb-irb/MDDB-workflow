@@ -46,6 +46,9 @@ def rmsds(
         for ligand in ligand_map:
             selection_name = 'ligand ' + ligand['name']
             parsed_selection = structure.select_residue_indices(ligand['residue_indices'])
+            # If the ligand has less than 3 atoms then gromacs can not fit it so it will fail
+            if len(parsed_selection) < 3:
+                continue
             parsed_selections[selection_name] = parsed_selection
             # If the ligand selection totally overlaps with any default selections then remove the default
             for default_selection in default_selections:
