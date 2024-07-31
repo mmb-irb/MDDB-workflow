@@ -2352,9 +2352,6 @@ def workflow (
         else:
             getter(project)
 
-    # Remove gromacs backups and other trash files
-    remove_trash(project.directory)
-
     # Get the MD tasks
     md_tasks = [ task for task in tasks if task in md_requestables ]
 
@@ -2385,7 +2382,10 @@ def workflow (
             else:
                 getter(md)
 
-        # Remove gromacs backups and other trash files
+        # Remove gromacs backups and other trash files from this MD
         remove_trash(md.directory)
+
+    # Remove gromacs backups and other trash files from the project
+    remove_trash(project.directory)
 
     print("Done!")
