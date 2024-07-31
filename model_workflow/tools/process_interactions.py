@@ -9,6 +9,9 @@ from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 
+# Set the flag used to label failed interactions
+FAILED_INTERACTION_FLAG = 'failed'
+
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
 # The heavy results of interactions are stored in a json file which is uploaded to the database independently
@@ -105,8 +108,8 @@ def process_interactions (
                     'Failed interactions will be removed from both analyses and metadata.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
-            interaction['failed'] = True
-            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) were not stable enough so their analyses are skipped')
+            interaction[FAILED_INTERACTION_FLAG] = True
+            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) are not stable enough so their analyses are skipped')
             continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
         for agent in ['1','2']:
@@ -146,7 +149,7 @@ def process_interactions (
            str(sorted(interaction['interface_indices_1'] + interaction['interface_indices_2'])))
 
     # Write the interactions file with the fields to be uploaded to the database only
-    # i.e. strong bonds and residue indices
+    # i.e. strong bonds and residue indices but not selections
     file_keys = [
         'name',
         'agent_1',
@@ -158,12 +161,15 @@ def process_interactions (
         'strong_bonds',
         'failed'
     ]
-
     file_interactions = []
     for interaction in interactions:
         file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
         file_interactions.append(file_interaction)
-    save_json(file_interactions, interactions_file.path, indent = 4)
+
+    # Save the interactions file unless all interactions failed
+    any_valid_interactions = any( (not interaction.get(FAILED_INTERACTION_FLAG, False)) for interaction in interactions )
+    if any_valid_interactions:
+        save_json(file_interactions, interactions_file.path, indent = 4)
 
     return interactions
 
