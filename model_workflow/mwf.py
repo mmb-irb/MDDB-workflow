@@ -367,7 +367,6 @@ class MD:
             required_tests.update(TRAJECTORY_TESTS)
         # If the file exists but it is new then we must run the tests as well
         elif self.register.is_file_new(output_trajectory_file):
-            print('MEEEC')
             required_tests.update(TRAJECTORY_TESTS)
         # If the trajectory was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_trajectory_file):
