@@ -173,9 +173,8 @@ class Atom:
     bonds = property(get_bonds, None, None, 'Atoms indices of atoms in the structure which are covalently bonded to this atom')
 
     # Get bonded atoms
-    def get_bonded_atoms (self) -> Generator['Atom', None, None]:
-        for atom_index in self.bonds:
-            yield self.structure.atoms[atom_index]
+    def get_bonded_atoms (self) -> List['Atom']:
+        return [ self.structure.atoms[atom_index] for atom_index in self.bonds ]
 
     # Generate a selection for this atom
     def get_selection (self) -> 'Selection':
@@ -463,6 +462,28 @@ class Residue:
             raise ValueError('Chain ' + str(new_chain) + ' is not set in the structure')
         self.set_chain_index(new_chain_index)
     chain = property(get_chain, set_chain, None, "The residue chain")
+
+    # Get atom indices from atoms bonded to this residue
+    def get_bonded_atom_indices (self) -> List[int]:
+        # Get all bonds among residue atoms
+        all_bonds = []
+        for atom in self.atoms:
+            all_bonds += atom.bonds
+        # Remove self atom indices from the list
+        external_bonds = set(all_bonds) - set(self.atom_indices)
+        return list(external_bonds)
+
+    # Get atoms bonded to this residue
+    def get_bonded_atoms (self) -> List['Atom']:
+        return [ self.structure.atoms[atom_index] for atom_index in self.get_bonded_atom_indices() ]
+
+    # Get residue indices from residues bonded to this residue
+    def get_bonded_residue_indices (self) -> List[int]:
+        return list(set([ atom.residue_index for atom in self.get_bonded_atoms() ]))
+
+    # Get residues bonded to this residue
+    def get_bonded_residues (self) -> List['Residue']:
+        return [ self.structure.residues[residue_index] for residue_index in self.get_bonded_residue_indices() ]
 
     # Get the residue biochemistry classification
     # WARNING: Note that this logic will not work in a structure without hydrogens
@@ -904,7 +925,7 @@ class Structure:
     bonds = property(get_bonds, set_bonds, None, "The structure bonds")
 
     # Get the groups of atoms which are covalently bonded
-    def get_fragments (self) -> List[ List[int] ]:
+    def get_fragments (self) -> List['Selection']:
         # Return the stored value, if exists
         if self._fragments != None:
             return self._fragments
@@ -915,12 +936,11 @@ class Structure:
     fragments = property(get_fragments, None, None, "The structure fragments (read only)")
 
     # Find fragments* in a selection of atoms
-    # * A fragment is a group of colvalently bond atoms
-    # A list of fragments is returned, where every fragment is a list of atom indices
+    # * A fragment is a selection of colvalently bonded atoms
     # All atoms are searched if no selection is provided
     # WARNING: Note that fragments generated from a specific selection may not match the structure fragments
     # A selection including 2 separated regions of a structure fragment will yield 2 fragments
-    def find_fragments (self, selection : Optional['Selection'] = None) -> Generator[List[int], None, None]:
+    def find_fragments (self, selection : Optional['Selection'] = None) -> Generator['Selection', None, None]:
         # If there is no selection we consider all atoms
         if not selection:
             selection = self.select_all()
@@ -943,14 +963,12 @@ class Structure:
                 bonds += next_new_bonds
                 fragment_atom_indices.append(next_atom_index)
                 del atom_indexed_covalent_bonds[next_atom_index]
-            yield fragment_atom_indices
+            yield Selection(fragment_atom_indices)
 
     # Given a selection of atoms, find all whole structure fragments on them
-    def find_whole_fragments (self, selection : 'Selection') -> Generator[List[int], None, None]:
-        selection_set = set(selection.atom_indices)
+    def find_whole_fragments (self, selection : 'Selection') -> Generator['Selection', None, None]:
         for fragment in self.fragments:
-            fragment_set = set(fragment)
-            if fragment_set.intersection(selection_set):
+            if selection and fragment:
                 yield fragment
 
 
@@ -1436,6 +1454,45 @@ class Structure:
                 atom_indices.append(atom.index)
         return Selection(atom_indices)
 
+    # Select protein atoms
+    # WARNING: Note that there is a small difference between VMD protein and our protein
+    # This function is improved to consider terminal residues as proteins
+    def select_protein (self) -> 'Selection':
+        atom_indices = []
+        for residue in self.residues:
+            if residue.classification == 'protein':
+                atom_indices += residue.atom_indices
+        return Selection(atom_indices)
+
+    # Select cartoon representable regions for VMD
+    # Rules are:
+    # 1. Residues must be protein (i.e. must contain C, CA, N and O atoms) or nucleic (P, OP1, OP2, O3', C3', C4', C5', O5')
+    # 2. There must be at least 3 covalently bonded residues
+    # It does not matter their chain, numeration or even index order as long as they are bonded
+    # * Note that we can represent cartoon while we display one residue alone, but it must be connected anyway
+    # Also, we have the option to include terminals in the cartoon selection although they are not representable
+    # This is helpful for the screenshot: terminals are better hidden than represented as ligands
+    def select_cartoon (self, include_terminals : bool = False) -> 'Selection':
+        # Set fragments which are candidate to be cartoon representable
+        fragments = []
+        # Get protein fragments according to VMD
+        protein_selection = self.select_protein() if include_terminals else self.select('protein', syntax='vmd')
+        if protein_selection:
+            fragments += list(self.find_fragments(protein_selection))
+        # Get nucleic fragments according to VMD
+        nucleic_selection = self.select('nucleic', syntax='vmd')
+        if nucleic_selection:
+            fragments += list(self.find_fragments(nucleic_selection))
+        # Set the final selection including all valid fragments
+        cartoon_selection = Selection()
+        # Iterate over every fragment
+        for fragment in fragments:
+            # Make sure the fragment has at least 3 residues before adding it to the cartoon selection
+            fragment_residue_indices = self.get_selection_residue_indices(fragment)
+            if len(fragment_residue_indices) >= 3:
+                cartoon_selection += fragment
+        return cartoon_selection
+
     # Invert a selection
     def invert_selection (self, selection : 'Selection') -> 'Selection':
         atom_indices = list(range(self.atom_count))
@@ -1563,8 +1620,7 @@ class Structure:
         fragment_getter = self.find_whole_fragments if whole_fragments else self.find_fragments
         for fragment in fragment_getter(selection):
             chain_name = self.get_next_available_chain_name()
-            fragment_selection = Selection(fragment)
-            self.set_selection_chain_name(fragment_selection, chain_name)
+            self.set_selection_chain_name(fragment, chain_name)
 
     # Smart function to set chains automatically
     # Original chains will be overwritten
@@ -2077,7 +2133,7 @@ class Structure:
             # Get the current atom to continue the followup: the last atom
             current_atom = atom_path[-1] # Note that the list MUST always have at least 1 atom
             # Get bonded atoms to continue the path
-            followup_atoms = list(current_atom.get_bonded_atoms())
+            followup_atoms = current_atom.get_bonded_atoms()
             # Hydrogens are discarded since they have only 1 bond and thus they can only lead to a dead end
             followup_atoms = [ atom for atom in followup_atoms if atom.element != 'H' ]
             # In case there is a selection, check followup atoms not to be in the selection
@@ -2115,7 +2171,7 @@ class Structure:
             if candidate_atom.element == 'H':
                 continue
             # It must not be a dead end already
-            bonded_atoms = list(candidate_atom.get_bonded_atoms())
+            bonded_atoms = candidate_atom.get_bonded_atoms()
             bonded_atoms = [ atom for atom in bonded_atoms if atom.element != 'H' ]
             # In case there is a selection, check followup atoms not to be in the selection
             if selected_atom_indices:
