@@ -924,13 +924,8 @@ class Structure:
         # If there is no selection we consider all atoms
         if not selection:
             selection = self.select_all()
-        # Get/Find covalent bonds between atoms
-        covalent_bonds = self.bonds
-        # for a, bonds in enumerate(covalent_bonds):
-        #     print(str(a) + ' -> ' + str(bonds))
-        # Duplicate each bonds list to avoid further corruption (deletion)
-        #print(selection.atom_indices)
-        atom_indexed_covalent_bonds = { atom_index: [ *covalent_bonds[i] ] for i, atom_index in enumerate(selection.atom_indices) }
+        # Get/Find covalent bonds between atoms in a new object avoid further corruption (deletion) of the original list
+        atom_indexed_covalent_bonds = { atom_index: [ *self.bonds[atom_index] ] for atom_index in selection.atom_indices }
         # Group the connected atoms in "fragments"
         while len(atom_indexed_covalent_bonds) > 0:
             start_atom_index, bonds = next(iter(atom_indexed_covalent_bonds.items()))
