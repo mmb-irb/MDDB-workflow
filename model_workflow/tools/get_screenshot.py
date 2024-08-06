@@ -99,6 +99,11 @@ def get_screenshot (
         line = [float(i) for i in line]
     vmd_center_coordinates = line
 
+    # Load the whole structure
+    # WARNING: Note that custom atoms selection is not yet supported, although we could do it one day
+    # WARNING: Not selecting all atoms but a subselection may cause problems when centering the image right now
+    structure = Structure.from_pdb_file(input_structure_filename)
+
     # Set the camera rotation, translation and zoom values to get the optimal picture
     angle = None
     angle2 = None
@@ -117,10 +122,6 @@ def get_screenshot (
     # We must calculate these values otherwise
     else:
 
-        # Load the whole structure
-        # WARNING: Note that custom atoms selection is not yet supported, although we could do it one day
-        # WARNING: Not selecting all atoms but a subselection may cause problems when centering the image right now
-        structure = Structure.from_pdb_file(input_structure_filename)
         # Obtain all coordinates from each atom of the filtered structure
         coordinates = [list(atom.coords) for atom in structure.atoms]        
         # Convert the list into a Numpy Array, since Scipy library just works with this type of data structure
@@ -301,14 +302,14 @@ def get_screenshot (
         # Set the scale
         scale = zoom / widest
 
-        # We must find also what is representable through cartoon and what is not
-        # Relying in 'protein or nucleic' is not safe enough
-        # For some structures large regions could remain invisible
-        # e.g. a large peptide noted as a single residue
-        # Note that we also include terminals in the cartoon selection although they are not representable
-        # This is because terminals are better hidden than represented as ligands, this would be missleading
-        cartoon_selection = structure.select_cartoon(include_terminals=True)
-        non_cartoon_selectuon = structure.invert_selection(cartoon_selection)
+    # We must find also what is representable through cartoon and what is not
+    # Relying in 'protein or nucleic' is not safe enough
+    # For some structures large regions could remain invisible
+    # e.g. a large peptide noted as a single residue
+    # Note that we also include terminals in the cartoon selection although they are not representable
+    # This is because terminals are better hidden than represented as ligands, this would be missleading
+    cartoon_selection = structure.select_cartoon(include_terminals=True)
+    non_cartoon_selectuon = structure.invert_selection(cartoon_selection)
 
     # Set a file name for the VMD script file
     commands_filename_2 = '.commands_2.vmd'
