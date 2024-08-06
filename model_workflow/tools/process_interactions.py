@@ -175,6 +175,7 @@ def process_interactions (
 
 # Load interactions from an already existing interactions file
 def load_interactions (interactions_file : 'File', structure : 'Structure') -> list:
+    print(f' Using already calculated interactions in {interactions_file.path}')
     # The stored interactions should carry only residue indices and strong bonds
     interactions = load_json(interactions_file.path)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
