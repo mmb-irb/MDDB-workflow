@@ -48,10 +48,17 @@ def process_interactions (
         if interaction['selection_1'] == interaction['selection_2']:
             raise InputError(f'Interaction agents must have different selections at {interaction["name"]}')
         # Make sure both agents have valid selections
-        if not structure.select(interaction['selection_1']):
+        agent_1_selection = structure.select(interaction['selection_1'])
+        if not agent_1_selection:
             raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
-        if not structure.select(interaction['selection_2']):
+        agent_2_selection = structure.select(interaction['selection_2'])
+        if not agent_2_selection:
             raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
+        # Make sure selections do not overlap at all
+        # This makes not sense as interactions are implemented in this workflow
+        overlap = agent_1_selection & agent_2_selection
+        if overlap:
+            raise InputError(f'Agents in interaction "{interaction["name"]}" have {len(overlap)} overlapping atoms')
 
     # If there is a backup then use it
     # Load the backup and return its content as it is

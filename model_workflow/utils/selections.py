@@ -62,7 +62,7 @@ class Selection:
     # Return a new selection with the intersection of both selections
     def intersection (self, other : Optional['Selection']) -> 'Selection':
         if not other:
-            return self
+            return Selection()
         self_atom_indices = set(self.atom_indices)
         other_atom_indices = set(other.atom_indices)
         intersection_atom_indices = list(self_atom_indices.intersection(other_atom_indices))
