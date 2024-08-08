@@ -6,7 +6,7 @@ import os
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, load_json, save_json
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 
 # Set the flag used to label failed interactions
@@ -110,9 +110,9 @@ def process_interactions (
             # Check if we must have mercy in case of interaction failure
             must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
             if must_be_killed:
-                raise SystemExit('FAIL: an interaction failed to be set.\n'
+                raise TestFailure('An interaction failed to be set.\n'
                     'Use the "--mercy interact" flag for the workflow to continue.\n'
-                    'Failed interactions will be removed from both analyses and metadata.')
+                    'Failed interactions will be removed from further analyses.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
             interaction[FAILED_INTERACTION_FLAG] = True
@@ -166,7 +166,7 @@ def process_interactions (
         'interface_indices_1',
         'interface_indices_2',
         'strong_bonds',
-        'failed'
+        FAILED_INTERACTION_FLAG
     ]
     file_interactions = []
     for interaction in interactions:
@@ -187,6 +187,9 @@ def load_interactions (interactions_file : 'File', structure : 'Structure') -> l
     interactions = load_json(interactions_file.path)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
+        # If the interaction failed then there will be minimal information
+        if interaction.get(FAILED_INTERACTION_FLAG, False):
+            continue
         # Get residues from their indices
         residues = structure.residues
         interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
