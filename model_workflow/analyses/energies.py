@@ -36,13 +36,9 @@ CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_2_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 
-# distance_cutoff = 5
-
-# Set the path to auxiliar files required for this analysis
+# Set the path to the resources folder where  we store auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "resources")
-cmip_inputs_checkonly_source = File(resources + '/check.in')
-cmip_inputs_source = File(resources + '/input.in')
-vdw_source = File(resources + '/vdwprm')
+print('RESOURCES -> ' + resources)
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies (
@@ -78,6 +74,11 @@ def energies (
     if not charges or len(charges) == 0:
         print('No charges were passed')
         return
+
+    # Set the auxiliar files further required as CMIP inputs
+    cmip_inputs_checkonly_source = File(resources + '/check.in')
+    cmip_inputs_source = File(resources + '/input.in')
+    vdw_source = File(resources + '/vdwprm')
 
     # Set a backup file to store some results on the fly
     # This is useful to restore these values in case the analysis is disrupt since it is a long analysis
