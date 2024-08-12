@@ -85,6 +85,13 @@ class Register:
         self.mtimes[target_file.filename] = new_mtime
         self.save()
 
+    # Check if a file is new
+    def is_file_new (self, target_file : 'File') -> bool:
+        # Get the new and the previous value
+        new_mtime, previous_mtime = self.get_mtime(target_file)
+        # If the previous value is None then it is new
+        return previous_mtime == None
+
     # Check if a file does not match the already registered modification time or it is new
     def is_file_modified (self, target_file : 'File') -> bool:
         # Get the new and the previous value

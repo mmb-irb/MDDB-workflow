@@ -354,23 +354,32 @@ class MD:
         # If there is no structure then we must run some tests
         if not output_structure_file.exists:
             required_tests.update(STRUCTURE_TESTS)
-        # If the structure was modified since the last time then we must run these tests as well
+        # If the file exists but it is new then we must run the tests as well
+        elif self.register.is_file_new(output_structure_file):
+            required_tests.update(STRUCTURE_TESTS)
+        # If the structure exists and it is not new but it was modified since the last time then we also run the tests
         elif self.register.is_file_modified(output_structure_file):
-            message = 'Structure was modified since the last processing or is new'
+            message = 'Structure was modified since the last processing'
             warn(message)
             required_tests.update(STRUCTURE_TESTS)
 
         # If there is no trajectory then we must run some tests
         if not output_trajectory_file.exists:
             required_tests.update(TRAJECTORY_TESTS)
+        # If the file exists but it is new then we must run the tests as well
+        elif self.register.is_file_new(output_trajectory_file):
+            required_tests.update(TRAJECTORY_TESTS)
         # If the trajectory was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_trajectory_file):
-            message = 'Trajectory was modified since the last processing or is new'
+            message = 'Trajectory was modified since the last processing'
             warn(message)
             required_tests.update(TRAJECTORY_TESTS)
 
         # If there is no topology then we must run some tests
         if not output_topology_file.exists:
+            required_tests.update(TOPOLOGY_TESTS)
+        # If the file exists but it is new then we must run the tests as well
+        elif self.project.register.is_file_new(output_topology_file):
             required_tests.update(TOPOLOGY_TESTS)
         # If the topology was modified since the last time then we must run these tests as well
         elif self.project.register.is_file_modified(output_topology_file):
@@ -906,6 +915,11 @@ class MD:
         return self._interactions
     interactions = property(get_interactions, None, None, "Interactions (read only)")
 
+    def count_valid_interactions (self) -> int:
+        valid_interactions = [ interaction for interaction in self.interactions if not interaction.get('failed', False) ]
+        return len(valid_interactions)
+    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed interactions (read only)")
+
     # Indices of residues in periodic boundary conditions
     # WARNING: Do not inherit project pbc residues
     # WARNING: It may trigger all the processing logic of the reference MD when there is no need
@@ -1154,15 +1168,29 @@ class MD:
     def run_clusters_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
+        # The number of output analyses should be the same number of valid interactions
+        # Otherwise we are missing some analysis
         if exists(output_analysis_filepath) and not overwrite:
             return
+        # Set the output filepaths for all runs
+        output_run_filepath = self.md_pathify(OUTPUT_CLUSTERS_RUNS_FILENAME)
+        # Set the output filepaths for additional images generated in this analysis
         output_screenshot_filepath = self.md_pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
+        # In case the overwirte argument is passed delete all already existing outputs
+        if overwrite:
+            for outputs in [ output_run_filepath, output_screenshot_filepath ]:
+                existing_outputs = glob(outputs)
+                for existing_output in existing_outputs:
+                    if exists(existing_output):
+                        remove(existing_output)
+        # Run the analysis
         clusters_analysis(
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             interactions = self.interactions,
             structure = self.structure,
             output_analysis_filename = output_analysis_filepath,
+            output_run_filepath = output_run_filepath,
             output_screenshots_filename = output_screenshot_filepath,
         )
 
@@ -2366,9 +2394,6 @@ def workflow (
         else:
             getter(project)
 
-    # Remove gromacs backups and other trash files
-    remove_trash(project.directory)
-
     # Get the MD tasks
     md_tasks = [ task for task in tasks if task in md_requestables ]
 
@@ -2399,7 +2424,10 @@ def workflow (
             else:
                 getter(md)
 
-        # Remove gromacs backups and other trash files
+        # Remove gromacs backups and other trash files from this MD
         remove_trash(md.directory)
+
+    # Remove gromacs backups and other trash files from the project
+    remove_trash(project.directory)
 
     print("Done!")

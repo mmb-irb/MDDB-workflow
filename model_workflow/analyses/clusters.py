@@ -1,3 +1,6 @@
+from os.path import exists
+import re
+
 import numpy as np
 
 import mdtraj as mdt
@@ -14,6 +17,7 @@ def clusters_analysis (
     interactions : list,
     structure : 'Structure',
     output_analysis_filename : str,
+    output_run_filepath : str,
     output_screenshots_filename : str,
     # Set the number of steps between the maximum and minimum RMSD so set how many cutoff are tried and how far they are
     n_steps : int = 100,
@@ -55,10 +59,29 @@ def clusters_analysis (
             'selection': final_selection
         })
 
+    # Set the final analysis which is actually a summary to find every run
+    output_summary = []
+
     # Now iterate over the different runs
     for r, run in enumerate(runs):
+        # Set the output analysis filename from the input template
+        output_run_filename = output_run_filepath.replace('*', str(r).zfill(2))
+        # Get the run name
         name = run['name']
-        print(f'Calculating distances for {name}')
+        # Add the root of the output run filename to the run data
+        analysis_name_search = re.search(r'/mda.([A-Za-z0-9_-]*).json$', output_run_filename)
+        if not analysis_name_search:
+            raise ValueError(f'Clusters output run file {output_run_filename} has not the expected filename')
+        analysis_name = analysis_name_search[1]
+        # Add this run to the final summary
+        output_summary.append({
+            'name': name,
+            'analysis': analysis_name
+        })
+        # If the output file already exists then skip this iteration
+        if exists(output_run_filename):
+            continue
+        print(f'Calculating distances for {name} -> {analysis_name}')
         # Get the run selection atom indices
         atom_indices = run['selection'].atom_indices
         
@@ -177,18 +200,18 @@ def clusters_analysis (
 
         # Set the output analysis
         output_analysis = {
-            'subname': name,
+            'name': name,
             'cutoff': cutoff,
             'clusters': output_clusters,
             'transitions': output_transitions
         }
 
-        # Set the analysis filename from the input template
-        analysis_filename = output_analysis_filename.replace('*', str(r).zfill(2))
-
         # The output filename must be different for every run to avoid overwritting previous results
         # However the filename is not important regarding the database since this analysis is found by its 'run'
-        save_json(output_analysis, analysis_filename)
+        save_json(output_analysis, output_run_filename)
+
+    # Save the final summary
+    save_json(output_summary, output_analysis_filename)
 
 # Set a function to cluster frames in a RMSD matrix given a RMSD cutoff
 # https://github.com/boneta/RMSD-Clustering/blob/master/rmsd_clustering/clustering.py

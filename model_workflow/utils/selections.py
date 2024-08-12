@@ -5,8 +5,8 @@ from model_workflow.utils.auxiliar import ranger
 # A selection is a list of atom indices from a structure
 class Selection:
 
-    def __init__ (self, atom_indices : List[int]):
-        self.atom_indices = atom_indices
+    def __init__ (self, atom_indices : Optional[ List[int] ] = None):
+        self.atom_indices = atom_indices if atom_indices != None else []
 
     def __repr__ (self):
         return f'<Selection ({len(self.atom_indices)} atoms)>'
@@ -62,7 +62,7 @@ class Selection:
     # Return a new selection with the intersection of both selections
     def intersection (self, other : Optional['Selection']) -> 'Selection':
         if not other:
-            return self
+            return Selection()
         self_atom_indices = set(self.atom_indices)
         other_atom_indices = set(other.atom_indices)
         intersection_atom_indices = list(self_atom_indices.intersection(other_atom_indices))
@@ -89,16 +89,16 @@ class Selection:
         else:
             return '_'.join([ str(index) for index in self.atom_indices ])
 
-    # Generate a vmd selection in tcl format
+    # Produce a vmd selection in tcl format
     def to_vmd (self) -> str:
         return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
 
-    # Generate the file content of gromacs ndx file
+    # Produce the content of gromacs ndx file
     def to_ndx (self, selection_name : str = 'Selection') -> str:
         # Add a header
         # WARNING: Sometimes (and only sometimes) if the selection name includes white spaces there is an error
-        # WARNING: Gromacs may get the wirst word only as the name of the selection, so we must pruge white spaces
-        # WARNING: However, if a call to this function passes a s election names it will expect it to be in the index file
+        # WARNING: Gromacs may get the first word only as the name of the selection, so we must purge white spaces
+        # WARNING: However, if a call to this function passes a selection name it will expect it to be in the index file
         # WARNING: For this reason we must kill here the proccess and warn the user
         if ' ' in selection_name:
             raise ValueError(f'A Gromacs index file selection name must never include white spaces: {selection_name}')
@@ -114,5 +114,11 @@ class Selection:
             # Atom indices go from 0 to n-1
             # Add +1 to the index since gromacs counts from 1 to n
             content += str(index + 1) + ' '
-        content += '\n' 
+        content += '\n'
         return content
+
+    # Create a gromacs ndx file
+    def to_ndx_file (self, selection_name : str = 'Selection', output_filepath : str = 'index.ndx'):
+        index_content = self.to_ndx(selection_name)
+        with open(output_filepath, 'w') as file:
+            file.write(index_content)

@@ -6,8 +6,11 @@ import os
 from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, load_json, save_json
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
+
+# Set the flag used to label failed interactions
+FAILED_INTERACTION_FLAG = 'failed'
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
@@ -45,10 +48,17 @@ def process_interactions (
         if interaction['selection_1'] == interaction['selection_2']:
             raise InputError(f'Interaction agents must have different selections at {interaction["name"]}')
         # Make sure both agents have valid selections
-        if not structure.select(interaction['selection_1']):
+        agent_1_selection = structure.select(interaction['selection_1'])
+        if not agent_1_selection:
             raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
-        if not structure.select(interaction['selection_2']):
+        agent_2_selection = structure.select(interaction['selection_2'])
+        if not agent_2_selection:
             raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
+        # Make sure selections do not overlap at all
+        # This makes not sense as interactions are implemented in this workflow
+        overlap = agent_1_selection & agent_2_selection
+        if overlap:
+            raise InputError(f'Agents in interaction "{interaction["name"]}" have {len(overlap)} overlapping atoms')
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
@@ -100,13 +110,13 @@ def process_interactions (
             # Check if we must have mercy in case of interaction failure
             must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
             if must_be_killed:
-                raise SystemExit('FAIL: an interaction failed to be set.\n'
+                raise TestFailure('An interaction failed to be set.\n'
                     'Use the "--mercy interact" flag for the workflow to continue.\n'
-                    'Failed interactions will be removed from both analyses and metadata.')
+                    'Failed interactions will be removed from further analyses.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
-            interaction['failed'] = True
-            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) were not stable enough so their analyses are skipped')
+            interaction[FAILED_INTERACTION_FLAG] = True
+            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) are not stable enough so their analyses are skipped')
             continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
         for agent in ['1','2']:
@@ -146,7 +156,7 @@ def process_interactions (
            str(sorted(interaction['interface_indices_1'] + interaction['interface_indices_2'])))
 
     # Write the interactions file with the fields to be uploaded to the database only
-    # i.e. strong bonds and residue indices
+    # i.e. strong bonds and residue indices but not selections
     file_keys = [
         'name',
         'agent_1',
@@ -156,23 +166,30 @@ def process_interactions (
         'interface_indices_1',
         'interface_indices_2',
         'strong_bonds',
-        'failed'
+        FAILED_INTERACTION_FLAG
     ]
-
     file_interactions = []
     for interaction in interactions:
         file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
         file_interactions.append(file_interaction)
-    save_json(file_interactions, interactions_file.path, indent = 4)
+
+    # Save the interactions file unless all interactions failed
+    any_valid_interactions = any( (not interaction.get(FAILED_INTERACTION_FLAG, False)) for interaction in interactions )
+    if any_valid_interactions:
+        save_json(file_interactions, interactions_file.path, indent = 4)
 
     return interactions
 
 # Load interactions from an already existing interactions file
 def load_interactions (interactions_file : 'File', structure : 'Structure') -> list:
+    print(f' Using already calculated interactions in {interactions_file.path}')
     # The stored interactions should carry only residue indices and strong bonds
     interactions = load_json(interactions_file.path)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
+        # If the interaction failed then there will be minimal information
+        if interaction.get(FAILED_INTERACTION_FLAG, False):
+            continue
         # Get residues from their indices
         residues = structure.residues
         interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
