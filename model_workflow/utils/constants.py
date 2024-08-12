@@ -101,6 +101,9 @@ PROTEIN_REFERENCES_FILENAME = 'references.json'
 # Set the ligands filename
 LIGAND_REFERENCES_FILENAME = 'ligands.json'
 
+# Set the chains filename
+OUTPUT_CHAINS_FILENAME = 'chains.json'
+
 # Set the metadata filename
 OUTPUT_METADATA_FILENAME = 'metadata.json'
 
@@ -155,11 +158,12 @@ CORRECT_ELEMENTS = 'elements'
 REFERENCE_SEQUENCE_FLAG = 'refseq'
 STABLE_INTERACTIONS_FLAG = 'interact'
 LIGANDS_MATCH_FLAG = 'ligands'
+CHAINS_ANALYSIS = 'chains'
 
 # State all the available checkings, which may be trusted
 AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG ]
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG ]
+AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, CHAINS_ANALYSIS ]
 
 # Set which tests are to be run when some input files are modified
 STRUCTURE_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
@@ -183,7 +187,8 @@ NICE_NAMES = {
     CORRECT_ELEMENTS: 'Correct elements',
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable',
-    LIGANDS_MATCH_FLAG : 'Ligands matched residues'
+    LIGANDS_MATCH_FLAG : 'Ligands matched residues',
+    CHAINS_ANALYSIS: 'Chains analysis'
 }
 
 # Set the "standard" file format of every possible file extension

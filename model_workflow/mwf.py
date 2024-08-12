@@ -29,6 +29,7 @@ from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
+from model_workflow.tools.chains import chains_data
 from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping, get_sequence_metadata
 from model_workflow.tools.generate_topology import generate_topology
@@ -1834,7 +1835,7 @@ class Project:
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
     input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
     input_ligands = property(input_getter('ligands'), None, None, "Input ligand references (read only)")
-
+    
     # PBC selection may come from the console or from the inputs file
     # Console has priority over the inputs file
     def get_pbc_selection (self) -> Optional[str]:
@@ -2039,6 +2040,18 @@ class Project:
         self.get_protein_map()
         return protein_references_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
+
+    def get_protein_chains (self) -> List[str]:
+        # Set the chains references file
+        chains_references_filepath = self.project_pathify(OUTPUT_CHAINS_FILENAME)
+        chains_references_file = File(chains_references_filepath)
+        chains = chains_data(
+            structure = self.structure,
+            chains_references_filepath = chains_references_file.path,
+            #chain_name=self.structure.chain_name,
+        )
+        return chains
+    chains_data = property(get_protein_chains, None, None, "Chain (read only)")
 
     # Ligand residues mapping
     def get_ligand_map (self) -> List[dict]:
@@ -2253,6 +2266,7 @@ project_requestables = {
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
+    'chains': Project.get_protein_chains,
 }
 # MD requestable tasks
 md_requestables = {
