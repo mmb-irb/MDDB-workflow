@@ -786,7 +786,9 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
 # Given a PDB code, get all its ligand codes
 def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     # Request the MMB service to retrieve pdb data
-    request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
+    #request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
+    # If the BSC API is not working then we can use the IRB API
+    request_url = f'https://mmb.irbbarcelona.org/api/pdb/{pdb_id}/entry'
     try:
         with urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
