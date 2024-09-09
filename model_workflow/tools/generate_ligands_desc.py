@@ -128,8 +128,16 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
         raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES section: ' + request_url)
     canonical_smiles = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'Canonical SMILES'), None)
     if canonical_smiles == None:
-        raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES: ' + request_url)
-    smiles = canonical_smiles.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+        # In some cases there is no canonical SMILES but a non-canonical one could exists
+        non_canonical_smiles_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'SMILES'), None)
+        if non_canonical_smiles_section == None:
+            raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES: ' + request_url)
+    
+    if canonical_smiles:
+        smiles = canonical_smiles.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    if non_canonical_smiles_section:
+        smiles = non_canonical_smiles_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    
     if smiles == None:
         raise RuntimeError('Wrong Pubchem data structure: no SMILES: ' + request_url)
 
