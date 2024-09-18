@@ -266,10 +266,16 @@ class MD:
         if self._md_inputs:
             return self._md_inputs
         # Otherwise we must find its value
+        # If we have MD inputs in the inputs file then use them
         if self.project.input_mds:
+            # Iterate over the different MD inputs to find out each directory
+            # We must find the MD inputs whcih belong to this specific MD according to this directory
             for md in self.project.input_mds:
-                name = md['name']
-                directory = name_2_directory(name)
+                directory = md.get(MD_DIRECTORY, None)
+                if not directory:
+                    name = md['name']
+                    directory = name_2_directory(name)
+                # If the directory matches then this is our MD inputs
                 if directory == self.directory:
                     self._md_inputs = md
                     return self._md_inputs
@@ -1569,7 +1575,9 @@ class Project:
             for input_md in self.input_mds:
                 # Set the directory from the MD name
                 name = input_md['name']
-                directory = name_2_directory(name)
+                directory = input_md.get(MD_DIRECTORY, None)
+                if not directory:
+                    directory = name_2_directory(name)
                 self._md_directories.append(directory)
         # Otherwise, guess MD directories by checking which directories include a register file
         else:

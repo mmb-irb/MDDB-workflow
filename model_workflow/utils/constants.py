@@ -37,6 +37,9 @@ ACCEPTED_INPUT_FILENAMES = [
     'inputs.json' # Legacy inputs file
 ]
 
+# Expected MD inputs
+MD_DIRECTORY = 'mdir'
+
 # Markov State Model input filenames
 DEFAULT_POPULATIONS_FILENAME = 'populations.json'
 DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
