@@ -128,8 +128,16 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
         raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES section: ' + request_url)
     canonical_smiles = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'Canonical SMILES'), None)
     if canonical_smiles == None:
-        raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES: ' + request_url)
-    smiles = canonical_smiles.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+        # In some cases there is no canonical SMILES but a non-canonical one could exists
+        non_canonical_smiles_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'SMILES'), None)
+        if non_canonical_smiles_section == None:
+            raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES: ' + request_url)
+    
+    if canonical_smiles:
+        smiles = canonical_smiles.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    if non_canonical_smiles_section:
+        smiles = non_canonical_smiles_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    
     if smiles == None:
         raise RuntimeError('Wrong Pubchem data structure: no SMILES: ' + request_url)
 
@@ -311,7 +319,12 @@ def generate_ligand_mapping (
     # Load the ligands file if exists already
     if os.path.exists(output_ligands_filepath):
         json_ligands_data += import_ligands(output_ligands_filepath)
-
+        # If json ligands exists and it is empty means that ligands analysis has been already done but no ligands were matched
+        # so the file will contain an empty list []
+        if len(json_ligands_data) == 0:
+            print('No ligands have been matched yet.\nIf you want to force a ligand to be matched, please provide the field "residues" in the inputs.json file.')
+            return [], {}
+        
     # Save apart ligand names forced by the user
     ligand_names = {}
     # Visited formulas
@@ -454,7 +467,6 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
         'formula': None,
         'pdbid': None,
     }
-
     # Set ligand data pubchem id, even if the input id is not from pubhcme (e.g. drugbank, chembl)
     if 'pubchem' in ligand:
         ligand_data['pubchem'] = str(ligand.get('pubchem'))
@@ -786,7 +798,9 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
 # Given a PDB code, get all its ligand codes
 def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     # Request the MMB service to retrieve pdb data
-    request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
+    #request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
+    # If the BSC API is not working then we can use the IRB API
+    request_url = f'https://mmb.irbbarcelona.org/api/pdb/{pdb_id}/entry'
     try:
         with urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))

@@ -2,6 +2,7 @@ from model_workflow.tools.get_box_size import get_box_size
 from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.generate_map import get_sequence_metadata
 from model_workflow.utils.auxiliar import InputError, save_json
+from model_workflow.utils.constants import MD_DIRECTORY
 
 from pathlib import Path
 from typing import Callable
@@ -172,10 +173,15 @@ def generate_md_metadata (
     ):
 
     print('-> Generating MD metadata')
+
+    # Remove the directory name form MD inputs since it is not to be uploaded to the database
+    directory = md_inputs.get(MD_DIRECTORY, None)
+    if directory:
+        del md_inputs[MD_DIRECTORY]
     
     # Write the metadata file
     metadata = {
-        'name': md_inputs['name'],
+        **md_inputs, # This includes the name
         'frames': snapshots,
         'atoms': len(structure.atoms), # Should be always the same but we better have explicit confirmation
         'refframe': reference_frame,
