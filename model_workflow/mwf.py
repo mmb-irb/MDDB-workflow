@@ -2317,7 +2317,7 @@ def workflow (
     # Include and exclude are not compatible
     # This is to protect the user to do something which makes not sense
     if include and exclude:
-        raise InputError('Include (-i) and exclude (-e) are not comaptible. Use one of these options.')
+        raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
 
     # Move the current directory to the working directory
     chdir(working_directory)
