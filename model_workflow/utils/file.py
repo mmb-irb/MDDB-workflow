@@ -1,4 +1,4 @@
-from os import remove, symlink, rename
+from os import remove, symlink, rename, readlink
 from os.path import exists, isabs, abspath, relpath, split, islink
 from shutil import copyfile
 from typing import Optional
@@ -51,7 +51,7 @@ class File:
     def __repr__ (self) -> str:
         if not self.filename:
             return '< No file >'
-        return '< File ' + self.filename + ' >'
+        return '< File ' + self.path + ' >'
 
     def __str__ (self) -> str:
         return self.__repr__()
@@ -109,6 +109,13 @@ class File:
     # Get a prefixed file using this file name as the name base
     def get_prefixed_file (self, prefix : str) -> 'File':
         return File(self.basepath + '/' + prefix + self.filename)
+
+    # Get the symlink target of this file
+    def get_symlink (self) -> Optional['File']:
+        target_filepath = readlink(self.path)
+        if not target_filepath:
+            return None
+        return File(self.basepath + '/' + target_filepath)
 
     # Set this file a symlink to another file
     def set_symlink_to (self, other_file : 'File'):

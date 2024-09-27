@@ -3,18 +3,16 @@
 # This is the starter script
 
 # Import python libraries
-from os import chdir, symlink, rename, walk, mkdir, getcwd
+from os import chdir, rename, walk, mkdir, getcwd
 from os.path import exists, isabs
 import sys
 import io
-import math
-from pathlib import Path
 import urllib.request
 import json
 import numpy
 from glob import glob
 from inspect import getfullargspec
-from typing import Optional, Union, List, Callable
+from typing import Optional, Union, List
 
 # Constants
 from model_workflow.utils.constants import *
@@ -587,7 +585,7 @@ class MD:
         cached_snapshots = self.register.cache.get(SNAPSHOTS_FLAG, None)
         if cached_snapshots != None:
             self._snapshots = cached_snapshots
-        # Othwerise count the number of snaphsots
+        # Othwerise count the number of snapshots
         else:
             self._snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
             # Save the snapshots value in the register cache as well
@@ -623,16 +621,23 @@ class MD:
         corrected_structure_file = corrected_structure_file if corrected_structure_file.exists else imaged_structure_file
         corrected_trajectory_file = corrected_trajectory_file if corrected_trajectory_file.exists else imaged_trajectory_file
 
-        # Now we must rename files to match the output file
-        # Processed files remain with some intermediate filename
+        # Set for every type of file (structure, trajectory and topology) tte input, the las processed step and the output files
         input_and_output_files = [
             (input_structure_file, corrected_structure_file, output_structure_file),
             (input_trajectory_files[0], corrected_trajectory_file, output_trajectory_file),
             (input_topology_file, filtered_topology_file, output_topology_file)
         ]
+        # Set a list of intermediate files
+        intermediate_files = set([
+            converted_structure_file, converted_trajectory_file,
+            filtered_structure_file, filtered_trajectory_file,
+            imaged_structure_file, imaged_trajectory_file,
+        ])
+        # Now we must rename files to match the output file
+        # Processed files remain with some intermediate filename
         for input_file, processed_file, output_file in input_and_output_files:
             # If the processed file is already the output file then there is nothing to do here
-            # This means it was already the input file and no chnages were made
+            # This means it was already the input file and no changes were made
             if processed_file == output_file:
                 continue
             # There is a chance that the input files have not been modified
@@ -646,7 +651,20 @@ class MD:
                 output_file.set_symlink_to(input_file)
             # Otherwise rename the last intermediate file as the output file
             else:
-                rename(processed_file.path, output_file.path)
+                
+                # In case the processed file is a symlink we must make sure the symlink is not made to a intermediate step
+                # Intermediate steps will be removed further and thus the symlink would break
+                # If the symlinks points to the input file there is no problem though
+                if processed_file.is_symlink():
+                    target_file = processed_file.get_symlink()
+                    if target_file in intermediate_files:
+                        target_file.rename_to(output_file)
+                    else:
+                        processed_file.rename_to(output_file)
+                # If the files is not a symlink then simply rename it
+                else:
+                    processed_file.rename_to(output_file)
+
 
         # Save the internal variables
         self._structure_file = output_structure_file
@@ -664,12 +682,6 @@ class MD:
 
         # --- Cleanup intermediate files
 
-        # Set a list of intermediate files
-        intermediate_files = set([
-            converted_structure_file, converted_trajectory_file,
-            filtered_structure_file, filtered_trajectory_file,
-            imaged_structure_file, imaged_trajectory_file,
-        ])
         # Set also a list of input files
         inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
         # We must make sure an intermediate file is not actually an input file before deleting it
