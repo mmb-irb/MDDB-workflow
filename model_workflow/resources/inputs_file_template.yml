@@ -488,12 +488,17 @@ cv19_nanobs:
 # Example:
 #
 # mds:
-#   - name: replica 1
-#   - name: replica 2
-#   - name: replica 3
+#   - name: replica 310 K
+#     mdir: replica_1
+#     temp: 310
+#   - name: replica 311 K
+#     mdir: replica_2
+#     temp: 311
+
 
 mds:
   - name: replica 1
+    mdir: replica_1
 
 # Also the reference MD is to be defined by providing the index of the MDs list
 # If there is not an MD which is more important than others then simply set the first MD (0) as the reference

@@ -137,15 +137,14 @@ def generate_project_metadata (
         metadata['BOXSIZEZ'] = boxsizez
     # Add collection specific fields
     if 'cv19' in collections:
-        # metadata['CV19_UNIT'] = get_input('cv19_unit')
-        # metadata['CV19_STARTCONF'] = get_input('cv19_startconf', optional=True)
-        # metadata['CV19_ABS'] = get_input('cv19_abs', optional=True)
-        # metadata['CV19_NANOBS'] = get_input('cv19_nanobs', optional=True)
-        # metadata['CV19_VARIANT'] = sequence_metadata['cv19_variant']
+        cv19_unit = get_input('cv19_unit', optional=True)
         cv19_startconf = get_input('cv19_startconf', optional=True)
         cv19_abs = get_input('cv19_abs', optional=True)
         cv19_nanobs = get_input('cv19_nanobs', optional=True)
         cv19_variant = sequence_metadata['cv19_variant']
+
+        if cv19_unit is not None:
+            metadata['CV19_UNIT'] = cv19_unit
 
         if cv19_startconf is not None:
             metadata['CV19_STARTCONF'] = cv19_startconf
@@ -162,6 +161,15 @@ def generate_project_metadata (
     # Write metadata to a file
     save_json(metadata, output_metadata_filename)
 
+metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
+    'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES', 
+    'REFERENCES', 'INPUT_LIGANDS', 'LIGANDS', 'LIGANDNAMES', 'SEQUENCES', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
+    'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'SYSTATS', 'PROTATS', 'PROT', 'DPPC', 'SOL', 'NA', 'CL',
+    'INTERACTIONS', 'PBC_SELECTION', 'CHAINNAMES', 'MEMBRANES', 'CUSTOMS', 'ORIENTATION', 'PTM', 
+    'MULTIMERIC', 'COLLECTIONS', 'WARNINGS', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'CV19_UNIT', 'CV19_STARTCONF',
+    'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
+])
+
 # Generate a JSON file with MD metadata
 def generate_md_metadata (
     md_inputs : dict,
@@ -174,19 +182,39 @@ def generate_md_metadata (
 
     print('-> Generating MD metadata')
 
-    # Remove the directory name form MD inputs since it is not to be uploaded to the database
+    # Mine name and directory from MD inputs
+    name = md_inputs.get('name', None)
     directory = md_inputs.get(MD_DIRECTORY, None)
-    if directory:
-        del md_inputs[MD_DIRECTORY]
     
     # Write the metadata file
-    metadata = {
-        **md_inputs, # This includes the name
+    md_metadata = {
+        'name': name,
         'frames': snapshots,
         'atoms': len(structure.atoms), # Should be always the same but we better have explicit confirmation
         'refframe': reference_frame,
         'warnings': register.warnings,
     }
 
+    # Get other MD inputs than the name and the directory
+    other_md_inputs = { k: v for k, v in md_inputs.items() }
+    # Remove name from MD inputs to not further overwrite project metadata
+    if name:
+        del other_md_inputs['name']
+    # Remove the directory name form MD inputs since it is not to be uploaded to the database
+    if directory:
+        del other_md_inputs[MD_DIRECTORY]
+
+    # Inherit all metadata fields
+    metadata = {}
+    for field in metadata_fields:
+        input_field = field.lower()
+        field_value = other_md_inputs.get(input_field, None)
+        if field_value:
+            metadata[field] = field_value
+
+    # Add the matadata field only if there is at least one value
+    if len(metadata) > 0:
+        md_metadata['metadata'] = metadata
+
     # Write metadata to a file
-    save_json(metadata, output_metadata_filename)
+    save_json(md_metadata, output_metadata_filename)
