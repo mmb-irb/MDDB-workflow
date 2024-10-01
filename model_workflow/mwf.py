@@ -3,7 +3,7 @@
 # This is the starter script
 
 # Import python libraries
-from os import chdir, rename, walk, mkdir, getcwd
+from os import chdir, rename, remove, walk, mkdir, getcwd
 from os.path import exists, isabs
 import sys
 import io
@@ -269,8 +269,12 @@ class MD:
             # Iterate over the different MD inputs to find out each directory
             # We must find the MD inputs whcih belong to this specific MD according to this directory
             for md in self.project.input_mds:
+                # Get the directory according to the inputs
                 directory = md.get(MD_DIRECTORY, None)
-                if not directory:
+                if directory:
+                    check_directory(directory)
+                # If no directory is specified in the inputs then guess it from the MD name
+                else:
                     name = md['name']
                     directory = name_2_directory(name)
                 # If the directory matches then this is our MD inputs
@@ -1207,6 +1211,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             interactions = self.interactions,
             structure = self.structure,
+            snapshots = self.snapshots,
             output_analysis_filename = output_analysis_filepath,
             output_run_filepath = output_run_filepath,
             output_screenshots_filename = output_screenshot_filepath,
@@ -1585,10 +1590,13 @@ class Project:
         # Use the MDs from the inputs file when available
         if self.is_inputs_file_available() and self.input_mds:
             for input_md in self.input_mds:
-                # Set the directory from the MD name
-                name = input_md['name']
+                # Get the directory according to the inputs
                 directory = input_md.get(MD_DIRECTORY, None)
-                if not directory:
+                if directory:
+                    check_directory(directory)
+                # If no directory is specified in the inputs then guess it from the MD name
+                else:
+                    name = input_md['name']
                     directory = name_2_directory(name)
                 self._md_directories.append(directory)
         # Otherwise, guess MD directories by checking which directories include a register file
@@ -2242,9 +2250,16 @@ def name_2_directory (name : str) -> str:
     # Replace white spaces with underscores
     directory = name.replace(' ', '_')
     # Remove problematic characters
-    for character in FORBIDEN_DIRECTORY_CHARACTERS:
+    for character in FORBIDDEN_DIRECTORY_CHARACTERS:
         directory = directory.replace(character, '')
     return directory
+
+# Set a function to check for problematic characters in a directory path
+def check_directory (directory : str) -> str:
+    # Remove problematic characters
+    for character in FORBIDDEN_DIRECTORY_CHARACTERS:
+        if character in directory:
+            raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
 # Set a function to convert an MD directory into an equivalent MD name
 def directory_2_name (directory : str) -> str:

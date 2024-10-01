@@ -143,7 +143,8 @@ ENERGIES_FOLDER = 'energies'
 POCKETS_FOLDER = 'mdpocket'
 
 # Set problematic signs for directory/folder names
-FORBIDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':']
+# º is forbidden since paths including this characters are not readable by MDtraj
+FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º']
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
