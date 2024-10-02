@@ -374,14 +374,17 @@ class MD:
         # If there is no trajectory then we must run some tests
         if not output_trajectory_file.exists:
             required_tests.update(TRAJECTORY_TESTS)
+            self.register.reset_cache()
         # If the file exists but it is new then we must run the tests as well
         elif self.register.is_file_new(output_trajectory_file):
             required_tests.update(TRAJECTORY_TESTS)
+            self.register.reset_cache()
         # If the trajectory was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_trajectory_file):
             message = 'Trajectory was modified since the last processing'
             warn(message)
             required_tests.update(TRAJECTORY_TESTS)
+            self.register.reset_cache()
 
         # If there is no topology then we must run some tests
         if not output_topology_file.exists:

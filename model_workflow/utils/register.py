@@ -106,6 +106,12 @@ class Register:
         self.cache[key] = value
         self.save()
 
+    # Reset the cache
+    # This is called when some input files are modified
+    def reset_cache (self):
+        self.cache = {}
+        self.save()
+
     # Update a test result and save the register
     def update_test (self, key : str, value : Optional[bool]):
         self.tests[key] = value
