@@ -7,18 +7,22 @@ import mdtraj as mdt
 
 from model_workflow.utils.auxiliar import round_to_thousandths, save_json, otherwise
 from model_workflow.tools.get_screenshot import get_screenshot
+from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
 AUXILIAR_PDB_FILENAME = '.model.pdb'
 
 # Run the cluster analysis
 def clusters_analysis (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
+    input_structure_file : 'File',
+    input_trajectory_file : 'File',
     interactions : list,
     structure : 'Structure',
+    snapshots : int,
     output_analysis_filename : str,
     output_run_filepath : str,
     output_screenshots_filename : str,
+    # Set the maximum number of frames
+    frames_limit : int = 1000,
     # Set the number of steps between the maximum and minimum RMSD so set how many cutoff are tried and how far they are
     n_steps : int = 100,
     # Set the final amount of desired clusters
@@ -29,8 +33,16 @@ def clusters_analysis (
 
     print('-> Running clusters analysis')
 
+    # If trajectory frames number is bigger than the limit we create a reduced trajectory
+    reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
+        input_structure_file,
+        input_trajectory_file,
+        snapshots,
+        frames_limit,
+    )
+
     # Load the whole trajectory
-    traj = mdt.load(input_trajectory_filename, top=input_structure_filename)
+    traj = mdt.load(reduced_trajectory_filepath, top=input_structure_file.path)
 
     # The cluster analysis is run for the overall structure and then once more for every interaction
     # We must set the atom selection of every run in atom indices, for MDtraj
@@ -59,12 +71,17 @@ def clusters_analysis (
             'selection': final_selection
         })
 
+    # Set the target number of clusters
+    # This should be the desired number of clusters unless there are less frames than that
+    target_n_clusters = min([ desired_n_clusters, snapshots ])
+
     # Set the final analysis which is actually a summary to find every run
     output_summary = []
 
     # Now iterate over the different runs
     for r, run in enumerate(runs):
         # Set the output analysis filename from the input template
+        # e.g. replica_1/mda.clusters_*.json -> replica_1/mda.clusters_01.json
         output_run_filename = output_run_filepath.replace('*', str(r).zfill(2))
         # Get the run name
         name = run['name']
@@ -72,7 +89,9 @@ def clusters_analysis (
         analysis_name_search = re.search(r'/mda.([A-Za-z0-9_-]*).json$', output_run_filename)
         if not analysis_name_search:
             raise ValueError(f'Clusters output run file {output_run_filename} has not the expected filename')
-        analysis_name = analysis_name_search[1]
+        # To make it coherent with the rest of analyses, the analysis name become parsed when loaded in the database
+        # Every '_' is replaced by '-' so we must keep the analysis name coherent or the web client will not find it
+        analysis_name = analysis_name_search[1].replace('_', '-')
         # Add this run to the final summary
         output_summary.append({
             'name': name,
@@ -111,7 +130,7 @@ def clusters_analysis (
         # Note that final clusters will be ordered by the time they appear
         clusters = None
         n_clusters = 0
-        while n_clusters != desired_n_clusters:
+        while n_clusters != target_n_clusters:
             # Find clusters
             print(f'Trying with cutoff {cutoff}', end='')
             clusters = clustering(distance_matrix, cutoff)
@@ -119,9 +138,9 @@ def clusters_analysis (
             print(f' -> Found {n_clusters} clusters')
             # Update the cutoff
             already_tried_cutoffs.add(cutoff)
-            if n_clusters > desired_n_clusters:
+            if n_clusters > target_n_clusters:
                 cutoff = round_to_thousandths(cutoff + rmsd_step)
-            if n_clusters < desired_n_clusters:
+            if n_clusters < target_n_clusters:
                 cutoff = round_to_thousandths(cutoff - rmsd_step)
             # If we already tried the updated cutoff then we are close enough to the desired number of clusters
             if cutoff in already_tried_cutoffs:
@@ -203,7 +222,8 @@ def clusters_analysis (
             'name': name,
             'cutoff': cutoff,
             'clusters': output_clusters,
-            'transitions': output_transitions
+            'transitions': output_transitions,
+            'step': step
         }
 
         # The output filename must be different for every run to avoid overwritting previous results

@@ -1210,8 +1210,8 @@ class MD:
                         remove(existing_output)
         # Run the analysis
         clusters_analysis(
-            input_structure_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
+            input_structure_file = self.structure_file,
+            input_trajectory_file = self.trajectory_file,
             interactions = self.interactions,
             structure = self.structure,
             snapshots = self.snapshots,
