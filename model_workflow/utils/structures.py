@@ -1299,6 +1299,15 @@ class Structure:
         # Set atom elements as fixed in order to avoid repeating this process
         self._fixed_atom_elements = True
         return modified
+
+    # Set new coordinates
+    def set_new_coordinates (self, new_coordinates : List[Coords]):
+        # Make sure the list of coordinates is as long as the number of atoms
+        if len(new_coordinates) != self.atom_count:
+            raise ValueError(f'The number of coordinates ({len(new_coordinates)}) does not match the number of atoms ({self.atom_count})')
+        # Overwrite current coordinates with the new coordinates
+        for i, atom in enumerate(self.atoms):
+            atom.coords = new_coordinates[i]
     
     # Get all supported ion atom indices together in a set
     def get_ion_atom_indices (self) -> Set:
