@@ -788,7 +788,11 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
     # Mine the pubchem id
     compounds = parsed_response['PC_Compounds']
     if len(compounds) != 1:
-        raise RuntimeError('We are not having 1 and only 1 result from PubChem: ' + request_url)
+        # There could be more than one result
+        # For example, the case HEM: https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/HEM/json 
+        # In this case we picked the first result
+        compound = compounds[0]
+        #raise RuntimeError('We are not having 1 and only 1 result from PubChem: ' + request_url)
     compound = compounds[0]
     id1 = compound['id']
     id2 = id1['id']
