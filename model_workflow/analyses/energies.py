@@ -38,7 +38,6 @@ ERASE_2_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE
 
 # Set the path to the resources folder where  we store auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "resources")
-print('RESOURCES -> ' + resources)
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies (
