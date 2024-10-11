@@ -22,7 +22,6 @@ from shutil import copyfile
 from pathlib import Path
 from glob import glob
 import re
-import numpy
 import math
 from subprocess import run, PIPE, Popen
 from typing import Optional, List, Tuple
