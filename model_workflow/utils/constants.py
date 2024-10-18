@@ -99,9 +99,11 @@ REFERENCE_LABELS = {
 
 # Set output files generated to be uploaded to the database
 
-# Set the references filename
+# Set the PDB (Protein Data Bank) references filename
+PDB_REFERENCES_FILENAME = 'pdb_references.json'
+# Set the protein references filename
 PROTEIN_REFERENCES_FILENAME = 'references.json'
-# Set the ligands filename
+# Set the ligand references filename
 LIGAND_REFERENCES_FILENAME = 'ligands.json'
 
 # Set the chains filename

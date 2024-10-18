@@ -4,8 +4,6 @@ import urllib.request
 
 from typing import List, Tuple, Optional, Union
 
-from pathlib import Path
-
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
