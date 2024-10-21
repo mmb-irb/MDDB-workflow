@@ -969,7 +969,7 @@ class Structure:
     # Given a selection of atoms, find all whole structure fragments on them
     def find_whole_fragments (self, selection : 'Selection') -> Generator['Selection', None, None]:
         for fragment in self.fragments:
-            if selection and fragment:
+            if selection & fragment:
                 yield fragment
 
 
