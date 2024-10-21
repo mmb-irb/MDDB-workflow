@@ -1600,6 +1600,8 @@ class Project:
                 # If no directory is specified in the inputs then guess it from the MD name
                 else:
                     name = input_md['name']
+                    if not name:
+                        name = 'unnamed'
                     directory = name_2_directory(name)
                 self._md_directories.append(directory)
         # Otherwise, guess MD directories by checking which directories include a register file
