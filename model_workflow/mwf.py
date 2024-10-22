@@ -55,6 +55,7 @@ from model_workflow.analyses.tmscores import tmscores
 from model_workflow.analyses.rmsf import rmsf
 from model_workflow.analyses.rgyr import rgyr
 from model_workflow.analyses.pca import pca
+from model_workflow.analyses.density import density
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1350,7 +1351,22 @@ class MD:
             #transitions = self.transitions,
             rmsd_selection = PROTEIN_AND_NUCLEIC,
         )
-
+    # Density
+    def run_density_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
+        if exists(output_analysis_filepath) and not overwrite:
+            return
+        # Run the analysis
+        density(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
+            structure = self.structure,
+            snapshots=self.snapshots,
+            masks = ['!(::M)','::M']
+        )
+        
 # The project is the main project
 # A project is a set of related MDs
 # These MDs share all or most topology and metadata
@@ -2323,6 +2339,7 @@ analyses = {
     'rmsf': MD.run_rmsf_analysis,
     'sas': MD.run_sas_analysis,
     'tmscore': MD.run_tmscores_analysis,
+    'density': MD.run_density_analysis
 }
 
 # Project requestable tasks
