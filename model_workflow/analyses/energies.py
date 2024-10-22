@@ -33,7 +33,7 @@ from model_workflow.utils.file import File
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
-ERASE_2_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+ERASE_3_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 
 # Set the path to the resources folder where  we store auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "resources")
@@ -48,7 +48,8 @@ def energies (
     interactions : list,
     charges : list,
     snapshots : int,
-    frames_limit : int):
+    frames_limit : int,
+    verbose : bool = False):
 
     print('-> Running energies analysis')
 
@@ -121,15 +122,15 @@ def energies (
 
     # Transform an agent structure to a cmip input pdb, which includes charges and cmip-friendly elements
     # If this is to be a host file then leave only atoms involved in the interaction: both host and guest agents
+    # If this is to be a host file, all guest atoms are set dummy* as well
     # If this is to be a guest file then remove all host atoms as well
     # Note that the frame structure is not the standard structure, which would already include charges
     # For this reason, charges are included in the frame structure before
     # Also flag some atoms as 'dummy' by adding a 'X' before the element
-    # Dummy atoms are not considered in the calculation but they stand for a region with low dielectric
+    # *Dummy atoms are not considered in the calculation but they stand for a region with low dielectric
     # If removed, the void left by these atoms would be considered to be filled with solvent, which has a high dielectric
     # These dielectric differences have a strong impact on the calculation
     # By default we set as dummy host atoms involved in a covalent bond with guest atoms
-    # If this is to be a host file, all guest atoms are set dummy as well
     def pdb2cmip (
         agent_name : str,
         host_file : bool,
@@ -399,7 +400,8 @@ def energies (
             strong_bonds = interaction.get('strong_bonds', None)
 
             # Get interaction and agent names, just for the logs
-            interaction_name = ['name']
+            interaction_name = interaction['name']
+            print(f' Processing {interaction_name}')
             agent1_name = interaction['agent_1'].replace(' ', '_').replace('/', '_')
             agent2_name = interaction['agent_2'].replace(' ', '_').replace('/', '_')
 
@@ -442,10 +444,20 @@ def energies (
             box_origin, box_size = adapt_cmip_grid(agent1_cmip_guest, agent2_cmip_guest, cmip_inputs)
 
             # Run the CMIP software to get the desired energies
-            print(f' Calculating energies for {agent1_name} as guest and {agent2_name} as host')
+            print(f'  Calculating energies for {agent1_name} as guest and {agent2_name} as host')
             agent1_residue_energies, agent1_atom_energies = get_cmip_energies(cmip_inputs, agent1_cmip_guest, agent2_cmip_host)
-            print(f' Calculating energies for {agent2_name} as guest and {agent1_name} as host')
+            print(f'  Calculating energies for {agent2_name} as guest and {agent1_name} as host')
             agent2_residue_energies, agent2_atom_energies = get_cmip_energies(cmip_inputs, agent2_cmip_guest, agent1_cmip_host)
+
+            # Print total energies at the end for every agent if the verbose flag has been passed
+            if verbose:
+                for agent_name, agent_energies in zip([agent1_name, agent2_name], [agent1_atom_energies, agent2_atom_energies]):
+                    total_vdw = total_es = total_both = 0
+                    for atom_energies in agent_energies:
+                        total_vdw += atom_energies[0]
+                        total_es += atom_energies[1]
+                        total_both += atom_energies[2]
+                    print(f' Total energies for {agent_name}: vmd {total_vdw}, es {total_es}, both {total_both}')
 
             # DANI: Usa esto para escribir los resultados de las energías por átomo
             # sample = {
@@ -458,7 +470,7 @@ def energies (
             data.append({ 'agent1': agent1_residue_energies, 'agent2': agent2_residue_energies })
 
             # Erase the 2 previous log lines
-            print(ERASE_2_PREVIOUS_LINES)
+            print(ERASE_3_PREVIOUS_LINES)
 
         return data
 

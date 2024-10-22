@@ -7,11 +7,13 @@ from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 
 from model_workflow.mwf import workflow, Project, requestables
+from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.filters import filter_atoms
 from model_workflow.utils.subsets import get_trajectory_subset
 from model_workflow.utils.constants import *
+from model_workflow.utils.auxiliar import InputError
 
 # Set the path to the input setter jupyter notebook
 inputs_template = str(Path(__file__).parent / "resources" / "inputs_file_template.yml")
@@ -83,7 +85,7 @@ def main ():
         )
         print('There you have it :)')
 
-     # In case the subset tool was called
+    # In case the subset tool was called
     elif subcommand == 'subset':
         output_trajectory = args.output_trajectory if args.output_trajectory else args.input_trajectory
         get_trajectory_subset(
@@ -97,6 +99,16 @@ def main ():
             frames=args.frames
         )
         print('All done :)')
+
+    # In case the chainer tool was called
+    elif subcommand == 'chainer':
+        structure = Structure.from_pdb_file(args.input_structure)
+        selection = structure.select(args.selection_string, args.selection_syntax) if args.selection_string else structure.select_all()
+        if not selection:
+            raise InputError(f'Empty selection {selection}')
+        structure.chainer(selection, args.letter, args.whole_fragments)
+        structure.generate_pdb_file(args.output_structure)
+        print('You got it ;)')
 
 # Define console arguments to call the workflow
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
@@ -342,10 +354,10 @@ filter_parser.add_argument(
     help="Path to output trajectory file")
 filter_parser.add_argument(
     "-sel", "--selection_string",
-    help="Atom selection formula")
+    help="Atom selection")
 filter_parser.add_argument(
     "-syn", "--selection_syntax", default='vmd',
-    help="Atom selection formula (vmd by default)")
+    help="Atom selection syntax (vmd by default)")
 
 # The subset command
 subset_parser = subparsers.add_parser("subset",
@@ -374,3 +386,25 @@ subset_parser.add_argument(
 subset_parser.add_argument(
     "-fr", "--frames", nargs='*', type=int, default=[],
     help="Frames to be returned. Input frame order is ignored as original frame order is conserved.")
+
+# The chainer command
+chainer_parser = subparsers.add_parser("chainer",
+    help="Edit structure (pdb) chains")
+chainer_parser.add_argument(
+    "-is", "--input_structure", required=True,
+    help="Path to input structure file")
+chainer_parser.add_argument(
+    "-os", "--output_structure", default='chained.pdb',
+    help="Path to output structure file")
+chainer_parser.add_argument(
+    "-sel", "--selection_string",
+    help="Atom selection (the whole structure by default)")
+chainer_parser.add_argument(
+    "-syn", "--selection_syntax", default='vmd',
+    help="Atom selection syntax")
+chainer_parser.add_argument(
+    "-let", "--letter",
+    help="New chain letter (one letter per fragment by default)")
+chainer_parser.add_argument(
+    "-whfr", "--whole_fragments", type=bool, default=True,
+    help="Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains.")

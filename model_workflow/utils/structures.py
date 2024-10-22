@@ -530,9 +530,10 @@ class Residue:
         # -------------------------------------------------------------------------------------------------------
         # Nucleic acids definition according to vmd:
         # a residue with atoms named P, O1P, O2P and either O3’, C3’, C4’, C5’, O5’ or O3*, C3*, C4*, C5*, O5*
-        if (all((name in atom_names) for name in ['P', 'OP1', 'OP2']) and
-        ( all((name in atom_names) for name in ["O3'", "C3'", "C4'", "C5'", "O5'"]) or
-        all((name in atom_names) for name in ["O3*", "C3*", "C4*", "C5*", "O5*"]))):
+        # Apparently it has been fixed so now a residue does not need to be phosphorylated to be considered nucleic
+        # LORE: This included the condition "all((name in atom_names) for name in ['P', 'OP1', 'OP2'])"
+        if (( all((name in atom_names) for name in ["O3'", "C3'", "C4'", "C5'", "O5'"]) or
+            all((name in atom_names) for name in ["O3*", "C3*", "C4*", "C5*", "O5*"]) )):
             self._classification = 'nucleic'
             return self._classification
         # -------------------------------------------------------------------------------------------------------
@@ -968,7 +969,7 @@ class Structure:
     # Given a selection of atoms, find all whole structure fragments on them
     def find_whole_fragments (self, selection : 'Selection') -> Generator['Selection', None, None]:
         for fragment in self.fragments:
-            if selection and fragment:
+            if selection & fragment:
                 yield fragment
 
 

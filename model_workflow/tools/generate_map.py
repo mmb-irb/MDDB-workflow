@@ -4,10 +4,8 @@ import urllib.request
 
 from typing import List, Tuple, Optional, Union
 
-from pathlib import Path
-
 from model_workflow.tools.residues_library import residue_name_2_letter
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import warn, load_json, save_json
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 
 import xmltodict
@@ -170,7 +168,7 @@ def generate_protein_mapping (
                 # If the alignment is better then we impose the new reference
                 chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
         # Sum up the current matching
-        print(' Reference summary:')
+        print(' Protein reference summary:')
         for chain_data in parsed_chains:
             name = chain_data['name']
             match = chain_data.get('match', None)
@@ -440,6 +438,7 @@ def blast (sequence : str) -> Optional[str]:
     return accession
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
+# If the reference is not found or there is any error then return None and keep going, we do not really need this
 def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
     # Request MDposit
     request_url = 'https://mdposit-dev.mddbr.eu/api/rest/v1/references/' + uniprot_accession
@@ -452,12 +451,19 @@ def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
         if error.code == 404:
             return None
         else:
-            print('Error when requesting ' + request_url)
-            raise ValueError('Something went wrong with the MDposit request (error ' + str(error.code) + ')')
+            warn(f'Something went wrong with the MDposit request {request_url} (error {error.code})')
+            warn(f'Protein reference {uniprot_accession} will be made again even if it exists')
+            return None
     # This error may occur if there is no internet connection
     except urllib.error.URLError as error:
-        print('Error when requesting ' + request_url)
-        raise ValueError('Something went wrong with the MDposit request')
+        # The error variable as is do not work properly
+        # Its 'errno' value is None (at least for tiemout errors)
+        actual_error = error.args[0]
+        if actual_error.errno == 110:
+            print('Timeout error when requesting MDposit. Is the node fallen?')
+        warn('Something went wrong with the MDposit request ' + request_url)
+        warn(f'Protein reference {uniprot_accession} will be made again even if it exists')
+        return None
     return parsed_response
 
 # Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database

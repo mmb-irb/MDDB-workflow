@@ -28,10 +28,10 @@ from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from model_workflow.tools.chains import chains_data
+from model_workflow.tools.generate_pdb_references import generate_pdb_references
 from model_workflow.tools.residue_mapping import generate_residue_mapping
-from model_workflow.tools.generate_map import generate_protein_mapping, get_sequence_metadata
+from model_workflow.tools.generate_map import generate_protein_mapping
 from model_workflow.tools.generate_topology import generate_topology
-from model_workflow.tools.get_summarized_trajectory import get_summarized_trajectory
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
@@ -375,7 +375,6 @@ class MD:
         # If there is no trajectory then we must run some tests
         if not output_trajectory_file.exists:
             required_tests.update(TRAJECTORY_TESTS)
-            self.register.reset_cache()
         # If the file exists but it is new then we must run the tests as well
         elif self.register.is_file_new(output_trajectory_file):
             required_tests.update(TRAJECTORY_TESTS)
@@ -1511,6 +1510,7 @@ class Project:
         self._charges = None
         self._populations = None
         self._transitions = None
+        self._pdb_references = None
         self._protein_map = None
         self._ligand_map = None
         self.pubchem_name_list = None
@@ -2082,6 +2082,38 @@ class Project:
         return self._transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
+    # PDB references
+    def get_pdb_references (self) -> List[dict]:
+        # If we already have a stored value then return it
+        if self._pdb_references:
+            return self._pdb_references
+        # Set the PDB references file
+        pdb_references_filepath = self.project_pathify(PDB_REFERENCES_FILENAME)
+        pdb_references_file = File(pdb_references_filepath)
+        # Otherwise we must find the value
+        self._pdb_references = generate_pdb_references(
+            pdb_ids = self.pdb_ids,
+            pdb_references_file = pdb_references_file
+        )
+        return self._pdb_references
+    pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
+
+    # Define the PDB references output file
+    def get_pdb_references_file (self, overwrite : bool = False) -> File:
+        # Set the PDB references file
+        pdb_references_filepath = self.project_pathify(PDB_REFERENCES_FILENAME)
+        pdb_references_file = File(pdb_references_filepath)
+        # If the file already exists then return it
+        # However if the overwrite argument is passed then delete it and proceed to produce it again
+        if pdb_references_file.exists:
+            if not overwrite:
+                return pdb_references_file
+            pdb_references_file.remove()
+        # Ask for the PDB references thus producing the PDB references file
+        self.get_pdb_references()
+        return pdb_references_file
+    pdb_references_file = property(get_pdb_references_file, None, None, "File including PDB refereces data (read only)")
+
     # Protein residues mapping
     def get_protein_map (self) -> List[dict]:
         # If we already have a stored value then return it
@@ -2346,6 +2378,7 @@ analyses = {
 project_requestables = {
     **project_input_files,
     **project_processed_files,
+    'pdbs': Project.get_pdb_references_file,
     'mapping': Project.get_protein_references_file,
     'ligands': Project.get_ligand_references_file,
     'screenshot': Project.get_screenshot_filename,
