@@ -48,6 +48,7 @@ from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.pyt_spells import get_frames_count
+from model_workflow.utils.type_hints import *
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds

@@ -19,7 +19,7 @@ import pytraj
 # Otherwise proceed without them
 # The error is not raised until a function using the missing module is called
 try:
-    import prody
+    import prody # type: ignore
 except:
     pass
 try:

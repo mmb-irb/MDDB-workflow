@@ -7,6 +7,7 @@ from typing import List
 from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
+from model_workflow.utils.type_hints import *
 
 # LORE
 # This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep

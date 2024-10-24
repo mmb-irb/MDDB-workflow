@@ -3,6 +3,7 @@ from model_workflow.tools.get_atoms_count import get_atoms_count
 from model_workflow.tools.generate_map import get_sequence_metadata
 from model_workflow.utils.auxiliar import InputError, save_json
 from model_workflow.utils.constants import MD_DIRECTORY
+from model_workflow.utils.type_hints import *
 
 from pathlib import Path
 from typing import Callable
