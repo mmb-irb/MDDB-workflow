@@ -522,9 +522,11 @@ class Residue:
         # -------------------------------------------------------------------------------------------------------
         # Protein definition according to vmd:
         # a residue with atoms named C, N, CA, and O
-        # In our case we accept OC1 or OC2 instead of O for terminal residues
+        # In our case we accept OC1 and OC2 or OT1 and OT2 instead of O for terminal residues
         atom_names = set([ atom.name for atom in self.atoms ])
-        if all((name in atom_names) for name in ['C', 'N', 'CA']) and any((name in atom_names) for name in ['O', 'OC1', 'OC2']):
+        if ( all((name in atom_names) for name in ['C', 'N', 'CA']) and (
+            'O' in atom_names or { 'OC1', 'OC2' } <= atom_names or { 'OT1', 'OT2' } <= atom_names
+        )):
             self._classification = 'protein'
             return self._classification
         # -------------------------------------------------------------------------------------------------------
