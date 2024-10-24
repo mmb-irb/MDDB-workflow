@@ -4,6 +4,9 @@ from os.path import exists
 from json import load
 from pathlib import Path
 from subprocess import run, PIPE
+from typing import List
+from model_workflow.utils.type_hints import *
+
 import re
 
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
@@ -12,7 +15,7 @@ from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
 
 # Extract charges from a source file
-def get_charges (charges_source_file : 'File') -> list:
+def get_charges (charges_source_file : 'File') -> List[float]:
     if not charges_source_file or not charges_source_file.exists:
         return None
     print('Charges in the "' + charges_source_file.filename + '" file will be used')
