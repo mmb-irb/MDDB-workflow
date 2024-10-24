@@ -1363,8 +1363,7 @@ class MD:
             input_trajectory_filepath = self.trajectory_file.path,
             output_analysis_filepath = output_analysis_filepath,
             structure = self.structure,
-            snapshots=self.snapshots,
-            masks = ['!(::M)','::M']
+            snapshots=self.snapshots
         )
         
 # The project is the main project

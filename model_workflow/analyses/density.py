@@ -9,7 +9,6 @@ def density (
     output_analysis_filepath : str,
     structure : 'Structure',
     snapshots : int,
-    masks : str = ['!(::M)','::M'],
     density_type = 'mass',
     frame_limit = 1000):
     
