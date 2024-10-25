@@ -118,3 +118,20 @@ filter_topology.format_sets = [
         }
     }
 ]
+
+# Given a corrupted NetCDF file, whose first frames may be read by pytraj, find the first corrupted frame number
+def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepath) -> int:
+    # Iterload the trajectory to pytraj
+    trajectory = get_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath)
+    # Iterate frames until we find one frame whose last atom coordinates are all zeros
+    frame_iterator = iter(trajectory.iterframe())
+    expected_frames = trajectory.n_frames
+    for f, frame in enumerate(frame_iterator, 1):
+        print(f'Reading frame {f}/{expected_frames}', end='\r')
+        # Make sure there are actual coordinates here
+        # If there is any problem we may have frames with coordinates full of zeros
+        last_atom_coordinates = frame.xyz[-1]
+        if not last_atom_coordinates.any():
+            return f
+    return None
+    

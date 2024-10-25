@@ -39,6 +39,7 @@ from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
 from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
+from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
@@ -433,6 +434,10 @@ class MD:
             return
 
         print('-> Processing input files')
+
+        # --- FIRST CHECK -----------------------------------------------------------------------
+
+        check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
 
         # --- CONVERTING AND MERGING ------------------------------------------------------------
 
