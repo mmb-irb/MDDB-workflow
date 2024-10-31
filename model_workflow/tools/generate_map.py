@@ -5,7 +5,7 @@ import urllib.request
 from typing import List, Tuple, Optional, Union
 
 from model_workflow.tools.residues_library import residue_name_2_letter
-from model_workflow.utils.auxiliar import warn, load_json, save_json
+from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 
 import xmltodict
@@ -147,7 +147,7 @@ def generate_protein_mapping (
             # Forced references have priority and this avoids having a match with a not forced reference further
             if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in forced_references:
                 continue
-            # Iterate over the deifferent available reference sequences
+            # Iterate over the different available reference sequences
             for uniprot_id, reference_sequence in reference_sequences.items():
                 # If this alignment has been tried already then skip it
                 if uniprot_id in chain_tried_alignments:
@@ -190,7 +190,15 @@ def generate_protein_mapping (
         # Export already matched references
         export_references(protein_parsed_chains, protein_references_file)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-        allright = all([ chain_data['match']['ref'] for chain_data in protein_parsed_chains ])            
+        allright = all([ chain_data['match']['ref'] for chain_data in protein_parsed_chains ])
+        # If we match all chains then make sure there is no forced reference missing which did not match
+        # Otherwise warn the user
+        if allright and forced_references:
+            forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
+            matched_uniprot_ids = set([ chain_data['match']['ref']['uniprot'] for chain_data in protein_parsed_chains ])
+            for forced_uniprot_id in forced_uniprot_ids:
+                if forced_uniprot_id not in matched_uniprot_ids:
+                    raise InputError(f'Forced reference {forced_uniprot_id} was not matched with any protein sequence. Please remove it from the inputs file')
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
