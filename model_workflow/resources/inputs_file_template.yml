@@ -160,9 +160,9 @@ pdbIds:
 #   - P0DTC2
 #
 # forced_references:
-#   - A: Q9BYF1
-#   - B: P0DTC2
-#   - C: noref
+#   A: Q9BYF1
+#   B: P0DTC2
+#   C: noref
 
 forced_references:
 
