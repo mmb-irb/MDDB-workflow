@@ -192,13 +192,23 @@ def generate_protein_mapping (
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
         allright = all([ chain_data['match']['ref'] for chain_data in protein_parsed_chains ])
         # If we match all chains then make sure there is no forced reference missing which did not match
-        # Otherwise warn the user
+        # Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file
+        # WARNING: Although we could move on it is better to stop here and warn the user to prevent a future silent problem
         if allright and forced_references:
-            forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
-            matched_uniprot_ids = set([ chain_data['match']['ref']['uniprot'] for chain_data in protein_parsed_chains ])
-            for forced_uniprot_id in forced_uniprot_ids:
-                if forced_uniprot_id not in matched_uniprot_ids:
-                    raise InputError(f'Forced reference {forced_uniprot_id} was not matched with any protein sequence. Please remove it from the inputs file')
+            # Get forced uniprot ids
+            forced_uniprot_ids = set(list(forced_references.values()) if strict_references else forced_references)
+            forced_uniprot_ids -= { NOT_FOUND_FLAG, NO_REFERABLE_FLAG }
+            #forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
+            #forced_uniprot_ids.remove(NOT_FOUND_FLAG)
+            # Get matched uniprot ids
+            matched_references = [ chain_data['match']['ref'] for chain_data in protein_parsed_chains ]
+            matched_uniprot_ids = set([ ref['uniprot'] for ref in matched_references if type(ref) == dict ])
+            # Check the difference
+            unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
+            if len(unmatched_uniprot_ids) > 0:
+                log = ', '.join(unmatched_uniprot_ids)
+                raise InputError(f'Some forced references were not matched with any protein sequence: {log}\n'
+                    '  Please remove them from the inputs file')
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
