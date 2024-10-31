@@ -165,7 +165,7 @@ class MD:
         self._snapshots = None
         self._structure = None
         self._pytraj_topology = None
-        self._interactions = None
+        self._processed_interactions = None
         self._reference_frame = None
 
         # Tests
@@ -579,7 +579,7 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                pbc_selection = self.project.pbc_selection
+                pbc_selection = self.input_pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
@@ -915,39 +915,57 @@ class MD:
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
-    # The interactions
+    # The processed interactions
     # This is a bit exceptional since it is a value to be used and an analysis file to be generated
-    def get_interactions (self, overwrite : bool = False) -> List[dict]:
+    def get_processed_interactions (self, overwrite : bool = False) -> List[dict]:
         # If we already have a stored value then return it
-        if self._interactions != None:
-            return self._interactions
-        # Set the interactions file
-        interactions_filepath = self.md_pathify(OUTPUT_INTERACTIONS_FILENAME)
-        interactions_file = File(interactions_filepath)
-        # If the file already exists then interactions will be read from it
+        if self._processed_interactions != None:
+            return self._processed_interactions
+        # Set the processed interactions file
+        processed_interactions_filepath = self.md_pathify(OUTPUT_PROCESSED_INTERACTIONS_FILENAME)
+        processed_interactions_file = File(processed_interactions_filepath)
+        # If the file already exists then processed interactions will be read from it
         # If the overwrite argument is passed we must delete it here
-        if interactions_file.exists and overwrite:
-            interactions_file.remove()
+        if processed_interactions_file.exists and overwrite:
+            processed_interactions_file.remove()
         # Otherwise, process interactions
-        self._interactions = process_interactions(
-            input_interactions = self.project.input_interactions,
+        self._processed_interactions = process_interactions(
+            input_interactions = self.input_interactions,
             structure_file = self.structure_file,
             trajectory_file = self.trajectory_file,
             structure = self.structure,
             snapshots = self.snapshots,
-            interactions_file = interactions_file,
+            processed_interactions_file = processed_interactions_file,
             mercy = self.project.mercy,
             register = self.register,
             frames_limit = 1000,
             interaction_cutoff = self.project.interaction_cutoff
         )
-        return self._interactions
-    interactions = property(get_interactions, None, None, "Interactions (read only)")
+        return self._processed_interactions
+    processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     def count_valid_interactions (self) -> int:
-        valid_interactions = [ interaction for interaction in self.interactions if not interaction.get('failed', False) ]
+        valid_interactions = [ interaction for interaction in self.processed_interactions if not interaction.get('failed', False) ]
         return len(valid_interactions)
-    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed interactions (read only)")
+    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed processed_interactions (read only)")
+
+    # Set a function to get input values which may be MD specific
+    # If the MD input is missing then we use the project input
+    def input_getter (name : str):
+        # Set the getter
+        def getter (self):
+            # Get the MD input
+            value = self.md_inputs.get(name, None)
+            if value != None:
+                return value
+            # If there is no MD input then return the project value
+            return getattr(self.project, f'input_{name}')
+        return getter
+
+    # Assign the MD input getters
+    input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
+    input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
+
 
     # Indices of residues in periodic boundary conditions
     # WARNING: Do not inherit project pbc residues
@@ -957,7 +975,7 @@ class MD:
         if self.project._pbc_residues:
             return self.project._pbc_residues
         # Otherwise we must find the value
-        self.project._pbc_residues = get_pbc_residues(self.structure, self.project.pbc_selection)
+        self.project._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
@@ -1151,7 +1169,7 @@ class MD:
     #     pca_contacts(
     #         trajectory = self.trajectory_file.path,
     #         topology = self.pdb_filename,
-    #         interactions = self.interactions,
+    #         interactions = self.processed_interactions,
     #         output_analysis_filename = output_analysis_filepath
     #     )
 
@@ -1185,7 +1203,7 @@ class MD:
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
             snapshots = self.snapshots,
@@ -1197,7 +1215,7 @@ class MD:
     def run_clusters_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
-        # The number of output analyses should be the same number of valid interactions
+        # The number of output analyses should be the same number of valid processed interactions
         # Otherwise we are missing some analysis
         if exists(output_analysis_filepath) and not overwrite:
             return
@@ -1216,7 +1234,7 @@ class MD:
         clusters_analysis(
             input_structure_file = self.structure_file,
             input_trajectory_file = self.trajectory_file,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             structure = self.structure,
             snapshots = self.snapshots,
             output_analysis_filename = output_analysis_filepath,
@@ -1235,7 +1253,7 @@ class MD:
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
         )
@@ -1258,7 +1276,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
             # is_time_dependend = self.is_time_dependend,
@@ -1295,7 +1313,7 @@ class MD:
             output_analysis_filename = output_analysis_filepath,
             energies_folder = self.md_pathify(ENERGIES_FOLDER),
             structure = self.structure,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             charges = self.charges,
             snapshots = self.snapshots,
             frames_limit = 100,
@@ -1463,7 +1481,7 @@ class Project:
         # This is just pased to the filtering function which knows how to handle the default
         self.filter_selection = filter_selection
         # PBC selection may come from the console or from the inputs
-        self._pbc_selection = pbc_selection
+        self._input_pbc_selection = pbc_selection
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1889,7 +1907,7 @@ class Project:
         def getter (self):
             value = self.inputs.get(name, missing_input_callback)
             if value == missing_input_exception:
-                raise InputError('Missing input "' + name + '"')
+                raise InputError(f'Missing input "{name}"')
             return value
         return getter
 
@@ -1904,21 +1922,21 @@ class Project:
     
     # PBC selection may come from the console or from the inputs file
     # Console has priority over the inputs file
-    def get_pbc_selection (self) -> Optional[str]:
+    def get_input_pbc_selection (self) -> Optional[str]:
         # If we have an internal value then return it
-        if self._pbc_selection:
-            return self._pbc_selection
+        if self._input_pbc_selection:
+            return self._input_pbc_selection
         # As an exception, we avoid asking for the inputs file if it is not available
         # This input is required for some early processing steps where we do not need the inputs file for anything else
         if not self.is_inputs_file_available():
             return None
         # Otherwise, find it in the inputs
         # Get the input value, whose key must exist
-        self._pbc_selection = self.inputs.get('pbc_selection', missing_input_exception)
-        if self._pbc_selection == missing_input_exception:
+        self._input_pbc_selection = self.inputs.get('pbc_selection', missing_input_exception)
+        if self._input_pbc_selection == missing_input_exception:
             raise InputError('Missing input "pbc_selection"')
-        return self._pbc_selection
-    pbc_selection = property(get_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
+        return self._input_pbc_selection
+    input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
     # Set additional values infered from input values
 
@@ -1995,7 +2013,7 @@ class Project:
         if self._pbc_residues:
             return self._pbc_residues
         # Otherwise we must find the value
-        self._pbc_residues = get_pbc_residues(self.structure, self.pbc_selection)
+        self._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
         return self._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
@@ -2379,7 +2397,7 @@ md_requestables = {
     **md_input_files,
     **md_processed_files,
     **analyses,
-    'interactions': MD.get_interactions,
+    'interactions': MD.get_processed_interactions,
     'mdmeta': MD.get_metadata_file,
 }
 # List of requestables for the console

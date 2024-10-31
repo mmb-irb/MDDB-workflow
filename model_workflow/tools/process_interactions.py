@@ -23,7 +23,7 @@ def process_interactions (
     trajectory_file : 'File',
     structure : 'Structure',
     snapshots : int,
-    interactions_file : 'File',
+    processed_interactions_file : 'File',
     mercy : List[str],
     register : 'Register',
     frames_limit : int,
@@ -62,8 +62,8 @@ def process_interactions (
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
-    if interactions_file.exists:
-        loaded_interactions = load_interactions(interactions_file, structure)
+    if processed_interactions_file.exists:
+        loaded_interactions = load_interactions(processed_interactions_file, structure)
         # Merge the loaded interactions with the input interactions to cover all fields
         complete_interactions = []
         for input_interaction, loaded_interaction in zip(input_interactions, loaded_interactions):
@@ -176,15 +176,15 @@ def process_interactions (
     # Save the interactions file unless all interactions failed
     any_valid_interactions = any( (not interaction.get(FAILED_INTERACTION_FLAG, False)) for interaction in interactions )
     if any_valid_interactions:
-        save_json(file_interactions, interactions_file.path, indent = 4)
+        save_json(file_interactions, processed_interactions_file.path, indent = 4)
 
     return interactions
 
 # Load interactions from an already existing interactions file
-def load_interactions (interactions_file : 'File', structure : 'Structure') -> list:
-    print(f' Using already calculated interactions in {interactions_file.path}')
+def load_interactions (processed_interactions_file : 'File', structure : 'Structure') -> list:
+    print(f' Using already calculated interactions in {processed_interactions_file.path}')
     # The stored interactions should carry only residue indices and strong bonds
-    interactions = load_json(interactions_file.path)
+    interactions = load_json(processed_interactions_file.path)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
         # If the interaction failed then there will be minimal information
