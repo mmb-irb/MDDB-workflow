@@ -389,3 +389,6 @@ NO_REFERABLE_FLAG = 'noref'
 
 # Set a flag to represent a not found reference
 NOT_FOUND_FLAG = 'notfound'
+
+# Reference id formats
+PDB_ID_FORMAT = r'^[1-9]{1}[a-zA-Z0-9]{3}$'

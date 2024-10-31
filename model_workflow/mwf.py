@@ -7,6 +7,7 @@ from os import chdir, rename, remove, walk, mkdir, getcwd
 from os.path import exists, isabs
 import sys
 import io
+import re
 import urllib.request
 import json
 import numpy
@@ -1517,6 +1518,7 @@ class Project:
         self._charges = None
         self._populations = None
         self._transitions = None
+        self._pdb_ids = None
         self._pdb_references = None
         self._protein_map = None
         self._ligand_map = None
@@ -1914,7 +1916,7 @@ class Project:
     # Assign the getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     forced_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
-    pdb_ids = property(input_getter('pdbIds'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
+    input_pdb_ids = property(input_getter('pdbIds'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
     input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
@@ -2089,6 +2091,23 @@ class Project:
         return self._transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
+    # Tested and standarized PDB ids
+    def get_pdb_ids (self) -> List[str]:
+        # If we already have a stored value then return it
+        if self._pdb_ids:
+            return self._pdb_ids
+        # Otherwise test and standarize input PDB ids
+        self._pdb_ids = []
+        # Iterate input PDB ids
+        for input_pdb_id in self.input_pdb_ids:
+            # First make sure this is a PDB id
+            if not re.match(PDB_ID_FORMAT, input_pdb_id):
+                raise InputError(f'Input PDB id "{input_pdb_id}" does not look like a PDB id')
+            # Make letters upper
+            pdb_id = input_pdb_id.upper()
+            self._pdb_ids.append(pdb_id)
+    pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
+
     # PDB references
     def get_pdb_references (self) -> List[dict]:
         # If we already have a stored value then return it
@@ -2241,6 +2260,7 @@ class Project:
             structure = self.structure,
             residue_map = self.residue_map,
             protein_references_file = self.protein_references_file,
+            pdb_ids = self.pdb_ids,
             register = self.register,
             output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,

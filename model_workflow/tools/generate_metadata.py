@@ -5,7 +5,7 @@ from model_workflow.utils.auxiliar import InputError, save_json
 from model_workflow.utils.constants import MD_DIRECTORY
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List
 
 # Generate a JSON file with all project metadata
 def generate_project_metadata (
@@ -15,6 +15,7 @@ def generate_project_metadata (
     structure : 'Structure',
     residue_map : dict,
     protein_references_file : 'File',
+    pdb_ids : List[str],
     register : dict,
     output_metadata_filename : str,
     ligand_customized_names : str
@@ -97,7 +98,7 @@ def generate_project_metadata (
         'CITATION': get_input('citation'),
         'THANKS': get_input('thanks'),
         'LINKS': get_input('links'),
-        'PDBIDS': get_input('pdbIds'),
+        'PDBIDS': pdb_ids,
         'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': protein_references,
         'INPUT_LIGANDS': input_ligands,
