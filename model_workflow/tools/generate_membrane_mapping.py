@@ -67,7 +67,6 @@ def generate_membrane_mapping(structure : 'Structure',
     for n, c in clusters.items():
         if len(c) > 10:
             membranes_map[str(n)] = neighbours.membrane.residues.resnums[clusters[n]] 
-    print(membranes_map)
     if debug:
         counts = neighbours.count_neighbours()
         return membranes_map, lipid, neighbours, counts, clusters
