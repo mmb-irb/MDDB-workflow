@@ -17,24 +17,23 @@ def generate_membrane_mapping(structure : 'Structure',
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
     # Get InChI keys of non-proteic/non-nucleic residues
-    print("dadaa")
     inchi_keys = get_inchi_keys(u, structure)
     # TO-DO: identify substructures like carbohydrates by neutralizing bonds:
     # ich = inchi_keys['ZNJXAXZHPQQZRY-LXGUWJNJSA-N']['inchi'] # A01IP
     # for args in [[ich], [ich, 1], [ich, 0, 1], [ich, 1, 1]]:
     #    display(inchi_2_mol(*args))
-    print(inchi_keys)
     # Classsify the residues as lipid or not
     lipid, not_lipid = [], []
     for inchikey, data in inchi_keys.items():
         lipid_data = is_in_LIPID_MAPS(inchikey)
         if lipid_data:
             lipid.extend(data['residues'])
-            # print(f'Residue {data["resname"]} is a lipid in LIPID MAPS', lipid_data)
+            if data['residues'][0].classification != 'fatty':
+                print('WARNING: The residue', data['residues'][0].name, 'is not classified as fatty')
         else:
             not_lipid.extend(data['residues'])
-            # print(f'Residue {data["resname"]} not found in LIPID MAPS')
-    print(lipid)
+            if data['residues'][0].classification == 'fatty':
+                print('WARNING: The residue', data['residues'][0].name, 'is classified as fatty')
     """ esto será para los glucolipidos
     # Propierty to make easier to see if the residue is lipid
     # without having to iterate over all the residues in mem_dict['lipid]

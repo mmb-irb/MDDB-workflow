@@ -48,7 +48,6 @@ def get_inchi_keys (
         # Convert to RDKIT and get InChi data
         res_RD = res_mda.atoms.convert_to("RDKIT") # slow step, 50% of time 
         inchikey = Chem.MolToInchiKey(res_RD)
-
         # If key don't existe we create the default entry with info that is only put once
         if not key_2_name.get(inchikey, None):
             inchi = Chem.MolToInchi(res_RD)
