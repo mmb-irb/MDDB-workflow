@@ -1,5 +1,8 @@
+import numpy as np
 import MDAnalysis
+from MDAnalysis.transformations.boxdimensions import set_dimensions
 from lipyphilic.lib.neighbours import Neighbours
+from lipyphilic.lib.assign_leaflets import AssignLeaflets
 from scipy.sparse.csgraph import connected_components
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_LIPID_MAPS
@@ -77,7 +80,7 @@ def generate_membrane_mapping(structure : 'Structure',
     universe=u,
     lipid_sel=all_res_sele + ' and not element H' # remove hydrogens to make it faster
     )
-    neighbours.run()
+    neighbours.run(verbose=False)
 
     # Find clusters
     frame_idx = 0 # TO-DO: clustering in more than one frame
@@ -88,12 +91,45 @@ def generate_membrane_mapping(structure : 'Structure',
     for n, c in clusters.items():
         if len(c) > 10:
             membranes_map[str(n)] = neighbours.membrane.residues.resindices[clusters[n]] 
+    
+    charges = abs(np.array([atom.charge for atom in u.atoms]))
+    for key, mem in membranes_map.items():
+        # for better leaflet assignation we only use polar atoms
+        polar_atoms = []
+        for res_idx in mem:
+            res = u.residues[res_idx]
+            res_ch = charges[[at.index for at in res.atoms]]
+            max_ch_idx = np.argmax(res_ch)
+            polar_atoms.append(res.atoms[max_ch_idx].index)
+
+        # Add dimensions to the universe so AssignLeaflets does not crash
+        if u.dimensions is None:
+            print('WARNING trajectory probably has no box variable. Setting dimensions for lipyphilic')
+            u.trajectory.add_transformations(set_dimensions([ 100,100,100, 90, 90, 90]))
+
+        sele = 'index ' + ' '.join(map(str,polar_atoms))
+
+        leaflets = AssignLeaflets(
+            universe=u,
+            lipid_sel=sele,
+            #n_bins=10
+        )
+        leaflets.run(verbose=False)
+
+        top_idx = leaflets.membrane.resindices[leaflets.leaflets[:,0] == 1]
+        bot_idx = leaflets.membrane.resindices[leaflets.leaflets[:,0] == -1]
+        membranes_map[key] = {
+            'res_idx': mem,
+            'top': top_idx,
+            'bot': bot_idx
+        }
+
+    
     if debug:
         counts = neighbours.count_neighbours()
         return membranes_map, lipid, neighbours, counts, clusters
     else:
         return membranes_map
-    # TO-DO: return leaflets
 
 
 def find_clusters(contact_matrix):

@@ -13,6 +13,7 @@ from MDAnalysis.core.topologyattrs import (
     Resnums,
     Segids
 )
+
 def to_MDAnalysis_topology(top_js : str) -> 'Topology':
     """
     Creates a MDAnalysis topology from a json topology file.
