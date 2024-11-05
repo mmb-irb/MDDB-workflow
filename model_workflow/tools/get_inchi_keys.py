@@ -33,6 +33,7 @@ def get_inchi_keys (
     # Set the MDAnalysis universe
     key_2_name = {}
     name_2_key = {}
+    # TO-DO: multiprocessing
     for residue in structure.residues:
         # Skip residues that are aminoacids, nucleics, or too small
         if residue.classification in ['ion', 'solvent', 'nucleic', 'protein']:

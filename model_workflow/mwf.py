@@ -1365,6 +1365,8 @@ class MD:
         density(
             input_structure_filepath = self.structure_file.path,
             input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
+            snapshots = self.snapshots,
             structure = self.structure,
         )
         
@@ -2210,7 +2212,6 @@ class Project:
             topology_file=self.topology_file,
             structure_file=self.structure_file,
         )
-        print("adada", self._membrane_map)
         return self._membrane_map
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 

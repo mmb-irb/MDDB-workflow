@@ -12,6 +12,27 @@ def generate_membrane_mapping(structure : 'Structure',
                               structure_file : 'File',
                               debug=False
                               ) -> List[dict]:
+    """
+    Generates a list of residue numbers of membrane components from a given structure and topology file.
+    Args:
+        structure (Structure): The molecular structure to analyze.
+        topology_file (File): The topology file in JSON format.
+        structure_file (File): The structure file.
+        debug (bool, optional): If True, additional debug information is returned. Defaults to False.
+    
+    Returns:
+        List[dict]: A list containing the membrane mapping. If debug is True, additional information is returned.
+    
+    Raises:
+        AssertionError: If the topology file is not in JSON format.
+    
+    Notes:
+        - The function identifies lipid and non-lipid residues based on InChI keys.
+        - It classifies residues and checks for potential misclassifications.
+        - Lipid residues are selected and neighboring lipids are found.
+        - Clusters of lipids are identified, and clusters with more than 10 lipids are considered as membranes.
+        - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
+    """
     print('Calculando la membrana...')
     assert topology_file.extension == 'json', 'Input topology file must be in json format'
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
@@ -72,6 +93,7 @@ def generate_membrane_mapping(structure : 'Structure',
         return membranes_map, lipid, neighbours, counts, clusters
     else:
         return membranes_map
+    # TO-DO: return leaflets
 
 
 def find_clusters(contact_matrix):
