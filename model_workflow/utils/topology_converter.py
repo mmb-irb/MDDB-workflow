@@ -1,13 +1,17 @@
 import json
+import numpy as np
 #from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.topology import Topology
 from MDAnalysis.core.topologyattrs import (
     Atomnames,
-    Elements,
-    Charges,
     Bonds,
+    ChainIDs,
+    Charges,
+    Elements,
+    Resids,
     Resnames,
     Resnums,
+    Segids
 )
 def to_MDAnalysis_topology(top_js : str) -> 'Topology':
     """
@@ -37,17 +41,26 @@ def to_MDAnalysis_topology(top_js : str) -> 'Topology':
             bonds.append(bond)
     # sorted(set(bonds)) if you want to check for duplicates
     top_js['bonds'] = set(bonds)
+    atom_2_chain = np.array(top_js['residue_chain_indices'])[top_js['atom_residue_indices']]
+    top_js['chainIDs'] = np.array(top_js['chain_names'])[atom_2_chain]
 
 
-    attr = [Atomnames, Elements, Charges, Bonds, Resnames, Resnums]
-    js_key = ['atom_names', 'atom_elements', 'atom_charges', 'bonds','residue_names','residue_numbers']
-    attrs = [att(top_js[key]) for att, key in zip(attr, js_key)]
+    attrs = [Atomnames (top_js['atom_names']),
+             Elements  (top_js['atom_elements']),
+             Charges   (top_js['atom_charges']),
+             Bonds     (top_js['bonds']),
+             Resnames  (top_js['residue_names']),
+             Resnums   (top_js['residue_numbers']),
+             ChainIDs  (top_js['chainIDs']),
+             Segids    (top_js['chain_names']),
+             Resids    (np.arange(len(top_js['residue_names']))),
+    ]
 
     mda_top = Topology(n_atoms=len(top_js['atom_names']), 
-                n_res=len(top_js['residue_names']), 
-                n_seg=len(top_js['chain_names']),
-                attrs=attrs,
-                atom_resindex=top_js['atom_residue_indices'],
-                residue_segindex=top_js['residue_chain_indices']
-                )
+                       n_res=len(top_js['residue_names']), 
+                       n_seg=len(top_js['chain_names']),
+                       attrs=attrs,
+                       atom_resindex=top_js['atom_residue_indices'],
+                       residue_segindex=top_js['residue_chain_indices']
+    )
     return mda_top

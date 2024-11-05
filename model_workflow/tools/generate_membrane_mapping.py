@@ -69,8 +69,8 @@ def generate_membrane_mapping(structure : 'Structure',
                 break """
     
     # Select only the lipids and potential membrane members
-    res_num = [res.number for res in lipid]
-    all_res_sele = '(resnum ' + ' '.join(map(str,(res_num)))+')'
+    res_idx = [res.index for res in lipid]
+    all_res_sele = '(resindex ' + ' '.join(map(str,(res_idx)))+')'
 
     # Find neighbouring lipids
     neighbours = Neighbours(
@@ -87,7 +87,7 @@ def generate_membrane_mapping(structure : 'Structure',
     membranes_map = {}
     for n, c in clusters.items():
         if len(c) > 10:
-            membranes_map[str(n)] = neighbours.membrane.residues.resnums[clusters[n]] 
+            membranes_map[str(n)] = neighbours.membrane.residues.resindices[clusters[n]] 
     if debug:
         counts = neighbours.count_neighbours()
         return membranes_map, lipid, neighbours, counts, clusters
