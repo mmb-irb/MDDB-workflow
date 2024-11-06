@@ -4,16 +4,15 @@ from os.path import exists
 from typing import List, Tuple, Optional
 from PIL import Image
 import math
-from model_workflow.utils.structures import Structure
 import numpy as np
+
+from model_workflow.utils.auxiliar import ToolError
+from model_workflow.utils.structures import Structure
 
 # The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon. 
 # SciPy provides a method "scipy. spatial. ConvexHull()" to create a Convex Hull
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import cdist
-from scipy.spatial.transform import Rotation
-from numpy import cross, eye 
-from scipy.linalg import expm, norm
 
 auxiliary_tga_filename = '.transition_screenshot.tga'
 
@@ -53,9 +52,6 @@ def get_screenshot (
     # The cause is not clear but this command may depend on OpenGL rendering features which are not supported in sbatch
     # https://www.ks.uiuc.edu/Training/Tutorials/vmd/tutorial-html/node8.html
     environ['VMDSCRSIZE'] = str(x_number_pixels) + " " + str(y_number_pixels)
-
-    # Change the scale factor as wished, since some big molecules may overfill in the VMD window
-    scale_factor = 2
 
     # Prepare a Tcl script in order to execute different commands in the terminal of VMD
 
@@ -309,7 +305,7 @@ def get_screenshot (
     # Note that we also include terminals in the cartoon selection although they are not representable
     # This is because terminals are better hidden than represented as ligands, this would be missleading
     cartoon_selection = structure.select_cartoon(include_terminals=True)
-    non_cartoon_selectuon = structure.invert_selection(cartoon_selection)
+    non_cartoon_selection = structure.invert_selection(cartoon_selection)
 
     # Set a file name for the VMD script file
     commands_filename_2 = '.commands_2.vmd'
@@ -327,22 +323,24 @@ def get_screenshot (
         file.write('mol representation Newcartoon \n')
         # Change the default atom coloring method setting to Chain
         file.write('mol color Chain \n')
-        # Set the default atom selection setting to all
+        # Set the default atom selection to atoms to be represented as cartoon
         file.write(f'mol selection "{cartoon_selection.to_vmd()}" \n')
         # Change the current material of the representation of the molecule
         file.write('mol material Opaque \n')
         # Using the new changes performed previously add a new representation to the new molecule
         file.write('mol addrep top \n')
-        # Change the default representation model to Newcartoon
-        file.write('mol representation cpk \n')
-        # Change the default atom coloring method setting to Chain
-        file.write('mol color element \n')
-        # Set the default atom selection setting to all
-        file.write(f'mol selection "{non_cartoon_selectuon.to_vmd()}" \n')
-        # Change the current material of the representation of the molecule
-        file.write('mol material Opaque \n')
-        # Using the new changes performed previously add a new representation to the new molecule
-        file.write('mol addrep top \n') 
+        # In case we have any non-cartoon selection to represent...
+        if non_cartoon_selection:
+            # Change the default representation model to CPK (ball and stick)
+            file.write('mol representation cpk \n')
+            # Change the default atom coloring method setting to Chain
+            file.write('mol color element \n')
+            # Set the default atom selection to atoms to be represented as CPK
+            file.write(f'mol selection "{non_cartoon_selection.to_vmd()}" \n')
+            # Change the current material of the representation of the molecule
+            file.write('mol material Opaque \n')
+            # Using the new changes performed previously add a new representation to the new molecule
+            file.write('mol addrep top \n') 
         # Change projection from perspective (used by VMD by default) to orthographic
         file.write('display projection orthographic \n')
         # Select all atoms
