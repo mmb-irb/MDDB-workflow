@@ -52,6 +52,8 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
     # However MDtraj is not able to read TPR
     if input_topology_file.format == 'tpr':
         print('We will skip the atom count matching check since it is not yet implemented for TPR')
+        # DANI: Hay que hacer return aquí, porque sino luego el atom_count sigue siendo None y el checking del structure falla
+        return
     else:
         try:
             # Note that declaring the iterator will not fail even when there is a mismatch
