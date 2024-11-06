@@ -65,7 +65,7 @@ class Atom:
         ):
         self.name = name
         self.element = element
-        self.coords = coords
+        self.coords = tuple(coords)
         # Set variables to store references to other related instances
         # These variables will be set further by the structure
         self._structure = None
@@ -1310,7 +1310,7 @@ class Structure:
             raise ValueError(f'The number of coordinates ({len(new_coordinates)}) does not match the number of atoms ({self.atom_count})')
         # Overwrite current coordinates with the new coordinates
         for i, atom in enumerate(self.atoms):
-            atom.coords = new_coordinates[i]
+            atom.coords = tuple(new_coordinates[i])
     
     # Get all supported ion atom indices together in a set
     def get_ion_atom_indices (self) -> Set:
@@ -1343,7 +1343,7 @@ class Structure:
                     residue_number = hex(residue.number)[2:].rjust(4)
                 icode = residue.icode if residue.icode and len(residue.icode) else ' '
                 # Make sure we have atom coordinates
-                if not atom.coords:
+                if atom.coords == None:
                     raise InputError('Trying to write a PDB file from a structure with atoms without coordinates')
                 x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in atom.coords ]
                 occupancy = '1.00' # Just a placeholder
