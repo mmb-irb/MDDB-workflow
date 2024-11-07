@@ -1,5 +1,6 @@
 import sys
 import json
+import re
 import urllib.request
 
 from typing import List, Tuple, Optional, Union
@@ -629,6 +630,18 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # First mine the sequences from the structure
     # Set a different sequence for each chain
     sequences = [ chain.get_sequence() for chain in structure.chains ]
+    # Now classify sequences according to if they belong to protein or nucleic sequences
+    protein_sequences = []
+    nucleic_sequences = []
+    for sequence in sequences:
+        # If the sequence is all X then it is probably not either protein or nucleic
+        if re.test(r'^[X]*$', sequence): continue
+        # If its a nucleic sequence
+        elif re.test(r'^[ACGTUX]*$', sequence):
+            nucleic_sequences.append(sequence)
+        # Otherwise we consider it a protein sequence
+        else:
+            protein_sequences.append(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -708,6 +721,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
+        'protein_sequences': protein_sequences,
+        'nucleic_sequences': nucleic_sequences,
         'domains': domains,
         'cv19_variant': variant
     }
