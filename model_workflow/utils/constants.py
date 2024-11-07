@@ -157,6 +157,7 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
 LIGANDS_DATA = 'ligandata'
+MEMBRANE_DATA = 'membranedata'
 
 # Set the different test flags
 STABLE_BONDS_FLAG = 'stabonds'

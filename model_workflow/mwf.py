@@ -2203,15 +2203,21 @@ class Project:
         return ligand_references_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
-    def get_membrane_map (self) -> List[dict]:
+    def get_membrane_map (self, overwrite : bool = False) -> List[dict]:
         # If we already have a stored value then return it
         if self._membrane_map:
             return self._membrane_map
+        # BORRAR or guardar en file
+        # If we already have a value in the register cache then use it
+        cached_value = self.register.cache.get(MEMBRANE_DATA, self._membrane_map)
+        if cached_value != None:
+            return cached_value
         self._membrane_map = generate_membrane_mapping(
             structure = self.structure,
             topology_file=self.topology_file,
             structure_file=self.structure_file,
         )
+        self.register.update_cache(MEMBRANE_DATA, self._membrane_map)
         return self._membrane_map
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
