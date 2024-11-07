@@ -624,7 +624,7 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 1. Get structure sequences
 # 2. Calculate which reference domains are covered by the previous sequence
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
-from model_workflow.resources.covid_variants import get_variants
+from model_workflow.resources.covid_variants import covid_spike_variants
 def get_sequence_metadata (structure : 'Structure', protein_references_file : 'File', residue_map : dict) -> dict:
     # First mine the sequences from the structure
     # Set a different sequence for each chain
@@ -646,8 +646,6 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     variant = None
     covid_spike_reference_id = 'P0DTC2'
     if covid_spike_reference_id in reference_ids:
-        # Load the reference variant sequences
-        covid_spike_variants = get_variants()
         # Load the reference data and find a chain which belongs to the spike
         # We consider having only one variant, so all chains should return the same result
         reference_data = references_data[covid_spike_reference_id]
@@ -658,7 +656,9 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         sample_chain_sequence = structure.residues[sample_residue_index].chain.get_sequence()
         # Align the sample chain sequence against all variants to find the best match
         highest_score = 0
+        print('Finding SARS-CoV-2 variant')
         for variant_name, variant_sequence in covid_spike_variants.items():
+            print(f' Trying with {variant_name}')
             align_results = align(variant_sequence, sample_chain_sequence)
             if not align_results:
                 continue
@@ -669,6 +669,7 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # At this point there should be a result
         if not variant:
             raise SystemExit('Something went wrong trying to find the SARS-CoV-2 variant')
+        print(f'It is {variant}')
     # Set which reference domains are present in the structure
     domains = []
     for reference_index, reference_id in enumerate(reference_ids):
