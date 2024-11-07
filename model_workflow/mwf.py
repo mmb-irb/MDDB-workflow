@@ -1238,6 +1238,7 @@ class MD:
             interactions = self.processed_interactions,
             structure = self.structure,
             snapshots = self.snapshots,
+            pbc_residues = self.pbc_residues,
             output_analysis_filename = output_analysis_filepath,
             output_run_filepath = output_run_filepath,
             output_screenshots_filename = output_screenshot_filepath,
