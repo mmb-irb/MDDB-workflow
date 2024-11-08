@@ -78,8 +78,9 @@ def load_yaml (filepath : str):
         with open(filepath, 'r') as file:
             content = yaml.load(file, Loader=yaml.CLoader)
         return content
-    except:
-        raise Exception('Something went wrong when loading YAML file ' + filepath)
+    except Exception as error:
+        warn(str(error).replace('\n', ' '))
+        raise InputError('Something went wrong when loading YAML file ' + filepath)
 
 # Set a YAML saver with additional logic to better handle problems
 def save_yaml (content, filepath : str):

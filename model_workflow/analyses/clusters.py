@@ -1,5 +1,6 @@
 from os.path import exists
 import re
+from typing import List
 
 import numpy as np
 
@@ -18,6 +19,7 @@ def clusters_analysis (
     interactions : list,
     structure : 'Structure',
     snapshots : int,
+    pbc_residues : List[int],
     output_analysis_filename : str,
     output_run_filepath : str,
     output_screenshots_filename : str,
@@ -48,11 +50,17 @@ def clusters_analysis (
     # We must set the atom selection of every run in atom indices, for MDtraj
     runs = []
 
+    # Parse the PBC selection, which will be substracted from every further selection
+    # Note that substracting PBC atoms is essential since sudden jumps across boundaries would eclipse the actual clusters
+    pbc_selection = structure.select_residue_indices(pbc_residues)
+
     # Start with the overall selection
     parsed_overall_selection = structure.select(overall_selection)
     # If the default selection is empty then use all heavy atoms
     if not parsed_overall_selection:
         parsed_overall_selection = structure.select_heavy_atoms()
+    # Substract PBC atoms
+    parsed_overall_selection -= pbc_selection
     runs.append({
         'name': 'Overall',
         'selection': parsed_overall_selection
@@ -66,6 +74,8 @@ def clusters_analysis (
         heavy_atoms_selection = structure.select_heavy_atoms()
         # Keep only heavy atoms for the distance calculation
         final_selection = interface_selection & heavy_atoms_selection
+        # Substract PBC atoms
+        final_selection -= pbc_selection
         runs.append({
             'name': interaction['name'],
             'selection': final_selection

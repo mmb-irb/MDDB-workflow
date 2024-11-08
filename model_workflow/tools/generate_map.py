@@ -1,5 +1,6 @@
 import sys
 import json
+import re
 import urllib.request
 
 from typing import List, Tuple, Optional, Union
@@ -192,13 +193,23 @@ def generate_protein_mapping (
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
         allright = all([ chain_data['match']['ref'] for chain_data in protein_parsed_chains ])
         # If we match all chains then make sure there is no forced reference missing which did not match
-        # Otherwise warn the user
+        # Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file
+        # WARNING: Although we could move on it is better to stop here and warn the user to prevent a future silent problem
         if allright and forced_references:
-            forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
-            matched_uniprot_ids = set([ chain_data['match']['ref']['uniprot'] for chain_data in protein_parsed_chains ])
-            for forced_uniprot_id in forced_uniprot_ids:
-                if forced_uniprot_id not in matched_uniprot_ids:
-                    raise InputError(f'Forced reference {forced_uniprot_id} was not matched with any protein sequence. Please remove it from the inputs file')
+            # Get forced uniprot ids
+            forced_uniprot_ids = set(list(forced_references.values()) if strict_references else forced_references)
+            forced_uniprot_ids -= { NOT_FOUND_FLAG, NO_REFERABLE_FLAG }
+            #forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
+            #forced_uniprot_ids.remove(NOT_FOUND_FLAG)
+            # Get matched uniprot ids
+            matched_references = [ chain_data['match']['ref'] for chain_data in protein_parsed_chains ]
+            matched_uniprot_ids = set([ ref['uniprot'] for ref in matched_references if type(ref) == dict ])
+            # Check the difference
+            unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
+            if len(unmatched_uniprot_ids) > 0:
+                log = ', '.join(unmatched_uniprot_ids)
+                raise InputError(f'Some forced references were not matched with any protein sequence: {log}\n'
+                    '  Please remove them from the inputs file')
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
@@ -614,11 +625,23 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 1. Get structure sequences
 # 2. Calculate which reference domains are covered by the previous sequence
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
-from model_workflow.resources.covid_variants import get_variants
+from model_workflow.resources.covid_variants import covid_spike_variants
 def get_sequence_metadata (structure : 'Structure', protein_references_file : 'File', residue_map : dict) -> dict:
     # First mine the sequences from the structure
     # Set a different sequence for each chain
     sequences = [ chain.get_sequence() for chain in structure.chains ]
+    # Now classify sequences according to if they belong to protein or nucleic sequences
+    protein_sequences = []
+    nucleic_sequences = []
+    for sequence in sequences:
+        # If the sequence is all X then it is probably not either protein or nucleic
+        if re.test(r'^[X]*$', sequence): continue
+        # If its a nucleic sequence
+        elif re.test(r'^[ACGTUX]*$', sequence):
+            nucleic_sequences.append(sequence)
+        # Otherwise we consider it a protein sequence
+        else:
+            protein_sequences.append(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -636,8 +659,6 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     variant = None
     covid_spike_reference_id = 'P0DTC2'
     if covid_spike_reference_id in reference_ids:
-        # Load the reference variant sequences
-        covid_spike_variants = get_variants()
         # Load the reference data and find a chain which belongs to the spike
         # We consider having only one variant, so all chains should return the same result
         reference_data = references_data[covid_spike_reference_id]
@@ -648,7 +669,9 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         sample_chain_sequence = structure.residues[sample_residue_index].chain.get_sequence()
         # Align the sample chain sequence against all variants to find the best match
         highest_score = 0
+        print('Finding SARS-CoV-2 variant')
         for variant_name, variant_sequence in covid_spike_variants.items():
+            print(f' Trying with {variant_name}')
             align_results = align(variant_sequence, sample_chain_sequence)
             if not align_results:
                 continue
@@ -659,6 +682,7 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # At this point there should be a result
         if not variant:
             raise SystemExit('Something went wrong trying to find the SARS-CoV-2 variant')
+        print(f'It is {variant}')
     # Set which reference domains are present in the structure
     domains = []
     for reference_index, reference_id in enumerate(reference_ids):
@@ -697,6 +721,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
+        'protein_sequences': protein_sequences,
+        'nucleic_sequences': nucleic_sequences,
         'domains': domains,
         'cv19_variant': variant
     }
