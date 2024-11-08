@@ -36,6 +36,7 @@ ACCEPTED_INPUT_FILENAMES = [
     'inputs.yml', # Another extension of yaml files
     'inputs.json' # Legacy inputs file
 ]
+DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
 
 # Expected MD inputs
 MD_DIRECTORY = 'mdir'
@@ -181,6 +182,7 @@ TOPOLOGY_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
 GREEN_HEADER = '\033[92m'
 CYAN_HEADER = '\033[96m'
+BLUE_HEADER = '\033[94m'
 YELLOW_HEADER = '\033[93m'
 RED_HEADER = '\033[91m'
 GREY_HEADER = '\033[90m'
@@ -389,3 +391,6 @@ NO_REFERABLE_FLAG = 'noref'
 
 # Set a flag to represent a not found reference
 NOT_FOUND_FLAG = 'notfound'
+
+# Available analysis for NASSA
+NASSA_ANALYSES_LIST = [ 'bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff' ]
