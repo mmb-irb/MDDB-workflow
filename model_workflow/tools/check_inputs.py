@@ -7,6 +7,7 @@ from re import match
 from typing import List
 from scipy.io import netcdf_file
 import mdtraj as mdt
+import pytraj as pyt
 
 # Set some known message errors
 NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.'
@@ -67,6 +68,15 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             frame = next(trajectory)
             # Now obtain the number of atoms from the frame we just read
             atom_count = frame.n_atoms
+            # And still, it may happen that the topology has more atoms than the trajectory but it loads
+            # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
+            # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
+            # Two double check the match, load the topology alone with PyTraj
+            topology = pyt.load_topology(input_topology_file.path)
+            if topology.n_atoms != atom_count:
+                raise InputError('Mismatch in the number of atoms between input files:\n' +
+                    f' Topology "{input_topology_file.path}" -> {topology.n_atoms} atoms\n' +
+                    f' Trajectory "{trajectory_sample.path}" -> {atom_count} atoms')
         except Exception as error:
             # If the error message matches with a known error then report the problem
             error_message = str(error)

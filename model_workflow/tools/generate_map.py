@@ -635,9 +635,11 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     nucleic_sequences = []
     for sequence in sequences:
         # If the sequence is all X then it is probably not either protein or nucleic
-        if re.test(r'^[X]*$', sequence): continue
+        test = re.match(r'^[X]*$', sequence)
+        if test: continue
         # If its a nucleic sequence
-        elif re.test(r'^[ACGTUX]*$', sequence):
+        test = re.match(r'^[ACGTUX]*$', sequence)
+        if test:
             nucleic_sequences.append(sequence)
         # Otherwise we consider it a protein sequence
         else:

@@ -35,7 +35,13 @@ CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_3_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 
-# Set the path to the resources folder where  we store auxiliar files required for this analysis
+# Set some auxiliar file names
+CMIP_INPUTS_FILE = 'cmip.in'
+CMIP_CHECK_INPUTS_FILE = 'cmip_check.in'
+VDW_PARAMETERS = 'vdwprm'
+DEBUG_ENERGIES_SUM_SCRIPT = 'get_energies_sum.py'
+
+# Set the path to the resources folder where we store auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "resources")
 
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
@@ -49,7 +55,8 @@ def energies (
     charges : list,
     snapshots : int,
     frames_limit : int,
-    verbose : bool = False):
+    verbose : bool = False,
+    debug : bool = False):
 
     print('-> Running energies analysis')
 
@@ -75,9 +82,10 @@ def energies (
         return
 
     # Set the auxiliar files further required as CMIP inputs
-    cmip_inputs_checkonly_source = File(resources + '/check.in')
-    cmip_inputs_source = File(resources + '/input.in')
-    vdw_source = File(resources + '/vdwprm')
+    cmip_inputs_checkonly_source = File(f'{resources}/{CMIP_CHECK_INPUTS_FILE}')
+    cmip_inputs_source = File(f'{resources}/{CMIP_INPUTS_FILE}')
+    vdw_source = File(f'{resources}/{VDW_PARAMETERS}')
+    debug_script_source = File(f'{resources}/{DEBUG_ENERGIES_SUM_SCRIPT}')
 
     # Set a backup file to store some results on the fly
     # This is useful to restore these values in case the analysis is disrupt since it is a long analysis
@@ -435,13 +443,39 @@ def energies (
             # Inputs will be modified to adapt the cmip grid to both agents together
             # Note than modified inputs file is not conserved along frames
             # Structures may change along trajectory thus requiring a different grid size
-            cmip_inputs = File(energies_folder + '/cmip.in')
+            cmip_inputs = File(f'{energies_folder}/{CMIP_INPUTS_FILE}')
             copyfile(cmip_inputs_source.path, cmip_inputs.path)
 
             # Set the CMIP box dimensions and densities to fit both the host and the guest
             # Box origin and size are modified in the cmip inputs
             # Values returned are only used for display / debug purposes
             box_origin, box_size = adapt_cmip_grid(agent1_cmip_guest, agent2_cmip_guest, cmip_inputs)
+
+            # If the debug flag is passed then, instead of calculating energies, leave it all ready and stop here
+            if debug:
+                # Copy in the energies folder a small python script used to sum output energies
+                debug_script = File(f'{energies_folder}/{DEBUG_ENERGIES_SUM_SCRIPT}')
+                copyfile(debug_script_source.path, debug_script.path)
+                # Copy in the energies folder the VDM parameters input file
+                debug_vdw_parameters = File(f'{energies_folder}/{VDW_PARAMETERS}')
+                copyfile(vdw_source.path, debug_vdw_parameters.path)
+                # Set auxiliar output filenames
+                debug_output_1 = 'first_output.pdb'
+                debug_output_2 = 'second_output.pdb'
+                # Write a README file explaining what to do to manually debug CMIP
+                debug_readme = File(f'{energies_folder}/README')
+                with open(debug_readme.path, 'w') as file:
+                    file.write(
+                        '# Energies debug\n\n'
+                        '# Run CMIP\n'
+                        f'cmip -i {CMIP_INPUTS_FILE} -pr {agent1_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent2_cmip_host.filename} -byat {debug_output_1}\n\n'
+                        '# Run CMIP inverting host and guest\n'
+                        f'cmip -i {CMIP_INPUTS_FILE} -pr {agent2_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent1_cmip_host.filename} -byat {debug_output_2}\n\n'
+                        '# Sum both energies and compare\n'
+                        f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_1}\n'
+                        f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_2}\n'
+                    )
+                raise SystemExit(' READY TO DEBUG -> Please go to the corresponding replica "energies" directory and follow the README instructions')
 
             # Run the CMIP software to get the desired energies
             print(f'  Calculating energies for {agent1_name} as guest and {agent2_name} as host')
