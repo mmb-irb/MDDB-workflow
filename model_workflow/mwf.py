@@ -2409,7 +2409,6 @@ analyses = {
     'rmsf': MD.run_rmsf_analysis,
     'sas': MD.run_sas_analysis,
     'tmscore': MD.run_tmscores_analysis,
-    'nassa': MD.run_nassa_analysis,
 }
 
 # Project requestable tasks
