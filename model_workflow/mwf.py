@@ -70,6 +70,7 @@ from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
 #from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
+#from model_workflow.analyses.nassa import run_nassa
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -1375,6 +1376,14 @@ class MD:
             rmsd_selection = PROTEIN_AND_NUCLEIC,
         )
 
+    # NASSA
+    # def run_nassa_analysis (self, overwrite : bool = False):
+    #     config_file_filepath = self.md_pathify(DEFAULT_NASSA_CONFIG_FILENAME)
+    #     if exists(config_file_filepath):
+    #         run_nassa(config_file_filepath)
+    
+
+
 # The project is the main project
 # A project is a set of related MDs
 # These MDs share all or most topology and metadata
@@ -1419,6 +1428,7 @@ class Project:
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
+        #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : bool = False,
     ):
@@ -2552,3 +2562,25 @@ def workflow (
     remove_trash(project.directory)
 
     print("Done!")
+
+# def workflow_nassa(
+#     config_file_path: str, 
+#     analysis_name: str , 
+#     make_config: bool = False, 
+#     output: Optional[List[str]] = None,
+#     working_directory: str = '.',
+#     ):
+
+#     chdir(working_directory)
+#     current_directory_name = getcwd().split('/')[-1]
+#     print(f'\n{BLUE_HEADER}Running NASSA for project at {current_directory_name}{COLOR_END}')
+    
+#     if config_file_path:
+#         print(f'  Using config file {config_file_path}')
+#     raise NotImplementedError()
+#     # Load the configuration file
+#     with open(config, 'r') as file:
+#         config = json.load(file)
+
+        
+    

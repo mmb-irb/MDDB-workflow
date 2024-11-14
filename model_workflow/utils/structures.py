@@ -65,7 +65,7 @@ class Atom:
         ):
         self.name = name
         self.element = element
-        self.coords = tuple(coords)
+        self.coords = tuple(coords) if coords else None
         # Set variables to store references to other related instances
         # These variables will be set further by the structure
         self._structure = None
