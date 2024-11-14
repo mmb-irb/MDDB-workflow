@@ -2095,10 +2095,13 @@ class Project:
     # Tested and standarized PDB ids
     def get_pdb_ids (self) -> List[str]:
         # If we already have a stored value then return it
-        if self._pdb_ids:
+        if self._pdb_ids != None:
             return self._pdb_ids
         # Otherwise test and standarize input PDB ids
         self._pdb_ids = []
+        # If there is no input pdb ids (may be None) then stop here
+        if not self.input_pdb_ids:
+            return []
         # Iterate input PDB ids
         for input_pdb_id in self.input_pdb_ids:
             # First make sure this is a PDB id
@@ -2107,6 +2110,7 @@ class Project:
             # Make letters upper
             pdb_id = input_pdb_id.upper()
             self._pdb_ids.append(pdb_id)
+        return self._pdb_ids
     pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
 
     # PDB references
