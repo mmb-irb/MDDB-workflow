@@ -33,7 +33,7 @@ def generate_membrane_mapping(structure : 'Structure',
         - The function identifies lipid and non-lipid residues based on InChI keys.
         - It classifies residues and checks for potential misclassifications.
         - Lipid residues are selected and neighboring lipids are found.
-        - Clusters of lipids are identified, and clusters with more than 10 lipids are considered as membranes.
+        - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
     print('Calculando la membrana...')
