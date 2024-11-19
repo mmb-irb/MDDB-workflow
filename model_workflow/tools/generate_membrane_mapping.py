@@ -86,10 +86,11 @@ def generate_membrane_mapping(structure : 'Structure',
     frame_idx = 0 # TO-DO: clustering in more than one frame
     n_clusters, labels, clusters = find_clusters(neighbours.neighbours[frame_idx])
 
-    # cluster con más de 10 lipidos agrupados es la membrana
+    # cluster con más de 30 lipidos agrupados es la membrana:
+    # https://pythonhosted.org/fatslim/documentation/leaflets.html#membrane-identification
     membranes_map = {}
     for n, c in clusters.items():
-        if len(c) > 10:
+        if len(c) > 30:
             membranes_map[str(n)] = neighbours.membrane.residues.resindices[clusters[n]] 
     
     charges = abs(np.array([atom.charge for atom in u.atoms]))
