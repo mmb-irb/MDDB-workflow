@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isabs
+from os.path import exists, isdir, isabs
 import sys
 import io
 import re
@@ -2463,6 +2463,14 @@ def workflow (
     # This is to protect the user to do something which makes not sense
     if include and exclude:
         raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
+
+    # Make sure the working directory exists
+    if not exists(working_directory):
+        raise InputError(f'Working directory "{working_directory}" does not exist')
+
+    # Make sure the working directory is actually a directory
+    if not isdir(working_directory):
+        raise InputError(f'Working directory "{working_directory}" is actually not a directory')
 
     # Move the current directory to the working directory
     chdir(working_directory)
