@@ -202,7 +202,7 @@ class MD:
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
         if not self.url:
-            raise InputError('Missing input structure file "' + self._input_structure_file.filename + '"')
+            raise InputError(f'Missing input structure file "{self._input_structure_file.filename}"')
         sys.stdout.write('Downloading structure (' + self._input_structure_file.filename + ')\n')
         # Set the download URL
         structure_url = self.url + '/files/' + self._input_structure_file.filename
@@ -1458,6 +1458,11 @@ class Project:
                     break
         # Set the input topology file
         self._input_topology_filepath = input_topology_filepath
+        # In case an input topology filepath was passed make sure it exists
+        if self._input_topology_filepath:
+            input_topology_file = File(input_topology_filepath)
+            if not input_topology_file.exists:
+                raise InputError(f'Input topology file "{self._input_topology_filepath}" does not exist')
         self._input_topology_file = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
@@ -1593,8 +1598,18 @@ class Project:
             if inputs_value:
                 self._input_structure_filepath = inputs_value
                 return self._input_structure_filepath
-        # If there is not any input then return the default
-        return STRUCTURE_FILENAME
+        # If there is not input structure then asume it is the default
+        # However make sure the default exists
+        default_structure_filepath = self.project_pathify(STRUCTURE_FILENAME)
+        default_structure_file = File(default_structure_filepath)
+        if default_structure_file.exists:
+            self._input_structure_filepath = default_structure_filepath
+            return self._input_structure_filepath
+        # If there is not input structure and the default structure file does not exist then use the input topology
+        # We will extract the structure from it using a sample frame from the trajectory
+        # Note that topology input filepath must exist and an input error will raise otherwise
+        self._input_structure_filepath = self.input_topology_filepath
+        return self._input_structure_filepath
     input_structure_filepath = property(get_input_structure_filepath, None, None, "Input structure file path (read only)")
 
     # Set a function to get input trajectory file paths
