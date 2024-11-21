@@ -24,7 +24,8 @@ dependencies:
   # WARNING: Further versions of python do not allow MDanalysis to keep working with biopython 1.79
   - mdanalysis=2.3
   # MDtraj is used for several processing and analysis steps
-  - mdtraj
+  # MDtraj 1.10 has a critical error: https://github.com/mdtraj/mdtraj/issues/1893
+  - mdtraj=1.9
   # Numpy and scipy are usually already included but they are required
   - numpy
   - scipy
