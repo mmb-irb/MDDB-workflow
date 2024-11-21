@@ -36,10 +36,20 @@ ACCEPTED_INPUT_FILENAMES = [
     'inputs.yml', # Another extension of yaml files
     'inputs.json' # Legacy inputs file
 ]
-DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
+
+# Default input values used when the value is not specified
+# If an input field has no default value then it will be set as None
+DEFAULT_INPUT_VALUES = {
+    'license': 'This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License',
+    'linkcense': 'https://creativecommons.org/licenses/by/4.0/',
+    'mdref': 0,
+}
 
 # Expected MD inputs
 MD_DIRECTORY = 'mdir'
+
+# Input config file for the NASSA analysis
+DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
 
 # Markov State Model input filenames
 DEFAULT_POPULATIONS_FILENAME = 'populations.json'

@@ -80,7 +80,7 @@ unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=
 sys.stdout = unbuffered
 
 # Set an special exception for input errors
-missing_input_exception = Exception('Missing input')
+MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -1591,11 +1591,9 @@ class Project:
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.inputs.get('input_structure_filepath', missing_input_exception)
-            if inputs_value == missing_input_exception:
-                raise InputError('Missing input "input_structure_filepath"')
+            inputs_value = self.get_input('input_structure_filepath')
             # If there is a valid input then use it
-            if inputs_value:
+            if inputs_value and inputs_value != MISSING_INPUT_EXCEPTION:
                 self._input_structure_filepath = inputs_value
                 return self._input_structure_filepath
         # If there is not input structure then asume it is the default
@@ -1622,8 +1620,8 @@ class Project:
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.inputs.get('input_trajectory_filepaths', missing_input_exception)
-            if inputs_value == missing_input_exception:
+            inputs_value = self.get_input('input_trajectory_filepaths')
+            if inputs_value == MISSING_INPUT_EXCEPTION:
                 raise InputError('Missing input "input_trajectory_filepaths"')
             # If there is a valid input then use it
             if inputs_value:
@@ -1791,11 +1789,11 @@ class Project:
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.inputs.get('input_topology_filepath', missing_input_exception)
-            if inputs_value == missing_input_exception:
+            inputs_value = self.get_input('input_topology_filepath')
+            if inputs_value == MISSING_INPUT_EXCEPTION:
                 raise InputError('Missing input "input_topology_filepath"')
             # If there is a valid input then use it
-            if inputs_value:
+            if inputs_value and inputs_value != MISSING_INPUT_EXCEPTION:
                 self._input_topology_filepath = inputs_value
                 return self._input_topology_filepath
         # Otherwise we must guess which is the topology file
@@ -1924,25 +1922,40 @@ class Project:
         if not inputs_data:
             raise InputError('Input file is empty')
         self._inputs = inputs_data
+        # Legacy fixes
+        old_pdb_ids = self._inputs.get('pdbIds', None)
+        if old_pdb_ids:
+            self._inputs['pdb_ids'] = old_pdb_ids
         # Finally return the updated inputs
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
 
     # Then set getters for every value in the inputs file
 
-    # Set a function to get 'inputs' values and handle missing keys
-    def input_getter (name : str, missing_input_callback = missing_input_exception):
-        def getter (self):
-            value = self.inputs.get(name, missing_input_callback)
-            if value == missing_input_exception:
-                raise InputError(f'Missing input "{name}"')
+    # Get a specific 'input' value
+    # Handle a possible missing keys
+    def get_input (self, name: str, missing_input_callback = MISSING_INPUT_EXCEPTION):
+        value = self.inputs.get(name, missing_input_callback)
+        # If we had a value then return it
+        if value != MISSING_INPUT_EXCEPTION:
             return value
+        # If the field is not specified in the inputs file then set a defualt value
+        default_value = DEFAULT_INPUT_VALUES.get(name, None)
+        # Warn the user about this
+        warn(f'Missing input "{name}" -> Using default value: {default_value}')
+        return default_value
+
+    # Set a function to get a specific 'input' value by its key/name
+    # Note that we return the getter function but we do not call it just yet
+    def input_getter (name : str, missing_input_callback = MISSING_INPUT_EXCEPTION):
+        def getter (self):
+            return self.get_input(name, missing_input_callback)
         return getter
 
     # Assign the getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     forced_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
-    input_pdb_ids = property(input_getter('pdbIds'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
+    input_pdb_ids = property(input_getter('pdb_ids'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
     input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
@@ -1960,8 +1973,8 @@ class Project:
             return None
         # Otherwise, find it in the inputs
         # Get the input value, whose key must exist
-        self._input_pbc_selection = self.inputs.get('pbc_selection', missing_input_exception)
-        if self._input_pbc_selection == missing_input_exception:
+        self._input_pbc_selection = self.get_input('pbc_selection')
+        if self._input_pbc_selection == MISSING_INPUT_EXCEPTION:
             raise InputError('Missing input "pbc_selection"')
         return self._input_pbc_selection
     input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")

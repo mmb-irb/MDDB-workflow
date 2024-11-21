@@ -23,8 +23,12 @@ name: My project
 
 # Write additional comments about the project
 # The description is displayed in the overview page
+#
+# Example:
+#
+# description: My project description
 
-description: My project description
+description:
 
 # Write author names
 # Authors are displayed in the overview page
@@ -60,10 +64,13 @@ contact:
 # Program (software) name which carried the trajectory and its version
 # Program and version are both displayed in the overview page
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
+#
+# Example:
+#
+# program: GROMACS
+# version: 2024.2
 
-# e.g. Gromacs
 program:
-# e.g. 2023.1
 version:
 
 # Type of molecular dynamics
@@ -71,22 +78,35 @@ version:
 # Note that this field has an effect on the client:
 # Some time-dependent analysis will change the labels of their axes in order to make sense
 # For instance RMSD X axis will be labeled as 'frames' instead of 'time'
+#
+# Example:
+#
+# type: trajectory
 
-type: trajectory
+type:
 
 # MD method is displayed in the overview
 # e.g. Classical MD, Targeted MD, Biased MD (Accelerated Weighted Ensemble)
 # e.g. Enhanced sampling (Hamiltonian Replica Exchange) ...
+#
+# Example:
+#
+# method: Classical MD
 
-method: Classical MD
+method:
 
 # License and link to the license web page
 # The license is displayed in the overview page
 # Under the license there is a 'More information' button
 # The link is used to redirect the user when this button is clicked
+#
+# Example:
+#
+# license: This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License
+# linkcense: https://creativecommons.org/licenses/by/4.0/
 
-license: This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License
-linkcense: https://creativecommons.org/licenses/by/4.0/
+license:
+linkcense:
 
 # Citation for refering this simulation or related paper
 # The citation is displayed in the overview page
@@ -136,11 +156,11 @@ links:
 #
 # Example:
 #
-# pdbIds:
+# pdb_ids:
 #   - 6ACS
 #   - 6M0J
 
-pdbIds:
+pdb_ids:
 
 # Set which reference sequences must be used in order to map residues in the structure of the simulation
 # UniProt accession ids are accepted
@@ -199,25 +219,41 @@ ligands:
 # Time framestep in nanoseconds (ns)
 # May be None if this is not a trajectory, but an ensemble
 # Framestep is an important value since it is used in many graph axes in the web client
+#
+# Example:
+#
+# framestep: 0.01 # ns
 
-framestep: 0.01 # ns
+framestep:
 
 # The rest of values are displayed in the web client as trajectory metadata
 # These values do not affect other outcomes in the workflow
 
 # Simulation timestep in femtoseconds (fs)
+#
+# Example:
+#
+# timestep: 2 # fs
 
-timestep: 2 # fs
+timestep:
 
 # Temperature in Kelvin (K)
+#
+# Example:
+#
+# temp: 310 # K
 
-temp: 310 # K
+temp:
 
 # Ensemble
 # e.g. NVT, NPT, etc.
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
+#
+# Example:
+#
+# ensemble: NPT
 
-ensemble: NPT
+ensemble:
 
 # Force fields
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
@@ -232,8 +268,12 @@ ff:
 
 # Water force fields
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
+#
+# Example:
+#
+# wat: TIP3P
 
-wat: TIP3P
+wat:
 
 # Boxtype
 # e.g. Triclinic, Cubic, Dodecahedron
@@ -495,15 +535,16 @@ cv19_nanobs:
 #     mdir: replica_2
 #     temp: 311
 
-
 mds:
-  - name: replica 1
-    mdir: replica_1
 
 # Also the reference MD is to be defined by providing the index of the MDs list
 # If there is not an MD which is more important than others then simply set the first MD (0) as the reference
+#
+# Example:
+#
+# mdref: 0
 
-mdref: 0
+mdref:
 
 # Input topology, trajectroy and structure files
 #
