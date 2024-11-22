@@ -2,9 +2,9 @@ from model_workflow.utils.auxiliar import InputError, warn
 from model_workflow.utils.constants import TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
 from model_workflow.utils.structures import Structure
+from model_workflow.utils.file import File
 
 from re import match, search
-from os.path import exists
 from typing import List
 from subprocess import run, PIPE, Popen
 from scipy.io import netcdf_file
@@ -63,7 +63,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
     elif input_topology_file.format == 'tpr':
         # Run Gromacs just to generate a structure using all atoms in the topology and coordinates in the first frame
         # If atoms do not match then we will see a specific error
-        output_sample_filepath = 'sample.gro'
+        output_sample_file = File('.sample.gro')
         p = Popen([ "echo", "System" ], stdout=PIPE)
         process = run([
             GROMACS_EXECUTABLE,
@@ -73,7 +73,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             "-f",
             trajectory_sample.path,
             '-o',
-            output_sample_filepath,
+            output_sample_file.path,
             "-dump",
             "0",
             '-quiet'
@@ -81,7 +81,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         logs = process.stdout.decode()
         p.stdout.close()
         # If the output does not exist at this point it means something went wrong with gromacs
-        if not exists(output_sample_filepath):
+        if not output_sample_file.exists:
             # Check if we know the error
             error_logs = process.stderr.decode()
             error_match = search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
@@ -100,6 +100,8 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             print(logs)
             print(error_logs)
             raise SystemExit('Something went wrong with GROMACS during the checking')
+        # Cleanup the file we just created
+        output_sample_file.remove()
     else:
         try:
             # Note that declaring the iterator will not fail even when there is a mismatch
