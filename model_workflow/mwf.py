@@ -2226,6 +2226,10 @@ class Project:
         # Set the chains references file
         chains_references_filepath = self.project_pathify(OUTPUT_CHAINS_FILENAME)
         chains_references_file = File(chains_references_filepath)
+        # If the file already exists and the overwrite option is passed then remove it
+        if chains_references_file.exists and overwrite:
+            chains_references_file.remove()
+        # Call the function to generate the chain references
         chains = generate_chain_references(
             structure = self.structure,
             chains_references_file = chains_references_file,
