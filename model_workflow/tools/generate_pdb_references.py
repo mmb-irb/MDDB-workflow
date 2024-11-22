@@ -6,6 +6,7 @@ from model_workflow.utils.auxiliar import load_json, save_json
 
 # Generate a json file including all PDB references and return these references to the workflow for further usage
 def generate_pdb_references (pdb_ids : List, pdb_references_file : 'File') -> List[dict]:
+    print('-> Generating PDB references file')
     # If we already have PDB references then load them
     previous_pdb_references = {}
     if pdb_references_file.exists:
@@ -43,7 +44,7 @@ def mine_pdb_data (pdb_id : str) -> dict:
             print(f' PDB code {pdb_id} not found')
             return None
         else:
-            raise ValueError('Something went wrong with the PDB request: {request_url}')
+            raise ValueError(f'Something went wrong with the PDB request: {request_url}')
     # Mine the PDB data we need
     pdb_data = { 'id': pdb_id }
     pdb_data['title'] = parsed_response['compound']
