@@ -14,6 +14,9 @@ import numpy
 from glob import glob
 from inspect import getfullargspec
 from typing import Optional, Union, List
+import yaml
+from pathlib import Path
+import os
 
 # Constants
 from model_workflow.utils.constants import *
@@ -68,9 +71,9 @@ from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
-#from model_workflow.analyses.helical_parameters import helical_parameters
+from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
-#from model_workflow.analyses.nassa import run_nassa
+from model_workflow.analyses.nassa import run_nassa
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -1121,7 +1124,7 @@ class MD:
     def run_rgyr_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RGYR_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size
@@ -1342,19 +1345,19 @@ class MD:
 
     # Helical parameters
     # DANI: Al final lo reimplementará Subamoy (en python) osea que esto no lo hacemos de momento
-    # def run_helical_analysis (self, overwrite : bool = False):
-    #     # Do not run the analysis if the output file already exists
-    #     output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
-    #     if exists(output_analysis_filepath) and not overwrite:
-    #         return
-    #     # Run the analysis
-    #     helical_parameters(
-    #         input_topology_filename = self.structure_file.path,
-    #         input_trajectory_filename = self.trajectory_file.path,
-    #         output_analysis_filename = output_analysis_filepath,
-    #         structure = self.structure,
-    #         frames_limit = 1000,
-    #     )
+    def run_helical_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
+        if exists(output_analysis_filepath) and not overwrite:
+            return
+        # Run the analysis
+        helical_parameters(
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
+            output_analysis_filename = output_analysis_filepath,
+            structure = self.structure,
+            frames_limit = 1000,
+        )
 
     # Markov
     def run_markov_analysis (self, overwrite : bool = False):
@@ -2207,7 +2210,7 @@ class Project:
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
     # Get chain references
-    def get_chain_references (self) -> List[str]:
+    def get_chain_references (self, overwrite : bool = False) -> List[str]:
         # Set the chains references file
         chains_references_filepath = self.project_pathify(OUTPUT_CHAINS_FILENAME)
         chains_references_file = File(chains_references_filepath)
@@ -2417,7 +2420,7 @@ analyses = {
     'dist': MD.run_dist_perres_analysis,
     'energies': MD.run_energies_analysis,
     'hbonds': MD.run_hbonds_analysis,
-    #'helical': MD.run_helical_analysis,
+    'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
     'pca': MD.run_pca_analysis,
     #'pcacons': MD.run_pca_contacts,
@@ -2515,6 +2518,7 @@ def workflow (
             'stopology',
             'screenshot',
             'pmeta',
+            'chains',
             # MD tasks
             'mdmeta',
             'interactions',
@@ -2587,24 +2591,59 @@ def workflow (
 
     print("Done!")
 
-# def workflow_nassa(
-#     config_file_path: str, 
-#     analysis_name: str , 
-#     make_config: bool = False, 
-#     output: Optional[List[str]] = None,
-#     working_directory: str = '.',
-#     ):
+def workflow_nassa(
+    config_file_path: str, 
+    analysis_names: Optional[List[str]], 
+    make_config: bool = False, 
+    output: Optional[List[str]] = None,
+    working_directory: str = '.',
+    overwrite: bool = False,
+    ):
 
-#     chdir(working_directory)
-#     current_directory_name = getcwd().split('/')[-1]
-#     print(f'\n{BLUE_HEADER}Running NASSA for project at {current_directory_name}{COLOR_END}')
+    chdir(working_directory)
+    current_directory_name = getcwd().split('/')[-1]
+    print(f'\n{BLUE_HEADER}Running NASSA at {current_directory_name}{COLOR_END}')
     
-#     if config_file_path:
-#         print(f'  Using config file {config_file_path}')
-#     raise NotImplementedError()
-#     # Load the configuration file
-#     with open(config, 'r') as file:
-#         config = json.load(file)
-
-        
+    if config_file_path:
+        print(f'  Using config file {config_file_path}')
+    # Load the configuration file
+        try:
+            with Path(config_file_path.absolute_path).open("r") as ymlfile:
+                config_archive = yaml.load(
+                    ymlfile, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Configuration file {config_file_path} not found!")      
+    if analysis_names is not None:
+        for analysis_name in analysis_names:
+            # CHECK OUTPUT PATHS
+            if output is not None:
+                output_path = os.path.join(output, analysis_name)
+                config_archive['save_path'] = output_path
+            else:
+                if 'save_path' in config_archive:
+                    output_path = os.path.join(config_archive['save_path'], analysis_name)
+                    config_archive['save_path'] = output_path
+                else:
+                    raise InputError('No output path defined. Please define it in the configuration file or pass it as an argument (--output)')
+            
+            # CHECK IF THE THE ANALYSIS NAMES (IN CONFIG FILE) MATCH THE ANALYSIS NAMES NEEDED
+            canal_files_config = config_archive['coordinate_info']
+            needed_files = NASSA_ANALYSES_CANALS[analysis_name]
+            for file in needed_files:
+                if file not in canal_files_config:
+                    raise InputError(f'Analysis {analysis_name} requires the files of {file} coordinate to be defined in the configuration file')
+            
+            #CHECK IF OUTPUT FOLDER EXISTS
+            if os.path.exists(output_path):
+                if overwrite == True:
+                    print(f'  Output folder {output_path} already exists. Overwriting analysis {analysis_name}')
+                    run_nassa(analysis_name, config_archive)
+                else:
+                    print(f'  Output folder {output_path} already exists. Skipping analysis. \nSet the overwrite flag to overwrite the output folder.')
+                    continue
+            else:
+                os.mkdir(output_path)
+                print(f'  Running analysis {analysis_name} and saving results in {output_path}')
+                run_nassa(analysis_name, config_archive)
     
