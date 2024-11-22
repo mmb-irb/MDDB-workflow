@@ -1675,10 +1675,10 @@ class Project:
         # Otherwise we must find the reference MD index
         # If the inputs file is available then it must declare the reference MD index
         if self.is_inputs_file_available():
-            self._reference_md_index = self.input_reference_md_index
+            self._reference_md_index = self.get_input('mdref')
         # Otherwise we simply set the first MD as the reference and warn the user about this
-        else:
-            #print('WARNING: No reference MD was specified. The first MD will be used as reference.')
+        if self._reference_md_index == None:
+            warn('No reference MD was specified. The first MD will be used as reference.')
             self._reference_md_index = 0
         return self._reference_md_index
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
@@ -1958,7 +1958,6 @@ class Project:
     input_pdb_ids = property(input_getter('pdb_ids'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
-    input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
     input_ligands = property(input_getter('ligands'), None, None, "Input ligand references (read only)")
     
     # PBC selection may come from the console or from the inputs file
