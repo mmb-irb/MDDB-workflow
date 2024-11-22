@@ -2534,6 +2534,7 @@ def workflow (
             'stopology',
             'screenshot',
             'pmeta',
+            'pdbs',
             'chains',
             # MD tasks
             'mdmeta',
