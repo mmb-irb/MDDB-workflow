@@ -1598,8 +1598,11 @@ class Project:
         # If there is not input structure and the default structure file does not exist then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
-        self._input_structure_filepath = self.input_topology_filepath
-        return self._input_structure_filepath
+        # However if we are using the standard topology file we can not extract the PDB from it (yet)
+        if self.input_topology_filepath != TOPOLOGY_FILENAME:
+            self._input_structure_filepath = self.input_topology_filepath
+            return self._input_structure_filepath
+        raise InputError('There is not input structure at all')
     input_structure_filepath = property(get_input_structure_filepath, None, None, "Input structure file path (read only)")
 
     # Set a function to get input trajectory file paths
