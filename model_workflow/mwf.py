@@ -1452,12 +1452,9 @@ class Project:
                     self._inputs_file = inputs_file
                     break
         # Set the input topology file
+        # Note that even if the input topology path is passed we do not check it exists
+        # Never forget we can donwload some input files from the database on the fly
         self._input_topology_filepath = input_topology_filepath
-        # In case an input topology filepath was passed make sure it exists
-        if self._input_topology_filepath:
-            input_topology_file = File(input_topology_filepath)
-            if not input_topology_file.exists:
-                raise InputError(f'Input topology file "{self._input_topology_filepath}" does not exist')
         self._input_topology_file = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
