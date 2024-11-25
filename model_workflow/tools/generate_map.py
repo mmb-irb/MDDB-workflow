@@ -5,6 +5,7 @@ import urllib.request
 
 from typing import List, Tuple, Optional, Union
 
+from model_workflow.tools.generate_pdb_references import get_pdb_data
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -603,19 +604,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
 def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
     # Request the MMB service to retrieve pdb data
-    #request_url = 'http://mdb-login.bsc.es/api/pdb/' + pdb_id + '/entry'
-    # If the request to BSC API fails then we can use BSC API to get the uniprot ids
-    request_url = 'https://mmb.irbbarcelona.org/api/pdb/' + pdb_id + '/entry'
-    try:
-        with urllib.request.urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the PDB then we can stop here
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            print(' PDB code ' + pdb_id + ' not found')
-            return None
-        else:
-            raise ValueError('Something went wrong with the PDB request: ' + request_url)
+    parsed_response = get_pdb_data(pdb_id)
     # Get the uniprot accessions
     uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
     print(' References for PDB code ' + pdb_id + ': ' + ', '.join(uniprot_ids))

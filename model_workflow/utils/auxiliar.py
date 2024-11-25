@@ -29,6 +29,10 @@ class TestFailure (QuietException):
 class ToolError (QuietException):
     pass
 
+# Set a custom quite exception for when the problem comes from a remote service
+class RemoteServiceError (QuietException):
+    pass
+
 # Set a custom exception handler where our input error exception has a quiet behaviour
 def custom_excepthook (exception_class, message, traceback):
     # Quite behaviour if it is our input error exception
