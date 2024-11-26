@@ -55,7 +55,7 @@ def get_pdb_data (pdb_id : str, service = 'IRB') -> dict:
             print(f'  PDB code {pdb_id} not found')
             return None
         # If the API is not responding try another service
-        elif error.code == 500:
+        elif error.code == 500 or error.code == 502 or error.code == 503:
             print(f'  {service} API to retrieve PDB data may be out of service')
             # Before we surrender we try with the other available service
             if service == 'IRB':
@@ -106,6 +106,8 @@ def mine_pdb_data (pdb_id : str) -> dict:
         letter = chain_id[-1]
         # Get the uniprot id associated to this chain
         hit = chain['swpHit']
+        if hit == None:
+            continue
         uniprot_id = hit['idHit']
         chain_uniprots[letter] = uniprot_id
     pdb_data['chain_uniprots'] = chain_uniprots
