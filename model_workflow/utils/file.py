@@ -1,5 +1,5 @@
 from os import remove, symlink, rename, readlink
-from os.path import exists, isabs, abspath, relpath, split, islink
+from os.path import exists, isabs, abspath, relpath, split, islink, normpath
 from shutil import copyfile
 from typing import Optional
 
@@ -64,7 +64,7 @@ class File:
 
     def __eq__ (self, other : 'File') -> bool:
         if isinstance(other, self.__class__):
-            return self.path == other.path
+            return normpath(self.path) == normpath(other.path)
         return False
 
     # Check if file exists
