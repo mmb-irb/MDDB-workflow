@@ -1,16 +1,15 @@
 from os import remove
 from os.path import exists
 from subprocess import run, PIPE, Popen
-from json import load
+import json
 from typing import Union, List
 
 import pytraj as pt
 
-from model_workflow.utils.constants import TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
-from model_workflow.utils.selections import Selection
 from model_workflow.utils.auxiliar import save_json
 
 from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
@@ -52,8 +51,8 @@ def filter_atoms (
 
     # Check if both the normal and the filtered topologies have the same number of atoms
     # If not, filter the whole trajectory and overwrite both topologies and trajectory
-    print('Total number of atoms: ' + str(atoms_count))
-    print('Filtered number of atoms: ' + str(filtered_structure_atoms_count))
+    print(f'Total number of atoms: {atoms_count}')
+    print(f'Filtered number of atoms: {filtered_structure_atoms_count}')
     if filtered_structure_atoms_count < atoms_count:
         print('Filtering structure and trajectory...')
         # Filter both structure and trajectory using Gromacs, since is more efficient than pytraj
@@ -68,30 +67,12 @@ def filter_atoms (
     # Filter topology according to the file format
     if input_topology_file and input_topology_file.exists:
         print('Filtering topology...')
-        # Already parsed topology
-        if input_topology_file.filename == TOPOLOGY_FILENAME:
-            standard_topology = None
-            with open(input_topology_file.path, 'r') as file:
-                standard_topology = load(file)
-            charges = standard_topology['atom_charges']
-            print('Topology atoms count: ' + str(len(charges)))
-            # Make it match since there is no problem when these 2 do not match
-            filtered_topology_atoms_count = filtered_structure_atoms_count
-            # If the number of charges does not match the number of atoms then filter the topology
-            if len(charges) != filtered_structure_atoms_count:
-                standard_topology_filter(input_topology_file, input_structure_file, filter_selection, output_topology_file)
-        # Raw charges
-        elif input_topology_file.filename == RAW_CHARGES_FILENAME:
-            charges = get_raw_charges(input_topology_file.path)
-            # Nothing to do here. It better matches by defualt or we have a problem
-            filtered_topology_atoms_count = len(charges)
-            print('Topology atoms count: ' + str(filtered_topology_atoms_count))
         # Pytraj supported formats
-        elif input_topology_file.is_pytraj_supported():
+        if input_topology_file.is_pytraj_supported():
             # Load the topology and count its atoms
             pt_topology = pt.load_topology(filename=input_topology_file.path)
             topology_atoms_count = pt_topology.n_atoms
-            print('Topology atoms count: ' + str(topology_atoms_count))
+            print(f'Topology atoms count: {topology_atoms_count}')
             # Filter the desired atoms using the mask and then count them
             filter_mask = get_filter_mask(input_topology_file.path, filter_selection)
             filtered_pt_topology = pt_topology[filter_mask]
@@ -109,7 +90,7 @@ def filter_atoms (
             # Extract charges from the tpr file and count them
             charges = get_tpr_charges(input_topology_file.path)
             topology_atoms_count = len(charges)
-            print('Topology atoms count: ' + str(topology_atoms_count))
+            print(f'Topology atoms count: {topology_atoms_count}')
             # If the number of charges in greater than expected then filter the tpr file and extract charges again
             if topology_atoms_count > filtered_structure_atoms_count:
                 if not exists(index_filename):
@@ -119,14 +100,32 @@ def filter_atoms (
                 tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
                 charges = get_tpr_charges(output_topology_file.path)
             filtered_topology_atoms_count = len(charges)
+        # Standard topology
+        elif input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+            standard_topology = None
+            with open(input_topology_file.path, 'r') as file:
+                standard_topology = json.load(file)
+            charges = standard_topology['atom_charges']
+            print('Topology atoms count: ' + str(len(charges)))
+            # Make it match since there is no problem when these 2 do not match
+            filtered_topology_atoms_count = filtered_structure_atoms_count
+            # If the number of charges does not match the number of atoms then filter the topology
+            if len(charges) != filtered_structure_atoms_count:
+                standard_topology_filter(input_topology_file, input_structure_file, filter_selection, output_topology_file)
+        # Raw charges
+        elif input_topology_file.filename == RAW_CHARGES_FILENAME:
+            charges = get_raw_charges(input_topology_file.path)
+            # Nothing to do here. It better matches by defualt or we have a problem
+            filtered_topology_atoms_count = len(charges)
+            print('Topology atoms count: ' + str(filtered_topology_atoms_count))
         else:
-            raise ValueError('Topology file (' + input_topology_file.filename + ') is in a non supported format')
+            raise ValueError(f'Topology file ({input_topology_file.filename}) is in a non supported format')
 
-        print('Filtered topology atoms: ' + str(filtered_topology_atoms_count))
+        print(f'Filtered topology atoms: {filtered_topology_atoms_count}')
 
         # Both filtered structure and topology must have the same number of atoms
         if filtered_structure_atoms_count != filtered_topology_atoms_count:
-            print('Filtered structure atoms: ' + str(filtered_structure_atoms_count))
+            print(f'Filtered structure atoms: {filtered_structure_atoms_count}')
             raise ValueError('Filtered atom counts in topology and charges does not match')
 
     # Remove the index file in case it was created
@@ -160,7 +159,7 @@ def get_default_filter_mask (topology_filename : str) -> str:
     filter_mask = '!' + water_mask
     counter_ions_mask = get_counter_ions_mask(topology_filename)
     if counter_ions_mask:
-        filter_mask = '(!' + water_mask + '&!(' + counter_ions_mask + '))'
+        filter_mask = f'(!{water_mask}&!({counter_ions_mask}))'
     return filter_mask
 
 # Escape all vmd reserved characters from the selection string, which may use regular expression characters
@@ -179,7 +178,7 @@ def vmd_selection_2_pytraj_mask (topology_filename : str, filter_selection : str
     # Prepare a script for the VMD to geth a selection atom indices. This is Tcl lenguage
     with open(commands_filename, "w") as file:
         # Select the specified atoms and set the specified chain
-        file.write('set atoms [atomselect top "' + escape_vmd(filter_selection) + '"]\n')
+        file.write(f'set atoms [atomselect top "{escape_vmd(filter_selection)}"]\n')
         file.write('$atoms list\n')
         file.write('exit\n')
 
@@ -378,7 +377,7 @@ def standard_topology_filter (
     # Load the topology
     topology = None
     with open(input_topology_file.path, 'r') as file:
-        topology = load(file)
+        topology = json.load(file)
 
     # Load the reference structure
     reference_structure = Structure.from_pdb_file(reference_structure_file.path)

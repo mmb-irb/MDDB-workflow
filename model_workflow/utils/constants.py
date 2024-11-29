@@ -81,7 +81,7 @@ CORRECTED_TRAJECTORY = 'corrected.xtc'
 PROCESSED = 'processed'
 
 # Input and output core files
-TOPOLOGY_FILENAME = 'topology.json'
+STANDARD_TOPOLOGY_FILENAME = 'topology.json'
 STRUCTURE_FILENAME = 'structure.pdb'
 TRAJECTORY_FILENAME = 'trajectory.xtc'
 

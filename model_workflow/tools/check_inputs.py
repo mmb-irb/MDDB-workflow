@@ -1,5 +1,5 @@
 from model_workflow.utils.auxiliar import InputError, warn
-from model_workflow.utils.constants import TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
@@ -56,8 +56,8 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
     # To do so we will rely on MDtraj, which is able to read most formats
     # Also MDtraj would probably be the first library to read the input files further (conversion)
     # However MDtraj is not able to read TPR and of course it does not read our interal topology format
-    if input_topology_file.filename == TOPOLOGY_FILENAME:
-        print(f'We will skip the atom count matching check since we already have a standard {TOPOLOGY_FILENAME}')
+    if input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+        print(f'We will skip the atom count matching check since we already have a standard {STANDARD_TOPOLOGY_FILENAME}')
         # DANI: Hay que hacer return aquí, porque sino luego el atom_count sigue siendo None y el checking del structure falla
         return
     elif input_topology_file.format == 'tpr':

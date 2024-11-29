@@ -6,7 +6,7 @@ from pathlib import Path
 from subprocess import run, PIPE
 import re
 
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
@@ -18,7 +18,7 @@ def get_charges (charges_source_file : 'File') -> list:
     print('Charges in the "' + charges_source_file.filename + '" file will be used')
     charges = None
     # If we have the standard topology then get charges from it
-    if charges_source_file.filename == TOPOLOGY_FILENAME:
+    if charges_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
         with open(charges_source_file.path, 'r') as file:
             standard_topology = load(file)
             charges = standard_topology['atom_charges']

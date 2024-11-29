@@ -2,7 +2,8 @@
 
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
 
-from os import remove, rename
+from os import rename, listdir
+from os.path import isfile
 import sys
 import json
 import yaml
@@ -166,3 +167,7 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
     for v, value in enumerate(values):
         others = values[0:v] + values[v+1:]
         yield value, others
+
+# List files in a directory
+def list_files (directory : str) -> List[str]:
+    return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]

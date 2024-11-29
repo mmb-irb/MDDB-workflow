@@ -126,7 +126,7 @@ def generate_project_metadata (
         'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),
         'CUSTOMS': get_input('customs'),
-        'ORIENTATION': get_input('orientation', optional=True),
+        'ORIENTATION': get_input('orientation'),
         'PTM': ptm_names,
         'MULTIMERIC' : get_input('multimeric'),
         'COLLECTIONS': collections,
@@ -139,10 +139,10 @@ def generate_project_metadata (
         metadata['BOXSIZEZ'] = boxsizez
     # Add collection specific fields
     if 'cv19' in collections:
-        cv19_unit = get_input('cv19_unit', optional=True)
-        cv19_startconf = get_input('cv19_startconf', optional=True)
-        cv19_abs = get_input('cv19_abs', optional=True)
-        cv19_nanobs = get_input('cv19_nanobs', optional=True)
+        cv19_unit = get_input('cv19_unit')
+        cv19_startconf = get_input('cv19_startconf')
+        cv19_abs = get_input('cv19_abs')
+        cv19_nanobs = get_input('cv19_nanobs')
         cv19_variant = sequence_metadata['cv19_variant']
 
         if cv19_unit is not None:
