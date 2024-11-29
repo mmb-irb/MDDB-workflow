@@ -67,8 +67,9 @@ from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
-from model_workflow.analyses.helical_parameters import helical_parameters
+#from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
+#from model_workflow.analyses.nassa import run_nassa
 
 # Make the system output stream to not be buffered
 # This is useful to make prints work on time in Slurm
@@ -1375,19 +1376,19 @@ class MD:
 
     # Helical parameters
     # DANI: Al final lo reimplementará Subamoy (en python) osea que esto no lo hacemos de momento
-    def run_helical_analysis (self, overwrite : bool = False):
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
-            return
-        # Run the analysis
-        helical_parameters(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            frames_limit = 1000,
-        )
+    # def run_helical_analysis (self, overwrite : bool = False):
+    #     # Do not run the analysis if the output file already exists
+    #     output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
+    #     if exists(output_analysis_filepath) and not overwrite:
+    #         return
+    #     # Run the analysis
+    #     helical_parameters(
+    #         input_topology_filename = self.structure_file.path,
+    #         input_trajectory_filename = self.trajectory_file.path,
+    #         output_analysis_filename = output_analysis_filepath,
+    #         structure = self.structure,
+    #         frames_limit = 1000,
+    #     )
 
     # Markov
     def run_markov_analysis (self, overwrite : bool = False):
@@ -1455,6 +1456,7 @@ class Project:
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
+        #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : bool = False,
     ):
@@ -2369,7 +2371,7 @@ analyses = {
     'dist': MD.run_dist_perres_analysis,
     'energies': MD.run_energies_analysis,
     'hbonds': MD.run_hbonds_analysis,
-    'helical': MD.run_helical_analysis,
+    #'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
     'pca': MD.run_pca_analysis,
     #'pcacons': MD.run_pca_contacts,
