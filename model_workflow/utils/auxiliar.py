@@ -171,3 +171,19 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
 # List files in a directory
 def list_files (directory : str) -> List[str]:
     return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]
+
+# Set a function to check if a string has patterns to be parsed by a glob function
+# Note that this is not trivial, but this function should be good enough for our case
+# https://stackoverflow.com/questions/42283009/check-if-string-is-a-glob-pattern
+GLOB_CHARACTERS = ['*', '?', '+', '[']
+def is_glob (path : str) -> bool:
+    # Find unescaped glob characters
+    for c, character in enumerate(path):
+        if character not in GLOB_CHARACTERS:
+            continue
+        if c == 0:
+            return True
+        previous_characters = path[c-1]
+        if previous_characters != '\\':
+            return True
+    return False

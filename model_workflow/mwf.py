@@ -42,7 +42,7 @@ from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files
+from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files, is_glob
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -171,6 +171,21 @@ class MD:
 
     # Set a function to get input structure file path
     def get_input_structure_filepath (self) -> str:
+        # Set a function to parse possible glob notation
+        def parse (filepath : str) -> str:
+            # If there is no glob pattern then just return the string as is
+            if not is_glob(filepath):
+                return filepath
+            # If there is glob pattern then parse it
+            parsed_filepaths = glob(filepath)
+            if len(parsed_filepaths) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
+                raise InputError(f'No structure found with "{filepath}"')
+            if len(parsed_filepaths) > 1:
+                raise InputError(f'Multiple structures found with "{filepath}": {", ".join(parsed_filepaths)}')
+            return parsed_filepaths[0]
         # Set a function to find out if a path is relative to MD directories or to the project directory
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
@@ -185,13 +200,13 @@ class MD:
         # If we have a value passed through command line
         if self.input_structure_filepath:
             # Find out if it is relative to MD directories or to the project directory
-            return relativize_path(self.input_structure_filepath)
+            return relativize_path(parse(self.input_structure_filepath))
         # If we have a value passed through the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.project.get_input('input_structure_filepath')
             # If there is a valid input then use it
-            if inputs_value: return relativize_path(inputs_value)
+            if inputs_value: return relativize_path(parse(inputs_value))
         # If there is not input structure then asume it is the default
         # Check the default structure file exists or it may be downloaded
         default_structure_filepath = relativize_path(STRUCTURE_FILENAME)
@@ -259,15 +274,15 @@ class MD:
             # In case there are glob characters we must parse the paths
             parsed_paths = []
             for path in relative_paths:
-                has_spread_syntax = '*' in path
-                if has_spread_syntax:
-                    if self.remote:
-                        raise InputError('Spread syntax in trajectory input filepaths is not supported when downloading remote files')
+                if is_glob(path):
                     parsed_paths += glob(path)
                 else:
                     parsed_paths.append(path)
             # Check we successfully defined some trajectory file
             if len(parsed_paths) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
                 raise InputError('No trajectory file was reached in paths ' + ', '.join(relative_paths))
             return parsed_paths
         # If we have a value passed through command line
@@ -1751,16 +1766,31 @@ class Project:
 
     # Get the input topology filepath from the inputs or try to guess it
     def get_input_topology_filepath (self) -> File:
+        # Set a function to parse possible glob notation
+        def parse (filepath : str) -> str:
+            # If there is no glob pattern then just return the string as is
+            if not is_glob(filepath):
+                return filepath
+            # If there is glob pattern then parse it
+            parsed_filepaths = glob(filepath)
+            if len(parsed_filepaths) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
+                raise InputError(f'No topologies found with "{filepath}"')
+            if len(parsed_filepaths) > 1:
+                raise InputError(f'Multiple topologies found with "{filepath}": {", ".join(parsed_filepaths)}')
+            return parsed_filepaths[0]
         # If this value was passed through command line then it would be set as the internal value already
         if self.input_topology_filepath:
-            return self.input_topology_filepath
+            return parse(self.input_topology_filepath)
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
             if inputs_value:
-                return inputs_value
+                return parse(inputs_value)
         # Otherwise we must guess which is the topology file
         guess = self.guess_input_topology_filepath()
         if guess:
