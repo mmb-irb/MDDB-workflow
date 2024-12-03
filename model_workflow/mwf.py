@@ -42,7 +42,7 @@ from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files, is_glob
+from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files, is_glob, parse_glob
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -114,16 +114,9 @@ class MD:
             self.remote = Remote(f'{self.project.database_url}/rest/current/projects/{self.accession}')
         # Save the directory
         self.directory = remove_final_slash(directory)
-        # If the directory does not exists then we may have 2 different scenarios
+        # If the directory does not exists then create it
         if not exists(self.directory):
-            # If we have a remote project to download then it means we must download input files
-            # Thus we simpy create the missing directory and it will be filled further
-            if self.remote:
-                mkdir(self.directory)
-            # Otherwise we are supposed to find input files locally
-            # If the directory does not exist we have nothing to do so we raise an error
-            else:
-                raise InputError(f'MD directory {self.directory} does not exist')
+            mkdir(self.directory)
         # Save the input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
@@ -171,45 +164,66 @@ class MD:
 
     # Set a function to get input structure file path
     def get_input_structure_filepath (self) -> str:
-        # Set a function to parse possible glob notation
-        def parse (filepath : str) -> str:
-            # If there is no glob pattern then just return the string as is
-            if not is_glob(filepath):
-                return filepath
-            # If there is glob pattern then parse it
-            parsed_filepaths = glob(filepath)
-            if len(parsed_filepaths) == 0:
-                # Warn the user in case it was trying to use glob syntax to donwload remote files
-                if self.remote:
-                    warn('Spread syntax is not supported to download remote files')
-                raise InputError(f'No structure found with "{filepath}"')
-            if len(parsed_filepaths) > 1:
-                raise InputError(f'Multiple structures found with "{filepath}": {", ".join(parsed_filepaths)}')
-            return parsed_filepaths[0]
         # Set a function to find out if a path is relative to MD directories or to the project directory
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
-        def relativize_path (input_path : str) -> str:
-            project_relative_filepath = self.project.project_pathify(input_path)
-            project_structure = File(project_relative_filepath)
+        # Parse glob notation in the process
+        def relativize_and_parse_paths (input_path : str) -> str:
+            # Check if it is an absolute path
+            if isabs(input_path):
+                abs_glob_parse = parse_glob(input_path)
+                # If we had multiple results then we complain
+                if len(abs_glob_parse) > 1:
+                    raise InputError(f'Multiple structures found with "{input_path}": {", ".join(abs_glob_parse)}')
+                # If we had no results then we complain
+                if len(abs_glob_parse) == 0:
+                    if self.remote:
+                        warn('Spread syntax is not supported to download remote files')
+                    raise InputError(f'No structure found with "{input_path}"')
+                abs_parsed_filepath = abs_glob_parse[0]
+                return abs_parsed_filepath
+            # Check the MD directory
             md_relative_filepath = self.md_pathify(input_path)
-            md_structure = File(md_relative_filepath)
-            if isabs(input_path) or (project_structure.exists and not md_structure.exists):
-                return project_relative_filepath
-            return md_relative_filepath
+            md_glob_parse = parse_glob(md_relative_filepath)
+            if len(md_glob_parse) > 1:
+                raise InputError(f'Multiple structures found with "{input_path}": {", ".join(md_glob_parse)}')
+            md_parsed_filepath = md_glob_parse[0] if len(md_glob_parse) == 1 else None
+            if md_parsed_filepath and File(md_parsed_filepath).exists:
+                return md_parsed_filepath
+            # Check the project directory
+            project_relative_filepath = self.project.project_pathify(input_path)
+            project_glob_parse = parse_glob(project_relative_filepath)
+            if len(project_glob_parse) > 1:
+                raise InputError(f'Multiple structures found with "{input_path}": {", ".join(project_glob_parse)}')
+            project_parsed_filepath = project_glob_parse[0] if len(project_glob_parse) == 1 else None
+            if project_parsed_filepath and File(project_parsed_filepath).exists:
+                return project_parsed_filepath
+            # At this point we can conclude the input structure file does not exist
+            # If we have no paths at all then it means a glob pattern was passed and it didn't match
+            # Note that if a glob pattern existed then it would mean the file actually existed
+            if len(md_glob_parse) == 0 and len(project_glob_parse) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
+                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+            # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
+            # However make sure we have a remote
+            if not self.remote:
+                raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
+            return md_parsed_filepath
         # If we have a value passed through command line
         if self.input_structure_filepath:
             # Find out if it is relative to MD directories or to the project directory
-            return relativize_path(parse(self.input_structure_filepath))
+            return relativize_and_parse_paths(self.input_structure_filepath)
         # If we have a value passed through the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.project.get_input('input_structure_filepath')
             # If there is a valid input then use it
-            if inputs_value: return relativize_path(parse(inputs_value))
+            if inputs_value: return relativize_and_parse_paths(inputs_value)
         # If there is not input structure then asume it is the default
         # Check the default structure file exists or it may be downloaded
-        default_structure_filepath = relativize_path(STRUCTURE_FILENAME)
+        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME)
         default_structure_file = File(default_structure_filepath)
         if default_structure_file.exists or self.remote:
             return default_structure_filepath
@@ -266,25 +280,61 @@ class MD:
                 checked_paths = [ checked_paths ]
             else:
                 raise InputError('Input trajectory filepaths must be a list of strings or a string')
-            # Check no trajectory path is absolute
-            for path in checked_paths:
-                if path[0] == '/': raise InputError(f'Trajectory paths MUST be relative, not absolute ({path})')
+            # Make sure all or none of the trajectory paths are absolute
+            abs_count = sum([ isabs(path) for path in checked_paths ])
+            if not (abs_count == 0 or abs_count == len(checked_paths)):
+                raise InputError('All trajectory frames must be relative or absolute. Mixing is not supported')
+            # Set a function to glob-parse and merge all paths
+            def parse_all_glob (paths : List[str]) -> List[str]:
+                parsed_paths = []
+                for path in paths:
+                    parsed_paths += parse_glob(path)
+                return parsed_paths
+            # In case trajectory paths are absolute
+            if abs_count > 0:
+                absolute_parsed_paths = parse_all_glob(checked_paths)
+                # Check we successfully defined some trajectory file
+                if len(absolute_parsed_paths) == 0:
+                    # Warn the user in case it was trying to use glob syntax to donwload remote files
+                    if self.remote:
+                        warn('Spread syntax is not supported to download remote files')
+                    raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+                return absolute_parsed_paths
+            # If trajectory paths are not absolute then check if they are relative to the MD directory
             # Get paths relative to the current MD directory
-            relative_paths = [ self.md_pathify(path) for path in checked_paths ]
+            md_relative_paths = [ self.md_pathify(path) for path in checked_paths ]
             # In case there are glob characters we must parse the paths
-            parsed_paths = []
-            for path in relative_paths:
-                if is_glob(path):
-                    parsed_paths += glob(path)
-                else:
-                    parsed_paths.append(path)
+            md_parsed_paths = parse_all_glob(md_relative_paths)
             # Check we successfully defined some trajectory file
-            if len(parsed_paths) == 0:
+            if len(md_parsed_paths) > 0:
+                # If so, check at least one of the files do actually exist
+                if any([ File(path).exists for path in md_parsed_paths ]):
+                    return md_parsed_paths
+            # If no trajectory files where found then asume they are relative to the project
+            # Get paths relative to the project directory
+            project_relative_paths = [ self.project.project_pathify(path) for path in checked_paths ]
+            # In case there are glob characters we must parse the paths
+            project_parsed_paths = parse_all_glob(project_relative_paths)
+            # Check we successfully defined some trajectory file
+            if len(project_parsed_paths) > 0:
+                # If so, check at least one of the files do actually exist
+                if any([ File(path).exists for path in project_parsed_paths ]):
+                    return project_parsed_paths
+            # At this point we can conclude the input trajectory file does not exist
+            # If we have no paths at all then it means a glob pattern was passed and it didn't match
+            # Note that if a glob pattern existed then it would mean the file actually existed
+            if len(md_parsed_paths) == 0 and len(project_parsed_paths) == 0:
                 # Warn the user in case it was trying to use glob syntax to donwload remote files
                 if self.remote:
                     warn('Spread syntax is not supported to download remote files')
-                raise InputError('No trajectory file was reached in paths ' + ', '.join(relative_paths))
-            return parsed_paths
+                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+            # If we have a path however it may be downloaded from the database if we have a remote
+            if not self.remote:
+                raise InputError(f'Cannot find anywhere a trajectory file with path(s) "{", ".join(input_paths)}"')
+            # In this case we set the path as MD relative
+            # Note that if input path was not glob based it will be both as project relative and MD relative
+            if len(md_parsed_paths) == 0: raise ValueError('This should never happen')
+            return md_parsed_paths
         # If we have a value passed through command line
         if self.input_trajectory_filepaths:
             return relativize_and_parse_paths(self.input_trajectory_filepaths)
@@ -1025,6 +1075,11 @@ class MD:
         # If we already have a stored value then return it
         if self.project._pbc_residues:
             return self.project._pbc_residues
+        # If there is no inputs file then asume there are no PBC residues and warn the user
+        if not self.project.is_inputs_file_available():
+            warn('Since there is no inputs file we assume there are no PBC residues')
+            self.project._pbc_residues = []
+            return self.project._pbc_residues
         # Otherwise we must find the value
         self.project._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
         return self.project._pbc_residues
@@ -1452,6 +1507,8 @@ class Project:
         # Set the different MD directories to be run
         # Each MD directory must contain a trajectory and may contain a structure
         md_directories : Optional[List[str]] = None,
+        # Set an alternative MD configuration input
+        md_config : Optional[list] = None,
         # Reference MD directory
         # Project functions which require structure or trajectory will use the ones from the reference MD
         # If no reference is passed then the first directory is used
@@ -1508,6 +1565,23 @@ class Project:
         # Do not parse them to files yet, let this to the MD class
         self.input_structure_filepath = input_structure_filepath
         self.input_trajectory_filepaths = input_trajectory_filepaths
+
+        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -stru, -traj)
+        if md_config and (md_directories or input_structure_filepath or input_trajectory_filepaths):
+            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -stru, -traj)')
+        # Save the MD configurations
+        self.md_config = md_config
+        # Make sure MD configuration has the correct format
+        if self.md_config:
+            # Make sure all MD configurations have at least 3 values each
+            for mdc in self.md_config:
+                if len(mdc) < 3:
+                    raise InputError('Wrong MD configuration: the patter is -md <directory> <structure> <trajectory> <trajectory 2> ...')
+            # Make sure there are no duplictaed MD directories
+            md_directories = [ mdc[0] for mdc in self.md_config ]
+            if len(md_directories) > len(set(md_directories)):
+                raise InputError('There are duplicated MD directories')
+
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
         self._populations_file = File(self.populations_filepath)
@@ -1524,6 +1598,7 @@ class Project:
 
         # Set the MD directories
         self._md_directories = md_directories
+        # Check input MDs are correct to far
         if self._md_directories:
             self.check_md_directories()
 
@@ -1670,13 +1745,24 @@ class Project:
             return self._mds
         # Now instantiate a new MD for each declared MD and save the reference MD
         self._mds = []
-        for n, md_directory in enumerate(self.md_directories, 1):
-            md = MD(
-                project = self, number = n, directory = md_directory,
-                input_structure_filepath = self.input_structure_filepath,
-                input_trajectory_filepaths = self.input_trajectory_filepaths,
-            )
-            self._mds.append(md)
+        # New system with MD configurations (-md)
+        if self.md_config:
+            for n, config in enumerate(self.md_config, 1):
+                md = MD(
+                    project = self, number = n, directory = config[0],
+                    input_structure_filepath = config[1],
+                    input_trajectory_filepaths = config[2:],
+                )
+                self._mds.append(md)
+        # Old system (-mdir, -stru -traj)
+        else:
+            for n, md_directory in enumerate(self.md_directories, 1):
+                md = MD(
+                    project = self, number = n, directory = md_directory,
+                    input_structure_filepath = self.input_structure_filepath,
+                    input_trajectory_filepaths = self.input_trajectory_filepaths,
+                )
+                self._mds.append(md)
         return self._mds
     mds = property(get_mds, None, None, "Available MDs (read only)")
 

@@ -132,6 +132,17 @@ run_parser.add_argument(
 )
 
 run_parser.add_argument(
+    "-md", "--md_config",
+    action='append',
+    nargs='*',
+    default=None,
+    help=("Configuration of a specific MD. You may declare as many as you want.\n"
+          "Every MD requires a directory name, a structure path and at least one trajectory path.\n"
+          "The structure is -md <directory> <structure> <trajectory 1> <trajectory 2> ...\n"
+          "Note that all trajectories from the same MD will be merged.")
+)
+
+run_parser.add_argument(
     "-proj", "--accession",
     default=None,
     help="Project accession to download missing input files from the database.")
