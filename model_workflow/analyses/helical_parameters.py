@@ -231,6 +231,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence):
     if not os.path.exists('canal_output_phaseC.ser'):
         raise SystemExit('Something went wrong with Canals software')
 
+
 def send_files(sequence,frames_limit):
     files_averages = []
     files_backbones = []

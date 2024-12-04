@@ -3,7 +3,6 @@ from os.path import exists
 from shutil import copyfile
 from subprocess import call
 from typing import List
-
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 
 from model_workflow.mwf import workflow, Project, requestables
@@ -14,9 +13,12 @@ from model_workflow.utils.filters import filter_atoms
 from model_workflow.utils.subsets import get_trajectory_subset
 from model_workflow.utils.constants import *
 from model_workflow.utils.auxiliar import InputError
+from model_workflow.utils.nassa_file import generate_nassa_config
+from model_workflow.analyses.nassa import workflow_nassa
 
 # Set the path to the input setter jupyter notebook
 inputs_template = str(Path(__file__).parent / "resources" / "inputs_file_template.yml")
+nassa_template = str(Path(__file__).parent / "resources" / "nassa_template.yml")
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
@@ -109,6 +111,90 @@ def main ():
         structure.chainer(selection, args.letter, args.whole_fragments)
         structure.generate_pdb_file(args.output_structure)
         print('You got it ;)')
+    # If user wants to run the NASSA analysis
+    elif subcommand == "nassa":
+        # If no input arguments are passed print help
+        if args.config == None and args.make_config == False:
+            nassa_parser.print_help()
+            print('Please provide a configuration file or make one with the -m flag')
+            return
+        # If the user wants to make a configuration file
+        if args.make_config:
+            #print('args.make_config: ', args.make_config)
+            if args.make_config == True or args.make_config == []:
+            # Make a copy of the template in the local directory if there is not an inputs file yet
+                if not exists(DEFAULT_NASSA_CONFIG_FILENAME):
+                    copyfile(nassa_template, DEFAULT_NASSA_CONFIG_FILENAME)
+                # Open a text editor for the user
+                call(["vim", DEFAULT_NASSA_CONFIG_FILENAME])
+                print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
+                return
+            # If the user provides a path to the files
+            else:
+                generate_nassa_config(
+                    args.make_config, 
+                    args.seq_path,
+                    args.output, 
+                    args.unit_len,
+                    args.n_sequences
+                    )
+            print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
+            return 
+        # If the user wants to run the analysis. With the config file an analysis name must be provided, or the all flag must be set
+        if args.config and args.analysis_names == None or args.all == False:
+            nassa_parser.print_help()
+            print('Please provide an analysis name to run:', ', '.join(NASSA_ANALYSES_LIST))
+            return
+        # If the user wants to run the helical parameters analysis we must check if the necessary files are provided (structure, topology and trajectory)
+        if args.helical_parameters:
+            # Also, it is necesary to provide the project directories. Each of the project directories must contain an independent MD
+            if args.proj_directories == None:
+                nassa_parser.print_help()
+                print('Please provide a project directory to run the helical parameters analysis')
+                return
+            if args.input_structure_filepath == None:
+                raise InputError('Please provide a structure file to run the helical parameters analysis')
+            elif args.input_trajectory_filepath == None:
+                raise InputError('Please provide a trajectory file to run the helical parameters analysis')
+            elif args.input_topology_filepath == None:
+                raise InputError('Please provide a topology file to run the helical parameters analysis')
+            # If the all flag is set, the user must provide the path to the sequences because it is necessary to create the nassa.yml and run the NASSA analysis
+            if args.all:
+                if not args.seq_path:
+                    raise InputError('Please, if all option is selected provide the path to the sequences (--seq_path)')
+            # If all the flags are correctly set, we can run the analysis
+            workflow_nassa(
+                config_file_path=None, # The configuration file is not needed in this case because we are going to run the helical parameters analysis so it will be created then
+                analysis_names=args.analysis_names,
+                overwrite=args.overwrite,
+                overwrite_nassa=args.overwrite_nassa,
+                helical_par=args.helical_parameters,
+                proj_dirs=args.proj_directories,
+                input_structure_file=args.input_structure_filepath,
+                input_trajectory_file=args.input_trajectory_filepath,
+                input_top_file=args.input_topology_filepath,
+                all=args.all,
+                unit_len=args.unit_len,
+                n_sequences=args.n_sequences,
+                seq_path=args.seq_path,
+            )
+        # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
+        else:
+            dict_args = vars(args)
+            del dict_args['subcommand'] # preguntar Dani ¿?
+            # Call the actual main function
+            workflow_nassa(
+                    config_file_path = File(args.config), 
+                    analysis_names = args.analysis_names, 
+                    make_config = args.make_config, 
+                    output =  args.output,
+                    working_directory = args.working_directory,
+                    overwrite = args.overwrite, 
+                    overwrite_nassa = args.overwrite_nassa,
+                    n_sequences = args.n_sequences,
+                    unit_len = args.unit_len,
+                    all= args.all,
+            )
 
 # Define console arguments to call the workflow
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
@@ -408,3 +494,91 @@ chainer_parser.add_argument(
 chainer_parser.add_argument(
     "-whfr", "--whole_fragments", type=bool, default=True,
     help="Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains.")
+
+# The NASSA commands 
+nassa_parser = subparsers.add_parser("nassa", formatter_class=RawTextHelpFormatter,
+    help="Run and set the configuration of the NASSA analysis")
+nassa_parser.add_argument(
+    "-c", "--config",
+    help="Configuration file for the NASSA analysis")
+nassa_parser.add_argument(
+    "-n", "--analysis_names", 
+    nargs='*',
+    default=None, 
+    help="Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST))
+nassa_parser.add_argument(
+    "-m", "--make_config",
+    type=str,
+    default=[],
+    const=True,
+    action=custom,
+    help="Make a configuration file for the NASSA analysis: makecfg.\nThe base path could be given as an argument. If not, an example of configuration file is created.")
+nassa_parser.add_argument(
+    "-seq", "--seq_path",
+    type=str,
+    const=False,
+    action=custom,
+    help="Set the base path of the sequences. If not given, the sequences are searched in the current directory.")
+nassa_parser.add_argument(
+    "-o", "--output",
+    help="Output path for the NASSA analysis")
+nassa_parser.add_argument(
+    "-dir", "--working_directory",
+    default='.',
+    help="Directory where the whole workflow is run. Current directory by default.")
+nassa_parser.add_argument(
+    "-ow", "--overwrite",
+    type=str,
+    nargs='*',
+    default=[],
+    action=custom,
+    const=True,
+    help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool")
+nassa_parser.add_argument(
+    "-own", "--overwrite_nassa",
+    type=str,
+    nargs='*',
+    default=[],
+    action=custom,
+    const=True,
+    help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool for the NASSA analysis")
+nassa_parser.add_argument(
+    "-nseq", "--n_sequences",
+    type=int,
+    help="Number of sequences to be analyzed")
+nassa_parser.add_argument(
+    "-i", "--unit_len",
+    type=int,
+    default=6,
+    help="Number of base pairs to be analyzed")
+nassa_parser.add_argument(
+    "-hp", "--helical_parameters",
+    action='store_true',
+    default=False,
+    help="Run the helical parameters analysis")
+nassa_parser.add_argument(
+    "-pdirs", "--proj_directories",
+    nargs='*',
+    default=None,
+    help=("Path to the different project directories. Each directory is to contain an independent project.\n"
+        "Several output files will be generated in the same folder directory"))
+nassa_parser.add_argument(
+    "-all", "--all",
+    action='store_true',
+    default=False,
+    help="Run all the helical parameters and NASSA analyses")
+nassa_parser.add_argument(
+    "-stru", "--input_structure_filepath",
+    default=None,
+    help=("Path to input structure file. It may be relative to the project or to each MD directory.\n"
+        "If this value is not passed then the standard structure file is used as input by default"))
+nassa_parser.add_argument(
+    "-traj", "--input_trajectory_filepath",
+    nargs='*',
+    default=None,
+    help=("Path to input trajectory file. It is relative to each MD directory.\n"
+        "If this value is not passed then the standard trajectory file path is used as input by default"))
+nassa_parser.add_argument(
+    "-top", "--input_topology_filepath",
+    default=None, # There is no default since many formats may be possible
+    help="Path to input topology file. It is relative to the project directory.")
