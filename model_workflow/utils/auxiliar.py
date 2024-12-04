@@ -7,6 +7,7 @@ from os.path import isfile
 import sys
 import json
 import yaml
+from glob import glob
 from typing import Optional, List, Generator
 
 # Check if a module has been imported
@@ -175,7 +176,7 @@ def list_files (directory : str) -> List[str]:
 # Set a function to check if a string has patterns to be parsed by a glob function
 # Note that this is not trivial, but this function should be good enough for our case
 # https://stackoverflow.com/questions/42283009/check-if-string-is-a-glob-pattern
-GLOB_CHARACTERS = ['*', '?', '+', '[']
+GLOB_CHARACTERS = ['*', '?', '[']
 def is_glob (path : str) -> bool:
     # Find unescaped glob characters
     for c, character in enumerate(path):
@@ -187,3 +188,14 @@ def is_glob (path : str) -> bool:
         if previous_characters != '\\':
             return True
     return False
+
+# Parse a glob path into one or several results
+# If the path has no glob characters then return it as it is
+# Otherwise make sure
+def parse_glob (path : str) -> List[str]:
+    # If there is no glob pattern then just return the string as is
+    if not is_glob(path):
+        return [ path ]
+    # If there is glob pattern then parse it
+    parsed_filepaths = glob(path)
+    return parsed_filepaths

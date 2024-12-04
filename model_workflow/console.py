@@ -31,6 +31,9 @@ def main ():
     # Parse input arguments from the console
     # The vars function converts the args object to a dictionary
     args = parser.parse_args()
+    # Apply common arguments as necessary
+    if args.no_symlinks:
+        GLOBALS['no_symlinks'] = True
     # Find which subcommand was called
     subcommand = args.subcommand
     # If there is not subcommand then print help
@@ -38,8 +41,14 @@ def main ():
         parser.print_help()
     # If user wants to run the workflow
     elif subcommand == "run":
+        # Ger all parsed arguments
         dict_args = vars(args)
+        # Remove arguments not related to this subcommand
         del dict_args['subcommand']
+        # Remove common arguments from the dict as well
+        common_args = [ action.dest for action in common_parser._actions ]
+        for arg in common_args:
+            del dict_args[arg]
         # Find out which arguments are for the Project class and which ones are for the workflow
         project_args = {}
         workflow_args = {}
@@ -196,12 +205,25 @@ def main ():
                     all= args.all,
             )
 
+# Define a common parser running in top of all others
+# This arguments declared here are available among all subparsers
+common_parser = ArgumentParser(add_help=False)
+
+# If this argument is passed then no symlinks will be used anywhere
+# Files will be copied instead thus taking more time and disk
+# However symlinks are not always allowed in all file systems so this is sometimes necessary
+common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true', help="Do not use symlinks internally")
+
 # Define console arguments to call the workflow
 parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
 subparsers = parser.add_subparsers(help='Name of the subcommand to be used', dest="subcommand")
 
 # Set the run subcommand
-run_parser = subparsers.add_parser("run", help="Run the workflow", formatter_class=RawTextHelpFormatter)
+run_parser = subparsers.add_parser("run",
+    help="Run the workflow",
+    formatter_class=RawTextHelpFormatter,
+    parents=[common_parser]
+)
 
 # Set optional arguments
 run_parser.add_argument(
@@ -215,6 +237,17 @@ run_parser.add_argument(
     default=None,
     help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
         "Several output files will be generated in every MD directory")
+)
+
+run_parser.add_argument(
+    "-md", "--md_config",
+    action='append',
+    nargs='*',
+    default=None,
+    help=("Configuration of a specific MD. You may declare as many as you want.\n"
+          "Every MD requires a directory name, a structure path and at least one trajectory path.\n"
+          "The structure is -md <directory> <structure> <trajectory 1> <trajectory 2> ...\n"
+          "Note that all trajectories from the same MD will be merged.")
 )
 
 run_parser.add_argument(
@@ -404,12 +437,17 @@ run_parser.add_argument(
         "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
 
 # Add a new to command to aid in the inputs file setup
-inputs_parser = subparsers.add_parser("inputs", help="Set the inputs file", formatter_class=RawTextHelpFormatter)
+inputs_parser = subparsers.add_parser("inputs",
+    help="Set the inputs file",
+    formatter_class=RawTextHelpFormatter,
+    parents=[common_parser]
+)
 
 # The convert command
 convert_parser = subparsers.add_parser("convert",
     help="Convert a structure and/or several trajectories to other formats\n" +
-        "If several input trajectories are passed they will be merged previously.")
+        "If several input trajectories are passed they will be merged previously.",
+    parents=[common_parser])
 convert_parser.add_argument(
     "-is", "--input_structure",
     help="Path to input structure file")
@@ -425,7 +463,8 @@ convert_parser.add_argument(
 
 # The filter command
 filter_parser = subparsers.add_parser("filter",
-    help="Filter atoms in a structure and/or a trajectory\n")
+    help="Filter atoms in a structure and/or a trajectory\n",
+    parents=[common_parser])
 filter_parser.add_argument(
     "-is", "--input_structure", required=True,
     help="Path to input structure file")
@@ -447,7 +486,8 @@ filter_parser.add_argument(
 
 # The subset command
 subset_parser = subparsers.add_parser("subset",
-    help="Get a subset of frames from the current trajectory.")
+    help="Get a subset of frames from the current trajectory.",
+    parents=[common_parser])
 subset_parser.add_argument(
     "-is", "--input_structure", required=True,
     help="Path to input structure file")
@@ -475,7 +515,8 @@ subset_parser.add_argument(
 
 # The chainer command
 chainer_parser = subparsers.add_parser("chainer",
-    help="Edit structure (pdb) chains")
+    help="Edit structure (pdb) chains",
+    parents=[common_parser])
 chainer_parser.add_argument(
     "-is", "--input_structure", required=True,
     help="Path to input structure file")

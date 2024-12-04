@@ -3,6 +3,13 @@ from shutil import which
 
 # CONSTANTS ---------------------------------------------------------------------------
 
+# Set a custom globals dict
+# This way we can edit the value of a constant on runtime
+GLOBALS = {
+    # Set if symlinks are allowed
+    'no_symlinks': False
+}
+
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
 GROMACS_EXECUTABLE_COMMON_NAMES = ['gmx', 'gmx_mpi']
 # Set the name of the environmental variable which is read by the workflow to know the gromacs path
