@@ -1456,7 +1456,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
-            frames_limit = 1000,
+            frames_limit = None,
         )
         
     # Markov

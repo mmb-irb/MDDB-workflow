@@ -7,7 +7,7 @@ import subprocess
 from shutil import move
 import glob
 
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, store_byte
 
 conda_prefix = os.environ['CONDA_PREFIX']
 # If this path does not exist then it means curves is not installed
@@ -237,24 +237,65 @@ def send_files(sequence,frames_limit):
     files_backbones = []
     files_allbackbones = []
     # Iterate over all files in the directory
-    for fi in os.listdir():
-        if fi.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
-            words = fi.split('.')
-            helpar = words[0].split('_')[-1].lower()
-            # Check to which block the file came from
-            if helpar in ["shear","stagger","stretch","buckle","opening","propel","inclin","tip","xdisp","ydisp", 
-                          "majw","majd","minw","mind","rise","shift","slide","roll","tilt","twist"]:
-                
-                files_averages.append(fi)
+    for file in os.listdir():
+        if not file.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
+            continue
+        data = []
+        with open(file, 'r') as ser_file:
+            # Skip the first line since it is only the headers
+            n_lines = 0
+            for line in ser_file:
+                # Skip the first line since it is only the row number
+                numbers = [ s for s in line.strip().split()[1:] ]
+                data += numbers
+                n_lines += 1
+                # if len(data) > 1000:
+                #     break
+        # Save the file with the same name but with .bin extension and mdf prefix
+        file_name = 'mdf.' + file
+        file_path = os.path.join(os.getcwd(), file_name.replace('.ser', '.bin'))
+        # Call the function to store the data in a binary file and compress it
+        store_byte(
+                data=data,
+                byte_size=4, # 32 bits
+                filepath=file_path
+        )
+        # We need the meta file to store the information about the binary file (with the same name and .meta.json extension)
+        name_meta_file = file_path + '.meta.json'
+        meta_data = {
+             'x': {
+                  'name': 'bases',
+                  'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
+             },
+                'y': {
+                    'name': 'frames',
+                    'length': n_lines # Total number of lines in the file os the number of frames
+                },
+            'bitsize': 32, # 32 bits
+        }
+        save_json(meta_data, name_meta_file)
 
-            elif helpar in ["alphac","alphaw","betac","betaw","gammac","gammaw","phasec","phasew","epsilc","epsilw","zetac","zetaw"]:
-                
-                files_backbones.append(fi)
 
-            if helpar in ['alphac', 'alphaw', 'betac', 'betaw', 'gammac', 'gammaw', 'deltac', 'deltaw', 'epsilc', 'epsilw', 
-                          'zetac', 'zetaw', 'chic', 'chiw', 'phasec', 'phasew']:
-                
-                files_allbackbones.append(fi)
+        #  THIS PART OF THE CODE IS TO ANALYZE THE FILES AND COMPUTE THE AVERAGES, STANDARD DEVIATIONS AND TIME SERIES
+        # BUT IT SHOULD BE REMOVED
+        words = file.split('.')
+        helpar = words[0].split('_')[-1].lower()
+        # Check to which block the file came from
+        if helpar in ["shear","stagger","stretch","buckle","opening","propel","inclin","tip","xdisp","ydisp", 
+                        "majw","majd","minw","mind","rise","shift","slide","roll","tilt","twist"]:
+            
+            files_averages.append(file)
+
+        elif helpar in ["alphac","alphaw","betac","betaw","gammac","gammaw","phasec","phasew","epsilc","epsilw","zetac","zetaw"]:
+            
+            files_backbones.append(file)
+
+        if helpar in ['alphac', 'alphaw', 'betac', 'betaw', 'gammac', 'gammaw', 'deltac', 'deltaw', 'epsilc', 'epsilw', 
+                        'zetac', 'zetaw', 'chic', 'chiw', 'phasec', 'phasew']:
+            
+            files_allbackbones.append(file)
+
+    
 
     information_dictionary = {'avg_res':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}},'ts':{'backbone':{},
                               'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}}}
@@ -647,7 +688,7 @@ def time_series(file,word,reduced_trajectory_frames_limit):
     '''
     snapshots = len(ser_data.index)
 
-    step = math.ceil(snapshots / reduced_trajectory_frames_limit)
+    step = math.ceil(snapshots)# / reduced_trajectory_frames_limit)
 
     ser_data = ser_data[0:len(ser_data.index):step]
     return ser_data

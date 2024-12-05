@@ -9,6 +9,7 @@ import json
 import yaml
 from glob import glob
 from typing import Optional, List, Generator
+from struct import pack
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -199,3 +200,26 @@ def parse_glob (path : str) -> List[str]:
     # If there is glob pattern then parse it
     parsed_filepaths = glob(path)
     return parsed_filepaths
+
+# Supported byte sizes
+SUPPORTED_BYTE_SIZES = {
+    2: 'e',
+    4: 'f',
+    8: 'd'
+}
+from typing import List
+from struct import pack
+# Data is a list of numeric values
+# Bit size is the number of bits for each value in data to be occupied
+def store_byte (data : List[float], byte_size : int, filepath : str):
+    # Check bit size to make sense
+    letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
+    if not letter:
+        raise ValueError(f'Not supported byte size {byte_size}, please select one of these: {(SUPPORTED_BYTE_SIZES.keys())}')
+    # Start writting the output file
+    byte_flag = f'!{letter}'
+    with open(filepath, 'wb') as file:
+        # Iterate over data list values
+        for value in data:
+            value = float(value)
+            file.write(pack(byte_flag, value))
