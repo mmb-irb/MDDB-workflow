@@ -17,9 +17,26 @@ MDTRAJ_ATOM_MISMATCH_ERROR = r'xyz must be shape \(Any, ([0-9]*), 3\). You suppl
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
 GROMACS_SYSTEM_ATOMS = r'System\) has ([0-9]*) elements'
 
+# List supported formats
+TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
+TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr', 'nc', 'dcd', 'mdcrd', 'pdb' }
+STRUCTURE_SUPPORTED_FORMATS = { *TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro' }
+
 # Check input files coherence and intergrity
 # If there is any problem then raise an input error
 def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : 'File'):
+
+    # Get a sample trajectory file and then check its format
+    # All input trajectory files must have the same format
+    trajectory_sample = input_trajectory_files[0]
+
+    # Check input files are supported by the workflow
+    if input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
+        raise InputError(f'Topology {input_topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
+    if trajectory_sample.format not in TRAJECTORY_SUPPORTED_FORMATS:
+        raise InputError(f'Trajectory {trajectory_sample.path} has a not supported format. Try one of these: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}')
+    if input_structure_file.format not in STRUCTURE_SUPPORTED_FORMATS:
+        raise InputError(f'Structure {input_structure_file.path} has a not supported format. Try one of these: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}')
 
     # Make sure the trajectory file is not corrupted
 
@@ -28,10 +45,6 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
     # This error may happen with NetCDF files and it is a bit shady
     # Some tools may be able to read the first frames of the corrupted file: VMD and pytraj
     # Some other tools will instantly fail to read it: MDtraj and MDAnalysis
-
-    # Get a sample trajectory file and then check its format
-    # All input trajectory files must have the same format
-    trajectory_sample = input_trajectory_files[0]
     if trajectory_sample.format == 'nc':
         try:
             # Iterate trajectory files
