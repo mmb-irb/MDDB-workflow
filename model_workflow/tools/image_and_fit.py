@@ -35,7 +35,7 @@ def image_and_fit (
     pbc_selection : str,
     ) -> str:
 
-    print(' Image: ' + str(image) + ' | Fit: ' + str(fit))
+    print(f' Image: {image} | Fit: {fit}')
 
     if not image and not fit:
         return
@@ -73,6 +73,9 @@ def image_and_fit (
 
         # Check if coordinates are to be translated 
         must_translate = translation != [0, 0, 0]
+
+        # Set logs grey
+        print(GREY_HEADER)
 
         # If so run the imaging process without the '-center' flag
         if must_translate:
@@ -143,7 +146,6 @@ def image_and_fit (
                 '-quiet'
             ], stdin=p.stdout, stdout=PIPE)
         # Run the defined process
-        print(GREY_HEADER)
         logs = process.stdout.decode()
         p.stdout.close()
         print(COLOR_END)

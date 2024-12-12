@@ -679,7 +679,7 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                pbc_selection = self.input_pbc_selection
+                pbc_selection = self.pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
@@ -1066,6 +1066,15 @@ class MD:
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
+    # Periodic boundary conditions atom selection
+    def get_pbc_selection (self) -> List[int]:
+        # If there is no inputs file then asume there are no PBC atoms and warn the user
+        if not self.project.is_inputs_file_available():
+            warn('Since there is no inputs file we assume there are no PBC atoms')
+            return None
+        # Otherwise use the input value
+        return self.input_pbc_selection
+    pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # Indices of residues in periodic boundary conditions
     # WARNING: Do not inherit project pbc residues
@@ -1075,12 +1084,12 @@ class MD:
         if self.project._pbc_residues:
             return self.project._pbc_residues
         # If there is no inputs file then asume there are no PBC residues and warn the user
-        if not self.project.is_inputs_file_available():
-            warn('Since there is no inputs file we assume there are no PBC residues')
+        pbc_selection = self.pbc_selection
+        if not pbc_selection:
             self.project._pbc_residues = []
             return self.project._pbc_residues
         # Otherwise we must find the value
-        self.project._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
+        self.project._pbc_residues = get_pbc_residues(self.structure, pbc_selection)
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
