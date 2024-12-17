@@ -1,6 +1,5 @@
 from os.path import exists
 import re
-from typing import List
 
 import numpy as np
 

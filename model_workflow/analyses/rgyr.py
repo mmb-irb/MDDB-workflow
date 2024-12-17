@@ -2,7 +2,6 @@ from os.path import exists
 from os import remove
 from subprocess import run, PIPE, Popen
 from numpy import mean, std
-from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.xvg_parse import xvg_parse

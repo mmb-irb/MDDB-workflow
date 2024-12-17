@@ -3,7 +3,6 @@
 
 from subprocess import run, PIPE, Popen
 import os
-from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json

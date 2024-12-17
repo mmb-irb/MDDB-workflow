@@ -5,7 +5,6 @@
 
 import pytraj as pt
 import re
-from typing import List
 
 from distutils.version import StrictVersion
 

@@ -24,7 +24,6 @@ from glob import glob
 import re
 import math
 from subprocess import run, PIPE, Popen
-from typing import Optional, List, Tuple
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import load_json, save_json

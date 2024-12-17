@@ -3,9 +3,7 @@
 # Set the data needed to represent a Markov State Model grpah in the client
 # This is finding the most populated frames and calculating an RMSD matrix between these frames
 
-from typing import List
 from os import remove
-
 import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot

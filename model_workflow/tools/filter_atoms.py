@@ -2,7 +2,6 @@ from os import remove
 from os.path import exists
 from subprocess import run, PIPE, Popen
 import json
-from typing import Union, List
 
 import pytraj as pt
 

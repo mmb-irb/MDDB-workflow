@@ -11,7 +11,6 @@ import re
 import numpy
 from glob import glob
 from inspect import getfullargspec
-from typing import Optional, Union, List
 
 # Constants
 from model_workflow.utils.constants import *

@@ -7,7 +7,6 @@ from model_workflow.utils.type_hints import *
 import os
 import numpy
 from subprocess import run, PIPE, Popen
-from typing import List
 
 # This is a residual file produced by the sasa analysis
 # It must be deleted after each

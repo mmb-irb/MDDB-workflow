@@ -3,7 +3,6 @@ from model_workflow.utils.auxiliar import load_json
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.type_hints import *
-from typing import List, Optional
 
 import pytraj as pt
 

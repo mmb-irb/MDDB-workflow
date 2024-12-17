@@ -3,8 +3,6 @@ from os.path import exists
 from shutil import copyfile
 from subprocess import run, PIPE, Popen
 
-from typing import List
-
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *

@@ -4,7 +4,6 @@ from os.path import exists
 from json import load
 from pathlib import Path
 from subprocess import run, PIPE
-from typing import List
 from model_workflow.utils.type_hints import *
 
 import re

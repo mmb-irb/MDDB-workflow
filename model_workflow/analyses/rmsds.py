@@ -7,8 +7,6 @@ from model_workflow.utils.type_hints import *
 import os
 from subprocess import run, PIPE, Popen
 
-from typing import List
-
 # Run multiple RMSD analyses
 # A RMSD analysis is run with each reference:
 # - First frame

@@ -6,7 +6,6 @@ from model_workflow.utils.constants import MD_DIRECTORY
 from model_workflow.utils.type_hints import *
 
 from pathlib import Path
-from typing import Callable, List
 
 # Generate a JSON file with all project metadata
 def generate_project_metadata (

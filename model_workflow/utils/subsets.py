@@ -1,10 +1,10 @@
 from inspect import getfullargspec
-from typing import List
 
 from model_workflow.utils.formats import get_format_set_suitable_function
 from model_workflow.utils.pyt_spells import get_frames_count
 from model_workflow.utils.gmx_spells import get_trajectory_subset as gmx_get_trajectory_subset
 from model_workflow.utils.mdt_spells import get_trajectory_subset as mdt_get_trajectory_subset
+from model_workflow.utils.type_hints import *
 
 # Set the functions to perform single frame gettering
 subset_functions = [ gmx_get_trajectory_subset, mdt_get_trajectory_subset ]

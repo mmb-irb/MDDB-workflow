@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *

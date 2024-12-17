@@ -1,6 +1,6 @@
 import json
 import urllib.request
-from typing import List
+from model_workflow.utils.type_hints import *
 
 from model_workflow.utils.auxiliar import load_json, save_json, RemoteServiceError
 

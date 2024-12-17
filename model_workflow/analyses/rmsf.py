@@ -5,7 +5,6 @@ from subprocess import run, PIPE, Popen
 from os.path import exists
 from os import remove
 from numpy import mean, std
-from typing import List
 
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.utils.auxiliar import save_json

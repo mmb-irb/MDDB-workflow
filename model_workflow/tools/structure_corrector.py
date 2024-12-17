@@ -1,4 +1,3 @@
-from typing import Optional, List
 from os import remove
 from os.path import exists
 from json import load

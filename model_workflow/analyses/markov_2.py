@@ -8,7 +8,6 @@
 # DANI: Esto hace que al hacer un subset con solo las más populadas a penas capturemos ninguna transición
 # DANI: Se podrían prerocesar los datos para hacer clusters o algo similar
 
-from typing import List
 from os import remove
 
 import mdtraj as mdt

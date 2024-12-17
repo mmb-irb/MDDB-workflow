@@ -2,7 +2,6 @@
 from sklearn.decomposition import PCA
 import numpy as np
 
-from typing import List
 
 import mdtraj as mdt
 

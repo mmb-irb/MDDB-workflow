@@ -1,5 +1,5 @@
-from typing import List
 from model_workflow.utils.constants import NO_REFERABLE_FLAG, NOT_FOUND_FLAG
+from model_workflow.utils.type_hints import *
 
 # Build the residue map from both proteins and ligands maps
 # This is formatted as both the standard topology and metadata generators expect them

@@ -5,8 +5,6 @@
 
 import pytraj as pt
 
-from typing import List
-
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
