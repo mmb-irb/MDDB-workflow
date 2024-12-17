@@ -3,6 +3,7 @@ import json
 from typing import Optional
 
 from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.type_hints import *
 
 class Remote:
     def __init__ (self, url : str):

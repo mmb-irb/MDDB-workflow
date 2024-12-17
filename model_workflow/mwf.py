@@ -205,7 +205,7 @@ class MD:
                 # Warn the user in case it was trying to use glob syntax to donwload remote files
                 if self.remote:
                     warn('Spread syntax is not supported to download remote files')
-                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths)) #ISSUE
             # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
             # However make sure we have a remote
             if not self.remote:

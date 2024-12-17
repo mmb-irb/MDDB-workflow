@@ -8,6 +8,7 @@ from shutil import move
 import glob
 
 from model_workflow.utils.auxiliar import save_json, store_byte
+from model_workflow.utils.type_hints import *
 
 conda_prefix = os.environ['CONDA_PREFIX']
 # If this path does not exist then it means curves is not installed

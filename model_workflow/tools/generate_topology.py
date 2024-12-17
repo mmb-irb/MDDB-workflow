@@ -2,6 +2,7 @@ import json
 from typing import List
 
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.type_hints import *
 
 # Generate a json file to be uploaded to the database (mongo) with topology data
 def generate_topology (

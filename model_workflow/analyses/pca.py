@@ -8,6 +8,7 @@ import mdtraj as mdt
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import warn, save_json
+from model_workflow.utils.type_hints import *
 
 # Perform the PCA analysis
 def pca (

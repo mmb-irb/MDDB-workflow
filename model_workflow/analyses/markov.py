@@ -10,6 +10,7 @@ import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.type_hints import *
 
 auxiliar_pdb_filename = '.model.pdb'
 

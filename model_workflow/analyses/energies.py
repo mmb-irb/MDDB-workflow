@@ -30,6 +30,7 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
+from model_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'

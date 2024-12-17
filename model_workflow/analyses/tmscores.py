@@ -8,6 +8,7 @@ from typing import List
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS
+from model_workflow.utils.type_hints import *
 
 # TM scores
 # 

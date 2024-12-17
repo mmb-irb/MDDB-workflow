@@ -3,7 +3,7 @@ from model_workflow.utils.formats import get_format_set_suitable_function
 from model_workflow.utils.gmx_spells import filter_structure, filter_trajectory, filter_tpr
 from model_workflow.utils.pyt_spells import filter_topology
 from model_workflow.utils.structures import Structure
-
+from model_workflow.utils.type_hints import *
 from typing import Optional
 from inspect import getfullargspec
 
@@ -116,7 +116,7 @@ def filter_atoms (
         if required_trajectory:
             # Make sure an input trajectory was passed
             if not input_trajectory_file:
-                raise InputError('The structure input format ' + input_structure_format +
+                raise InputError('The structure input format ' + input_structure_format + #ISSUE
                 ' is missing coordinates and the output format ' + output_structure_format +
                 ' needs them. An input trajectory file is required.')
             filtering_function(

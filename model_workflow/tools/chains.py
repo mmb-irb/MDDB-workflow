@@ -6,10 +6,11 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
 from typing import List, Tuple, Optional, Union
-
+#ISSUE: unused import
 from pathlib import Path
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.type_hints import *
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError

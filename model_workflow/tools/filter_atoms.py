@@ -11,7 +11,7 @@ from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STAND
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import save_json
-
+from model_workflow.utils.type_hints import *
 from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
 
 # Set the gromacs indices filename
