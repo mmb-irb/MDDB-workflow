@@ -65,7 +65,7 @@ class Atom:
         ):
         self.name = name
         self.element = element
-        self.coords = coords
+        self.coords = tuple(coords) if coords else None
         # Set variables to store references to other related instances
         # These variables will be set further by the structure
         self._structure = None
@@ -1310,7 +1310,7 @@ class Structure:
             raise ValueError(f'The number of coordinates ({len(new_coordinates)}) does not match the number of atoms ({self.atom_count})')
         # Overwrite current coordinates with the new coordinates
         for i, atom in enumerate(self.atoms):
-            atom.coords = new_coordinates[i]
+            atom.coords = tuple(new_coordinates[i])
     
     # Get all supported ion atom indices together in a set
     def get_ion_atom_indices (self) -> Set:
@@ -1336,14 +1336,16 @@ class Structure:
                 name = ' ' + atom.name.ljust(3) if len(atom.name) < 4 else atom.name
                 residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
                 chain = atom.chain
-                chain_name = atom.chain.name.rjust(1) if chain else 'X'
+                chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
                 residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
                 # If residue number is longer than 4 characters then we must parse to hexadecimal
                 if len(residue_number) > 4:
                     residue_number = hex(residue.number)[2:].rjust(4)
-                icode = residue.icode.rjust(1) if residue else ' '
-                coords = atom.coords
-                x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
+                icode = residue.icode if residue.icode and len(residue.icode) else ' '
+                # Make sure we have atom coordinates
+                if atom.coords == None:
+                    raise InputError('Trying to write a PDB file from a structure with atoms without coordinates')
+                x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in atom.coords ]
                 occupancy = '1.00' # Just a placeholder
                 temp_factor = '0.00' # Just a placeholder
                 element = atom.element.rjust(2)

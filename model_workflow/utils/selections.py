@@ -69,12 +69,18 @@ class Selection:
         return Selection(intersection_atom_indices)
 
     def to_prody (self) -> str:
+        # Make sure it is not an empty selection
+        if not self: raise ValueError('Trying to get ProDy selection from an empty selection')
         return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
 
     def to_mdanalysis (self) -> str:
+        # Make sure it is not an empty selection
+        if not self: raise ValueError('Trying to get MDAnalysis selection from an empty selection')
         return self.to_prody() # Same notation than prody for atom indices
 
     def to_pytraj (self) -> str:
+        # Make sure it is not an empty selection
+        if not self: raise ValueError('Trying to get PyTraj selection from an empty selection')
         # NEVER FORGET: Pytraj counts atoms starting at 1, not at 0
         indices = [ index + 1 for index in self.atom_indices ]
         # Make ranges for atoms in a row
@@ -84,6 +90,8 @@ class Selection:
     # This string can be then passed as a bash argument and easily parsed by other programms
     # Indices can start from 0 or from 1
     def to_bash (self, one_start : bool = False) -> str:
+        # Make sure it is not an empty selection
+        if not self: raise ValueError('Trying to get Bash selection from an empty selection')
         if one_start:
             return '_'.join([ str(index + 1) for index in self.atom_indices ])
         else:
@@ -91,10 +99,14 @@ class Selection:
 
     # Produce a vmd selection in tcl format
     def to_vmd (self) -> str:
+        # Make sure it is not an empty selection
+        if not self: raise ValueError('Trying to get VMD selection from an empty selection')
         return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
 
     # Produce the content of gromacs ndx file
     def to_ndx (self, selection_name : str = 'Selection') -> str:
+        # Make sure it is not an empty selection
+        if not self: raise ValueError('Trying to get NDX selection from an empty selection')
         # Add a header
         # WARNING: Sometimes (and only sometimes) if the selection name includes white spaces there is an error
         # WARNING: Gromacs may get the first word only as the name of the selection, so we must purge white spaces

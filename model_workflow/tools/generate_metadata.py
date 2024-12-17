@@ -6,7 +6,7 @@ from model_workflow.utils.constants import MD_DIRECTORY
 from model_workflow.utils.type_hints import *
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List
 
 # Generate a JSON file with all project metadata
 def generate_project_metadata (
@@ -16,6 +16,7 @@ def generate_project_metadata (
     structure : 'Structure',
     residue_map : dict,
     protein_references_file : 'File',
+    pdb_ids : List[str],
     register : dict,
     output_metadata_filename : str,
     ligand_customized_names : str
@@ -98,13 +99,14 @@ def generate_project_metadata (
         'CITATION': get_input('citation'),
         'THANKS': get_input('thanks'),
         'LINKS': get_input('links'),
-        'PDBIDS': get_input('pdbIds'),
+        'PDBIDS': pdb_ids,
         'FORCED_REFERENCES': get_input('forced_references'),
         'REFERENCES': protein_references,
         'INPUT_LIGANDS': input_ligands,
         'LIGANDS': ligand_references,
         'LIGANDNAMES': ligand_customized_names,
-        'SEQUENCES': sequence_metadata['sequences'],
+        'PROTSEQ': sequence_metadata['protein_sequences'],
+        'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],
         'FRAMESTEP': framestep,
         'TIMESTEP': get_input('timestep'),
@@ -125,7 +127,7 @@ def generate_project_metadata (
         'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),
         'CUSTOMS': get_input('customs'),
-        'ORIENTATION': get_input('orientation', optional=True),
+        'ORIENTATION': get_input('orientation'),
         'PTM': ptm_names,
         'MULTIMERIC' : get_input('multimeric'),
         'COLLECTIONS': collections,
@@ -138,10 +140,10 @@ def generate_project_metadata (
         metadata['BOXSIZEZ'] = boxsizez
     # Add collection specific fields
     if 'cv19' in collections:
-        cv19_unit = get_input('cv19_unit', optional=True)
-        cv19_startconf = get_input('cv19_startconf', optional=True)
-        cv19_abs = get_input('cv19_abs', optional=True)
-        cv19_nanobs = get_input('cv19_nanobs', optional=True)
+        cv19_unit = get_input('cv19_unit')
+        cv19_startconf = get_input('cv19_startconf')
+        cv19_abs = get_input('cv19_abs')
+        cv19_nanobs = get_input('cv19_nanobs')
         cv19_variant = sequence_metadata['cv19_variant']
 
         if cv19_unit is not None:
@@ -164,7 +166,7 @@ def generate_project_metadata (
 
 metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
     'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES', 
-    'REFERENCES', 'INPUT_LIGANDS', 'LIGANDS', 'LIGANDNAMES', 'SEQUENCES', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
+    'REFERENCES', 'INPUT_LIGANDS', 'LIGANDS', 'LIGANDNAMES', 'PROTSEQ', 'NUCLSEQ', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
     'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'SYSTATS', 'PROTATS', 'PROT', 'DPPC', 'SOL', 'NA', 'CL',
     'INTERACTIONS', 'PBC_SELECTION', 'CHAINNAMES', 'MEMBRANES', 'CUSTOMS', 'ORIENTATION', 'PTM', 
     'MULTIMERIC', 'COLLECTIONS', 'WARNINGS', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'CV19_UNIT', 'CV19_STARTCONF',

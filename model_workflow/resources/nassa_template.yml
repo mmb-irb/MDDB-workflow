@@ -1,0 +1,23 @@
+unit_name: hexamer
+unit_len: 6
+n_lines: 5000
+tail: true
+bimod: true
+save_tables: true
+save_plots: true
+save_path: /Users/agarciad/Desktop/pruebas_NASSA/mwf_nassa
+sequence_files:
+- /Users/agarciad/sshfs_directories/mmb/ABCix/DNA_sequences190/seq001.fa
+coordinate_info:
+  shift:
+  - /Users/agarciad/sshfs_directories/mmb/ABCix/r02/clean_ser/shift/seq001_output_shift.ser
+  slide:
+  - /Users/agarciad/sshfs_directories/mmb/ABCix/r02/clean_ser/slide/seq001_output_slide.ser
+  rise:
+  - /Users/agarciad/sshfs_directories/mmb/ABCix/r02/clean_ser/rise/seq001_output_rise.ser
+  tilt:
+  - /Users/agarciad/sshfs_directories/mmb/ABCix/r02/clean_ser/tilt/seq001_output_tilt.ser
+  roll:
+  - /Users/agarciad/sshfs_directories/mmb/ABCix/r02/clean_ser/roll/seq001_output_roll.ser
+  twist:
+  - /Users/agarciad/sshfs_directories/mmb/ABCix/r02/clean_ser/twist/seq001_output_twist.ser

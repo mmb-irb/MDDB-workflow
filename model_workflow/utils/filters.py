@@ -50,6 +50,12 @@ def filter_atoms (
     # Hope the input structure is in a supported format
     structure = Structure.from_file(input_structure_file.path)
     if selection_string:
+        # If the input structure is not a PDB then it will probably be a topology thus not having coordinates
+        # Therefore we can not support a custom selection since VMD could have silent miss-selections
+        # DANI: Si tenemos trayectoria deberíamos poder cargar coordenadas de una frame en la structure, pero es más lío
+        if input_structure_file.format != 'pdb':
+            raise InputError(f'Custom selection is not supported when the input structure is not in PDB format')
+        # Parse the input selection
         selection = structure.select(selection_string, syntax=selection_syntax)
         # If the selection is empty then war the user
         if not selection:

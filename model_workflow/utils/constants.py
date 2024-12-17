@@ -3,6 +3,13 @@ from shutil import which
 
 # CONSTANTS ---------------------------------------------------------------------------
 
+# Set a custom globals dict
+# This way we can edit the value of a constant on runtime
+GLOBALS = {
+    # Set if symlinks are allowed
+    'no_symlinks': False
+}
+
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
 GROMACS_EXECUTABLE_COMMON_NAMES = ['gmx', 'gmx_mpi']
 # Set the name of the environmental variable which is read by the workflow to know the gromacs path
@@ -37,8 +44,19 @@ ACCEPTED_INPUT_FILENAMES = [
     'inputs.json' # Legacy inputs file
 ]
 
+# Default input values used when the value is not specified
+# If an input field has no default value then it will be set as None
+DEFAULT_INPUT_VALUES = {
+    'license': 'This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License',
+    'linkcense': 'https://creativecommons.org/licenses/by/4.0/',
+    'mdref': 0,
+}
+
 # Expected MD inputs
 MD_DIRECTORY = 'mdir'
+
+# Input config file for the NASSA analysis
+DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
 
 # Markov State Model input filenames
 DEFAULT_POPULATIONS_FILENAME = 'populations.json'
@@ -70,7 +88,7 @@ CORRECTED_TRAJECTORY = 'corrected.xtc'
 PROCESSED = 'processed'
 
 # Input and output core files
-TOPOLOGY_FILENAME = 'topology.json'
+STANDARD_TOPOLOGY_FILENAME = 'topology.json'
 STRUCTURE_FILENAME = 'structure.pdb'
 TRAJECTORY_FILENAME = 'trajectory.xtc'
 
@@ -119,7 +137,7 @@ OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.clusters_*_screenshot_?.jpg'
 
 # Set analyses files to be generated
-OUTPUT_INTERACTIONS_FILENAME = 'mda.interactions.json'
+OUTPUT_PROCESSED_INTERACTIONS_FILENAME = 'mda.interactions.json'
 OUTPUT_RMSDS_FILENAME = 'mda.rmsds.json'
 OUTPUT_TMSCORES_FILENAME = 'mda.tmscores.json'
 OUTPUT_RMSF_FILENAME = 'mda.fluctuation.json'
@@ -183,6 +201,7 @@ TOPOLOGY_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
 GREEN_HEADER = '\033[92m'
 CYAN_HEADER = '\033[96m'
+BLUE_HEADER = '\033[94m'
 YELLOW_HEADER = '\033[93m'
 RED_HEADER = '\033[91m'
 GREY_HEADER = '\033[90m'
@@ -391,3 +410,18 @@ NO_REFERABLE_FLAG = 'noref'
 
 # Set a flag to represent a not found reference
 NOT_FOUND_FLAG = 'notfound'
+
+# Reference id formats
+PDB_ID_FORMAT = r'^[1-9]{1}[a-zA-Z0-9]{3}$'
+
+# Available analysis for NASSA
+NASSA_ANALYSES_LIST = [ 'bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff' ]
+
+# Set the correponding canals archives (.ser) for each NASSA analysis
+NASSA_ANALYSES_CANALS = {
+    'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
+    'coordist': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist','chiW', 'chiC'],
+    'bpcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
+    #'crdcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
+    'stiff': ['stretch', 'shear', 'buckle', 'stagger', 'propel', 'opening', 'chiW', 'chiC']
+}

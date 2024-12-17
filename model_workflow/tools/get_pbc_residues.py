@@ -6,5 +6,5 @@ def get_pbc_residues (structure : 'Structure', input_pbc_selection : str) -> Lis
         return []
     selection = structure.select(input_pbc_selection, syntax='vmd')
     pbc_residues = structure.get_selection_residue_indices(selection)
-    print(' "' + input_pbc_selection + '" -> ' + str(len(pbc_residues)) + ' residues')
+    print(f'PBC residues "{input_pbc_selection}" -> {len(pbc_residues)} residues')
     return pbc_residues

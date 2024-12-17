@@ -2,11 +2,14 @@
 
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
 
-from os import remove, rename
+from os import rename, listdir
+from os.path import isfile
 import sys
 import json
 import yaml
+from glob import glob
 from typing import Optional, List, Generator
+from struct import pack
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -27,6 +30,10 @@ class TestFailure (QuietException):
 
 # Set a custom quite exception for when the problem comes from a third party dependency
 class ToolError (QuietException):
+    pass
+
+# Set a custom quite exception for when the problem comes from a remote service
+class RemoteServiceError (QuietException):
     pass
 
 # Set a custom exception handler where our input error exception has a quiet behaviour
@@ -78,8 +85,9 @@ def load_yaml (filepath : str):
         with open(filepath, 'r') as file:
             content = yaml.load(file, Loader=yaml.CLoader)
         return content
-    except:
-        raise Exception('Something went wrong when loading YAML file ' + filepath)
+    except Exception as error:
+        warn(str(error).replace('\n', ' '))
+        raise InputError('Something went wrong when loading YAML file ' + filepath)
 
 # Set a YAML saver with additional logic to better handle problems
 def save_yaml (content, filepath : str):
@@ -161,3 +169,57 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
     for v, value in enumerate(values):
         others = values[0:v] + values[v+1:]
         yield value, others
+
+# List files in a directory
+def list_files (directory : str) -> List[str]:
+    return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]
+
+# Set a function to check if a string has patterns to be parsed by a glob function
+# Note that this is not trivial, but this function should be good enough for our case
+# https://stackoverflow.com/questions/42283009/check-if-string-is-a-glob-pattern
+GLOB_CHARACTERS = ['*', '?', '[']
+def is_glob (path : str) -> bool:
+    # Find unescaped glob characters
+    for c, character in enumerate(path):
+        if character not in GLOB_CHARACTERS:
+            continue
+        if c == 0:
+            return True
+        previous_characters = path[c-1]
+        if previous_characters != '\\':
+            return True
+    return False
+
+# Parse a glob path into one or several results
+# If the path has no glob characters then return it as it is
+# Otherwise make sure
+def parse_glob (path : str) -> List[str]:
+    # If there is no glob pattern then just return the string as is
+    if not is_glob(path):
+        return [ path ]
+    # If there is glob pattern then parse it
+    parsed_filepaths = glob(path)
+    return parsed_filepaths
+
+# Supported byte sizes
+SUPPORTED_BYTE_SIZES = {
+    2: 'e',
+    4: 'f',
+    8: 'd'
+}
+from typing import List
+from struct import pack
+# Data is a list of numeric values
+# Bit size is the number of bits for each value in data to be occupied
+def store_byte (data : List[float], byte_size : int, filepath : str):
+    # Check bit size to make sense
+    letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
+    if not letter:
+        raise ValueError(f'Not supported byte size {byte_size}, please select one of these: {(SUPPORTED_BYTE_SIZES.keys())}')
+    # Start writting the output file
+    byte_flag = f'!{letter}'
+    with open(filepath, 'wb') as file:
+        # Iterate over data list values
+        for value in data:
+            value = float(value)
+            file.write(pack(byte_flag, value))

@@ -17,7 +17,7 @@ for directory in argv[1:]:
     new_inputs = { k: v for k, v in reference_inputs.items() }
     # Update the pdb ids and the title
     pdb_id = directory.replace('/','').replace('\n','')
-    new_inputs['pdbIds'] = [pdb_id]
+    new_inputs['pdb_ids'] = [pdb_id]
     new_inputs['name'] += ', ' + pdb_id
     new_inputs_path = directory + 'inputs.yaml'
     save_yaml(new_inputs, new_inputs_path)

@@ -4,11 +4,10 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isabs
+from os.path import exists, isdir, isabs
 import sys
 import io
-import urllib.request
-import json
+import re
 import numpy
 from glob import glob
 from inspect import getfullargspec
@@ -27,7 +26,7 @@ from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
-from model_workflow.tools.chains import chains_data
+from model_workflow.tools.chains import generate_chain_references
 from model_workflow.tools.generate_pdb_references import generate_pdb_references
 from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
@@ -40,14 +39,16 @@ from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
 from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
+from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, load_yaml
+from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files, is_glob, parse_glob
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
+from model_workflow.utils.remote import Remote
 from model_workflow.utils.pyt_spells import get_frames_count
 from model_workflow.utils.type_hints import *
 
@@ -69,7 +70,7 @@ from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
-#from model_workflow.analyses.helical_parameters import helical_parameters
+from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
 
 # Make the system output stream to not be buffered
@@ -80,7 +81,7 @@ unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=
 sys.stdout = unbuffered
 
 # Set an special exception for input errors
-missing_input_exception = Exception('Missing input')
+MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -109,53 +110,27 @@ class MD:
         self.number = number
         # Set the MD accession and request URL
         self.accession = None
-        self.url = None
+        self.remote = None
         if self.project.database_url and self.project.accession:
-            self.accession = self.project.accession + '.' + str(self.number)
-            self.url = self.project.database_url + '/rest/current/projects/' + self.accession
+            self.accession = f'{self.project.accession}.{self.number}'
+            self.remote = Remote(f'{self.project.database_url}/rest/current/projects/{self.accession}')
         # Save the directory
         self.directory = remove_final_slash(directory)
-        # If the directory does not exists then we may have 2 different scenarios
+        # If the directory does not exists then create it
         if not exists(self.directory):
-            # If we have an URL to donwload then it means we must download input files
-            # Thus we simpy create the missing directory and it be filled further
-            if self.url:
-                mkdir(self.directory)
-            # Otherwise we are supposed to find input files locally
-            # If the directory does not exist we have nothing to do so we raise an error
-            else:
-                raise InputError(f'MD directory {self.directory} does not exist')
-        # Input structure filepath
+            mkdir(self.directory)
+        # Save the input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
         # If the file does not exist and it is to be downloaded then it is downloaded for each MD
         # Priorize the MD directory over the project directory
-        project_structure = File(input_structure_filepath)
-        md_structure = File(self.md_pathify(input_structure_filepath))
-        if isabs(input_structure_filepath) or (project_structure.exists and not md_structure.exists):
-            self._input_structure_file = project_structure
-        else:
-            self._input_structure_file = md_structure
-        # Input trajectory filepaths
-        # They are always relative
-        self.input_trajectory_filepaths = [ self.md_pathify(path) for path in input_trajectory_filepaths ]
-        # Now parse the filepaths to actual files
-        # In case there are glob characters we must parse the paths
-        self._input_trajectory_files = []
-        for path in self.input_trajectory_filepaths:
-            has_spread_syntax = '*' in path
-            if has_spread_syntax:
-                if self.url:
-                    raise InputError('Spread syntax in trajectory input filepaths is not supported when downloading remote files')
-                for parsed_path in glob(path):
-                    trajectory_file = File(parsed_path)
-                    self._input_trajectory_files.append(trajectory_file)
-            else:
-                trajectory_file = File(path)
-                self._input_trajectory_files.append(trajectory_file)
-        # Check we successfully defined some trajectory file
-        if len(self._input_trajectory_files) == 0:
-            raise InputError('No trajectory file was reached in paths ' + ', '.join(self.input_trajectory_filepaths))
+        self.input_structure_filepath = input_structure_filepath
+        # Set the internal variable for the input structure file, to be assigned later
+        self._input_structure_file = None
+        # Save the input trajectory filepaths
+        self.input_trajectory_filepaths = input_trajectory_filepaths
+        # Set the internal variable for the input trajectory files, to be assigned later
+        self._input_trajectory_files = None
 
         # Processed structure and trajectory files
         self._structure_file = None
@@ -163,11 +138,10 @@ class MD:
 
         # Other values which may be found/calculated on demand
         self._md_inputs = None
-        self._available_files = None
         self._snapshots = None
         self._structure = None
         self._pytraj_topology = None
-        self._interactions = None
+        self._processed_interactions = None
         self._reference_frame = None
 
         # Tests
@@ -182,53 +156,213 @@ class MD:
             self.register = Register(register_file)
 
     def __repr__ (self):
-        return '<MD (' + str(len(self.structure.atoms)) + ' atoms)>'
+        return f'<MD ({len(self.structure.atoms)} atoms)>'
 
     # Given a filename or relative path, add the MD directory path at the beginning
     def md_pathify (self, filename_or_relative_path : str) -> str:
         return self.directory + '/' + filename_or_relative_path
 
-    # Input structure filename ------------
+    # Input structure file ------------
+
+    # Set a function to get input structure file path
+    def get_input_structure_filepath (self) -> str:
+        # Set a function to find out if a path is relative to MD directories or to the project directory
+        # To do so just check if the file exists in any of those
+        # In case it exists in both or none then assume it is relative to MD directory
+        # Parse glob notation in the process
+        def relativize_and_parse_paths (input_path : str) -> str:
+            # Check if it is an absolute path
+            if isabs(input_path):
+                abs_glob_parse = parse_glob(input_path)
+                # If we had multiple results then we complain
+                if len(abs_glob_parse) > 1:
+                    raise InputError(f'Multiple structures found with "{input_path}": {", ".join(abs_glob_parse)}')
+                # If we had no results then we complain
+                if len(abs_glob_parse) == 0:
+                    if self.remote:
+                        warn('Spread syntax is not supported to download remote files')
+                    raise InputError(f'No structure found with "{input_path}"')
+                abs_parsed_filepath = abs_glob_parse[0]
+                return abs_parsed_filepath
+            # Check the MD directory
+            md_relative_filepath = self.md_pathify(input_path)
+            md_glob_parse = parse_glob(md_relative_filepath)
+            if len(md_glob_parse) > 1:
+                raise InputError(f'Multiple structures found with "{input_path}": {", ".join(md_glob_parse)}')
+            md_parsed_filepath = md_glob_parse[0] if len(md_glob_parse) == 1 else None
+            if md_parsed_filepath and File(md_parsed_filepath).exists:
+                return md_parsed_filepath
+            # Check the project directory
+            project_relative_filepath = self.project.project_pathify(input_path)
+            project_glob_parse = parse_glob(project_relative_filepath)
+            if len(project_glob_parse) > 1:
+                raise InputError(f'Multiple structures found with "{input_path}": {", ".join(project_glob_parse)}')
+            project_parsed_filepath = project_glob_parse[0] if len(project_glob_parse) == 1 else None
+            if project_parsed_filepath and File(project_parsed_filepath).exists:
+                return project_parsed_filepath
+            # At this point we can conclude the input structure file does not exist
+            # If we have no paths at all then it means a glob pattern was passed and it didn't match
+            # Note that if a glob pattern existed then it would mean the file actually existed
+            if len(md_glob_parse) == 0 and len(project_glob_parse) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
+                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+            # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
+            # However make sure we have a remote
+            if not self.remote:
+                raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
+            return md_parsed_filepath
+        # If we have a value passed through command line
+        if self.input_structure_filepath:
+            # Find out if it is relative to MD directories or to the project directory
+            return relativize_and_parse_paths(self.input_structure_filepath)
+        # If we have a value passed through the inputs file has the value
+        if self.project.is_inputs_file_available():
+            # Get the input value, whose key must exist
+            inputs_value = self.project.get_input('input_structure_filepath')
+            # If there is a valid input then use it
+            if inputs_value: return relativize_and_parse_paths(inputs_value)
+        # If there is not input structure then asume it is the default
+        # Check the default structure file exists or it may be downloaded
+        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME)
+        default_structure_file = File(default_structure_filepath)
+        if default_structure_file.exists or self.remote:
+            return default_structure_filepath
+        # If there is not input structure anywhere then use the input topology
+        # We will extract the structure from it using a sample frame from the trajectory
+        # Note that topology input filepath must exist and an input error will raise otherwise
+        # However if we are using the standard topology file we can not extract the PDB from it (yet)
+        if self.project.input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME:
+            return self.project.input_topology_file.path
+        # If we can not use the topology either then surrender
+        raise InputError('There is not input structure at all')
 
     # Get the input pdb filename from the inputs
     # If the file is not found try to download it
     def get_input_structure_file (self) -> str:
-        # There must be an input structure filename
-        if not self._input_structure_file:
-            raise InputError('Not defined input structure filename')
-        # If the file already exists then we are done
+        # If the input structure file is already defined then return it
+        if self._input_structure_file:
+            return self._input_structure_file
+        # Otherwise we must set it
+        # First set the input structure filepath
+        input_structure_filepath = self.get_input_structure_filepath()
+        # Now set the input structure file
+        self._input_structure_file = File(input_structure_filepath)
+        # If the file already exists then return it
         if self._input_structure_file.exists:
             return self._input_structure_file
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
-        if not self.url:
-            raise InputError('Missing input structure file "' + self._input_structure_file.filename + '"')
-        sys.stdout.write('Downloading structure (' + self._input_structure_file.filename + ')\n')
-        # Set the download URL
-        structure_url = self.url + '/files/' + self._input_structure_file.filename
+        if not self.remote:
+            raise InputError(f'Missing input structure file "{self._input_structure_file.path}"')
+        # Download the structure
         # If the structure filename is the standard structure filename then use the structure endpoint instead
         if self._input_structure_file.filename == STRUCTURE_FILENAME:
-            structure_url = self.url + '/structure'
-        # Download the file
-        try:
-            urllib.request.urlretrieve(structure_url, self._input_structure_file.path)
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                raise Exception('Missing input pdb file "' + self._input_structure_file.filename + '"')
-            else:
-                raise Exception('Something went wrong with the MDposit request: ' + structure_url)
+            self.remote.download_standard_structure(self._input_structure_file)
+        # Otherwise download the input strucutre file by its filename
+        else:
+            self.remote.download_file(self._input_structure_file)
         return self._input_structure_file
     input_structure_file = property(get_input_structure_file, None, None, "Input structure filename (read only)")
 
     # Input trajectory filename ------------
 
+    # Set a function to get input trajectory file paths
+    def get_input_trajectory_filepaths (self) -> str:
+        # Set a function to check and fix input trajectory filepaths
+        # Also relativize paths to the current MD directory and parse glob notation
+        def relativize_and_parse_paths (input_paths : List[str]) -> List[str]:
+            checked_paths = input_paths
+            # Input trajectory filepaths may be both a list or a single string
+            # However we must keep a list
+            if type(checked_paths) == list:
+                pass 
+            elif type(checked_paths) == str:
+                checked_paths = [ checked_paths ]
+            else:
+                raise InputError('Input trajectory filepaths must be a list of strings or a string')
+            # Make sure all or none of the trajectory paths are absolute
+            abs_count = sum([ isabs(path) for path in checked_paths ])
+            if not (abs_count == 0 or abs_count == len(checked_paths)):
+                raise InputError('All trajectory frames must be relative or absolute. Mixing is not supported')
+            # Set a function to glob-parse and merge all paths
+            def parse_all_glob (paths : List[str]) -> List[str]:
+                parsed_paths = []
+                for path in paths:
+                    parsed_paths += parse_glob(path)
+                return parsed_paths
+            # In case trajectory paths are absolute
+            if abs_count > 0:
+                absolute_parsed_paths = parse_all_glob(checked_paths)
+                # Check we successfully defined some trajectory file
+                if len(absolute_parsed_paths) == 0:
+                    # Warn the user in case it was trying to use glob syntax to donwload remote files
+                    if self.remote:
+                        warn('Spread syntax is not supported to download remote files')
+                    raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+                return absolute_parsed_paths
+            # If trajectory paths are not absolute then check if they are relative to the MD directory
+            # Get paths relative to the current MD directory
+            md_relative_paths = [ self.md_pathify(path) for path in checked_paths ]
+            # In case there are glob characters we must parse the paths
+            md_parsed_paths = parse_all_glob(md_relative_paths)
+            # Check we successfully defined some trajectory file
+            if len(md_parsed_paths) > 0:
+                # If so, check at least one of the files do actually exist
+                if any([ File(path).exists for path in md_parsed_paths ]):
+                    return md_parsed_paths
+            # If no trajectory files where found then asume they are relative to the project
+            # Get paths relative to the project directory
+            project_relative_paths = [ self.project.project_pathify(path) for path in checked_paths ]
+            # In case there are glob characters we must parse the paths
+            project_parsed_paths = parse_all_glob(project_relative_paths)
+            # Check we successfully defined some trajectory file
+            if len(project_parsed_paths) > 0:
+                # If so, check at least one of the files do actually exist
+                if any([ File(path).exists for path in project_parsed_paths ]):
+                    return project_parsed_paths
+            # At this point we can conclude the input trajectory file does not exist
+            # If we have no paths at all then it means a glob pattern was passed and it didn't match
+            # Note that if a glob pattern existed then it would mean the file actually existed
+            if len(md_parsed_paths) == 0 and len(project_parsed_paths) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
+                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+            # If we have a path however it may be downloaded from the database if we have a remote
+            if not self.remote:
+                raise InputError(f'Cannot find anywhere a trajectory file with path(s) "{", ".join(input_paths)}"')
+            # In this case we set the path as MD relative
+            # Note that if input path was not glob based it will be both as project relative and MD relative
+            if len(md_parsed_paths) == 0: raise ValueError('This should never happen')
+            return md_parsed_paths
+        # If we have a value passed through command line
+        if self.input_trajectory_filepaths:
+            return relativize_and_parse_paths(self.input_trajectory_filepaths)
+        # Check if the inputs file has the value
+        if self.project.is_inputs_file_available():
+            # Get the input value
+            inputs_value = self.project.get_input('input_trajectory_filepaths')
+            if inputs_value:
+                return relativize_and_parse_paths(inputs_value)
+        # If no input trajectory is passed then asume it is the default
+        default_trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
+        default_trajectory_file = File(default_trajectory_filepath)
+        if default_trajectory_file.exists or self.remote:
+            return relativize_and_parse_paths([ TRAJECTORY_FILENAME ])
+        # If there is no trajectory available then we surrender
+        raise InputError('There is not input trajectory at all')
+
     # Get the input trajectory filename(s) from the inputs
     # If file(s) are not found try to download it
     def get_input_trajectory_files (self) -> str:
-        # There must be an input structure filename
-        if not self._input_trajectory_files or len(self._input_trajectory_files) == 0:
-            print(self._input_trajectory_files)
-            raise InputError('Not defined input trajectory filenames')
+        # If we already defined input trajectory files then return them
+        if self._input_trajectory_files != None:
+            return self._input_trajectory_files
+        # Otherwise we must set the input trajectory files
+        input_trajectory_filepaths = self.get_input_trajectory_filepaths()
+        self._input_trajectory_files = [ File(path) for path in input_trajectory_filepaths ]
         # Find missing trajectory files
         missing_input_trajectory_files = []
         for trajectory_file in self._input_trajectory_files:
@@ -239,25 +373,18 @@ class MD:
             return self._input_trajectory_files
         # Try to download the missing files
         # If we do not have the required parameters to download it then we surrender here
-        if not self.url:
+        if not self.remote:
             missing_filepaths = [ trajectory_file.path for trajectory_file in missing_input_trajectory_files ]
             raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
         # Download each trajectory file (ususally it will be just one)
         for trajectory_file in self._input_trajectory_files:
-            sys.stdout.write('Downloading trajectory (' + trajectory_file.filename + ')\n')
-            # Set the trajectory URL, which may depend in different parameters
-            trajectory_url = self.url + '/files/' + trajectory_file.filename
+            # If this is the main trajectory (the usual one) then use the dedicated endpoint
             if trajectory_file.filename == TRAJECTORY_FILENAME:
-                trajectory_url = self.url + '/trajectory?format=xtc'
-                if self.project.sample_trajectory:
-                    trajectory_url += '&frames=1:10:1'
-            # Download the file
-            try:
-                urllib.request.urlretrieve(trajectory_url, trajectory_file.path)
-            except urllib.error.HTTPError as error:
-                if error.code == 404:
-                    raise Exception('Missing input trajectory file "' + trajectory_file.filename + '"')
-                raise Exception('Something went wrong with the MDposit request: ' + trajectory_url)
+                frame_selection = '1:10:1' if self.project.sample_trajectory else None
+                self.remote.download_trajectory(trajectory_file, frame_selection=frame_selection, format='xtc')
+            # Otherwise, download it by its filename
+            else:
+                self.remote.download_file(trajectory_file)
         return self._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
@@ -294,22 +421,6 @@ class MD:
 
     # ---------------------------------
 
-    # Remote available files
-    def get_available_files (self) -> List[str]:
-        # If we already have a stored value then return it
-        if self._available_files != None:
-            return self._available_files
-        # If we have not remote access then there are not available files
-        if not self.url:
-            return []
-        # Get the available files
-        files_url = self.url + '/files'
-        response = urllib.request.urlopen(files_url)
-        filenames = json.loads(response.read())
-        self._available_files = filenames
-        return self._available_files
-    available_files = property(get_available_files, None, None, "Remote available files (read only)")
-
     # Check if a file exists
     # If not, try to download it from the database
     # If the file is not found in the database it is fine, we do not even warn the user
@@ -320,24 +431,14 @@ class MD:
             return True
         # Try to download the missing file
         # If we do not have the required parameters to download it then we surrender here
-        if not self.url:
+        if not self.remote:
             return False
         # Check if the file is among the available remote files
         # If it is no then stop here
-        if target_file.filename not in self.available_files:
+        if target_file.filename not in self.remote.available_files:
             return False
-        sys.stdout.write('Downloading file (' + target_file.filename + ')\n')
-        # Set the download URL
-        file_url = self.url + '/files/' + target_file.filename
         # Download the file
-        try:
-            urllib.request.urlretrieve(file_url, target_file.path)
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                print('Missing file "' + target_file.filename + '"')
-                return False
-            else:
-                raise Exception('Something went wrong with the MDposit request: ' + file_url)
+        self.remote.download_file(target_file)
         return True
 
     # Processed files ----------------------------------------------------      
@@ -436,6 +537,10 @@ class MD:
             return
 
         print('-> Processing input files')
+
+        # --- FIRST CHECK -----------------------------------------------------------------------
+
+        check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
 
         # --- CONVERTING AND MERGING ------------------------------------------------------------
 
@@ -577,7 +682,7 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                pbc_selection = self.project.pbc_selection
+                pbc_selection = self.input_pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
@@ -913,39 +1018,57 @@ class MD:
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
-    # The interactions
+    # The processed interactions
     # This is a bit exceptional since it is a value to be used and an analysis file to be generated
-    def get_interactions (self, overwrite : bool = False) -> List[dict]:
+    def get_processed_interactions (self, overwrite : bool = False) -> List[dict]:
         # If we already have a stored value then return it
-        if self._interactions != None:
-            return self._interactions
-        # Set the interactions file
-        interactions_filepath = self.md_pathify(OUTPUT_INTERACTIONS_FILENAME)
-        interactions_file = File(interactions_filepath)
-        # If the file already exists then interactions will be read from it
+        if self._processed_interactions != None:
+            return self._processed_interactions
+        # Set the processed interactions file
+        processed_interactions_filepath = self.md_pathify(OUTPUT_PROCESSED_INTERACTIONS_FILENAME)
+        processed_interactions_file = File(processed_interactions_filepath)
+        # If the file already exists then processed interactions will be read from it
         # If the overwrite argument is passed we must delete it here
-        if interactions_file.exists and overwrite:
-            interactions_file.remove()
+        if processed_interactions_file.exists and overwrite:
+            processed_interactions_file.remove()
         # Otherwise, process interactions
-        self._interactions = process_interactions(
-            input_interactions = self.project.input_interactions,
+        self._processed_interactions = process_interactions(
+            input_interactions = self.input_interactions,
             structure_file = self.structure_file,
             trajectory_file = self.trajectory_file,
             structure = self.structure,
             snapshots = self.snapshots,
-            interactions_file = interactions_file,
+            processed_interactions_file = processed_interactions_file,
             mercy = self.project.mercy,
             register = self.register,
             frames_limit = 1000,
             interaction_cutoff = self.project.interaction_cutoff
         )
-        return self._interactions
-    interactions = property(get_interactions, None, None, "Interactions (read only)")
+        return self._processed_interactions
+    processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     def count_valid_interactions (self) -> int:
-        valid_interactions = [ interaction for interaction in self.interactions if not interaction.get('failed', False) ]
+        valid_interactions = [ interaction for interaction in self.processed_interactions if not interaction.get('failed', False) ]
         return len(valid_interactions)
-    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed interactions (read only)")
+    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed processed_interactions (read only)")
+
+    # Set a function to get input values which may be MD specific
+    # If the MD input is missing then we use the project input
+    def input_getter (name : str):
+        # Set the getter
+        def getter (self):
+            # Get the MD input
+            value = self.md_inputs.get(name, None)
+            if value != None:
+                return value
+            # If there is no MD input then return the project value
+            return getattr(self.project, f'input_{name}')
+        return getter
+
+    # Assign the MD input getters
+    input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
+    input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
+
 
     # Indices of residues in periodic boundary conditions
     # WARNING: Do not inherit project pbc residues
@@ -954,8 +1077,13 @@ class MD:
         # If we already have a stored value then return it
         if self.project._pbc_residues:
             return self.project._pbc_residues
+        # If there is no inputs file then asume there are no PBC residues and warn the user
+        if not self.project.is_inputs_file_available():
+            warn('Since there is no inputs file we assume there are no PBC residues')
+            self.project._pbc_residues = []
+            return self.project._pbc_residues
         # Otherwise we must find the value
-        self.project._pbc_residues = get_pbc_residues(self.structure, self.project.pbc_selection)
+        self.project._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
@@ -1099,7 +1227,7 @@ class MD:
     def run_rgyr_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_RGYR_FILENAME)
-        if exists(output_analysis_filepath):
+        if exists(output_analysis_filepath) and not overwrite:
             return
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size
@@ -1149,7 +1277,7 @@ class MD:
     #     pca_contacts(
     #         trajectory = self.trajectory_file.path,
     #         topology = self.pdb_filename,
-    #         interactions = self.interactions,
+    #         interactions = self.processed_interactions,
     #         output_analysis_filename = output_analysis_filepath
     #     )
 
@@ -1183,7 +1311,7 @@ class MD:
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             structure = self.structure,
             pbc_residues = self.pbc_residues,
             snapshots = self.snapshots,
@@ -1195,7 +1323,7 @@ class MD:
     def run_clusters_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
-        # The number of output analyses should be the same number of valid interactions
+        # The number of output analyses should be the same number of valid processed interactions
         # Otherwise we are missing some analysis
         if exists(output_analysis_filepath) and not overwrite:
             return
@@ -1214,9 +1342,10 @@ class MD:
         clusters_analysis(
             input_structure_file = self.structure_file,
             input_trajectory_file = self.trajectory_file,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             structure = self.structure,
             snapshots = self.snapshots,
+            pbc_residues = self.pbc_residues,
             output_analysis_filename = output_analysis_filepath,
             output_run_filepath = output_run_filepath,
             output_screenshots_filename = output_screenshot_filepath,
@@ -1233,7 +1362,7 @@ class MD:
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
         )
@@ -1256,7 +1385,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
             # is_time_dependend = self.is_time_dependend,
@@ -1293,7 +1422,7 @@ class MD:
             output_analysis_filename = output_analysis_filepath,
             energies_folder = self.md_pathify(ENERGIES_FOLDER),
             structure = self.structure,
-            interactions = self.interactions,
+            interactions = self.processed_interactions,
             charges = self.charges,
             snapshots = self.snapshots,
             frames_limit = 100,
@@ -1319,20 +1448,20 @@ class MD:
 
     # Helical parameters
     # DANI: Al final lo reimplementará Subamoy (en python) osea que esto no lo hacemos de momento
-    # def run_helical_analysis (self, overwrite : bool = False):
-    #     # Do not run the analysis if the output file already exists
-    #     output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
-    #     if exists(output_analysis_filepath) and not overwrite:
-    #         return
-    #     # Run the analysis
-    #     helical_parameters(
-    #         input_topology_filename = self.structure_file.path,
-    #         input_trajectory_filename = self.trajectory_file.path,
-    #         output_analysis_filename = output_analysis_filepath,
-    #         structure = self.structure,
-    #         frames_limit = 1000,
-    #     )
-
+    def run_helical_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
+        if exists(output_analysis_filepath) and not overwrite:
+            return
+        # Run the analysis
+        helical_parameters(
+            input_topology_filename = self.structure_file.path,
+            input_trajectory_filename = self.trajectory_file.path,
+            output_analysis_filename = output_analysis_filepath,
+            structure = self.structure,
+            frames_limit = None,
+        )
+        
     # Markov
     def run_markov_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
@@ -1395,6 +1524,8 @@ class Project:
         # Set the different MD directories to be run
         # Each MD directory must contain a trajectory and may contain a structure
         md_directories : Optional[List[str]] = None,
+        # Set an alternative MD configuration input
+        md_config : Optional[list] = None,
         # Reference MD directory
         # Project functions which require structure or trajectory will use the ones from the reference MD
         # If no reference is passed then the first directory is used
@@ -1414,17 +1545,18 @@ class Project:
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
+        #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : bool = False,
     ):
         # Save input parameters
         self.directory = remove_final_slash(directory)
-        self.accession = accession
         self.database_url = database_url
+        self.accession = accession
         # Set the project URL in case we have the required data
-        self.url = None
-        if database_url and accession:
-            self.url = database_url + '/rest/current/projects/' + accession
+        self.remote = None
+        if self.database_url and self.accession:
+            self.remote = Remote(f'{self.database_url}/rest/current/projects/{self.accession}')
 
         # Save inputs for the register, even if they are not used in the class
 
@@ -1442,14 +1574,31 @@ class Project:
                     self._inputs_file = inputs_file
                     break
         # Set the input topology file
-        self._input_topology_filepath = input_topology_filepath
+        # Note that even if the input topology path is passed we do not check it exists
+        # Never forget we can donwload some input files from the database on the fly
+        self.input_topology_filepath = input_topology_filepath
         self._input_topology_file = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
-        self._input_structure_filepath = input_structure_filepath
-        self._input_trajectory_filepaths = input_trajectory_filepaths
-        if self._input_trajectory_filepaths:
-            self.check_input_trajectory_filepaths()
+        self.input_structure_filepath = input_structure_filepath
+        self.input_trajectory_filepaths = input_trajectory_filepaths
+
+        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -stru, -traj)
+        if md_config and (md_directories or input_structure_filepath or input_trajectory_filepaths):
+            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -stru, -traj)')
+        # Save the MD configurations
+        self.md_config = md_config
+        # Make sure MD configuration has the correct format
+        if self.md_config:
+            # Make sure all MD configurations have at least 3 values each
+            for mdc in self.md_config:
+                if len(mdc) < 3:
+                    raise InputError('Wrong MD configuration: the patter is -md <directory> <structure> <trajectory> <trajectory 2> ...')
+            # Make sure there are no duplictaed MD directories
+            md_directories = [ mdc[0] for mdc in self.md_config ]
+            if len(md_directories) > len(set(md_directories)):
+                raise InputError('There are duplicated MD directories')
+
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
         self._populations_file = File(self.populations_filepath)
@@ -1466,6 +1615,7 @@ class Project:
 
         # Set the MD directories
         self._md_directories = md_directories
+        # Check input MDs are correct to far
         if self._md_directories:
             self.check_md_directories()
 
@@ -1478,7 +1628,7 @@ class Project:
         # This is just pased to the filtering function which knows how to handle the default
         self.filter_selection = filter_selection
         # PBC selection may come from the console or from the inputs
-        self._pbc_selection = pbc_selection
+        self._input_pbc_selection = pbc_selection
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1508,12 +1658,12 @@ class Project:
         self._inputs = None
 
         # Other values which may be found/calculated on demand
-        self._available_files = None
         self._pbc_residues = None
         self._safe_bonds = None
         self._charges = None
         self._populations = None
         self._transitions = None
+        self._pdb_ids = None
         self._pdb_references = None
         self._protein_map = None
         self._ligand_map = None
@@ -1535,22 +1685,6 @@ class Project:
     def project_pathify (self, filename_or_relative_path : str) -> str:
         return self.directory + '/' + filename_or_relative_path
 
-    # Check input trajectory file paths to be right
-    # If there is any problem then fix it or directly raise an input error
-    def check_input_trajectory_filepaths (self):
-        # WARNING: Input trajectory filepaths may be both a list or a single string
-        # However we must keep a list
-        if type(self._input_trajectory_filepaths) == list:
-            pass 
-        elif type(self._input_trajectory_filepaths) == str:
-            self._input_trajectory_filepaths = [ self._input_trajectory_filepaths ]
-        else:
-            raise InputError('Input trajectory filepaths must be a list of strings or a string')
-        # Check no trajectory path is absolute
-        for path in self._input_trajectory_filepaths:
-            if path[0] == '/':
-                raise InputError('Trajectory paths MUST be relative, not absolute (' + path + ')')
-
     # Check MD directories to be right
     # If there is any problem then directly raise an input error
     def check_md_directories (self):
@@ -1560,49 +1694,6 @@ class Project:
         # Check there are not duplicated MD directories
         if len(set(self._md_directories)) != len(self._md_directories):
             raise InputError('There are duplicated MD directories')
-
-    # Set a function to get input structure file path
-    def get_input_structure_filepath (self) -> str:
-        # If we already have a value then return it
-        # If this value was passed through command line then it would be set as the internal value already
-        if self._input_structure_filepath:
-            return self._input_structure_filepath
-        # Otherwise we must find it
-        # Check if the inputs file has the value
-        if self.is_inputs_file_available():
-            # Get the input value, whose key must exist
-            inputs_value = self.inputs.get('input_structure_filepath', missing_input_exception)
-            if inputs_value == missing_input_exception:
-                raise InputError('Missing input "input_structure_filepath"')
-            # If there is a valid input then use it
-            if inputs_value:
-                self._input_structure_filepath = inputs_value
-                return self._input_structure_filepath
-        # If there is not any input then return the default
-        return STRUCTURE_FILENAME
-    input_structure_filepath = property(get_input_structure_filepath, None, None, "Input structure file path (read only)")
-
-    # Set a function to get input trajectory file paths
-    def get_input_trajectory_filepaths (self) -> str:
-        # If we already have a value then return it
-        # If this value was passed through command line then it would be set as the internal value already
-        if self._input_trajectory_filepaths:
-            return self._input_trajectory_filepaths
-        # Otherwise we must find it
-        # Check if the inputs file has the value
-        if self.is_inputs_file_available():
-            # Get the input value, whose key must exist
-            inputs_value = self.inputs.get('input_trajectory_filepaths', missing_input_exception)
-            if inputs_value == missing_input_exception:
-                raise InputError('Missing input "input_trajectory_filepaths"')
-            # If there is a valid input then use it
-            if inputs_value:
-                self._input_trajectory_filepaths = inputs_value
-                self.check_input_trajectory_filepaths()
-                return self._input_trajectory_filepaths
-        # If there is not any input then return the default
-        return [ TRAJECTORY_FILENAME ]
-    input_trajectory_filepaths = property(get_input_trajectory_filepaths, None, None, "Input trajectory file paths (read only)")
 
     # Set a function to get MD directories
     def get_md_directories (self) -> list:
@@ -1647,10 +1738,10 @@ class Project:
         # Otherwise we must find the reference MD index
         # If the inputs file is available then it must declare the reference MD index
         if self.is_inputs_file_available():
-            self._reference_md_index = self.input_reference_md_index
+            self._reference_md_index = self.get_input('mdref')
         # Otherwise we simply set the first MD as the reference and warn the user about this
-        else:
-            #print('WARNING: No reference MD was specified. The first MD will be used as reference.')
+        if self._reference_md_index == None:
+            warn('No reference MD was specified. The first MD will be used as reference.')
             self._reference_md_index = 0
         return self._reference_md_index
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
@@ -1672,13 +1763,24 @@ class Project:
             return self._mds
         # Now instantiate a new MD for each declared MD and save the reference MD
         self._mds = []
-        for n, md_directory in enumerate(self.md_directories, 1):
-            md = MD(
-                project = self, number = n, directory = md_directory,
-                input_structure_filepath = self.input_structure_filepath,
-                input_trajectory_filepaths = self.input_trajectory_filepaths,
-            )
-            self._mds.append(md)
+        # New system with MD configurations (-md)
+        if self.md_config:
+            for n, config in enumerate(self.md_config, 1):
+                md = MD(
+                    project = self, number = n, directory = config[0],
+                    input_structure_filepath = config[1],
+                    input_trajectory_filepaths = config[2:],
+                )
+                self._mds.append(md)
+        # Old system (-mdir, -stru -traj)
+        else:
+            for n, md_directory in enumerate(self.md_directories, 1):
+                md = MD(
+                    project = self, number = n, directory = md_directory,
+                    input_structure_filepath = self.input_structure_filepath,
+                    input_trajectory_filepaths = self.input_trajectory_filepaths,
+                )
+                self._mds.append(md)
         return self._mds
     mds = property(get_mds, None, None, "Available MDs (read only)")
 
@@ -1698,7 +1800,7 @@ class Project:
         if self._inputs_file.exists:
             return True
         # If it does not exist but it may be downloaded then it is available
-        if self.url:
+        if self.remote:
             return True
         return False
 
@@ -1712,69 +1814,93 @@ class Project:
             return self._inputs_file
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
-        if not self.url:
-            raise InputError('Missing inputs file "' + self._inputs_file.filename + '"')
+        if not self.remote:
+            raise InputError(f'Missing inputs file "{self._inputs_file.filename}"')
         # Download the inputs json file if it does not exists
-        sys.stdout.write('Downloading inputs (' + self._inputs_file.filename + ')\n')
-        inputs_url = self.url + '/inputs'
-        # In case this is a json file we must specify the format in the query
-        is_json = self._inputs_file.format == 'json'
-        if is_json:
-            inputs_url += '?format=json'
-        urllib.request.urlretrieve(inputs_url, self._inputs_file.path)
-        # Rewrite the inputs file in a pretty formatted way in case it is a JSON file
-        if is_json:
-            file_content = load_json(self._inputs_file.path)
-            save_json(file_content, self._inputs_file.path, indent = 4)
+        self.remote.download_inputs_file(self._inputs_file)
         return self._inputs_file
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
     # Topology filename ------------
 
-    # If there is not input topology filename, which is possible, we must guess the topology filename
-    # Note that if we can download then the name will always be the remote topology name (topology.json)
-    def guess_input_topology_filename (self) -> Optional[str]:
-        # If we can download then the we use the remote topology filename (topology.json)
-        if self.url:
-            return TOPOLOGY_FILENAME
-        # Otherwise we must guess among the local files
-        # If the default topology filename exists then use it
-        if exists(TOPOLOGY_FILENAME):
-            return TOPOLOGY_FILENAME
-        # Find if the raw charges file is present
+    # If there is not input topology filepath, we must try to guess it among the files in the project directory
+    # Note that if we can download from the remote then we must check the remote available files as well
+    def guess_input_topology_filepath (self) -> Optional[str]:
+        # Find the first supported topology file according to its name and format
+        def find_first_accepted_topology_filename (available_filenames : List[str]) -> Optional[str]:
+            for filename in available_filenames:
+                # Make sure it is a valid topology file candidate
+                # i.e. topology.xxx
+                filename_splits = filename.split('.')
+                if len(filename_splits) != 2 or filename_splits[0] != 'topology':
+                    continue
+                # Then make sure its format is among the acceoted topology formats
+                extension = filename_splits[1]
+                format = EXTENSION_FORMATS[extension]
+                if format in ACCEPTED_TOPOLOGY_FORMATS:
+                    return filename
+            return None
+        # First check among the local available files
+        local_files = list_files(self.directory)
+        accepted_topology_filename = find_first_accepted_topology_filename(local_files)
+        if accepted_topology_filename:
+            return self.project_pathify(accepted_topology_filename)
+        # In case we did not find a topology among the local files, repeat the process with the remote files
+        if self.remote:
+            remote_files = self.remote.available_files
+            accepted_topology_filename = find_first_accepted_topology_filename(remote_files)
+            if accepted_topology_filename:
+                return self.project_pathify(accepted_topology_filename)
+        # If no actual topology is to be found then try with the standard topology instead
+        # Check if the standard topology file is available
+        # Note that we do not use standard_topology_file property to avoid generating it at this point
+        standard_topology_filepath = self.project_pathify(STANDARD_TOPOLOGY_FILENAME)
+        standard_topology_file = File(standard_topology_filepath)
+        if standard_topology_file.exists:
+            return standard_topology_filepath
+        # If not we may also try to download the standard topology
+        if self.remote:
+            self.remote.download_standard_topology(standard_topology_file)
+            return standard_topology_filepath
+        # DEPRECATED: Find if the raw charges file is present as a last resource
         if exists(RAW_CHARGES_FILENAME):
             return RAW_CHARGES_FILENAME
-        # Otherwise, find all possible accepted topology formats
-        for topology_format in ACCEPTED_TOPOLOGY_FORMATS:
-            topology_filename = 'topology.' + topology_format
-            if exists(topology_filename):
-                return topology_filename
-        return None        
+        # If we did not find any valid topology filepath at this point then return None
+        return None
 
-    # Get the input topology filepath from the inputs
+    # Get the input topology filepath from the inputs or try to guess it
     def get_input_topology_filepath (self) -> File:
-        # If we already have a value then return it
+        # Set a function to parse possible glob notation
+        def parse (filepath : str) -> str:
+            # If there is no glob pattern then just return the string as is
+            if not is_glob(filepath):
+                return filepath
+            # If there is glob pattern then parse it
+            parsed_filepaths = glob(filepath)
+            if len(parsed_filepaths) == 0:
+                # Warn the user in case it was trying to use glob syntax to donwload remote files
+                if self.remote:
+                    warn('Spread syntax is not supported to download remote files')
+                raise InputError(f'No topologies found with "{filepath}"')
+            if len(parsed_filepaths) > 1:
+                raise InputError(f'Multiple topologies found with "{filepath}": {", ".join(parsed_filepaths)}')
+            return parsed_filepaths[0]
         # If this value was passed through command line then it would be set as the internal value already
-        if self._input_topology_filepath:
-            return self._input_topology_filepath
-        # Otherwise we must find it
+        if self.input_topology_filepath:
+            return parse(self.input_topology_filepath)
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.inputs.get('input_topology_filepath', missing_input_exception)
-            if inputs_value == missing_input_exception:
-                raise InputError('Missing input "input_topology_filepath"')
+            inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
             if inputs_value:
-                self._input_topology_filepath = inputs_value
-                return self._input_topology_filepath
+                return parse(inputs_value)
         # Otherwise we must guess which is the topology file
-        guess = self.guess_input_topology_filename()
+        guess = self.guess_input_topology_filepath()
         if guess:
-            self._input_topology_filepath = guess
-            return self._input_topology_filepath
+            return guess
+        # If nothing worked then surrender
         raise InputError('Missing input topology file path')
-    input_topology_filepath = property(get_input_topology_filepath, None, None, "Input topology file path (read only)")
 
     # Get the input topology file
     # If the file is not found try to download it
@@ -1782,44 +1908,30 @@ class Project:
         # If we already have a value then return it
         if self._input_topology_file:
             return self._input_topology_file
+        # Set the input topology filepath
+        input_topology_filepath = self.get_input_topology_filepath()
+        # If no input is passed then we check the inputs file
         # Set the file
-        self._input_topology_file = File(self.input_topology_filepath)
+        self._input_topology_file = File(input_topology_filepath)
         # If the file already exists then we are done
         if self._input_topology_file.exists:
             return self._input_topology_file
         # Try to download it
         # If we do not have the required parameters to download it then we surrender here
-        if not self.url:
-            raise InputError('Missing input topology file "' + self._input_topology_file.filename + '"')
-        # If the input topology name is the standard then download it from the topology endpoint
-        if self._input_topology_file.filename == TOPOLOGY_FILENAME:
-            # Check if the project has a topology and download it in json format if so
-            topology_url = self.url + '/topology'
-            try:
-                sys.stdout.write('Downloading topology (' + self._input_topology_file.filename + ')\n')
-                urllib.request.urlretrieve(topology_url, self._input_topology_file.path)
-                # Rewrite the topology file in a pretty formatted way
-                file_content = load_json(self._input_topology_file.path)
-                save_json(file_content, self._input_topology_file.path, indent = 4)
-            except:
-                raise Exception('Something where wrong while downloading the topology')
-            return self._input_topology_file
+        if not self.remote:
+            raise InputError(f'Missing input topology file "{self._input_topology_file.filename}"')
         # Otherwise, try to download it using the files endpoint
         # Note that this is not usually required
-        topology_url = self.url + '/files/' + self._input_topology_file.filename
-        try:
-            sys.stdout.write('Downloading topology (' + self._input_topology_file.filename + ')\n')
-            urllib.request.urlretrieve(topology_url, self._input_topology_file.path)
-        except:
-            raise Exception('Something where wrong while downloading the topology: ' + topology_url)
-        # Before we finish, in case the topology is a '.top' file, we may need to download the itp files as well
-        if self._input_topology_file.filename == 'topology.top':
+        self.remote.download_file(self._input_topology_file)
+        # In case the topology is a '.top' file we consider it is a Gromacs topology
+        # It may come with additional itp files we must download as well
+        if self._input_topology_file.format == 'top':
             # Find available .itp files and download each of them
-            itp_filenames = [filename for filename in self.available_files if filename[-4:] == '.itp']
+            itp_filenames = [filename for filename in self.remote.available_files if filename[-4:] == '.itp']
             for itp_filename in itp_filenames:
-                sys.stdout.write('Downloading itp file (' + itp_filename + ')\n')
-                itp_url = self.url + '/files/' + itp_filename
-                urllib.request.urlretrieve(itp_url, itp_filename)
+                itp_filepath = self.project_pathify(itp_filename)
+                itp_file = File(itp_filepath)
+                self.remote.download_file(itp_file)
         return self._input_topology_file
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
@@ -1857,16 +1969,6 @@ class Project:
 
     # ---------------------------------
 
-    # DISCLAIMER:
-    # Note that requesting files from any of the MDs already returns the project-specific files
-    # For this reason these two functions are inherited from the MD class although 'get_file' is used for project files only
-
-    # Remote available files
-    # Note that requesting files from any of the MDs already return the project-specific files
-    def get_available_files (self) -> List[str]:
-        return self.reference_md.available_files
-    available_files = property(get_available_files, None, None, "Remote available files (read only)")
-
     # Check if a file exists
     # If not, try to download it from the database
     # If the file is not found in the database it is fine, we do not even warn the user
@@ -1894,47 +1996,59 @@ class Project:
         if not inputs_data:
             raise InputError('Input file is empty')
         self._inputs = inputs_data
+        # Legacy fixes
+        old_pdb_ids = self._inputs.get('pdbIds', None)
+        if old_pdb_ids:
+            self._inputs['pdb_ids'] = old_pdb_ids
         # Finally return the updated inputs
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
 
     # Then set getters for every value in the inputs file
 
-    # Set a function to get 'inputs' values and handle missing keys
-    def input_getter (name : str, missing_input_callback = missing_input_exception):
-        def getter (self):
-            value = self.inputs.get(name, missing_input_callback)
-            if value == missing_input_exception:
-                raise InputError('Missing input "' + name + '"')
+    # Get a specific 'input' value
+    # Handle a possible missing keys
+    def get_input (self, name: str):
+        value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
+        # If we had a value then return it
+        if value != MISSING_INPUT_EXCEPTION:
             return value
+        # If the field is not specified in the inputs file then set a defualt value
+        default_value = DEFAULT_INPUT_VALUES.get(name, None)
+        # Warn the user about this
+        warn(f'Missing input "{name}" -> Using default value: {default_value}')
+        return default_value
+
+    # Set a function to get a specific 'input' value by its key/name
+    # Note that we return the getter function but we do not call it just yet
+    def input_getter (name : str):
+        def getter (self):
+            return self.get_input(name)
         return getter
 
     # Assign the getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     forced_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
-    pdb_ids = property(input_getter('pdbIds'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
+    input_pdb_ids = property(input_getter('pdb_ids'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
-    input_reference_md_index = property(input_getter('mdref'), None, None, "Input MD reference index (read only)")
     input_ligands = property(input_getter('ligands'), None, None, "Input ligand references (read only)")
     
     # PBC selection may come from the console or from the inputs file
     # Console has priority over the inputs file
-    def get_pbc_selection (self) -> Optional[str]:
+    def get_input_pbc_selection (self) -> Optional[str]:
         # If we have an internal value then return it
-        if self._pbc_selection:
-            return self._pbc_selection
+        if self._input_pbc_selection:
+            return self._input_pbc_selection
         # As an exception, we avoid asking for the inputs file if it is not available
         # This input is required for some early processing steps where we do not need the inputs file for anything else
         if not self.is_inputs_file_available():
             return None
         # Otherwise, find it in the inputs
         # Get the input value, whose key must exist
-        self._pbc_selection = self.inputs.get('pbc_selection', missing_input_exception)
-        if self._pbc_selection == missing_input_exception:
-            raise InputError('Missing input "pbc_selection"')
-        return self._pbc_selection
-    pbc_selection = property(get_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
+        self._input_pbc_selection = self.get_input('pbc_selection')
+        return self._input_pbc_selection
+    input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
     # Set additional values infered from input values
 
@@ -1955,8 +2069,6 @@ class Project:
         filename = self.input_topology_file.filename
         if not filename:
             return None
-        if filename == TOPOLOGY_FILENAME:
-            return filename
         if filename == RAW_CHARGES_FILENAME:
             return filename
         standard_format = self.input_topology_file.format
@@ -2011,7 +2123,7 @@ class Project:
         if self._pbc_residues:
             return self._pbc_residues
         # Otherwise we must find the value
-        self._pbc_residues = get_pbc_residues(self.structure, self.pbc_selection)
+        self._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
         return self._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
@@ -2087,6 +2199,27 @@ class Project:
         return self._transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
+    # Tested and standarized PDB ids
+    def get_pdb_ids (self) -> List[str]:
+        # If we already have a stored value then return it
+        if self._pdb_ids != None:
+            return self._pdb_ids
+        # Otherwise test and standarize input PDB ids
+        self._pdb_ids = []
+        # If there is no input pdb ids (may be None) then stop here
+        if not self.input_pdb_ids:
+            return []
+        # Iterate input PDB ids
+        for input_pdb_id in self.input_pdb_ids:
+            # First make sure this is a PDB id
+            if not re.match(PDB_ID_FORMAT, input_pdb_id):
+                raise InputError(f'Input PDB id "{input_pdb_id}" does not look like a PDB id')
+            # Make letters upper
+            pdb_id = input_pdb_id.upper()
+            self._pdb_ids.append(pdb_id)
+        return self._pdb_ids
+    pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
+
     # PDB references
     def get_pdb_references (self) -> List[dict]:
         # If we already have a stored value then return it
@@ -2155,17 +2288,22 @@ class Project:
         return protein_references_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
-    def get_protein_chains (self) -> List[str]:
+    # Get chain references
+    def get_chain_references (self, overwrite : bool = False) -> List[str]:
         # Set the chains references file
         chains_references_filepath = self.project_pathify(OUTPUT_CHAINS_FILENAME)
         chains_references_file = File(chains_references_filepath)
-        chains = chains_data(
+        # If the file already exists and the overwrite option is passed then remove it
+        if chains_references_file.exists and overwrite:
+            chains_references_file.remove()
+        # Call the function to generate the chain references
+        chains = generate_chain_references(
             structure = self.structure,
-            chains_references_filepath = chains_references_file.path,
+            chains_references_file = chains_references_file,
             #chain_name=self.structure.chain_name,
         )
         return chains
-    chains_data = property(get_protein_chains, None, None, "Chain (read only)")
+    chains_data = property(get_chain_references, None, None, "Chain (read only)")
 
     # Ligand residues mapping
     def get_ligand_map (self) -> List[dict]:
@@ -2245,9 +2383,7 @@ class Project:
         if metadata_file.exists and not overwrite:
             return metadata_file
         # Set an input getter that gets the input as soon as called
-        def get_input (name : str, optional : bool = False):
-            if optional:
-                return Project.input_getter(name, None)(self)
+        def get_input (name : str):
             return Project.input_getter(name)(self)
         # Otherwise, generate it
         generate_project_metadata(
@@ -2257,6 +2393,7 @@ class Project:
             structure = self.structure,
             residue_map = self.residue_map,
             protein_references_file = self.protein_references_file,
+            pdb_ids = self.pdb_ids,
             register = self.register,
             output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,
@@ -2271,10 +2408,14 @@ class Project:
         if self._standard_topology_file:
             return self._standard_topology_file
         # Set the standard topology file
-        standard_topology_filepath = self.project_pathify(TOPOLOGY_FILENAME)
+        standard_topology_filepath = self.project_pathify(STANDARD_TOPOLOGY_FILENAME)
         self._standard_topology_file = File(standard_topology_filepath)
-        # If the file already exists and is not to be overwirtten then send it
+        # If the file already exists and it is not to be overwirtten then send it
         if self._standard_topology_file.exists and not overwrite:
+            return self._standard_topology_file
+        # Download the standard topology if it is possible and the overwrite flag is not passed
+        if self.remote and not overwrite:
+            self.remote.download_standard_topology(self._standard_topology_file)
             return self._standard_topology_file
         # Otherwise, generate it
         generate_topology(
@@ -2382,7 +2523,7 @@ analyses = {
     'dist': MD.run_dist_perres_analysis,
     'energies': MD.run_energies_analysis,
     'hbonds': MD.run_hbonds_analysis,
-    #'helical': MD.run_helical_analysis,
+    'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
     'pca': MD.run_pca_analysis,
     #'pcacons': MD.run_pca_contacts,
@@ -2407,14 +2548,14 @@ project_requestables = {
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
-    'chains': Project.get_protein_chains,
+    'chains': Project.get_chain_references,
 }
 # MD requestable tasks
 md_requestables = {
     **md_input_files,
     **md_processed_files,
     **analyses,
-    'interactions': MD.get_interactions,
+    'interactions': MD.get_processed_interactions,
     'mdmeta': MD.get_metadata_file,
 }
 # List of requestables for the console
@@ -2446,6 +2587,14 @@ def workflow (
     if include and exclude:
         raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
 
+    # Make sure the working directory exists
+    if not exists(working_directory):
+        raise InputError(f'Working directory "{working_directory}" does not exist')
+
+    # Make sure the working directory is actually a directory
+    if not isdir(working_directory):
+        raise InputError(f'Working directory "{working_directory}" is actually not a directory')
+
     # Move the current directory to the working directory
     chdir(working_directory)
     current_directory_name = getcwd().split('/')[-1]
@@ -2473,6 +2622,8 @@ def workflow (
             'stopology',
             'screenshot',
             'pmeta',
+            'pdbs',
+            'chains',
             # MD tasks
             'mdmeta',
             'interactions',

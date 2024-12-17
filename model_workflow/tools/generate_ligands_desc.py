@@ -5,6 +5,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
 from typing import List, Tuple, Optional, Callable
+from model_workflow.tools.generate_pdb_references import get_pdb_data
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json
 from urllib.request import Request, urlopen
@@ -678,17 +679,7 @@ def smiles_to_pubchem_id (smiles : str) -> Optional[str]:
 # e.g. 4YDF -> O=S(=O)(N(C3C(N(Cc1ccccc1)S(=O)(=O)c2ccc([N+]([O-])=O)cc2)CNC3)Cc4ccccc4)c5cc([N+]([O-])=O)ccc5, [O-]S([O-])(=O)=O
 def pdb_to_smiles (pdb_id : str) -> Optional[ List[str] ]:
     # Request the MMB service to retrieve pdb data
-    request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
-    try:
-        with urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the PDB then we can stop here
-    except HTTPError as error:
-        if error.code == 404:
-            print(f' PDB code {pdb_id} not found')
-            return None
-        else:
-            raise ValueError('Something went wrong with the PDB request: ' + request_url)
+    parsed_response = get_pdb_data(pdb_id)
     # Get the 'het' hits or ligands available
     smiles_list = []
     hets = parsed_response.get('hets', None)
@@ -802,19 +793,7 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
 # Given a PDB code, get all its ligand codes
 def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     # Request the MMB service to retrieve pdb data
-    #request_url = f'http://mdb-login.bsc.es/api/pdb/{pdb_id}/entry'
-    # If the BSC API is not working then we can use the IRB API
-    request_url = f'https://mmb.irbbarcelona.org/api/pdb/{pdb_id}/entry'
-    try:
-        with urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the PDB then we can stop here
-    except HTTPError as error:
-        if error.code == 404:
-            print(f' PDB code {pdb_id} not found')
-            raise ValueError('Something went wrong with the PDB request (error ' + str(error.code) + ')')
-        else:
-            raise ValueError('Something went wrong with the PDB request: ' + request_url)
+    parsed_response = get_pdb_data(pdb_id)
     # Get the 'het' hits or ligands available
     ligand_codes = []
     hets = parsed_response.get('hets', None)

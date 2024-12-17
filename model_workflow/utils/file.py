@@ -1,9 +1,9 @@
 from os import remove, symlink, rename, readlink
-from os.path import exists, isabs, abspath, relpath, split, islink
+from os.path import exists, isabs, abspath, relpath, split, islink, normpath
 from shutil import copyfile
 from typing import Optional
 
-from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
+from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT, GLOBALS
 from model_workflow.utils.auxiliar import InputError
 
 LOCAL_PATH = '.'
@@ -64,7 +64,7 @@ class File:
 
     def __eq__ (self, other : 'File') -> bool:
         if isinstance(other, self.__class__):
-            return self.path == other.path
+            return normpath(self.path) == normpath(other.path)
         return False
 
     # Check if file exists
@@ -119,6 +119,12 @@ class File:
 
     # Set this file a symlink to another file
     def set_symlink_to (self, other_file : 'File'):
+        # Check if symlinks are allowed
+        no_symlinks = GLOBALS['no_symlinks']
+        # If symlinks are now allowed then copy the file instead
+        if no_symlinks:
+            other_file.copy_to(self)
+            return
         # Self file must not exist
         if self.exists:
             raise Exception('Cannot set a symlink from an already existing file: ' + str(self))

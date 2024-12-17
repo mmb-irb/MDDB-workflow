@@ -66,6 +66,7 @@ def pockets (
     # DANI: Estamos a la espera que los de mdpocket incluyan un flag para estos casos
     # https://github.com/Discngine/fpocket/issues/77#issuecomment-974193129
     if pbc_residues and len(pbc_residues) > 0:
+        print(' Pockets analysis will be skipped since we have PBC atoms')
         return
 
     # Set a reduced trajectory with only 100 frames
