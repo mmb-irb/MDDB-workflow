@@ -116,8 +116,8 @@ def filter_atoms (
         if required_trajectory:
             # Make sure an input trajectory was passed
             if not input_trajectory_file:
-                raise InputError('The structure input format ' + input_structure_format + #ISSUE
-                ' is missing coordinates and the output format ' + output_structure_format +
+                raise InputError('The structure input format ' + input_structure_file.format +
+                ' is missing coordinates and the output format ' + output_structure_file.format +
                 ' needs them. An input trajectory file is required.')
             filtering_function(
                 input_structure_file=input_structure_file,
