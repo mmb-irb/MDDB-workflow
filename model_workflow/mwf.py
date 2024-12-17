@@ -2345,11 +2345,12 @@ class Project:
         # If we already have a stored value then return it
         if self._membrane_map:
             return self._membrane_map
-        # BORRAR or guardar en file
-        # If we already have a value in the register cache then use it
-        cached_value = self.register.cache.get(MEMBRANE_DATA, self._membrane_map)
-        if cached_value != None:
-            return cached_value
+        # TODO: guardar el mapping en un archivo
+        if False: # only for debugging
+            # If we already have a value in the register cache then use it
+            cached_value = self.register.cache.get(MEMBRANE_DATA, self._membrane_map)
+            if cached_value != None:
+                return cached_value
         self._membrane_map = generate_membrane_mapping(
             structure = self.structure,
             topology_file=self.topology_file,
