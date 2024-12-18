@@ -32,7 +32,7 @@ def main ():
     # The vars function converts the args object to a dictionary
     args = parser.parse_args()
     # Apply common arguments as necessary
-    if args.no_symlinks:
+    if hasattr(args, 'no_symlinks') and args.no_symlinks:
         GLOBALS['no_symlinks'] = True
     # Find which subcommand was called
     subcommand = args.subcommand
