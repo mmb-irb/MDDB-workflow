@@ -11,7 +11,6 @@ import re
 import numpy
 from glob import glob
 from inspect import getfullargspec
-from typing import Optional, Union, List
 
 # Constants
 from model_workflow.utils.constants import *
@@ -49,6 +48,7 @@ from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
 from model_workflow.utils.pyt_spells import get_frames_count
+from model_workflow.utils.type_hints import *
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -204,7 +204,7 @@ class MD:
                 # Warn the user in case it was trying to use glob syntax to donwload remote files
                 if self.remote:
                     warn('Spread syntax is not supported to download remote files')
-                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_path))
             # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
             # However make sure we have a remote
             if not self.remote:
@@ -1465,7 +1465,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
-            frames_limit = 1000,
+            frames_limit = None,
         )
         
     # Markov

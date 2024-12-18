@@ -4,10 +4,10 @@ import json
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from mordred import Calculator, descriptors
-from typing import List, Tuple, Optional, Callable
 from model_workflow.tools.generate_pdb_references import get_pdb_data
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json
+from model_workflow.utils.type_hints import *
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError

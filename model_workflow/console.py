@@ -150,7 +150,7 @@ def main ():
             print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
             return 
         # If the user wants to run the analysis. With the config file an analysis name must be provided, or the all flag must be set
-        if args.config and args.analysis_names == None or args.all == False:
+        if args.config and args.analysis_names == None:
             nassa_parser.print_help()
             print('Please provide an analysis name to run:', ', '.join(NASSA_ANALYSES_LIST))
             return
@@ -538,7 +538,8 @@ chainer_parser.add_argument(
 
 # The NASSA commands 
 nassa_parser = subparsers.add_parser("nassa", formatter_class=RawTextHelpFormatter,
-    help="Run and set the configuration of the NASSA analysis")
+    help="Run and set the configuration of the NASSA analysis",
+    parents=[common_parser])
 nassa_parser.add_argument(
     "-c", "--config",
     help="Configuration file for the NASSA analysis")

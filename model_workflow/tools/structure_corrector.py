@@ -1,4 +1,3 @@
-from typing import Optional, List
 from os import remove
 from os.path import exists
 from json import load
@@ -10,6 +9,7 @@ from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_b
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import get_new_letter, save_json
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
+from model_workflow.utils.type_hints import *
 
 # Analyze the structure looking for irregularities and then modify the structure to standarize the format
 #

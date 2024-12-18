@@ -4,7 +4,7 @@ import os
 import sys
 import urllib.request
 
-from fuse import FUSE
+from fuse import FUSE 
 
 
 # Set the functions which ar set by default when the file handler is passed to the fuse class

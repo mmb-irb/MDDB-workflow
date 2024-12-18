@@ -6,9 +6,9 @@ import os
 from os.path import exists
 
 from subprocess import run, PIPE, STDOUT, Popen
-from typing import Optional, List
 
 from model_workflow.utils.file import File
+from model_workflow.utils.type_hints import *
 
 # Set the script filename with all commands to be passed to vmd
 commands_filename = '.commands.vmd'

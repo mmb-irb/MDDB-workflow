@@ -2,10 +2,10 @@ from sys import argv
 from os.path import exists, getmtime
 from datetime import datetime
 from time import strftime, gmtime
-from typing import Optional, List
 
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
+from model_workflow.utils.type_hints import *
 
 # Set dates format
 date_style = '%d-%m-%Y %H:%M:%S'

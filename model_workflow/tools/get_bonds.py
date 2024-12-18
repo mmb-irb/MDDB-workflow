@@ -2,8 +2,7 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import load_json
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
 from model_workflow.utils.vmd_spells import get_covalent_bonds
-
-from typing import List, Optional
+from model_workflow.utils.type_hints import *
 
 import pytraj as pt
 
