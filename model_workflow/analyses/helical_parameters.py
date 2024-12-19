@@ -7,7 +7,7 @@ import subprocess
 from shutil import move
 import glob
 
-from model_workflow.utils.auxiliar import save_json, store_byte
+from model_workflow.utils.auxiliar import save_json, store_binary_data
 from model_workflow.utils.type_hints import *
 
 conda_prefix = os.environ['CONDA_PREFIX']
@@ -255,23 +255,23 @@ def send_files(sequence,frames_limit):
         # Save the file with the same name but with .bin extension and mdf prefix
         file_name = 'mdf.' + file
         file_path = os.path.join(os.getcwd(), file_name.replace('.ser', '.bin'))
-        # Call the function to store the data in a binary file and compress it
-        store_byte(
-                data=data,
-                byte_size=4, # 32 bits
-                filepath=file_path
+        # Store data in a binary format
+        store_binary_data(
+            data=data,
+            byte_size=4, # 32 bits
+            filepath=file_path
         )
         # We need the meta file to store the information about the binary file (with the same name and .meta.json extension)
         name_meta_file = file_path + '.meta.json'
         meta_data = {
-             'x': {
-                  'name': 'bases',
-                  'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
-             },
-                'y': {
-                    'name': 'frames',
-                    'length': n_lines # Total number of lines in the file os the number of frames
-                },
+            'x': {
+                'name': 'bases',
+                'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
+            },
+            'y': {
+                'name': 'frames',
+                'length': n_lines # Total number of lines in the file os the number of frames
+            },
             'bitsize': 32, # 32 bits
         }
         save_json(meta_data, name_meta_file)
