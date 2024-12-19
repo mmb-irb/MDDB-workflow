@@ -10,7 +10,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
-from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise
+from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise, warn
 from model_workflow.utils.constants import SUPPORTED_POLYMER_ELEMENTS, SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 
@@ -19,7 +19,7 @@ import pytraj
 # Otherwise proceed without them
 # The error is not raised until a function using the missing module is called
 try:
-    import prody
+    import prody # type: ignore
 except:
     pass
 try:
@@ -237,6 +237,10 @@ class Atom:
 
     # Guess an atom element from its name and number of bonds
     def guess_element (self) -> str:
+        # If the name is SOD and it is a lonly atom then it is clearly sodium, not sulfur
+        if self.name.upper() == 'SOD' and self.residue.atom_count == 1:
+            return 'Na'
+        # Find a obvios element name in the atom name
         element = self.get_name_suggested_element()
         # CA may refer to calcium or alpha carbon, so the number of atoms in the residue is decisive
         if element == 'Ca' and self.residue.atom_count >= 2:
@@ -277,7 +281,7 @@ class Atom:
             # Finally, try with the first character alone
             if character in SUPPORTED_ELEMENTS:
                 return character
-        raise InputError("Not recognized element in '" + name + "'")
+        raise InputError(f"Not recognized element in '{name}'")
 
     # Get a standard label
     def get_label (self) -> str:
@@ -1271,13 +1275,16 @@ class Structure:
         return len(self.atoms)
     atom_count = property(get_atom_count, None, None, "The number of atoms in the structure (read only)")
 
-    # Fix atom elements by gueesing them when missing
+    # Fix atom elements by guessing them when missing
     # Set all elements with the first letter upper and the second (if any) lower
     # Also check if atom elements are coherent with atom names
     # If 'trust' is set as False then we impose elements according to what we can guess from the atom name
     # Return True if any element was modified or False if not
     def fix_atom_elements (self, trust : bool = True) -> bool:
         modified = False
+        # Save the wrong guesses for a final report
+        # This way we do not crowd the terminal with logs when a lot of atoms are affected
+        reports = {}
         for atom in self.atoms:
             # Make sure elements have the first letter cap and the second letter not cap
             if atom.element:
@@ -1289,7 +1296,9 @@ class Structure:
                 # In case it does not just warn the user
                 guess = atom.guess_element()
                 if atom.element != guess:
-                    print('WARNING: Suspicious element for atom ' + atom.name + ' -> ' + atom.element + " (shoudn't it be " + guess + "?)")
+                    report = (atom.name, atom.element, guess)
+                    report_count = reports.get(report, 0)
+                    reports[report] = report_count + 1
                     if not trust:
                         atom.element = guess
                         modified = True
@@ -1297,8 +1306,13 @@ class Structure:
             else:
                 atom.element = atom.guess_element()
                 modified = True
+        # Warn the user about anormalies
+        for report, count in reports.items():
+            atom_name, atom_element, guess = report
+            warn(f"Suspicious element for atom {atom_name}: {atom_element} -> shoudn't it be {guess}? ({count} occurrences)")
+        # Warn the user that some elements were modified
         if modified:
-            print('WARNING: Atom elements have been modified')
+            warn('Atom elements have been modified')
         # Set atom elements as fixed in order to avoid repeating this process
         self._fixed_atom_elements = True
         return modified

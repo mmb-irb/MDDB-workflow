@@ -5,12 +5,12 @@
 
 import pytraj as pt
 import re
-from typing import List
 
 from distutils.version import StrictVersion
 
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import delete_previous_log, save_json
+from model_workflow.utils.type_hints import *
 
 # The pytraj trajectory may be reduced
 def rmsd_per_residue (

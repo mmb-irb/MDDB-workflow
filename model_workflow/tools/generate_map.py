@@ -3,12 +3,11 @@ import json
 import re
 import urllib.request
 
-from typing import List, Tuple, Optional, Union
-
 from model_workflow.tools.generate_pdb_references import get_pdb_data
 from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
+from model_workflow.utils.type_hints import *
 
 import xmltodict
 

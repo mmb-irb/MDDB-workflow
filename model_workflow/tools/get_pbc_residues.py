@@ -1,4 +1,4 @@
-from typing import List
+from model_workflow.utils.type_hints import *
 
 # Given a structure and a VMD selection, return the list of residue indices
 def get_pbc_residues (structure : 'Structure', input_pbc_selection : str) -> List[int]:

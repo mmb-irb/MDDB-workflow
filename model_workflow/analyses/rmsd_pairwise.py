@@ -5,10 +5,9 @@
 
 import pytraj as pt
 
-from typing import List
-
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.type_hints import *
 
 # Perform an analysis for the overall structure and then one more analysis for each interaction
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)

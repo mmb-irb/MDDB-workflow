@@ -3,11 +3,11 @@
 
 from subprocess import run, PIPE, Popen
 import os
-from typing import List
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
+from model_workflow.utils.type_hints import *
 
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'

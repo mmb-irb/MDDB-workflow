@@ -1,8 +1,6 @@
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 
 import os
-from subprocess import run, PIPE, Popen
-import math
 from typing import Optional
 
 import pytraj as pt
