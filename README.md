@@ -16,7 +16,7 @@ First clone the workflow repo:
 Now create a new environment using the `environment.yml` file in this repo:
 
 `cd MoDEL-workflow`<br />
-`conda env create --file environment.yml`
+`conda env create --file envs/environment.yml`
 
 Activate the new enviornment
 
