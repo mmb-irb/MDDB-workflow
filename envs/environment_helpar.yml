@@ -1,0 +1,33 @@
+name: mwf_helpar
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - ambertools
+  - biopython=1.7.9
+  - curves
+  - gromacs
+  - matplotlib-base
+  - mdanalysis
+  - mdtraj
+  - mordred
+  - pandas
+  - pyyaml
+  - rdkit
+  - scikit-learn
+  - seaborn
+  - scipy
+  - statsmodels
+  - pip
+  - xmltodict
+  - pip:
+      - amberlite
+      - amberutils
+      - mmpbsa-py
+      - packmol-memgen
+      - pdb4amber
+      - pytraj
+      - sander
+      - tmscoring
