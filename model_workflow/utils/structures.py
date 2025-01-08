@@ -770,6 +770,9 @@ class Chain:
 
     def __eq__ (self, other):
         return self.name == other.name
+    
+    def __hash__ (self):
+        return hash(self.name)
 
     # The parent structure (read only)
     # This value is set by the structure itself
@@ -863,6 +866,11 @@ class Chain:
     def get_atoms (self) -> List[int]:
         return sum([ residue.atoms for residue in self.residues ], [])
     atoms = property(get_atoms, None, None, "Atoms in the chain (read only)")
+
+    # Number of atoms in the chain (read only)
+    def get_atom_count (self) -> int:
+        return len(self.atom_indices)
+    atom_count = property(get_atom_count, None, None, "Number of atoms in the chain (read only)")
 
     # Get the residues sequence in one-letter code
     def get_sequence (self) -> str:
@@ -978,6 +986,25 @@ class Structure:
             if selection & fragment:
                 yield fragment
 
+    # Name an atom selection depending on the chains it contains
+    # This is used for debug purpouses
+    def name_selection (self, selection : 'Selection') -> str:
+        atoms = [ self.atoms[index] for index in selection.atom_indices ]
+        # Count atoms per chain
+        atom_count_per_chain = { chain: 0 for chain in self.chains }
+        for atom in atoms:
+            atom_count_per_chain[atom.chain] += 1
+        # Set labels accoridng to the coverage of every chain
+        chain_labels = []
+        for chain, atom_count in atom_count_per_chain.items():
+            if atom_count == 0: continue
+            coverage = atom_count / chain.atom_count
+            label = f'chain {chain.name}'
+            if coverage < 1:
+                percent = round(coverage * 1000) / 10
+                label += f' ({percent}%)'
+            chain_labels.append(label)
+        return ', '.join(chain_labels)
 
     # Set a new atom in the structure
     def set_new_atom (self, atom : 'Atom'):
