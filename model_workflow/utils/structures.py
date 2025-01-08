@@ -518,6 +518,12 @@ class Residue:
         if self.structure._fixed_atom_elements == False:
             self.structure.fix_atom_elements()
         # Solvent is water molecules
+        # First rely on the residue name
+        if self.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+            self._classification = 'solvent'
+            return self._classification
+        # It may be water with a not known name
+        # Literally check if its a molecule with 3 atoms: 2 hydrogens and 1 oxygen
         if self.atom_count == 3:
             atom_elements = [ atom.element for atom in self.atoms ]
             if atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
@@ -1309,6 +1315,7 @@ class Structure:
     # Return True if any element was modified or False if not
     def fix_atom_elements (self, trust : bool = True) -> bool:
         modified = False
+        added = False
         # Save the wrong guesses for a final report
         # This way we do not crowd the terminal with logs when a lot of atoms are affected
         reports = {}
@@ -1332,17 +1339,17 @@ class Structure:
             # If elements are missing then guess them from atom names
             else:
                 atom.element = atom.guess_element()
-                modified = True
+                added = True
         # Warn the user about anormalies
         for report, count in reports.items():
             atom_name, atom_element, guess = report
             warn(f"Suspicious element for atom {atom_name}: {atom_element} -> shoudn't it be {guess}? ({count} occurrences)")
         # Warn the user that some elements were modified
-        if modified:
-            warn('Atom elements have been modified')
+        if modified: warn('Atom elements have been modified')
+        if added: warn('Atom elements were missing and have been added')
         # Set atom elements as fixed in order to avoid repeating this process
         self._fixed_atom_elements = True
-        return modified
+        return modified or added
 
     # Set new coordinates
     def set_new_coordinates (self, new_coordinates : List[Coords]):
@@ -1482,7 +1489,7 @@ class Structure:
     # Select water atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
     def select_water (self) -> 'Selection':
-        water_residues_indices = [ residue.index for residue in self.residues if residue.name in STANDARD_SOLVENT_RESIDUE_NAMES ]
+        water_residues_indices = [ residue.index for residue in self.residues if residue.classification == 'solvent' ]
         return self.select_residue_indices(water_residues_indices)
 
     # Select counter ion atoms
@@ -1500,6 +1507,10 @@ class Structure:
                 counter_ion_indices.append(atom.index)
         return Selection(counter_ion_indices)
 
+    # Select both water and counter ions
+    def select_water_and_counter_ions (self) -> 'Selection':
+        return self.select_water() + self.select_counter_ions()
+
     # Select heavy atoms
     def select_heavy_atoms (self) -> 'Selection':
         atom_indices = []
@@ -1512,6 +1523,7 @@ class Structure:
     # Select protein atoms
     # WARNING: Note that there is a small difference between VMD protein and our protein
     # This function is improved to consider terminal residues as proteins
+    # VMD considers protein any resiude including N, C, CA and O while terminals may have OC1 and OC2 instead of O
     def select_protein (self) -> 'Selection':
         atom_indices = []
         for residue in self.residues:
@@ -1554,16 +1566,6 @@ class Structure:
         for atom_index in selection.atom_indices:
             atom_indices[atom_index] = None
         return Selection([ atom_index for atom_index in atom_indices if atom_index != None ])
-
-    # Get protein selection
-    # WARNING: Do not rely in VMD's "protein" selection since it misses terminal residues
-    # VMD considers protein any resiude including N, C, CA and O while terminals may have OC1 and OC2 instead of O
-    def get_protein_selection (self) -> 'Selection':
-        atom_indices = []
-        for residue in self.residues:
-            if residue.classification == 'protein':
-                atom_indices += residue.atom_indices
-        return Selection(atom_indices)
     
     # Given a selection, get a list of residue indices for residues implicated
     # Note that if a single atom from the residue is in the selection then the residue index is returned
@@ -2268,7 +2270,7 @@ class Structure:
     def find_ptms (self) -> Generator[dict, None, None]:
         # Find bonds between protein and non-protein atoms
         # First get all protein atoms
-        protein_selection = self.get_protein_selection()
+        protein_selection = self.select_protein()
         if not protein_selection:
             return
         protein_atom_indices = set(protein_selection.atom_indices) # This is used later
