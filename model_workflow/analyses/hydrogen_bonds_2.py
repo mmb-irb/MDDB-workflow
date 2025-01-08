@@ -13,10 +13,10 @@ import pytraj as pt
 import numpy
 import re
 from math import ceil
-from typing import List, Optional
 
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.type_hints import *
 
 # Perform an hydrogen bonds analysis for each interaction interface
 # The 'interactions' input may be an empty list (i.e. there are no interactions)

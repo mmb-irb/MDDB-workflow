@@ -207,17 +207,18 @@ SUPPORTED_BYTE_SIZES = {
     4: 'f',
     8: 'd'
 }
-from typing import List
-from struct import pack
+
 # Data is a list of numeric values
 # Bit size is the number of bits for each value in data to be occupied
-def store_byte (data : List[float], byte_size : int, filepath : str):
+def store_binary_data (data : List[float], byte_size : int, filepath : str):
     # Check bit size to make sense
     letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
     if not letter:
-        raise ValueError(f'Not supported byte size {byte_size}, please select one of these: {(SUPPORTED_BYTE_SIZES.keys())}')
+        raise ValueError(f'Not supported byte size {byte_size}, please select one of these: {", ".join(SUPPORTED_BYTE_SIZES.keys())}')
+    # Set the binary format
+    # '<' stands for little endian
+    byte_flag = f'<{letter}'
     # Start writting the output file
-    byte_flag = f'!{letter}'
     with open(filepath, 'wb') as file:
         # Iterate over data list values
         for value in data:

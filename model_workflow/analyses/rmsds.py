@@ -2,11 +2,10 @@ from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS
+from model_workflow.utils.type_hints import *
 
 import os
 from subprocess import run, PIPE, Popen
-
-from typing import List
 
 # Run multiple RMSD analyses
 # A RMSD analysis is run with each reference:

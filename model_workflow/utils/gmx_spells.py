@@ -3,10 +3,9 @@ from os.path import exists
 from shutil import copyfile
 from subprocess import run, PIPE, Popen
 
-from typing import List
-
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.file import File
+from model_workflow.utils.type_hints import *
 
 # Get the first frame from a trajectory
 def get_first_frame (input_structure_filename : str, input_trajectory_filename : str, output_frame_filename : str):
@@ -36,7 +35,7 @@ def get_first_frame (input_structure_filename : str, input_trajectory_filename :
             "-f",
             input_trajectory_filename,
             "-o",
-            output_first_frame_filename,
+            output_frame_filename,
             "-dump",
             "0",
             "-quiet"
@@ -486,11 +485,11 @@ def parse_xpm (filename : str) -> List[ List[float] ]:
         x_axis = []
         y_axis = []
         # Every line has a maximum of 80 labels
-        x_lines = ceil(x_dimension / 80)
+        x_lines = math.ceil(x_dimension / 80)
         for l in range(x_lines):
             line = file.readline()[12:-3].split()
             x_axis += [ int(v) for v in line ]
-        y_lines = ceil(y_dimension / 80)
+        y_lines = math.ceil(y_dimension / 80)
         for l in range(y_lines):
             line = file.readline()[12:-3].split()
             y_axis += [ int(v) for v in line ]

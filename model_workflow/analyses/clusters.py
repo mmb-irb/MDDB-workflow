@@ -1,6 +1,5 @@
 from os.path import exists
 import re
-from typing import List
 
 import numpy as np
 
@@ -9,6 +8,7 @@ import mdtraj as mdt
 from model_workflow.utils.auxiliar import round_to_thousandths, save_json, otherwise
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from model_workflow.utils.type_hints import *
 
 AUXILIAR_PDB_FILENAME = '.model.pdb'
 

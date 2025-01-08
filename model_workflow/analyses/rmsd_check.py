@@ -2,8 +2,6 @@ import mdtraj as mdt
 import pytraj as pt
 import numpy as np
 
-from typing import List
-
 from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
