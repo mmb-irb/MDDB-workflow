@@ -798,18 +798,6 @@ class MD:
         # Update the parameters used to get the last processed structure and trajectory files
         self.register.update_cache(PROCESSED, current_processed_parameters)
 
-        # --- Cleanup intermediate files
-
-        # Set also a list of input files
-        inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
-        # We must make sure an intermediate file is not actually an input file before deleting it
-        removable_files = intermediate_files - inputs_files
-        # Now delete every removable file
-        for removable_file in removable_files:
-            # Note that a broken symlink does not 'exists'
-            if removable_file.exists or removable_file.is_symlink():
-                removable_file.remove()
-
         # --- RUNNING FINAL TESTS ------------------------------------------------------------
 
         # Note that some tests have been run already
@@ -836,7 +824,7 @@ class MD:
             else:
                 raise ValueError()
             
-            print(' - ' + test_nice_name + ' -> ' + test_nice_result)
+            print(f' - {test_nice_name} -> {test_nice_result}')
 
         # Issue some warnings if failed or never run tests are skipped
         for test_name in AVAILABLE_CHECKINGS:
@@ -862,6 +850,18 @@ class MD:
                 self.register.add_warning(test_skip_flag, test_nice_name + ' was skipped and never run before')
             else:
                 raise ValueError('Test value is not supported')
+            
+        # --- Cleanup intermediate files
+
+        # Set also a list of input files
+        inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
+        # We must make sure an intermediate file is not actually an input file before deleting it
+        removable_files = intermediate_files - inputs_files
+        # Now delete every removable file
+        for removable_file in removable_files:
+            # Note that a broken symlink does not 'exists'
+            if removable_file.exists or removable_file.is_symlink():
+                removable_file.remove()
 
     # Check all tests to be succeeded in the last run
     def all_tests_succeeded (self) -> bool:
