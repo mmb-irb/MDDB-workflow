@@ -285,7 +285,7 @@ class Atom:
 
     # Get a standard label
     def get_label (self) -> str:
-        return f'{self.residue.label}.{self.name}'
+        return f'{self.residue.label}.{self.name} (index {self.index})'
     # The atom standard label (read only)
     label = property(get_label, None, None)
 
@@ -2093,7 +2093,7 @@ class Structure:
             # Get actual number of bonds in the current atom both with and without ion bonds
             # LORE: This was a problem since some ions are force-bonded but bonds are actually not real
             # LORE: When an ion is forced we may end up with hyrogens with 2 bonds or carbons with 5 bonds
-            # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbonds (e.g. weird ligands)
+            # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbons (e.g. ligands)
             min_nbonds = len(atom.get_bonds(skip_ions = True))
             max_nbonds = len(atom.get_bonds(skip_ions = False))
             # Get the accepted range of number of bonds for the current atom according to its element
@@ -2116,7 +2116,9 @@ class Structure:
                     print(f' It should have {min_allowed_bonds} bond{plural_sufix}')
                 else:
                     print(f' It should have between {min_allowed_bonds} and {max_allowed_bonds} bonds')
-                print(f' -> Atom {atom.label} (index {atom.index})')
+                print(f' -> Atom {atom.label}')
+                bond_label = ', '.join([ self.atoms[atom].label for atom in atom.get_bonds(skip_ions = False) ])
+                print(f' -> Bonds {bond_label}')
                 return True
         return False
 
