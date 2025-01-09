@@ -3,12 +3,11 @@ from os.path import exists
 from json import load
 
 # Import local tools
-from model_workflow.utils.structures import Structure
-from model_workflow.utils.auxiliar import TestFailure
 from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-from model_workflow.utils.auxiliar import get_new_letter, save_json
+from model_workflow.utils.auxiliar import TestFailure, get_new_letter, save_json, warn
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
+from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
 
 # Analyze the structure looking for irregularities and then modify the structure to standarize the format
@@ -192,12 +191,18 @@ def structure_corrector (
         # Note that atoms with no chain are not a problem for the workflow but they are for the web client
         unlettered_chain = next((chain for chain in chains if chain.name == ' '), None)
         if unlettered_chain:
-            current_letters = [ chain.name for chain in chains ]
+            current_letters = set([ chain.name for chain in chains ])
             new_letter = get_new_letter(current_letters)
-            unlettered_chain.name = new_letter
-            print('WARNING: some chains are missing -> Unchained regions will be chained as ' + new_letter)
+            # If we run out of letters there may be some problematic chain configuration
+            # In this cases we cannot respect the original chains
+            if new_letter == None:
+                warn('No more letters in the alphabel to fill missing chains -> All chains will be assigned from scratch')
+                structure.auto_chainer()
+            else:
+                warn(f'Some chains are missing -> Unchained regions will be chained as {new_letter}')
+                unlettered_chain.name = new_letter
             # Update the structure file using the corrected structure
-            print(' The structure file has been modified -> ' + output_structure_file.filename)
+            print(f' The structure file has been modified -> {output_structure_file.filename}')
             structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -216,7 +221,7 @@ def structure_corrector (
             # Note that this will never happen because of the pdb itself, duplicated chains are handled further
             # This will only happen if chains were missing and guessed, and there is something very wrong in the structure
             # Check fragments with the VMD and searh for wrong bonds
-            raise SystemExit('We are having splitted chains (e.g. ' + chain_name + ')')
+            raise TestFailure(f'We are having splitted chains (e.g. {chain_name})')
         checked_chains.append(chain_name)
 
     # ------------------------------------------------------------------------------------------
