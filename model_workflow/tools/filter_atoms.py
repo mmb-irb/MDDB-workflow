@@ -10,8 +10,9 @@ from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STAND
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.gmx_spells import get_tpr_atom_count
 from model_workflow.utils.type_hints import *
-from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
+from model_workflow.tools.get_charges import get_raw_charges
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -103,30 +104,29 @@ def filter_atoms (
                 )
         # Gromacs format format
         elif input_topology_file.format == 'tpr':
-            # Extract charges from the tpr file and count them
-            charges = get_tpr_charges(input_topology_file.path)
-            topology_atoms_count = len(charges)
+            # Get the input tpr atom count
+            topology_atoms_count = get_tpr_atom_count(input_topology_file.path)
             print(f'Topology atoms count: {topology_atoms_count}')
-            # If the number of charges in greater than expected then filter the tpr file and extract charges again
+            # If the number of atoms is greater than expected then filter the tpr file
             if topology_atoms_count > filtered_structure_atoms_count:
                 if not exists(index_filename):
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
                 tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
-                charges = get_tpr_charges(output_topology_file.path)
-            filtered_topology_atoms_count = len(charges)
+            # Get the output tpr atom count
+            filtered_topology_atoms_count = get_tpr_atom_count(output_topology_file.path)
         # Standard topology
         elif input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
             standard_topology = None
             with open(input_topology_file.path, 'r') as file:
                 standard_topology = json.load(file)
-            charges = standard_topology['atom_charges']
-            print(f'Topology atoms count: {len(charges)}')
+            topology_atoms_count = len(standard_topology['atom_names'])
+            print(f'Topology atoms count: {topology_atoms_count}')
             # Make it match since there is no problem when these 2 do not match
             filtered_topology_atoms_count = filtered_structure_atoms_count
             # If the number of charges does not match the number of atoms then filter the topology
-            if len(charges) != filtered_structure_atoms_count:
+            if topology_atoms_count != filtered_structure_atoms_count:
                 standard_topology_filter(input_topology_file, reference_structure, parsed_filter_selection, output_topology_file)
         # Raw charges
         elif input_topology_file.filename == RAW_CHARGES_FILENAME:
