@@ -66,6 +66,10 @@ def rmsf (
 
     # Get all rmsf values which are not None
     actual_rmsf_values = [ v for v in rmsf_values if v != None ]
+    # There may be none if the whole system is in PBC
+    if len(actual_rmsf_values) == 0:
+        print(' No actual values to do RMSF')
+        return
 
     # Format data
     rmsf_data = {

@@ -38,6 +38,9 @@ def rgyr (
     # Generate a custom index file to exclude PBC residues from the analysis
     pbc_selection = structure.select_residue_indices(pbc_residues)
     not_pbc_selection = structure.invert_selection(pbc_selection)
+    if not not_pbc_selection:
+        print(' No selection to run the analysis')
+        return
     selection_name = 'pbc_residues'
     ndx_selection = not_pbc_selection.to_ndx(selection_name)
     ndx_filename = '.not_pbc.ndx'

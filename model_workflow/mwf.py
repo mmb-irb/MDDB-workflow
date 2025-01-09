@@ -505,6 +505,16 @@ class MD:
             for test in repeated_tests:
                 self.register.update_test(test, None)
 
+        # Extend the required tests list with the base tests which are to be run by default and are not already passed
+        for checking in AVAILABLE_CHECKINGS:
+            test_result = self.register.tests.get(checking, None)
+            # If the test result is true then it menas ir has already passed
+            # If the test result is 'na' then it means it is not aplicable
+            if test_result == True or test_result == 'na': continue
+            # If the test result is None then it means it has never been run
+            # If the test result is false then it means it failed
+            required_tests.update(checking)
+
         # Check if the processing parameters (filter, image, etc.) have changed since the last time
         # If so, then we must reset all tests and rerun the processing
         previous_processed_parameters = self.register.cache.get(PROCESSED, None)
@@ -530,7 +540,7 @@ class MD:
         # Check also if all availables tests were actually passed in the last run
         # They may be skipped or allowed to fail
         # Also make sure processing parameters are the same that the last time
-        if outputs_exist and len(required_tests) == 0 and self.all_tests_succeeded() and same_processed_paramaters:
+        if outputs_exist and len(required_tests) == 0 and same_processed_paramaters:
             return
 
         print('-> Processing input files')
@@ -821,6 +831,8 @@ class MD:
                 test_nice_result = RED_HEADER + 'Failed' + COLOR_END
             elif test_result == True:
                 test_nice_result = GREEN_HEADER + 'Passed' + COLOR_END
+            elif test_result == 'na':
+                test_nice_result = BLUE_HEADER + 'Not applicable' + COLOR_END
             else:
                 raise ValueError()
             
@@ -862,14 +874,6 @@ class MD:
             # Note that a broken symlink does not 'exists'
             if removable_file.exists or removable_file.is_symlink():
                 removable_file.remove()
-
-    # Check all tests to be succeeded in the last run
-    def all_tests_succeeded (self) -> bool:
-        for checking in AVAILABLE_CHECKINGS:
-            test_result = self.register.tests.get(checking, None)
-            if test_result != True:
-                return False
-        return True
 
     # Get the processed structure
     def get_structure_file (self) -> str:

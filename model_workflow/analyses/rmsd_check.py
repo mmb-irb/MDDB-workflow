@@ -2,7 +2,7 @@ import mdtraj as mdt
 import pytraj as pt
 import numpy as np
 
-from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure
+from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
 from model_workflow.utils.type_hints import *
@@ -53,7 +53,9 @@ def check_trajectory_integrity (
 
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        raise Exception('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
+        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
+        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
+        return True
 
     print('Checking trajectory integrity')
 
@@ -184,7 +186,9 @@ def check_trajectory_integrity_per_fragment (
 
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        raise Exception('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
+        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
+        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
+        return True
     
     # Get fragments out of the parsed selection
     # Fragments will be analyzed independently
@@ -346,7 +350,9 @@ def check_trajectory_integrity_per_fragment_2 (
 
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        raise Exception('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
+        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
+        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
+        return True
     
     # First frames may not be perfectly equilibrated and thus have stronger RMSD jumps
     # For this reason we allow the first frames to bypass the check
@@ -504,7 +510,9 @@ def check_trajectory_integrity_per_residue (
 
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        raise Exception('WARNING: There are not atoms to be analyzed after PBC substraction for the RMSD analysis')
+        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
+        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
+        return True
 
     # We must filter out residues which only have 1 atom (e.g. ions)
     # This is because sometimes pytraj does not return results for them and then the number of results and residues does not match
