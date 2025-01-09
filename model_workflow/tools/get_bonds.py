@@ -37,14 +37,14 @@ def do_bonds_match (
         if len(atom_bonds_set_1) != len(atom_bonds_set_2) or any(bond not in atom_bonds_set_2 for bond in atom_bonds_set_1):
             if verbose:
                 if atoms:
-                    missmatch_atom_label = atoms[atom_index].label
-                    print(f' Missmatch in atom {missmatch_atom_label}:')
+                    mismatch_atom_label = atoms[atom_index].label
+                    print(f' Mismatch in atom {mismatch_atom_label}:')
                     it_is_atom_labels = ', '.join([ atoms[index].label for index in atom_bonds_set_1 ])
                     print(f' It is bonded to atoms {it_is_atom_labels}')
                     it_should_be_atom_labels = ', '.join([ atoms[index].label for index in atom_bonds_set_2 ])
                     print(f' It should be bonded to atoms {it_should_be_atom_labels}')
                 else:
-                    print(f' Missmatch in atom with index {atom_index}:')
+                    print(f' Mismatch in atom with index {atom_index}:')
                     it_is_atom_indices = ','.join(atom_bonds_set_1)
                     print(f' It is bondes to atoms with indices {it_is_atom_indices}')
                     it_should_be_atom_indices = ','.join(atom_bonds_set_2)
