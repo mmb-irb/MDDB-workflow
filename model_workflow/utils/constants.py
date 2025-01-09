@@ -123,7 +123,8 @@ PDB_REFERENCES_FILENAME = 'pdb_references.json'
 PROTEIN_REFERENCES_FILENAME = 'references.json'
 # Set the ligand references filename
 LIGAND_REFERENCES_FILENAME = 'ligands.json'
-
+# Set the ligand references filename
+MEMBRANE_MAPPING_FILENAME = 'mem_map.json'
 # Set the chains filename
 OUTPUT_CHAINS_FILENAME = 'chains.json'
 
@@ -175,7 +176,6 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
 LIGANDS_DATA = 'ligandata'
-MEMBRANE_DATA = 'membranedata'
 
 # Set the different test flags
 STABLE_BONDS_FLAG = 'stabonds'

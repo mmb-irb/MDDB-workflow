@@ -2353,18 +2353,17 @@ class Project:
         # If we already have a stored value then return it
         if self._membrane_map:
             return self._membrane_map
-        # TODO: guardar el mapping en un archivo
-        if False: # only for debugging
-            # If we already have a value in the register cache then use it
-            cached_value = self.register.cache.get(MEMBRANE_DATA, self._membrane_map)
-            if cached_value != None:
-                return cached_value
+        # Set the membrane mapping file
+        mem_map_filepath = self.project_pathify(MEMBRANE_MAPPING_FILENAME)
+        mem_map_file = File(mem_map_filepath)
+        # If the file already exists then send it
+        if mem_map_file.exists and not overwrite:
+            return mem_map_file
         self._membrane_map = generate_membrane_mapping(
             structure = self.structure,
             topology_file=self.topology_file,
             structure_file=self.structure_file,
         )
-        self.register.update_cache(MEMBRANE_DATA, self._membrane_map)
         return self._membrane_map
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 

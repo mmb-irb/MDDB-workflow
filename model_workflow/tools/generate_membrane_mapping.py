@@ -1,6 +1,9 @@
+import os
 import numpy as np
 import MDAnalysis
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
+from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
+from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
@@ -76,7 +79,7 @@ def generate_membrane_mapping(structure : 'Structure',
     # for better leaflet assignation we only use polar atoms
     charges = abs(np.array([atom.charge for atom in u.atoms]))
     polar_atoms = []
-    for res_idx in u.select_atoms(mem_candidates):
+    for res_idx in u.select_atoms(mem_candidates).resindices:
         res = u.residues[res_idx]
         res_ch = charges[[at.index for at in res.atoms]]
         max_ch_idx = np.argmax(res_ch)
@@ -85,15 +88,29 @@ def generate_membrane_mapping(structure : 'Structure',
 
     # Run FATSLiM to find the membranes
     prop = {
-    'selection': headgroup_sel,
-    'cutoff': 2.2,
-    'ignore_no_box': True,
-    'disable_logs': True
+        'selection': headgroup_sel,
+        'cutoff': 2.2,
+        'ignore_no_box': True,
+        'disable_logs': True,
+        'return_hydrogen':True
     }
-    output_ndx_path = "mda.mem_map.ndx"
+    output_ndx_path = "tmp_mem_map.ndx"
     fatslim_membranes(input_top_path=structure_file.absolute_path,
                     output_ndx_path=output_ndx_path,
                     properties=prop)
-    membranes_map = parse_index(output_ndx_path)
-    return membranes_map
+    # Parse the output to get the membrane mapping
+    mem_map = parse_index(output_ndx_path)
+    os.remove(output_ndx_path)
+    # Save the membrane mapping as a JSON file
+    n_mems = len(mem_map)//2
+    mem_map_js = {'n_mems': n_mems, 'mems': {}}
+    for i in range(n_mems):
+        mem_map_js['mems'][(str(i))] = {
+            'leaflets': {
+                'top': mem_map[f'membrane_{2*i+1}_leaflet_1'], 
+                'bot': mem_map[f'membrane_{2*i+1}_leaflet_2']
+                }
+            }
+    save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+    return mem_map_js
 
