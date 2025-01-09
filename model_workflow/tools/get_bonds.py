@@ -167,7 +167,7 @@ def mine_topology_bonds (bonds_source_file : 'File') -> list:
 # First try to mine bonds from a topology files
 # If the mining fails then search for the most stable bonds
 # If we turst in stable bonds then simply return the structure bonds
-def get_safe_bonds (
+def find_safe_bonds (
     input_topology_file : 'File',
     input_structure_file : 'File',
     input_trajectory_file : 'File',

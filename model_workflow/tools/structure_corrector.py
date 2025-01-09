@@ -3,7 +3,7 @@ from os.path import exists
 from json import load
 
 # Import local tools
-from model_workflow.tools.get_bonds import get_safe_bonds, do_bonds_match, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import TestFailure, get_new_letter, save_json, warn
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
@@ -65,16 +65,14 @@ def structure_corrector (
     # ------------------------------------------------------------------------------------------
 
     # Set if stable bonds have to be checked
+    # Note that we must not skip this even if the test already passed
+    # It may be a corrected structure the one which passed the structure, while this structure comes from the raw input
     must_check_stable_bonds = STABLE_BONDS_FLAG not in trust
-
-    # If this analysis has been already passed then we skip the process
-    if register.tests.get(STABLE_BONDS_FLAG, None) == True:
-        must_check_stable_bonds = False
 
     # Get safe bonds
     # Use topology bonds if possible
     # Otherwise guess bonds by guessing bonds according to coordinates and atom radius for 10 frames along the trajectory
-    safe_bonds = get_safe_bonds(
+    safe_bonds = find_safe_bonds(
         input_topology_file,
         input_structure_file,
         input_trajectory_file,

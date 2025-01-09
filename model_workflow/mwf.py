@@ -20,7 +20,7 @@ from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
-from model_workflow.tools.get_bonds import get_safe_bonds, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
@@ -2131,13 +2131,18 @@ class Project:
             print('Using resorted safe bonds')
             self._safe_bonds = load_json(self.resorted_bonds_file.path)
             return self._safe_bonds
+        # Set if stable bonds have to be checked
+        must_check_stable_bonds = STABLE_BONDS_FLAG not in self.trust
+        # If this analysis has been already passed then we can trust structure bonds
+        if self.register.tests.get(STABLE_BONDS_FLAG, None) == True:
+            must_check_stable_bonds = False
         # Otherwise we must find safe bonds value
         # This should only happen if we are working with already processed files
-        self._safe_bonds = get_safe_bonds(
+        self._safe_bonds = find_safe_bonds(
             input_topology_file=self.topology_file,
             input_structure_file=self.structure_file,
             input_trajectory_file=self.trajectory_file,
-            must_check_stable_bonds=(STABLE_BONDS_FLAG not in self.trust),
+            must_check_stable_bonds=must_check_stable_bonds,
             snapshots=self.reference_md.snapshots,
             structure=self.structure,
         )
