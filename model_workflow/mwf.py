@@ -2361,7 +2361,7 @@ class Project:
             return mem_map_file
         self._membrane_map = generate_membrane_mapping(
             structure = self.structure,
-            topology_file=self.topology_file,
+            topology_file=self.standard_topology_file,
             structure_file=self.structure_file,
         )
         return self._membrane_map

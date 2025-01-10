@@ -36,7 +36,7 @@ def generate_membrane_mapping(structure : 'Structure',
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
     print('Calculando la membrana...')
-    assert topology_file.extension == 'json', 'Input topology file must be in json format'
+    assert topology_file.extension == 'json', 'Input topology file must be in json format: '+ topology_file.extension
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
     # Get InChI keys of non-proteic/non-nucleic residues
