@@ -1,4 +1,4 @@
-import os
+import os, warnings
 import numpy as np
 import MDAnalysis
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
@@ -47,17 +47,18 @@ def generate_membrane_mapping(structure : 'Structure',
     #    display(inchi_2_mol(*args))
 
     # Classsify the residues as lipid or not
-    lipid, not_lipid = [], []
-    for inchikey, data in inchi_keys.items():
+    lipid_idx, not_lipid_idx = [], []
+    for inchikey, res_data in inchi_keys.items():
         lipid_data = is_in_LIPID_MAPS(inchikey)
+        # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if lipid_data:
-            lipid.extend(data['residues'])
-            if data['residues'][0].classification != 'fatty':
-                print('WARNING: The residue', data['residues'][0].name, 'is not classified as fatty')
+            lipid_idx.extend(res_data['resindices'])
+            if 'fatty' not in res_data['classification']:
+                warnings.warn('The inChIKey ', inchikey, ' is not classified as fatty but it is a lipid')
         else:
-            not_lipid.extend(data['residues'])
-            if data['residues'][0].classification == 'fatty':
-                print('WARNING: The residue', data['residues'][0].name, 'is classified as fatty')
+            not_lipid_idx.extend(res_data['resindices'])
+            if 'fatty' in res_data['classification']:
+                warnings.warn('The inChIKey ', inchikey, ' is classified as fatty but is not a lipid')
     # RUBEN: esto será para los glucolipidos
     """ 
     # Propierty to make easier to see if the residue is lipid
@@ -73,8 +74,7 @@ def generate_membrane_mapping(structure : 'Structure',
                 break """
     
     # Select only the lipids and potential membrane members
-    res_idx = [res.index for res in lipid]
-    mem_candidates = f'(resindex {" ".join(map(str,(res_idx)))})'
+    mem_candidates = f'(resindex {" ".join(map(str,(lipid_idx)))})'
 
     # for better leaflet assignation we only use polar atoms
     charges = abs(np.array([atom.charge for atom in u.atoms]))

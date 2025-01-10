@@ -1,9 +1,23 @@
-from typing import Optional
 import MDAnalysis
 from rdkit import Chem
 from model_workflow.utils.structures import Structure
+from model_workflow.utils.type_hints import *
+from multiprocessing import Pool
 from functools import lru_cache
-import requests
+import requests, warnings
+
+
+def process_residue(args: Tuple[MDAnalysis.core.groups.AtomGroup, int]) -> Tuple[str, str, int]:
+    """
+    Process a single residue to get its InChI key and related information.
+    """
+    res_atoms, resindex = args
+    # Convert to RDKIT and get InChI data
+    res_RD = res_atoms.convert_to("RDKIT")
+    # Calculate InChI key and string
+    inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
+    inchi = Chem.MolToInchi(res_RD)
+    return (inchikey, inchi, resindex)
 
 
 def get_inchi_keys (
@@ -29,53 +43,68 @@ def get_inchi_keys (
             residue information such as associated residues, InChI strings, bond information,
             and classification.
     """
-    key_2_name = {} # To see if different name for same residue
-    name_2_key = {} # To see if different residues under same name
-    # TO-DO: multiprocessing
-    for residue in structure.residues:
+    # 1) Prepare residue data for parallel processing
+    residue_data_list = []
+    residues = structure.residues
+    residue: Residue
+    for resindex, residue in enumerate(residues):
         # Skip residues that are aminoacids, nucleics, or too small
         if residue.classification in ['ion', 'solvent', 'nucleic', 'protein']:
             continue
         # Select residues atoms with MDAnalysis
-        res_sele = residue.get_selection().to_mdanalysis()
-        res_mda = u.select_atoms(res_sele)
-        # Convert to RDKIT and get InChi data
-        res_RD = res_mda.atoms.convert_to("RDKIT") # slow step, 50% of time 
-        inchikey = Chem.MolToInchiKey(res_RD)
+        res_atoms = u.select_atoms(residue.get_selection().to_mdanalysis())
+        res_data = (res_atoms,resindex)
+        residue_data_list.append(res_data)
+
+    with Pool() as pool:
+        results = pool.map(process_residue, residue_data_list)
+
+    # 2) Process results and build dictionaries
+    key_2_name = {} # To see if different name for same residue
+    name_2_key = {} # To see if different residues under same name
+    for result in results:
+        inchikey, inchi, index = result
+
         # If key don't existe we create the default entry with info that is only put once
-        if not key_2_name.get(inchikey, None):
-            inchi = Chem.MolToInchi(res_RD)
-            has_bonds = residue.get_bonded_atoms()
-            key_2_name[inchikey] = {'residues':[], 
-                                    'inchi': inchi, 
-                                    'has_bonds': has_bonds, 
-                                    'classification': residue.classification}
-        # We append all the residue with this key
-        key_2_name[inchikey]['residues'].append(residue)
+        if inchikey not in key_2_name:
+            key_2_name[inchikey] = {'inchi': inchi,
+                                    'resindices': [],
+                                    'resname':[], 
+                                    'classification': [],
+                                    'has_bonds': residues[index].get_bonded_atoms()} # TO-DO: check for every residue not only the first
+        # Add residue index to the list
+        key_2_name[inchikey]['resindices'].append(index)
+        # Add residue name to the list
+        resname = residues[index].name
+        if resname not in key_2_name[inchikey]['resname']:
+            key_2_name[inchikey]['resname'].append(resname)
+        # Add residue class to the list
+        classification = residues[index].classification
+        if classification not in key_2_name[inchikey]['classification']:
+            key_2_name[inchikey]['classification'].append(classification)
 
-        # This dict is only to check if a residue has multiple keys:
         # Incorrect residue name, estereoisomers, lose of atoms...
-        if not name_2_key.get(residue.name, None):
-            name_2_key[residue.name] = []
-        name_2_key[residue.name].append(inchikey)
+        if resname not in name_2_key:
+            name_2_key[resname] = []
+        name_2_key[resname].append(inchikey)
     
-    # DATA CHECKS
-    # Check if there are multiple names for the same InChi key
+    # 3) Check data coherence
+    # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
-        unique_names = list(set((res.name for res in data['residues'])))
         if data["has_bonds"]:
-            print(f'WARNING: inChiKey {inchikey} is a substructure of type {data["classification"]}'\
+            warnings.warn(f'inChIKey {inchikey} is a substructure of type {data["classification"]}'\
                   ' and will result in inprecise search in PubChemb due lo lack of hidrogens and different charges on the bonded atoms.')
-        if len(unique_names) > 1:
-            print('WARNING: Same residue with different names: ' + inchikey + ' -> ' + str(unique_names))
-        data['resname'] = list(unique_names) # Normally there is only one name
+        if len(data['resname']) > 1:
+            warnings.warn('Same residue with different names: ' + inchikey + ' -> ' + str(data['resname']))
+        if len(data['classification']) > 1:
+            warnings.warn('Same residue with different classifications: ' + inchikey + ' -> ' + str(data['classification']))   
 
-    # Check if there are multiple InChi keys for the same name
+    # Check if there are multiple InChI keys for the same name
     for name, inchikeys in name_2_key.items():
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
-            key_counts = '  '.join([f'({len(key_2_name[key]["residues"])}): {key}' for key in inchikeys])
-            print('WARNING: Same residue with different InChi keys: ' + name + ' -> ' + key_counts)
+            key_counts = '  '.join([f'({len(key_2_name[key]["resindices"])}): {key}' for key in inchikeys])
+            warnings.warn('Same residue with different InChi keys: ' + name + ' -> ' + key_counts)
    
     return key_2_name
 
