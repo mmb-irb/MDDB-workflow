@@ -51,7 +51,7 @@ def pockets (
     output_analysis_filepath : str,
     pockets_prefix : str,
     mdpocket_folder : str,
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int = 100,
     # Get only the 10 first pockets since the analysis is quite slow by now
@@ -65,7 +65,7 @@ def pockets (
     # DANI: Descartarlos significa quitarlos, pero si los quitamos entonces podemos encontrar pockets donde están estos átomos
     # DANI: Estamos a la espera que los de mdpocket incluyan un flag para estos casos
     # https://github.com/Discngine/fpocket/issues/77#issuecomment-974193129
-    if pbc_residues and len(pbc_residues) > 0:
+    if pbc_selection:
         print(' Pockets analysis will be skipped since we have PBC atoms')
         return
 

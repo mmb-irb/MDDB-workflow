@@ -19,7 +19,7 @@ def check_trajectory_integrity (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     mercy : List[str],
     trust: List[str],
     register : 'Register',
@@ -48,7 +48,6 @@ def check_trajectory_integrity (
         raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
 
     # Discard PBC residues from the selection to be checked
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     parsed_selection -= pbc_selection
 
     # If there is nothing to check then warn the user and stop here
@@ -152,7 +151,7 @@ def check_trajectory_integrity_per_fragment (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     mercy : List[str],
     trust: List[str],
     register : 'Register',
@@ -181,7 +180,6 @@ def check_trajectory_integrity_per_fragment (
         raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
 
     # Discard PBC residues from the selection to be checked
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     parsed_selection -= pbc_selection
 
     # If there is nothing to check then warn the user and stop here
@@ -316,7 +314,7 @@ def check_trajectory_integrity_per_fragment_2 (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     mercy : List[str],
     trust: List[str],
     register : 'Register',
@@ -345,7 +343,6 @@ def check_trajectory_integrity_per_fragment_2 (
         raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
 
     # Discard PBC residues from the selection to be checked
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     parsed_selection -= pbc_selection
 
     # If there is nothing to check then warn the user and stop here
@@ -473,7 +470,7 @@ def check_trajectory_integrity_per_residue (
     input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     mercy : List[str],
     trust: List[str],
     register : 'Register',
@@ -505,7 +502,6 @@ def check_trajectory_integrity_per_residue (
         raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
 
     # Discard PBC residues from the selection to be checked
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     parsed_selection -= pbc_selection
 
     # If there is nothing to check then warn the user and stop here

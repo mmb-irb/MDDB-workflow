@@ -19,7 +19,7 @@ center_selection_filename = '.index.ndx'
 # image - Set if it must me imaged
 # fit - Set if it must be fitted
 # translation - Set how it must be translated during imaging
-# pbc_selection - Set a selection to exclude PBC residues from both the centering and the fitting focuses
+# input_pbc_selection - Set a selection to exclude PBC residues from both the centering and the fitting focuses
 def image_and_fit (
     # Tested supported formats are .pdb and .tpr
     input_structure_file : 'File',
@@ -32,7 +32,7 @@ def image_and_fit (
     output_trajectory_file : 'File',
     image : bool, fit : bool,
     translation : list,
-    pbc_selection : str,
+    input_pbc_selection : str,
     ) -> str:
 
     print(f' Image: {image} | Fit: {fit}')
@@ -50,9 +50,14 @@ def image_and_fit (
     structure = Structure.from_pdb_file(input_structure_file.path)
     system_selection = structure.select('all', syntax='vmd')
     custom_selection = structure.select(center_selection, syntax='vmd')
-    if pbc_selection:
-        parsed_pbc_selection = structure.select(pbc_selection, syntax='vmd')
-        custom_selection -= parsed_pbc_selection
+    if not custom_selection:
+        raise SystemExit(f'The default selection to center ({center_selection}) is empty. Please image your simulation manually.')
+    if input_pbc_selection:
+        parsed_input_pbc_selection = structure.select(input_pbc_selection, syntax='vmd')
+        custom_selection -= parsed_input_pbc_selection
+    elif input_pbc_selection == 'guess':
+        parsed_input_pbc_selection = structure.select_pbc_guess()
+        custom_selection -= parsed_input_pbc_selection
     # Convert both selections to a single ndx file which gromacs can read
     system_selection_ndx = system_selection.to_ndx('System')
     selection_ndx = custom_selection.to_ndx(center_selection_name)
@@ -63,8 +68,8 @@ def image_and_fit (
     # In order to run the imaging with PBC residues we need a .tpr file, not just the .pdb file
     # This is because there is a '-pbc mol' step which only works with a .tpr file
     is_tpr_available = input_topology_file and input_topology_file.format == 'tpr'
-    has_pbc_residues = bool(pbc_selection)
-    if image and has_pbc_residues and not is_tpr_available:
+    has_pbc_atoms = bool(input_pbc_selection)
+    if image and has_pbc_atoms and not is_tpr_available:
         raise InputError('In order to image a simulation with PBC residues it is mandatory to provide a .tpr file')
 
     # Imaging --------------------------------------------------------------------------------------
@@ -159,7 +164,7 @@ def image_and_fit (
         reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
 
         # If there are PBC residues then run a '-pbc mol' to make all residues stay inside the box anytime
-        if has_pbc_residues:
+        if has_pbc_atoms:
             print(GREY_HEADER)
             # Run Gromacs
             p = Popen([

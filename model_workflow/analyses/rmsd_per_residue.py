@@ -18,7 +18,7 @@ def rmsd_per_residue (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int):
 
@@ -39,8 +39,7 @@ def rmsd_per_residue (
     # We must exclude here PBC residues from the analysis
     # PBC residues may jump through boundaries thus having non-sense high RMSD values
     pbc_atom_indices = []
-    if pbc_residues and len(pbc_residues) > 0:
-        pbc_selection = structure.select_residue_indices(pbc_residues)
+    if pbc_selection:
         pbc_atom_indices = pbc_selection.atom_indices
 
     # Filter the trajectory with the specified residue indices

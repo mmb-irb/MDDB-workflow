@@ -20,7 +20,7 @@ def pca (
     structure : 'Structure',
     fit_selection : str,
     analysis_selection : str,
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     projection_frames : int = 20
 ) -> dict:
 
@@ -48,7 +48,6 @@ def pca (
         parsed_analysis_selection = structure.select_heavy_atoms()
 
     # Parse PBC residues into a selection to be removed from PCA selections
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     parsed_fit_selection -= pbc_selection
     parsed_analysis_selection -= pbc_selection
 

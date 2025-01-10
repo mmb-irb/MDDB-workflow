@@ -1486,11 +1486,18 @@ class Structure:
     def select_all (self) -> 'Selection':
         return Selection(list(range(self.atom_count)))
 
+    # Select atoms according to the classification of its residue
+    def select_by_classification (self, classification : str) -> 'Selection':
+        atom_indices = []
+        for residue in self.residues:
+            if residue.classification == classification:
+                atom_indices += residue.atom_indices
+        return Selection(atom_indices)
+
     # Select water atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
     def select_water (self) -> 'Selection':
-        water_residues_indices = [ residue.index for residue in self.residues if residue.classification == 'solvent' ]
-        return self.select_residue_indices(water_residues_indices)
+        return self.select_by_classification('solvent')
 
     # Select counter ion atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard atom named structures
@@ -1525,11 +1532,16 @@ class Structure:
     # This function is improved to consider terminal residues as proteins
     # VMD considers protein any resiude including N, C, CA and O while terminals may have OC1 and OC2 instead of O
     def select_protein (self) -> 'Selection':
-        atom_indices = []
-        for residue in self.residues:
-            if residue.classification == 'protein':
-                atom_indices += residue.atom_indices
-        return Selection(atom_indices)
+        return self.select_by_classification('protein')
+    
+    # Select lipids
+    def select_lipids (self) -> 'Selection':
+        return self.select_by_classification('fatty') + self.select_by_classification('steroid')
+
+    # Return a selection of the typical PBC atoms: solvent, counter ions and lipids
+    # WARNING: This is just a guess
+    def select_pbc_guess (self) -> 'Selection':
+        return self.select_water() + self.select_counter_ions() + self.select_lipids()
 
     # Select cartoon representable regions for VMD
     # Rules are:

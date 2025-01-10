@@ -22,7 +22,6 @@ from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
 from model_workflow.tools.process_interactions import process_interactions
-from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from model_workflow.tools.chains import generate_chain_references
@@ -679,6 +678,10 @@ class MD:
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
         if must_image and (missing_imaged_output or not same_imaged_parameters):
+            # Set a provisional PBC selection
+            # Note that we can not rely in the standard PBC selection since it is parsed through the structure
+            # However we still don't have the standard structure available
+            provisional_pbc_selection = self.input_pbc_selection if self.project.is_inputs_file_available() else 'guess'
             print(' * Imaging and fitting')
             image_and_fit(
                 input_structure_file = filtered_structure_file,
@@ -689,7 +692,7 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                pbc_selection = self.pbc_selection
+                input_pbc_selection = provisional_pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
@@ -1074,10 +1077,10 @@ class MD:
     def get_pbc_selection (self) -> List[int]:
         # If there is no inputs file then asume there are no PBC atoms and warn the user
         if not self.project.is_inputs_file_available():
-            warn('Since there is no inputs file we assume there are no PBC atoms')
-            return None
+            warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
+            return self.structure.select_pbc_guess()
         # Otherwise use the input value
-        return self.input_pbc_selection
+        return self.structure.select(self.input_pbc_selection)
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # Indices of residues in periodic boundary conditions
@@ -1088,12 +1091,12 @@ class MD:
         if self.project._pbc_residues:
             return self.project._pbc_residues
         # If there is no inputs file then asume there are no PBC residues and warn the user
-        pbc_selection = self.pbc_selection
-        if not pbc_selection:
+        if not self.pbc_selection:
             self.project._pbc_residues = []
             return self.project._pbc_residues
-        # Otherwise we must find the value
-        self.project._pbc_residues = get_pbc_residues(self.structure, pbc_selection)
+        # Otherwise we parse the selection and return the list of residue indices     
+        self.project._pbc_residues = self.structure.get_selection_residue_indices(self.pbc_selection)
+        print(f'PBC residues "{self.input_pbc_selection}" -> {len(self.project._pbc_residues)} residues')
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
@@ -1164,7 +1167,7 @@ class MD:
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             mercy = self.project.mercy,
             trust = self.project.trust,
             register = self.register,
@@ -1195,7 +1198,7 @@ class MD:
             frames_limit = 5000,
             snapshots = self.snapshots,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             ligand_map = self.project.ligand_map,
         )
 
@@ -1212,7 +1215,7 @@ class MD:
             first_frame_file = self.first_frame_file,
             average_structure_file = self.average_structure_file,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 200,
         )
@@ -1229,8 +1232,7 @@ class MD:
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
         )
 
     # RGYR, radius of gyration
@@ -1249,7 +1251,7 @@ class MD:
             snapshots = self.snapshots,
             frames_limit = 5000,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
         )
 
     # PCA, principal component analysis
@@ -1271,7 +1273,7 @@ class MD:
             structure = self.structure,
             fit_selection = self.project.pca_fit_selection,
             analysis_selection = self.project.pca_selection,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
         )
 
     # PCA contacts
@@ -1304,7 +1306,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
         )
@@ -1323,7 +1325,7 @@ class MD:
             output_analysis_filename = output_analysis_filepath,
             interactions = self.processed_interactions,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 200,
             overall_selection = "name CA or name C5"
@@ -1355,7 +1357,7 @@ class MD:
             interactions = self.processed_interactions,
             structure = self.structure,
             snapshots = self.snapshots,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             output_analysis_filename = output_analysis_filepath,
             output_run_filepath = output_run_filepath,
             output_screenshots_filename = output_screenshot_filepath,
@@ -1451,7 +1453,7 @@ class MD:
             pockets_prefix = self.md_pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
             output_analysis_filepath = output_analysis_filepath,
             mdpocket_folder = self.md_pathify(POCKETS_FOLDER),
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
         )
@@ -2112,12 +2114,7 @@ class Project:
 
     # Indices of residues in periodic boundary conditions
     def get_pbc_residues (self) -> List[int]:
-        # If we already have a stored value then return it
-        if self._pbc_residues:
-            return self._pbc_residues
-        # Otherwise we must find the value
-        self._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
-        return self._pbc_residues
+        return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
      # Safe bonds

@@ -22,7 +22,7 @@ def rmsd_pairwise(
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     overall_selection : str = "name CA or name C5'", # equivalent to "@CA,C5'" in pytraj
     ):
 
@@ -45,7 +45,6 @@ def rmsd_pairwise(
         selection = structure.select_all()
 
     # Remove PBC residues from the selection
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     selection -= pbc_selection
     if not selection:
         print(f' Empty selection after substracting PBC atoms')

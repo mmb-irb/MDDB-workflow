@@ -17,7 +17,7 @@ def tmscores (
     first_frame_file : 'File',
     average_structure_file : 'File',
     structure : 'Structure',
-    pbc_residues: List[int],
+    pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int):
 
@@ -32,9 +32,7 @@ def tmscores (
         return
 
     # Remove PBC residues from the selection
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     selection -= pbc_selection
-
     if not selection:
         print('WARNING: There are not atoms to be analyzed for the TM score analysis after PBC substraction')
         return
