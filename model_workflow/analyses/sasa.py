@@ -25,6 +25,11 @@ def sasa(
 
     print('-> Running SAS analysis')
 
+    # If all residues are to be excluded since the whole system is in PCB then stop here
+    if len(pbc_residues) == len(structure.residues):
+        print(' No residues to run the analysis')
+        return
+
     # For this analysis me must filter out hydrogens
     heavy_atoms_selection = '( not name "H.*" )'
 
