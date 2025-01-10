@@ -2,6 +2,7 @@ from typing import Optional
 import MDAnalysis
 from rdkit import Chem
 from model_workflow.utils.structures import Structure
+from functools import lru_cache
 import requests
 
 
@@ -78,6 +79,8 @@ def get_inchi_keys (
    
     return key_2_name
 
+
+@lru_cache(maxsize=None)
 def is_in_LIPID_MAPS(inchikey) -> dict:
     """Search the InChi keys in LIPID MAPS"""
     headers = {'accept': 'json'}
@@ -89,6 +92,7 @@ def is_in_LIPID_MAPS(inchikey) -> dict:
            return js        
     else:
         print(f"Error for {inchikey}: {response.status_code}")
+
 
 def get_atoms_info(atom):
     """Get the RDkit atom information."""
@@ -128,6 +132,7 @@ def inchi_2_mol(inchi, withHs=False, neutralize=False):
         return Chem.AddHs(mol)
     else:
         return mol
+
 
 def Residue_2_Mol(res):
     mol = Chem.RWMol()
