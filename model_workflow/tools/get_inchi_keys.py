@@ -4,8 +4,6 @@ from rdkit import Chem
 from model_workflow.utils.structures import Structure
 import requests
 
-# PDB coordinates are necesary to distinguish stereoisomers
-# TO-DO?: convertir directamente de Structure a RDKit
 
 def get_inchi_keys (
     u : 'MDAnalysis.Universe',
@@ -18,7 +16,7 @@ def get_inchi_keys (
     residues that are not classified as 'ion', 'solvent', 'nucleic', or 'protein'. For each
     identified residue, it converts the structure to RDKit format to obtain the InChI key
     and InChI string. The resulting data is stored in dictionaries to map InChI keys to residue
-    details and residue names to InChI keys.
+    details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers.
 
     Args:
         input_structure_file (File): The input structure file.
@@ -30,19 +28,13 @@ def get_inchi_keys (
             residue information such as associated residues, InChI strings, bond information,
             and classification.
     """
-    # Set the MDAnalysis universe
-    key_2_name = {}
-    name_2_key = {}
+    key_2_name = {} # To see if different name for same residue
+    name_2_key = {} # To see if different residues under same name
     # TO-DO: multiprocessing
     for residue in structure.residues:
         # Skip residues that are aminoacids, nucleics, or too small
         if residue.classification in ['ion', 'solvent', 'nucleic', 'protein']:
             continue
-        # TO-DO: convertir structure a RDKIT para no tener que usar MDAnalysis
-        # (MDAnalysis/converters/RDKit.RDKitConverter) y poder poner el metodo d
-        # directamente en residue.get_inchi_key o crear parser de Structure 
-        # para MDAnalysis
-
         # Select residues atoms with MDAnalysis
         res_sele = residue.get_selection().to_mdanalysis()
         res_mda = u.select_atoms(res_sele)
