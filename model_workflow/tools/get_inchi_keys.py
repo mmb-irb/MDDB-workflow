@@ -2,9 +2,9 @@ import MDAnalysis
 from rdkit import Chem
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
-from multiprocessing import Pool
+from model_workflow.utils.warnings import warn
 from functools import lru_cache
-import requests, warnings
+import requests
 
 
 def process_residue(res_atoms: 'MDAnalysis.AtomGroup', 
@@ -87,15 +87,14 @@ def get_inchi_keys (
     # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
         if data["has_bonds"]:
-            print(f"WARNING: inChIKey {inchikey} is a substructure of type {data['classification']}\n"
+            warn(f"inChIKey {inchikey} is a substructure of type {data['classification']}\n"
                    "and will result in imprecise search in PubChemb due lo lack of hidrogens\n"
                    "and different charges on the bonded atoms.")
-        
         if len(data['resname']) > 1:
-            print('WARNING: Same residue with different names:\n'
+            warn('Same residue with different names:\n'
                 f'{inchikey} -> {str(data["resname"])}')
         if len(data['classification']) > 1:
-            print('WARNING: Same residue with different classifications:\n'
+            warn('Same residue with different classifications:\n'
                  f'{inchikey} + -> {str(data["classification"])}')   
 
     # Check if there are multiple InChI keys for the same name
@@ -103,7 +102,7 @@ def get_inchi_keys (
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
             key_counts = '  '.join([f'({len(key_2_name[key]["resindices"])}): {key}' for key in inchikeys])
-            print('WARNING: Same residue with different InChi keys:\n'
+            warn('Same residue with different InChi keys:\n'
                  f'{name} -> {key_counts}')
     return key_2_name
 

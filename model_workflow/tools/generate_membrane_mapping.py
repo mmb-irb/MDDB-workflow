@@ -7,6 +7,7 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.warnings import warn
 
 
 def generate_membrane_mapping(structure : 'Structure',
@@ -53,11 +54,11 @@ def generate_membrane_mapping(structure : 'Structure',
         if lipid_data:
             lipid_idx.extend(res_data['resindices'])
             if 'fatty' not in res_data['classification']:
-                print('WARNING: The inChIKey ', inchikey, ' is not classified as fatty but it is a lipid')
+                warn('The inChIKey ', inchikey, ' is not classified as fatty but it is a lipid')
         else:
             not_lipid_idx.extend(res_data['resindices'])
             if 'fatty' in res_data['classification']:
-                print('WARNING: The inChIKey ', inchikey, ' is classified as fatty but is not a lipid')
+                warn('The inChIKey ', inchikey, ' is classified as fatty but is not a lipid')
     # RUBEN: esto será para los glucolipidos
     """ 
     # Propierty to make easier to see if the residue is lipid
