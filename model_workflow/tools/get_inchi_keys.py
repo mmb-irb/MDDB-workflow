@@ -7,11 +7,11 @@ from functools import lru_cache
 import requests, warnings
 
 
-def process_residue(args: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
+def process_residue(res_atoms: 'MDAnalysis.AtomGroup', 
+                    resindex : int) -> Tuple[str, str, int]:
     """
     Process a single residue to get its InChI key and related information.
     """
-    res_atoms, resindex = args
     # Convert to RDKIT and get InChI data
     res_RD = res_atoms.convert_to("RDKIT")
     # Calculate InChI key and string
@@ -44,7 +44,7 @@ def get_inchi_keys (
             and classification.
     """
     # 1) Prepare residue data for parallel processing
-    residue_data_list = []
+    results = []
     residues: List[Residue] = structure.residues
     for resindex, residue in enumerate(residues):
         # Skip residues that are aminoacids, nucleics, or too small
@@ -52,11 +52,7 @@ def get_inchi_keys (
             continue
         # Select residues atoms with MDAnalysis
         res_atoms = u.select_atoms(residue.get_selection().to_mdanalysis())
-        res_data = (res_atoms,resindex)
-        residue_data_list.append(res_data)
-
-    with Pool() as pool:
-        results = pool.map(process_residue, residue_data_list)
+        results.append(process_residue(res_atoms,resindex))
 
     # 2) Process results and build dictionaries
     key_2_name = {} # To see if different name for same residue
