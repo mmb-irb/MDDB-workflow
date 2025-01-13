@@ -2557,6 +2557,7 @@ project_requestables = {
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
+    'membrane': Project.get_membrane_map, 
 }
 # MD requestable tasks
 md_requestables = {

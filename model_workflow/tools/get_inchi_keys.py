@@ -87,20 +87,24 @@ def get_inchi_keys (
     # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
         if data["has_bonds"]:
-            warnings.warn(f'inChIKey {inchikey} is a substructure of type {data["classification"]}'\
-                  ' and will result in inprecise search in PubChemb due lo lack of hidrogens and different charges on the bonded atoms.')
+            print(f"WARNING: inChIKey {inchikey} is a substructure of type {data['classification']}\n"
+                   "and will result in imprecise search in PubChemb due lo lack of hidrogens\n"
+                   "and different charges on the bonded atoms.")
+        
         if len(data['resname']) > 1:
-            warnings.warn('Same residue with different names: ' + inchikey + ' -> ' + str(data['resname']))
+            print('WARNING: Same residue with different names:\n'
+                f'{inchikey} -> {str(data["resname"])}')
         if len(data['classification']) > 1:
-            warnings.warn('Same residue with different classifications: ' + inchikey + ' -> ' + str(data['classification']))   
+            print('WARNING: Same residue with different classifications:\n'
+                 f'{inchikey} + -> {str(data["classification"])}')   
 
     # Check if there are multiple InChI keys for the same name
     for name, inchikeys in name_2_key.items():
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
             key_counts = '  '.join([f'({len(key_2_name[key]["resindices"])}): {key}' for key in inchikeys])
-            warnings.warn('Same residue with different InChi keys: ' + name + ' -> ' + key_counts)
-   
+            print('WARNING: Same residue with different InChi keys:\n'
+                 f'{name} -> {key_counts}')
     return key_2_name
 
 
