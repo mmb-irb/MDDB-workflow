@@ -7,7 +7,7 @@ from functools import lru_cache
 import requests, warnings
 
 
-def process_residue(args: Tuple[MDAnalysis.core.groups.AtomGroup, int]) -> Tuple[str, str, int]:
+def process_residue(args: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
     """
     Process a single residue to get its InChI key and related information.
     """
@@ -45,8 +45,7 @@ def get_inchi_keys (
     """
     # 1) Prepare residue data for parallel processing
     residue_data_list = []
-    residues = structure.residues
-    residue: Residue
+    residues: List[Residue] = structure.residues
     for resindex, residue in enumerate(residues):
         # Skip residues that are aminoacids, nucleics, or too small
         if residue.classification in ['ion', 'solvent', 'nucleic', 'protein']:
