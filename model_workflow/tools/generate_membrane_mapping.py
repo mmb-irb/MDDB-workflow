@@ -7,7 +7,6 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
-from typing import List
 
 
 def generate_membrane_mapping(structure : 'Structure',
@@ -81,7 +80,7 @@ def generate_membrane_mapping(structure : 'Structure',
     polar_atoms = []
     for res_idx in u.select_atoms(mem_candidates).resindices:
         res = u.residues[res_idx]
-        res_ch = charges[[at.index for at in res.atoms]]
+        res_ch = charges[res.atoms.ix]
         max_ch_idx = np.argmax(res_ch)
         polar_atoms.append(res.atoms[max_ch_idx].index)
     headgroup_sel = f'(index {" ".join(map(str,(polar_atoms)))})'
