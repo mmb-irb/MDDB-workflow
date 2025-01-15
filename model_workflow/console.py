@@ -626,3 +626,9 @@ nassa_parser.add_argument(
     "-top", "--input_topology_filepath",
     default=None, # There is no default since many formats may be possible
     help="Path to input topology file. It is relative to the project directory.")
+nassa_parser.add_argument(
+    "-mdir", "--md_directories",
+    nargs='*',
+    default=None,
+    help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
+        "Several output files will be generated in every MD directory"))

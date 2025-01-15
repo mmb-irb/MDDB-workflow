@@ -224,8 +224,11 @@ class MD:
         # Check the default structure file exists or it may be downloaded
         default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME, may_not_exist=True)
         default_structure_file = File(default_structure_filepath)
-        if default_structure_file.exists or self.remote:
-            return default_structure_filepath
+        # AGUS: si default_structure_filepath es None, default_structure_file será un objeto File y no se puede evaluar como None
+        # AGUS: de esta forma al evaluar directamente si default_structure_filepath es None, se evita el error
+        if default_structure_filepath is not None:
+            if default_structure_file.exists or self.remote:
+                return default_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise

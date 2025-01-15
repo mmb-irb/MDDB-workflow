@@ -976,6 +976,7 @@ def workflow_nassa(
     unit_len: int = 6,
     n_sequences: Optional[int] = '*',
     seq_path: str = None,
+    md_directories: Optional[List[str]] = None,
     ):
 
     # Change to the working directory and print the name of the directory to inform the user
