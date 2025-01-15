@@ -186,6 +186,7 @@ def main ():
                 unit_len=args.unit_len,
                 n_sequences=args.n_sequences,
                 seq_path=args.seq_path,
+                md_directories=args.md_directories,
             )
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
@@ -203,6 +204,7 @@ def main ():
                     n_sequences = args.n_sequences,
                     unit_len = args.unit_len,
                     all= args.all,
+                    md_directories=args.md_directories,
             )
 
 # Define a common parser running in top of all others

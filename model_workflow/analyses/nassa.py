@@ -1001,10 +1001,11 @@ def workflow_nassa(
             print(f'\n{CYAN_HEADER}Running Helical Parameters at {proj_path}{COLOR_END}')
             # Call the workflow function to run the helical parameters analysis with the include flag set to helical and overwrite (if it is added)
             workflow(project_parameters={#'directory':os.getcwd(),
-                                         'md_directories':[os.getcwd()],
-                                         'input_structure_filepath':input_structure_file, 
+                                         #'md_directories':[os.getcwd()],
+                                         #'input_structure_filepath':input_structure_file, 
                                          'input_topology_filepath':input_top_file, 
-                                         'input_trajectory_filepaths':input_trajectory_file
+                                         'input_trajectory_filepaths':input_trajectory_file,
+                                         'md_directories': md_directories,
                                          }, 
                      include=['helical'], 
                      overwrite=overwrite
