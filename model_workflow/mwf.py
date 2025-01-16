@@ -376,7 +376,7 @@ class MD:
         for trajectory_file in self._input_trajectory_files:
             # If this is the main trajectory (the usual one) then use the dedicated endpoint
             if trajectory_file.filename == TRAJECTORY_FILENAME:
-                frame_selection = '1:10:1' if self.project.sample_trajectory else None
+                frame_selection = f'1:{self.project.sample_trajectory}:1' if self.project.sample_trajectory else None
                 self.remote.download_trajectory(trajectory_file, frame_selection=frame_selection, format='xtc')
             # Otherwise, download it by its filename
             else:

@@ -394,8 +394,11 @@ run_parser.add_argument(
 
 run_parser.add_argument(
     "-smp", "--sample_trajectory",
-    action='store_true',
-    help="If passed, download just the 10 first frames of the trajectory instead of it all")
+    type=int,
+    nargs='?',
+    default=-1,
+    const=10,
+    help="If passed, download just a few frames (10 by default) from the trajectory instead of it all")
 
 # Set a list with the alias of all requestable dependencies
 choices = list(requestables.keys())
