@@ -204,6 +204,7 @@ def main ():
                 unit_len=args.unit_len,
                 n_sequences=args.n_sequences,
                 seq_path=args.seq_path,
+                md_directories=args.md_directories,
             )
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
@@ -221,6 +222,7 @@ def main ():
                     n_sequences = args.n_sequences,
                     unit_len = args.unit_len,
                     all= args.all,
+                    md_directories=args.md_directories,
             )
 
 # Define a common parser running in top of all others
@@ -412,8 +414,11 @@ run_parser.add_argument(
 
 run_parser.add_argument(
     "-smp", "--sample_trajectory",
-    action='store_true',
-    help="If passed, download just the 10 first frames of the trajectory instead of it all")
+    type=int,
+    nargs='?',
+    default=-1,
+    const=10,
+    help="If passed, download just a few frames (10 by default) from the trajectory instead of it all")
 
 # Set a list with the alias of all requestable dependencies
 choices = list(requestables.keys())
@@ -642,3 +647,9 @@ nassa_parser.add_argument(
     "-top", "--input_topology_filepath",
     default=None, # There is no default since many formats may be possible
     help="Path to input topology file. It is relative to the project directory.")
+nassa_parser.add_argument(
+    "-mdir", "--md_directories",
+    nargs='*',
+    default=None,
+    help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
+        "Several output files will be generated in every MD directory"))

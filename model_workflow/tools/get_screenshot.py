@@ -319,16 +319,17 @@ def get_screenshot (
         # Eliminate the molecule to perform changes in the representation, color and material 
         file.write('mol delrep 0 top \n')
         # First add a spcific representation for polymers (protein and nucleic acids)
-        # Change the default representation model to Newcartoon
-        file.write('mol representation Newcartoon \n')
-        # Change the default atom coloring method setting to Chain
-        file.write('mol color Chain \n')
-        # Set the default atom selection to atoms to be represented as cartoon
-        file.write(f'mol selection "{cartoon_selection.to_vmd()}" \n')
-        # Change the current material of the representation of the molecule
-        file.write('mol material Opaque \n')
-        # Using the new changes performed previously add a new representation to the new molecule
-        file.write('mol addrep top \n')
+        if cartoon_selection:
+            # Change the default representation model to Newcartoon
+            file.write('mol representation Newcartoon \n')
+            # Change the default atom coloring method setting to Chain
+            file.write('mol color Chain \n')
+            # Set the default atom selection to atoms to be represented as cartoon
+            file.write(f'mol selection "{cartoon_selection.to_vmd()}" \n')
+            # Change the current material of the representation of the molecule
+            file.write('mol material Opaque \n')
+            # Using the new changes performed previously add a new representation to the new molecule
+            file.write('mol addrep top \n')
         # In case we have any non-cartoon selection to represent...
         if non_cartoon_selection:
             # Change the default representation model to CPK (ball and stick)

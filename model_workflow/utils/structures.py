@@ -285,7 +285,7 @@ class Atom:
 
     # Get a standard label
     def get_label (self) -> str:
-        return f'{self.residue.label}.{self.name}'
+        return f'{self.residue.label}.{self.name} (index {self.index})'
     # The atom standard label (read only)
     label = property(get_label, None, None)
 
@@ -518,6 +518,12 @@ class Residue:
         if self.structure._fixed_atom_elements == False:
             self.structure.fix_atom_elements()
         # Solvent is water molecules
+        # First rely on the residue name
+        if self.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+            self._classification = 'solvent'
+            return self._classification
+        # It may be water with a not known name
+        # Literally check if its a molecule with 3 atoms: 2 hydrogens and 1 oxygen
         if self.atom_count == 3:
             atom_elements = [ atom.element for atom in self.atoms ]
             if atom_elements.count('H') == 2 and atom_elements.count('O') == 1:
@@ -770,6 +776,9 @@ class Chain:
 
     def __eq__ (self, other):
         return self.name == other.name
+    
+    def __hash__ (self):
+        return hash(self.name)
 
     # The parent structure (read only)
     # This value is set by the structure itself
@@ -863,6 +872,11 @@ class Chain:
     def get_atoms (self) -> List[int]:
         return sum([ residue.atoms for residue in self.residues ], [])
     atoms = property(get_atoms, None, None, "Atoms in the chain (read only)")
+
+    # Number of atoms in the chain (read only)
+    def get_atom_count (self) -> int:
+        return len(self.atom_indices)
+    atom_count = property(get_atom_count, None, None, "Number of atoms in the chain (read only)")
 
     # Get the residues sequence in one-letter code
     def get_sequence (self) -> str:
@@ -978,6 +992,25 @@ class Structure:
             if selection & fragment:
                 yield fragment
 
+    # Name an atom selection depending on the chains it contains
+    # This is used for debug purpouses
+    def name_selection (self, selection : 'Selection') -> str:
+        atoms = [ self.atoms[index] for index in selection.atom_indices ]
+        # Count atoms per chain
+        atom_count_per_chain = { chain: 0 for chain in self.chains }
+        for atom in atoms:
+            atom_count_per_chain[atom.chain] += 1
+        # Set labels accoridng to the coverage of every chain
+        chain_labels = []
+        for chain, atom_count in atom_count_per_chain.items():
+            if atom_count == 0: continue
+            coverage = atom_count / chain.atom_count
+            label = f'chain {chain.name}'
+            if coverage < 1:
+                percent = round(coverage * 1000) / 10
+                label += f' ({percent}%)'
+            chain_labels.append(label)
+        return ', '.join(chain_labels)
 
     # Set a new atom in the structure
     def set_new_atom (self, atom : 'Atom'):
@@ -1282,6 +1315,7 @@ class Structure:
     # Return True if any element was modified or False if not
     def fix_atom_elements (self, trust : bool = True) -> bool:
         modified = False
+        added = False
         # Save the wrong guesses for a final report
         # This way we do not crowd the terminal with logs when a lot of atoms are affected
         reports = {}
@@ -1305,17 +1339,17 @@ class Structure:
             # If elements are missing then guess them from atom names
             else:
                 atom.element = atom.guess_element()
-                modified = True
+                added = True
         # Warn the user about anormalies
         for report, count in reports.items():
             atom_name, atom_element, guess = report
             warn(f"Suspicious element for atom {atom_name}: {atom_element} -> shoudn't it be {guess}? ({count} occurrences)")
         # Warn the user that some elements were modified
-        if modified:
-            warn('Atom elements have been modified')
+        if modified: warn('Atom elements have been modified')
+        if added: warn('Atom elements were missing and have been added')
         # Set atom elements as fixed in order to avoid repeating this process
         self._fixed_atom_elements = True
-        return modified
+        return modified or added
 
     # Set new coordinates
     def set_new_coordinates (self, new_coordinates : List[Coords]):
@@ -1452,11 +1486,18 @@ class Structure:
     def select_all (self) -> 'Selection':
         return Selection(list(range(self.atom_count)))
 
+    # Select atoms according to the classification of its residue
+    def select_by_classification (self, classification : str) -> 'Selection':
+        atom_indices = []
+        for residue in self.residues:
+            if residue.classification == classification:
+                atom_indices += residue.atom_indices
+        return Selection(atom_indices)
+
     # Select water atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
     def select_water (self) -> 'Selection':
-        water_residues_indices = [ residue.index for residue in self.residues if residue.name in STANDARD_SOLVENT_RESIDUE_NAMES ]
-        return self.select_residue_indices(water_residues_indices)
+        return self.select_by_classification('solvent')
 
     # Select counter ion atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard atom named structures
@@ -1473,6 +1514,10 @@ class Structure:
                 counter_ion_indices.append(atom.index)
         return Selection(counter_ion_indices)
 
+    # Select both water and counter ions
+    def select_water_and_counter_ions (self) -> 'Selection':
+        return self.select_water() + self.select_counter_ions()
+
     # Select heavy atoms
     def select_heavy_atoms (self) -> 'Selection':
         atom_indices = []
@@ -1485,12 +1530,18 @@ class Structure:
     # Select protein atoms
     # WARNING: Note that there is a small difference between VMD protein and our protein
     # This function is improved to consider terminal residues as proteins
+    # VMD considers protein any resiude including N, C, CA and O while terminals may have OC1 and OC2 instead of O
     def select_protein (self) -> 'Selection':
-        atom_indices = []
-        for residue in self.residues:
-            if residue.classification == 'protein':
-                atom_indices += residue.atom_indices
-        return Selection(atom_indices)
+        return self.select_by_classification('protein')
+    
+    # Select lipids
+    def select_lipids (self) -> 'Selection':
+        return self.select_by_classification('fatty') + self.select_by_classification('steroid')
+
+    # Return a selection of the typical PBC atoms: solvent, counter ions and lipids
+    # WARNING: This is just a guess
+    def select_pbc_guess (self) -> 'Selection':
+        return self.select_water() + self.select_counter_ions() + self.select_lipids()
 
     # Select cartoon representable regions for VMD
     # Rules are:
@@ -1527,16 +1578,6 @@ class Structure:
         for atom_index in selection.atom_indices:
             atom_indices[atom_index] = None
         return Selection([ atom_index for atom_index in atom_indices if atom_index != None ])
-
-    # Get protein selection
-    # WARNING: Do not rely in VMD's "protein" selection since it misses terminal residues
-    # VMD considers protein any resiude including N, C, CA and O while terminals may have OC1 and OC2 instead of O
-    def get_protein_selection (self) -> 'Selection':
-        atom_indices = []
-        for residue in self.residues:
-            if residue.classification == 'protein':
-                atom_indices += residue.atom_indices
-        return Selection(atom_indices)
     
     # Given a selection, get a list of residue indices for residues implicated
     # Note that if a single atom from the residue is in the selection then the residue index is returned
@@ -2064,7 +2105,7 @@ class Structure:
             # Get actual number of bonds in the current atom both with and without ion bonds
             # LORE: This was a problem since some ions are force-bonded but bonds are actually not real
             # LORE: When an ion is forced we may end up with hyrogens with 2 bonds or carbons with 5 bonds
-            # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbonds (e.g. weird ligands)
+            # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbons (e.g. ligands)
             min_nbonds = len(atom.get_bonds(skip_ions = True))
             max_nbonds = len(atom.get_bonds(skip_ions = False))
             # Get the accepted range of number of bonds for the current atom according to its element
@@ -2087,7 +2128,9 @@ class Structure:
                     print(f' It should have {min_allowed_bonds} bond{plural_sufix}')
                 else:
                     print(f' It should have between {min_allowed_bonds} and {max_allowed_bonds} bonds')
-                print(f' -> Atom {atom.label} (index {atom.index})')
+                print(f' -> Atom {atom.label}')
+                bond_label = ', '.join([ self.atoms[atom].label for atom in atom.get_bonds(skip_ions = False) ])
+                print(f' -> Bonds {bond_label}')
                 return True
         return False
 
@@ -2241,7 +2284,7 @@ class Structure:
     def find_ptms (self) -> Generator[dict, None, None]:
         # Find bonds between protein and non-protein atoms
         # First get all protein atoms
-        protein_selection = self.get_protein_selection()
+        protein_selection = self.select_protein()
         if not protein_selection:
             return
         protein_atom_indices = set(protein_selection.atom_indices) # This is used later

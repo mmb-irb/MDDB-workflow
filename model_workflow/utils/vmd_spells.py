@@ -10,6 +10,16 @@ from subprocess import run, PIPE, STDOUT, Popen
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
+# Set characters to be escaped since they have a meaning in TCL
+TCL_RESERVED_CHARACTERS = ['"','[',']']
+
+# Given a VMD atom selection string, escape TCL meaningful characters and return the escaped string
+def escape_tcl_selection (selection : str) -> str:
+    escaped_selection = selection
+    for character in TCL_RESERVED_CHARACTERS:
+        escaped_selection = escaped_selection.replace(character, '\\' + character)
+    return escaped_selection
+
 # Set the script filename with all commands to be passed to vmd
 commands_filename = '.commands.vmd'
 
@@ -47,12 +57,12 @@ def vmd_to_pdb (
     # Prepare a script for VMD to run. This is Tcl language
     with open(commands_filename, "w") as file:
         # Load only the first frame of the trajectory
-        file.write('animate read ' + vmd_trajectory_format + ' ' + input_trajectory_filename + ' end 1\n')
+        file.write(f'animate read {vmd_trajectory_format} {input_trajectory_filename} end 1\n')
         # Select all atoms
         file.write('set all [atomselect top "all"]\n')
         # Write the current topology in 'pdb' format
         file.write('$all frame first\n')
-        file.write('$all writepdb ' + output_structure_filename + '\n')
+        file.write(f'$all writepdb {output_structure_filename}\n')
         file.write('exit\n')
 
     # Run VMD
@@ -107,6 +117,9 @@ def chainer (
     if not atom_selection:
         atom_selection = 'all'
 
+    # Escape TCL meaningful characters
+    escaped_atom_selection = escape_tcl_selection(atom_selection)
+
     # If no chain letter is provided then the flag 'fragment' is used
     if not chain_letter:
         chain_letter = 'fragment'
@@ -121,7 +134,7 @@ def chainer (
        
     with open(commands_filename, "w") as file:
         # Select the specified atoms and set the specified chain
-        file.write('set atoms [atomselect top "' + atom_selection + '"]\n')
+        file.write(f'set atoms [atomselect top "{escaped_atom_selection}"]\n')
         # In case chain letter is not a letter but the 'fragment' flag, asign chains by fragment
         # Fragments are atom groups which are not connected by any bond
         if chain_letter == 'fragment':
@@ -139,11 +152,11 @@ def chainer (
             file.write('}\n')
             # Otherwise, set the specified chain
         else:
-            file.write('$atoms set chain ' + chain_letter + '\n')
+            file.write(f'$atoms set chain {chain_letter}\n')
         # Write the current topology in 'pdb' format
         file.write('set all [atomselect top "all"]\n')
         file.write('$all frame first\n')
-        file.write('$all writepdb ' + output_pdb_filename + '\n')
+        file.write(f'$all writepdb {output_pdb_filename}\n')
         file.write('exit\n')
 
     # Run VMD
@@ -191,7 +204,7 @@ def merge_and_convert_trajectories (
         # Select all atoms
         file.write('set all [atomselect top "all"]\n')
         # Write the current trajectory in the specified format format
-        file.write('animate write ' + output_trajectory_format + ' ' + output_trajectory_filename + ' waitfor all sel $all\n')
+        file.write(f'animate write {output_trajectory_format} {output_trajectory_filename} waitfor all sel $all\n')
         file.write('exit\n')
 
     inputs = [ input_structure_filename, *input_trajectory_filenames ] if input_structure_filename else input_trajectory_filenames
@@ -241,21 +254,19 @@ merge_and_convert_trajectories.format_sets = [
 # Given an atom selection in vmd syntax, return the list of atom indices it corresponds to
 def get_vmd_selection_atom_indices (input_structure_filename : str, selection : str) -> List[int]:
 
-    # A vmd selection may contain "
-    # However strings in TCL are defined with ""
-    # For this reason me must escape those symbols anywhere in the input selection
-    escaped_selection = selection.replace('"','\\"')
+    # Escape TCL meaningful characters
+    escaped_selection = escape_tcl_selection(selection)
     
     # Prepare a script for VMD to run. This is Tcl language
     # The output of the script will be written to a txt file
     atom_indices_filename = '.vmd_output.txt'
     with open(commands_filename, "w") as file:
         # Select the specified atoms
-        file.write('set selection [atomselect top "' + escaped_selection + '"]\n')
+        file.write(f'set selection [atomselect top "{escaped_selection}"]\n')
         # Save atom indices from the selection
         file.write('set indices [$selection list]\n')
         # Write atom indices to a file
-        file.write('set indices_file [open ' + atom_indices_filename + ' w]\n')
+        file.write(f'set indices_file [open {atom_indices_filename} w]\n')
         file.write('puts $indices_file $indices\n')
         file.write('exit\n')
 
@@ -301,11 +312,11 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
     output_bonds_file = '.bonds.txt'
     with open(commands_filename, "w") as file:
         # Select atoms
-        file.write('set atoms [atomselect top "' + vmd_selection + '"]\n')
+        file.write(f'set atoms [atomselect top "{vmd_selection}"]\n')
         # Save covalent bonds
         file.write('set bonds [$atoms getbonds]\n')
         # Write those bonds to a file
-        file.write('set bondsfile [open ' + output_bonds_file + ' w]\n')
+        file.write(f'set bondsfile [open {output_bonds_file} w]\n')
         file.write('puts $bondsfile $bonds\n')
         file.write('exit\n')
         
@@ -385,23 +396,23 @@ def get_covalent_bonds_between (
     output_bonds_file = '.bonds.ext'
     with open(commands_filename, "w") as file:
         # Select the specified atoms in selection 1
-        file.write('set sel1 [atomselect top "' + selection_1.to_vmd() + '"]\n')
+        file.write(f'set sel1 [atomselect top "{selection_1.to_vmd()}"]\n')
         # Save all atom index in the selection
         file.write('set index1 [$sel1 list]\n')
         # Write those index to a file
-        file.write('set indexfile1 [open ' + output_index_1_file + ' w]\n')
+        file.write(f'set indexfile1 [open {output_index_1_file} w]\n')
         file.write('puts $indexfile1 $index1\n')
         # Save all covalent bonds in the selection
         file.write('set bonds [$sel1 getbonds]\n')
         # Write those bonds to a file
-        file.write('set bondsfile [open ' + output_bonds_file + ' w]\n')
+        file.write(f'set bondsfile [open {output_bonds_file} w]\n')
         file.write('puts $bondsfile $bonds\n')
         # Select the specified atoms in selection 2
-        file.write('set sel2 [atomselect top "' + selection_2.to_vmd() + '"]\n')
+        file.write(f'set sel2 [atomselect top "{selection_2.to_vmd()}"]\n')
         # Save all atom index in the selection
         file.write('set index2 [$sel2 list]\n')
         # Write those index to a file
-        file.write('set indexfile2 [open ' + output_index_2_file + ' w]\n')
+        file.write(f'set indexfile2 [open {output_index_2_file} w]\n')
         file.write('puts $indexfile2 $index2\n')
         file.write('exit\n')
         
@@ -476,7 +487,7 @@ def get_covalent_bonds_between (
         
     # At this point indexes and bonds from the first selection should match in number
     if len(index_1) != len(bonds_per_atom):
-        raise ValueError('Indexes (' + str(len(index_1)) + ') and atom bonds (' +  str(len(bonds_per_atom)) + ') do not match in number')
+        raise ValueError(f'Indexes ({len(index_1)}) and atom bonds ({len(bonds_per_atom)}) do not match in number')
         
     # Now get all covalent bonds which include an index from the atom selection 2
     crossed_bonds = []

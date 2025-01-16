@@ -10,6 +10,9 @@ class Selection:
 
     def __repr__ (self):
         return f'<Selection ({len(self.atom_indices)} atoms)>'
+    
+    def __hash__ (self):
+        return hash(tuple(self.atom_indices))
 
     def __len__ (self):
         return len(self.atom_indices)

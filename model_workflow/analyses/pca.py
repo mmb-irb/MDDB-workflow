@@ -20,7 +20,7 @@ def pca (
     structure : 'Structure',
     fit_selection : str,
     analysis_selection : str,
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     projection_frames : int = 20
 ) -> dict:
 
@@ -38,19 +38,24 @@ def pca (
     # VMD selection syntax
     parsed_fit_selection = structure.select(fit_selection, syntax='vmd')
     if not parsed_fit_selection:
-        print(f'PCA fit selection: {fit_selection}')
+        print(f' PCA fit selection: {fit_selection}')
         warn('PCA fit selection is empty -> Using all heavy atoms in the structure instead')
         parsed_fit_selection = structure.select_heavy_atoms()
     parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd')
     if not parsed_analysis_selection:
-        print(f'PCA analysis selection: {analysis_selection}')
+        print(f' PCA analysis selection: {analysis_selection}')
         warn('PCA analysis selection is empty -> Using all heavy atoms in the structure instead')
         parsed_analysis_selection = structure.select_heavy_atoms()
 
     # Parse PBC residues into a selection to be removed from PCA selections
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     parsed_fit_selection -= pbc_selection
     parsed_analysis_selection -= pbc_selection
+
+    # If no selection is available at this point then stop here
+    # This may happen when the whole system is in PCB
+    if not parsed_analysis_selection:
+        print(' No selection to do PCA')
+        return
 
     # Load the trajectory
     mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=input_topology_file.path)

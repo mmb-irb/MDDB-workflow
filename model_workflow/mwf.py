@@ -20,9 +20,8 @@ from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
-from model_workflow.tools.get_bonds import get_safe_bonds, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
 from model_workflow.tools.process_interactions import process_interactions
-from model_workflow.tools.get_pbc_residues import get_pbc_residues
 from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from model_workflow.tools.chains import generate_chain_references
@@ -169,7 +168,7 @@ class MD:
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
         # Parse glob notation in the process
-        def relativize_and_parse_paths (input_path : str) -> str:
+        def relativize_and_parse_paths (input_path : str, may_not_exist : bool = False) -> Optional[str]:
             # Check if it is an absolute path
             if isabs(input_path):
                 abs_glob_parse = parse_glob(input_path)
@@ -209,7 +208,8 @@ class MD:
                 raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_path))
             # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
             # However make sure we have a remote
-            if not self.remote:
+            # As an exception, if the 'may not exist' flag is passed then we return the result even if there is no remote
+            if not may_not_exist and not self.remote:
                 raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
             return md_parsed_filepath
         # If we have a value passed through command line
@@ -224,10 +224,13 @@ class MD:
             if inputs_value: return relativize_and_parse_paths(inputs_value)
         # If there is not input structure then asume it is the default
         # Check the default structure file exists or it may be downloaded
-        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME)
+        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME, may_not_exist=True)
         default_structure_file = File(default_structure_filepath)
-        if default_structure_file.exists or self.remote:
-            return default_structure_filepath
+        # AGUS: si default_structure_filepath es None, default_structure_file será un objeto File y no se puede evaluar como None
+        # AGUS: de esta forma al evaluar directamente si default_structure_filepath es None, se evita el error
+        if default_structure_filepath is not None:
+            if default_structure_file.exists or self.remote:
+                return default_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
@@ -379,7 +382,7 @@ class MD:
         for trajectory_file in self._input_trajectory_files:
             # If this is the main trajectory (the usual one) then use the dedicated endpoint
             if trajectory_file.filename == TRAJECTORY_FILENAME:
-                frame_selection = '1:10:1' if self.project.sample_trajectory else None
+                frame_selection = f'1:{self.project.sample_trajectory}:1' if self.project.sample_trajectory else None
                 self.remote.download_trajectory(trajectory_file, frame_selection=frame_selection, format='xtc')
             # Otherwise, download it by its filename
             else:
@@ -507,6 +510,16 @@ class MD:
             for test in repeated_tests:
                 self.register.update_test(test, None)
 
+        # Extend the required tests list with the base tests which are to be run by default and are not already passed
+        for checking in AVAILABLE_CHECKINGS:
+            test_result = self.register.tests.get(checking, None)
+            # If the test result is true then it menas ir has already passed
+            # If the test result is 'na' then it means it is not aplicable
+            if test_result == True or test_result == 'na': continue
+            # If the test result is None then it means it has never been run
+            # If the test result is false then it means it failed
+            required_tests.update(checking)
+
         # Check if the processing parameters (filter, image, etc.) have changed since the last time
         # If so, then we must reset all tests and rerun the processing
         previous_processed_parameters = self.register.cache.get(PROCESSED, None)
@@ -532,7 +545,7 @@ class MD:
         # Check also if all availables tests were actually passed in the last run
         # They may be skipped or allowed to fail
         # Also make sure processing parameters are the same that the last time
-        if outputs_exist and len(required_tests) == 0 and self.all_tests_succeeded() and same_processed_paramaters:
+        if outputs_exist and len(required_tests) == 0 and same_processed_paramaters:
             return
 
         print('-> Processing input files')
@@ -671,6 +684,10 @@ class MD:
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
         if must_image and (missing_imaged_output or not same_imaged_parameters):
+            # Set a provisional PBC selection
+            # Note that we can not rely in the standard PBC selection since it is parsed through the structure
+            # However we still don't have the standard structure available
+            provisional_pbc_selection = self.input_pbc_selection if self.project.is_inputs_file_available() else 'guess'
             print(' * Imaging and fitting')
             image_and_fit(
                 input_structure_file = filtered_structure_file,
@@ -681,7 +698,7 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                pbc_selection = self.pbc_selection
+                input_pbc_selection = provisional_pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
@@ -800,18 +817,6 @@ class MD:
         # Update the parameters used to get the last processed structure and trajectory files
         self.register.update_cache(PROCESSED, current_processed_parameters)
 
-        # --- Cleanup intermediate files
-
-        # Set also a list of input files
-        inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
-        # We must make sure an intermediate file is not actually an input file before deleting it
-        removable_files = intermediate_files - inputs_files
-        # Now delete every removable file
-        for removable_file in removable_files:
-            # Note that a broken symlink does not 'exists'
-            if removable_file.exists or removable_file.is_symlink():
-                removable_file.remove()
-
         # --- RUNNING FINAL TESTS ------------------------------------------------------------
 
         # Note that some tests have been run already
@@ -835,10 +840,12 @@ class MD:
                 test_nice_result = RED_HEADER + 'Failed' + COLOR_END
             elif test_result == True:
                 test_nice_result = GREEN_HEADER + 'Passed' + COLOR_END
+            elif test_result == 'na':
+                test_nice_result = BLUE_HEADER + 'Not applicable' + COLOR_END
             else:
                 raise ValueError()
             
-            print(' - ' + test_nice_name + ' -> ' + test_nice_result)
+            print(f' - {test_nice_name} -> {test_nice_result}')
 
         # Issue some warnings if failed or never run tests are skipped
         for test_name in AVAILABLE_CHECKINGS:
@@ -864,14 +871,18 @@ class MD:
                 self.register.add_warning(test_skip_flag, test_nice_name + ' was skipped and never run before')
             else:
                 raise ValueError('Test value is not supported')
+            
+        # --- Cleanup intermediate files
 
-    # Check all tests to be succeeded in the last run
-    def all_tests_succeeded (self) -> bool:
-        for checking in AVAILABLE_CHECKINGS:
-            test_result = self.register.tests.get(checking, None)
-            if test_result != True:
-                return False
-        return True
+        # Set also a list of input files
+        inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
+        # We must make sure an intermediate file is not actually an input file before deleting it
+        removable_files = intermediate_files - inputs_files
+        # Now delete every removable file
+        for removable_file in removable_files:
+            # Note that a broken symlink does not 'exists'
+            if removable_file.exists or removable_file.is_symlink():
+                removable_file.remove()
 
     # Get the processed structure
     def get_structure_file (self) -> str:
@@ -1072,10 +1083,10 @@ class MD:
     def get_pbc_selection (self) -> List[int]:
         # If there is no inputs file then asume there are no PBC atoms and warn the user
         if not self.project.is_inputs_file_available():
-            warn('Since there is no inputs file we assume there are no PBC atoms')
-            return None
+            warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
+            return self.structure.select_pbc_guess()
         # Otherwise use the input value
-        return self.input_pbc_selection
+        return self.structure.select(self.input_pbc_selection)
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # Indices of residues in periodic boundary conditions
@@ -1086,12 +1097,12 @@ class MD:
         if self.project._pbc_residues:
             return self.project._pbc_residues
         # If there is no inputs file then asume there are no PBC residues and warn the user
-        pbc_selection = self.pbc_selection
-        if not pbc_selection:
+        if not self.pbc_selection:
             self.project._pbc_residues = []
             return self.project._pbc_residues
-        # Otherwise we must find the value
-        self.project._pbc_residues = get_pbc_residues(self.structure, pbc_selection)
+        # Otherwise we parse the selection and return the list of residue indices     
+        self.project._pbc_residues = self.structure.get_selection_residue_indices(self.pbc_selection)
+        print(f'PBC residues "{self.input_pbc_selection}" -> {len(self.project._pbc_residues)} residues')
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
@@ -1162,7 +1173,7 @@ class MD:
             input_structure_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             mercy = self.project.mercy,
             trust = self.project.trust,
             register = self.register,
@@ -1193,7 +1204,7 @@ class MD:
             frames_limit = 5000,
             snapshots = self.snapshots,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             ligand_map = self.project.ligand_map,
         )
 
@@ -1210,7 +1221,7 @@ class MD:
             first_frame_file = self.first_frame_file,
             average_structure_file = self.average_structure_file,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 200,
         )
@@ -1227,8 +1238,7 @@ class MD:
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
         )
 
     # RGYR, radius of gyration
@@ -1247,7 +1257,7 @@ class MD:
             snapshots = self.snapshots,
             frames_limit = 5000,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
         )
 
     # PCA, principal component analysis
@@ -1269,7 +1279,7 @@ class MD:
             structure = self.structure,
             fit_selection = self.project.pca_fit_selection,
             analysis_selection = self.project.pca_selection,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
         )
 
     # PCA contacts
@@ -1302,7 +1312,7 @@ class MD:
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
         )
@@ -1321,7 +1331,7 @@ class MD:
             output_analysis_filename = output_analysis_filepath,
             interactions = self.processed_interactions,
             structure = self.structure,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 200,
             overall_selection = "name CA or name C5"
@@ -1353,7 +1363,7 @@ class MD:
             interactions = self.processed_interactions,
             structure = self.structure,
             snapshots = self.snapshots,
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             output_analysis_filename = output_analysis_filepath,
             output_run_filepath = output_run_filepath,
             output_screenshots_filename = output_screenshot_filepath,
@@ -1449,13 +1459,12 @@ class MD:
             pockets_prefix = self.md_pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
             output_analysis_filepath = output_analysis_filepath,
             mdpocket_folder = self.md_pathify(POCKETS_FOLDER),
-            pbc_residues = self.pbc_residues,
+            pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
         )
 
     # Helical parameters
-    # DANI: Al final lo reimplementará Subamoy (en python) osea que esto no lo hacemos de momento
     def run_helical_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
@@ -2127,12 +2136,7 @@ class Project:
 
     # Indices of residues in periodic boundary conditions
     def get_pbc_residues (self) -> List[int]:
-        # If we already have a stored value then return it
-        if self._pbc_residues:
-            return self._pbc_residues
-        # Otherwise we must find the value
-        self._pbc_residues = get_pbc_residues(self.structure, self.input_pbc_selection)
-        return self._pbc_residues
+        return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
      # Safe bonds
@@ -2150,13 +2154,18 @@ class Project:
             print('Using resorted safe bonds')
             self._safe_bonds = load_json(self.resorted_bonds_file.path)
             return self._safe_bonds
+        # Set if stable bonds have to be checked
+        must_check_stable_bonds = STABLE_BONDS_FLAG not in self.trust
+        # If this analysis has been already passed then we can trust structure bonds
+        if self.register.tests.get(STABLE_BONDS_FLAG, None) == True:
+            must_check_stable_bonds = False
         # Otherwise we must find safe bonds value
         # This should only happen if we are working with already processed files
-        self._safe_bonds = get_safe_bonds(
+        self._safe_bonds = find_safe_bonds(
             input_topology_file=self.topology_file,
             input_structure_file=self.structure_file,
             input_trajectory_file=self.trajectory_file,
-            must_check_stable_bonds=(STABLE_BONDS_FLAG not in self.trust),
+            must_check_stable_bonds=must_check_stable_bonds,
             snapshots=self.reference_md.snapshots,
             structure=self.structure,
         )

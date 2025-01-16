@@ -10,8 +10,9 @@ from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STAND
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.gmx_spells import get_tpr_atom_count
 from model_workflow.utils.type_hints import *
-from model_workflow.tools.get_charges import get_raw_charges, get_tpr_charges
+from model_workflow.tools.get_charges import get_raw_charges
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -28,21 +29,35 @@ def filter_atoms (
     output_structure_file : 'File',
     output_trajectory_file : 'File',
     output_topology_file : 'File',
-    # Filter selection may be a cutom seleection or True, in which case we run a default filtering
-    filter_selection : Union[bool, str]
+    # Filter selection may be a custom selection or true
+    # If true then we run a default filtering of water and counter ions
+    filter_selection : Union[bool, str],
+    filter_selection_syntax : str = 'vmd'
 ):
 
     # Handle missing filter selection
     if not filter_selection:
         return
+    
+    # Load the reference structure
+    reference_structure = Structure.from_pdb_file(input_structure_file.path)
+
+    # Parse the selection to be filtered
+    # WARNING: Note that the structure is not corrected at this point and there may be limitations
+    parsed_filter_selection = None
+    if filter_selection == True: parsed_filter_selection = reference_structure.select_water_and_counter_ions() 
+    else: parsed_filter_selection = reference_structure.select(filter_selection, syntax=filter_selection_syntax)
+
+    # Invert the parsed selection to get the atoms to remain
+    keep_selection = reference_structure.invert_selection(parsed_filter_selection)
+
+    # Set the pytraj mask to filter the desired atoms from the structure
+    filter_mask = keep_selection.to_pytraj()
 
     # Load the structure and trajectory
     trajectory = pt.iterload(input_trajectory_file.path, input_structure_file.path)
     pt_topology = trajectory.topology
     atoms_count = pt_topology.n_atoms
-
-    # Set the pytraj mask to filter the desired atoms from the structure
-    filter_mask = get_filter_mask(input_structure_file.path, filter_selection)
 
     # Set the filtered structure
     filtered_pt_topology = pt_topology[filter_mask]
@@ -57,7 +72,7 @@ def filter_atoms (
         # Filter both structure and trajectory using Gromacs, since is more efficient than pytraj
         # Set up an index file with all atom indices manually
         # As long as indices are for atoms and not residues there should never be any incompatibility
-        pytraj_mask_2_gromacs_ndx(pt_topology, { filter_group_name : filter_mask }, index_filename)
+        keep_selection.to_ndx_file(output_filepath = index_filename)
         # Filter the trajectory
         xtc_filter(input_structure_file.path, input_trajectory_file.path, output_trajectory_file.path, index_filename)
         # Filter the structure
@@ -73,11 +88,14 @@ def filter_atoms (
             topology_atoms_count = pt_topology.n_atoms
             print(f'Topology atoms count: {topology_atoms_count}')
             # Filter the desired atoms using the mask and then count them
-            filter_mask = get_filter_mask(input_topology_file.path, filter_selection)
             filtered_pt_topology = pt_topology[filter_mask]
             filtered_topology_atoms_count = filtered_pt_topology.n_atoms
             # If there is a difference in atom counts then write the filtered topology
             if filtered_topology_atoms_count < topology_atoms_count:
+                # WARNING: If the output topology is a symlink it will try to overwrite the origin
+                # Remove it to avoid overwriting input data
+                if output_topology_file.is_symlink(): output_topology_file.remove()
+                # Now write the filtered topology
                 pt.write_parm(
                     filename=output_topology_file.path,
                     top=filtered_pt_topology,
@@ -86,37 +104,36 @@ def filter_atoms (
                 )
         # Gromacs format format
         elif input_topology_file.format == 'tpr':
-            # Extract charges from the tpr file and count them
-            charges = get_tpr_charges(input_topology_file.path)
-            topology_atoms_count = len(charges)
+            # Get the input tpr atom count
+            topology_atoms_count = get_tpr_atom_count(input_topology_file.path)
             print(f'Topology atoms count: {topology_atoms_count}')
-            # If the number of charges in greater than expected then filter the tpr file and extract charges again
+            # If the number of atoms is greater than expected then filter the tpr file
             if topology_atoms_count > filtered_structure_atoms_count:
                 if not exists(index_filename):
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
                 tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
-                charges = get_tpr_charges(output_topology_file.path)
-            filtered_topology_atoms_count = len(charges)
+            # Get the output tpr atom count
+            filtered_topology_atoms_count = get_tpr_atom_count(output_topology_file.path)
         # Standard topology
         elif input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
             standard_topology = None
             with open(input_topology_file.path, 'r') as file:
                 standard_topology = json.load(file)
-            charges = standard_topology['atom_charges']
-            print('Topology atoms count: ' + str(len(charges)))
+            topology_atoms_count = len(standard_topology['atom_names'])
+            print(f'Topology atoms count: {topology_atoms_count}')
             # Make it match since there is no problem when these 2 do not match
             filtered_topology_atoms_count = filtered_structure_atoms_count
             # If the number of charges does not match the number of atoms then filter the topology
-            if len(charges) != filtered_structure_atoms_count:
-                standard_topology_filter(input_topology_file, input_structure_file, filter_selection, output_topology_file)
+            if topology_atoms_count != filtered_structure_atoms_count:
+                standard_topology_filter(input_topology_file, reference_structure, parsed_filter_selection, output_topology_file)
         # Raw charges
         elif input_topology_file.filename == RAW_CHARGES_FILENAME:
             charges = get_raw_charges(input_topology_file.path)
             # Nothing to do here. It better matches by defualt or we have a problem
             filtered_topology_atoms_count = len(charges)
-            print('Topology atoms count: ' + str(filtered_topology_atoms_count))
+            print(f'Topology atoms count: {filtered_topology_atoms_count}')
         else:
             raise ValueError(f'Topology file ({input_topology_file.filename}) is in a non supported format')
 
@@ -140,149 +157,6 @@ def filter_atoms (
         output_trajectory_file.set_symlink_to(input_trajectory_file)
     if not output_topology_file.exists:
         output_topology_file.set_symlink_to(input_topology_file)
-
-# Set the pytraj mask to filter the desired atoms from a specific topology
-def get_filter_mask (topology_filename : str, filter_selection : str) -> str:
-    # If the default filtering was rquested
-    if filter_selection == True:
-        return get_default_filter_mask(topology_filename)
-    # The filter selection is meant to be in vmd selection format
-    filter_mask = vmd_selection_2_pytraj_mask(topology_filename, filter_selection)
-    return filter_mask
-
-# Set the pytraj selection for not water
-water_mask = '(:' + ','.join(STANDARD_SOLVENT_RESIDUE_NAMES) + ')'
-# Set the pytraj mask to filter default atoms
-# i.e. water and counter ions with standard residue names
-def get_default_filter_mask (topology_filename : str) -> str:
-    filter_mask = '!' + water_mask
-    counter_ions_mask = get_counter_ions_mask(topology_filename)
-    if counter_ions_mask:
-        filter_mask = f'(!{water_mask}&!({counter_ions_mask}))'
-    return filter_mask
-
-# Escape all vmd reserved characters from the selection string, which may use regular expression characters
-vmd_reserved_characters = ['"','[',']']
-def escape_vmd (selection : str) -> str:
-    escaped_selection = selection
-    for character in vmd_reserved_characters:
-        escaped_selection = escaped_selection.replace(character, '\\' + character)
-    return escaped_selection
-
-# Set the vmd script filename
-commands_filename = '.commands.vmd'
-# Convert a vmd selection to a group of atom indices
-def vmd_selection_2_pytraj_mask (topology_filename : str, filter_selection : str) -> dict:
-
-    # Prepare a script for the VMD to geth a selection atom indices. This is Tcl lenguage
-    with open(commands_filename, "w") as file:
-        # Select the specified atoms and set the specified chain
-        file.write(f'set atoms [atomselect top "{escape_vmd(filter_selection)}"]\n')
-        file.write('$atoms list\n')
-        file.write('exit\n')
-
-    # Run VMD
-    vmd_logs = run([
-        "vmd",
-        topology_filename,
-        "-e",
-        commands_filename,
-        "-dispdev",
-        "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
-
-    # Mine and parse the VMD logs into an atoms indices list
-    atom_indices_line = None
-    vmd_log_lines = vmd_logs.split('\n')
-    for l, line in enumerate(vmd_log_lines):
-        if line == 'atomselect0':
-            atom_indices_line = vmd_log_lines[l + 1]
-            break
-
-    if atom_indices_line == None:
-        print(vmd_logs)
-        raise SystemExit('Something went wrong with VMD')
-
-    # WARNING: Although pytraj atom indices goes from 0 to n-1, they go from 1 to n in the selection mask
-    atom_indices = [ str(int(index) + 1) for index in atom_indices_line.split(' ') ]
-    filter_mask = '@' + ','.join(atom_indices)
-    return filter_mask
-
-# Get a pytraj selection with all counter ions
-def get_counter_ions_mask (structure_filename : str) -> str:
-    pt_topology = pt.load_topology(filename=structure_filename)
-
-    # Get all atoms from single atom residues
-    single_atoms = []
-    for residue in pt_topology.residues:
-        if residue.n_atoms != 1:
-            continue
-        single_atoms.append(residue.first_atom_index)
-
-    # Get a list with all topology atoms
-    atoms = list(pt_topology.atoms)
-
-    # Get atoms whose name matches any counter ion names list
-    counter_ion_atoms = []
-    for atom_index in single_atoms:
-        atom = atoms[atom_index]
-        atom_name = atom.name.upper()
-        # Remove possible '+' and '-' signs by keeping only letters
-        simple_atom_name = ''.join(filter(str.isalpha, atom_name))
-        if simple_atom_name in STANDARD_COUNTER_ION_ATOM_NAMES:
-            # Atom indices go from 0 to n-1
-            # Add +1 to the index since the mask selection syntax counts from 1 to n
-            counter_ion_atoms.append(str(atom_index +1))
-    
-    # Return None in case there are no counter ion atoms
-    if len(counter_ion_atoms) == 0:
-        return None
-    
-    # Return atoms in a pytraj mask format
-    counter_ions_mask = '@' + ','.join(counter_ion_atoms)
-    return counter_ions_mask
-
-# Use this function to create gromacs 'index.ndx' files to match pytraj mask selections in a given pytraj topology
-# 'masks' is a dict where each entry key will be the gromacs group name and each entry value is the mask string
-# e.g. { "my_solvent" : ":SOL,WAT,HOH", "my_ions" : "@17,18" }
-def pytraj_mask_2_gromacs_ndx (pt_topology : 'Topology', masks : dict, output_filename : str = 'index.ndx'):
-    # Parse the masks object into the a dict with atom indices
-    groups = pytraj_mask_2_atom_indices(pt_topology, masks)
-    # Now generate the .ndx file
-    atom_indices_2_gromacs_ndx(groups, output_filename)
-
-# Convert groups of pytraj masks to atom indices
-# 'masks' is a dict where each entry key will be the gromacs group name and each entry value is the mask string
-# e.g. { "my_solvent" : ":SOL,WAT,HOH", "my_ions" : "@17,18" }
-def pytraj_mask_2_atom_indices (pt_topology : 'Topology', masks : dict) -> dict:
-    # Parse the masks object into a dict with atom indices
-    groups = {}
-    for group_name, mask in masks.items():
-        # Find mask atom indices in the pytraj topology
-        atom_indices = list(pt_topology.atom_indices(mask))
-        groups[group_name] = atom_indices
-    return groups
-
-# Use this function to create gromacs 'index.ndx' files from atom indexes
-# 'groups' is a dict where each entry key will be the gromacs group name and each entry value is the atoms integer list
-# e.g. { "my_solvent" : [1,2,3], "my_ions" : [4,5,6] }
-def atom_indices_2_gromacs_ndx (groups : dict, output_filename : str = 'index.ndx'):
-    with open(output_filename, "w") as file:
-        for group_name, atom_indices in groups.items():
-            # Add a header with the name for each group
-            content = '[ ' + group_name + ' ]\n'
-            count = 0
-            for index in atom_indices:
-                # Add a breakline each 15 indices
-                count += 1
-                if count == 15:
-                    content += '\n'
-                    count = 0
-                # Add a space between indices
-                # Atom indices go from 0 to n-1
-                # Add +1 to the index since gromacs counts from 1 to n
-                content += str(index + 1) + ' '
-            file.write(content + '\n')
 
 # Filter atoms in a pdb file
 # This method conserves maximum resolution and chains
@@ -369,8 +243,8 @@ def tpr_filter(
 # WARNING: This function has not been checked in depth to work properly
 def standard_topology_filter (
     input_topology_file : 'File',
-    reference_structure_file : 'File',
-    filter_selection : str,
+    reference_structure : 'Structure',
+    parsed_filter_selection : 'Selection',
     output_topology_file : 'File'):
 
     # Load the topology
@@ -378,16 +252,10 @@ def standard_topology_filter (
     with open(input_topology_file.path, 'r') as file:
         topology = json.load(file)
 
-    # Load the reference structure
-    reference_structure = Structure.from_pdb_file(reference_structure_file.path)
-
-    # Parse the VMD selection to a list of atom indices
-    parsed_selection = reference_structure.select(filter_selection)
-
     # Get filtered atom, residues and chain indices
-    atom_indices = parsed_selection.atom_indices
-    residue_indices = reference_structure.get_selection_residue_indices(parsed_selection)
-    chain_indices = reference_structure.get_selection_chain_indices(parsed_selection)
+    atom_indices = parsed_filter_selection.atom_indices
+    residue_indices = reference_structure.get_selection_residue_indices(parsed_filter_selection)
+    chain_indices = reference_structure.get_selection_chain_indices(parsed_filter_selection)
 
     # Set backmapping
     atom_backmapping = { old_index: new_index for new_index, old_index in enumerate(atom_indices) }

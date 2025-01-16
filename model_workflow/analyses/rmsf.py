@@ -25,8 +25,7 @@ def rmsf (
     input_topology_filename : str,
     input_trajectory_filename : str,
     output_analysis_filename : str,
-    structure : 'Structure',
-    pbc_residues : List[int]):
+    pbc_selection : 'Selection'):
 
     print('-> Running RMSF analysis')
     
@@ -60,12 +59,15 @@ def rmsf (
     rmsf_values = raw_rmsf_data['rmsf']
 
     # Filter out values from PBC residue atoms since they may have not sense
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     for index in pbc_selection.atom_indices:
         rmsf_values[index] = None
 
     # Get all rmsf values which are not None
     actual_rmsf_values = [ v for v in rmsf_values if v != None ]
+    # There may be none if the whole system is in PBC
+    if len(actual_rmsf_values) == 0:
+        print(' No actual values to do RMSF')
+        return
 
     # Format data
     rmsf_data = {

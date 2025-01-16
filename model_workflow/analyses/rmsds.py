@@ -22,15 +22,12 @@ def rmsds(
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
-    pbc_residues: List[int],
+    pbc_selection : 'Selection',
     ligand_map : List[dict],
     default_selections : List[str] = ['protein', 'nucleic'],
     ):
 
     print('-> Running RMSDs analysis')
-
-    # Find PBC residues, which are to be removed from parsed selections
-    pbc_selection = structure.select_residue_indices(pbc_residues)
 
     # Parse the selections to meaningfull atom indices
     parsed_selections = {}
@@ -56,7 +53,6 @@ def rmsds(
                     del parsed_selections[default_selection]
 
     # Remove PBC residues from parsed selections
-    pbc_selection = structure.select_residue_indices(pbc_residues)
     non_pbc_selections = {}
     for selection_name, selection in parsed_selections.items():
         # Substract PBC atoms

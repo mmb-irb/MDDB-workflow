@@ -19,7 +19,7 @@ def clusters_analysis (
     interactions : list,
     structure : 'Structure',
     snapshots : int,
-    pbc_residues : List[int],
+    pbc_selection : 'Selection',
     output_analysis_filename : str,
     output_run_filepath : str,
     output_screenshots_filename : str,
@@ -35,24 +35,9 @@ def clusters_analysis (
 
     print('-> Running clusters analysis')
 
-    # If trajectory frames number is bigger than the limit we create a reduced trajectory
-    reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        input_structure_file,
-        input_trajectory_file,
-        snapshots,
-        frames_limit,
-    )
-
-    # Load the whole trajectory
-    traj = mdt.load(reduced_trajectory_filepath, top=input_structure_file.path)
-
     # The cluster analysis is run for the overall structure and then once more for every interaction
     # We must set the atom selection of every run in atom indices, for MDtraj
     runs = []
-
-    # Parse the PBC selection, which will be substracted from every further selection
-    # Note that substracting PBC atoms is essential since sudden jumps across boundaries would eclipse the actual clusters
-    pbc_selection = structure.select_residue_indices(pbc_residues)
 
     # Start with the overall selection
     parsed_overall_selection = structure.select(overall_selection)
@@ -60,11 +45,13 @@ def clusters_analysis (
     if not parsed_overall_selection:
         parsed_overall_selection = structure.select_heavy_atoms()
     # Substract PBC atoms
+    # Note that this is essential since sudden jumps across boundaries would eclipse the actual clusters
     parsed_overall_selection -= pbc_selection
-    runs.append({
-        'name': 'Overall',
-        'selection': parsed_overall_selection
-    })
+    if parsed_overall_selection:
+        runs.append({
+            'name': 'Overall',
+            'selection': parsed_overall_selection
+        })
 
     # Now setup the interaction runs
     for interaction in interactions:
@@ -76,10 +63,28 @@ def clusters_analysis (
         final_selection = interface_selection & heavy_atoms_selection
         # Substract PBC atoms
         final_selection -= pbc_selection
-        runs.append({
-            'name': interaction['name'],
-            'selection': final_selection
-        })
+        if final_selection:
+            runs.append({
+                'name': interaction['name'],
+                'selection': final_selection
+            })
+
+    # If there are no runs at this point then stop here
+    # This may happen when the whole system is in PCB
+    if len(runs) == 0:
+        print(' No clusters to analyze')
+        return
+    
+    # If trajectory frames number is bigger than the limit we create a reduced trajectory
+    reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
+        input_structure_file,
+        input_trajectory_file,
+        snapshots,
+        frames_limit,
+    )
+
+    # Load the whole trajectory
+    traj = mdt.load(reduced_trajectory_filepath, top=input_structure_file.path)
 
     # Set the target number of clusters
     # This should be the desired number of clusters unless there are less frames than that

@@ -2,6 +2,7 @@ from os import remove, rename
 from os.path import exists
 from shutil import copyfile
 from subprocess import run, PIPE, Popen
+from re import search
 
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.file import File
@@ -358,12 +359,35 @@ filter_trajectory.format_sets = [
     }
 ]
 
+# Set a regular expression to further mine data from gromacs logs
+GROMACS_SYSTEM_ATOMS = r'System\) has ([0-9]*) elements'
+
+# Count TPR atoms
+def get_tpr_atom_count (tpr_filepath : str) -> int:
+    # Run Gromacs only to see the number of atoms in the TPR
+    p = Popen([ "echo", "whatever" ], stdout=PIPE)
+    process = run([
+        GROMACS_EXECUTABLE,
+        "convert-tpr",
+        "-s",
+        tpr_filepath,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    error_logs = process.stderr.decode()
+    p.stdout.close()
+    # Mine the number of atoms in the system from the logs
+    system_atoms_match = search(GROMACS_SYSTEM_ATOMS, error_logs)
+    if not system_atoms_match:
+        raise ValueError('Failed to mine Gromacs error logs')
+    atom_count = int(system_atoms_match[1])
+    return atom_count
+
 # Filter topology atoms
 # DANI: Note that a TPR file is not a structure but a topology
 # DANI: However it is important that the argument is called 'structure' for the format finder
 def filter_tpr (
-    input_structure_file : str,
-    output_structure_file : str,
+    input_structure_file : 'File',
+    output_structure_file : 'File',
     input_selection : 'Selection'
 ):
     # Generate a ndx file with the desired selection
