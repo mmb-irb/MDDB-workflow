@@ -66,7 +66,7 @@ def get_inchi_keys (
                                     'resindices': [],
                                     'resname':[], 
                                     'classification': [],
-                                    'has_bonds': residues[index].get_bonded_atoms()} # TO-DO: check for every residue not only the first
+                                    'has_bonds': residues[index].get_bonded_atoms()} # TODO: check for every residue not only the first
         # Add residue index to the list
         key_2_name[inchikey]['resindices'].append(index)
         # Add residue name to the list
@@ -86,8 +86,8 @@ def get_inchi_keys (
     # 3) Check data coherence
     # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
-        if data["has_bonds"]:
-            warn(f"inChIKey {inchikey} is a substructure of type {data['classification']}\n"
+        if data["has_bonds"]: # TODO quitar, neutralizar bonds.
+            warn(f"The InChIKey {inchikey} is a substructure ({data['classification']})\n"
                    "and will result in imprecise search in PubChemb due lo lack of hidrogens\n"
                    "and different charges on the bonded atoms.")
         if len(data['resname']) > 1:
@@ -101,9 +101,9 @@ def get_inchi_keys (
     for name, inchikeys in name_2_key.items():
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
-            key_counts = '  '.join([f'({len(key_2_name[key]["resindices"])}): {key}' for key in inchikeys])
-            warn('Same residue with different InChi keys:\n'
-                 f'{name} -> {key_counts}')
+            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"])}. {key_2_name[key]["inchi"]}' for key in inchikeys])
+            warn(f'The residue {name} has more than one InChi key:\n'
+                 f'{key_counts}')
     return key_2_name
 
 
@@ -162,6 +162,7 @@ def inchi_2_mol(inchi, withHs=False, neutralize=False):
 
 
 def Residue_2_Mol(res):
+    "WiP"
     mol = Chem.RWMol()
     # map index in universe to index in mol
     atom_mapper = {}

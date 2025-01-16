@@ -41,7 +41,7 @@ def generate_membrane_mapping(structure : 'Structure',
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
     # Get InChI keys of non-proteic/non-nucleic residues
     inchi_keys = get_inchi_keys(u, structure)
-    # TO-DO: identify substructures like carbohydrates by neutralizing bonds:
+    # TODO: identify substructures like carbohydrates by neutralizing bonds:
     # ich = inchi_keys['ZNJXAXZHPQQZRY-LXGUWJNJSA-N']['inchi'] # A01IP
     # for args in [[ich], [ich, 1], [ich, 0, 1], [ich, 1, 1]]:
     #    display(inchi_2_mol(*args))
