@@ -64,8 +64,26 @@ def main ():
         # Make a copy of the template in the local directory if there is not an inputs file yet
         if not exists(DEFAULT_INPUTS_FILENAME):
             copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
-        # Open a text editor for the user
-        call(["vim", DEFAULT_INPUTS_FILENAME])
+        # Ask the user for their preferred editor by choosing a number
+        editors = ["vscode", "vim", "nano", "gedit","None"]
+        print("Choose your preferred editor:")
+        for i, editor in enumerate(editors, 1):
+            print(f"{i}. {editor}")
+        try:
+            choice = int(input("Enter the number of your preferred editor: ").strip())
+            if 1 <= choice <= len(editors):
+                editor = editors[choice - 1]
+            else:
+                raise ValueError
+            if editor != "None":
+                # Open a text editor for the user
+                editor = editor if editor != 'vscode' else 'code'
+                call([editor, DEFAULT_INPUTS_FILENAME])
+            else:
+                print(f'File {DEFAULT_INPUTS_FILENAME} generated. Modify with a text editor.')
+        except ValueError:
+            print(f"Invalid choice. Please modify {DEFAULT_INPUTS_FILENAME} with a text editor.")
+        
 
     # In case the convert tool was called
     elif subcommand == 'convert':
