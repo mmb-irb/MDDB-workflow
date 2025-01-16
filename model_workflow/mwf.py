@@ -2393,10 +2393,6 @@ class Project:
         # If the file already exists and it is not to be overwirtten then send it
         if self._standard_topology_file.exists and not overwrite:
             return self._standard_topology_file
-        # Download the standard topology if it is possible and the overwrite flag is not passed
-        if self.remote and not overwrite:
-            self.remote.download_standard_topology(self._standard_topology_file)
-            return self._standard_topology_file
         # Otherwise, generate it
         generate_topology(
             structure = self.structure,
