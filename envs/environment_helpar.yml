@@ -11,11 +11,12 @@ dependencies:
   - curves
   - gromacs
   - mdanalysis
-  - mdtraj
+  - mdtraj=1.9
   - pip
   - xmltodict
   - rdkit
   - mordred
   - iminuit
+  - vmd
   - pip:
     - tmscoring

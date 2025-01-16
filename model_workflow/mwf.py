@@ -166,7 +166,7 @@ class MD:
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
         # Parse glob notation in the process
-        def relativize_and_parse_paths (input_path : str) -> str:
+        def relativize_and_parse_paths (input_path : str, may_not_exist : bool = False) -> Optional[str]:
             # Check if it is an absolute path
             if isabs(input_path):
                 abs_glob_parse = parse_glob(input_path)
@@ -206,7 +206,8 @@ class MD:
                 raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_path))
             # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
             # However make sure we have a remote
-            if not self.remote:
+            # As an exception, if the 'may not exist' flag is passed then we return the result even if there is no remote
+            if not may_not_exist and not self.remote:
                 raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
             return md_parsed_filepath
         # If we have a value passed through command line
@@ -221,10 +222,13 @@ class MD:
             if inputs_value: return relativize_and_parse_paths(inputs_value)
         # If there is not input structure then asume it is the default
         # Check the default structure file exists or it may be downloaded
-        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME)
+        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME, may_not_exist=True)
         default_structure_file = File(default_structure_filepath)
-        if default_structure_file.exists or self.remote:
-            return default_structure_filepath
+        # AGUS: si default_structure_filepath es None, default_structure_file será un objeto File y no se puede evaluar como None
+        # AGUS: de esta forma al evaluar directamente si default_structure_filepath es None, se evita el error
+        if default_structure_filepath is not None:
+            if default_structure_file.exists or self.remote:
+                return default_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
@@ -1459,7 +1463,6 @@ class MD:
         )
 
     # Helical parameters
-    # DANI: Al final lo reimplementará Subamoy (en python) osea que esto no lo hacemos de momento
     def run_helical_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
@@ -2389,10 +2392,6 @@ class Project:
         self._standard_topology_file = File(standard_topology_filepath)
         # If the file already exists and it is not to be overwirtten then send it
         if self._standard_topology_file.exists and not overwrite:
-            return self._standard_topology_file
-        # Download the standard topology if it is possible and the overwrite flag is not passed
-        if self.remote and not overwrite:
-            self.remote.download_standard_topology(self._standard_topology_file)
             return self._standard_topology_file
         # Otherwise, generate it
         generate_topology(

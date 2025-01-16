@@ -105,7 +105,6 @@ hp_backbone = [
 helical_parameters = hp_basepairs + hp_singlebases + hp_backbone
 baselen = 0
 hp_unit = ""
-actual_path = os.getcwd()
 
 def helical_parameters (
     input_topology_filename : str,
@@ -115,7 +114,7 @@ def helical_parameters (
     frames_limit : int,
     dna_selection : str = None
 ):
-
+    actual_path = os.getcwd()
     print('-> Running helical analysis')
 
     # Get a selection from both chains in the B-DNA
@@ -151,9 +150,12 @@ def helical_parameters (
         residue_index_ranges.append(residue_index_range)
     
     # Call function to execute Curves+ and Canals software to generate the desired output in order to do different calculations
-    terminal_execution(input_trajectory_filename,input_topology_filename,residue_index_ranges,sequences[0])
+    folder_path = False
+    if '/' in input_trajectory_filename:
+        folder_path = input_trajectory_filename.split('/')[-2]
+    terminal_execution(input_trajectory_filename, input_topology_filename, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
-    dictionary_information = send_files(sequences[0],frames_limit)
+    dictionary_information = send_files(sequences[0], frames_limit)
     # Set the path into the original directory outside the folder helicalparameters
     os.chdir(actual_path)
     # Convert the dictionary into a json file
@@ -162,8 +164,8 @@ def helical_parameters (
     
 
 # Function to execute Curves+ and Canals software to generate the output needed
-def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence):
-    helical_parameters_folder = "helical_parameters"
+def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,folder_path):
+    helical_parameters_folder = f"{folder_path}/helical_parameters"
     # If the folder already exists dont create it again
     if not os.path.exists(helical_parameters_folder):
         os.mkdir(helical_parameters_folder)
