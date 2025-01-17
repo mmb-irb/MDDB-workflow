@@ -66,7 +66,7 @@ def get_inchi_keys (
                                     'resindices': [],
                                     'resname':[], 
                                     'classification': [],
-                                    'has_bonds': residues[index].get_bonded_atoms()} # TODO: check for every residue not only the first
+                                    'has_bonds': residues[index].get_bonded_atoms()} # TO-DO: check for every residue not only the first
         # Add residue index to the list
         key_2_name[inchikey]['resindices'].append(index)
         # Add residue name to the list
@@ -86,7 +86,7 @@ def get_inchi_keys (
     # 3) Check data coherence
     # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
-        if data["has_bonds"]: # TODO quitar, neutralizar bonds.
+        if data["has_bonds"]: # TO-DO quitar, neutralizar bonds.
             warn(f"The InChIKey {inchikey} is a substructure ({data['classification']})\n"
                    "and will result in imprecise search in PubChemb due lo lack of hidrogens\n"
                    "and different charges on the bonded atoms.")
