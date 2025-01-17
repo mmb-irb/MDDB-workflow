@@ -187,6 +187,7 @@ def main ():
                 n_sequences=args.n_sequences,
                 seq_path=args.seq_path,
                 md_directories=args.md_directories,
+                trust=args.trust
             )
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
@@ -205,6 +206,7 @@ def main ():
                     unit_len = args.unit_len,
                     all= args.all,
                     md_directories=args.md_directories,
+                    trust=args.trust
             )
 
 # Define a common parser running in top of all others
@@ -635,3 +637,13 @@ nassa_parser.add_argument(
     default=None,
     help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
         "Several output files will be generated in every MD directory"))
+nassa_parser.add_argument(
+    "-t", "--trust",
+    type=str,
+    nargs='*',
+    default=[],
+    action=custom,
+    const=AVAILABLE_CHECKINGS,
+    choices=AVAILABLE_CHECKINGS,
+    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n" + pretty_list(AVAILABLE_CHECKINGS)
+)
