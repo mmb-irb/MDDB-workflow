@@ -70,7 +70,7 @@ def get_most_stable_bonds (
     frame_bonds = []
 
     # Iterate over the different frames
-    for current_frame_pdb in tqdm(frames,desc='Frames',total=count):
+    for current_frame_pdb in tqdm(frames,desc='Frames',total=count,unit='frame'):
 
         # Find the covalent bonds for the current frame
         current_frame_bonds = get_covalent_bonds(current_frame_pdb)
@@ -116,7 +116,7 @@ def get_bonds_canonical_frame (
 
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
-    for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=count):
+    for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=count, unit='frame'):
         bonds = get_covalent_bonds(frame_pdb)
         if do_bonds_match(bonds, reference_bonds, atom_elements):
             reference_bonds_frame = frame_number
