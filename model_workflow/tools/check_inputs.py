@@ -16,7 +16,7 @@ NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a diviso
 MDTRAJ_ATOM_MISMATCH_ERROR = r'xyz must be shape \(Any, ([0-9]*), 3\). You supplied  \(1, ([0-9]*), 3\)'
 PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does not match # atoms in (topology|parm) [\w.-]* \(([0-9]*)\)'
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
-GROMACS_SYSTEM_ATOMS = r'System\) has ([0-9]*) elements'
+GROMACS_SYSTEM_ATOMS = r'System\) has[ ]+([0-9]*) elements'
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
@@ -104,6 +104,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         error_logs = process.stderr.decode()
         system_atoms_match = search(GROMACS_SYSTEM_ATOMS, error_logs)
         if not system_atoms_match:
+            print(error_logs)
             raise ValueError('Failed to mine Gromacs error logs')
         atom_count = int(system_atoms_match[1])
         # If the output does not exist at this point it means something went wrong with gromacs
