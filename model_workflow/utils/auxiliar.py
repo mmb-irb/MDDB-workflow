@@ -2,6 +2,7 @@
 
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
 
+import os
 from os import rename, listdir
 from os.path import isfile
 import sys
@@ -10,6 +11,9 @@ import yaml
 from glob import glob
 from typing import Optional, List, Generator
 from struct import pack
+import time
+import threading
+
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -222,3 +226,44 @@ def store_binary_data (data : List[float], byte_size : int, filepath : str):
         for value in data:
             value = float(value)
             file.write(pack(byte_flag, value))
+
+# Capture all stdout or stderr within a code region even if it comes from another non-python threaded process
+# https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
+class CaptureOutput (object):
+    escape_char = "\b"
+    def __init__(self, stream : str = 'stdout'):
+        # Get sys stdout or stderr
+        if not hasattr(sys, stream):
+            raise ValueError(f'Unknown stream "{stream}". Expected stream value is "stdout" or "stderr"')
+        self.original_stream = getattr(sys, stream)
+        self.original_streamfd = self.original_stream.fileno()
+        self.captured_text = ""
+        # Create a pipe so the stream can be captured:
+        self.pipe_out, self.pipe_in = os.pipe()
+    def __enter__(self):
+        self.captured_text = ""
+        # Save a copy of the stream:
+        self.streamfd = os.dup(self.original_streamfd)
+        # Replace the original stream with our write pipe:
+        os.dup2(self.pipe_in, self.original_streamfd)
+        return self
+    def __exit__(self, type, value, traceback):
+        # Print the escape character to make the readOutput method stop:
+        self.original_stream.write(self.escape_char)
+        # Flush the stream to make sure all our data goes in before
+        # the escape character:
+        self.original_stream.flush()
+        self.readOutput()
+        # Close the pipe:
+        os.close(self.pipe_in)
+        os.close(self.pipe_out)
+        # Restore the original stream:
+        os.dup2(self.streamfd, self.original_streamfd)
+        # Close the duplicate stream:
+        os.close(self.streamfd)
+    def readOutput(self):
+        while True:
+            char = os.read(self.pipe_out,1).decode(self.original_stream.encoding)
+            if not char or self.escape_char in char:
+                break
+            self.captured_text += char
