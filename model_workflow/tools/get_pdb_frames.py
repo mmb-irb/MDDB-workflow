@@ -1,5 +1,4 @@
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
-from model_workflow.utils.auxiliar import reprint
 
 import os
 from typing import Optional
@@ -37,12 +36,9 @@ def get_pdb_frames (
     def frames_generator():
         # Get the current directory at this point and use it to delete old files, in case we change the directory
         cwd = os.getcwd()
-        # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
-        print()
         # Extract each frame in pdb format
         for f in frames_list:
             # Update the current frame log
-            reprint('Frame ' + str(f+1) + ' / ' + str(frames_count))
             current_frame = cwd + '/' + output_frames_prefix + str(f) + '.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)

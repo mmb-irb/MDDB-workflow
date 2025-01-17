@@ -3,8 +3,8 @@ from model_workflow.utils.auxiliar import load_json
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.type_hints import *
-
 import pytraj as pt
+from tqdm import tqdm
 
 
 # Check if two sets of bonds match perfectly
@@ -70,7 +70,7 @@ def get_most_stable_bonds (
     frame_bonds = []
 
     # Iterate over the different frames
-    for current_frame_pdb in frames:
+    for current_frame_pdb in tqdm(frames,desc='Frames',total=count):
 
         # Find the covalent bonds for the current frame
         current_frame_bonds = get_covalent_bonds(current_frame_pdb)
@@ -116,7 +116,7 @@ def get_bonds_canonical_frame (
 
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
-    for frame_number, frame_pdb in enumerate(frames):
+    for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=count):
         bonds = get_covalent_bonds(frame_pdb)
         if do_bonds_match(bonds, reference_bonds, atom_elements):
             reference_bonds_frame = frame_number
@@ -127,8 +127,7 @@ def get_bonds_canonical_frame (
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:
         return None
-
-    print(f' Got it -> Frame {reference_bonds_frame + 1}')
+    print(f'Got it -> Frame {reference_bonds_frame + 1}')
 
     return reference_bonds_frame
 
