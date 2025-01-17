@@ -47,6 +47,7 @@ from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
 from model_workflow.utils.pyt_spells import get_frames_count
+from model_workflow.utils.selections import Selection
 from model_workflow.utils.type_hints import *
 
 # Import local analyses
@@ -1084,6 +1085,7 @@ class MD:
             warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
             return self.structure.select_pbc_guess()
         # Otherwise use the input value
+        if not self.input_pbc_selection: return Selection()
         return self.structure.select(self.input_pbc_selection)
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
