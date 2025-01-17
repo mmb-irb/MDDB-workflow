@@ -1086,6 +1086,7 @@ class MD:
             warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
             return self.structure.select_pbc_guess()
         # Otherwise use the input value
+        if not self.input_pbc_selection: return Selection()
         return self.structure.select(self.input_pbc_selection)
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
