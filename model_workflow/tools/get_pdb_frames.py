@@ -1,14 +1,10 @@
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
+from model_workflow.utils.auxiliar import reprint
 
 import os
 from typing import Optional
 
 import pytraj as pt
-
-CURSOR_UP_ONE = '\x1b[1A'
-ERASE_LINE = '\x1b[2K'
-ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
-
 # Build a generator which returns frames from the trajectory in pdb format
 # The frames limit is the maximum number of frames to be iterated
 # Note that the number of frames iterated may be less than the specified number
@@ -46,8 +42,7 @@ def get_pdb_frames (
         # Extract each frame in pdb format
         for f in frames_list:
             # Update the current frame log
-            print(ERASE_PREVIOUS_LINE)
-            print('Frame ' + str(f+1) + ' / ' + str(frames_count))
+            reprint('Frame ' + str(f+1) + ' / ' + str(frames_count))
             current_frame = cwd + '/' + output_frames_prefix + str(f) + '.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
