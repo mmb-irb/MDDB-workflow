@@ -978,6 +978,7 @@ def workflow_nassa(
     seq_path: str = None,
     md_directories: Optional[List[str]] = None,
     trust: bool = False,
+    mercy: bool = False,
     ):
 
     # Change to the working directory and print the name of the directory to inform the user
@@ -1009,6 +1010,7 @@ def workflow_nassa(
                                          'input_trajectory_filepaths':input_trajectory_file,
                                          'md_directories': md_directories,
                                          'trust': trust,
+                                         'mercy': mercy
                                          }, 
                      include=['helical'], 
                      overwrite=overwrite
