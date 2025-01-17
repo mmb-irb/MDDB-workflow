@@ -95,7 +95,7 @@ def get_inchi_keys (
                 f'{inchikey} -> {str(data["resname"])}')
         if len(data['classification']) > 1:
             warn('Same residue with different classifications:\n'
-                 f'{inchikey} + -> {str(data["classification"])}')   
+                 f'{inchikey} + -> {str(data["classification"])} for names {str(data["resname"])}')   
 
     # Check if there are multiple InChI keys for the same name
     for name, inchikeys in name_2_key.items():
