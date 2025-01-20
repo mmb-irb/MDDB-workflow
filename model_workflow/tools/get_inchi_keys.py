@@ -161,7 +161,7 @@ def inchi_2_mol(inchi, withHs=False, neutralize=False):
         return mol
 
 
-def Residue_2_Mol(res):
+def Residue_2_Mol(res: 'Residue'):
     "WiP"
     mol = Chem.RWMol()
     # map index in universe to index in mol

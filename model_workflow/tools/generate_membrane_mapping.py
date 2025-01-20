@@ -58,7 +58,8 @@ def generate_membrane_mapping(structure : 'Structure',
         else:
             not_lipid_idx.extend(res_data['resindices'])
             if 'fatty' in res_data['classification']:
-                warn(f'The InChIKey {inchikey} is classified as fatty but is not a lipid')
+                warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is classified as fatty but is not a lipid.\n'
+                     f'Resindices: {str(res_data["resindices"])}')
     # RUBEN: esto será para los glucolipidos
     """ 
     # Propierty to make easier to see if the residue is lipid
