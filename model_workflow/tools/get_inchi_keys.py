@@ -102,7 +102,7 @@ def get_inchi_keys (
     for name, inchikeys in name_2_key.items():
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
-            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"])}. {key_2_name[key]["inchi"]}' for key in inchikeys])
+            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"]): >4}. {key_2_name[key]["inchi"]}' for key in inchikeys])
             warn(f'The residue {name} has more than one InChi key:\n'
                  f'{key_counts}')
     return key_2_name
@@ -116,8 +116,8 @@ def is_in_LIPID_MAPS(inchikey) -> dict:
     # Output item = physchem, is the only one that returns data for the inchi key
     # for only the two first layers (main and atom connection)
     # To see InChiKey layers: https://www.inchi-trust.org/
-    first_layers = inchikey[:25]
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{first_layers}/physchem"
+    first_layer = inchikey[:14]
+    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{first_layer}/physchem"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         js = response.text
