@@ -1,6 +1,7 @@
 from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
+from model_workflow.utils.gmx_spells import mine_system_atoms_count
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 
@@ -16,7 +17,6 @@ NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a diviso
 MDTRAJ_ATOM_MISMATCH_ERROR = r'xyz must be shape \(Any, ([0-9]*), 3\). You supplied  \(1, ([0-9]*), 3\)'
 PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does not match # atoms in (topology|parm) [\w.-]* \(([0-9]*)\)'
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
-GROMACS_SYSTEM_ATOMS = r'System\) has[ ]+([0-9]*) elements'
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
@@ -102,11 +102,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         # Note that this logs include the output selection request from Gromacs
         # This log should be always there, even if there was a mismatch and then Gromacs failed
         error_logs = process.stderr.decode()
-        system_atoms_match = search(GROMACS_SYSTEM_ATOMS, error_logs)
-        if not system_atoms_match:
-            print(error_logs)
-            raise ValueError('Failed to mine Gromacs error logs')
-        atom_count = int(system_atoms_match[1])
+        atom_count = mine_system_atoms_count(error_logs)
         # If the output does not exist at this point it means something went wrong with gromacs
         if not output_sample_file.exists:
             # Check if we know the error
