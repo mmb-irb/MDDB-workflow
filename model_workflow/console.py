@@ -205,7 +205,8 @@ def main ():
                 n_sequences=args.n_sequences,
                 seq_path=args.seq_path,
                 md_directories=args.md_directories,
-                trust=args.trust
+                trust=args.trust,
+                mercy=args.mercy
             )
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
@@ -224,7 +225,8 @@ def main ():
                     unit_len = args.unit_len,
                     all= args.all,
                     md_directories=args.md_directories,
-                    trust=args.trust
+                    trust=args.trust,
+                    mercy=args.mercy
             )
 
 # Define a common parser running in top of all others
@@ -574,7 +576,7 @@ nassa_parser.add_argument(
     default=None, 
     help="Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST))
 nassa_parser.add_argument(
-    "-m", "--make_config",
+    "-w", "--make_config",
     type=str,
     default=[],
     const=True,
@@ -664,4 +666,15 @@ nassa_parser.add_argument(
     const=AVAILABLE_CHECKINGS,
     choices=AVAILABLE_CHECKINGS,
     help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n" + pretty_list(AVAILABLE_CHECKINGS)
+)
+nassa_parser.add_argument(
+    "-m", "--mercy",
+    type=str,
+    nargs='*',
+    default=[],
+    action=custom,
+    const=AVAILABLE_FAILURES,
+    choices=AVAILABLE_FAILURES,
+    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
+        "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
 )

@@ -1,4 +1,4 @@
-from model_workflow.utils.auxiliar import InputError, warn
+from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
 from model_workflow.utils.structures import Structure
@@ -14,13 +14,15 @@ import pytraj as pyt
 # Set some known message errors
 NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.'
 MDTRAJ_ATOM_MISMATCH_ERROR = r'xyz must be shape \(Any, ([0-9]*), 3\). You supplied  \(1, ([0-9]*), 3\)'
+PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does not match # atoms in (topology|parm) [\w.-]* \(([0-9]*)\)'
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
-GROMACS_SYSTEM_ATOMS = r'System\) has ([0-9]*) elements'
+GROMACS_SYSTEM_ATOMS = r'System\) has[ ]+([0-9]*) elements'
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
 TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr', 'nc', 'dcd', 'mdcrd', 'pdb' }
 STRUCTURE_SUPPORTED_FORMATS = { *TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro' }
+GROMACS_TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr'}
 
 # Check input files coherence and intergrity
 # If there is any problem then raise an input error
@@ -74,6 +76,9 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         # DANI: Hay que hacer return aquí, porque sino luego el atom_count sigue siendo None y el checking del structure falla
         return
     elif input_topology_file.format == 'tpr':
+        # Make sure the trajectory is compatible with gromacs
+        if trajectory_sample.format not in GROMACS_TRAJECTORY_SUPPORTED_FORMATS:
+            raise InputError('Why loading a TPR topology with a non-gromacs trajectory?')
         # Run Gromacs just to generate a structure using all atoms in the topology and coordinates in the first frame
         # If atoms do not match then we will see a specific error
         output_sample_file = File('.sample.gro')
@@ -99,6 +104,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         error_logs = process.stderr.decode()
         system_atoms_match = search(GROMACS_SYSTEM_ATOMS, error_logs)
         if not system_atoms_match:
+            print(error_logs)
             raise ValueError('Failed to mine Gromacs error logs')
         atom_count = int(system_atoms_match[1])
         # If the output does not exist at this point it means something went wrong with gromacs
@@ -118,6 +124,24 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         # If we had an output then it means both topology and trajectory match in the number of atoms
         # Cleanup the file we just created and proceed
         output_sample_file.remove()
+    # For .top files we use PyTraj since MDtraj can not handle it
+    elif input_topology_file.format == 'top':
+        # Note that calling ierload will print a error log when atoms do not match but will not raise a proper error
+        # To capture the error log we must throw this command wrapped in a stdout redirect
+        trajectory = None
+        with CaptureOutput('stderr') as output:
+            trajectory = pyt.iterload(trajectory_sample.path, top=input_topology_file.path)
+        logs = output.captured_text
+        error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
+        if error_match:
+            topology_atoms = error_match[3]
+            trajectory_atoms = error_match[1]
+            raise InputError('Mismatch in the number of atoms between input files:\n' +
+                f' Topology "{input_topology_file.path}" -> {topology_atoms} atoms\n' +
+                f' Trajectory "{trajectory_sample.path}" -> {trajectory_atoms} atoms')
+        # Now obtain the number of atoms from the frame we just read
+        atom_count = trajectory.n_atoms
+    # More any toher format use MDtraj
     else:
         try:
             # Note that declaring the iterator will not fail even when there is a mismatch
