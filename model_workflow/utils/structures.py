@@ -13,6 +13,7 @@ from model_workflow.utils.mdt_spells import sort_trajectory_atoms
 from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise, warn
 from model_workflow.utils.constants import SUPPORTED_POLYMER_ELEMENTS, SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
+from model_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM_ELEMENT
 
 import pytraj
 # Import these libraries if they are available
@@ -237,7 +238,10 @@ class Atom:
 
     # Guess an atom element from its name and number of bonds
     def guess_element (self) -> str:
-        # If the name is SOD and it is a lonly atom then it is clearly sodium, not sulfur
+        # If the atom name is among the known dummy atoms then return a standard element for dummy atoms
+        if self.name.upper() in STANDARD_DUMMY_ATOM_NAMES:
+            return DUMMY_ATOM_ELEMENT
+        # If the name is SOD and it is a lonely atom then it is clearly sodium, not sulfur
         if self.name.upper() == 'SOD' and self.residue.atom_count == 1:
             return 'Na'
         # Find a obvios element name in the atom name
