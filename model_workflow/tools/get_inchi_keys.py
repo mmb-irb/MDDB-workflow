@@ -16,7 +16,8 @@ def process_residue(res_atoms: 'MDAnalysis.AtomGroup',
     res_RD = res_atoms.convert_to("RDKIT")
     # Calculate InChI key and string
     inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
-    inchi = Chem.MolToInchi(res_RD)
+    # rdinchi.MolToInchi so it doesnt print the warnings
+    inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
     return (inchikey, inchi, resindex)
 
 
@@ -111,7 +112,12 @@ def get_inchi_keys (
 def is_in_LIPID_MAPS(inchikey) -> dict:
     """Search the InChi keys in LIPID MAPS"""
     headers = {'accept': 'json'}
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{inchikey}/all"
+    # https://www.lipidmaps.org/resources/rest
+    # Output item = physchem, is the only one that returns data for the inchi key
+    # for only the two first layers (main and atom connection)
+    # To see InChiKey layers: https://www.inchi-trust.org/
+    first_layers = inchikey[:25]
+    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{first_layers}/physchem"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         js = response.text
