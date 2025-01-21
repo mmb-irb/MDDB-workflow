@@ -89,6 +89,8 @@ def structure_corrector (
     def check_stable_bonds ():
         # If we have been requested to skip this test then we are done
         if not must_check_stable_bonds:
+            # Set the safe bonds as the structure bonds, just in case
+            structure.bonds = safe_bonds
             return
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
