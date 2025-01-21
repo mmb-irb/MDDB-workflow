@@ -49,6 +49,9 @@ def structure_corrector (
     # Import the pdb file and parse it to a structure object
     structure = Structure.from_pdb_file(input_structure_file.path)
 
+    # Write the inital output structure file which will be overwritten several times further
+    structure.generate_pdb_file(output_structure_file.path)
+
     # ------------------------------------------------------------------------------------------
     # Missing/Non-standard elements ------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
@@ -74,7 +77,7 @@ def structure_corrector (
     # Otherwise guess bonds by guessing bonds according to coordinates and atom radius for 10 frames along the trajectory
     safe_bonds = find_safe_bonds(
         input_topology_file,
-        input_structure_file,
+        output_structure_file,
         input_trajectory_file,
         must_check_stable_bonds,
         snapshots,
@@ -100,7 +103,7 @@ def structure_corrector (
         structure.bonds = safe_bonds
         # Find the first frame in the whole trajectory where safe bonds are respected
         safe_bonds_frame = get_bonds_canonical_frame(
-            structure_filepath = input_structure_file.path,
+            structure_filepath = output_structure_file.path,
             trajectory_filepath = input_trajectory_file.path,
             snapshots = snapshots,
             reference_bonds = safe_bonds,
@@ -120,7 +123,7 @@ def structure_corrector (
         # Save this frame as the reference frame for the current MD
         MD._reference_frame = safe_bonds_frame
         # Set also the safe bonds frame structure to mine its coordinates
-        safe_bonds_frame_filename = get_pdb_frame(input_structure_file.path, input_trajectory_file.path, safe_bonds_frame)
+        safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, safe_bonds_frame)
         safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
         # Set all coordinates in the main structure by copying the safe bonds frame coordinates
         for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
@@ -253,7 +256,7 @@ def structure_corrector (
             MD.project._charges = resorted_charges
             save_json(resorted_charges, MD.project.resorted_charges_file.path, indent=4)
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
-            structure.trajectory_atom_sorter(input_structure_file, input_trajectory_file, output_trajectory_file)
+            structure.trajectory_atom_sorter(output_structure_file, input_trajectory_file, output_trajectory_file)
 
     # ------------------------------------------------------------------------------------------
     # Repeated atoms ---------------------------------------------------------------------------

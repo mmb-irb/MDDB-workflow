@@ -45,9 +45,9 @@ def do_bonds_match (
                     print(f' It should be bonded to atoms {it_should_be_atom_labels}')
                 else:
                     print(f' Mismatch in atom with index {atom_index}:')
-                    it_is_atom_indices = ','.join(atom_bonds_set_1)
+                    it_is_atom_indices = ','.join([ str(index) for index in atom_bonds_set_1 ])
                     print(f' It is bondes to atoms with indices {it_is_atom_indices}')
-                    it_should_be_atom_indices = ','.join(atom_bonds_set_2)
+                    it_should_be_atom_indices = ','.join([ str(index) for index in atom_bonds_set_2 ])
                     print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
             return False
     return True
@@ -113,7 +113,6 @@ def get_bonds_canonical_frame (
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
     print(f'Searching reference bonds canonical frame. Only first {patience} frames will be checked.')
     frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots)
-
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
     for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=count, unit='frame'):
