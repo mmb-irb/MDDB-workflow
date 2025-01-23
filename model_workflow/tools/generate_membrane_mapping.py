@@ -60,7 +60,8 @@ def generate_membrane_mapping(structure : 'Structure',
             if any('fatty' in classes for classes in res_data['classification']):
                 warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is '
                      f'classified as fatty but is not a lipid.\n'
-                     f'Resindices: {str(res_data["resindices"])}')
+                     f'Resindices: {str(res_data["resindices"])}\n'
+                     'In case it is a lipid, please add it to the LIPID MAPS database: https://www.lipidmaps.org/new/reg/')
     
     # Select only the lipids and potential membrane members
     mem_candidates = f'(resindex {" ".join(map(str,(lipid_idx)))})'
