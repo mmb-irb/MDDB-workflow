@@ -7,6 +7,54 @@ from functools import lru_cache
 import requests
 
 
+def get_connected_residues(
+        residue: 'MDAnalysis.Residue',
+        visited=None):
+    """
+    Recursively finds all residues that are connected through bonds to the given residue.
+    Parameters
+    ----------
+    residue : MDAnalysis.core.groups.Residue
+        The residue to start the search from
+    visited : set, optional
+        Set of already visited residue IDs to prevent infinite recursion. 
+        Default is None, which initializes an empty set.
+    Returns
+    -------
+    list
+        A set containing the residue IDs of all residues that are connected 
+        through bonds to the input residue, either directly or indirectly.
+    Notes
+    -----
+    This function traverses the molecular structure recursively, following bonds 
+    between residues. It keeps track of visited residues to avoid cycles in the
+    traversal. Both direct bonds between residues and indirect connections through
+    other residues are included in the result.
+    """
+    
+    if visited is None:
+        visited = set()
+    
+    # Add current residue to visited set
+    visited.add(residue.resid)
+    
+    # Get direct external bonds
+    external_bonds = set()
+    for bond in residue.atoms.bonds:
+        external_bonds.update(bond.atoms.resindices)
+    
+    # Recursively check external bonds
+    all_external_bonds = external_bonds.copy()
+    u = residue.universe
+    for ext_resid in external_bonds:
+        if ext_resid not in visited:
+            # Get external bonds for the connected residue
+            recursive_bonds = get_connected_residues(u.residues[ext_resid], visited)
+            all_external_bonds.update(recursive_bonds)
+    
+    return list(all_external_bonds)
+
+
 def process_residue(res_atoms: 'MDAnalysis.AtomGroup', 
                     resindex : int) -> Tuple[str, str, int]:
     """
@@ -44,40 +92,48 @@ def get_inchi_keys (
             residue information such as associated residues, InChI strings, bond information,
             and classification.
     """
-    # 1) Prepare residue data for parallel processing
+    # 1) Prepare residue data for parallel processing (not yet implemented)
+    # First group residues that are bonded together
     results = []
     residues: List[Residue] = structure.residues
-    for resindex, residue in enumerate(residues):
+    visited = set()
+    for resindex in range(len(residues)):
+        # Skip residues that have already been visited
+        if resindex in visited:
+            continue
+        # Residues grouped by bonded atoms
+        res_grp_idx = get_connected_residues(u.residues[resindex], visited) 
+        classes = [residues[grp_idx].classification for grp_idx in res_grp_idx]
         # Skip residues that are aminoacids, nucleics, or too small
-        if residue.classification in ['ion', 'solvent', 'nucleic', 'protein']:
+        # We also skips residues connected to them: glicoprotein, lipid-anchored protein...
+        if any(cls in ['ion', 'solvent', 'nucleic', 'protein'] for cls in classes):
             continue
         # Select residues atoms with MDAnalysis
-        res_atoms = u.select_atoms(residue.get_selection().to_mdanalysis())
-        results.append(process_residue(res_atoms,resindex))
+        res_atoms = u.residues[res_grp_idx].atoms
+        # Convert to RDKit and get InChI data
+        results.append(process_residue(res_atoms,res_grp_idx))
 
     # 2) Process results and build dictionaries
     key_2_name = {} # To see if different name for same residue
     name_2_key = {} # To see if different residues under same name
     for result in results:
-        inchikey, inchi, index = result
+        inchikey, inchi, indexes = result
 
         # If key don't existe we create the default entry with info that is only put once
         if inchikey not in key_2_name:
             key_2_name[inchikey] = {'inchi': inchi,
                                     'resindices': [],
-                                    'resname':[], 
-                                    'classification': [],
-                                    'has_bonds': residues[index].get_bonded_atoms()} # TO-DO: check for every residue not only the first
+                                    'resname': set(), 
+                                    'classification': set()
+                                    }
         # Add residue index to the list
-        key_2_name[inchikey]['resindices'].append(index)
-        # Add residue name to the list
-        resname = residues[index].name
-        if resname not in key_2_name[inchikey]['resname']:
-            key_2_name[inchikey]['resname'].append(resname)
+        key_2_name[inchikey]['resindices'].extend(indexes)
+        # Add residue name to the list. For multi residues we join the names
+        resname = '-'.join([residues[index].name for index in indexes])
+        key_2_name[inchikey]['resname'].add(resname)
         # Add residue class to the list
-        classification = residues[index].classification
-        if classification not in key_2_name[inchikey]['classification']:
-            key_2_name[inchikey]['classification'].append(classification)
+        classes = set([residues[index].classification for index in indexes])
+        key_2_name[inchikey]['classification'].update(classes)
 
         # Incorrect residue name, estereoisomers, lose of atoms...
         if resname not in name_2_key:
@@ -87,10 +143,6 @@ def get_inchi_keys (
     # 3) Check data coherence
     # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
-        if data["has_bonds"]: # TO-DO quitar, neutralizar bonds.
-            warn(f"The InChIKey {inchikey} is a substructure ({data['classification']})\n"
-                   "and will result in imprecise search in PubChemb due lo lack of hidrogens\n"
-                   "and different charges on the bonded atoms.")
         if len(data['resname']) > 1:
             warn('Same residue with different names:\n'
                 f'{inchikey} -> {str(data["resname"])}')
@@ -102,7 +154,10 @@ def get_inchi_keys (
     for name, inchikeys in name_2_key.items():
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
-            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"]): >4}. {key_2_name[key]["inchi"]}' for key in inchikeys])
+            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"]): >4}. '
+                                    f'{key_2_name[key]["inchi"]}. '
+                                    f'Sample index: {key_2_name[key]["resindices"][0]}'
+                                      for key in inchikeys])
             warn(f'The residue {name} has more than one InChi key:\n'
                  f'{key_counts}')
     return key_2_name

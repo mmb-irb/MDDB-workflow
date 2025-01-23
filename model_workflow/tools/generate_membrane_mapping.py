@@ -47,32 +47,18 @@ def generate_membrane_mapping(structure : 'Structure',
     #    display(inchi_2_mol(*args))
 
     # Classsify the residues as lipid or not
-    lipid_idx, not_lipid_idx = [], []
+    lipid_idx = []
     for inchikey, res_data in inchi_keys.items():
         lipid_data = is_in_LIPID_MAPS(inchikey)
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if lipid_data:
             lipid_idx.extend(res_data['resindices'])
-            if 'fatty' not in res_data['classification']:
-                warn(f'The InChIKey {inchikey} is not classified as fatty but it is a lipid')
+            if any('fatty' not in classes for classes in res_data['classification']):
+                warn(f'The InChIKey {inchikey} is not classified as fatty {res_data["classification"]} but it is a lipid')
         else:
-            not_lipid_idx.extend(res_data['resindices'])
-            if 'fatty' in res_data['classification']:
+            if any('fatty' not in classes for classes in res_data['classification']):
                 warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}')
-    # RUBEN: esto será para los glucolipidos
-    """ 
-    # Propierty to make easier to see if the residue is lipid
-    # without having to iterate over all the residues in mem_dict['lipid]
-    for res in mem_dict['lipid']:
-        res.is_lipid = True
-
-     # Check if non lipid are bonded to lipid like in    
-    for res in not_lipid:
-        for bonded_res in res.get_bonded_residues():
-            if getattr(res, 'is_lipid', False):
-                mem_dict['other'].append(res)
-                break """
     
     # Select only the lipids and potential membrane members
     mem_candidates = f'(resindex {" ".join(map(str,(lipid_idx)))})'
@@ -86,7 +72,6 @@ def generate_membrane_mapping(structure : 'Structure',
         max_ch_idx = np.argmax(res_ch)
         polar_atoms.append(res.atoms[max_ch_idx].index)
     headgroup_sel = f'(index {" ".join(map(str,(polar_atoms)))})'
-
     # Run FATSLiM to find the membranes
     prop = {
         'selection': headgroup_sel,

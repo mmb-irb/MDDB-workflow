@@ -12,3 +12,4 @@ if TYPE_CHECKING:
     from model_workflow.utils.register import Register
     from model_workflow.utils.file import File
     from model_workflow.utils.selections import Selection
+    from model_workflow.mwf import MD
