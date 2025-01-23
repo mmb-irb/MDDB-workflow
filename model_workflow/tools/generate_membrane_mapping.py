@@ -53,11 +53,13 @@ def generate_membrane_mapping(structure : 'Structure',
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if lipid_data:
             lipid_idx.extend(res_data['resindices'])
-            if any('fatty' not in classes for classes in res_data['classification']):
-                warn(f'The InChIKey {inchikey} is not classified as fatty {res_data["classification"]} but it is a lipid')
+            if all('fatty' not in classes for classes in res_data['classification']):
+                warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is not '
+                     f'classified as fatty {res_data["classification"]} but it is a lipid')
         else:
-            if any('fatty' not in classes for classes in res_data['classification']):
-                warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is classified as fatty but is not a lipid.\n'
+            if any('fatty' in classes for classes in res_data['classification']):
+                warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is '
+                     f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}')
     
     # Select only the lipids and potential membrane members
@@ -72,6 +74,7 @@ def generate_membrane_mapping(structure : 'Structure',
         max_ch_idx = np.argmax(res_ch)
         polar_atoms.append(res.atoms[max_ch_idx].index)
     headgroup_sel = f'(index {" ".join(map(str,(polar_atoms)))})'
+    
     # Run FATSLiM to find the membranes
     prop = {
         'selection': headgroup_sel,

@@ -103,7 +103,7 @@ def get_inchi_keys (
             continue
         # Residues grouped by bonded atoms
         res_grp_idx = get_connected_residues(u.residues[resindex], visited) 
-        classes = [residues[grp_idx].classification for grp_idx in res_grp_idx]
+        classes = set([residues[grp_idx].classification for grp_idx in res_grp_idx])
         # Skip residues that are aminoacids, nucleics, or too small
         # We also skips residues connected to them: glicoprotein, lipid-anchored protein...
         if any(cls in ['ion', 'solvent', 'nucleic', 'protein'] for cls in classes):
@@ -129,11 +129,14 @@ def get_inchi_keys (
         # Add residue index to the list
         key_2_name[inchikey]['resindices'].extend(indexes)
         # Add residue name to the list. For multi residues we join the names
-        resname = '-'.join([residues[index].name for index in indexes])
+        resname = '-'.join(sorted([residues[index].name for index in indexes]))
         key_2_name[inchikey]['resname'].add(resname)
         # Add residue class to the list
-        classes = set([residues[index].classification for index in indexes])
-        key_2_name[inchikey]['classification'].update(classes)
+        if len(indexes) > 1:
+            classes = tuple(set([residues[index].classification for index in indexes]))
+            key_2_name[inchikey]['classification'].add(classes)
+        else:
+            key_2_name[inchikey]['classification'].add(residues[indexes[0]].classification)
 
         # Incorrect residue name, estereoisomers, lose of atoms...
         if resname not in name_2_key:
