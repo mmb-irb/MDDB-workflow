@@ -1548,7 +1548,7 @@ class Project:
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
         # Set it we must download just a few frames instead of the whole trajectory
-        sample_trajectory : bool = False,
+        sample_trajectory : int = 10,
     ):
         # Save input parameters
         self.directory = remove_final_slash(directory)
