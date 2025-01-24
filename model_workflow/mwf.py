@@ -110,7 +110,7 @@ class MD:
         self.remote = None
         if self.project.database_url and self.project.accession:
             self.accession = f'{self.project.accession}.{self.number}'
-            self.remote = Remote(f'{self.project.database_url}/rest/current/projects/{self.accession}')
+            self.remote = Remote(self.project.database_url, self.accession)
         # Save the directory
         self.directory = remove_final_slash(directory)
         # If the directory does not exists then create it
@@ -1557,7 +1557,7 @@ class Project:
         # Set the project URL in case we have the required data
         self.remote = None
         if self.database_url and self.accession:
-            self.remote = Remote(f'{self.database_url}/rest/current/projects/{self.accession}')
+            self.remote = Remote(self.database_url, self.accession)
 
         # Save inputs for the register, even if they are not used in the class
 
