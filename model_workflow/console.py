@@ -420,7 +420,7 @@ run_parser.add_argument(
     "-smp", "--sample_trajectory",
     type=int,
     nargs='?',
-    default=-1,
+    default=None,
     const=10,
     help="If passed, download just a few frames (10 by default) from the trajectory instead of it all")
 
