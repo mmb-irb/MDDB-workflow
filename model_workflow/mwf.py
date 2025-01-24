@@ -960,7 +960,7 @@ class MD:
         # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds
-        if self.register.tests.get(STABLE_BONDS_FLAG, None) == False:
+        if not self.register.tests.get(STABLE_BONDS_FLAG, None):
             self._structure.bonds = self.safe_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
