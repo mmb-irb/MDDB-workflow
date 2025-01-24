@@ -115,7 +115,7 @@ def get_bonds_canonical_frame (
     frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots)
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
-    for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=max(patience,count), unit='frame'):
+    for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=min(patience,count), unit='frame'):
         bonds = get_covalent_bonds(frame_pdb)
         if do_bonds_match(bonds, reference_bonds, atom_elements):
             reference_bonds_frame = frame_number
