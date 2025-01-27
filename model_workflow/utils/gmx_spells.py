@@ -372,6 +372,9 @@ def mine_system_atoms_count (logs : str) -> int:
 
 # Count TPR atoms
 def get_tpr_atom_count (tpr_filepath : str) -> int:
+    # Make sure the filepath is valid
+    if not exists(tpr_filepath):
+        raise ValueError('Trying to count atoms from a topology which does not exist')
     # Run Gromacs only to see the number of atoms in the TPR
     p = Popen([ "echo", "whatever" ], stdout=PIPE)
     process = run([

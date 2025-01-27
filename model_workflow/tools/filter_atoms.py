@@ -114,8 +114,10 @@ def filter_atoms (
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
                 tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
-            # Get the output tpr atom count
-            filtered_topology_atoms_count = get_tpr_atom_count(output_topology_file.path)
+                # Get the output tpr atom count
+                filtered_topology_atoms_count = get_tpr_atom_count(output_topology_file.path)
+            else:
+                filtered_topology_atoms_count = topology_atoms_count
         # Standard topology
         elif input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
             standard_topology = None
