@@ -159,7 +159,7 @@ class Atom:
     chain = property(get_chain, None, None, "The atom chain (read only)")
 
     # Get indices of other atoms in the structure which are covalently bonded to this atom
-    def get_bonds (self, skip_ions : bool = False) -> Optional[ List[int] ]:
+    def get_bonds (self, skip_ions : bool = False, skip_dummies : bool = False) -> Optional[ List[int] ]:
         if not self.structure:
             raise ValueError('The atom has not a structure defined')
         if self.index == None:
@@ -168,6 +168,8 @@ class Atom:
         # If the skip ions argument is passed then remove atom indices of supported ion atoms
         if skip_ions:
             bonds = list(set(bonds) - self.structure.ion_atom_indices)
+        if skip_dummies:
+            bonds = list(set(bonds) - self.structure.dummy_atom_indices)
         return bonds
 
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
@@ -930,6 +932,7 @@ class Structure:
         self._fixed_atom_elements = False
         # Save indices of supported ion atoms
         self._ion_atom_indices = None
+        self._dummy_atom_indices = None
 
     def __repr__ (self):
         return f'<Structure ({self.atom_count} atoms)>'
@@ -1377,6 +1380,20 @@ class Structure:
         self._ion_atom_indices = indices
         return self._ion_atom_indices
     ion_atom_indices = property(get_ion_atom_indices, None, None, "Atom indices for what we consider supported ions")
+
+    # Get all dummy atom indices together in a set
+    def get_dummy_atom_indices (self) -> Set:
+        # If we already did this then return the stored value
+        if self._dummy_atom_indices != None:
+            return self._dummy_atom_indices
+        # Find ion atom indices
+        indices = set()
+        for atom in self.atoms:
+            if atom.element == DUMMY_ATOM_ELEMENT:
+                indices.add(atom.index)
+        self._dummy_atom_indices = indices
+        return self._dummy_atom_indices
+    dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
 
     # Generate a pdb file with current structure
     def generate_pdb_file (self, pdb_filename : str):
@@ -2100,18 +2117,21 @@ class Structure:
         # It may happen that we encounter an structure without hydrogens
         has_hydrogen = next(( True for atom in self.atoms if atom.element == 'H' ), False)
         coherent_bonds = coherent_bonds_with_hydrogen if has_hydrogen else coherent_bonds_without_hydrogen
-        # Cechk coherent bonds atom by atom
+        # Check coherent bonds atom by atom
         for atom in self.atoms:
             # Do not check this atom bonds if this may be an ion
             # Most authors "force" dummy bonds in these atoms to make them stable
             if atom.element in SUPPORTED_ION_ELEMENTS:
                 continue
+            # Ignore dummy atoms as well
+            if atom.element == DUMMY_ATOM_ELEMENT:
+                continue
             # Get actual number of bonds in the current atom both with and without ion bonds
             # LORE: This was a problem since some ions are force-bonded but bonds are actually not real
             # LORE: When an ion is forced we may end up with hyrogens with 2 bonds or carbons with 5 bonds
             # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbons (e.g. ligands)
-            min_nbonds = len(atom.get_bonds(skip_ions = True))
-            max_nbonds = len(atom.get_bonds(skip_ions = False))
+            min_nbonds = len(atom.get_bonds(skip_ions = True, skip_dummies = True))
+            max_nbonds = len(atom.get_bonds(skip_ions = False, skip_dummies = True))
             # Get the accepted range of number of bonds for the current atom according to its element
             element = atom.element
             element_coherent_bonds = coherent_bonds.get(element, None)
