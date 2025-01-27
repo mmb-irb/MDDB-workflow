@@ -366,6 +366,7 @@ GROMACS_SYSTEM_ATOMS_REGEX = r'System\) has[ ]+([0-9]*) elements'
 def mine_system_atoms_count (logs : str) -> int:
     system_atoms_match = search(GROMACS_SYSTEM_ATOMS_REGEX, logs)
     if not system_atoms_match:
+        print(logs)
         raise ValueError('Failed to mine Gromacs error logs')
     return int(system_atoms_match[1])
 
