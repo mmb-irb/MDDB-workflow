@@ -2606,6 +2606,9 @@ def workflow (
             'interactions',
             *analyses.keys(),
         ]
+        # WARNING: Do not run helical by default, it will fail in the default environment
+        # There is a separated enviornment to run this analysis
+        tasks.remove('helical')
         # If the exclude parameter was passed then remove excluded tasks from the default tasks
         if exclude and len(exclude) > 0:
             tasks = [ name for name in tasks if name not in exclude ]
