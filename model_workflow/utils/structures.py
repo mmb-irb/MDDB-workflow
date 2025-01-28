@@ -458,7 +458,7 @@ class Residue:
             # Get the residue structure
             structure = self.structure
             if not structure:
-                raise ValueError('Cannot find the corresponding ' + new_chain + ' chain without the structure')
+                raise ValueError(f'Cannot find the corresponding {new_chain} chain without the structure')
             # Find if the letter belongs to an already existing chain
             new_chain = structure.get_chain_by_name(letter)
             # If the chain does not exist yet then create it
@@ -469,7 +469,7 @@ class Residue:
         # Note that the chain must be set in the structure already
         new_chain_index = new_chain.index
         if new_chain_index == None:
-            raise ValueError('Chain ' + str(new_chain) + ' is not set in the structure')
+            raise ValueError(f'Chain {new_chain} is not set in the structure')
         self.set_chain_index(new_chain_index)
     chain = property(get_chain, set_chain, None, "The residue chain")
 
@@ -844,7 +844,7 @@ class Chain:
         for new_residue in new_residues:
             new_residue_index = new_residue.index
             if new_residue_index == None:
-                raise ValueError('Residue ' + str(new_residue) + ' is not set in the structure')
+                raise ValueError(f'Residue {new_residue} is not set in the structure')
             new_residue_indices.append(new_residue_index)
         self.set_residue_indices(new_residue_indices)
     residues = property(get_residues, set_residues, None, "The residues in this chain")
@@ -1044,9 +1044,9 @@ class Structure:
     def purge_residue (self, residue : 'Residue'):
         # Check the residue can be purged
         if residue not in self.residues:
-            raise ValueError(str(residue) + ' is not in the structure already')
+            raise ValueError(f'{residue} is not in the structure already')
         if len(residue.atom_indices) > 0:
-            raise ValueError(str(residue) + ' is still having atoms and thus it cannot be purged')
+            raise ValueError(f'{residue} is still having atoms and thus it cannot be purged')
         # Get the current index of the residue to be purged
         purged_index = residue.index
         # Residues and their atoms below this index are not to be modified
@@ -1076,9 +1076,9 @@ class Structure:
     def purge_chain (self, chain : 'Chain'):
         # Check the chain can be purged
         if chain not in self.chains:
-            raise ValueError('Chain ' + chain.name + ' is not in the structure already')
+            raise ValueError(f'Chain {chain.name} is not in the structure already')
         if len(chain.residue_indices) > 0:
-            raise ValueError('Chain ' + chain.name + ' is still having residues and thus it cannot be purged')
+            raise ValueError(f'Chain {chain.name} is still having residues and thus it cannot be purged')
         # Get the current index of the chain to be purged
         purged_index = chain.index
         # Chains and their residues below this index are not to be modified
@@ -1483,7 +1483,7 @@ class Structure:
                 return None
             return Selection(atom_indices)
 
-        raise InputError('Syntax ' + syntax + ' is not supported. Choose one of the following: vmd, prody, pytraj')
+        raise InputError(f'Syntax {syntax} is not supported. Choose one of the following: vmd, prody, pytraj')
 
     # Set a function to make selections using atom indices
     def select_atom_indices (self, atom_indices : List[int]) -> 'Selection':
@@ -1797,7 +1797,7 @@ class Structure:
         current_chain_names = [ chain.name for chain in self.chains ]
         next_available_chain_name = next((name for name in available_chains if name not in current_chain_names), None)
         if next_available_chain_name == None:
-            raise InputError('There are more chains than available chain letters (' + str(len(available_chains)) + ')')
+            raise InputError(f'There are more chains than available chain letters ({len(available_chains)})')
         return next_available_chain_name
 
     # Get a chain by its name
@@ -1844,11 +1844,11 @@ class Structure:
         # Display the summary of repeated chains if requested
         if display_summary:
             if len(repeated_chains) > 0:
-                print('WARNING: There are repeated chains:')
+                warn('There are repeated chains:')
                 for chain_name, chains in name_chains.items():
                     chains_count = len(chains)
                     if chains_count > 1:
-                        print('- Chain ' + chain_name + ' has ' + str(chains_count) + ' repeats' )
+                        print(f'- Chain {chain_name} has {chains_count} repeats')
         # Rename repeated chains if requested
         if len(repeated_chains) > 0 and fix_chains:
             n_chains = len(self.chains)
@@ -1856,7 +1856,7 @@ class Structure:
             if n_chains > n_available_chains:
                 # for chain in self.chains:
                 #     print(str(chain) + ': ' + str(chain.atom_indices[0]) + ' to ' + str(chain.atom_indices[-1]))
-                raise ValueError('There are more chains (' + str(n_chains) + ') than available chain letters (' + str(n_available_chains) + ')')
+                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_chains})')
             current_letters = list(name_chains.keys())
             for repeated_chain in repeated_chains:
                 last_chain_letter = repeated_chain.name
@@ -1870,7 +1870,7 @@ class Structure:
             # Check if residue indices are consecutive
             if residue_indices[-1] - residue_indices[0] + 1 == len(residue_indices):
                 continue
-            print('WARNING: splitted chain ' + chain.name)
+            warn(f'Splitted chain {chain.name}')
             # If indices are not consecutive then we must find ranges of consecutive residues and create new chains for them
             previous_residue_index = residue_indices[0]
             consecutive_residues = [previous_residue_index]
@@ -1946,7 +1946,7 @@ class Structure:
         # In case we have non icoded residues
         if len(non_icoded_residues) > 0:
             if display_summary:
-                print('There are non-icoded residues (' + str(len(non_icoded_residues)) + ')')
+                print(f'There are non-icoded residues ({len(non_icoded_residues)})')
             # Set new icodes for non icoded residues
             if fix_residues:
                 print('    Non icoded residues will recieve an icode')
@@ -1965,8 +1965,8 @@ class Structure:
             return modified
         # In case we have repeated residues...
         if display_summary:
-            print('WARNING: There are repeated residues (' + str(len(repeated_residues)) + ')')
-            print('    e.g. ' + str(repeated_residues[0][0]))
+            warn(f'There are repeated residues ({len(repeated_residues)})')
+            print(f'    e.g. {repeated_residues[0][0]}')
         # Now for each repeated residue, find out which are splitted and which are duplicated
         covalent_bonds = self.bonds
         overall_splitted_residues = []
@@ -2000,7 +2000,7 @@ class Structure:
         # In case we have splitted residues
         if len(overall_splitted_residues) > 0:
             if display_summary:
-                print('    There are splitted residues (' + str(len(overall_splitted_residues)) + ')')
+                print(f'    There are splitted residues ({len(overall_splitted_residues)})')
             # Fix splitted residues
             if fix_residues:
                 print('        Splitted residues will be merged')
@@ -2053,7 +2053,7 @@ class Structure:
          # In case we have duplicated residues
         if len(overall_duplicated_residues) > 0:
             if display_summary:
-                print('    There are duplicated residues (' + str(len(overall_duplicated_residues)) + ')')
+                print(f'    There are duplicated residues ({len(overall_duplicated_residues)})')
             # Renumerate duplicated residues if requested
             if fix_residues:
                 print('        Duplicated residues will be renumerated')
@@ -2100,14 +2100,14 @@ class Structure:
                     new_name = initial + str(number)
                 # Save an example for the logs if there is none yet
                 if not example:
-                    example = atom.name + ' renamed as ' + new_name + ' in residue ' + str(residue)
+                    example = f'{atom.name} renamed as {new_name} in residue {residue}'
                 atom.name = new_name
                 current_names.append(new_name)
         # Display the summary of repeated atoms if requested
         if display_summary:
             if repeated_atoms_count > 0:
-                print('WARNING: There are repeated atoms (' + str(repeated_atoms_count) + ')')
-                print('    e.g. ' + example)
+                warn(f'There are repeated atoms ({repeated_atoms_count})')
+                print(f'    e.g. {example}')
         return repeated_atoms_count > 0
 
     # Check bonds to be incoherent
@@ -2326,11 +2326,11 @@ class Structure:
             ptm_classification = self.ptm_options[residue_classification]
             # If we found something impossible then raise the error
             if type(ptm_classification) == ValueError:
-                print('Problematic residue: ' + str(residue))
+                print(f'Problematic residue: {residue}')
                 raise ptm_classification
             # If we do not know what it is then do tag it as a PTM but print a warning
             if type(ptm_classification) == Warning:
-                print('WARNING: ' + str(ptm_classification) + ' -> ' + str(residue))
+                warn(f'{ptm_classification} -> {residue}')
                 continue
             # At this point we have found a valid PTM
             # Find the protein residue linked to this PTM
