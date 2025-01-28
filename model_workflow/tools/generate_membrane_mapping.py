@@ -35,17 +35,12 @@ def generate_membrane_mapping(structure : 'Structure',
         - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
-    print('Generating membrane mapping.')
+    print('Generating membrane mapping...')
     assert topology_file.extension == 'json', 'Input topology file must be in json format: '+ topology_file.extension
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
     # Get InChI keys of non-proteic/non-nucleic residues
     inchi_keys = get_inchi_keys(u, structure)
-    # TODO: identify substructures like carbohydrates by neutralizing bonds:
-    # ich = inchi_keys['ZNJXAXZHPQQZRY-LXGUWJNJSA-N']['inchi'] # A01IP
-    # for args in [[ich], [ich, 1], [ich, 0, 1], [ich, 1, 1]]:
-    #    display(inchi_2_mol(*args))
-
     # Classsify the residues as lipid or not
     lipid_idx = []
     for inchikey, res_data in inchi_keys.items():
@@ -62,10 +57,16 @@ def generate_membrane_mapping(structure : 'Structure',
                      f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}\n'
                      'In case it is a lipid, please add it to the LIPID MAPS database: https://www.lipidmaps.org/new/reg/')
+    # Prepare the membrane mapping OBJ/JSON
+    mem_map_js = {'n_mems': 0, 'mems': {}}
+    # if no lipids are found, we save the empty mapping and return
+    if len(lipid_idx) == 0:
+        print('No lipids found in the structure.')
+        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+        return mem_map_js
     
     # Select only the lipids and potential membrane members
     mem_candidates = f'(resindex {" ".join(map(str,(lipid_idx)))})'
-
     # for better leaflet assignation we only use polar atoms
     charges = abs(np.array([atom.charge for atom in u.atoms]))
     polar_atoms = []
@@ -94,7 +95,7 @@ def generate_membrane_mapping(structure : 'Structure',
     os.remove(output_ndx_path)
     # Save the membrane mapping as a JSON file
     n_mems = len(mem_map)//2
-    mem_map_js = {'n_mems': n_mems, 'mems': {}}
+    mem_map_js['n_mems'] = n_mems
     for i in range(n_mems):
         mem_map_js['mems'][(str(i))] = {
             'leaflets': {
