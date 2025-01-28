@@ -80,6 +80,16 @@ def pockets (
     # Save the pockets trajectory as a file
     pockets_trajectory_file = File(pockets_trajectory)
 
+    # Create a symlink to the input files with a fixed shord length
+    # This workaround is necessary to avoid a silent bug in the pockets regarding the limit of characters in the path
+    # https://github.com/Discngine/fpocket/issues/130
+    auxiliar_input_trajectory = File('./.aux_traj.xtc')
+    if not auxiliar_input_trajectory.exists:
+        auxiliar_input_trajectory.set_symlink_to(pockets_trajectory_file)
+    auxiliar_input_structure = File('./.aux_stru.xtc')
+    if not auxiliar_input_structure.exists:
+        auxiliar_input_structure.set_symlink_to(structure_file)
+
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
     if not exists(mdpocket_folder):
@@ -93,6 +103,7 @@ def pockets (
     # WARNING: The file is created as soon as mdpocket starts to run
     # WARNING: However the file remains empty until the end of mdpocket
     if not exists(grid_filename) or getsize(grid_filename) == 0:
+
         print('Searching new pockets')
         print(GREY_HEADER)
         process = run([
@@ -100,13 +111,13 @@ def pockets (
             "--trajectory_file",
             # WARNING: There is a silent sharp limit of characters here
             # To avoid the problem we must use the relative path instead of the absolute path
-            pockets_trajectory_file.path,
+            auxiliar_input_trajectory.path,
             "--trajectory_format",
             "xtc",
             "-f",
             # WARNING: There is a silent sharp limit of characters here
             # To avoid the problem we must use the relative path instead of the absolute path
-            structure_file.path,
+            auxiliar_input_structure.path,
             "-o",
             mdpocket_output,
         ], stderr=PIPE)
@@ -410,13 +421,13 @@ def pockets (
             error_logs = run([
                 "mdpocket",
                 "--trajectory_file",
-                pockets_trajectory_file.path,
+                auxiliar_input_trajectory.path,
                 "--trajectory_format",
                 "xtc",
                 "-f",
                 # WARNING: There is a silent sharp limit of characters here
                 # To avoid the problem we must use the relative path instead of the absolute path
-                structure_file.path,
+                auxiliar_input_structure.path,
                 "-o",
                 pocket_output,
                 "--selected_pocket",
@@ -503,3 +514,7 @@ def pockets (
 
     # Export the analysis in json format
     save_json({ 'data': output_analysis, 'start': start, 'step': step }, output_analysis_filepath)
+
+    # Cleanup auxiliar files
+    auxiliar_input_structure.remove()
+    auxiliar_input_trajectory.remove()
