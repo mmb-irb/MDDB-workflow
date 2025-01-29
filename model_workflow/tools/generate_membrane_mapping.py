@@ -58,7 +58,7 @@ def generate_membrane_mapping(structure : 'Structure',
                      f'Resindices: {str(res_data["resindices"])}\n'
                      'In case it is a lipid, please add it to the LIPID MAPS database: https://www.lipidmaps.org/new/reg/')
     # Prepare the membrane mapping OBJ/JSON
-    mem_map_js = {'n_mems': 0, 'mems': {}}
+    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_idx) == 0:
         print('No lipids found in the structure.')
@@ -66,11 +66,11 @@ def generate_membrane_mapping(structure : 'Structure',
         return mem_map_js
     
     # Select only the lipids and potential membrane members
-    mem_candidates = f'(resindex {" ".join(map(str,(lipid_idx)))})'
+    mem_candidates = u.select_atoms(f'(resindex {" ".join(map(str,(lipid_idx)))})')
     # for better leaflet assignation we only use polar atoms
     charges = abs(np.array([atom.charge for atom in u.atoms]))
     polar_atoms = []
-    for res_idx in u.select_atoms(mem_candidates).resindices:
+    for res_idx in mem_candidates.resindices:
         res = u.residues[res_idx]
         res_ch = charges[res.atoms.ix]
         max_ch_idx = np.argmax(res_ch)
@@ -99,10 +99,19 @@ def generate_membrane_mapping(structure : 'Structure',
     for i in range(n_mems):
         mem_map_js['mems'][(str(i))] = {
             'leaflets': {
-                'top': mem_map[f'membrane_{2*i+1}_leaflet_1'], 
-                'bot': mem_map[f'membrane_{2*i+1}_leaflet_2']
+                'top': mem_map[f'membrane_{i+1}_leaflet_1'], 
+                'bot': mem_map[f'membrane_{i+1}_leaflet_2']
                 }
             }
+    # Remove lipids not assigned to any membrane
+    no_mem_lipids = set(mem_candidates.atoms.indices)
+    for mem_idx in mem_map.values():
+        no_mem_lipids -= set(mem_idx)
+    mem_map_js['no_mem_lipid'] = list(map(int, no_mem_lipids))
+    # Print the results and save the membrane mapping
+    print(f'{n_mems} membrane/s found. '
+          f'{len(no_mem_lipids)} lipid/s not assigned to any membrane.' 
+          if len(no_mem_lipids)>0 else '')
     save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
     return mem_map_js
 
