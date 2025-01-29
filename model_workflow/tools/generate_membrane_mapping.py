@@ -5,7 +5,7 @@ from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
 from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
-from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_LIPID_MAPS
+from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.warnings import warn
 
@@ -44,7 +44,7 @@ def generate_membrane_mapping(structure : 'Structure',
     # Classsify the residues as lipid or not
     lipid_idx = []
     for inchikey, res_data in inchi_keys.items():
-        lipid_data = is_in_LIPID_MAPS(inchikey)
+        lipid_data = is_in_swiss_lipids(inchikey)
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if lipid_data:
             lipid_idx.extend(res_data['resindices'])
