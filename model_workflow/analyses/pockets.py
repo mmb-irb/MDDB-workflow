@@ -349,9 +349,9 @@ def pockets (
     # 2 - Conver the grid to pdb
     # 3 - Analyze this pdb with mdpocket
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
-    for i, p in enumerate(biggest_pockets):
+    for p, pock in enumerate(biggest_pockets, 1):
         # WARNING: This name must match the final name of the pocket file once loaded in the database
-        pocket_name = 'pocket_' + str(i+1).zfill(2)
+        pocket_name = 'pocket_' + str(p).zfill(2)
         pocket_output = mdpocket_folder + '/' + pocket_name
         # Check if current pocket files already exist and are complete. If so, skip this pocket
         # Output files:
@@ -364,11 +364,11 @@ def pockets (
         if not (exists(checking_filename) and getsize(checking_filename) > 0):
 
             # Update the logs
-            print(' Analyzing pocket ' + str(i+1) + '/' + str(pockets_number), end='\r')
+            print(f' Analyzing pocket {p}/{pockets_number}', end='\r')
             
             # Create the new grid for this pocket, where all values from other pockets are set to 0
-            pocket_value = p[0]
-            new_grid_values = [str(v).ljust(5,'0') if pockets[i] == pocket_value else '0.000' for i, v in enumerate(grid_values)]
+            pocket_value = pock[0]
+            new_grid_values = [str(value).ljust(5,'0') if pockets[v] == pocket_value else '0.000' for v, value in enumerate(grid_values)]
             new_grid_filename = mdpocket_folder + '/' + pocket_name + '.dx'
             with open(new_grid_filename,'w') as file:
                 # Write the header lines
@@ -398,7 +398,7 @@ def pockets (
             # Convert the grid coordinates to pdb
             new_pdb_lines = []
             lines_count = 0
-            new_pdb_filename = pockets_prefix + '_' + str(i+1).zfill(2) + '.pdb'
+            new_pdb_filename = pockets_prefix + '_' + str(p).zfill(2) + '.pdb'
             for j, pocket in enumerate(pockets):
                 if pocket != pocket_value:
                     continue
@@ -438,7 +438,7 @@ def pockets (
             # If file does not exist or is still empty at this point then somethin went wrong
             if not exists(checking_filename) or getsize(checking_filename) == 0:
                 print(error_logs)
-                raise Exception('Something went wrong with mdpocket while analysing pocket ' + str(i+1))
+                raise Exception(f'Something went wrong with mdpocket while analysing pocket {p}')
 
             # Remove previous lines
             print(ERASE_4_PREVIOUS_LINES)
@@ -453,8 +453,8 @@ def pockets (
                 descriptors_data[entry] = []
             for line in file:
                 line_data = re.split("[ ]+", line[:-1])
-                for i, value in enumerate(line_data):
-                    descriptors_data[entries[i]].append(value)
+                for v, value in enumerate(line_data):
+                    descriptors_data[entries[v]].append(value)
 
         # Mine the Voronoi vertices which represent the pocket each frame
         # Mine their positions and radius for each frame
