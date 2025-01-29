@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isdir, isabs
+from os.path import exists, isdir, isabs, relpath
 import sys
 import io
 import re
@@ -112,7 +112,13 @@ class MD:
             self.accession = f'{self.project.accession}.{self.number}'
             self.remote = Remote(self.project.database_url, self.accession)
         # Save the directory
-        self.directory = remove_final_slash(directory)
+        # If it is an absolute then make it relative to the project
+        if isabs(directory):
+            # This function alreadt removes the final slash
+            self.directory = relpath(directory, self.project.directory)
+        # Otherwise save it as is but just removing the final slash (if any)
+        else:
+            self.directory = remove_final_slash(directory)
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
