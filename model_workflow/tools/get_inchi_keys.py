@@ -123,11 +123,13 @@ def get_inchi_keys (
         if inchikey not in key_2_name:
             key_2_name[inchikey] = {'inchi': inchi,
                                     'resindices': [],
+                                    'resgroups': [], # For glucolipids
                                     'resname': set(), 
                                     'classification': set()
                                     }
         # Add residue index to the list
         key_2_name[inchikey]['resindices'].extend(indexes)
+        key_2_name[inchikey]['resgroups'].append(indexes)
         # Add residue name to the list. For multi residues we join the names
         resname = '-'.join(sorted([residues[index].name for index in indexes]))
         key_2_name[inchikey]['resname'].add(resname)
