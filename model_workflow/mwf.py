@@ -1099,7 +1099,9 @@ class MD:
             return self.structure.select_pbc_guess()
         # Otherwise use the input value
         if not self.input_pbc_selection: return Selection()
-        return self.structure.select(self.input_pbc_selection)
+        parsed_selection = self.structure.select(self.input_pbc_selection)
+        print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(parsed_selection)} atoms')
+        return parsed_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # Indices of residues in periodic boundary conditions
