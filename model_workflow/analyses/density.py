@@ -18,7 +18,7 @@ def density (
     if membrane_map['n_mems'] == 0:
         # Do something special for density analysis for 
         # membranes like leaflets separation, polargroups, etc.
-        print('No membranes found in the structure. Skipping density analysis.')
+        print(' No membranes found in the structure. Skipping density analysis.')
         return
 
     # Load

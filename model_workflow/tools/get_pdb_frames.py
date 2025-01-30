@@ -1,5 +1,5 @@
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
-
+from tqdm import tqdm
 import os
 from typing import Optional
 
@@ -37,8 +37,10 @@ def get_pdb_frames (
         # Get the current directory at this point and use it to delete old files, in case we change the directory
         cwd = os.getcwd()
         # Extract each frame in pdb format
+        pbar = tqdm(initial=0, desc=' Frames', total=frames_count, unit='frame')
         for f in frames_list:
             # Update the current frame log
+            pbar.update(1); pbar.refresh()
             current_frame = cwd + '/' + output_frames_prefix + str(f) + '.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)

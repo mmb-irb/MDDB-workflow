@@ -4,7 +4,6 @@ from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.type_hints import *
 import pytraj as pt
-from tqdm import tqdm
 import pandas as pd
 from collections import Counter
 
@@ -51,6 +50,7 @@ def do_bonds_match (
                     print(f' It is bondes to atoms with indices {it_is_atom_indices}')
                     it_should_be_atom_indices = ','.join([ str(index) for index in atom_bonds_set_2 ])
                     print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
+            # Save for failure analysis
             if counter_list is not None:
                 counter_list.append((atom_index,tuple(atom_bonds_set_1),tuple(atom_bonds_set_2)))
             return False
@@ -74,7 +74,7 @@ def get_most_stable_bonds (
     frame_bonds = []
 
     # Iterate over the different frames
-    for current_frame_pdb in tqdm(frames,desc='Frames',total=count,unit='frame'):
+    for current_frame_pdb in frames:
 
         # Find the covalent bonds for the current frame
         current_frame_bonds = get_covalent_bonds(current_frame_pdb)
@@ -115,23 +115,21 @@ def get_bonds_canonical_frame (
 ) -> Optional[int]:
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots)
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots,patience)
     print('Searching reference bonds canonical frame. Only first '
           f'{min(patience,count)} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
     counter_list = []
-    pbar = tqdm(enumerate(frames),desc='Frames', 
-                total=min(patience,count), unit='frame')
-    for frame_number, frame_pdb in pbar:
+    for frame_number, frame_pdb in enumerate(frames):
         bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, reference_bonds, atom_elements, 
-                          counter_list=counter_list,verbose=False):
+        if do_bonds_match(bonds, reference_bonds, atom_elements, counter_list=counter_list):
             reference_bonds_frame = frame_number
             break
         # If we didn't find a canonical frame at this point we probablty won't
         if frame_number >= patience:
             break
+    frames.close()
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:
         df = pd.DataFrame([(n, at, bond, should) 
@@ -139,7 +137,7 @@ def get_bonds_canonical_frame (
                  columns=['Count', 'Atom', 'Is bonding with', 'Should bond with'])
         print('First clash stats:\n',df)
         return None
-    print(f'Got it -> Frame {reference_bonds_frame + 1}')
+    print(f' Got it -> Frame {reference_bonds_frame + 1}')
 
     return reference_bonds_frame
 

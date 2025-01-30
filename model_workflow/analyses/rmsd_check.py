@@ -69,7 +69,7 @@ def check_trajectory_integrity (
     rmsd_jumps = []
 
     # Iterate trajectory frames
-    for f, frame in tqdm(enumerate(trajectory, 1),desc='Frame', unit='frame',initial=1):
+    for f, frame in tqdm(enumerate(trajectory, 1),desc=' Frame', unit='frame',initial=1):
         # Calculate RMSD value between previous and current frame
         rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
         rmsd_jumps.append(rmsd_value)
