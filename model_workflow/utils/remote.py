@@ -12,6 +12,7 @@ class Remote:
         # Set the URL
         self.url = f'{database_url}/rest/current/projects/{accession}'
         # Set internal variables
+        self._project_data = None
         self._available_files = None
         # Download project data to make sure we have database access and the project exists
         self.get_project_data()
@@ -19,9 +20,13 @@ class Remote:
     # Get project data
     # This is only used to make sure the project exists by now
     def get_project_data (self):
+        # Return the internal value if we already have it
+        if self._project_data != None:
+            return self._project_data
+        # Otherwise request the project data to the API
         try:
             response = urllib.request.urlopen(self.url)
-            self._available_files = json.loads(response.read())
+            self._project_data = json.loads(response.read())
         except urllib.error.HTTPError as error:
             # Try to provide comprehensive error logs depending on the error
             # If project was not found
@@ -39,6 +44,7 @@ class Remote:
             return self._available_files
         # Otherwise request the available files to the API
         request_url = self.url + '/files'
+        print('GETTIG REMOTE FILES')
         try:
             response = urllib.request.urlopen(request_url)
             self._available_files = json.loads(response.read())
