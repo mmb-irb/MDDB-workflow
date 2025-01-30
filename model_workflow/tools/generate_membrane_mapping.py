@@ -96,7 +96,7 @@ def generate_membrane_mapping(structure : 'Structure',
                     properties=prop)
     # Parse the output to get the membrane mapping
     mem_map = parse_index(output_ndx_path)
-    #os.remove(output_ndx_path)
+    os.remove(output_ndx_path)
     # Save the membrane mapping as a JSON file
     n_mems = len(mem_map)//2
     mem_map_js['n_mems'] = n_mems

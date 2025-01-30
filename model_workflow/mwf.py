@@ -1514,8 +1514,9 @@ class MD:
             input_structure_filepath = self.structure_file.path,
             input_trajectory_filepath = self.trajectory_file.path,
             output_analysis_filepath = output_analysis_filepath,
-            snapshots = self.snapshots,
+            membrane_map = self.project.membrane_map,
             structure = self.structure,
+            snapshots = self.snapshots,
         )
         
 # The project is the main project
@@ -2369,7 +2370,7 @@ class Project:
         mem_map_file = File(mem_map_filepath)
         # If the file already exists then send it
         if mem_map_file.exists and not overwrite:
-            return mem_map_file
+            return load_json(mem_map_file.path)
         self._membrane_map = generate_membrane_mapping(
             structure = self.structure,
             topology_file=self.standard_topology_file,
