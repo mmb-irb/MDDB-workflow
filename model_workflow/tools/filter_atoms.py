@@ -25,10 +25,10 @@ filter_group_name = "not_water_or_counter_ions"
 def filter_atoms (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
-    input_topology_file : 'File',
+    input_topology_file : Optional['File'],
     output_structure_file : 'File',
     output_trajectory_file : 'File',
-    output_topology_file : 'File',
+    output_topology_file : Optional['File'],
     # Filter selection may be a custom selection or true
     # If true then we run a default filtering of water and counter ions
     filter_selection : Union[bool, str],
@@ -79,7 +79,7 @@ def filter_atoms (
         pdb_filter(input_structure_file.path, output_structure_file.path, index_filename)
 
     # Filter topology according to the file format
-    if input_topology_file and input_topology_file.exists:
+    if input_topology_file != None and input_topology_file.exists:
         print('Filtering topology...')
         # Pytraj supported formats
         if input_topology_file.is_pytraj_supported():
@@ -157,7 +157,7 @@ def filter_atoms (
         output_structure_file.set_symlink_to(input_structure_file)
     if not output_trajectory_file.exists:
         output_trajectory_file.set_symlink_to(input_trajectory_file)
-    if not output_topology_file.exists:
+    if output_topology_file != None and not output_topology_file.exists:
         output_topology_file.set_symlink_to(input_topology_file)
 
 # Filter atoms in a pdb file
