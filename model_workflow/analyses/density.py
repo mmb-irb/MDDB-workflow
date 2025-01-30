@@ -13,7 +13,14 @@ def density (
     snapshots : int,
     density_type = 'mass',
     frame_limit = 1000):
-    
+    print('-> Running density analysis')
+
+    if membrane_map['n_mems'] == 0:
+        # Do something special for density analysis for 
+        # membranes like leaflets separation, polargroups, etc.
+        print('No membranes found in the structure. Skipping density analysis.')
+        return
+
     # Load
     tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frame_limit)
     
@@ -24,10 +31,7 @@ def density (
             'name': chain.name,
             'selection': chain.get_selection()
         })
-    if membrane_map['n_mems'] > 0:
-        # Do something special for density analysis for 
-        # membranes like leaflets separation, polargroups, etc.
-        pass
+    
     # Parse selections to pytraj masks
     pytraj_masks = [ component['selection'].to_pytraj() for component in components ]
     # Run pytraj

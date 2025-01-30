@@ -1506,7 +1506,6 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
-        print("Density analysis")
         if not getattr(self.project, 'membrane_map', None):
             raise ValueError('Membrane map is not available')
         # Run the analysis
