@@ -402,6 +402,8 @@ RESIDUE_NAME_LETTERS = {
 # Set typical residue names to guess what residues are
 STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4'}
 STANDARD_COUNTER_ION_ATOM_NAMES = {'K', 'NA', 'CL', 'CLA', 'SOD', 'POT'}
+STANDARD_DUMMY_ATOM_NAMES = {'MW'}
+DUMMY_ATOM_ELEMENT = 'Dm'
 
 # Topology flags
 

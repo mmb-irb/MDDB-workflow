@@ -1,15 +1,41 @@
 import urllib.request
 import json
 
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import load_json, save_json, InputError
 from model_workflow.utils.type_hints import *
 
 class Remote:
-    def __init__ (self, url : str):
-        # Save arguments
-        self.url = url
+    def __init__ (self, database_url : str, accession : str):
+        # Save input arguments
+        self.database_url = database_url
+        self.accession = accession
+        # Set the URL
+        self.url = f'{database_url}/rest/current/projects/{accession}'
         # Set internal variables
+        self._project_data = None
         self._available_files = None
+        # Download project data to make sure we have database access and the project exists
+        self.get_project_data()
+
+    # Get project data
+    # This is only used to make sure the project exists by now
+    def get_project_data (self):
+        # Return the internal value if we already have it
+        if self._project_data != None:
+            return self._project_data
+        # Otherwise request the project data to the API
+        try:
+            response = urllib.request.urlopen(self.url)
+            self._project_data = json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            # Try to provide comprehensive error logs depending on the error
+            # If project was not found
+            if error.code == 404:
+                raise InputError(f'Remote project "{self.accession}" not found')
+            # If we don't know the error then simply say something went wrong
+            raise Exception('Error when downloading project data: ' + self.url)
+        except:
+            raise Exception('Something went wrong when requesting project data: ' + self.url)
 
     # Get available files in the remove project
     def get_available_files (self):
@@ -18,6 +44,7 @@ class Remote:
             return self._available_files
         # Otherwise request the available files to the API
         request_url = self.url + '/files'
+        print('GETTIG REMOTE FILES')
         try:
             response = urllib.request.urlopen(request_url)
             self._available_files = json.loads(response.read())
@@ -96,7 +123,7 @@ class Remote:
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except:
-            raise Exception('Something went wrong when downloading the input files: ' + request_url)
+            raise Exception('Something went wrong when downloading the inputs file: ' + request_url)
         # If this is a json file then rewrite the inputs file in a pretty formatted way (with indentation)
         if is_json:
             file_content = load_json(output_file.path)

@@ -18,14 +18,12 @@
 # Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, “MDpocket: open-source cavity detection 
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
-from os.path import exists, getsize
-from os import mkdir, remove
+from os.path import exists, getsize, split
+from os import mkdir, remove, chdir
 import re
 import collections
 
-from subprocess import run, PIPE, Popen
-
-from typing import List
+from subprocess import run, PIPE
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import warn, ToolError, save_json
@@ -78,21 +76,44 @@ def pockets (
         frames_limit,
     )
     # Save the pockets trajectory as a file
-    pockets_trajectory_file = File(pockets_trajectory)
+    pockets_trajectory_file = File(pockets_trajectory)    
 
     # This anlaysis produces many useless output files
     # Create a new folder to store all ouput files so they do not overcrowd the main directory
     if not exists(mdpocket_folder):
         mkdir(mdpocket_folder)
 
+    # WARNING: There is a silent sharp limit of characters here
+    # https://github.com/Discngine/fpocket/issues/130
+    # To avoid the problem we must change the directory where we run pockets so all the paths are as short as possible
+
+    # Save the MD path
+    md_path, mdpocket_folder_name = split(mdpocket_folder)
+    # Count the number of directory deep we are now
+    # Thus we can know how many directories back we need to jump to get back to the original directory
+    if md_path[0] == '/': raise ValueError('This path should not be absolute, the fix below will not work')
+    if md_path[-1] == '/': md_path = md_path[0:-1]
+    directory_jumps_count = md_path.count('/') + 1
+    recovery_path = '/'.join([ '..' for n in range(directory_jumps_count) ])
+
+    # Move to the MD path so all relative paths become shorter
+    chdir(md_path)
+
+    # Now set the structure and trajectory paths relative to the current new location
+    # HARDCODE: We asume the trajectory and structure files are in the current location
+    # This is now true, but if this changes in the future this will fail, although the error will be obvious
+    auxiliar_trajectory_filepath = f'./{pockets_trajectory_file.filename}'
+    auxiliar_structure_filepath = f'./{structure_file.filename}'
+
     # Run the mdpocket analysis to find new pockets
-    mdpocket_output = mdpocket_folder + '/mdpout'
+    mdpocket_output = mdpocket_folder_name + '/mdpout'
     # Set the filename of the fpocket output we are intereseted in
     grid_filename = mdpocket_output + '_freq.dx'
     # Skip this step if the output file already exists and is not empty
     # WARNING: The file is created as soon as mdpocket starts to run
     # WARNING: However the file remains empty until the end of mdpocket
     if not exists(grid_filename) or getsize(grid_filename) == 0:
+
         print('Searching new pockets')
         print(GREY_HEADER)
         process = run([
@@ -100,13 +121,13 @@ def pockets (
             "--trajectory_file",
             # WARNING: There is a silent sharp limit of characters here
             # To avoid the problem we must use the relative path instead of the absolute path
-            pockets_trajectory_file.path,
+            auxiliar_trajectory_filepath,
             "--trajectory_format",
             "xtc",
             "-f",
             # WARNING: There is a silent sharp limit of characters here
             # To avoid the problem we must use the relative path instead of the absolute path
-            structure_file.path,
+            auxiliar_structure_filepath,
             "-o",
             mdpocket_output,
         ], stderr=PIPE)
@@ -338,10 +359,10 @@ def pockets (
     # 2 - Conver the grid to pdb
     # 3 - Analyze this pdb with mdpocket
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
-    for i, p in enumerate(biggest_pockets):
+    for p, pock in enumerate(biggest_pockets, 1):
         # WARNING: This name must match the final name of the pocket file once loaded in the database
-        pocket_name = 'pocket_' + str(i+1).zfill(2)
-        pocket_output = mdpocket_folder + '/' + pocket_name
+        pocket_name = 'pocket_' + str(p).zfill(2)
+        pocket_output = mdpocket_folder_name + '/' + pocket_name
         # Check if current pocket files already exist and are complete. If so, skip this pocket
         # Output files:
         # - pX.dx: it is created and completed at the begining by this workflow
@@ -353,12 +374,12 @@ def pockets (
         if not (exists(checking_filename) and getsize(checking_filename) > 0):
 
             # Update the logs
-            print(' Analyzing pocket ' + str(i+1) + '/' + str(pockets_number), end='\r')
+            print(f' Analyzing pocket {p}/{pockets_number}', end='\r')
             
             # Create the new grid for this pocket, where all values from other pockets are set to 0
-            pocket_value = p[0]
-            new_grid_values = [str(v).ljust(5,'0') if pockets[i] == pocket_value else '0.000' for i, v in enumerate(grid_values)]
-            new_grid_filename = mdpocket_folder + '/' + pocket_name + '.dx'
+            pocket_value = pock[0]
+            new_grid_values = [str(value).ljust(5,'0') if pockets[v] == pocket_value else '0.000' for v, value in enumerate(grid_values)]
+            new_grid_filename = mdpocket_folder_name + '/' + pocket_name + '.dx'
             with open(new_grid_filename,'w') as file:
                 # Write the header lines
                 for line in header_lines:
@@ -387,7 +408,9 @@ def pockets (
             # Convert the grid coordinates to pdb
             new_pdb_lines = []
             lines_count = 0
-            new_pdb_filename = pockets_prefix + '_' + str(i+1).zfill(2) + '.pdb'
+            # HARDCODE: Since we are cding to the current file we must remove the MD path from the prefix
+            fixed_pockets_prefix = pockets_prefix.split('/')[-1]
+            new_pdb_filename = fixed_pockets_prefix + '_' + str(p).zfill(2) + '.pdb'
             for j, pocket in enumerate(pockets):
                 if pocket != pocket_value:
                     continue
@@ -410,13 +433,13 @@ def pockets (
             error_logs = run([
                 "mdpocket",
                 "--trajectory_file",
-                pockets_trajectory_file.path,
+                auxiliar_trajectory_filepath,
                 "--trajectory_format",
                 "xtc",
                 "-f",
                 # WARNING: There is a silent sharp limit of characters here
                 # To avoid the problem we must use the relative path instead of the absolute path
-                structure_file.path,
+                auxiliar_structure_filepath,
                 "-o",
                 pocket_output,
                 "--selected_pocket",
@@ -427,7 +450,7 @@ def pockets (
             # If file does not exist or is still empty at this point then somethin went wrong
             if not exists(checking_filename) or getsize(checking_filename) == 0:
                 print(error_logs)
-                raise Exception('Something went wrong with mdpocket while analysing pocket ' + str(i+1))
+                raise Exception(f'Something went wrong with mdpocket while analysing pocket {p}')
 
             # Remove previous lines
             print(ERASE_4_PREVIOUS_LINES)
@@ -442,8 +465,8 @@ def pockets (
                 descriptors_data[entry] = []
             for line in file:
                 line_data = re.split("[ ]+", line[:-1])
-                for i, value in enumerate(line_data):
-                    descriptors_data[entries[i]].append(value)
+                for v, value in enumerate(line_data):
+                    descriptors_data[entries[v]].append(value)
 
         # Mine the Voronoi vertices which represent the pocket each frame
         # Mine their positions and radius for each frame
@@ -497,6 +520,9 @@ def pockets (
         }
 
         output_analysis.append(output)
+
+    # Recover the original directory
+    chdir(recovery_path)
 
     # By default, the starting frame is always 0
     start = 0

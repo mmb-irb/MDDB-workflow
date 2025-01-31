@@ -28,8 +28,7 @@ def generate_project_metadata (
         input_structure_filename, input_trajectory_filename)
 
     # Count different type of atoms and residues
-    (systats, protats, prot, dppc, sol, na,
-     cl) = get_atoms_count(input_structure_filename)
+    (systats, protats, prot, dppc, sol, na, cl) = get_atoms_count(structure)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
