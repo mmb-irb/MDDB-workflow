@@ -123,7 +123,8 @@ PDB_REFERENCES_FILENAME = 'pdb_references.json'
 PROTEIN_REFERENCES_FILENAME = 'references.json'
 # Set the ligand references filename
 LIGAND_REFERENCES_FILENAME = 'ligands.json'
-
+# Set the ligand references filename
+MEMBRANE_MAPPING_FILENAME = 'mem_map.json'
 # Set the chains filename
 OUTPUT_CHAINS_FILENAME = 'chains.json'
 
@@ -157,6 +158,7 @@ OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
 OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket' # WARNING: If this is changed then the pockets function must be updated as well
 OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
 OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
+OUTPUT_DENSITY_FILENAME = 'mda.density.json'
 
 # Set folder names for some analyses which generate a lot of intermediate step files
 ENERGIES_FOLDER = 'energies'
