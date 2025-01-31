@@ -62,7 +62,7 @@ def residue_name_to_letter (residue_name : str) -> str:
     return RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
 # Set a JSON loader with additional logic to better handle problems
-def load_json (filepath : str):
+def load_json (filepath : str) -> dict: 
     try:
         with open(filepath, 'r') as file:
             content = json.load(file)

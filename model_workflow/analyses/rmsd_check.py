@@ -6,6 +6,7 @@ from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFail
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
 from model_workflow.utils.type_hints import *
+from tqdm import tqdm
 
 # LORE
 # This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep
@@ -67,14 +68,8 @@ def check_trajectory_integrity (
     # Save all RMSD jumps
     rmsd_jumps = []
 
-    # Add an extra breakline before the first log
-    print()
-
     # Iterate trajectory frames
-    for f, frame in enumerate(trajectory, 1):
-        # Update the current frame log
-        reprint(f' Frame {f}')
-
+    for f, frame in tqdm(enumerate(trajectory, 1),desc=' Frame', unit='frame',initial=1):
         # Calculate RMSD value between previous and current frame
         rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
         rmsd_jumps.append(rmsd_value)
