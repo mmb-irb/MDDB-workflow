@@ -58,6 +58,7 @@ from model_workflow.analyses.rmsf import rmsf
 from model_workflow.analyses.rgyr import rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.density import density
+from model_workflow.analyses.thickness import thickness
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1500,14 +1501,13 @@ class MD:
             #transitions = self.transitions,
             rmsd_selection = PROTEIN_AND_NUCLEIC,
         )
+    # MEMBRANE ANALYSES    
     # Density
     def run_density_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
-        if not getattr(self.project, 'membrane_map', None):
-            raise ValueError('Membrane map is not available')
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,
@@ -1515,6 +1515,19 @@ class MD:
             output_analysis_filepath = output_analysis_filepath,
             membrane_map = self.project.membrane_map,
             structure = self.structure,
+            snapshots = self.snapshots,
+        )
+    def run_thickness_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_thickness_filepath = self.md_pathify(OUTPUT_THICKNESS_FILENAME)
+        if exists(output_thickness_filepath) and not overwrite:
+            return
+        # Run the analysis
+        thickness(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_thickness_filepath,
+            membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
         
@@ -2550,7 +2563,8 @@ analyses = {
     'rmsf': MD.run_rmsf_analysis,
     'sas': MD.run_sas_analysis,
     'tmscore': MD.run_tmscores_analysis,
-    'density': MD.run_density_analysis
+    'density': MD.run_density_analysis,
+    'thickness': MD.run_thickness_analysis,
 }
 
 # Project requestable tasks
