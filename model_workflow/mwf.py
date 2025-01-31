@@ -28,6 +28,7 @@ from model_workflow.tools.chains import generate_chain_references
 from model_workflow.tools.generate_pdb_references import generate_pdb_references
 from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
+from model_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
@@ -56,6 +57,7 @@ from model_workflow.analyses.tmscores import tmscores
 from model_workflow.analyses.rmsf import rmsf
 from model_workflow.analyses.rgyr import rgyr
 from model_workflow.analyses.pca import pca
+from model_workflow.analyses.density import density
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1513,8 +1515,24 @@ class MD:
             #transitions = self.transitions,
             rmsd_selection = PROTEIN_AND_NUCLEIC,
         )
-
-
+    # Density
+    def run_density_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
+        if exists(output_analysis_filepath) and not overwrite:
+            return
+        if not getattr(self.project, 'membrane_map', None):
+            raise ValueError('Membrane map is not available')
+        # Run the analysis
+        density(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
+            membrane_map = self.project.membrane_map,
+            structure = self.structure,
+            snapshots = self.snapshots,
+        )
+        
 # The project is the main project
 # A project is a set of related MDs
 # These MDs share all or most topology and metadata
@@ -1683,6 +1701,7 @@ class Project:
         self._pdb_references = None
         self._protein_map = None
         self._ligand_map = None
+        self._membrane_map = None
         self.pubchem_name_list = None
         self._residue_map = None
         self._mds = None
@@ -2373,6 +2392,24 @@ class Project:
         return ligand_references_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
+    def get_membrane_map (self, overwrite : bool = False) -> List[dict]:
+        # If we already have a stored value then return it
+        if self._membrane_map:
+            return self._membrane_map
+        # Set the membrane mapping file
+        mem_map_filepath = self.project_pathify(MEMBRANE_MAPPING_FILENAME)
+        mem_map_file = File(mem_map_filepath)
+        # If the file already exists then send it
+        if mem_map_file.exists and not overwrite:
+            return load_json(mem_map_file.path)
+        self._membrane_map = generate_membrane_mapping(
+            structure = self.structure,
+            topology_file=self.standard_topology_file,
+            structure_file=self.structure_file,
+        )
+        return self._membrane_map
+    membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
+
     # Build the residue map from both proteins and ligands maps
     # This is formatted as both the standard topology and metadata generators expect them
     def get_residue_map (self) -> List[dict]:
@@ -2545,6 +2582,7 @@ analyses = {
     'rmsf': MD.run_rmsf_analysis,
     'sas': MD.run_sas_analysis,
     'tmscore': MD.run_tmscores_analysis,
+    'density': MD.run_density_analysis
 }
 
 # Project requestable tasks
@@ -2558,6 +2596,7 @@ project_requestables = {
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
+    'membrane': Project.get_membrane_map, 
 }
 # MD requestable tasks
 md_requestables = {
