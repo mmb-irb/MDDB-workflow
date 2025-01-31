@@ -460,12 +460,16 @@ class MD:
         input_topology_file = self.project.input_topology_file
 
         # Set the output filepaths
-        output_structure_file = File(self.md_pathify(STRUCTURE_FILENAME))
-        output_trajectory_file = File(self.md_pathify(TRAJECTORY_FILENAME))
-        output_topology_file = File(self.project.topology_filepath)
+        output_structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
+        output_structure_file = File(output_structure_filepath)
+        output_trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
+        output_trajectory_file = File(output_trajectory_filepath)
+        output_topology_filepath = self.project.topology_filepath
+        output_topology_file = File(output_topology_filepath) if output_topology_filepath else None
 
         # If all output files already exist we may skip the processing
-        outputs_exist = output_structure_file.exists and output_trajectory_file.exists and output_topology_file.exists
+        topology_already_processed = output_topology_file == None or output_topology_file.exists
+        outputs_exist = output_structure_file.exists and output_trajectory_file.exists and topology_already_processed
 
         # Check which tests are to be run
         required_tests = set()
@@ -496,17 +500,19 @@ class MD:
             required_tests.update(TRAJECTORY_TESTS)
             self.register.reset_cache()
 
-        # If there is no topology then we must run some tests
-        if not output_topology_file.exists:
-            required_tests.update(TOPOLOGY_TESTS)
-        # If the file exists but it is new then we must run the tests as well
-        elif self.project.register.is_file_new(output_topology_file):
-            required_tests.update(TOPOLOGY_TESTS)
-        # If the topology was modified since the last time then we must run these tests as well
-        elif self.project.register.is_file_modified(output_topology_file):
-            message = 'Topology was modified since the last processing or is new'
-            warn(message)
-            required_tests.update(TOPOLOGY_TESTS)
+        # In case there is a topology to be processed...
+        if output_topology_file != None:
+            # If there is no topology then we must run some tests
+            if not output_topology_file.exists:
+                required_tests.update(TOPOLOGY_TESTS)
+            # If the file exists but it is new then we must run the tests as well
+            elif self.project.register.is_file_new(output_topology_file):
+                required_tests.update(TOPOLOGY_TESTS)
+            # If the topology was modified since the last time then we must run these tests as well
+            elif self.project.register.is_file_modified(output_topology_file):
+                message = 'Topology was modified since the last processing or is new'
+                warn(message)
+                required_tests.update(TOPOLOGY_TESTS)
 
         # If any of the required tests was already passed then reset its value and warn the user
         repeated_tests = [ test for test in required_tests if self.register.tests.get(test, None) == True ]
@@ -817,7 +823,8 @@ class MD:
         # This way we know if they have been modifed in the future and checkings need to be rerun
         self.register.update_mtime(output_structure_file)
         self.register.update_mtime(output_trajectory_file)
-        self.project.register.update_mtime(output_topology_file)
+        if output_topology_file != None:
+            self.project.register.update_mtime(output_topology_file)
 
         # Update the parameters used to get the last processed structure and trajectory files
         self.register.update_cache(PROCESSED, current_processed_parameters)
@@ -1092,7 +1099,9 @@ class MD:
             return self.structure.select_pbc_guess()
         # Otherwise use the input value
         if not self.input_pbc_selection: return Selection()
-        return self.structure.select(self.input_pbc_selection)
+        parsed_selection = self.structure.select(self.input_pbc_selection)
+        print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(parsed_selection)} atoms')
+        return parsed_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # Indices of residues in periodic boundary conditions
@@ -1554,7 +1563,7 @@ class Project:
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
         # Set it we must download just a few frames instead of the whole trajectory
-        sample_trajectory : bool = False,
+        sample_trajectory : Optional[int] = None,
     ):
         # Save input parameters
         self.directory = remove_final_slash(directory)
@@ -1875,7 +1884,15 @@ class Project:
         return None
 
     # Get the input topology filepath from the inputs or try to guess it
-    def get_input_topology_filepath (self) -> File:
+    def get_input_topology_filepath (self) -> Optional[str]:
+        # If the input topology filepath is a 'no' flag then we consider there is no topology at all
+        # So far we extract atom charcges and atom bonds from the topology file
+        # In this scenario we can keep working but there are some consecuences:
+        # 1 - Analysis using atom charges usch as 'energies' will be skipped
+        # 2 - The standard topology file will not include atom charges
+        # 3 - Bonds will be guessed
+        if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
+            return None
         # Set a function to parse possible glob notation
         def parse (filepath : str) -> str:
             # If there is no glob pattern then just return the string as is
@@ -1906,16 +1923,23 @@ class Project:
         if guess:
             return guess
         # If nothing worked then surrender
-        raise InputError('Missing input topology file path')
+        raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
+            '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
+            '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
+            '  Some analyses such us the interaction energies will be skiped')
 
     # Get the input topology file
     # If the file is not found try to download it
-    def get_input_topology_file (self) -> File:
+    def get_input_topology_file (self) -> Optional[File]:
         # If we already have a value then return it
         if self._input_topology_file:
             return self._input_topology_file
         # Set the input topology filepath
         input_topology_filepath = self.get_input_topology_filepath()
+        # If the input filepath is None then it menas we must proceed without a topology
+        if input_topology_filepath == None:
+            self._input_topology_file = None
+            return self._input_topology_file
         # If no input is passed then we check the inputs file
         # Set the file
         self._input_topology_file = File(input_topology_filepath)
@@ -2071,7 +2095,9 @@ class Project:
 
     # Set the expected output topology filename given the input topology filename
     # Note that topology formats are conserved
-    def inherit_topology_filename (self) -> str:
+    def inherit_topology_filename (self) -> Optional[str]:
+        if self.input_topology_file == None:
+            return None
         filename = self.input_topology_file.filename
         if not filename:
             return None

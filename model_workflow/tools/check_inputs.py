@@ -1,4 +1,4 @@
-from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput
+from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
 from model_workflow.utils.gmx_spells import mine_system_atoms_count
@@ -6,7 +6,7 @@ from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 
 from re import match, search
-from typing import List
+from typing import List, Optional, Tuple
 from subprocess import run, PIPE, Popen
 from scipy.io import netcdf_file
 import mdtraj as mdt
@@ -26,14 +26,14 @@ GROMACS_TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr'}
 
 # Check input files coherence and intergrity
 # If there is any problem then raise an input error
-def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : 'File'):
+def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : Optional['File']):
 
     # Get a sample trajectory file and then check its format
     # All input trajectory files must have the same format
     trajectory_sample = input_trajectory_files[0]
 
     # Check input files are supported by the workflow
-    if input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
+    if input_topology_file != None and input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
         raise InputError(f'Topology {input_topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
     if trajectory_sample.format not in TRAJECTORY_SUPPORTED_FORMATS:
         raise InputError(f'Trajectory {trajectory_sample.path} has a not supported format. Try one of these: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}')
@@ -58,126 +58,183 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             error_message = str(error)
             if error_message == NETCDF_DTYPE_ERROR:
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
-                first_corrupted_frame = find_first_corrupted_frame(input_topology_file.path, trajectory_file.path)
+                pytraj_input_topology = input_topology_file if input_topology_file != None else input_structure_file
+                first_corrupted_frame = find_first_corrupted_frame(pytraj_input_topology.path, trajectory_file.path)
                 print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
                 raise InputError('Corrupted input trajectory file')
             # If we do not know the error then raise it as is
             else:
                 raise error
-            
-    # Now make sure topology and trajectory match in number of atoms
-    atom_count = None
 
-    # To do so we will rely on MDtraj, which is able to read most formats
-    # Also MDtraj would probably be the first library to read the input files further (conversion)
-    # However MDtraj is not able to read TPR and of course it does not read our interal topology format
-    if input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
-        print(f'We will skip the atom count matching check since we already have a standard {STANDARD_TOPOLOGY_FILENAME}')
-        # DANI: Hay que hacer return aquí, porque sino luego el atom_count sigue siendo None y el checking del structure falla
-        return
-    elif input_topology_file.format == 'tpr':
-        # Make sure the trajectory is compatible with gromacs
-        if trajectory_sample.format not in GROMACS_TRAJECTORY_SUPPORTED_FORMATS:
-            raise InputError('Why loading a TPR topology with a non-gromacs trajectory?')
-        # Run Gromacs just to generate a structure using all atoms in the topology and coordinates in the first frame
-        # If atoms do not match then we will see a specific error
-        output_sample_file = File('.sample.gro')
-        p = Popen([ "echo", "System" ], stdout=PIPE)
-        process = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-s",
-            input_topology_file.path,
-            "-f",
-            trajectory_sample.path,
-            '-o',
-            output_sample_file.path,
-            "-dump",
-            "0",
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-        logs = process.stdout.decode()
-        p.stdout.close()
-        # Always get error logs and mine topology atoms
-        # Note that this logs include the output selection request from Gromacs
-        # This log should be always there, even if there was a mismatch and then Gromacs failed
-        error_logs = process.stderr.decode()
-        atom_count = mine_system_atoms_count(error_logs)
-        # If the output does not exist at this point it means something went wrong with gromacs
-        if not output_sample_file.exists:
-            # Check if we know the error
-            error_match = search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
-            if error_match:
-                # Get the trajectory atom count
-                trajectory_atom_count = error_match[1]
-                raise InputError('Mismatch in the number of atoms between input files:\n' +
-                    f' Topology "{input_topology_file.path}" -> {atom_count} atoms\n' +
-                    f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
-            # Otherwise just print the whole error logs and stop here anyway
-            print(logs)
-            print(error_logs)
-            raise SystemExit('Something went wrong with GROMACS during the checking')
-        # If we had an output then it means both topology and trajectory match in the number of atoms
-        # Cleanup the file we just created and proceed
-        output_sample_file.remove()
-    # For .top files we use PyTraj since MDtraj can not handle it
-    elif input_topology_file.format == 'top':
-        # Note that calling ierload will print a error log when atoms do not match but will not raise a proper error
-        # To capture the error log we must throw this command wrapped in a stdout redirect
-        trajectory = None
-        with CaptureOutput('stderr') as output:
-            trajectory = pyt.iterload(trajectory_sample.path, top=input_topology_file.path)
-        logs = output.captured_text
-        error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
-        if error_match:
-            topology_atoms = error_match[3]
-            trajectory_atoms = error_match[1]
-            raise InputError('Mismatch in the number of atoms between input files:\n' +
-                f' Topology "{input_topology_file.path}" -> {topology_atoms} atoms\n' +
-                f' Trajectory "{trajectory_sample.path}" -> {trajectory_atoms} atoms')
+    # Set a function to get atoms from a structure alone
+    def get_structure_atoms (structure_file : 'File') -> int:
+        # Get the number of atoms in the input structure
+        structure = Structure.from_file(structure_file.path)
+        return structure.atom_count
+
+    # Set a function to get atoms from structure and trajectory together
+    def get_structure_and_trajectory_atoms (structure_file : 'File', trajectory_file : 'File') -> Tuple[int, int]:
+        # Note that declaring the iterator will not fail even when there is a mismatch
+        trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
+        # We must consume the generator first value to make the error raise
+        frame = next(trajectory)
         # Now obtain the number of atoms from the frame we just read
-        atom_count = trajectory.n_atoms
-    # More any toher format use MDtraj
-    else:
+        trajectory_atom_count = frame.n_atoms
+        # And still, it may happen that the topology has more atoms than the trajectory but it loads
+        # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
+        # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
+        # Two double check the match, load the topology alone with PyTraj
+        topology = pyt.load_topology(structure_file.path)
+        structure_atom_count = topology.n_atoms
+        return structure_atom_count, trajectory_atom_count
+    
+    # Set a function to get atoms from topology and trajectory together
+    def get_topology_and_trajectory_atoms (topology_file : 'File', trajectory_file : 'File') -> Tuple[int, int]:
+        # To do so rely on different tools depending on the topology format
+        # If there is no topology file then just compare strucutre and trajectory an exit
+        if topology_file == None:
+            # We do not have a topology atom count to return
+            # Without a valid topology we can not count trajectory atoms either
+            return None, None
+        # If it is our standard topology then simply count the atom names
+        # Get trajectory atoms using the structure instead
+        if topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+            # Parse the json and count atoms
+            parsed_topology = load_json(topology_file.path)
+            topology_atom_count = len(parsed_topology['atom_names'])
+            # Without a valid topology we can not count trajectory atoms
+            return topology_atom_count, None
+        # For a TPR use Gromacs, which is its native tool
+        if topology_file.format == 'tpr':
+            # Make sure the trajectory is compatible with gromacs
+            if trajectory_file.format not in GROMACS_TRAJECTORY_SUPPORTED_FORMATS:
+                raise InputError('Why loading a TPR topology with a non-gromacs trajectory?')
+            # Run Gromacs just to generate a structure using all atoms in the topology and coordinates in the first frame
+            # If atoms do not match then we will see a specific error
+            output_sample_file = File('.sample.gro')
+            p = Popen([ "echo", "System" ], stdout=PIPE)
+            process = run([
+                GROMACS_EXECUTABLE,
+                "trjconv",
+                "-s",
+                topology_file.path,
+                "-f",
+                trajectory_file.path,
+                '-o',
+                output_sample_file.path,
+                "-dump",
+                "0",
+                '-quiet'
+            ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+            logs = process.stdout.decode()
+            p.stdout.close()
+            # Always get error logs and mine topology atoms
+            # Note that this logs include the output selection request from Gromacs
+            # This log should be always there, even if there was a mismatch and then Gromacs failed
+            error_logs = process.stderr.decode()
+            topology_atom_count = mine_system_atoms_count(error_logs)
+            # If the output does not exist at this point it means something went wrong with gromacs
+            if not output_sample_file.exists:
+                # Check if we know the error
+                error_match = search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
+                if error_match:
+                    # Get the trajectory atom count
+                    trajectory_atom_count = error_match[1]
+                    return topology_atom_count, trajectory_atom_count
+                # Otherwise just print the whole error logs and stop here anyway
+                print(logs)
+                print(error_logs)
+                raise SystemExit('Something went wrong with GROMACS during the checking')
+            # If we had an output then it means both topology and trajectory match in the number of atoms
+            # Cleanup the file we just created and proceed
+            output_sample_file.remove()
+            # If there was no problem then it means the trajectory atom count matches the topology atom count
+            trajectory_atom_count = topology_atom_count
+            return topology_atom_count, trajectory_atom_count
+        # For .top files we use PyTraj since MDtraj can not handle it
+        if topology_file.format == 'top':
+            # Note that calling ierload will print a error log when atoms do not match but will not raise a proper error
+            # To capture the error log we must throw this command wrapped in a stdout redirect
+            trajectory = None
+            with CaptureOutput('stderr') as output:
+                trajectory = pyt.iterload(trajectory_file.path, top=topology_file.path)
+            logs = output.captured_text
+            error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
+            if error_match:
+                topology_atom_count = error_match[3]
+                trajectory_atom_count = error_match[1]
+            # Now obtain the number of atoms from the frame we just read
+            else:
+                topology_atom_count = trajectory_atom_count = trajectory.n_atoms
+            return topology_atom_count, trajectory_atom_count
+        # For any other format use MDtraj
         try:
             # Note that declaring the iterator will not fail even when there is a mismatch
-            trajectory = mdt.iterload(trajectory_sample.path, top=input_topology_file.path, chunk=1)
+            trajectory = mdt.iterload(trajectory_file.path, top=topology_file.path, chunk=1)
             # We must consume the generator first value to make the error raise
             frame = next(trajectory)
             # Now obtain the number of atoms from the frame we just read
-            atom_count = frame.n_atoms
+            trajectory_atom_count = frame.n_atoms
             # And still, it may happen that the topology has more atoms than the trajectory but it loads
             # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
             # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
             # Two double check the match, load the topology alone with PyTraj
-            topology = pyt.load_topology(input_topology_file.path)
-            if topology.n_atoms != atom_count:
-                raise InputError('Mismatch in the number of atoms between input files:\n' +
-                    f' Topology "{input_topology_file.path}" -> {topology.n_atoms} atoms\n' +
-                    f' Trajectory "{trajectory_sample.path}" -> {atom_count} atoms')
+            topology = pyt.load_topology(topology_file.path)
+            topology_atom_count = topology.n_atoms
+            return topology_atom_count, trajectory_atom_count
         except Exception as error:
             # If the error message matches with a known error then report the problem
             error_message = str(error)
             error_match = match(MDTRAJ_ATOM_MISMATCH_ERROR, error_message)
             if error_match:
-                topology_atoms = error_match[1]
-                trajectory_atoms = error_match[2]
-                raise InputError('Mismatch in the number of atoms between input files:\n' +
-                    f' Topology "{input_topology_file.path}" -> {topology_atoms} atoms\n' +
-                    f' Trajectory "{trajectory_sample.path}" -> {trajectory_atoms} atoms')
+                topology_atom_count = error_match[1]
+                trajectory_atom_count = error_match[2]
+                return topology_atom_count, trajectory_atom_count
             # If we do not know the error then raise it as is
             else:
                 raise error
-            
-    # If we have an independent structure then check it also matches the number of atoms
-    if input_structure_file != input_topology_file:
-        # Get the number of atoms in the input structure
-        structure = Structure.from_file(input_structure_file.path)
-        # Make sure it matches
-        if atom_count != structure.atom_count:
-            raise InputError('Mismatch in the structure input file number of atoms:\n'+
-                f' Topology and trajectory -> {atom_count} atoms\n' +
-                f' Structure "{input_structure_file.path}" -> {structure.atom_count} atoms')
         
-    # if we made it this far it means all checkings are good
-    print(f'All input files match in number of atoms: {atom_count}')
+    # Get topology and trajectory atom counts
+    topology_atom_count, trajectory_atom_count = get_topology_and_trajectory_atoms(input_topology_file, trajectory_sample)
+
+    # If we have the trajectory atom count then it means we had a valid topology
+    if trajectory_atom_count != None:
+
+        # Make sure their atom counts match
+        if topology_atom_count != trajectory_atom_count:
+            raise InputError('Mismatch in the number of atoms between input files:\n' +
+                f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms\n' +
+                f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
+        
+        # If the counts match then anslo get the structure atom count and compare
+        structure_atom_count = get_structure_atoms(input_structure_file)
+
+        # Make sure it matches the topology and trajectory atom count
+        if topology_atom_count != structure_atom_count:
+            raise InputError('Mismatch in the structure input file number of atoms:\n'+
+                f' Topology and trajectory -> {topology_atom_count} atoms\n' +
+                f' Structure "{input_structure_file.path}" -> {structure_atom_count} atoms')
+        
+        # If we reached this point then it means everything is matching
+        print(f'All input files match in number of atoms: {trajectory_atom_count}')
+        return
+        
+    # Otherwise it means we had not a valid topology file
+    # We must use the structure to find trajectory atoms
+    structure_atom_count, trajectory_atom_count = get_structure_and_trajectory_atoms(input_structure_file, trajectory_sample)
+
+    # Make sure their atom counts match
+    if structure_atom_count != trajectory_atom_count:
+        raise InputError('Mismatch in the number of atoms between input files:\n' +
+            f' Structure "{input_structure_file.path}" -> {structure_atom_count} atoms\n' +
+            f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
+            
+    # If we have a number of topology atoms then make sure it matches the structure and trajectory atoms
+    # This may happen if the topology is our standard topology file instead of a valid topology
+    if topology_atom_count != None and topology_atom_count != trajectory_atom_count:
+        raise InputError('Mismatch in the number of atoms between input files:\n' +
+            f' Structure and trajectory -> {trajectory_atom_count} atoms\n' +
+            f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms')
+        
+    # If we made it this far it means all checkings are good
+    print(f'Input files match in number of atoms: {trajectory_atom_count}')
