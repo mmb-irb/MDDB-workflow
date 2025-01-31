@@ -12,7 +12,7 @@ def density (
     structure : 'Structure',
     snapshots : int,
     density_type = 'mass',
-    frame_limit = 1000):
+    frames_limit = 1000):
     print('-> Running density analysis')
 
     if membrane_map['n_mems'] == 0:
@@ -22,7 +22,7 @@ def density (
         return
 
     # Load
-    tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frame_limit)
+    tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frames_limit)
     
     # Set every selections to be analyzed separately
     components = []

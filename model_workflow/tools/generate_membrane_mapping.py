@@ -63,7 +63,7 @@ def generate_membrane_mapping(structure : 'Structure',
                      f'Resindices: {str(res_data["resindices"])}\n'
                      'In case it is a lipid, please add it to the LIPID MAPS database: https://www.lipidmaps.org/new/reg/')
     # Prepare the membrane mapping OBJ/JSON
-    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
+    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'polar_atoms': {}}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         print('No lipids found in the structure.')
@@ -80,6 +80,7 @@ def generate_membrane_mapping(structure : 'Structure',
         res_ch = charges[res.atoms.ix]
         max_ch_idx = np.argmax(res_ch)
         polar_atoms.append(res.atoms[max_ch_idx].index)
+    mem_map_js['polar_atoms'] = polar_atoms  # save it later analysis
     headgroup_sel = f'(index {" ".join(map(str,(polar_atoms)))})'
     # Run FATSLiM to find the membranes
     prop = {
@@ -87,7 +88,7 @@ def generate_membrane_mapping(structure : 'Structure',
         'cutoff': 2.2,
         'ignore_no_box': True,
         'disable_logs': True,
-        'return_hydrogen':True
+        'return_hydrogen': True
     }
     output_ndx_path = "tmp_mem_map.ndx"
     print('Running BioBB FATSLiM Membranes:')
