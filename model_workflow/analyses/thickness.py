@@ -47,7 +47,6 @@ def thickness (
         selected_atoms = frame[head_sel]
         mean_z = selected_atoms.mean(axis=0)[2]
         midplane_z.append(float(mean_z))
-    df.to_csv('thickness.csv')
     # Save the data
     data = {
         'frame': df.index.tolist(),
