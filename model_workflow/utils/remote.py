@@ -44,7 +44,6 @@ class Remote:
             return self._available_files
         # Otherwise request the available files to the API
         request_url = self.url + '/files'
-        print('GETTIG REMOTE FILES')
         try:
             response = urllib.request.urlopen(request_url)
             self._available_files = json.loads(response.read())

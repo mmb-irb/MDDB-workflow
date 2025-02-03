@@ -13,8 +13,15 @@ from model_workflow.utils.constants import GROMACS_EXECUTABLE, STANDARD_TOPOLOGY
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
 
-# Extract charges from a source file
 def get_charges (charges_source_file : 'File') -> List[float]:
+    """
+    Extract charges from a source file.
+
+    Returns:
+    List[float]: A list of atomic charges if extraction is successful, 
+                 otherwise None if the file does not exist.
+
+    """
     if not charges_source_file or not charges_source_file.exists:
         return None
     print('Charges in the "' + charges_source_file.filename + '" file will be used')

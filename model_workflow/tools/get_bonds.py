@@ -4,7 +4,7 @@ from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.type_hints import *
 import pytraj as pt
-from tqdm import tqdm
+from collections import Counter
 
 # Check if two sets of bonds match perfectly
 def do_bonds_match (
@@ -14,7 +14,8 @@ def do_bonds_match (
     atom_elements : List[str],
     # Set verbose as true to show which are the atoms preventing the match
     verbose : bool = False,
-    atoms : Optional[ List['Atom'] ] = None
+    atoms : Optional[ List['Atom'] ] = None,
+    counter_list : Optional[ List[int] ] = None
 ) -> bool:
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
@@ -48,6 +49,9 @@ def do_bonds_match (
                     print(f' It is bondes to atoms with indices {it_is_atom_indices}')
                     it_should_be_atom_indices = ','.join([ str(index) for index in atom_bonds_set_2 ])
                     print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
+            # Save for failure analysis
+            if counter_list is not None:
+                counter_list.append((atom_index,tuple(atom_bonds_set_1),tuple(atom_bonds_set_2)))
             return False
     return True
 
@@ -110,22 +114,41 @@ def get_bonds_canonical_frame (
 ) -> Optional[int]:
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
-    print(f'Searching reference bonds canonical frame. Only first {patience} frames will be checked.')
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots)
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots,patience)
+    print('Searching reference bonds canonical frame. Only first '
+          f'{min(patience,count)} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
-    for frame_number, frame_pdb in tqdm(enumerate(frames),desc='Frames',total=min(patience,count), unit='frame'):
+    counter_list = []
+    for frame_number, frame_pdb in enumerate(frames):
         bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, reference_bonds, atom_elements):
+        if do_bonds_match(bonds, reference_bonds, atom_elements, counter_list=counter_list):
             reference_bonds_frame = frame_number
             break
         # If we didn't find a canonical frame at this point we probablty won't
-        if frame_number > patience:
-            return None
+        if frame_number >= patience:
+            break
+    frames.close()
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:
+        # Print the first clashes
+        print(' First clash stats:')
+        headers = ['Count', 'Atom', 'Is bonding with', 'Should bond with']
+        count = Counter(counter_list).most_common(10)
+        # Calculate column widths
+        table_data = []
+        for (at, bond, should), n in count:
+            table_data.append([n, at, bond, should])
+        col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data, headers)]
+        # Format rows
+        def format_row(row):
+            return " | ".join(f"{str(item):>{col_widths[i]}}" for i, item in enumerate(row))
+        # Print table
+        print(format_row(headers))
+        print("-+-".join('-' * width for width in col_widths))
+        for row in table_data:
+            print(format_row(row))
         return None
-
     print(f' Got it -> Frame {reference_bonds_frame + 1}')
 
     return reference_bonds_frame
