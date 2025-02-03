@@ -96,6 +96,10 @@ def pockets (
     directory_jumps_count = md_path.count('/') + 1
     recovery_path = '/'.join([ '..' for n in range(directory_jumps_count) ])
 
+    print(f'MD path: {md_path}')
+    print(f'jumps: {directory_jumps_count}')
+    print(f'recovery path: {recovery_path}')
+
     # Move to the MD path so all relative paths become shorter
     chdir(md_path)
 
