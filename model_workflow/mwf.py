@@ -1197,6 +1197,7 @@ class MD:
             # time_length = self.time_length,
             check_selection = ALL_ATOMS,
             standard_deviations_cutoff = self.project.rmsd_cutoff,
+            snapshots = self.snapshots,
         )
         return self._trajectory_integrity
 
