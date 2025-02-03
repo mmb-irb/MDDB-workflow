@@ -509,7 +509,8 @@ def energies (
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, step, count = get_pdb_frames(energies_structure_file.path, input_trajectory_file.path, snapshots, frames_limit)
+    frames, step, count = get_pdb_frames(energies_structure_file.path, input_trajectory_file.path, 
+                                         snapshots, frames_limit,pbar_bool=False)
     non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
 
     # Load backup data in case there is a backup file
