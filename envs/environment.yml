@@ -36,9 +36,6 @@ dependencies:
   # Ligands analyses
   - rdkit
   - mordred
-  # Curves does not fit in this environment anymore
-  # DANI: Habrá que hacerle un environment a parte. Será nuestro primer use case de esto.
-  # - curves
   # Dependency of tmscoring
   # WARNING: This version of iminuit is not supported in further versions of python
   - iminuit<2

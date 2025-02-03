@@ -4,7 +4,6 @@ from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.type_hints import *
 import pytraj as pt
-import pandas as pd
 from collections import Counter
 
 # Check if two sets of bonds match perfectly
@@ -132,10 +131,23 @@ def get_bonds_canonical_frame (
     frames.close()
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:
-        df = pd.DataFrame([(n, at, bond, should) 
-                  for (at, bond, should), n in Counter(counter_list).most_common(10)],
-                 columns=['Count', 'Atom', 'Is bonding with', 'Should bond with'])
-        print('First clash stats:\n',df)
+        # Print the first clashes
+        print(' First clash stats:')
+        headers = ['Count', 'Atom', 'Is bonding with', 'Should bond with']
+        count = Counter(counter_list).most_common(10)
+        # Calculate column widths
+        table_data = []
+        for (at, bond, should), n in count:
+            table_data.append([n, at, bond, should])
+        col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data, headers)]
+        # Format rows
+        def format_row(row):
+            return " | ".join(f"{str(item):>{col_widths[i]}}" for i, item in enumerate(row))
+        # Print table
+        print(format_row(headers))
+        print("-+-".join('-' * width for width in col_widths))
+        for row in table_data:
+            print(format_row(row))
         return None
     print(f' Got it -> Frame {reference_bonds_frame + 1}')
 

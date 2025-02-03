@@ -1,6 +1,7 @@
 import mdtraj as mdt
 import pytraj as pt
 import numpy as np
+import time
 
 from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
@@ -28,7 +29,8 @@ def check_trajectory_integrity (
     check_selection : str,
     # DANI: He visto saltos 'correctos' pasar de 6
     # DANI: He visto saltos 'incorrectos' no bajar de 10
-    standard_deviations_cutoff : float) -> bool:
+    standard_deviations_cutoff : float,
+    snapshots : int) -> bool:
 
     # Skip the test if we trust
     if TRAJECTORY_INTEGRITY_FLAG in trust:
@@ -68,14 +70,17 @@ def check_trajectory_integrity (
     # Save all RMSD jumps
     rmsd_jumps = []
 
-    # Iterate trajectory frames
-    for f, frame in tqdm(enumerate(trajectory, 1),desc=' Frame', unit='frame',initial=1):
+    # Initialize progress bar first
+    pbar = tqdm(enumerate(trajectory, 1), total=snapshots, desc=' Frame', unit='frame', initial=1)
+    
+    for f, frame in pbar:
         # Calculate RMSD value between previous and current frame
         rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
         rmsd_jumps.append(rmsd_value)
 
         # Update the previous frame as the current one
         previous_frame = frame
+    time.sleep(0.1) # Needed for progress bar to be print at the correct place
 
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if len(rmsd_jumps) <= 1:
