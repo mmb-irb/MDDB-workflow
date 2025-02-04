@@ -1523,7 +1523,7 @@ class MD:
         if exists(output_analysis_filepath) and not overwrite:
             return
         if not getattr(self.project, 'membrane_map', None):
-            raise ValueError('Membrane map is not available')
+            print('Membrane map is not available. Skipping density analysis')
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,
