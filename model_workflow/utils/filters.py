@@ -4,6 +4,8 @@ from model_workflow.utils.gmx_spells import filter_structure, filter_trajectory,
 from model_workflow.utils.pyt_spells import filter_topology
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.conversions import convert
+from model_workflow.utils.file import File
 from inspect import getfullargspec
 
 # Set functions to performe structure conversions
@@ -16,6 +18,9 @@ structure_filtering_functions = [ filter_structure, filter_tpr, filter_topology 
 # These functions must have 'input_trajectory_file' and 'output_trajectory_file' keywords
 # These functions must have the 'format_sets' property
 trajectory_filtering_functions = [ filter_trajectory ]
+
+# Auxiliar PDB file used to instatiate the reference structure sometimes
+AUXILIAR_PDB_FILE = File('.auxiliar.pdb')
 
 # Handle filterings of different structure and trajectory formats
 def filter_atoms (
@@ -43,17 +48,28 @@ def filter_atoms (
         print('Missing input selection string -> Water and counter ions will be filtered')
     elif not selection_syntax:
         raise InputError('Missing input selection syntax')
+    
+    # We need a PDB to instantiate the reference structure
+    # The structure file may also be instantiated from some topology file formats but this is not much reliable
+    # If the input structure is not a PDB then we make a conversion to generate it
+    structure_filepath = input_structure_file.path
+    if input_structure_file.format != 'pdb':
+        # To do so we need coordinates so make sure they were passed
+        if not input_trajectory_file:
+            raise InputError('In order to filter we need coordinates since some atom selections may rely in close atoms.\n' +
+                '  Your input structure is a topology thus not having coordinates.\n' +
+                '  Please provide a trajectory file as well')
+        # Generate a PDB file using both input topology and trajectory
+        structure_filepath = AUXILIAR_PDB_FILE.path
+        convert(input_structure_filepath=input_structure_file.path,
+                output_structure_filepath=structure_filepath,
+                input_trajectory_filepaths=input_trajectory_file.path)
 
     # Parse the selection
     selection = None
     # Hope the input structure is in a supported format
-    structure = Structure.from_file(input_structure_file.path)
+    structure = Structure.from_file(structure_filepath)
     if selection_string:
-        # If the input structure is not a PDB then it will probably be a topology thus not having coordinates
-        # Therefore we can not support a custom selection since VMD could have silent miss-selections
-        # DANI: Si tenemos trayectoria deberíamos poder cargar coordenadas de una frame en la structure, pero es más lío
-        if input_structure_file.format != 'pdb':
-            raise InputError(f'Custom selection is not supported when the input structure is not in PDB format')
         # Parse the input selection
         selection = structure.select(selection_string, syntax=selection_syntax)
         # If the selection is empty then war the user
@@ -68,6 +84,9 @@ def filter_atoms (
         # If the selection is empty then war the user
         if not selection:
             raise InputError('There are no water or counter ions')
+        
+    # Remove the axuiliar PDB file, if exists
+    if AUXILIAR_PDB_FILE.exists: AUXILIAR_PDB_FILE.remove()
 
     # Check if any input file has an non-standard extension of a supported format
     # If so then we create a symlink with the standard extension

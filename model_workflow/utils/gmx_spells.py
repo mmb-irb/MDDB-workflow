@@ -360,10 +360,21 @@ filter_trajectory.format_sets = [
 ]
 
 # Set a regular expression to further mine data from gromacs logs
-GROMACS_SYSTEM_ATOMS = r'System\) has ([0-9]*) elements'
+GROMACS_SYSTEM_ATOMS_REGEX = r'System\) has[ ]+([0-9]*) elements'
+
+# Mine system atoms count from gromacs logs
+def mine_system_atoms_count (logs : str) -> int:
+    system_atoms_match = search(GROMACS_SYSTEM_ATOMS_REGEX, logs)
+    if not system_atoms_match:
+        print(logs)
+        raise ValueError('Failed to mine Gromacs error logs')
+    return int(system_atoms_match[1])
 
 # Count TPR atoms
 def get_tpr_atom_count (tpr_filepath : str) -> int:
+    # Make sure the filepath is valid
+    if not exists(tpr_filepath):
+        raise ValueError('Trying to count atoms from a topology which does not exist')
     # Run Gromacs only to see the number of atoms in the TPR
     p = Popen([ "echo", "whatever" ], stdout=PIPE)
     process = run([
@@ -376,10 +387,7 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
     error_logs = process.stderr.decode()
     p.stdout.close()
     # Mine the number of atoms in the system from the logs
-    system_atoms_match = search(GROMACS_SYSTEM_ATOMS, error_logs)
-    if not system_atoms_match:
-        raise ValueError('Failed to mine Gromacs error logs')
-    atom_count = int(system_atoms_match[1])
+    atom_count = mine_system_atoms_count(error_logs)
     return atom_count
 
 # Filter topology atoms

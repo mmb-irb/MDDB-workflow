@@ -10,9 +10,10 @@ from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
-from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise, warn
+from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise, warn, reprint
 from model_workflow.utils.constants import SUPPORTED_POLYMER_ELEMENTS, SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
+from model_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM_ELEMENT
 
 import pytraj
 # Import these libraries if they are available
@@ -33,6 +34,10 @@ available_caps = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
 available_lows = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
     'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 available_chains = available_caps + available_lows
+
+# Set letters to be found in alphanumerical bases
+hexadecimal_letters = set(available_caps[0:6] + available_lows[0:6])
+alphanumerical_letters = set(available_caps[6:] + available_lows[6:])
 
 # Set the expected number of bonds for each atom according to its element
 coherent_bonds_with_hydrogen = {
@@ -158,7 +163,7 @@ class Atom:
     chain = property(get_chain, None, None, "The atom chain (read only)")
 
     # Get indices of other atoms in the structure which are covalently bonded to this atom
-    def get_bonds (self, skip_ions : bool = False) -> Optional[ List[int] ]:
+    def get_bonds (self, skip_ions : bool = False, skip_dummies : bool = False) -> Optional[ List[int] ]:
         if not self.structure:
             raise ValueError('The atom has not a structure defined')
         if self.index == None:
@@ -167,6 +172,8 @@ class Atom:
         # If the skip ions argument is passed then remove atom indices of supported ion atoms
         if skip_ions:
             bonds = list(set(bonds) - self.structure.ion_atom_indices)
+        if skip_dummies:
+            bonds = list(set(bonds) - self.structure.dummy_atom_indices)
         return bonds
 
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
@@ -237,7 +244,10 @@ class Atom:
 
     # Guess an atom element from its name and number of bonds
     def guess_element (self) -> str:
-        # If the name is SOD and it is a lonly atom then it is clearly sodium, not sulfur
+        # If the atom name is among the known dummy atoms then return a standard element for dummy atoms
+        if self.name.upper() in STANDARD_DUMMY_ATOM_NAMES:
+            return DUMMY_ATOM_ELEMENT
+        # If the name is SOD and it is a lonely atom then it is clearly sodium, not sulfur
         if self.name.upper() == 'SOD' and self.residue.atom_count == 1:
             return 'Na'
         # Find a obvios element name in the atom name
@@ -452,7 +462,7 @@ class Residue:
             # Get the residue structure
             structure = self.structure
             if not structure:
-                raise ValueError('Cannot find the corresponding ' + new_chain + ' chain without the structure')
+                raise ValueError(f'Cannot find the corresponding {new_chain} chain without the structure')
             # Find if the letter belongs to an already existing chain
             new_chain = structure.get_chain_by_name(letter)
             # If the chain does not exist yet then create it
@@ -463,7 +473,7 @@ class Residue:
         # Note that the chain must be set in the structure already
         new_chain_index = new_chain.index
         if new_chain_index == None:
-            raise ValueError('Chain ' + str(new_chain) + ' is not set in the structure')
+            raise ValueError(f'Chain {new_chain} is not set in the structure')
         self.set_chain_index(new_chain_index)
     chain = property(get_chain, set_chain, None, "The residue chain")
 
@@ -838,7 +848,7 @@ class Chain:
         for new_residue in new_residues:
             new_residue_index = new_residue.index
             if new_residue_index == None:
-                raise ValueError('Residue ' + str(new_residue) + ' is not set in the structure')
+                raise ValueError(f'Residue {new_residue} is not set in the structure')
             new_residue_indices.append(new_residue_index)
         self.set_residue_indices(new_residue_indices)
     residues = property(get_residues, set_residues, None, "The residues in this chain")
@@ -900,6 +910,7 @@ class Structure:
         atoms : List['Atom'] = [],
         residues : List['Residue'] = [],
         chains : List['Chain'] = [],
+        residue_numeration_base : int = 10,
         ):
         self.atoms = []
         self.residues = []
@@ -926,6 +937,13 @@ class Structure:
         self._fixed_atom_elements = False
         # Save indices of supported ion atoms
         self._ion_atom_indices = None
+        self._dummy_atom_indices = None
+        # Set the scale of the residue numbers
+        # It may be decimal (10), hexadecimal(16) or alphanumeric(36)
+        # Note that hybrid scales (1-9999 decimal and different further) are not explicitly supported
+        # However, the scale is guessed on read and conserved on write, so the original numeration would be conserved
+        # The default values is used only when the structure is not read from a PDB
+        self.residue_numeration_base = residue_numeration_base
 
     def __repr__ (self):
         return f'<Structure ({self.atom_count} atoms)>'
@@ -1037,9 +1055,9 @@ class Structure:
     def purge_residue (self, residue : 'Residue'):
         # Check the residue can be purged
         if residue not in self.residues:
-            raise ValueError(str(residue) + ' is not in the structure already')
+            raise ValueError(f'{residue} is not in the structure already')
         if len(residue.atom_indices) > 0:
-            raise ValueError(str(residue) + ' is still having atoms and thus it cannot be purged')
+            raise ValueError(f'{residue} is still having atoms and thus it cannot be purged')
         # Get the current index of the residue to be purged
         purged_index = residue.index
         # Residues and their atoms below this index are not to be modified
@@ -1069,9 +1087,9 @@ class Structure:
     def purge_chain (self, chain : 'Chain'):
         # Check the chain can be purged
         if chain not in self.chains:
-            raise ValueError('Chain ' + chain.name + ' is not in the structure already')
+            raise ValueError(f'Chain {chain.name} is not in the structure already')
         if len(chain.residue_indices) > 0:
-            raise ValueError('Chain ' + chain.name + ' is still having residues and thus it cannot be purged')
+            raise ValueError(f'Chain {chain.name} is still having residues and thus it cannot be purged')
         # Get the current index of the chain to be purged
         purged_index = chain.index
         # Chains and their residues below this index are not to be modified
@@ -1119,6 +1137,26 @@ class Structure:
     # Set the structure from a pdb file
     @classmethod
     def from_pdb (cls, pdb_content : str):
+        pdb_lines = pdb_content.split('\n')
+        # Before we start, we must guess the numeration system
+        # To do so mine all residue numbers
+        all_residue_number_characters = set()
+        for line in pdb_lines:
+            # Parse atoms only
+            start = line[0:6]
+            is_atom = start == 'ATOM  ' or start == 'HETATM'
+            if not is_atom: continue
+            # Mine all resiude numbers
+            residue_number = line[22:26]
+            for character in residue_number:
+                all_residue_number_characters.add(character)
+        # Search among all resiude numbers any letters (non-numerical characters)
+        if next((letter for letter in alphanumerical_letters if letter in all_residue_number_characters), None):
+            residue_numeration_base = 36
+        elif next((letter for letter in hexadecimal_letters if letter in all_residue_number_characters), None):
+            residue_numeration_base = 16
+        else:
+            residue_numeration_base = 10
         # Read the pdb content line by line and set the parsed atoms, residues and chains
         parsed_atoms = []
         parsed_residues = []
@@ -1129,10 +1167,6 @@ class Structure:
         last_residue_name = None
         last_residue_number = None
         last_residue_icode = None
-        # Set whenever we have reached the limit of residue numbers
-        # Thus further residue numbers must be parsed as hexadecimals
-        hexadecimal_residue_numbers = False
-        pdb_lines = pdb_content.split('\n')
         for line in pdb_lines:
             # Parse atoms only
             start = line[0:6]
@@ -1172,13 +1206,9 @@ class Structure:
                 parsed_residue.atom_indices.append(atom_index)
                 # If it is the same residue then it will be the same chain as well so we can proceed
                 continue
-            # Otherwise, include the new residue in the list and update the current residue index
-            # When residue index is greater than the limit we start using the hexadecimal parsing
-            # Note that residue index 9998 equals residue number 9999 which is the last allowed
-            if residue_index == pdb_last_decimal_residue_index:
-                hexadecimal_residue_numbers = True
             # Parse the residue number
-            parsed_residue_number = int(residue_number, 16) if hexadecimal_residue_numbers else int(residue_number)
+            parsed_residue_number = int(residue_number, residue_numeration_base)
+            #print(f'Residue {residue_index+1} with number {residue_number} ({hexadecimal_residue_numbers}) -> {parsed_residue_number}')
             # Now parse the residue and add it to the list
             parsed_residue = Residue(name=residue_name, number=parsed_residue_number, icode=icode)
             parsed_residues.append(parsed_residue)
@@ -1195,7 +1225,7 @@ class Structure:
             parsed_chains.append(parsed_chain)
             # Add current atom to the new chain
             parsed_chain.residue_indices.append(residue_index)
-        return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
+        return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains, residue_numeration_base=residue_numeration_base)
 
     # Set the structure from a pdb file
     @classmethod
@@ -1374,6 +1404,20 @@ class Structure:
         return self._ion_atom_indices
     ion_atom_indices = property(get_ion_atom_indices, None, None, "Atom indices for what we consider supported ions")
 
+    # Get all dummy atom indices together in a set
+    def get_dummy_atom_indices (self) -> Set:
+        # If we already did this then return the stored value
+        if self._dummy_atom_indices != None:
+            return self._dummy_atom_indices
+        # Find ion atom indices
+        indices = set()
+        for atom in self.atoms:
+            if atom.element == DUMMY_ATOM_ELEMENT:
+                indices.add(atom.index)
+        self._dummy_atom_indices = indices
+        return self._dummy_atom_indices
+    dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
+
     # Generate a pdb file with current structure
     def generate_pdb_file (self, pdb_filename : str):
         with open(pdb_filename, "w") as file:
@@ -1462,7 +1506,7 @@ class Structure:
                 return None
             return Selection(atom_indices)
 
-        raise InputError('Syntax ' + syntax + ' is not supported. Choose one of the following: vmd, prody, pytraj')
+        raise InputError(f'Syntax {syntax} is not supported. Choose one of the following: vmd, prody, pytraj')
 
     # Set a function to make selections using atom indices
     def select_atom_indices (self, atom_indices : List[int]) -> 'Selection':
@@ -1776,7 +1820,7 @@ class Structure:
         current_chain_names = [ chain.name for chain in self.chains ]
         next_available_chain_name = next((name for name in available_chains if name not in current_chain_names), None)
         if next_available_chain_name == None:
-            raise InputError('There are more chains than available chain letters (' + str(len(available_chains)) + ')')
+            raise InputError(f'There are more chains than available chain letters ({len(available_chains)})')
         return next_available_chain_name
 
     # Get a chain by its name
@@ -1823,11 +1867,11 @@ class Structure:
         # Display the summary of repeated chains if requested
         if display_summary:
             if len(repeated_chains) > 0:
-                print('WARNING: There are repeated chains:')
+                warn('There are repeated chains:')
                 for chain_name, chains in name_chains.items():
                     chains_count = len(chains)
                     if chains_count > 1:
-                        print('- Chain ' + chain_name + ' has ' + str(chains_count) + ' repeats' )
+                        print(f'- Chain {chain_name} has {chains_count} repeats')
         # Rename repeated chains if requested
         if len(repeated_chains) > 0 and fix_chains:
             n_chains = len(self.chains)
@@ -1835,7 +1879,7 @@ class Structure:
             if n_chains > n_available_chains:
                 # for chain in self.chains:
                 #     print(str(chain) + ': ' + str(chain.atom_indices[0]) + ' to ' + str(chain.atom_indices[-1]))
-                raise ValueError('There are more chains (' + str(n_chains) + ') than available chain letters (' + str(n_available_chains) + ')')
+                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_chains})')
             current_letters = list(name_chains.keys())
             for repeated_chain in repeated_chains:
                 last_chain_letter = repeated_chain.name
@@ -1849,7 +1893,7 @@ class Structure:
             # Check if residue indices are consecutive
             if residue_indices[-1] - residue_indices[0] + 1 == len(residue_indices):
                 continue
-            print('WARNING: splitted chain ' + chain.name)
+            warn(f'Splitted chain {chain.name}')
             # If indices are not consecutive then we must find ranges of consecutive residues and create new chains for them
             previous_residue_index = residue_indices[0]
             consecutive_residues = [previous_residue_index]
@@ -1925,7 +1969,7 @@ class Structure:
         # In case we have non icoded residues
         if len(non_icoded_residues) > 0:
             if display_summary:
-                print('There are non-icoded residues (' + str(len(non_icoded_residues)) + ')')
+                print(f'There are non-icoded residues ({len(non_icoded_residues)})')
             # Set new icodes for non icoded residues
             if fix_residues:
                 print('    Non icoded residues will recieve an icode')
@@ -1944,8 +1988,10 @@ class Structure:
             return modified
         # In case we have repeated residues...
         if display_summary:
-            print('WARNING: There are repeated residues (' + str(len(repeated_residues)) + ')')
-            print('    e.g. ' + str(repeated_residues[0][0]))
+            warn(f'There are {len(repeated_residues)} different groups of repeated residues')
+            print(f'    e.g. {repeated_residues[0][0]}')
+            if len(repeated_residues) == 9999 or len(repeated_residues) == 10000:
+                print('    Probably you have more residues than the PDB numeration limit (1-9999)')
         # Now for each repeated residue, find out which are splitted and which are duplicated
         covalent_bonds = self.bonds
         overall_splitted_residues = []
@@ -1975,11 +2021,11 @@ class Structure:
             if len(splitted_residues) > 0:
                 overall_splitted_residues.append(splitted_residues)
             if len(duplicated_residues) > 0:
-                overall_duplicated_residues += duplicated_residues
+                overall_duplicated_residues.append(duplicated_residues)
         # In case we have splitted residues
         if len(overall_splitted_residues) > 0:
             if display_summary:
-                print('    There are splitted residues (' + str(len(overall_splitted_residues)) + ')')
+                print(f'    There are splitted residues ({len(overall_splitted_residues)})')
             # Fix splitted residues
             if fix_residues:
                 print('        Splitted residues will be merged')
@@ -2029,17 +2075,37 @@ class Structure:
                 self.trajectory_atom_sorter = trajectory_atom_sorter
                 self.new_atom_order = new_atom_indices
                 modified = True
-         # In case we have duplicated residues
-        if len(overall_duplicated_residues) > 0:
+        # In case we have duplicated residues
+        duplicated_residues_count = len(overall_duplicated_residues)
+        if duplicated_residues_count > 0:
             if display_summary:
-                print('    There are duplicated residues (' + str(len(overall_duplicated_residues)) + ')')
+                warn(f'There are {duplicated_residues_count} different groups of duplicated residues')
             # Renumerate duplicated residues if requested
             if fix_residues:
-                print('        Duplicated residues will be renumerated')
-                # Get the next available number in the residue chain
-                for duplicated_residue in overall_duplicated_residues:
-                    maximum_chain_number = max([ residue.number for residue in duplicated_residue.chain.residues ])
-                    duplicated_residue.number = maximum_chain_number + 1
+                # First of all, from each group of repeated residues, discard the first residue
+                # The first residue will remain as it is and the rest will be renumerated
+                # Join all residues to be renumerated in a single list
+                residue_to_renumerate = []
+                for residues in overall_duplicated_residues:
+                    residue_to_renumerate += residues[1:]
+                # Now group residues per chain since the renumeration is done by chains
+                chain_residues = {}
+                for residue in residue_to_renumerate:
+                    chain = residue.chain
+                    current_chain_residues = chain_residues.get(chain, None)
+                    if current_chain_residues: current_chain_residues.append(residue)
+                    else: chain_residues[chain] = [ residue ]
+                # Iterate residue chain groups
+                for chain, residues in chain_residues.items():
+                    # Find the last residue number in the current chain
+                    maximum_chain_number = max([ residue.number for residue in chain.residues ])
+                    # Sort residues by index
+                    residues.sort(key=lambda x: x.index, reverse=True)
+                    for residue in residues:
+                        # Set the number of the residue as the next available number
+                        residue.number = maximum_chain_number + 1
+                        # Update the maximum number
+                        maximum_chain_number = residue.number
                 modified = True
         return modified
 
@@ -2079,14 +2145,14 @@ class Structure:
                     new_name = initial + str(number)
                 # Save an example for the logs if there is none yet
                 if not example:
-                    example = atom.name + ' renamed as ' + new_name + ' in residue ' + str(residue)
+                    example = f'{atom.name} renamed as {new_name} in residue {residue}'
                 atom.name = new_name
                 current_names.append(new_name)
         # Display the summary of repeated atoms if requested
         if display_summary:
             if repeated_atoms_count > 0:
-                print('WARNING: There are repeated atoms (' + str(repeated_atoms_count) + ')')
-                print('    e.g. ' + example)
+                warn(f'There are repeated atoms ({repeated_atoms_count})')
+                print(f'    e.g. {example}')
         return repeated_atoms_count > 0
 
     # Check bonds to be incoherent
@@ -2096,18 +2162,21 @@ class Structure:
         # It may happen that we encounter an structure without hydrogens
         has_hydrogen = next(( True for atom in self.atoms if atom.element == 'H' ), False)
         coherent_bonds = coherent_bonds_with_hydrogen if has_hydrogen else coherent_bonds_without_hydrogen
-        # Cechk coherent bonds atom by atom
+        # Check coherent bonds atom by atom
         for atom in self.atoms:
             # Do not check this atom bonds if this may be an ion
             # Most authors "force" dummy bonds in these atoms to make them stable
             if atom.element in SUPPORTED_ION_ELEMENTS:
                 continue
+            # Ignore dummy atoms as well
+            if atom.element == DUMMY_ATOM_ELEMENT:
+                continue
             # Get actual number of bonds in the current atom both with and without ion bonds
             # LORE: This was a problem since some ions are force-bonded but bonds are actually not real
             # LORE: When an ion is forced we may end up with hyrogens with 2 bonds or carbons with 5 bonds
             # LORE: When an ions is really bonded we can not discard it or we may end up with orphan carbons (e.g. ligands)
-            min_nbonds = len(atom.get_bonds(skip_ions = True))
-            max_nbonds = len(atom.get_bonds(skip_ions = False))
+            min_nbonds = len(atom.get_bonds(skip_ions = True, skip_dummies = True))
+            max_nbonds = len(atom.get_bonds(skip_ions = False, skip_dummies = True))
             # Get the accepted range of number of bonds for the current atom according to its element
             element = atom.element
             element_coherent_bonds = coherent_bonds.get(element, None)
@@ -2302,11 +2371,11 @@ class Structure:
             ptm_classification = self.ptm_options[residue_classification]
             # If we found something impossible then raise the error
             if type(ptm_classification) == ValueError:
-                print('Problematic residue: ' + str(residue))
+                print(f'Problematic residue: {residue}')
                 raise ptm_classification
             # If we do not know what it is then do tag it as a PTM but print a warning
             if type(ptm_classification) == Warning:
-                print('WARNING: ' + str(ptm_classification) + ' -> ' + str(residue))
+                warn(f'{ptm_classification} -> {residue}')
                 continue
             # At this point we have found a valid PTM
             # Find the protein residue linked to this PTM

@@ -29,8 +29,10 @@ class File:
         else:
             self.relative_path = relative_or_basolute_path
             self.absolute_path = abspath(self.relative_path)
-        # When simply a path is requested we return the absolute path
-        self.path = self.relative_path
+        # When simply a path is requested we return the relative path
+        # Note that normalizing the path is essential to recognize same filepaths
+        # Otherwise we could have './myfile' and 'myfile' considered as different filepaths
+        self.path = normpath(self.relative_path)
         # Capture the filename and the basepath
         self.basepath, self.filename = split(self.path)
         # If the basepath is empty then it means the file is in the local directroy
@@ -57,14 +59,14 @@ class File:
         return self.__repr__()
 
     def __hash__ (self) -> str:
-        return hash(self.path)
+        return hash(self.path) # Path is already normalized
 
     def __bool__ (self) -> bool:
         return bool(self.filename)
 
     def __eq__ (self, other : 'File') -> bool:
         if isinstance(other, self.__class__):
-            return normpath(self.path) == normpath(other.path)
+            return self.path == other.path # Paths are already normalized
         return False
 
     # Check if file exists
