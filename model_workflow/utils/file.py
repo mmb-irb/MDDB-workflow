@@ -110,7 +110,11 @@ class File:
 
     # Get a prefixed file using this file name as the name base
     def get_prefixed_file (self, prefix : str) -> 'File':
-        return File(self.basepath + '/' + prefix + self.filename)
+        return File(f'{self.basepath}/{prefix}{self.filename}')
+    
+    # Get a file in the same path but whith a different name
+    def get_neighbour_file (self, filename : str) -> 'File':
+        return File(f'{self.basepath}/{filename}')
 
     # Get the symlink target of this file
     def get_symlink (self) -> Optional['File']:

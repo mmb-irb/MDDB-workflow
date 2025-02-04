@@ -1,7 +1,5 @@
 from subprocess import run, PIPE, Popen
 
-from os import rename
-from os.path import exists
 from math import ceil
 
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, INCOMPLETE_PREFIX, GREY_HEADER, COLOR_END
@@ -18,7 +16,7 @@ def get_reduced_trajectory (
     input_trajectory_file : 'File',
     snapshots : int,
     reduced_trajectory_frames_limit : int,
-    ) -> list:
+    ) -> tuple:
 
     # If the trajectory already has the reduced number of frames or less return here
     if reduced_trajectory_frames_limit >= snapshots:
@@ -28,14 +26,13 @@ def get_reduced_trajectory (
         return output_trajectory_filepath, step, frames
 
     # Set the reduced trajectory filename
-    output_trajectory_filename = 'f' + str(reduced_trajectory_frames_limit) + '.trajectory.xtc'
-    # Set the output path in the same directory than the input trajectory
-    output_trajectory_filepath = input_trajectory_file.basepath + '/' + output_trajectory_filename
+    output_trajectory_filename = f'f{reduced_trajectory_frames_limit}.trajectory.xtc'
+    # Set the output trajectory file in the same directory than the input trajectory
+    output_trajectory_file = input_trajectory_file.get_neighbour_file(output_trajectory_filename)
 
-    # Set the incomplete reduced trajectory filename and path as well
+    # Set the incomplete reduced trajectory file
     # This prevents the workflow from using an incomplete reduced trajectroy in case the workflow was suddenly interrupted
-    incomplete_trajectory_filename = INCOMPLETE_PREFIX + output_trajectory_filename
-    incomplete_trajectory_filepath = input_trajectory_file.basepath + '/' + incomplete_trajectory_filename
+    incomplete_trajectory_file = input_trajectory_file.get_prefixed_file(INCOMPLETE_PREFIX)
 
     # Calculate the step between frames in the reduced trajectory to match the final number of frames
     # WARNING: Since the step must be an integer the thorical step must be rounded
@@ -50,8 +47,8 @@ def get_reduced_trajectory (
     step = ceil(snapshots / reduced_trajectory_frames_limit)
 
     # Create the reduced trajectory if it does not exist yet
-    if not exists(output_trajectory_filepath):
-        print('Reducing trajectory from ' + str(snapshots) + ' to less than ' + str(reduced_trajectory_frames_limit) + ' frames')
+    if not output_trajectory_file.exists:
+        print(f'Reducing trajectory from {snapshots} to less than {reduced_trajectory_frames_limit} frames')
         print(GREY_HEADER)
         # Run Gromacs
         p = Popen([
@@ -66,7 +63,7 @@ def get_reduced_trajectory (
             "-f",
             input_trajectory_file.path,
             '-o',
-            incomplete_trajectory_filepath,
+            incomplete_trajectory_file.path,
             '-skip',
             str(step),
             '-quiet'
@@ -74,11 +71,11 @@ def get_reduced_trajectory (
         p.stdout.close()
         print(COLOR_END)
         # Check the output file exists at the end
-        if not exists(incomplete_trajectory_filepath):
+        if not incomplete_trajectory_file.exists:
             print(logs)
-            print('Something went wrong with GROMACS while reducing the trajectory')
+            raise SystemExit('Something went wrong with GROMACS while reducing the trajectory')
         # Once the trajectory is complete we rename it as complete
-        rename(incomplete_trajectory_filepath, output_trajectory_filepath)
+        incomplete_trajectory_file.rename_to(output_trajectory_file)
 
     # Calculate also the final number of frames given the current step and return this value
     # WARNING: It may seem that the final number of frames is math.floor(snapshots / step)
@@ -88,4 +85,4 @@ def get_reduced_trajectory (
     frames = ceil(snapshots / step)
 
     # Return gromacs logs
-    return output_trajectory_filepath, step, frames
+    return output_trajectory_file.path, step, frames

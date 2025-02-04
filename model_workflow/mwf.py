@@ -1198,6 +1198,7 @@ class MD:
             # time_length = self.time_length,
             check_selection = ALL_ATOMS,
             standard_deviations_cutoff = self.project.rmsd_cutoff,
+            snapshots = self.snapshots,
         )
         return self._trajectory_integrity
 
@@ -1523,6 +1524,8 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
+        if not getattr(self.project, 'membrane_map', None):
+            print('Membrane map is not available. Skipping density analysis')
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,

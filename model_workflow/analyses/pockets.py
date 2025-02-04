@@ -332,6 +332,8 @@ def pockets (
     biggest_pockets = collections.Counter(pockets).most_common()
     if len(biggest_pockets) == 1:
         print('WARNING: No pockets were found')
+        # Recover the original directory
+        chdir(recovery_path)
         return
     biggest_pockets = biggest_pockets[1:]
     pockets_number = len(biggest_pockets)
