@@ -168,7 +168,7 @@ def main ():
             print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
             return 
         # If the user wants to run the analysis. With the config file an analysis name must be provided, or the all flag must be set
-        if args.config and args.analysis_names == None:
+        if args.config and args.analysis_names == None and args.all == False:
             nassa_parser.print_help()
             print('Please provide an analysis name to run:', ', '.join(NASSA_ANALYSES_LIST))
             return
@@ -214,7 +214,7 @@ def main ():
             del dict_args['subcommand'] # preguntar Dani ¿?
             # Call the actual main function
             workflow_nassa(
-                    config_file_path = File(args.config), 
+                    config_file_path = args.config, 
                     analysis_names = args.analysis_names, 
                     make_config = args.make_config, 
                     output =  args.output,
@@ -577,10 +577,11 @@ nassa_parser.add_argument(
     help="Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST))
 nassa_parser.add_argument(
     "-w", "--make_config",
-    type=str,
-    default=[],
-    const=True,
-    action=custom,
+    #type=str,
+    nargs='*',
+    default=None,
+    # const=True,
+    # action=custom,
     help="Make a configuration file for the NASSA analysis: makecfg.\nThe base path could be given as an argument. If not, an example of configuration file is created.")
 nassa_parser.add_argument(
     "-seq", "--seq_path",

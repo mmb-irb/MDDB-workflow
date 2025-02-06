@@ -9,7 +9,7 @@ from pathlib import Path
 from model_workflow.tools.nassa_base import Base
 from model_workflow.tools.nassa_loaders import load_sequence
 from model_workflow.tools.nassa_loaders import load_serfile
-from model_workflow.utils.constants import NASSA_ANALYSES_CANALS, BLUE_HEADER, COLOR_END, CYAN_HEADER
+from model_workflow.utils.constants import NASSA_ANALYSES_CANALS, BLUE_HEADER, COLOR_END, CYAN_HEADER, GREEN_HEADER
 
 from model_workflow.utils.heatmaps_nassa import basepair_plot
 from model_workflow.utils.heatmaps_nassa import bconf_heatmap
@@ -1079,9 +1079,9 @@ def workflow_nassa(
             return
     # If the helical parameter analysis is not selected, the NASSA analysis will be run
     # To run this, the user has to provide the configuration file with the information needed
-    if config_file_path:
+    if config_file_path and analysis_names is not None:
         print(f'  Using config file {config_file_path}')
-    # Load the configuration file
+        # Load the configuration file
         try:
             with Path(config_file_path.absolute_path).open("r") as ymlfile:
                 config_archive = yaml.load(
@@ -1089,8 +1089,7 @@ def workflow_nassa(
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"Configuration file {config_file_path} not found!")   
-    # If the user select an analysis to run, it will be run   
-    if analysis_names is not None:
+        # The user can select the analysis to run
         for analysis_name in analysis_names:
             # THe output folder is defined in the configuration file
             if output is not None:
@@ -1124,3 +1123,28 @@ def workflow_nassa(
                 os.mkdir(output_path)
                 print(f'  Running analysis {analysis_name} and saving results in {output_path}')
                 run_nassa(analysis_name, config_archive, overwrite_nassa)
+    if all:
+        for analysis_name in NASSA_ANALYSES_CANALS.keys():
+            print(f"{GREEN_HEADER} |-----> Running analysis {analysis_name}{COLOR_END}")  
+            # Read the configuration file
+            try:
+                with Path(config_file_path).open("r") as ymlfile:
+                    config_archive = yaml.load(
+                        ymlfile, Loader=yaml.FullLoader)
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"Configuration file {config_file_path} not found!")   
+            # Check if the NASSA output folder exists
+            output_path = os.path.join(config_archive['save_path'], 'nassa_analysis')
+            config_archive['save_path'] = output_path
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+            # Check if the analysis output folder exists in NASSA output folder
+            if not os.path.exists(os.path.join(output_path, analysis_name)):
+                os.makedirs(os.path.join(output_path, analysis_name))
+            #     config_archive['save_path'] = os.path.join(output_path, analysis_name)
+            # Run the NASSA analysis with the selected analysis
+            run_nassa(analysis_name=analysis_name, 
+                        config_archive=config_archive, 
+                        overwrite_nassa=overwrite_nassa)
+            print(f'NASSA analysis completed at {current_directory_name}')
