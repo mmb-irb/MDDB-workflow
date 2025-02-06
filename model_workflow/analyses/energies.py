@@ -147,8 +147,28 @@ def energies (
         guest_selection : 'Selection',
         strong_bonds : Optional[list]
     ) -> File:
-        # Filter the selected atoms in the structure
+        # Get atom indices for host atoms involved in a covalent bond with guest atoms
+        # If this is the host, they will be further marked as dummy for CMIP to ignore them in the calculations
+        # If this is the guest, they will be removed
+        strong_bond_atom_indices = []
+        if strong_bonds:
+            for bond in strong_bonds:
+                strong_bond_atom_indices += bond
+        # Set atoms to be flagged as dummy
+        dummy_atom_indices = set()
+        # If this is to be the host file then set guest atoms and strong bond atoms dummy
+        if host_file:
+            dummy_atom_indices |= set(strong_bond_atom_indices)
+            dummy_atom_indices |= set(guest_selection.atom_indices)
+        # Set which atoms must be kept in the output file
+        # If this is the host file then keep both host and guest atoms
+        # If this is the guest file then keep only guest atoms
+        # Always remove strong bond atoms in the guest
         selection = host_selection + guest_selection if host_file else guest_selection
+        strong_bond_selection = frame_structure.select_atom_indices(strong_bond_atom_indices)
+        guest_strong_bonds = guest_selection & strong_bond_selection
+        selection -= guest_strong_bonds
+        # Filter the selected atoms in the structure
         selected_structure = frame_structure.filter(selection)
         # Set atom charges (non standard attribute), which are used further to write the adapted cmip pdb
         # Set also the elements to macth the original structure, since the frame generator messes the elements
@@ -158,17 +178,6 @@ def energies (
             setattr(atom, 'charge', charge)
             cmip_element = energies_structure.atoms[atom_index].element
             atom.element = cmip_element
-        # Get atom indices for host atoms involved in a covalent bond with guest atoms
-        # They will be further marked as dummy for CMIP to ignore them in the calculations
-        strong_bond_atom_indices = []
-        if strong_bonds:
-            for bond in strong_bonds:
-                strong_bond_atom_indices += bond
-        # Set atoms to be flagged as dummy
-        dummy_atom_indices = set(strong_bond_atom_indices)
-        # If this is to be the host file then set guest atoms dummy as well
-        if host_file:
-            dummy_atom_indices |= set(guest_selection.atom_indices)
         # Write a special pdb which contains charges as CMIP expects to find them and dummy atoms flagged
         output_filepath = f'{energies_folder}/{agent_name}_{"host" if host_file else "guest"}.cmip.pdb'
         with open(output_filepath, "w") as file:
@@ -281,13 +290,13 @@ def energies (
         # In case the current number of grid points exceeds the limit...
         # Reduce all dimension densities in proportion and expand the grid units size to compensate
         if current_grid_points > grid_points_limit:
-            print('WARNING: Grid points limit is exceeded (' + str(current_grid_points) + ')')
+            print(f'WARNING: Grid points limit is exceeded ({current_grid_points})')
             proportion = grid_points_limit / current_grid_points
             new_density[0] = math.ceil(new_density[0] * proportion)
             new_density[1] = math.ceil(new_density[1] * proportion)
             new_density[2] = math.ceil(new_density[2] * proportion)
             grid_unit_size = math.ceil(grid_unit_size / proportion * 1000) / 1000
-            print('WARNING: Grid resolution has been reduced -> unit size = ' + str(grid_unit_size))
+            print(f'WARNING: Grid resolution has been reduced -> unit size = {grid_unit_size}')
 
         # Set the new lines to be written in the local CMIP inputs file
         grid_inputs = [
@@ -472,8 +481,7 @@ def energies (
                         '# Run CMIP inverting host and guest\n'
                         f'cmip -i {CMIP_INPUTS_FILE} -pr {agent2_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent1_cmip_host.filename} -byat {debug_output_2}\n\n'
                         '# Sum both energies and compare\n'
-                        f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_1}\n'
-                        f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_2}\n'
+                        f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_1} {debug_output_2}\n'
                     )
                 raise SystemExit(' READY TO DEBUG -> Please go to the corresponding replica "energies" directory and follow the README instructions')
 
@@ -509,8 +517,7 @@ def energies (
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, step, count = get_pdb_frames(energies_structure_file.path, input_trajectory_file.path, 
-                                         snapshots, frames_limit,pbar_bool=False)
+    frames, step, count = get_pdb_frames(energies_structure_file.path, input_trajectory_file.path, snapshots, frames_limit)
     non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
 
     # Load backup data in case there is a backup file

@@ -11,8 +11,9 @@ import yaml
 from glob import glob
 from typing import Optional, List, Generator
 from struct import pack
-import time
-import threading
+# NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
+# We must use requests instead
+import requests
 
 
 # Check if a module has been imported
@@ -267,3 +268,30 @@ class CaptureOutput (object):
             if not char or self.escape_char in char:
                 break
             self.captured_text += char
+
+# Set a function to request data to the PDB GraphQL API
+# Note that this function may be used for either PDB ids or PDB molecule ids, depending on the query
+# The query parameter may be constructed using the following page:
+# https://data.rcsb.org/graphql/index.html
+def request_pdb_data (pdb_id : str, query : str) -> dict:
+    # Make sure the PDB id is valid as we set the correct key to mine the response data
+    if len(pdb_id) == 4: data_key = 'entry'
+    elif len(pdb_id) < 4: data_key = 'chem_comp'
+    else: raise ValueError(f'Wrong PDB id "{pdb_id}". It must be 4 (entries) or less (ligands) characters long')
+    # Set the request URL
+    request_url = 'https://data.rcsb.org/graphql'
+    # Set the POST data
+    post_data = {
+        "query": query,
+        "variables": { "id": pdb_id }
+    }
+    # Send the request
+    try:
+        response = requests.post(request_url, json=post_data)
+    except requests.exceptions.ConnectionError as error:
+        raise ConnectionError('No internet connection :(') from None
+    # Get the response
+    parsed_response = json.loads(response.text)['data'][data_key]
+    if parsed_response == None:
+        raise ValueError(f'PDB id {pdb_id} not found')
+    return parsed_response

@@ -3,9 +3,8 @@ import json
 import re
 import urllib.request
 
-from model_workflow.tools.generate_pdb_references import get_pdb_data
 from model_workflow.tools.residues_library import residue_name_2_letter
-from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json
+from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from model_workflow.utils.type_hints import *
 
@@ -256,7 +255,7 @@ def generate_protein_mapping (
             if match_sequences():
                 return protein_parsed_chains
     # If there are still any chain which is not matched with a reference then we need more references
-    # To get them, retrieve all uniprot codes associated to the pdb codes, if any
+    # To get them, retrieve all uniprot ids associated to the pdb ids, if any
     if pdb_ids and len(pdb_ids) > 0:
         for pdb_id in pdb_ids:
             # Ask PDB
@@ -602,11 +601,25 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 # Given a pdb Id, get its uniprot id
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
 def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
-    # Request the MMB service to retrieve pdb data
-    parsed_response = get_pdb_data(pdb_id)
-    # Get the uniprot accessions
-    uniprot_ids = [ uniprot['_id'] for uniprot in parsed_response['uniprotRefs'] ]
-    print(' References for PDB code ' + pdb_id + ': ' + ', '.join(uniprot_ids))
+    # Set the request query
+    query = '''query ($id: String!) {
+        entry(entry_id: $id) {
+            polymer_entities { rcsb_polymer_entity_container_identifiers { uniprot_ids } }
+        }
+    }'''
+    # Request PDB data
+    parsed_response = request_pdb_data(pdb_id, query)
+    # Mine data
+    uniprot_ids = []
+    for polymer in parsed_response['polymer_entities']:
+        identifier = polymer['rcsb_polymer_entity_container_identifiers']
+        # Get the uniprot
+        uniprots = identifier.get('uniprot_ids', None)
+        if not uniprots: continue
+        if len(uniprots) > 1: raise ValueError('Multiple PDB ids in the same chain?')
+        uniprot_id = uniprots[0]
+        uniprot_ids.append(uniprot_id)
+    print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(uniprot_ids))
     return uniprot_ids
 
 # This function is used by the generate_metadata script
