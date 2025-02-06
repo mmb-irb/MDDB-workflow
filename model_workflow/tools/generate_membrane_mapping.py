@@ -35,6 +35,15 @@ def generate_membrane_mapping(structure : 'Structure',
         - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
+     # Patch case where there no internet
+    try:
+        # This would return a ConnectionError
+        is_in_swiss_lipids('test')
+    except:
+        # Then we map the lipids/membrane
+        warn('There is a problem connecting to the SwissLipids database.\n'
+             'Skipping membrane mapping.')
+        return None
     print('-> Generating membrane mapping')
     assert topology_file.extension == 'json', 'Input topology file must be in json format: '+ topology_file.extension
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)

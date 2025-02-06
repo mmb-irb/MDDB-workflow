@@ -40,7 +40,7 @@ dependencies:
   # WARNING: This version of iminuit is not supported in further versions of python
   - iminuit<2
   # Membrane proteins analysis
-  - biobb_mem
+  - bioconda::biobb_mem
   - requests # To check is molecules is in LIPID MAPS
   # We must declare pip explicitly according to a warning
   - pip
