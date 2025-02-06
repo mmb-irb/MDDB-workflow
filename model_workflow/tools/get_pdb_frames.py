@@ -14,7 +14,7 @@ def get_pdb_frames (
     snapshots : int,
     frames_limit : Optional[int] = None,
     output_frames_prefix : str = 'frame',
-    pbar_bool : bool = True,
+    pbar_bool : bool = False,
 ):
 
     # Load the trajectory using pytraj
