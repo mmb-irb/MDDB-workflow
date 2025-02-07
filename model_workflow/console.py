@@ -1,6 +1,6 @@
 from pathlib import Path
 from os.path import exists
-from shutil import copyfile
+from shutil import copyfile, which
 from subprocess import call
 from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
@@ -62,27 +62,32 @@ def main ():
     # If user wants to setup the inputs
     elif subcommand == "inputs":
         # Make a copy of the template in the local directory if there is not an inputs file yet
-        if not exists(DEFAULT_INPUTS_FILENAME):
+        if exists(DEFAULT_INPUTS_FILENAME):
+            print(f"File {DEFAULT_INPUTS_FILENAME} already exists")
+        else:
             copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
-        # Ask the user for their preferred editor by choosing a number
-        editors = ["vscode", "vim", "nano", "gedit","None"]
+            print(f"File {DEFAULT_INPUTS_FILENAME} has been generated")
+        # Set the editor to be used to modify the inputs file
+        editor_command = args.editor
+        if editor_command:
+            if editor_command == 'none': return
+            return call([editor_command, DEFAULT_INPUTS_FILENAME])
+        # If no editor argument is passed then ask the user for one
         print("Choose your preferred editor:")
-        for i, editor in enumerate(editors, 1):
-            print(f"{i}. {editor}")
+        available_editors = list(AVAILABLE_TEXT_EDITORS.keys())
+        for i, editor_name in enumerate(available_editors, 1):
+            print(f"{i}. {editor_name}")
+        print("*. exit")
         try:
-            choice = int(input("Enter the number of your preferred editor: ").strip())
-            if 1 <= choice <= len(editors):
-                editor = editors[choice - 1]
-            else:
-                raise ValueError
-            if editor != "None":
-                # Open a text editor for the user
-                editor = editor if editor != 'vscode' else 'code'
-                call([editor, DEFAULT_INPUTS_FILENAME])
-            else:
-                print(f'File {DEFAULT_INPUTS_FILENAME} generated. Modify with a text editor.')
+            choice = int(input("Number: ").strip())
+            if not (1 <= choice <= len(available_editors)): raise ValueError
+            editor_name = available_editors[choice - 1]
+            editor_command = AVAILABLE_TEXT_EDITORS[editor_name]
+            # Open a text editor for the user
+            print(f"{editor_name} was selected")
+            call([editor_command, DEFAULT_INPUTS_FILENAME])
         except ValueError:
-            print(f"Invalid choice. Please modify {DEFAULT_INPUTS_FILENAME} with a text editor.")
+            print(f"No editor was selected")
         
 
     # In case the convert tool was called
@@ -469,6 +474,12 @@ inputs_parser = subparsers.add_parser("inputs",
     formatter_class=RawTextHelpFormatter,
     parents=[common_parser]
 )
+
+# Chose the editor in advance
+inputs_parser.add_argument(
+    "-ed", "--editor",
+    choices=[*AVAILABLE_TEXT_EDITORS.values(), 'none'],
+    help="Set the text editor to modify the inputs file")
 
 # The convert command
 convert_parser = subparsers.add_parser("convert",
