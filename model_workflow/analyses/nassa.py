@@ -927,11 +927,11 @@ def run_nassa(analysis_name: str,
             config_archive["save_path"] = analyses_folder
         else:
             # If the output folder already exists, it is checked so that it can be overwritten with te overwrite_nassa flag
-            if overwrite_nassa:
+            if os.listdir(analyses_folder) == [] or overwrite_nassa:
                 config_archive["save_path"] = analyses_folder
                 print(f'WARNING: Output folder {analyses_folder} already exists. Overwriting it.')
             else:
-                print(f'WARNING: Output folder {analyses_folder} already exists and is not empty. Skipping NASSA analysis. \nSet the overwrite flag to overwrite the output folder (--overwrite).')
+                print(f'WARNING: Output folder {analyses_folder} already exists and is not empty. Skipping NASSA analysis. \nSet the overwrite flag to overwrite the output folder (-own).')
                 return
         # The analysis is run
         analysis_class = analyses[analysis_name]
@@ -1113,7 +1113,7 @@ def workflow_nassa(
             
             # The check for the output folder is done here
             if os.path.exists(output_path):
-                if overwrite_nassa == True:
+                if os.listdir(output_path) == [] or overwrite_nassa == True:
                     print(f'  Output folder {output_path} already exists. Overwriting analysis {analysis_name}')
                     run_nassa(analysis_name, config_archive, overwrite_nassa)
                 else:
