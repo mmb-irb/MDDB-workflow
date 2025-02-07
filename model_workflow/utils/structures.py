@@ -1150,10 +1150,13 @@ class Structure:
             residue_number = line[22:26]
             for character in residue_number:
                 all_residue_number_characters.add(character)
+        # Remove white spaces
+        all_residue_number_characters.discard(' ')
         # If we find a non-numerical and non-alphabetical character then we assume it has a weird numeration system
         # Since we can not support every scenario, in this cases we set the numeration totally ignoring the one in the PDB
-        if next((character for character in all_residue_number_characters if not character.isalnum()), None):
-            warn('Weird residue numeration system found in the PDB file. Ignoring it.')
+        weird_character = next((character for character in all_residue_number_characters if not character.isalnum()), None)
+        if weird_character:
+            warn(f'Weird residue numeration including "{weird_character}" characters system found in the PDB file. Ignoring it.')
             residue_numeration_base = None
         # Search among all resiude numbers any letters (non-numerical characters)
         elif next((letter for letter in alphanumerical_letters if letter in all_residue_number_characters), None):
