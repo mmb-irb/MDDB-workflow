@@ -1150,8 +1150,13 @@ class Structure:
             residue_number = line[22:26]
             for character in residue_number:
                 all_residue_number_characters.add(character)
+        # If we find a non-numerical and non-alphabetical character then we assume it has a weird numeration system
+        # Since we can not support every scenario, in this cases we set the numeration totally ignoring the one in the PDB
+        if next((character for character in all_residue_number_characters if not character.isalnum()), None):
+            warn('Weird residue numeration system found in the PDB file. Ignoring it.')
+            residue_numeration_base = None
         # Search among all resiude numbers any letters (non-numerical characters)
-        if next((letter for letter in alphanumerical_letters if letter in all_residue_number_characters), None):
+        elif next((letter for letter in alphanumerical_letters if letter in all_residue_number_characters), None):
             residue_numeration_base = 36
         elif next((letter for letter in hexadecimal_letters if letter in all_residue_number_characters), None):
             residue_numeration_base = 16
@@ -1167,6 +1172,7 @@ class Structure:
         last_residue_name = None
         last_residue_number = None
         last_residue_icode = None
+        last_issued_residue_number = None
         for line in pdb_lines:
             # Parse atoms only
             start = line[0:6]
@@ -1206,8 +1212,14 @@ class Structure:
                 parsed_residue.atom_indices.append(atom_index)
                 # If it is the same residue then it will be the same chain as well so we can proceed
                 continue
-            # Parse the residue number
-            parsed_residue_number = int(residue_number, residue_numeration_base)
+            # Parse the residue number if it is to be parsed
+            if residue_numeration_base:
+                parsed_residue_number = int(residue_number, residue_numeration_base)
+            # If we decided to ignore the numeration system then we just issue the new residue number
+            else:
+                if not same_chain: last_issued_residue_number = 0
+                parsed_residue_number = last_issued_residue_number + 1
+                last_issued_residue_number = parsed_residue_number
             #print(f'Residue {residue_index+1} with number {residue_number} ({hexadecimal_residue_numbers}) -> {parsed_residue_number}')
             # Now parse the residue and add it to the list
             parsed_residue = Residue(name=residue_name, number=parsed_residue_number, icode=icode)
