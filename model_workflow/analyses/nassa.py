@@ -727,13 +727,11 @@ class StiffnessDistributions(Base):
                     extracted[coord.lower()] = crd_data
                     self.logger.info(
                         f"loaded {len(crd_data)} files for coordinate <{coord}>")
-        print(extracted)
         return extracted
 
     def transform(self, data):
         sequences = data.pop("sequences")
         results = {"stiffness": [], "covariances": {}, "constants": {}}
-        print(data)
         for traj, seq in enumerate(sequences):
             traj_series = {coord.lower(): data[coord][traj]
                            for coord in data.keys()}
@@ -792,7 +790,6 @@ class StiffnessDistributions(Base):
             scaling=[1, 1, 1, 10.6, 10.6, 10.6],
             KT=0.592186827):
         if (self.unit_len % 2) == 0:
-            print(cols_dict.keys())
             SH_av = cols_dict["shift"].mean()
             SL_av = cols_dict["slide"].mean()
             RS_av = cols_dict["rise"].mean()
@@ -816,14 +813,12 @@ class StiffnessDistributions(Base):
 
         cov_df = pd.DataFrame(cv, columns=coordinates, index=coordinates)
         stiff = np.linalg.inv(cv) * KT
-        #print(stiff)
         # Added two new variables: ChiC and ChiW -> 8 (for PENTAMERS)
         if (self.unit_len % 2) == 0:
             last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av] #, CW_av, CC_av]
             stiff = np.append(stiff, last_row).reshape(7, 6)
         elif (self.unit_len % 2) == 1:
             last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av, CW_av, CC_av]
-            print(last_row)
             stiff = np.append(stiff, last_row).reshape(9, 8)
             scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
         
@@ -882,7 +877,6 @@ class StiffnessDistributions(Base):
     def make_plots(self, dataset):
         stiffness_data = dataset["stiffness"]
         labeled_df = self.unimod_labels(stiffness_data)
-        print(stiffness_data)
         for col in labeled_df.columns:
             df = labeled_df[col]
             g_mean = df.loc["g_mean"]
