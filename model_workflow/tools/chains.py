@@ -118,9 +118,9 @@ def check_hmmer_result (jobid : str) -> dict:
     return parsed_response
 
 # Check if the required sequence is already in the MDDB database
-def check_sequence_in_mddb (sequence : str) -> dict:
+def check_sequence_in_mddb (sequence : str, database_url : str) -> dict:
     # Request PubChem
-    request_url = f'https://mmb-dev.mddbr.eu/api/rest/v1/references/chains/{sequence}'
+    request_url = f'{database_url}/rest/v1/references/chains/{sequence}'
     parsed_response = None
     try:
         with urlopen(request_url) as response:
@@ -181,6 +181,7 @@ def import_chains (chains_references_file : 'File') -> dict:
 def generate_chain_references (
     structure : 'Structure',
     chains_references_file : 'File',
+    database_url : str,
 ) -> dict:
     
     print('-> Getting protein chains data')
@@ -209,7 +210,7 @@ def generate_chain_references (
         chain_data = next((data for data in chains_data if data['sequence'] == sequence), None)
         # If we have no previous chain data then check if the sequence is already in the MDDB database
         if chain_data == None:
-            chain_data = check_sequence_in_mddb(sequence)
+            chain_data = check_sequence_in_mddb(sequence, database_url)
             if chain_data is not None:
                 chains_data.append(chain_data)
                 # Save the chains data at this point

@@ -2321,6 +2321,7 @@ class Project:
         self._protein_map = generate_protein_mapping(
             structure = self.structure,
             protein_references_file = protein_references_file,
+            database_url = self.database_url,
             register = self.register,
             mercy = self.mercy,
             forced_references = self.forced_references,
@@ -2357,6 +2358,7 @@ class Project:
         chains = generate_chain_references(
             structure = self.structure,
             chains_references_file = chains_references_file,
+            database_url=self.database_url
             #chain_name=self.structure.chain_name,
         )
         return chains

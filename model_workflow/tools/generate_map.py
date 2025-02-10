@@ -44,6 +44,7 @@ sys.stderr = stderr_backup
 def generate_protein_mapping (
     structure : 'Structure',
     protein_references_file : 'File',
+    database_url : str,
     register : dict,
     mercy : List[str] = [],
     forced_references : Union[list,dict] = [],
@@ -74,7 +75,7 @@ def generate_protein_mapping (
         reference = references.get(uniprot_accession, None)
         if reference:
             return reference, True
-        reference = get_mdposit_reference(uniprot_accession)
+        reference = get_mdposit_reference(uniprot_accession, database_url)
         if reference:
             return reference, True
         reference = get_uniprot_reference(uniprot_accession)
@@ -457,9 +458,9 @@ def blast (sequence : str) -> Optional[str]:
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
 # If the reference is not found or there is any error then return None and keep going, we do not really need this
-def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
+def get_mdposit_reference (uniprot_accession : str, database_url : str) -> Optional[dict]:
     # Request MDposit
-    request_url = 'https://mdposit-dev.mddbr.eu/api/rest/v1/references/' + uniprot_accession
+    request_url = f'{database_url}/rest/v1/references/{uniprot_accession}'
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
