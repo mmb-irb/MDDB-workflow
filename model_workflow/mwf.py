@@ -1095,15 +1095,19 @@ class MD:
 
     # Periodic boundary conditions atom selection
     def get_pbc_selection (self) -> List[int]:
+        # If we already have a stored value then return it
+        if self.project._pbc_selection:
+            return self.project._pbc_selection
         # If there is no inputs file then asume there are no PBC atoms and warn the user
         if not self.project.is_inputs_file_available():
             warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
-            return self.structure.select_pbc_guess()
+            self.project._pbc_selection = self.structure.select_pbc_guess()
+            return self.project._pbc_selection
         # Otherwise use the input value
         if not self.input_pbc_selection: return Selection()
-        parsed_selection = self.structure.select(self.input_pbc_selection)
-        print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(parsed_selection)} atoms')
-        return parsed_selection
+        self.project._pbc_selection = self.structure.select(self.input_pbc_selection)
+        print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(self.project._pbc_selection)} atoms')
+        return self.project._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # Indices of residues in periodic boundary conditions
@@ -1693,6 +1697,7 @@ class Project:
         self._inputs = None
 
         # Other values which may be found/calculated on demand
+        self._pbc_selection = None
         self._pbc_residues = None
         self._safe_bonds = None
         self._charges = None

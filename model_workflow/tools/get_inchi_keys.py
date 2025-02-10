@@ -36,10 +36,10 @@ def get_connected_residues(
         visited = set()
     
     # Add current residue to visited set
-    visited.add(residue.resid)
+    visited.add(residue.resindex)
     
     # Get direct external bonds
-    external_bonds = set()
+    external_bonds = set([residue.resindex])
     for bond in residue.atoms.bonds:
         external_bonds.update(bond.atoms.resindices)
     
