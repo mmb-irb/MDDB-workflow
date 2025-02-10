@@ -53,8 +53,16 @@ def clusters_analysis (
             'selection': parsed_overall_selection
         })
 
+    # Get all not failed interactions
+    valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
+
+    # Make sure we have valid interactions
+    if len(valid_interactions) == 0:
+        print(' There are no valid interactions -> This analysis will be skipped')
+        return
+
     # Now setup the interaction runs
-    for interaction in interactions:
+    for interaction in valid_interactions:
         # Get the interface selection
         interface_residue_indices = interaction['interface_indices_1'] + interaction['interface_indices_2']
         interface_selection = structure.select_residue_indices(interface_residue_indices)
