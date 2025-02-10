@@ -1,6 +1,6 @@
 from pathlib import Path
 from os.path import exists
-from shutil import copyfile
+from shutil import copyfile, which
 from subprocess import call
 from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
@@ -62,27 +62,32 @@ def main ():
     # If user wants to setup the inputs
     elif subcommand == "inputs":
         # Make a copy of the template in the local directory if there is not an inputs file yet
-        if not exists(DEFAULT_INPUTS_FILENAME):
+        if exists(DEFAULT_INPUTS_FILENAME):
+            print(f"File {DEFAULT_INPUTS_FILENAME} already exists")
+        else:
             copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
-        # Ask the user for their preferred editor by choosing a number
-        editors = ["vscode", "vim", "nano", "gedit","None"]
+            print(f"File {DEFAULT_INPUTS_FILENAME} has been generated")
+        # Set the editor to be used to modify the inputs file
+        editor_command = args.editor
+        if editor_command:
+            if editor_command == 'none': return
+            return call([editor_command, DEFAULT_INPUTS_FILENAME])
+        # If no editor argument is passed then ask the user for one
         print("Choose your preferred editor:")
-        for i, editor in enumerate(editors, 1):
-            print(f"{i}. {editor}")
+        available_editors = list(AVAILABLE_TEXT_EDITORS.keys())
+        for i, editor_name in enumerate(available_editors, 1):
+            print(f"{i}. {editor_name}")
+        print("*. exit")
         try:
-            choice = int(input("Enter the number of your preferred editor: ").strip())
-            if 1 <= choice <= len(editors):
-                editor = editors[choice - 1]
-            else:
-                raise ValueError
-            if editor != "None":
-                # Open a text editor for the user
-                editor = editor if editor != 'vscode' else 'code'
-                call([editor, DEFAULT_INPUTS_FILENAME])
-            else:
-                print(f'File {DEFAULT_INPUTS_FILENAME} generated. Modify with a text editor.')
+            choice = int(input("Number: ").strip())
+            if not (1 <= choice <= len(available_editors)): raise ValueError
+            editor_name = available_editors[choice - 1]
+            editor_command = AVAILABLE_TEXT_EDITORS[editor_name]
+            # Open a text editor for the user
+            print(f"{editor_name} was selected")
+            call([editor_command, DEFAULT_INPUTS_FILENAME])
         except ValueError:
-            print(f"Invalid choice. Please modify {DEFAULT_INPUTS_FILENAME} with a text editor.")
+            print(f"No editor was selected")
         
 
     # In case the convert tool was called
@@ -168,7 +173,7 @@ def main ():
             print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
             return 
         # If the user wants to run the analysis. With the config file an analysis name must be provided, or the all flag must be set
-        if args.config and args.analysis_names == None:
+        if args.config and args.analysis_names == None and args.all == False:
             nassa_parser.print_help()
             print('Please provide an analysis name to run:', ', '.join(NASSA_ANALYSES_LIST))
             return
@@ -214,7 +219,7 @@ def main ():
             del dict_args['subcommand'] # preguntar Dani ¿?
             # Call the actual main function
             workflow_nassa(
-                    config_file_path = File(args.config), 
+                    config_file_path = args.config, 
                     analysis_names = args.analysis_names, 
                     make_config = args.make_config, 
                     output =  args.output,
@@ -470,6 +475,12 @@ inputs_parser = subparsers.add_parser("inputs",
     parents=[common_parser]
 )
 
+# Chose the editor in advance
+inputs_parser.add_argument(
+    "-ed", "--editor",
+    choices=[*AVAILABLE_TEXT_EDITORS.values(), 'none'],
+    help="Set the text editor to modify the inputs file")
+
 # The convert command
 convert_parser = subparsers.add_parser("convert",
     help="Convert a structure and/or several trajectories to other formats\n" +
@@ -577,10 +588,11 @@ nassa_parser.add_argument(
     help="Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST))
 nassa_parser.add_argument(
     "-w", "--make_config",
-    type=str,
-    default=[],
-    const=True,
-    action=custom,
+    #type=str,
+    nargs='*',
+    default=None,
+    # const=True,
+    # action=custom,
     help="Make a configuration file for the NASSA analysis: makecfg.\nThe base path could be given as an argument. If not, an example of configuration file is created.")
 nassa_parser.add_argument(
     "-seq", "--seq_path",

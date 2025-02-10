@@ -9,7 +9,7 @@ from pathlib import Path
 from model_workflow.tools.nassa_base import Base
 from model_workflow.tools.nassa_loaders import load_sequence
 from model_workflow.tools.nassa_loaders import load_serfile
-from model_workflow.utils.constants import NASSA_ANALYSES_CANALS, BLUE_HEADER, COLOR_END, CYAN_HEADER
+from model_workflow.utils.constants import NASSA_ANALYSES_CANALS, BLUE_HEADER, COLOR_END, CYAN_HEADER, GREEN_HEADER
 
 from model_workflow.utils.heatmaps_nassa import basepair_plot
 from model_workflow.utils.heatmaps_nassa import bconf_heatmap
@@ -727,13 +727,11 @@ class StiffnessDistributions(Base):
                     extracted[coord.lower()] = crd_data
                     self.logger.info(
                         f"loaded {len(crd_data)} files for coordinate <{coord}>")
-        print(extracted)
         return extracted
 
     def transform(self, data):
         sequences = data.pop("sequences")
         results = {"stiffness": [], "covariances": {}, "constants": {}}
-        print(data)
         for traj, seq in enumerate(sequences):
             traj_series = {coord.lower(): data[coord][traj]
                            for coord in data.keys()}
@@ -792,7 +790,6 @@ class StiffnessDistributions(Base):
             scaling=[1, 1, 1, 10.6, 10.6, 10.6],
             KT=0.592186827):
         if (self.unit_len % 2) == 0:
-            print(cols_dict.keys())
             SH_av = cols_dict["shift"].mean()
             SL_av = cols_dict["slide"].mean()
             RS_av = cols_dict["rise"].mean()
@@ -816,14 +813,12 @@ class StiffnessDistributions(Base):
 
         cov_df = pd.DataFrame(cv, columns=coordinates, index=coordinates)
         stiff = np.linalg.inv(cv) * KT
-        #print(stiff)
         # Added two new variables: ChiC and ChiW -> 8 (for PENTAMERS)
         if (self.unit_len % 2) == 0:
             last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av] #, CW_av, CC_av]
             stiff = np.append(stiff, last_row).reshape(7, 6)
         elif (self.unit_len % 2) == 1:
             last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av, CW_av, CC_av]
-            print(last_row)
             stiff = np.append(stiff, last_row).reshape(9, 8)
             scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
         
@@ -882,7 +877,6 @@ class StiffnessDistributions(Base):
     def make_plots(self, dataset):
         stiffness_data = dataset["stiffness"]
         labeled_df = self.unimod_labels(stiffness_data)
-        print(stiffness_data)
         for col in labeled_df.columns:
             df = labeled_df[col]
             g_mean = df.loc["g_mean"]
@@ -927,11 +921,11 @@ def run_nassa(analysis_name: str,
             config_archive["save_path"] = analyses_folder
         else:
             # If the output folder already exists, it is checked so that it can be overwritten with te overwrite_nassa flag
-            if overwrite_nassa:
+            if os.listdir(analyses_folder) == [] or overwrite_nassa:
                 config_archive["save_path"] = analyses_folder
                 print(f'WARNING: Output folder {analyses_folder} already exists. Overwriting it.')
             else:
-                print(f'WARNING: Output folder {analyses_folder} already exists and is not empty. Skipping NASSA analysis. \nSet the overwrite flag to overwrite the output folder (--overwrite).')
+                print(f'WARNING: Output folder {analyses_folder} already exists and is not empty. Skipping NASSA analysis. \nSet the overwrite flag to overwrite the output folder (-own).')
                 return
         # The analysis is run
         analysis_class = analyses[analysis_name]
@@ -1079,9 +1073,9 @@ def workflow_nassa(
             return
     # If the helical parameter analysis is not selected, the NASSA analysis will be run
     # To run this, the user has to provide the configuration file with the information needed
-    if config_file_path:
+    if config_file_path and analysis_names is not None:
         print(f'  Using config file {config_file_path}')
-    # Load the configuration file
+        # Load the configuration file
         try:
             with Path(config_file_path.absolute_path).open("r") as ymlfile:
                 config_archive = yaml.load(
@@ -1089,8 +1083,7 @@ def workflow_nassa(
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"Configuration file {config_file_path} not found!")   
-    # If the user select an analysis to run, it will be run   
-    if analysis_names is not None:
+        # The user can select the analysis to run
         for analysis_name in analysis_names:
             # THe output folder is defined in the configuration file
             if output is not None:
@@ -1114,7 +1107,7 @@ def workflow_nassa(
             
             # The check for the output folder is done here
             if os.path.exists(output_path):
-                if overwrite_nassa == True:
+                if os.listdir(output_path) == [] or overwrite_nassa == True:
                     print(f'  Output folder {output_path} already exists. Overwriting analysis {analysis_name}')
                     run_nassa(analysis_name, config_archive, overwrite_nassa)
                 else:
@@ -1124,3 +1117,28 @@ def workflow_nassa(
                 os.mkdir(output_path)
                 print(f'  Running analysis {analysis_name} and saving results in {output_path}')
                 run_nassa(analysis_name, config_archive, overwrite_nassa)
+    if all:
+        for analysis_name in NASSA_ANALYSES_CANALS.keys():
+            print(f"{GREEN_HEADER} |-----> Running analysis {analysis_name}{COLOR_END}")  
+            # Read the configuration file
+            try:
+                with Path(config_file_path).open("r") as ymlfile:
+                    config_archive = yaml.load(
+                        ymlfile, Loader=yaml.FullLoader)
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"Configuration file {config_file_path} not found!")   
+            # Check if the NASSA output folder exists
+            output_path = os.path.join(config_archive['save_path'], 'nassa_analysis')
+            config_archive['save_path'] = output_path
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+            # Check if the analysis output folder exists in NASSA output folder
+            if not os.path.exists(os.path.join(output_path, analysis_name)):
+                os.makedirs(os.path.join(output_path, analysis_name))
+            #     config_archive['save_path'] = os.path.join(output_path, analysis_name)
+            # Run the NASSA analysis with the selected analysis
+            run_nassa(analysis_name=analysis_name, 
+                        config_archive=config_archive, 
+                        overwrite_nassa=overwrite_nassa)
+            print(f'NASSA analysis completed at {current_directory_name}')

@@ -27,8 +27,18 @@ if not GROMACS_EXECUTABLE:
 if not GROMACS_EXECUTABLE:
     raise RuntimeError(f'Cannot find gromacs. Is gromacs installed? Set the env variable {GROMACS_ENV} as the gromacs executable path')
 
+# List typical text editor and their commands
+TEXT_EDITORS = {
+    'VIM': 'vim',
+    'GNU nano': 'nano',
+    'GNOME text editor': 'gedit',
+    'VScode': 'code',
+}
+# Keep only those editor which are already installed
+AVAILABLE_TEXT_EDITORS = { name: command for name, command in TEXT_EDITORS.items() if which(command) }
+
 # Database
-DEFAULT_API_URL = 'https://mmb-dev.mddbr.eu/api'
+DEFAULT_API_URL = 'https://irb.mddbr.eu/api'
 
 # Selections
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
