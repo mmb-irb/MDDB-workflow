@@ -48,7 +48,7 @@ def thickness (
         mean_z = selected_atoms.mean(axis=0)[2]
         midplane_z.append(float(mean_z))
     # Save the data
-    data = {
+    data = { 'data':{
         'frame': df.index.tolist(),
         'mean_positive': df['mean_positive'].tolist(),
         'mean_negative': df['mean_negative'].tolist(),
@@ -57,6 +57,6 @@ def thickness (
         'thickness': df['thickness'].tolist(),
         'std_thickness': df['std_thickness'].tolist(),
         'midplane_z': midplane_z,
-
+        }
     }
     save_json(data, output_analysis_filepath)
