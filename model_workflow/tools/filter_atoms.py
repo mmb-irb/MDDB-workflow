@@ -6,7 +6,6 @@ import json
 import pytraj as pt
 
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
-from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import save_json
