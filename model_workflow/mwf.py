@@ -2615,6 +2615,14 @@ md_requestables = {
 # List of requestables for the console
 requestables = { **project_requestables, **md_requestables }
 
+# Set groups of dependencies to be requested together using only one flag
+DEPENDENCY_FLAGS = {
+    'download': list(input_files.keys()),
+    'setup': list(processed_files.keys()),
+    'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
+    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ]
+}
+
 # The actual main function
 def workflow (
     # Project parameters
@@ -2662,13 +2670,24 @@ def workflow (
     tasks = None
     # If the download argument is passed then just make sure input files are available
     if download:
+        warn('The "-d" or "--download" argument is deprecated. Please use "-i download" instead.')
         tasks = list(input_files.keys())
     # If the setup argument is passed then just process input files
     elif setup:
+        warn('The "-s" or "--setup" argument is deprecated. Please use "-i setup" instead.')
         tasks = list(processed_files.keys())
     # If the include argument then add only the specified tasks to the list
     elif include and len(include) > 0:
-        tasks = include
+        tasks = [ *include ]
+        # Find for special flags among included
+        for flag, dependencies, in DEPENDENCY_FLAGS.items():
+            if flag not in tasks: continue
+            # If the flag is found then remove it and write the corresponding dependencie instead
+            # Make sure not to duplicate a dependency if it was already included
+            tasks.remove(flag)
+            for dep in dependencies:
+                if dep in tasks: continue
+                tasks.append(dep)
     # Set the default tasks otherwise
     else:
         tasks = [
