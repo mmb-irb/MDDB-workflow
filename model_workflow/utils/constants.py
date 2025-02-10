@@ -38,7 +38,7 @@ TEXT_EDITORS = {
 AVAILABLE_TEXT_EDITORS = { name: command for name, command in TEXT_EDITORS.items() if which(command) }
 
 # Database
-DEFAULT_API_URL = 'https://mmb-dev.mddbr.eu/api'
+DEFAULT_API_URL = 'https://irb.mddbr.eu/api'
 
 # Selections
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
