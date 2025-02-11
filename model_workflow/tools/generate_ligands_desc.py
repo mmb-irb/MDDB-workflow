@@ -764,8 +764,11 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
     # Mine data
+    nonpolymers = parsed_response['nonpolymer_entities']
+    if nonpolymers == None: return []
+    # Iterate nonpolymer entities to mine each PDB code
     ligand_codes = []
-    for nonpolymer in parsed_response['nonpolymer_entities']:
+    for nonpolymer in nonpolymers:
         ligand_code = nonpolymer['nonpolymer_comp']['chem_comp']['id']
         ligand_codes.append(ligand_code)
     print(f' Ligand codes for PDB id {pdb_id}: ' + ', '.join(ligand_codes))

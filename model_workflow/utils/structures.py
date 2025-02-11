@@ -11,7 +11,8 @@ from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
 from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise, warn, reprint
-from model_workflow.utils.constants import SUPPORTED_POLYMER_ELEMENTS, SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
+from model_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
+from model_workflow.utils.constants import STANDARD_COUNTER_CATION_ATOM_NAMES, STANDARD_COUNTER_ANION_ATOM_NAMES
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 from model_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM_ELEMENT
 
@@ -1560,16 +1561,25 @@ class Structure:
 
     # Select counter ion atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard atom named structures
-    def select_counter_ions (self) -> 'Selection':
+    def select_counter_ions (self, charge : Optional[str] = None) -> 'Selection':
         counter_ion_indices = []
+        # Set the accepted names accoridng to the charge
+        if charge == None:
+            accepted_names = STANDARD_COUNTER_ION_ATOM_NAMES
+        elif charge == '+':
+            accepted_names = STANDARD_COUNTER_CATION_ATOM_NAMES
+        elif charge == '-':
+            accepted_names = STANDARD_COUNTER_ANION_ATOM_NAMES
+        else:
+            raise ValueError('Not supported charge')
+        # Iterate atoms
         for atom in self.atoms:
             # If the residue has not one single atom then it is not an ion
-            if len(atom.residue.atoms) != 1:
-                continue
+            if len(atom.residue.atoms) != 1: continue
             # Get a simplified version of the atom name
             # Set all letters upper and remove non-letter characters (e.g. '+' and '-' symbols)
             simple_atom_name = ''.join(filter(str.isalpha, atom.name.upper()))
-            if simple_atom_name in STANDARD_COUNTER_ION_ATOM_NAMES:
+            if simple_atom_name in accepted_names:
                 counter_ion_indices.append(atom.index)
         return Selection(counter_ion_indices)
 
@@ -1593,9 +1603,17 @@ class Structure:
     def select_protein (self) -> 'Selection':
         return self.select_by_classification('protein')
     
+    # Select nucleic atoms
+    def select_nucleic (self) -> 'Selection':
+        return self.select_by_classification('nucleic')
+    
     # Select lipids
     def select_lipids (self) -> 'Selection':
         return self.select_by_classification('fatty') + self.select_by_classification('steroid')
+    
+    # Select carbohydrates
+    def select_carbohydrates (self) -> 'Selection':
+        return self.select_by_classification('carbohydrate')
 
     # Return a selection of the typical PBC atoms: solvent, counter ions and lipids
     # WARNING: This is just a guess
