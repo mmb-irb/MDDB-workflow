@@ -3,7 +3,7 @@
 
 from subprocess import run, PIPE, Popen
 import os
-
+import itertools
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
@@ -27,20 +27,97 @@ def process_interactions (
     mercy : List[str],
     register : 'Register',
     frames_limit : int,
+    interactions_auto : List[str],
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,
     # The cutoff distance is in Ångstroms (Å)
-    distance_cutoff : float = 5) -> list:
+    distance_cutoff : float = 5,
+    ) -> list:
 
     print('-> Processing interactions')
+
+    # If interactions are to be automatically defined, there are two options
+    if interactions_auto:
+        if len(interactions_auto) == 0:
+            interactions_auto = ['greedy']
+        # We only consider three cases: all chains interactions, only two or all chains vs one
+        if not interactions_auto == ['greedy'] and not interactions_auto == ['humble'] and len(interactions_auto[0]) != 1:
+            raise InputError('Invalid input interactions_auto. Please select "greedy", "humble" or the letter of the chain to be used')
+        if interactions_auto == ['greedy'] or interactions_auto == ['humble']:
+            print(f'-> Processing interactions automatically. Option "{interactions_auto}" is selected')
+        else:
+            print(f'-> Processing interactions automatically. Chain "{interactions_auto[0]}" is selected')
+        # Define the interactions to be processed overwriting the inputs.yaml
+        input_interactions = interactions_auto
+        
+    # If interactions are already in the expected format. If it a single letter it means only one chain is selected
+    if type(input_interactions) == list and not len(input_interactions[0]) == 1:
+        # Duplicate the input interactions to avoid modifying the originals
+        interactions = [ { k:v for k,v in interaction.items() } for interaction in input_interactions ]
+    # The greedy option is to find all possible interactions between chains
+    elif input_interactions == 'autogreedy' or input_interactions == 'greedy':
+        chain_names = [ chain.name for chain in structure.chains ]
+        interactions = []
+        # Use itertools to get all possible combinations of chains
+        for chain1, chain2 in itertools.combinations(chain_names, 2):
+            interaction = {
+                "agent_1": f"chain {chain1}",
+                "agent_2": f"chain {chain2}",
+                "name": "protein-protein interaction",
+                "selection_1": f"chain {chain1}",
+                "selection_2": f"chain {chain2}",
+                "type": "protein-protein"
+            }
+            interactions.append(interaction)
+    # The humble option is to find the interaction between two chains. If there are more than two chains then it won't work
+    elif input_interactions == 'autohumble' or input_interactions == 'humble':
+        chain_names = [ chain.name for chain in structure.chains ]
+        if chain_names == 2:
+            interactions = []
+            interaction = {
+                "agent_1": f"protein {chain_names[0]}",
+                "agent_2": f"protein {chain_names[1]}",
+                "name": "protein-protein interaction",
+                "selection_1": f"chain {chain_names[0]}",
+                "selection_2": f"chain {chain_names[1]}",
+                "type": "protein-protein"
+            }
+            interactions = [interaction]
+        else:
+            raise InputError('With input "autohumble" there must be exactly 2 chains in the structure. If not, use "autogreedy" or select the interactions manually')
+    # If the input is a single letter then it means only one chain is selected so we find the interactions with all other chains
+    elif len(input_interactions[0]) == 1:
+        chain_names = [ chain.name for chain in structure.chains ]
+        chain_selected = input_interactions[0]
+        # Check the selected chain is present in the structure
+        if chain_selected not in chain_names:
+            raise InputError(f'Selected chain "{chain_selected}" is not present in the structure')
+        interactions = []
+        for chain in chain_names:
+            # Skip the selected chain to not have self interactions
+            if chain == chain_selected:
+                continue
+            interaction = {
+                "agent_1": f"chain {chain_selected}",
+                "agent_2": f"chain {chain}",
+                "name": "protein-protein interaction",
+                "selection_1": f"chain {chain_selected}",
+                "selection_2": f"chain {chain}",
+                "type": "protein-protein"
+            }
+            interactions.append(interaction) 
+        # In this case, we assume that the user wants to interact the selected chain with all other chains so we force the analysis to be run anyway
+        mercy = STABLE_INTERACTIONS_FLAG
+    else:
+        raise InputError('Invalid input interactions')
 
     # If there are no interactions return an empty list
     if not input_interactions or len(input_interactions) == 0:
         return []
 
     # Check input interactions to be correct
-    for interaction in input_interactions:
+    for interaction in interactions:
         # Check agents have different names
         if interaction['agent_1'] == interaction['agent_2']:
             raise InputError(f'Interaction agents must have different names at {interaction["name"]}')
@@ -66,12 +143,10 @@ def process_interactions (
         loaded_interactions = load_interactions(processed_interactions_file, structure)
         # Merge the loaded interactions with the input interactions to cover all fields
         complete_interactions = []
-        for input_interaction, loaded_interaction in zip(input_interactions, loaded_interactions):
+        for input_interaction, loaded_interaction in zip(interactions, loaded_interactions):
             complete_interaction = { **input_interaction, **loaded_interaction }
             complete_interactions.append(complete_interaction)
         return complete_interactions
-
-    # Otherwise we must find the interacting residues
 
     # Reset warnings related to this analysis
     register.remove_warnings(STABLE_INTERACTIONS_FLAG)
@@ -83,9 +158,6 @@ def process_interactions (
         snapshots,
         frames_limit,
     )
-    
-    # Duplicate the input interactions to avoid modifying the originals
-    interactions = [ { k:v for k,v in interaction.items() } for interaction in input_interactions ]
 
     # Iterate over each defined interaction
     for interaction in interactions:
@@ -116,6 +188,8 @@ def process_interactions (
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
             interaction[FAILED_INTERACTION_FLAG] = True
+             # If this is an automated process then there is no need to warn the user
+            if interactions_auto: continue
             register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) are not stable enough so their analyses are skipped')
             continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
@@ -168,6 +242,12 @@ def process_interactions (
         'strong_bonds',
         FAILED_INTERACTION_FLAG
     ]
+
+    # If automatic interactions are being processed then we must remove failed interactions (this is necessary for futher analyses)
+    # AGUS: en principio esto es temporal 
+    if interactions_auto:
+        interactions = [ interaction for interaction in interactions if not interaction.get(FAILED_INTERACTION_FLAG, False) ]
+    
     file_interactions = []
     for interaction in interactions:
         file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
@@ -177,7 +257,6 @@ def process_interactions (
     any_valid_interactions = any( (not interaction.get(FAILED_INTERACTION_FLAG, False)) for interaction in interactions )
     if any_valid_interactions:
         save_json(file_interactions, processed_interactions_file.path, indent = 4)
-
     return interactions
 
 # Load interactions from an already existing interactions file

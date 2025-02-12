@@ -3,7 +3,7 @@ from os.path import exists, getmtime
 from datetime import datetime
 from time import strftime, gmtime
 
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import load_json, save_json, warn
 from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
 from model_workflow.utils.type_hints import *
 
@@ -124,7 +124,11 @@ class Register:
     # Add warnings with the right format and save the register
     # A flag is to be passed to handle further removal of warnings
     def add_warning (self, tag : str, message : str):
-        print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
+        warn(message)
+        # If we already had this exact warning then do not repeat it
+        for warning in self.warnings:
+            if warning['tag'] == tag and warning['message'] == message : return
+        # Add a new warning
         warning = { 'tag': tag, 'message': message }
         self.warnings.append(warning)
         self.save()

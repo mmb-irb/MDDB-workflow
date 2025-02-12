@@ -475,6 +475,14 @@ run_parser.add_argument(
     help=(f"Set the cutoff for the interactions analysis to fail (default {(DEFAULT_INTERACTION_CUTOFF)}).\n"
         "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
 
+run_parser.add_argument(
+    "-iauto", "--interactions_auto",
+    type=str,
+    nargs='*',
+    help="If passed, the interactions analysis will be run automatically.\n"
+    "You can select greedy (for all possible interactions), humble (if only exists two interactions) or the name of one chain. Default: greedy"
+)
+
 # Add a new to command to aid in the inputs file setup
 inputs_parser = subparsers.add_parser("inputs",
     help="Set the inputs file",

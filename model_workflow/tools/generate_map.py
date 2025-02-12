@@ -633,8 +633,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Set a different sequence for each chain
     sequences = [ chain.get_sequence() for chain in structure.chains ]
     # Now classify sequences according to if they belong to protein or nucleic sequences
-    protein_sequences = []
-    nucleic_sequences = []
+    protein_sequences = set()
+    nucleic_sequences = set()
     for sequence in sequences:
         # If the sequence is all X then it is probably not either protein or nucleic
         test = re.match(r'^[X]*$', sequence)
@@ -642,10 +642,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # If its a nucleic sequence
         test = re.match(r'^[ACGTUX]*$', sequence)
         if test:
-            nucleic_sequences.append(sequence)
+            nucleic_sequences.add(sequence)
         # Otherwise we consider it a protein sequence
         else:
-            protein_sequences.append(sequence)
+            protein_sequences.add(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -725,8 +725,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
-        'protein_sequences': protein_sequences,
-        'nucleic_sequences': nucleic_sequences,
+        'protein_sequences': list(protein_sequences),
+        'nucleic_sequences': list(nucleic_sequences),
         'domains': domains,
         'cv19_variant': variant
     }

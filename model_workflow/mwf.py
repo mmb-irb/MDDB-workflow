@@ -1066,7 +1066,8 @@ class MD:
             mercy = self.project.mercy,
             register = self.register,
             frames_limit = 1000,
-            interaction_cutoff = self.project.interaction_cutoff
+            interaction_cutoff = self.project.interaction_cutoff,
+            interactions_auto = self.project.interactions_auto,
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
@@ -1584,7 +1585,7 @@ class Project:
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
-        #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
+        interactions_auto : Optional[str] = None,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : Optional[int] = None,
     ):
@@ -1692,7 +1693,7 @@ class Project:
         self.rmsd_cutoff = rmsd_cutoff
         self.interaction_cutoff = interaction_cutoff
         self.sample_trajectory = sample_trajectory
-
+        self.interactions_auto = interactions_auto
         # Set the inputs, where values from the inputs file will be stored
         self._inputs = None
 
