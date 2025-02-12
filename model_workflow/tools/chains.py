@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 from urllib import request
 
 from model_workflow.tools.residues_library import residue_name_2_letter
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import load_json, save_json, RemoteServiceError
 from model_workflow.utils.type_hints import *
 
 # Get the sequence and name of the chain in the structure and request the InterProScan 
@@ -87,13 +87,15 @@ def request_hmmer (sequence : str) -> str:
         with request.urlopen(req) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
-        print(error.read().decode())
+        parsed_error = json.loads(error.read().decode("utf-8"))
         if error.code == 404:
             print('Not found')
             parsed_response = None
         elif error.code == 503:
-            raise SystemExit('PHMMER Service unavailable. Please try again later.')    
+            error_message = parsed_error.get('error', '')
+            raise RemoteServiceError('PHMMER Service unavailable. ' + error_message)  
         else:
+            print(parsed_error)
             raise ValueError('Something went wrong with the request: ' + request_url)
     job_id = parsed_response['results']['uuid']
     return job_id
@@ -291,4 +293,4 @@ def generate_chain_references (
             # Save the result
             save_json(chains_data, chains_references_file.path)
     
-    print(' Protein chains data obtained')
+    print(' Protein chains data obtained              ')
