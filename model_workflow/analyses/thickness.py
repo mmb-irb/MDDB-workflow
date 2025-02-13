@@ -11,7 +11,7 @@ def thickness (
     output_analysis_filepath : str,
     membrane_map: dict,
     snapshots : int,
-    frames_limit: int = 1000):
+    frames_limit: int = 100):
     print('-> Running thickness analysis')
 
     if membrane_map['n_mems'] == 0:
@@ -42,7 +42,7 @@ def thickness (
 
     # Calculate the mean z position of midplane wrt the box axis using pytraj
     midplane_z = []
-    for i in range(0, frames_count, frame_step):
+    for i in range(0, frames_count):
         frame = tj[i]
         selected_atoms = frame[head_sel]
         mean_z = selected_atoms.mean(axis=0)[2]

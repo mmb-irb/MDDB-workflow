@@ -11,12 +11,12 @@ def density (
     membrane_map: dict,
     structure : 'Structure',
     snapshots : int,
-    density_type = 'mass',
+    density_types = ['number', 'mass', 'charge', 'electron'],
     frames_limit = 1000):
     print('-> Running density analysis')
 
     if membrane_map['n_mems'] == 0:
-        # Do something special for density analysis for 
+        # TODO Do something special for density analysis for 
         # membranes like leaflets separation, polargroups, etc.
         print(' No membranes found in the structure. Skipping density analysis.')
         return
@@ -29,20 +29,27 @@ def density (
     for chain in structure.chains:
         components.append({
             'name': chain.name,
-            'selection': chain.get_selection()
+            'selection': chain.get_selection(),
+            'number': {},
+            'mass': {},
+            'charge': {}, # charge will be all 0because we cannot add charges to pytraj topology
+            'electron': {}
         })
     
     # Parse selections to pytraj masks
     pytraj_masks = [ component['selection'].to_pytraj() for component in components ]
     # Run pytraj
-    out = pt.density(tj, pytraj_masks, density_type)
-    # Iterate pytraj results
-    results = iter(out.values())
+    for density_type in density_types:
+        out = pt.density(tj, pytraj_masks, density_type)
+        # Iterate pytraj results
+        results = iter(out.values())
+        for component in components:
+            # Mine pytraj results
+            component[density_type]['dens'] = list(next(results))
+            component[density_type]['stdv'] = list(next(results))
+
+    # Parse the selection to atom indices
     for component in components:
-        # Mine pytraj results
-        component['dens'] = list(next(results))
-        component['stdv'] = list(next(results))
-        # Parse the selection to atom indices
         component['selection'] = component['selection'].atom_indices
     # Export results
     data = {'data': { 'comps': components, 'z': list(out['z']) } }
