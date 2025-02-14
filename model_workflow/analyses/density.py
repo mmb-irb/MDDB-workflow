@@ -32,12 +32,19 @@ def density (
             'selection': chain.get_selection(),
             'number': {},
             'mass': {},
-            'charge': {}, # charge will be all 0because we cannot add charges to pytraj topology
+            'charge': {}, # charge will be all 0 because we cannot add charges to pytraj topology
             'electron': {}
         })
-    
     # Parse selections to pytraj masks
     pytraj_masks = [ component['selection'].to_pytraj() for component in components ]
+    # Add polar atoms selection
+    components.append({
+        'name': 'polar',
+        'selection': membrane_map['polar_atoms'],
+        'number': {},'mass': {},'charge': {},'electron': {}
+    }) 
+    pytraj_masks.append('@'+', '.join(map(str,membrane_map['polar_atoms'])))
+
     # Run pytraj
     for density_type in density_types:
         out = pt.density(tj, pytraj_masks, density_type)
@@ -49,7 +56,9 @@ def density (
             component[density_type]['stdv'] = list(next(results))
 
     # Parse the selection to atom indices
+    # Selections could be removed to make the file smaller
     for component in components:
+        if component['name'] == 'polar': continue
         component['selection'] = component['selection'].atom_indices
     # Export results
     data = {'data': { 'comps': components, 'z': list(out['z']) } }
