@@ -10,7 +10,7 @@ class Remote:
         self.database_url = database_url
         self.accession = accession
         # Set the URL
-        self.url = f'{database_url}/rest/current/projects/{accession}'
+        self.url = f'{database_url}rest/current/projects/{accession}'
         # Set internal variables
         self._project_data = None
         self._available_files = None

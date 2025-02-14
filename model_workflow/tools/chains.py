@@ -122,7 +122,7 @@ def check_hmmer_result (jobid : str) -> dict:
 # Check if the required sequence is already in the MDDB database
 def check_sequence_in_mddb (sequence : str, database_url : str) -> dict:
     # Request PubChem
-    request_url = f'{database_url}/rest/v1/references/chains/{sequence}'
+    request_url = f'{database_url}rest/v1/references/chains/{sequence}'
     parsed_response = None
     try:
         with urlopen(request_url) as response:

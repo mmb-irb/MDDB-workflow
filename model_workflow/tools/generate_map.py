@@ -460,7 +460,7 @@ def blast (sequence : str) -> Optional[str]:
 # If the reference is not found or there is any error then return None and keep going, we do not really need this
 def get_mdposit_reference (uniprot_accession : str, database_url : str) -> Optional[dict]:
     # Request MDposit
-    request_url = f'{database_url}/rest/v1/references/{uniprot_accession}'
+    request_url = f'{database_url}rest/v1/references/{uniprot_accession}'
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
