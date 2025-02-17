@@ -89,7 +89,7 @@ def generate_membrane_mapping(structure : 'Structure',
         res_ch = charges[res.atoms.ix]
         max_ch_idx = np.argmax(res_ch)
         polar_atoms.append(res.atoms[max_ch_idx].index)
-    mem_map_js['polar_atoms'] = list(map(int, polar_atoms))  # save it later analysis
+    
     headgroup_sel = f'(index {" ".join(map(str,(polar_atoms)))})'
     # Run FATSLiM to find the membranes
     prop = {
@@ -131,15 +131,21 @@ def generate_membrane_mapping(structure : 'Structure',
                 remove_ridx.append(grp)
         for grp in remove_ridx:
             glclipid_ridx.remove(grp)
+        # Remove lipids not assigned to any membrane
+        no_mem_lipids -= top
+        no_mem_lipids -= bot
+        # Check in which leaflets each of the polar atoms is and save them
         mem_map_js['mems'][(str(i))] = {
             'leaflets': {
                 'top': list(map(int, top)),
                 'bot': list(map(int, bot))
-                }
+                },
+            'polar_atoms': {
+                'top': np.in1d(polar_atoms, list(top)).nonzero()[0].tolist(),
+                'bot': np.in1d(polar_atoms, list(bot)).nonzero()[0].tolist(),
             }
-        # Remove lipids not assigned to any membrane
-        no_mem_lipids -= top
-        no_mem_lipids -= bot
+        }
+
     mem_map_js['no_mem_lipid'] = list(map(int, no_mem_lipids))
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
