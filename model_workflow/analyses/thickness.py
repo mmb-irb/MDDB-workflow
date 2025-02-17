@@ -23,7 +23,10 @@ def thickness (
     # Load. Only used to get the frame step. TODO: extract the frame step on a separate function
     tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frames_limit)
 
-    head_sel = membrane_map['polar_atoms']
+    head_sel = []
+    for n in range(membrane_map['n_mems']):
+        head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
+        head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
     head_sel_mda = 'index ' + " ".join(map(str,(head_sel)))
     # Run the analysis on the whole membrane
     prop = {
