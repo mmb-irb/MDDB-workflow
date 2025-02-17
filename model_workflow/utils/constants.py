@@ -134,7 +134,7 @@ PROTEIN_REFERENCES_FILENAME = 'references.json'
 # Set the ligand references filename
 LIGAND_REFERENCES_FILENAME = 'ligands.json'
 # Set the ligand references filename
-MEMBRANE_MAPPING_FILENAME = 'mem_map.json'
+MEMBRANE_MAPPING_FILENAME = 'mda.mem_map.json'
 # Set the chains filename
 OUTPUT_CHAINS_FILENAME = 'chains.json'
 

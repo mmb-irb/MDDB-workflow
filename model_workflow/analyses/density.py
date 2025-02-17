@@ -16,8 +16,6 @@ def density (
     print('-> Running density analysis')
 
     if membrane_map['n_mems'] == 0:
-        # TODO Do something special for density analysis for 
-        # membranes like leaflets separation, polargroups, etc.
         print(' No membranes found in the structure. Skipping density analysis.')
         return
 
@@ -38,12 +36,16 @@ def density (
     # Parse selections to pytraj masks
     pytraj_masks = [ component['selection'].to_pytraj() for component in components ]
     # Add polar atoms selection
+    polar_atoms = []
+    for n in range(membrane_map['n_mems']):
+        polar_atoms.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
+        polar_atoms.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
     components.append({
         'name': 'polar',
-        'selection': membrane_map['polar_atoms'],
+        'selection': polar_atoms,
         'number': {},'mass': {},'charge': {},'electron': {}
     }) 
-    pytraj_masks.append('@'+', '.join(map(str,membrane_map['polar_atoms'])))
+    pytraj_masks.append('@'+', '.join(map(str,polar_atoms)))
 
     # Run pytraj
     for density_type in density_types:

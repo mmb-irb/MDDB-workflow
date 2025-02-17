@@ -89,7 +89,7 @@ def generate_membrane_mapping(structure : 'Structure',
         res_ch = charges[res.atoms.ix]
         max_ch_idx = np.argmax(res_ch)
         polar_atoms.append(res.atoms[max_ch_idx].index)
-    
+    polar_atoms = np.array(polar_atoms)
     headgroup_sel = f'(index {" ".join(map(str,(polar_atoms)))})'
     # Run FATSLiM to find the membranes
     prop = {
@@ -113,8 +113,8 @@ def generate_membrane_mapping(structure : 'Structure',
     no_mem_lipids = set(mem_candidates.atoms.indices)
     for i in range(n_mems):
         # and they are not assigned to any membrane. FATSLiM indexes start at 1
-        top = (np.array(mem_map[f'membrane_{i+1}_leaflet_1'])-1).tolist()  # JSON does not support numpy arrays
-        bot = (np.array(mem_map[f'membrane_{i+1}_leaflet_2'])-1).tolist()
+        bot = (np.array(mem_map[f'membrane_{i+1}_leaflet_1'])-1).tolist()  # JSON does not support numpy arrays
+        top = (np.array(mem_map[f'membrane_{i+1}_leaflet_2'])-1).tolist()
         top_ridx = u.atoms[top].residues.resindices
         bot_rdix = u.atoms[bot].residues.resindices
         # Some polar atoms from the glucids are to far from the polar atoms of the lipids
@@ -137,12 +137,12 @@ def generate_membrane_mapping(structure : 'Structure',
         # Check in which leaflets each of the polar atoms is and save them
         mem_map_js['mems'][(str(i))] = {
             'leaflets': {
+                'bot': list(map(int, bot)),
                 'top': list(map(int, top)),
-                'bot': list(map(int, bot))
                 },
             'polar_atoms': {
-                'top': np.in1d(polar_atoms, list(top)).nonzero()[0].tolist(),
-                'bot': np.in1d(polar_atoms, list(bot)).nonzero()[0].tolist(),
+                'bot': polar_atoms[np.in1d(polar_atoms, list(bot))].tolist(),
+                'top': polar_atoms[np.in1d(polar_atoms, list(top))].tolist(),
             }
         }
 
