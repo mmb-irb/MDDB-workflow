@@ -59,6 +59,7 @@ from model_workflow.analyses.rgyr import rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.density import density
 from model_workflow.analyses.thickness import thickness
+from model_workflow.analyses.area_per_lipid import area_per_lipid
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1544,6 +1545,8 @@ class MD:
         output_thickness_filepath = self.md_pathify(OUTPUT_THICKNESS_FILENAME)
         if exists(output_thickness_filepath) and not overwrite:
             return
+        if not getattr(self.project, 'membrane_map', None):
+            print('Membrane map is not available. Skipping thickness analysis')
         # Run the analysis
         thickness(
             input_structure_filepath = self.structure_file.path,
@@ -1551,6 +1554,20 @@ class MD:
             output_analysis_filepath = output_thickness_filepath,
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
+        )
+    def run_apl_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_apl_filepath = self.md_pathify(OUTPUT_APL_FILENAME)
+        if exists(output_apl_filepath) and not overwrite:
+            return
+        if not getattr(self.project, 'membrane_map', None):
+            print('Membrane map is not available. Skipping area per lipid analysis')
+        # Run the analysis
+        area_per_lipid(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_apl_filepath,
+            membrane_map = self.project.membrane_map,
         )
         
 # The project is the main project
@@ -2605,6 +2622,7 @@ analyses = {
     'tmscore': MD.run_tmscores_analysis,
     'density': MD.run_density_analysis,
     'thickness': MD.run_thickness_analysis,
+    'apl': MD.run_apl_analysis,
 }
 
 # Project requestable tasks

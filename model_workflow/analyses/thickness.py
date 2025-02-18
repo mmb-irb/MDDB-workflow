@@ -17,12 +17,10 @@ def thickness (
     if membrane_map['n_mems'] == 0:
         # Do something special for density analysis for 
         # membranes like leaflets separation, polargroups, etc.
-        print(' No membranes found in the structure. Skipping thickness analysis.')
+        print(' No membranes found in the structure. Skipping analysis.')
         return
 
-    # Load. Only used to get the frame step. TODO: extract the frame step on a separate function
     tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frames_limit)
-
     head_sel = []
     for n in range(membrane_map['n_mems']):
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])

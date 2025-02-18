@@ -170,6 +170,7 @@ OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
 OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
 OUTPUT_DENSITY_FILENAME = 'mda.density.json'
 OUTPUT_THICKNESS_FILENAME = 'mda.thickness.json'
+OUTPUT_APL_FILENAME = 'mda.apl.json'
 
 # Set folder names for some analyses which generate a lot of intermediate step files
 ENERGIES_FOLDER = 'energies'
