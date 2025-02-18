@@ -37,7 +37,8 @@ def area_per_lipid (
                 properties=prop)
     grids, grid_x, grid_y, m, s = process_apl(apl_tmp)
     os.remove(apl_tmp)
-
+    # Replace NaNs with -1 in the grids
+    grids = [np.nan_to_num(grid, nan=-1) for grid in grids]
     # Save the data
     data = { 'data':{
         'lower leaflet': grids[0].tolist(),
