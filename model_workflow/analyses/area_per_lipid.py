@@ -37,14 +37,14 @@ def area_per_lipid (
                 properties=prop)
     grids, grid_x, grid_y, m, s = process_apl(apl_tmp)
     os.remove(apl_tmp)
-    # Replace NaNs with -1 in the grids
+    # Replace NaNs with -1 in the grids so the loader don't break
     grids = [np.nan_to_num(grid, nan=-1) for grid in grids]
     # Save the data
     data = { 'data':{
         'lower leaflet': grids[0].tolist(),
         'upper leaflet': grids[1].tolist(),
-        'grid_x': grid_x.tolist(),
-        'grid_y': grid_y.tolist(),
+        'grid_x': grid_x[:,0].tolist(),
+        'grid_y': grid_y[0,:].tolist(),
         'median': m,
         'std': s,
         }

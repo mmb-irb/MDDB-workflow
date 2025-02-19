@@ -1,6 +1,6 @@
-import os, warnings
-import numpy as np
+import os
 import MDAnalysis
+import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
 from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
 from model_workflow.utils.auxiliar import save_json
@@ -52,10 +52,14 @@ def generate_membrane_mapping(structure : 'Structure',
     inchi_keys = get_inchi_keys(u, structure)
     # Classsify the residues as lipid or not
     lipid_ridx, glclipid_ridx = [], []
+    references = {}
     for inchikey, res_data in inchi_keys.items():
+        print(f'Checking InChIKey {inchikey} of {str(res_data["resname"])}')
         lipid_data = is_in_swiss_lipids(inchikey)
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if lipid_data:
+            references[inchikey] = {'resname': list(res_data['resname'])[0],
+                                    'swisslipids': lipid_data}
             lipid_ridx.extend(res_data['resindices'])
             if all('fatty' not in classes for classes in res_data['classification']):
                 warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is not '
@@ -72,7 +76,7 @@ def generate_membrane_mapping(structure : 'Structure',
                      f'Resindices: {str(res_data["resindices"])}\n'
                      'In case it is a lipid, please add it to the LIPID MAPS database: https://www.lipidmaps.org/new/reg/')
     # Prepare the membrane mapping OBJ/JSON
-    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'polar_atoms': {}}
+    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'polar_atoms': {}, 'references': references}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         print('No lipids found in the structure.')

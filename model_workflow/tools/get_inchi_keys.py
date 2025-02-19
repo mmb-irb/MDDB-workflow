@@ -195,8 +195,7 @@ def is_in_swiss_lipids(inchikey) -> dict:
     url = f"https://www.swisslipids.org/api/index.php/advancedSearch?InChIkey={first_layer}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        js = response.text
-        return True
+        return response.json()
     else:
         return False
     

@@ -597,7 +597,7 @@ class Residue:
         # These carbon atoms must be connected only to hydrogen in addition to 1-2 carbon
         # These carbons must not be bonded in a cycle so check atoms not be repeated in the series
         bonded_fatty_atoms = []
-        def get_bonded_fatty_atoms_recuersive (current_atom : Atom, previous_atom : Optional[Atom] = None) -> bool:
+        def get_bonded_fatty_atoms_recursive (current_atom : Atom, previous_atom : Optional[Atom] = None) -> bool:
             # Iterate over the input atom bonded atoms
             for bonded_atom in current_atom.get_bonded_atoms():
                 # Discard the previous atom to avoid an infinite loop
@@ -612,7 +612,7 @@ class Residue:
                 # Add the current bonded fatty atom to the list
                 bonded_fatty_atoms.append(bonded_atom)
                 # Find more bonded fatty atoms and add them to list as well
-                if get_bonded_fatty_atoms_recuersive(current_atom=bonded_atom, previous_atom=current_atom) == False:
+                if get_bonded_fatty_atoms_recursive(current_atom=bonded_atom, previous_atom=current_atom) == False:
                     return False
             return True
         # Now check all atoms and try to set the series until we find one which works
@@ -626,7 +626,7 @@ class Residue:
                 continue
             # Now that we have found a suitable candidate atom we start the series
             bonded_fatty_atoms = [atom]
-            if get_bonded_fatty_atoms_recuersive(atom) and len(bonded_fatty_atoms) >= 3:
+            if get_bonded_fatty_atoms_recursive(atom) and len(bonded_fatty_atoms) >= 3:
                 self._classification = 'fatty'
                 return self._classification
             already_checked_atoms += bonded_fatty_atoms
