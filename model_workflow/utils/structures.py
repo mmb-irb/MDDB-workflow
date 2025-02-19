@@ -774,8 +774,10 @@ class Residue:
 class Chain:
     def __init__ (self,
         name : Optional[str] = None,
+        classification : Optional[str] = None,
         ):
         self.name = name
+        self._classification = classification
         # Set variables to store references to other related instaces
         # These variables will be set further by the structure
         self._structure = None
@@ -904,6 +906,22 @@ class Chain:
         chain_copy._index = self._index
         chain_copy.residue_indices = self.residue_indices
         return chain_copy
+    
+    # Get type of the chain
+    def classify_chain (self) -> str:
+        return self.structure.get_selection_classification(self.get_selection())
+
+    def get_classification(self) -> str:
+        if self._classification:
+            return self._classification
+        self._classification = self.classify_chain()
+        return self._classification
+
+    def set_classification(self, classification : str):
+        self._classification = classification  
+
+    classification = property(get_classification, set_classification, None, "Classification of the chain (manual or automatic)")
+
 
 # A structure is a group of atoms organized in chains and residues
 class Structure:
@@ -1665,6 +1683,56 @@ class Structure:
     # Note that if a single atom from the chain is in the selection then the chain index is returned
     def get_selection_chain_indices (self, selection : 'Selection') -> List[int]:
         return list(set([ self.atoms[atom_index].chain_index for atom_index in selection.atom_indices ]))
+    
+    # Get type of the chain
+    def get_selection_classification (self, selection : 'Selection') -> str:
+
+        # Get selection residues
+        selection_residue_indices = self.get_selection_residue_indices(selection)
+
+        # Inicializar contadores para cada tipo de residuo
+        residue_counts = {}
+
+        # Count the residues of each type
+        for residue_index in selection_residue_indices:
+            residue = self.residues[residue_index]
+            res_class = residue.classification
+            if res_class in residue_counts:
+                residue_counts[res_class] += 1
+            else:
+                # If the classification is not recognized, count it as "other"
+                residue_counts[res_class] = 1  
+
+        total_residues = sum(residue_counts.values())
+        if total_residues == 0:
+            return "unknown"
+
+        # Calculate the proportion of each type of residue
+        proportions = {k: v / total_residues for k, v in residue_counts.items()}
+
+        # If one type of residue dominates, return it
+        primary_type = max(proportions, key=proportions.get)
+        # We establish a threshold of 80% to consider a chain as a single type
+        if proportions[primary_type] >= 0.8:
+            return f"{primary_type.capitalize()}"
+
+        # Special cases
+        # Mixed biopolimers
+        if proportions["protein"] > 0.3 and proportions["nucleic"] > 0.3:
+            return "protein-nucleic hybrid"
+        if proportions["carbohydrate"] > 0.3 and proportions["protein"] > 0.3:
+            return "glycoprotein"
+
+        # Mixed lipids
+        if proportions["fatty"] > 0.3 and proportions["steroid"] > 0.3:
+            return "lipid hybrid"
+
+        # More than two types of residues with a proportion greater than 20% can generate a hybrid chain
+        if len([p for p in proportions.values() if p > 0.2]) > 1:
+            return "hybrid"
+
+        # If no principal type is found, return the maximum percentage of residue type
+        return f"{primary_type.capitalize()}"
 
     # Create a new structure from the current using a selection to filter atoms
     def filter (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':

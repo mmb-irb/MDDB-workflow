@@ -5,7 +5,7 @@ from subprocess import run, PIPE, Popen
 import os
 import itertools
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 from model_workflow.utils.type_hints import *
 
@@ -18,7 +18,7 @@ FAILED_INTERACTION_FLAG = 'failed'
 # This file is also used as a backup here, since calculating interactions is a heavy calculation
 # In addition, this file may be used to force interactions with custom interface residues manually
 def process_interactions (
-    input_interactions : list,
+    input_interactions : Optional[list],
     structure_file : 'File',
     trajectory_file : 'File',
     structure : 'Structure',
@@ -27,7 +27,8 @@ def process_interactions (
     mercy : List[str],
     register : 'Register',
     frames_limit : int,
-    interactions_auto : List[str],
+    interactions_auto : str,
+    ligand_map : List[dict],
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,
@@ -37,83 +38,121 @@ def process_interactions (
 
     print('-> Processing interactions')
 
-    # If interactions are to be automatically defined, there are two options
-    if interactions_auto:
-        if len(interactions_auto) == 0:
-            interactions_auto = ['greedy']
-        # We only consider three cases: all chains interactions, only two or all chains vs one
-        if not interactions_auto == ['greedy'] and not interactions_auto == ['humble'] and len(interactions_auto[0]) != 1:
-            raise InputError('Invalid input interactions_auto. Please select "greedy", "humble" or the letter of the chain to be used')
-        if interactions_auto == ['greedy'] or interactions_auto == ['humble']:
-            print(f'-> Processing interactions automatically. Option "{interactions_auto}" is selected')
-        else:
-            print(f'-> Processing interactions automatically. Chain "{interactions_auto[0]}" is selected')
-        # Define the interactions to be processed overwriting the inputs.yaml
-        input_interactions = interactions_auto
-        
-    # If interactions are already in the expected format. If it a single letter it means only one chain is selected
-    if type(input_interactions) == list and not len(input_interactions[0]) == 1:
+    # Copy input interactions to avoid input mutation
+    interactions = []
+    if type(input_interactions) == list:
         # Duplicate the input interactions to avoid modifying the originals
         interactions = [ { k:v for k,v in interaction.items() } for interaction in input_interactions ]
-    # The greedy option is to find all possible interactions between chains
-    elif input_interactions == 'autogreedy' or input_interactions == 'greedy':
-        chain_names = [ chain.name for chain in structure.chains ]
-        interactions = []
-        # Use itertools to get all possible combinations of chains
-        for chain1, chain2 in itertools.combinations(chain_names, 2):
-            interaction = {
-                "agent_1": f"chain {chain1}",
-                "agent_2": f"chain {chain2}",
-                "name": "protein-protein interaction",
-                "selection_1": f"chain {chain1}",
-                "selection_2": f"chain {chain2}",
-                "type": "protein-protein"
-            }
-            interactions.append(interaction)
-    # The humble option is to find the interaction between two chains. If there are more than two chains then it won't work
-    elif input_interactions == 'autohumble' or input_interactions == 'humble':
-        chain_names = [ chain.name for chain in structure.chains ]
-        if chain_names == 2:
-            interactions = []
-            interaction = {
-                "agent_1": f"protein {chain_names[0]}",
-                "agent_2": f"protein {chain_names[1]}",
-                "name": "protein-protein interaction",
-                "selection_1": f"chain {chain_names[0]}",
-                "selection_2": f"chain {chain_names[1]}",
-                "type": "protein-protein"
-            }
-            interactions = [interaction]
+
+    # Set the protocol for guessing interactions automatically
+    auto = interactions_auto
+    # If the protocol is simply "true" then consider the greedy option
+    if auto == True: auto = 'greedy'
+
+    # If interactions are to be automatically defined, there are two options
+    if auto:
+        # We only consider three cases: all chains interactions, only two or all chains vs one
+        if not auto == 'greedy' and not auto == 'humble' and not auto == 'ligands' and len(auto[0]) != 1:
+            raise InputError('Invalid input auto. Please select "greedy", "humble", "ligands" or the letter of the chain to be used')
+        if auto == 'greedy' or auto == 'humble' or auto == 'ligands':
+            print(f' |-> Processing interactions automatically. Option "{auto}" is selected')
         else:
-            raise InputError('With input "autohumble" there must be exactly 2 chains in the structure. If not, use "autogreedy" or select the interactions manually')
-    # If the input is a single letter then it means only one chain is selected so we find the interactions with all other chains
-    elif len(input_interactions[0]) == 1:
-        chain_names = [ chain.name for chain in structure.chains ]
-        chain_selected = input_interactions[0]
-        # Check the selected chain is present in the structure
-        if chain_selected not in chain_names:
-            raise InputError(f'Selected chain "{chain_selected}" is not present in the structure')
-        interactions = []
-        for chain in chain_names:
-            # Skip the selected chain to not have self interactions
-            if chain == chain_selected:
-                continue
-            interaction = {
-                "agent_1": f"chain {chain_selected}",
-                "agent_2": f"chain {chain}",
-                "name": "protein-protein interaction",
-                "selection_1": f"chain {chain_selected}",
-                "selection_2": f"chain {chain}",
-                "type": "protein-protein"
-            }
-            interactions.append(interaction) 
-        # In this case, we assume that the user wants to interact the selected chain with all other chains so we force the analysis to be run anyway
-        mercy = STABLE_INTERACTIONS_FLAG
-    else:
-        raise InputError('Invalid input interactions')
+            print(f' |-> Processing interactions automatically. Chain "{auto[0]}" is selected')
+    
+        # The greedy option is to find all possible interactions between chains
+        if auto == 'autogreedy' or auto == 'greedy':
+            chains = { chain.name: chain.classification for chain in structure.chains }
+            # Use itertools to get all possible combinations of chains
+            for chain1, chain2 in itertools.combinations(chains.items(), 2):
+                chain1_name, chain1_classification = chain1
+                chain2_name, chain2_classification = chain2
+                interaction = {
+                    "agent_1": f"chain {chain1_name}",
+                    "agent_2": f"chain {chain2_name}",
+                    "name": f"{chain1_classification}-{chain2_classification} interaction",
+                    "selection_1": f"chain {chain1_name}",
+                    "selection_2": f"chain {chain2_name}"
+                }
+                interactions.append(interaction)
+            mercy = STABLE_INTERACTIONS_FLAG
+            
+        # The humble option is to find the interaction between two chains. If there are more than two chains then it won't work
+        elif auto == 'autohumble' or auto == 'humble':
+            chains = [ {chain.name: chain.classification} for chain in structure.chains ]
+            # If there are exactly two chains then we find the interaction between them
+            if len(chains) == 2:  
+                chain_data = [(next(iter(chain.keys())), next(iter(chain.values()))) for chain in chains]
+                interaction = {
+                    "agent_1": f"chain {chain_data[0][0]}",
+                    "agent_2": f"chain {chain_data[1][0]}",
+                    "name": f"{chain_data[0][1]}-{chain_data[1][1]} interaction",  
+                    "selection_1": f"chain {chain_data[0][0]}",
+                    "selection_2": f"chain {chain_data[1][0]}"
+                }
+                interactions.append(interaction)
+            else:
+                raise InputError('With input "autohumble" there must be exactly 2 chains in the structure. If not, use "autogreedy" or select the interactions manually')
+        # If the input is a single letter then it means only one chain is selected so we find the interactions with all other chains
+        elif len(auto) == 1:
+            chains = [ {chain.name: chain.classification} for chain in structure.chains ]
+            # Find the chain selected by the user
+            chain_selected = auto
+            matching_chain = next((chain for chain in chains if chain_selected in chain), None)
+            # If the chain is not found then raise an error
+            if not matching_chain:
+                raise InputError(f'Selected chain "{chain_selected}" is not present in the structure')
+            # Keep the classification of the selected chain
+            chain_selected_classification = matching_chain[chain_selected]
+            for chain_name, chain_classification in chains.items():
+                # Skip interaction of the selected chain with itself
+                if chain_name == chain_selected: continue
+                interaction = {
+                    "agent_1": f"chain {chain_selected}",
+                    "agent_2": f"chain {chain_name}",
+                    "name": f"{chain_selected_classification}-{chain_classification} interaction",
+                    "selection_1": f"chain {chain_selected}",
+                    "selection_2": f"chain {chain_name}"
+                }
+                interactions.append(interaction)
+        
+            # In this case, we assume that the user wants to interact the selected chain with all other chains so we force the analysis to be run anyway
+            mercy = STABLE_INTERACTIONS_FLAG
+        
+        elif auto == 'ligands':
+            # If there are no ligands present or matched in the structure then we skip ligand interactions
+            if not ligand_map:
+                raise InputError('No ligand map is detected. Skipping ligand interactions')
+            chains = { chain.name: chain.classification for chain in structure.chains }
+            # Iterate over the list of matched ligands in the structure
+            for ligand in ligand_map:
+                # AGUS: la clasificacion del ligando deberia mejorarse para no ser 'Other Chain' sino 'ligand' --> modificar Chain
+                for residue_index in ligand['residue_indices']:
+                    # Match the ligand residue with the chain it belongs to and its classification
+                    residue = structure.residues[residue_index]
+                    ligand_chain = residue.chain
+                    ligand_classification = residue.chain.classification.lower()
+                    # Create the ligand interaction with all chains
+                    for chain_name, chain_classification in chains.items():
+                        # Skip interaction of the ligand with itself
+                        if chain_name == ligand_chain.name: continue
+                        residue_selection = ', '.join([ str(residue_index) for residue_index in ligand['residue_indices'] ])
+                        # Skip interaction if the ligand classification is the same as the chain classification
+                        if ligand_classification == chain_classification.lower(): continue
+                        interaction = {
+                            "agent_1": f"ligand {ligand['name']}",
+                            "agent_2": f"chain {chain_name}",
+                            "name": f"ligand-{chain_classification.lower()} interaction",
+                            "selection_1": f"residue {residue_selection}", # AGUS: esto es un parche, podría haber más de un residuo por ligando ¿?
+                            "selection_2": f"chain {chain_name}"
+                        }
+                        interactions.append(interaction)
+            mercy = STABLE_INTERACTIONS_FLAG
+
+        else:
+            raise InputError(f'Invalid input auto interactions "{auto}"')
 
     # If there are no interactions return an empty list
-    if not input_interactions or len(input_interactions) == 0:
+    if not interactions or len(interactions) == 0:
         return []
 
     # Check input interactions to be correct
@@ -136,6 +175,15 @@ def process_interactions (
         overlap = agent_1_selection & agent_2_selection
         if overlap:
             raise InputError(f'Agents in interaction "{interaction["name"]}" have {len(overlap)} overlapping atoms')
+        # Check if there was a type already assigned to the interaction
+        # This is not supported anymore since the interaction type is set automatically
+        if 'type' in interaction:
+            warn(f'Interaction type "{interaction["type"]}" is already set for "{interaction["name"]}". This is no longer supported and it may be overwritten')
+        # Set the interaction type
+        agent_1_classification = structure.get_selection_classification(agent_1_selection)
+        agent_2_classification = structure.get_selection_classification(agent_2_selection)
+        alphabetically_sorted = sorted([agent_1_classification, agent_2_classification])
+        interaction['type'] = f'{alphabetically_sorted[0]}-{alphabetically_sorted[1]}'
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
@@ -189,7 +237,7 @@ def process_interactions (
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
             interaction[FAILED_INTERACTION_FLAG] = True
              # If this is an automated process then there is no need to warn the user
-            if interactions_auto: continue
+            if auto: continue
             register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) are not stable enough so their analyses are skipped')
             continue
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
@@ -226,8 +274,7 @@ def process_interactions (
             }
         )
 
-        print(interaction['name'] + ' (' + pretty_frames_percent + ') -> ' + 
-           str(sorted(interaction['interface_indices_1'] + interaction['interface_indices_2'])))
+        print(f'{interaction["name"]} ({pretty_frames_percent}) (type: {interaction["type"]}) -> {sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])}')
 
     # Write the interactions file with the fields to be uploaded to the database only
     # i.e. strong bonds and residue indices but not selections
@@ -245,7 +292,7 @@ def process_interactions (
 
     # If automatic interactions are being processed then we must remove failed interactions (this is necessary for futher analyses)
     # AGUS: en principio esto es temporal 
-    if interactions_auto:
+    if auto:
         interactions = [ interaction for interaction in interactions if not interaction.get(FAILED_INTERACTION_FLAG, False) ]
     
     file_interactions = []

@@ -478,9 +478,10 @@ run_parser.add_argument(
 run_parser.add_argument(
     "-iauto", "--interactions_auto",
     type=str,
-    nargs='*',
+    nargs='?',
+    const=True,
     help="If passed, the interactions analysis will be run automatically.\n"
-    "You can select greedy (for all possible interactions), humble (if only exists two interactions) or the name of one chain. Default: greedy"
+    "You can select 'greedy' (for all possible interactions), 'humble' (if only exists two interactions), the name of one chain or 'ligands' (for all chains vs ligands).\nDefault: greedy"
 )
 
 # Add a new to command to aid in the inputs file setup
