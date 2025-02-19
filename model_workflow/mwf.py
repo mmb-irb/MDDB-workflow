@@ -1530,6 +1530,7 @@ class MD:
             return
         if not getattr(self.project, 'membrane_map', None):
             print('Membrane map is not available. Skipping density analysis')
+            return
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,

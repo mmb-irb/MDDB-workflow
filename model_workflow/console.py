@@ -287,7 +287,7 @@ run_parser.add_argument(
 run_parser.add_argument(
     "-url", "--database_url",
     default=DEFAULT_API_URL,
-    help="API URL to download missing data")
+    help=f"API URL to download missing data. Default value is {DEFAULT_API_URL}")
 
 run_parser.add_argument(
     "-stru", "--input_structure_filepath",
