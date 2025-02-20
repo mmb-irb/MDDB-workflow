@@ -61,56 +61,51 @@ def process_interactions (
     
         # The greedy option is to find all possible interactions between chains
         if auto == 'autogreedy' or auto == 'greedy':
-            chains = { chain.name: chain.classification for chain in structure.chains }
+            chains = [ chain.name for chain in structure.chains ]
             # Use itertools to get all possible combinations of chains
-            for chain1, chain2 in itertools.combinations(chains.items(), 2):
-                chain1_name, chain1_classification = chain1
-                chain2_name, chain2_classification = chain2
+            for chain1, chain2 in itertools.combinations(chains, 2):
                 interaction = {
-                    "agent_1": f"chain {chain1_name}",
-                    "agent_2": f"chain {chain2_name}",
-                    "name": f"{chain1_classification}-{chain2_classification} interaction",
-                    "selection_1": f"chain {chain1_name}",
-                    "selection_2": f"chain {chain2_name}"
+                    "name": f"chain {chain1}-chain {chain2} interaction",
+                    "agent_1": f"chain {chain1}",
+                    "agent_2": f"chain {chain2}",
+                    "selection_1": f"chain {chain1}",
+                    "selection_2": f"chain {chain2}"
                 }
                 interactions.append(interaction)
             mercy = STABLE_INTERACTIONS_FLAG
             
         # The humble option is to find the interaction between two chains. If there are more than two chains then it won't work
         elif auto == 'autohumble' or auto == 'humble':
-            chains = [ {chain.name: chain.classification} for chain in structure.chains ]
+            chains = [ chain.name for chain in structure.chains ]
+            # Make sure there are only 2 chains
+            if len(chains) != 2: raise InputError('With input "autohumble" there must be exactly 2 chains in the structure. If not, use "autogreedy" or select the interactions manually')
             # If there are exactly two chains then we find the interaction between them
-            if len(chains) == 2:  
-                chain_data = [(next(iter(chain.keys())), next(iter(chain.values()))) for chain in chains]
-                interaction = {
-                    "agent_1": f"chain {chain_data[0][0]}",
-                    "agent_2": f"chain {chain_data[1][0]}",
-                    "name": f"{chain_data[0][1]}-{chain_data[1][1]} interaction",  
-                    "selection_1": f"chain {chain_data[0][0]}",
-                    "selection_2": f"chain {chain_data[1][0]}"
-                }
-                interactions.append(interaction)
-            else:
-                raise InputError('With input "autohumble" there must be exactly 2 chains in the structure. If not, use "autogreedy" or select the interactions manually')
+            chain_data = [(next(iter(chain.keys())), next(iter(chain.values()))) for chain in chains]
+            interaction = {
+                "name": f"chain {chains[0]}-chain {chains[1]} interaction", 
+                "agent_1": f"chain {chains[0]}",
+                "agent_2": f"chain {chains[1]}", 
+                "selection_1": f"chain {chains[0]}",
+                "selection_2": f"chain {chains[1]}"
+            }
+            interactions.append(interaction)
         # If the input is a single letter then it means only one chain is selected so we find the interactions with all other chains
         elif len(auto) == 1:
-            chains = [ {chain.name: chain.classification} for chain in structure.chains ]
+            chains = [ chain.name for chain in structure.chains ]
             # Find the chain selected by the user
-            chain_selected = auto
-            matching_chain = next((chain for chain in chains if chain_selected in chain), None)
+            selected_chain = auto
+            matching_chain = next((chain for chain in chains if selected_chain == chain), None)
             # If the chain is not found then raise an error
             if not matching_chain:
-                raise InputError(f'Selected chain "{chain_selected}" is not present in the structure')
-            # Keep the classification of the selected chain
-            chain_selected_classification = matching_chain[chain_selected]
-            for chain_name, chain_classification in chains.items():
+                raise InputError(f'Selected chain "{selected_chain}" is not present in the structure')
+            for chain_name in chains:
                 # Skip interaction of the selected chain with itself
-                if chain_name == chain_selected: continue
+                if chain_name == selected_chain: continue
                 interaction = {
-                    "agent_1": f"chain {chain_selected}",
+                    "name": f"chain {selected_chain}-chain {chain_name} interaction",
+                    "agent_1": f"chain {selected_chain}",
                     "agent_2": f"chain {chain_name}",
-                    "name": f"{chain_selected_classification}-{chain_classification} interaction",
-                    "selection_1": f"chain {chain_selected}",
+                    "selection_1": f"chain {selected_chain}",
                     "selection_2": f"chain {chain_name}"
                 }
                 interactions.append(interaction)
@@ -139,9 +134,9 @@ def process_interactions (
                         # Skip interaction if the ligand classification is the same as the chain classification
                         if ligand_classification == chain_classification.lower(): continue
                         interaction = {
+                            "name": f"ligand {ligand['name']}-chain {chain_name} interaction",
                             "agent_1": f"ligand {ligand['name']}",
                             "agent_2": f"chain {chain_name}",
-                            "name": f"ligand-{chain_classification.lower()} interaction",
                             "selection_1": f"residue {residue_selection}", # AGUS: esto es un parche, podría haber más de un residuo por ligando ¿?
                             "selection_2": f"chain {chain_name}"
                         }
