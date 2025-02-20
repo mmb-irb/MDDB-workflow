@@ -56,11 +56,6 @@ def clusters_analysis (
     # Get all not failed interactions
     valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
 
-    # Make sure we have valid interactions
-    if len(valid_interactions) == 0:
-        print(' There are no valid interactions -> This analysis will be skipped')
-        return
-
     # Now setup the interaction runs
     for interaction in valid_interactions:
         # Get the interface selection
@@ -240,7 +235,7 @@ def clusters_analysis (
         # Set the output clusters which include all frames in the cluster and the main or more representative frame
         output_clusters = []
         for frames, most_representative_frame in zip(clusters, representative_frames):
-            output_clusters.append({ 'frames': frames, 'main': most_representative_frame })
+            output_clusters.append({ 'frames': frames, 'main': most_representative_frame * step })
 
         # Set the output transitions in a hashable and json parseable way
         output_transitions = []
@@ -254,7 +249,8 @@ def clusters_analysis (
             'cutoff': cutoff,
             'clusters': output_clusters,
             'transitions': output_transitions,
-            'step': step
+            'step': step,
+            'version': '0.1.0',
         }
 
         # The output filename must be different for every run to avoid overwritting previous results
