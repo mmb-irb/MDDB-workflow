@@ -154,6 +154,11 @@ def process_interactions (
     # If there are no interactions return an empty list
     if not interactions or len(interactions) == 0:
         return []
+    
+    # Make sure there are no interactions with the same name
+    interaction_names = [ interaction['name'] for interaction in interactions ]
+    if len(set(interaction_names)) < len(interaction_names):
+        raise InputError('Interactions must have unique names')
 
     # Check input interactions to be correct
     for interaction in interactions:
