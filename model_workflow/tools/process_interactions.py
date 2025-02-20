@@ -180,6 +180,11 @@ def process_interactions (
         if 'type' in interaction:
             warn(f'Interaction type "{interaction["type"]}" is already set for "{interaction["name"]}". This is no longer supported and it may be overwritten')
         # Set the interaction type
+        # LORE: The type was a user input back in time but now we find it automatically
+        # WARNING: Do not calculate the type from the interface residue instead of the whole agent
+        # WARNING: This seems more coherent BUT the type will be written in the PROJECT metadata
+        # WARNING: Interaction type is a valuable search parameter and thus it must remain in project metadata
+        # WARNING: However we could have different types in different MDs, if the interaction is different
         agent_1_classification = structure.get_selection_classification(agent_1_selection)
         agent_2_classification = structure.get_selection_classification(agent_2_selection)
         alphabetically_sorted = sorted([agent_1_classification, agent_2_classification])
@@ -243,7 +248,7 @@ def process_interactions (
         # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
         for agent in ['1','2']:
             # First with all atoms/residues
-            atom_indices = interface_results['selection_' + agent + '_atom_indices']
+            atom_indices = interface_results[f'selection_{agent}_atom_indices']
             residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
             # Check residue lists to not be empty, which should never happen
             if len(residue_indices) == 0:
@@ -252,7 +257,7 @@ def process_interactions (
             interaction['residue_indices_' + agent] = residue_indices
             interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
-            interface_atom_indices = interface_results['selection_' + agent + '_interface_atom_indices']
+            interface_atom_indices = interface_results[f'selection_{agent}_interface_atom_indices']
             interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
             interaction['interface_indices_' + agent] = interface_residue_indices
             interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
@@ -277,7 +282,7 @@ def process_interactions (
         print(f'{interaction["name"]} ({pretty_frames_percent}) (type: {interaction["type"]}) -> {sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])}')
 
     # Write the interactions file with the fields to be uploaded to the database only
-    # i.e. strong bonds and residue indices but not selections
+    # i.e. not vmd selections
     file_keys = [
         'name',
         'agent_1',
