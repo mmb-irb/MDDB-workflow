@@ -504,7 +504,8 @@ class Residue:
     # WARNING: Note that this logic will not work in a structure without hydrogens
     # Available classifications:
     # - protein
-    # - nucleic
+    # - dna
+    # - rna
     # - carbohydrate
     # - fatty
     # - steroid
@@ -557,7 +558,12 @@ class Residue:
         # LORE: This included the condition "all((name in atom_names) for name in ['P', 'OP1', 'OP2'])"
         if (( all((name in atom_names) for name in ["O3'", "C3'", "C4'", "C5'", "O5'"]) or
             all((name in atom_names) for name in ["O3*", "C3*", "C4*", "C5*", "O5*"]) )):
-            self._classification = 'nucleic'
+            # At this point we know it is nucleic
+            # We must tell the difference between DNA and RNA
+            if "O2'" in atom_names or "O2*" in atom_names:
+                self._classification = 'rna'
+            else:
+                self._classification = 'dna'
             return self._classification
         # -------------------------------------------------------------------------------------------------------
         # To define carbohydrates search for rings made of 1 oxygen and 'n' carbons
@@ -891,6 +897,20 @@ class Chain:
         return len(self.atom_indices)
     atom_count = property(get_atom_count, None, None, "Number of atoms in the chain (read only)")
 
+    # Get the chain classification
+    def get_classification (self) -> str:
+        if self._classification:
+            return self._classification
+        self._classification = self.structure.get_selection_classification(self.get_selection())
+        return self._classification
+
+    # Force the chain classification
+    def set_classification (self, classification : str):
+        self._classification = classification  
+
+    # Chain classification
+    classification = property(get_classification, set_classification, None, "Classification of the chain (manual or automatic)")
+
     # Get the residues sequence in one-letter code
     def get_sequence (self) -> str:
         return ''.join([ residue_name_to_letter(residue.name) for residue in self.residues ])
@@ -906,22 +926,6 @@ class Chain:
         chain_copy._index = self._index
         chain_copy.residue_indices = self.residue_indices
         return chain_copy
-    
-    # Get type of the chain
-    def classify_chain (self) -> str:
-        return self.structure.get_selection_classification(self.get_selection())
-
-    def get_classification(self) -> str:
-        if self._classification:
-            return self._classification
-        self._classification = self.classify_chain()
-        return self._classification
-
-    def set_classification(self, classification : str):
-        self._classification = classification  
-
-    classification = property(get_classification, set_classification, None, "Classification of the chain (manual or automatic)")
-
 
 # A structure is a group of atoms organized in chains and residues
 class Structure:
@@ -1576,6 +1580,10 @@ class Structure:
     # WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
     def select_water (self) -> 'Selection':
         return self.select_by_classification('solvent')
+    
+    # Select ions
+    def select_ions (self) -> 'Selection':
+        return self.select_by_classification('ion')
 
     # Select counter ion atoms
     # WARNING: This logic is a bit guessy and it may fail for non-standard atom named structures
@@ -1623,7 +1631,7 @@ class Structure:
     
     # Select nucleic atoms
     def select_nucleic (self) -> 'Selection':
-        return self.select_by_classification('nucleic')
+        return self.select_by_classification('dna') + self.select_by_classification('rna')
     
     # Select lipids
     def select_lipids (self) -> 'Selection':
@@ -1654,7 +1662,7 @@ class Structure:
         if protein_selection:
             fragments += list(self.find_fragments(protein_selection))
         # Get nucleic fragments according to VMD
-        nucleic_selection = self.select('nucleic', syntax='vmd')
+        nucleic_selection = self.select_nucleic()
         if nucleic_selection:
             fragments += list(self.find_fragments(nucleic_selection))
         # Set the final selection including all valid fragments
@@ -1703,36 +1711,43 @@ class Structure:
                 # If the classification is not recognized, count it as "other"
                 residue_counts[res_class] = 1  
 
+        # Count the total number of residues in the selection
         total_residues = sum(residue_counts.values())
-        if total_residues == 0:
-            return "unknown"
+        if total_residues == 0: raise ValueError('Should have residues at this point')
 
         # Calculate the proportion of each type of residue
-        proportions = {k: v / total_residues for k, v in residue_counts.items()}
+        proportions = { k: v / total_residues for k, v in residue_counts.items() }
 
         # If one type of residue dominates, return it
         primary_type = max(proportions, key=proportions.get)
         # We establish a threshold of 80% to consider a chain as a single type
         if proportions[primary_type] >= 0.8:
-            return f"{primary_type.capitalize()}"
+            return primary_type
 
         # Special cases
-        # Mixed biopolimers
-        if proportions["protein"] > 0.3 and proportions["nucleic"] > 0.3:
-            return "protein-nucleic hybrid"
-        if proportions["carbohydrate"] > 0.3 and proportions["protein"] > 0.3:
+        relevant_threshold = 0.3
+        if proportions["dna"] > relevant_threshold and proportions["rna"] > relevant_threshold:
+            return "nucleic"
+        if proportions["carbohydrate"] > relevant_threshold and proportions["protein"] > relevant_threshold:
             return "glycoprotein"
-
-        # Mixed lipids
-        if proportions["fatty"] > 0.3 and proportions["steroid"] > 0.3:
-            return "lipid hybrid"
-
-        # More than two types of residues with a proportion greater than 20% can generate a hybrid chain
-        if len([p for p in proportions.values() if p > 0.2]) > 1:
-            return "hybrid"
-
-        # If no principal type is found, return the maximum percentage of residue type
-        return f"{primary_type.capitalize()}"
+        if proportions["fatty"] > relevant_threshold and proportions["steroid"] > relevant_threshold:
+            return "lipid"
+        
+        # Any other combinations of different main proportions
+        main_proportions = { k: v for k, v in proportions.items() if v > relevant_threshold }
+        # Nothing is above the threshold
+        if len(main_proportions) == 0:
+            return "mix"
+        # There is only one thing above threshold
+        elif len(main_proportions) == 1:
+            return f"{primary_type}/mix"
+        # There are two things above threshold
+        elif len(main_proportions) == 2:
+            other_type = next(key for key in main_proportions.keys() if key != primary_type)
+            return f"{primary_type}/{other_type}"
+        # There are three things above the threshold (more is not possible)
+        else:
+            return "mix"
 
     # Create a new structure from the current using a selection to filter atoms
     def filter (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':
@@ -1842,32 +1857,23 @@ class Structure:
         # Reset chains
         self.chainer(letter='X')
         # Set solvent and ions as a unique chain
-        ion_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'ion' ]
-        ion_selection = self.select_residue_indices(ion_residue_indices)
-        solvent_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'solvent' ]
-        solvent_selection = self.select_residue_indices(solvent_residue_indices)
+        ion_selection = self.select_ions()
+        solvent_selection = self.select_water()
         ion_and_indices_selection = ion_selection + solvent_selection
         self.chainer(selection=ion_and_indices_selection, letter='S')
         # Set fatty acids and steroids as a unique chain
         # DANI: Se podrían incluir algunos carbohydrates (glycans)
         # DANI: Se podrían descartarían residuos que no pertenezcan a la membrana por proximidad
-        fatty_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'fatty' ]
-        fatty_selection = self.select_residue_indices(fatty_residue_indices)
-        steroid_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'steroid' ]
-        steroid_selection = self.select_residue_indices(steroid_residue_indices)
-        membrane_selection = fatty_selection + steroid_selection
+        membrane_selection = self.select_lipids()
         self.chainer(selection=membrane_selection, letter='M')
         # Set carbohydrates as a unique chain as well, just in case we have glycans
         # Note that in case glycan atoms are mixed with protein atoms glycan chains will be overwritten
         # However this is not a problem. It is indeed the best solution if we don't want ro resort atoms
-        carbohydrate_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'carbohydrate' ]
-        carbohydrate_selection = self.select_residue_indices(carbohydrate_residue_indices)
+        carbohydrate_selection = self.select_carbohydrates()
         self.chainer(selection=carbohydrate_selection, letter='H')
-        # Add a chain per fragment for both protein and nucleic acids
-        protein_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'protein' ]
-        protein_selection = self.select_residue_indices(protein_residue_indices)
-        nucleic_residue_indices = [ residue.index for residue in self.residues if residue.classification == 'nucleic' ]
-        nucleic_selection = self.select_residue_indices(nucleic_residue_indices)
+        # Add a chain per fragment for both proteins and nucleic acids
+        protein_selection = self.select_protein()
+        nucleic_selection = self.select_nucleic()
         protein_and_nucleic_selection = protein_selection + nucleic_selection
         self.chainer(selection=protein_and_nucleic_selection)
         # At this point we should have covered most of the molecules in the structure
@@ -2439,7 +2445,8 @@ class Structure:
     # Set the type of PTM according to the classification of the bonded residue
     ptm_options = {
         'protein': ValueError('A PTM residue must never be protein'),
-        'nucleic': 'Nucleic acid linkage', # DANI: Esto es posible aunque muy raro y no se como se llama
+        'dna': 'DNA linkage', # DANI: Esto es posible aunque muy raro y no se como se llama
+        'rna': 'RNA linkage', # DANI: Esto es posible aunque muy raro y no se como se llama
         'carbohydrate': 'Glycosilation',
         'fatty': 'Lipidation',
         'steroid': 'Steroid linkage', # DANI: Esto es posible aunque muy raro y no se como se llama

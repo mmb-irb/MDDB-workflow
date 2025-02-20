@@ -124,7 +124,7 @@ def helical_parameters (
         selection = structure.select(dna_selection, syntax='vmd')
     # Otherwise, get all nucleic acids
     else:
-        selection = structure.select('nucleic', syntax='vmd')
+        selection = structure.select_nucleic()
 
     # If there is nothing to analyze then we return here
     if not selection:

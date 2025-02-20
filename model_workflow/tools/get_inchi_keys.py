@@ -106,7 +106,7 @@ def get_inchi_keys (
         classes = set([residues[grp_idx].classification for grp_idx in res_grp_idx])
         # Skip residues that are aminoacids, nucleics, or too small
         # We also skips residues connected to them: glicoprotein, lipid-anchored protein...
-        if any(cls in ['ion', 'solvent', 'nucleic', 'protein'] for cls in classes):
+        if any(cls in ['ion', 'solvent', 'dna', 'rna', 'protein'] for cls in classes):
             continue
         # Select residues atoms with MDAnalysis
         res_atoms = u.residues[res_grp_idx].atoms
