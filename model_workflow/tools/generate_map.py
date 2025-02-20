@@ -629,23 +629,23 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
 from model_workflow.resources.covid_variants import covid_spike_variants
 def get_sequence_metadata (structure : 'Structure', protein_references_file : 'File', residue_map : dict) -> dict:
-    # First mine the sequences from the structure
-    # Set a different sequence for each chain
-    sequences = [ chain.get_sequence() for chain in structure.chains ]
-    # Now classify sequences according to if they belong to protein or nucleic sequences
+    # Mine sequences from the structure
+    sequences = []
+    # Classify sequences according to if they belong to protein or nucleic sequences
     protein_sequences = set()
     nucleic_sequences = set()
-    for sequence in sequences:
-        # If the sequence is all X then it is probably not either protein or nucleic
-        test = re.match(r'^[X]*$', sequence)
-        if test: continue
-        # If its a nucleic sequence
-        test = re.match(r'^[ACGTUX]*$', sequence)
-        if test:
-            nucleic_sequences.add(sequence)
-        # Otherwise we consider it a protein sequence
-        else:
+    # Iterate structure chains
+    for chain in structure.chains:
+        # Get the current chain sequence and add it to the list
+        sequence = chain.get_sequence()
+        sequences.append(sequence)
+        # Get the chain classification
+        classification = chain.get_classification()
+        # Depending on what it is, add the sequence also in the corresponding list
+        if classification == 'protein':
             protein_sequences.add(sequence)
+        elif classification == 'dna' or classification == 'rna':
+            nucleic_sequences.add(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
