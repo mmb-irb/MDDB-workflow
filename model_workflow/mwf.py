@@ -2459,6 +2459,7 @@ class Project:
             register = self.register,
             output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,
+            processed_interactions = self.reference_md.processed_interactions
         )
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
