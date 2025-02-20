@@ -3,7 +3,7 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
 from biobb_mem.gromacs.gmx_order import gmx_order
 import MDAnalysis
-
+import os
 
 def lipid_order (
     input_structure_filepath : str,
@@ -16,15 +16,27 @@ def lipid_order (
     if membrane_map['n_mems'] == 0:
         print(' No membranes found in the structure. Skipping analysis.')
         return
-
+    assert topology_file.absolute_path.endswith('tpr'), 'Topology file must be a .tpr file'
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, input_structure_filepath)
     membrane_map['references'] = ['DPPC']  # Placeholder
+    tmp_ndx = 'tmp.ndx'
     for resname in range(membrane_map['references']):
         # Select one residue, we have confirm before in the membrane mapping that all the lipids are the same
-        res = u.select_atoms(f'resname {resname}').residues[0]
+        res = u.select_atoms('resname DPPC').residues[0]
         carbon_groups = get_all_carbon_groups(res)
-
+        for i, group in enumerate(carbon_groups):
+            atoms = res.universe.atoms[group]
+            with MDAnalysis.selections.gromacs.SelectionWriter(tmp_ndx, mode='w') as ndx:
+                for atom in atoms:
+                    ndx.write(u.select_atoms(f'resname {resname} and name {atom.name}'), name=atom.name)
+            prop = {'disable_logs': True}
+            gmx_order(input_top_path=topology_file.absolute_path,
+                    input_traj_path=input_trajectory_filepath,
+                    input_index_path=tmp_ndx,
+                    output_deuter_path=resname + f'_order_{i}.xvg',
+                    properties=prop)
+            os.remove(tmp_ndx)
     # Save the data
     data = { 'data':{
         'order': 1,

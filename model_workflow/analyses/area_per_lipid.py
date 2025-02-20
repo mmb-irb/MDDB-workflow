@@ -52,10 +52,11 @@ def area_per_lipid (
     save_json(data, output_analysis_filepath)
 
 
-def process_apl(output_csv_path, res=50j):
+def process_apl(output_csv_path, res=100j):
     df = pd.read_csv(output_csv_path)
     grids = []
     # Create separate plots for each leaflet
+    df['Area per lipid'] *= 100  # Convert to A^2
     m = df['Area per lipid'].median()
     s = df['Area per lipid'].std()
     

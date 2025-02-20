@@ -60,6 +60,7 @@ from model_workflow.analyses.pca import pca
 from model_workflow.analyses.density import density
 from model_workflow.analyses.thickness import thickness
 from model_workflow.analyses.area_per_lipid import area_per_lipid
+from model_workflow.analyses.lipid_order import lipid_order
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1569,6 +1570,20 @@ class MD:
             output_analysis_filepath = output_apl_filepath,
             membrane_map = self.project.membrane_map,
         )
+    def run_lipid_order_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_lipid_order_filepath = self.md_pathify(OUTPUT_LIPID_ORDER_FILENAME)
+        if exists(output_lipid_order_filepath) and not overwrite:
+            return
+        if not getattr(self.project, 'membrane_map', None):
+            print('Membrane map is not available. Skipping area per lipid analysis')
+        # Run the analysis
+        lipid_order(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_lipid_order_filepath,
+            membrane_map = self.project.membrane_map,
+        )
         
 # The project is the main project
 # A project is a set of related MDs
@@ -2623,6 +2638,7 @@ analyses = {
     'density': MD.run_density_analysis,
     'thickness': MD.run_thickness_analysis,
     'apl': MD.run_apl_analysis,
+    'lorder': MD.run_lipid_order_analysis,
 }
 
 # Project requestable tasks
