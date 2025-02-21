@@ -36,9 +36,7 @@ ERASE_PREVIOUS_LINE = CURSOR_UP_ONE + ERASE_LINE
 ERASE_4_PREVIOUS_LINES = ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + ERASE_PREVIOUS_LINE + CURSOR_UP_ONE
 
 # Set some known error logs to check if we are having them
-KNOWN_ERRORS = set([
-    'No Pockets Found while refining',
-    'No pocket to reindex',
+KNOWN_MDPOCKET_ERRORS = set([
     'Error in creating clustering tree, return NULL pointer...breaking up'
 ])
 
@@ -141,7 +139,7 @@ def pockets (
 
         # Check if we are having concerning error logs
         errored = False
-        for error in KNOWN_ERRORS:
+        for error in KNOWN_MDPOCKET_ERRORS:
             matches = re.findall(error, error_logs)
             count = len(matches)
             if count > 0:
@@ -331,7 +329,7 @@ def pockets (
     # Exclude the first result which will always be 0 and it stands for no-pocket points
     biggest_pockets = collections.Counter(pockets).most_common()
     if len(biggest_pockets) == 1:
-        print('WARNING: No pockets were found')
+        print(' No pockets were found')
         # Recover the original directory
         chdir(recovery_path)
         return
