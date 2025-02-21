@@ -1579,8 +1579,8 @@ class MD:
             print('Membrane map is not available. Skipping area per lipid analysis')
         # Run the analysis
         lipid_order(
-            input_structure_filepath = self.structure_file.path,
             input_trajectory_filepath = self.trajectory_file.path,
+            topology_file=self.project.standard_topology_file,
             output_analysis_filepath = output_lipid_order_filepath,
             membrane_map = self.project.membrane_map,
         )

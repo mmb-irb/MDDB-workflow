@@ -1,12 +1,11 @@
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
-from biobb_mem.gromacs.gmx_order import gmx_order
+import numpy as np
 import MDAnalysis
-import os
+
 
 def lipid_order (
-    input_structure_filepath : str,
     input_trajectory_filepath : str,
     topology_file : 'File',
     output_analysis_filepath : str,
@@ -16,36 +15,37 @@ def lipid_order (
     if membrane_map['n_mems'] == 0:
         print(' No membranes found in the structure. Skipping analysis.')
         return
-    assert topology_file.absolute_path.endswith('tpr'), 'Topology file must be a .tpr file'
+    
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
-    u = MDAnalysis.Universe(mda_top, input_structure_filepath)
-    membrane_map['references'] = ['DPPC']  # Placeholder
-    tmp_ndx = 'tmp.ndx'
-    for resname in range(membrane_map['references']):
-        # Select one residue, we have confirm before in the membrane mapping that all the lipids are the same
-        res = u.select_atoms('resname DPPC').residues[0]
-        carbon_groups = get_all_carbon_groups(res)
-        for i, group in enumerate(carbon_groups):
+    u = MDAnalysis.Universe(mda_top, input_trajectory_filepath)
+    for ref_data in membrane_map['references'].values():
+        res = u.select_atoms(f'resname {ref_data["resname"]}').residues[0]
+        carbon_groups = get_all_acyl_chains(res)
+        ch_order_parameters = []
+        for group in carbon_groups:
             atoms = res.universe.atoms[group]
-            with MDAnalysis.selections.gromacs.SelectionWriter(tmp_ndx, mode='w') as ndx:
-                for atom in atoms:
-                    ndx.write(u.select_atoms(f'resname {resname} and name {atom.name}'), name=atom.name)
-            prop = {'disable_logs': True}
-            gmx_order(input_top_path=topology_file.absolute_path,
-                    input_traj_path=input_trajectory_filepath,
-                    input_index_path=tmp_ndx,
-                    output_deuter_path=resname + f'_order_{i}.xvg',
-                    properties=prop)
-            os.remove(tmp_ndx)
+            names = [atom.name for atom in atoms]
+            # Find all C-H bonds indices
+            ch_pairs = find_ch_bonds(u, ref_data["resname"], names)
+            # Initialize the order parameters to sum over the trajectory
+            order_parameters = []
+            costheta_sums = {name: np.zeros(len(ch_pairs[name]['C'])) for name in names}
+            n = 0
+            for ts in u.trajectory[0:10001:100]:
+                for name in names:
+                    d = u.atoms[ch_pairs[name]['C']].positions - u.atoms[ch_pairs[name]['H']].positions
+                    costheta_sums[name] += d[:,2]**2/np.linalg.norm(d, axis=1)**2
+                n += 1
+            costhetas = {name: costheta_sums[name].mean()/n for name in names}
+            #serror = 1.5 * np.std(order_parameters, axis = 0)/np.sqrt(len(order_parameters))
+            order_parameters = {name: 1.5 * costhetas[name] - 0.5 for name in names}
+            ch_order_parameters.append(order_parameters)
     # Save the data
-    data = { 'data':{
-        'order': 1,
-        }
-    }
+    data = { 'data':tuple(ch_order_parameters)}
     save_json(data, output_analysis_filepath)
 
 
-def get_all_carbon_groups(residue: 'MDAnalysis.Residue') -> list:
+def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list:
     """
     Finds all groups of connected Carbon atoms within a residue, including cyclic structures.
     
@@ -82,13 +82,56 @@ def get_all_carbon_groups(residue: 'MDAnalysis.Residue') -> list:
     # Get all Carbon atoms in the residue
     carbon_atoms = residue.atoms.select_atoms('name C*')
     visited = set()
+    for at in carbon_atoms:
+        if 'H' not in at.bonded_atoms.elements:
+            visited.add(at.index)
     carbon_groups = []
     # Find all distinct groups of connected carbons
     for carbon in carbon_atoms:
         if carbon.index not in visited:
             # Get all carbons connected to this one
             connected_carbons = explore_carbon_group(carbon, visited)
-            # Only add groups > 6: Acyl tails and non-cyclic structures
-            if len(connected_carbons)>6:  
-                carbon_groups.append(connected_carbons)
+            if len(connected_carbons)>6:  # Only add non-empty groups
+                carbon_groups.append(sorted(connected_carbons))
     return carbon_groups
+
+
+def find_ch_bonds(universe, lipid_resname, atom_names):
+    """
+    Find all carbon-hydrogen bonds in a lipid molecule using topology information.
+    
+    Args:
+        universe: MDAnalysis Universe object with topology information
+        lipid_resname: Residue name of the lipid (default: 'DPPC')
+    
+    Returns:
+        dict: Dict for each carbon, of tuples containing (carbon_index, hydrogen_index) for each C-H bond
+    """
+    # Get all carbons in the lipid
+    carbons = universe.select_atoms(f'resname {lipid_resname} and name ' + ' '.join(atom_names))
+    # Get how many carbons with different name that we will average over later
+    ch_pairs = {}
+    for name in atom_names:
+        ch_pairs[name] = { 'C':[], 'H':[] }
+
+    # Iterate through each carbon
+    for carbon in carbons:
+        # Get all bonds for this carbon
+        for bond in carbon.bonds:
+            # Check if the bond is between C and H
+            atoms = bond.atoms
+            at1_nm = atoms[0].name
+            at2_nm = atoms[1].name
+            if ('C' in at1_nm and 'H' in at2_nm):
+                # Store the indices making sure carbon is first
+                ch_pairs[carbon.name]['C'].append(atoms[0].index)
+                ch_pairs[carbon.name]['H'].append(atoms[1].index)
+            elif 'H' in at1_nm and 'C' in at2_nm:
+                ch_pairs[carbon.name]['C'].append(atoms[1].index)
+                ch_pairs[carbon.name]['H'].append(atoms[0].index)
+    # Convert lists to numpy arrays
+    for name in ch_pairs:
+        ch_pairs[name]['C'] = np.array(ch_pairs[name]['C'])
+        ch_pairs[name]['H'] = np.array(ch_pairs[name]['H'])
+    return ch_pairs
+
