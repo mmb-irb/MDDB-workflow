@@ -115,13 +115,14 @@ def get_bonds_canonical_frame (
 ) -> Optional[int]:
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots,patience)
-    print('Searching reference bonds canonical frame. Only first '
-          f'{min(patience,count)} frames will be checked.')
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots, patience)
+    print(f'Searching reference bonds canonical frame. {min(patience, count)} frames along the trajectory will be checked.')
     # We check all frames but we stop as soon as we find a match
     reference_bonds_frame = None
     counter_list = []
-    for frame_number, frame_pdb in enumerate(frames):
+    for f, frame_pdb in enumerate(frames):
+        # Get the actual frame number
+        frame_number = f * step
         bonds = get_covalent_bonds(frame_pdb)
         if do_bonds_match(bonds, reference_bonds, atom_elements, counter_list=counter_list):
             reference_bonds_frame = frame_number
