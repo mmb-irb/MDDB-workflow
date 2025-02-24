@@ -15,6 +15,7 @@ def get_pdb_frames (
     frames_limit : Optional[int] = None,
     output_frames_prefix : str = 'frame',
     pbar_bool : bool = False,
+    patience=float('inf')
 ):
     # WARNING: Do not set a pytraj iterload trajectory and read its 'n_frames' to get the snapshots
     # WARNING: Trying to read the number o frames of a xtc trajectory will read the whole trajectory
@@ -37,7 +38,7 @@ def get_pdb_frames (
         # Get the current directory at this point and use it to delete old files, in case we change the directory
         cwd = os.getcwd()
         # Create a progress bar
-        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=frames_count, unit='frame')
+        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=min(frames_count, patience), unit='frame')
         # Or print an empty line for the reprint to not delete a previous log
         else: print()
         # Extract each frame in pdb format
