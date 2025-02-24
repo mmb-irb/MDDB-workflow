@@ -187,12 +187,12 @@ def is_in_LIPID_MAPS(inchikey) -> dict:
         print(f"Error for {inchikey}: {response.status_code}")
 
 
-@lru_cache(maxsize=None)
-def is_in_swiss_lipids(inchikey) -> dict:
+# @lru_cache(maxsize=None)
+def is_in_swiss_lipids(inchikey, only_first_layer=True) -> dict:
     """Search the InChi keys in LIPID MAPS"""
-    first_layer = inchikey[:14]
+    key = inchikey[:14] if only_first_layer else inchikey
     headers = {'accept': 'json'}
-    url = f"https://www.swisslipids.org/api/index.php/advancedSearch?InChIkey={first_layer}"
+    url = f"https://www.swisslipids.org/api/index.php/advancedSearch?InChIkey={key}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return response.json()

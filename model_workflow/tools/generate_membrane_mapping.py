@@ -54,7 +54,6 @@ def generate_membrane_mapping(structure : 'Structure',
     lipid_ridx, glclipid_ridx = [], []
     references = {}
     for inchikey, res_data in inchi_keys.items():
-        print(f'Checking InChIKey {inchikey} of {str(res_data["resname"])}')
         lipid_data = is_in_swiss_lipids(inchikey)
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if lipid_data:

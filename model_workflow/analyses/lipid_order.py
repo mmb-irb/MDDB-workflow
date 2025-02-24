@@ -18,6 +18,7 @@ def lipid_order (
     
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, input_trajectory_filepath)
+    order_parameters_dict = {}
     for ref_data in membrane_map['references'].values():
         res = u.select_atoms(f'resname {ref_data["resname"]}').residues[0]
         carbon_groups = get_all_acyl_chains(res)
@@ -25,6 +26,7 @@ def lipid_order (
         for group in carbon_groups:
             atoms = res.universe.atoms[group]
             names = [atom.name for atom in atoms]
+            print(f'Calculating order parameters for {res.resname} {res.resid} {names}')
             # Find all C-H bonds indices
             ch_pairs = find_ch_bonds(u, ref_data["resname"], names)
             # Initialize the order parameters to sum over the trajectory
@@ -40,8 +42,9 @@ def lipid_order (
             #serror = 1.5 * np.std(order_parameters, axis = 0)/np.sqrt(len(order_parameters))
             order_parameters = {name: 1.5 * costhetas[name] - 0.5 for name in names}
             ch_order_parameters.append(order_parameters)
+        order_parameters_dict[ref_data['resname']] = tuple(ch_order_parameters)
     # Save the data
-    data = { 'data':tuple(ch_order_parameters)}
+    data = { 'data': order_parameters_dict}
     save_json(data, output_analysis_filepath)
 
 
