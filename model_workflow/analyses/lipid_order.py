@@ -22,27 +22,28 @@ def lipid_order (
     for ref_data in membrane_map['references'].values():
         res = u.select_atoms(f'resname {ref_data["resname"]}').residues[0]
         carbon_groups = get_all_acyl_chains(res)
-        ch_order_parameters = []
-        for group in carbon_groups:
+        order_parameters_dict[ref_data['resname']] = {}
+        # For every 'tail'
+        for chain_idx, group in enumerate(carbon_groups):
             atoms = res.universe.atoms[group]
-            names = [atom.name for atom in atoms]
-            print(f'Calculating order parameters for {res.resname} {res.resid} {names}')
+            C_names = [atom.name for atom in atoms]
             # Find all C-H bonds indices
-            ch_pairs = find_ch_bonds(u, ref_data["resname"], names)
+            ch_pairs = find_ch_bonds(u, ref_data["resname"], C_names)
             # Initialize the order parameters to sum over the trajectory
             order_parameters = []
-            costheta_sums = {name: np.zeros(len(ch_pairs[name]['C'])) for name in names}
+            costheta_sums = {C_name: np.zeros(len(ch_pairs[C_name]['C'])) for C_name in C_names}
             n = 0
             for ts in u.trajectory[0:10001:100]:
-                for name in names:
-                    d = u.atoms[ch_pairs[name]['C']].positions - u.atoms[ch_pairs[name]['H']].positions
-                    costheta_sums[name] += d[:,2]**2/np.linalg.norm(d, axis=1)**2
+                for C_name in C_names:
+                    d = u.atoms[ch_pairs[C_name]['C']].positions - u.atoms[ch_pairs[C_name]['H']].positions
+                    costheta_sums[C_name] += d[:,2]**2/np.linalg.norm(d, axis=1)**2
                 n += 1
-            costhetas = {name: costheta_sums[name].mean()/n for name in names}
-            #serror = 1.5 * np.std(order_parameters, axis = 0)/np.sqrt(len(order_parameters))
-            order_parameters = {name: 1.5 * costhetas[name] - 0.5 for name in names}
-            ch_order_parameters.append(order_parameters)
-        order_parameters_dict[ref_data['resname']] = tuple(ch_order_parameters)
+            order_parameters = 1.5 * np.array([costheta_sums[C_name].mean() for C_name in C_names])/n - 0.5
+            serrors = 1.5 * np.array([costheta_sums[C_name].std() for C_name in C_names])/n
+            order_parameters_dict[ref_data['resname']][str(chain_idx)] = {
+                'atoms': C_names,
+                'avg': order_parameters.tolist(),
+                'std': serrors.tolist()}
     # Save the data
     data = { 'data': order_parameters_dict}
     save_json(data, output_analysis_filepath)
@@ -72,18 +73,18 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list:
             if current_atom.index in visited:
                 continue
             visited.add(current_atom.index)
-            if current_atom.name.startswith('C'):
+            if current_atom.element == 'C':
                 group.add(current_atom.index)
                 # Add all bonded carbon atoms to the visit queue
                 for bond in current_atom.bonds:
                     for bonded_atom in bond.atoms:
-                        if (bonded_atom.name.startswith('C') and 
+                        if (bonded_atom.element == 'C' and 
                             bonded_atom.index not in visited):
                             to_visit.append(bonded_atom)
         return list(group)
 
     # Get all Carbon atoms in the residue
-    carbon_atoms = residue.atoms.select_atoms('name C*')
+    carbon_atoms = residue.atoms.select_atoms('element C')
     visited = set()
     for at in carbon_atoms:
         if 'H' not in at.bonded_atoms.elements:
