@@ -20,13 +20,18 @@ def lipid_order (
     u = MDAnalysis.Universe(mda_top, input_trajectory_filepath)
     order_parameters_dict = {}
     for ref_data in membrane_map['references'].values():
+        # Take the first residue of the reference (all residues are the same)
         res = u.select_atoms(f'resname {ref_data["resname"]}').residues[0]
-        carbon_groups = get_all_acyl_chains(res)
+        if ref_data['swisslipids'][0]['entity_name'] != 'cholesterol':
+            carbon_groups = get_all_acyl_chains(res)
+        else:
+            carbon_groups = [res.atoms.select_atoms('element C and bonded element H').indices]
+
         order_parameters_dict[ref_data['resname']] = {}
         # For every 'tail'
         for chain_idx, group in enumerate(carbon_groups):
             atoms = res.universe.atoms[group]
-            C_names = [atom.name for atom in atoms]
+            C_names = sorted([atom.name for atom in atoms],key=natural_sort_key)
             # Find all C-H bonds indices
             ch_pairs = find_ch_bonds(u, ref_data["resname"], C_names)
             # Initialize the order parameters to sum over the trajectory
@@ -86,6 +91,7 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list:
     # Get all Carbon atoms in the residue
     carbon_atoms = residue.atoms.select_atoms('element C')
     visited = set()
+    # Remove ester carbons (without hydrogens)
     for at in carbon_atoms:
         if 'H' not in at.bonded_atoms.elements:
             visited.add(at.index)
@@ -139,3 +145,8 @@ def find_ch_bonds(universe, lipid_resname, atom_names):
         ch_pairs[name]['H'] = np.array(ch_pairs[name]['H'])
     return ch_pairs
 
+def natural_sort_key(s):
+    """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)"""
+    import re
+    return [int(text) if text.isdigit() else text.lower()
+            for text in re.split('([0-9]+)', s)]
