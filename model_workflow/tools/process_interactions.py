@@ -178,7 +178,9 @@ def process_interactions (
         # Check if there was a type already assigned to the interaction
         # This is not supported anymore since the interaction type is set automatically
         if 'type' in interaction:
-            warn(f'Interaction type "{interaction["type"]}" is already set for "{interaction["name"]}". This is no longer supported and it may be overwritten')
+            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{interaction["name"]}".\n'
+                 'Interaction type is now calculated and the input interaction type is no longer supported.\n'
+                 'Note that the input value will be ignored')
         # Set the interaction type
         # LORE: The type was a user input back in time but now we find it automatically
         # WARNING: Do not calculate the type from the interface residue instead of the whole agent

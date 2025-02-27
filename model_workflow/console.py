@@ -480,8 +480,11 @@ run_parser.add_argument(
     type=str,
     nargs='?',
     const=True,
-    help="If passed, the interactions analysis will be run automatically.\n"
-    "You can select 'greedy' (for all possible interactions), 'humble' (if only exists two interactions), the name of one chain or 'ligands' (for all chains vs ligands).\nDefault: greedy"
+    help=("Guess input interactions automatically. Available options:\n"
+        "   greedy (default) - All chains against all chains\n"
+        "   humble - If there are only two chains then select the interaction between them\n"
+        "   <chain letter> - All chains against this specific chain\n"
+        "   ligands - All chains against every ligand")
 )
 
 # Add a new to command to aid in the inputs file setup
