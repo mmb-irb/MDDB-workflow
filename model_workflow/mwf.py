@@ -1069,6 +1069,7 @@ class MD:
             interaction_cutoff = self.project.interaction_cutoff,
             interactions_auto = self.project.interactions_auto,
             ligand_map = self.project.ligand_map,
+            pbc_selection = self.pbc_selection,
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
