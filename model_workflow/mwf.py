@@ -41,7 +41,8 @@ from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files, is_glob, parse_glob
+from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files
+from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -1372,17 +1373,19 @@ class MD:
     def run_clusters_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
-        # The number of output analyses should be the same number of valid processed interactions
-        # Otherwise we are missing some analysis
         if exists(output_analysis_filepath) and not overwrite:
             return
-        # Set the output filepaths for all runs
-        output_run_filepath = self.md_pathify(OUTPUT_CLUSTERS_RUNS_FILENAME)
         # Set the output filepaths for additional images generated in this analysis
         output_screenshot_filepath = self.md_pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
         # In case the overwirte argument is passed delete all already existing outputs
         if overwrite:
-            for outputs in [ output_run_filepath, output_screenshot_filepath ]:
+            # Delete the summary if it exists
+            if exists(output_analysis_filepath):
+                remove(output_analysis_filepath)
+            # Get the glob-patterned path of the output analyses
+            output_analysis_glob_pattern = glob_filename(output_analysis_filepath)
+            # Iterate glob matches
+            for outputs in [ output_analysis_glob_pattern, output_screenshot_filepath ]:
                 existing_outputs = glob(outputs)
                 for existing_output in existing_outputs:
                     if exists(existing_output):
@@ -1395,8 +1398,7 @@ class MD:
             structure = self.structure,
             snapshots = self.snapshots,
             pbc_selection = self.pbc_selection,
-            output_analysis_filename = output_analysis_filepath,
-            output_run_filepath = output_run_filepath,
+            output_analysis_filepath = output_analysis_filepath,
             output_screenshots_filename = output_screenshot_filepath,
         )
 
@@ -1422,24 +1424,31 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_HBONDS_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
-        # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
-        # WARNING: However, the output file size depends on the trajectory
-        # WARNING: Files have no limit, but analyses must be no heavier than 16Mb in BSON format
+        # If the analysis is to be overwritten then delete all previous outputs
+        if overwrite:
+            glob_pattern = glob_filename(output_analysis_filepath)
+            existing_outputs = glob(glob_pattern)
+            for existing_output in existing_outputs:
+                if exists(existing_output):
+                    remove(existing_output)
+        # Run the the analysis
+        # WARNING: the output file size depends on the number of hydrogen bonds
+        # WARNING: analyses must be no heavier than 16Mb in BSON format
         # WARNING: In case of large surface interaction the output analysis may be larger than the limit
-        # DANI: Esto no puede quedar así
-        # DANI: Me sabe muy mal perder resolución con este análisis, porque en cáculo es muy rápido
-        # DANI: Hay que crear un sistema de carga en mongo alternativo para análisis pesados
         hydrogen_bonds(
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
+            #output_analysis_filepath = output_analysis_filepath, # For the new version
             structure = self.structure,
             interactions = self.processed_interactions,
+            # Old fields
             snapshots = self.snapshots,
             frames_limit = 200,
-            # is_time_dependend = self.is_time_dependend,
-            # time_splits = 100,
-            # populations = self.populations
+            # New fields
+            #is_time_dependend = self.project.is_time_dependend,
+            #time_splits = 100,
+            #populations = self.populations
         )
 
     # SASA, solvent accessible surfave analysis

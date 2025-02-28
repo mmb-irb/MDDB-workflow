@@ -10,12 +10,12 @@
 # topology has been corrected previously and duplicated atoms have been renamed
 
 import pytraj as pt
-import numpy
 import re
 from math import ceil
+from os.path import exists
 
 from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name
 from model_workflow.utils.type_hints import *
 
 # Perform an hydrogen bonds analysis for each interaction interface
@@ -26,7 +26,7 @@ from model_workflow.utils.type_hints import *
 def hydrogen_bonds (
     input_topology_filename : str,
     input_trajectory_filename : str,
-    output_analysis_filename : str,
+    output_analysis_filepath : str,
     structure : 'Structure',
     interactions : list,
     #snapshots : int,
@@ -66,14 +66,32 @@ def hydrogen_bonds (
     pytraj_residue_index_2_residue = structure.pytraj_residue_index_2_residue
 
     # Save each analysis to a dict which will be parsed to json
-    output_analysis = []
+    output_summary = []
 
-    for interaction in interactions:
+    # Iterate interactions
+    for i, interaction in enumerate(interactions):
+
+        # Get the interaction name
+        name = interaction['name']
+        # Set a filename for the current interaction data
+        numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
+
+        # Add the root of the output analysis filename to the run data
+        analysis_name = get_analysis_name(numbered_output_analysis_filepath)
+        # Append current interaction to the summary
+        output_summary.append({
+            'name': name,
+            'analysis': analysis_name
+        })
+
+        # If the analysis already exists then proceed to the next interaction
+        if exists(numbered_output_analysis_filepath):
+            continue
         
         # Select all interface residues in pytraj notation
         pt_interface = interaction['pt_interface_1'] + interaction['pt_interface_2']
         if len(pt_interface) == 0:
-            raise ValueError('There are no interface residues for interaction "' + interaction['name'] + '"')
+            raise ValueError(f'There are no interface residues for interaction "{name}"')
         pt_selection = ':' + ','.join(map(str, pt_interface))
 
         # Run the analysis
@@ -168,7 +186,7 @@ def hydrogen_bonds (
                 temporal_percents.append(temporal_percent)
             hbond_timed.append(temporal_percents)
 
-        # Set the final interaction
+        # Set the interaction output
         interaction_data = {
             'name': interaction['name'],
             'acceptors': acceptor_atom_index_list,
@@ -181,8 +199,8 @@ def hydrogen_bonds (
         if populations:
             interaction_data['hbonds_framed'] = hbond_framed
 
-        # Write 
-        output_analysis.append(interaction_data)
+        # Write the interaction analysis output to a file
+        save_json(interaction_data, numbered_output_analysis_filepath)
 
     # Export the analysis in json format
-    save_json({ 'data': output_analysis }, output_analysis_filename)
+    save_json(output_summary, output_analysis_filepath)

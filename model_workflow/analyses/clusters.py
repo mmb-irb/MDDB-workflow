@@ -1,11 +1,11 @@
 from os.path import exists
-import re
 
 import numpy as np
 
 import mdtraj as mdt
 
 from model_workflow.utils.auxiliar import round_to_thousandths, save_json, otherwise
+from model_workflow.utils.auxiliar import numerate_filename, get_analysis_name
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
@@ -20,8 +20,7 @@ def clusters_analysis (
     structure : 'Structure',
     snapshots : int,
     pbc_selection : 'Selection',
-    output_analysis_filename : str,
-    output_run_filepath : str,
+    output_analysis_filepath : str,
     output_screenshots_filename : str,
     # Set the maximum number of frames
     frames_limit : int = 1000,
@@ -103,24 +102,21 @@ def clusters_analysis (
     for r, run in enumerate(runs):
         # Set the output analysis filename from the input template
         # e.g. replica_1/mda.clusters_*.json -> replica_1/mda.clusters_01.json
-        output_run_filename = output_run_filepath.replace('*', str(r).zfill(2))
+        numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, r)
+        print(numbered_output_analysis_filepath)
         # Get the run name
         name = run['name']
-        # Add the root of the output run filename to the run data
-        analysis_name_search = re.search(r'/mda.([A-Za-z0-9_-]*).json$', output_run_filename)
-        if not analysis_name_search:
-            raise ValueError(f'Clusters output run file {output_run_filename} has not the expected filename')
-        # To make it coherent with the rest of analyses, the analysis name become parsed when loaded in the database
-        # Every '_' is replaced by '-' so we must keep the analysis name coherent or the web client will not find it
-        analysis_name = analysis_name_search[1].replace('_', '-')
+        # Add the root of the output analysis filename to the run data
+        analysis_name = get_analysis_name(numbered_output_analysis_filepath)
         # Add this run to the final summary
         output_summary.append({
             'name': name,
             'analysis': analysis_name
         })
         # If the output file already exists then skip this iteration
-        if exists(output_run_filename):
+        if exists(numbered_output_analysis_filepath):
             continue
+
         print(f'Calculating distances for {name} -> {analysis_name}')
         # Get the run selection atom indices
         atom_indices = run['selection'].atom_indices
@@ -228,7 +224,7 @@ def clusters_analysis (
             auxiliar_structure.set_new_coordinates(coordinates)
             auxiliar_structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)
             # Set the screenshot filename from the input template
-            screenshot_filename = output_screenshots_filename.replace('*', str(r).zfill(2)).replace('?', str(c).zfill(2))
+            screenshot_filename = output_screenshots_filename.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
             # Generate the screenshot
             screenshot_parameters = get_screenshot(AUXILIAR_PDB_FILENAME, screenshot_filename, parameters=screenshot_parameters)
 
@@ -255,10 +251,10 @@ def clusters_analysis (
 
         # The output filename must be different for every run to avoid overwritting previous results
         # However the filename is not important regarding the database since this analysis is found by its 'run'
-        save_json(output_analysis, output_run_filename)
+        save_json(output_analysis, numbered_output_analysis_filepath)
 
     # Save the final summary
-    save_json(output_summary, output_analysis_filename)
+    save_json(output_summary, output_analysis_filepath)
 
 # Set a function to cluster frames in a RMSD matrix given a RMSD cutoff
 # https://github.com/boneta/RMSD-Clustering/blob/master/rmsd_clustering/clustering.py

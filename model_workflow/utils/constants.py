@@ -7,7 +7,8 @@ from shutil import which
 # This way we can edit the value of a constant on runtime
 GLOBALS = {
     # Set if symlinks are allowed
-    'no_symlinks': False
+    'no_symlinks': False,
+    'overwrite': set()
 }
 
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
@@ -145,7 +146,7 @@ OUTPUT_METADATA_FILENAME = 'metadata.json'
 OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 
 # Additional screenshot filenames
-OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.clusters_*_screenshot_?.jpg'
+OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.clusters_*_screenshot_??.jpg'
 
 # Set analyses files to be generated
 OUTPUT_PROCESSED_INTERACTIONS_FILENAME = 'mda.interactions.json'
@@ -159,7 +160,6 @@ OUTPUT_PCA_CONTACTS_FILENAME = 'mda.pca_contacts.json'
 OUTPUT_RMSD_PERRES_FILENAME = 'mda.rmsd_perres.json'
 OUTPUT_RMSD_PAIRWISE_FILENAME = 'mda.rmsd_pairwise.json'
 OUTPUT_CLUSTERS_FILENAME = 'mda.clusters.json'
-OUTPUT_CLUSTERS_RUNS_FILENAME = 'mda.clusters_*.json'
 OUTPUT_DIST_PERRES_FILENAME = 'mda.dist_perres.json'
 OUTPUT_HBONDS_FILENAME = 'mda.hbonds.json'
 OUTPUT_SASA_FILENAME = 'mda.sasa.json'
