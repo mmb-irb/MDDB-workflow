@@ -214,10 +214,10 @@ def generate_chain_references (
             # Get corresponding chain data and add the InterProScan results
             chain_data = next(data for data in chains_data if data['sequence'] == sequence)
             chain_data['interproscan'] = interproscan_result
+            # Remove version and pathways so Mongo don't get confused when they change
             del chain_data['interproscan']['interproscan-version']
             # RUBEN: creo que results siempre tiene un solo elemento, pero por si acaso iteramos
             for result in chain_data['interproscan']['results']:
-                # Sort the pathways by name so Mongo don't get confused when the change order
                 for match in result['matches']:
                     if match['signature']['entry'] is not None:
                         del match['signature']['entry']['pathwayXRefs']
