@@ -70,55 +70,6 @@ def check_interproscan_result (jobid : str) -> dict:
             raise ValueError('Something went wrong with the InterProScan results request: ' + request_url)
     return parsed_response
 
-# Get the sequence and name of the chain in the structure and request the HMMER services
-def request_hmmer (sequence : str) -> str:
-    # Set the request URL
-    request_url = 'https://www.ebi.ac.uk/Tools/hmmer/search/phmmer'
-    # Set the POST data
-    data = urlencode({
-        'seqdb': 'pdb',
-        'seq': f'>chain X\n{sequence}'
-    }).encode()
-    # Set the headers (they are needed in hmmer services)
-    headers = { 'Accept': 'application/json' }
-    req = request.Request(request_url, data=data, headers=headers)
-    parsed_response = None
-    try:
-        with request.urlopen(req) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    except HTTPError as error:
-        parsed_error = json.loads(error.read().decode("utf-8"))
-        if error.code == 404:
-            print('Not found')
-            parsed_response = None
-        elif error.code == 503:
-            error_message = parsed_error.get('error', '')
-            raise RemoteServiceError('PHMMER Service unavailable. ' + error_message)  
-        else:
-            print(parsed_error)
-            raise ValueError('Something went wrong with the request: ' + request_url)
-    job_id = parsed_response['results']['uuid']
-    return job_id
-
-# Check the status of the HMMER job
-def check_hmmer_result (jobid : str) -> dict:
-    # Set the request URL
-    request_url = f'https://www.ebi.ac.uk/Tools/hmmer/results/{jobid}.1'   
-    parsed_response = None
-    headers = { 'Accept': 'application/json' }
-    req = request.Request(request_url, headers=headers)
-    try:
-        with request.urlopen(req) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    except HTTPError as error:
-        print(error.read().decode())
-        if error.code == 404:
-            print('Not found')
-            parsed_response = None
-        else:
-            raise ValueError('Something went wrong with the request: ' + request_url)
-    return parsed_response
-
 # Check if the required sequence is already in the MDDB database
 def check_sequence_in_mddb (sequence : str, database_url : str) -> dict:
     # Request PubChem
@@ -164,7 +115,7 @@ def get_protein_parsed_chains (structure : 'Structure') -> list:
     return parsed_chains
 
 # Set the expected ligand data fields
-CHAIN_DATA_FIELDS = set(['sequence', 'interproscan', 'hmmer'])
+CHAIN_DATA_FIELDS = set(['sequence', 'interproscan'])
 
 # Import the chains data from a file if exists
 def import_chains (chains_references_file : 'File') -> dict:
@@ -178,7 +129,7 @@ def import_chains (chains_references_file : 'File') -> dict:
     return imported_chains
 
 # Define the main function that will be called from the main script
-# This function will get the parsed chains from the structure and request the InterProScan and HMMER services 
+# This function will get the parsed chains from the structure and request the InterProScan service
 # to obtain the data for each chain
 def generate_chain_references (
     structure : 'Structure',
@@ -202,9 +153,8 @@ def generate_chain_references (
     if chains_references_file.exists:
         chains_data += import_chains(chains_references_file)
 
-    # Save the jobids of every call to InterProScan and HMMER
+    # Save the jobids of every call to InterProScan
     interproscan_jobids = {}
-    hmmer_jobids = {}
 
     # Iterate protein sequences
     for sequence in protein_sequences:
@@ -220,26 +170,22 @@ def generate_chain_references (
                 # However, saving the chain in the local backup file is useufl to further run without internet connection
                 save_json(chains_data, chains_references_file.path)
         # If we still have no chain data then create a new chain data dict
-        # Set an object with the results of every call to InterProScan and HMMER
+        # Set an object with the results of every call to InterProScan
         if chain_data == None:
             chain_data = {
                 'sequence': sequence,
-                'interproscan': None,
-                'hmmer': None
+                'interproscan': None
             }
             chains_data.append(chain_data)
         # If chain data is missing any analysis then send a job
-        # Request the InterProScan and HMMER services
+        # Request the InterProScan service
         # Keep the returned job ids to check the status and get the results later
         if chain_data['interproscan'] == None:
             interproscan_jobid = request_interpsocan(sequence)
             interproscan_jobids[sequence] = interproscan_jobid
-        if chain_data['hmmer'] == None:
-            hmmer_jobid = request_hmmer(sequence)
-            hmmer_jobids[sequence] = hmmer_jobid
 
-    # Get the pending jobids from both hmmer and interpsocan
-    pending_jobids = list(interproscan_jobids.values()) + list(hmmer_jobids.values())
+    # Get the pending interpsocan jobids 
+    pending_jobids = list(interproscan_jobids.values())
 
     # If we already have the results of all the chains then we can skip the next steps
     if len(pending_jobids) == 0:
@@ -268,28 +214,15 @@ def generate_chain_references (
             # Get corresponding chain data and add the InterProScan results
             chain_data = next(data for data in chains_data if data['sequence'] == sequence)
             chain_data['interproscan'] = interproscan_result
+            del chain_data['interproscan']['interproscan-version']
+            # RUBEN: creo que results siempre tiene un solo elemento, pero por si acaso iteramos
+            for result in chain_data['interproscan']['results']:
+                # Sort the pathways by name so Mongo don't get confused when the change order
+                for match in result['matches']:
+                    if match['signature']['entry'] is not None:
+                        del match['signature']['entry']['pathwayXRefs']
             # Remove the jobid from the queue list
             pending_jobids.remove(interproscan_jobid)
-            # Save the result
-            save_json(chains_data, chains_references_file.path)
-                    
-        # AGUS: HMMER devuelve directamente el resultado, no hay ningún status
-        # AGUS: La única forma que se me ocurrió para comprobar si estaba acabado el job es con el campo 'results'
-        # AGUS: pero si por lo que fuera fallara el sistema de EBI, no sé que devuelve (no me ha pasado todavía). Podría pasar en un futuro
-        for sequence, hmmer_jobid in hmmer_jobids.items():
-            # If the jobid is already processed then skip it
-            if hmmer_jobid not in pending_jobids:
-                continue
-            # # If we still have no results then continue
-            # if 'results' not in hmmer_jobid:
-            #     continue
-            # Retrive the results from HMMER
-            hmmer_result = check_hmmer_result(hmmer_jobid)
-            # Get corresponding chain data and add the InterProScan results
-            chain_data = next(data for data in chains_data if data['sequence'] == sequence)
-            chain_data['hmmer'] = hmmer_result
-            # Remove the jobid from the queue list
-            pending_jobids.remove(hmmer_jobid)
             # Save the result
             save_json(chains_data, chains_references_file.path)
     
