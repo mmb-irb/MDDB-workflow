@@ -386,9 +386,14 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
 # Set a function to retrieve covalent (strong) bonds between 2 atom selections
 def get_covalent_bonds_between (
     structure_filename : str,
-    selection_1 : 'Selection',
-    selection_2 : 'Selection'
+    # Selections may be either selection instances or selection strings already in VMD format
+    selection_1 : Union['Selection', str],
+    selection_2 : Union['Selection', str]
 ) -> List[ List[int] ]:
+    
+    # Parse selections (if not parsed yet)
+    parsed_selection_1 = selection_1 if type(selection_1) == str else selection_1.to_vmd()
+    parsed_selection_2 = selection_2 if type(selection_2) == str else selection_2.to_vmd()
 
     # Prepare a script for the VMD to automate the commands. This is Tcl lenguage
     output_index_1_file = '.index1.txt'
@@ -396,7 +401,7 @@ def get_covalent_bonds_between (
     output_bonds_file = '.bonds.ext'
     with open(commands_filename, "w") as file:
         # Select the specified atoms in selection 1
-        file.write(f'set sel1 [atomselect top "{selection_1.to_vmd()}"]\n')
+        file.write(f'set sel1 [atomselect top "{parsed_selection_1}"]\n')
         # Save all atom index in the selection
         file.write('set index1 [$sel1 list]\n')
         # Write those index to a file
@@ -408,7 +413,7 @@ def get_covalent_bonds_between (
         file.write(f'set bondsfile [open {output_bonds_file} w]\n')
         file.write('puts $bondsfile $bonds\n')
         # Select the specified atoms in selection 2
-        file.write(f'set sel2 [atomselect top "{selection_2.to_vmd()}"]\n')
+        file.write(f'set sel2 [atomselect top "{parsed_selection_2}"]\n')
         # Save all atom index in the selection
         file.write('set index2 [$sel2 list]\n')
         # Write those index to a file
@@ -499,3 +504,148 @@ def get_covalent_bonds_between (
                 crossed_bonds.append(crossed_bond)
                 
     return crossed_bonds
+
+# Given two atom selections, find interface atoms and return their indices
+# Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
+# Return also atom indices for the whole selections
+def get_interface_atom_indices (
+    input_structure_filepath : str,
+    input_trajectory_filepath : str,
+    selection_1 : str,
+    selection_2 : str,
+    distance_cutoff : float,
+) -> List[int]:
+
+    # Set the interface selections
+    interface_selection_1 = (f'({selection_1}) and within {distance_cutoff} of ({selection_2})')
+    interface_selection_2 = (f'({selection_2 }) and within {distance_cutoff} of ({selection_1})')
+    
+    # Set the output txt files for vmd to write the atom indices
+    # Note that these output files are deleted at the end of this function
+    selection_1_filename = '.selection_1.txt'
+    selection_2_filename = '.selection_2.txt'
+    interface_selection_1_filename = '.interface_selection_1.txt'
+    interface_selection_2_filename = '.interface_selection_2.txt'
+    interacting_frames_filename = '.iframes.txt'
+    total_frames_filename = '.nframes.txt'
+
+    # Prepare a script for VMD to run. This is Tcl language
+    commands_filename = '.commands.vmd'
+    with open(commands_filename, "w") as file:
+        # -------------------------------------------
+        # First get the whole selection atom indices
+        # -------------------------------------------
+        # Select the specified atoms
+        file.write('set selection [atomselect top "' + selection_1 + '"]\n')
+        # Save atom indices from the selection
+        file.write('set indices [$selection list]\n')
+        # Write atom indices to a file
+        file.write('set indices_file [open ' + selection_1_filename + ' w]\n')
+        file.write('puts $indices_file $indices\n')
+        # Select the specified atoms
+        file.write('set selection [atomselect top "' + selection_2 + '"]\n')
+        # Save atom indices from the selection
+        file.write('set indices [$selection list]\n')
+        # Write atom indices to a file
+        file.write('set indices_file [open ' + selection_2_filename + ' w]\n')
+        file.write('puts $indices_file $indices\n')
+        # -------------------------------------------
+        # Now get the interface selection atom indices
+        # Also count the number of frames where there is at least one interacting residue
+        # -------------------------------------------
+        # Capture indices for each frame in the trajectory
+        file.write('set accumulated_interface1_atom_indices []\n')
+        file.write('set accumulated_interface2_atom_indices []\n')
+        file.write('set interface1 [atomselect top "' + interface_selection_1 + '"]\n')
+        file.write('set interface2 [atomselect top "' + interface_selection_2 + '"]\n')
+        # Capture the number of frames where the interaction happens
+        file.write('set iframes 0\n')
+        # Get the number of frames in the trajectory
+        file.write('set nframes [molinfo top get numframes]\n')
+        # Iterate over each frame
+        file.write('for { set i 1 } { $i < $nframes } { incr i } {\n')
+        # Update the selection in the current frame
+        file.write('    $interface1 frame $i\n')
+        file.write('    $interface1 update\n')
+        # Add its atom indices to the acumulated atom indices
+        file.write('    set interface1_atom_indices [$interface1 list]\n')
+        file.write('    set accumulated_interface1_atom_indices [concat $accumulated_interface1_atom_indices $interface1_atom_indices ]\n')
+        # Repeat with the selection 2
+        file.write('    $interface2 frame $i\n')
+        file.write('    $interface2 update\n')
+        file.write('    set interface2_atom_indices [$interface2 list]\n')
+        file.write('    set accumulated_interface2_atom_indices [concat $accumulated_interface2_atom_indices $interface2_atom_indices ]\n')
+        # If there was at least one residue in one of the interactions then add one to the interaction frame count
+        # Note that checking both interactions would be redundant so one is enough
+        file.write('    if { [llength $interface1_atom_indices] > 0 } {\n')
+        file.write('        incr iframes\n')
+        file.write('    }\n')
+        file.write('}\n')
+        # Write the number of interacting frames and total frames to files
+        file.write('set iframes_file [open ' + interacting_frames_filename + ' w]\n')
+        file.write('puts $iframes_file $iframes\n')
+        file.write('set nframes_file [open ' + total_frames_filename + ' w]\n')
+        file.write('puts $nframes_file $nframes\n')
+        # Remove duplicated indices
+        file.write('lsort -unique $accumulated_interface1_atom_indices\n')
+        file.write('lsort -unique $accumulated_interface2_atom_indices\n')
+        # Write indices to files
+        file.write('set indices_file [open ' + interface_selection_1_filename + ' w]\n')
+        file.write('puts $indices_file $accumulated_interface1_atom_indices\n')
+        file.write('set indices_file [open ' + interface_selection_2_filename + ' w]\n')
+        file.write('puts $indices_file $accumulated_interface2_atom_indices\n')
+        file.write('exit\n')
+
+    # Run VMD
+    logs = run([
+        "vmd",
+        input_structure_filepath,
+        input_trajectory_filepath,
+        "-e",
+        commands_filename,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+
+    # If any of the output files do not exist at this point then it means something went wrong with vmd
+    expected_output_files = [
+        selection_1_filename,
+        selection_2_filename,
+        interface_selection_1_filename,
+        interface_selection_2_filename,
+        interacting_frames_filename,
+        total_frames_filename
+    ]
+    for output_file in expected_output_files:
+        if not os.path.exists(output_file):
+            print(logs)
+            raise SystemExit('Something went wrong with VMD')
+    
+    # Set a function to read the VMD output and parse the atom indices string to an array of integers
+    def process_vmd_output (output_filename : str) -> List[int]:
+        with open(output_filename, 'r') as file:
+            raw_atom_indices = file.read()
+        return [ int(i) for i in raw_atom_indices.split() ]
+
+    # Read the VMD output
+    selection_1_atom_indices = process_vmd_output(selection_1_filename)
+    selection_2_atom_indices = process_vmd_output(selection_2_filename)
+    selection_1_interface_atom_indices = process_vmd_output(interface_selection_1_filename)
+    selection_2_interface_atom_indices = process_vmd_output(interface_selection_2_filename)
+    interacting_frames = process_vmd_output(interacting_frames_filename)[0]
+    total_frames = process_vmd_output(total_frames_filename)[0]
+    
+    # Remove trash files
+    trash_files = [ commands_filename ] + expected_output_files
+    for trash_file in trash_files:
+        os.remove(trash_file)
+
+    # Return the results
+    return {
+        'selection_1_atom_indices': selection_1_atom_indices,
+        'selection_2_atom_indices': selection_2_atom_indices,
+        'selection_1_interface_atom_indices': selection_1_interface_atom_indices,
+        'selection_2_interface_atom_indices': selection_2_interface_atom_indices,
+        'interacting_frames': interacting_frames,
+        'total_frames': total_frames
+    }

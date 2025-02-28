@@ -332,8 +332,6 @@ boxtype:
 
 interactions:
 
-# [EXPERIMENTAL INPUT]
-#
 # Set those residues which are under periodic boundary conditions (PBC)
 # These residues are excluded from the imaging centering and fitting
 # These residues are excluded in the follwoing analyses:
@@ -346,8 +344,15 @@ interactions:
 #    - PCA: Sudden jumps make not sense in PCA and they eclipse non-PBC movements
 #    - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
 #    - Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
+#    - Clusters: Since Clustering is RMSD-based it has the same limitations
 #
-# Note that this input is used mostly for membranes since the most tipical residues under periodic boundary conditions (solvent and counter ions) are usually removed from the trajectory. They are to be included in this field as well when they are not removed. This field is also useful for those scenarions with several protein or nucleic acid molecules floating around and crossing boundaries. In this situation you can not image and fit all molecules. You must focus in one molecule and let the others stay in PBC.
+# If this field is set to 'auto' then PBC residues are set automatically
+# Solvent, counter ions and membrane lipids are selected in this cases
+# Note that these are the most tipical residues under periodic boundary conditions
+#
+# This field is also useful for those scenarions with several protein or nucleic acid molecules floating around
+# In this situation you can not image and fit all molecules
+# You must focus in one molecule and let the others stay in periodic boundary conditions
 #
 # These residues are defined using VMD selection lenguage.
 #
@@ -358,7 +363,7 @@ interactions:
 #
 # pbc_selection: water or ions
 
-pbc_selection:
+pbc_selection: auto
 
 #------------------------------------------------------------------------------------------------------------
 # REPRESENTATION PARAMETERS

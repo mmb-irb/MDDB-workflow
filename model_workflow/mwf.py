@@ -1069,6 +1069,7 @@ class MD:
             interaction_cutoff = self.project.interaction_cutoff,
             interactions_auto = self.project.interactions_auto,
             ligand_map = self.project.ligand_map,
+            pbc_selection = self.pbc_selection,
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
@@ -1105,8 +1106,14 @@ class MD:
             warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
             self.project._pbc_selection = self.structure.select_pbc_guess()
             return self.project._pbc_selection
+        # If the input PBC selection is 'auto' then set it automatically as well
+        if self.input_pbc_selection == 'auto':
+            self.project._pbc_selection = self.structure.select_pbc_guess()
+            return self.project._pbc_selection
         # Otherwise use the input value
-        if not self.input_pbc_selection: return Selection()
+        if not self.input_pbc_selection:
+            self.project._pbc_selection = Selection()
+            return self.project._pbc_selection
         self.project._pbc_selection = self.structure.select(self.input_pbc_selection)
         print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(self.project._pbc_selection)} atoms')
         return self.project._pbc_selection
