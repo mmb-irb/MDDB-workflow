@@ -8,6 +8,7 @@ import numpy as np
 
 from model_workflow.utils.file import File
 from model_workflow.utils.gmx_spells import merge_xtc_files
+from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
@@ -27,18 +28,18 @@ def merge_and_convert_trajectories (
     ):
 
     # Run MDtraj
+    print(GREY_HEADER, end='\r')
     process = run([
         "mdconvert",
         "-o",
         output_trajectory_filename,
         *input_trajectory_filenames,
-    ], stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
+    ], stderr=PIPE)
+    error_logs = process.stderr.decode()
+    print(COLOR_END, end='\r')
 
     # If output has not been generated then warn the user
     if not exists(output_trajectory_filename) or getsize(output_trajectory_filename) == 0:
-        print(logs)
-        error_logs = process.stderr.decode()
         print(error_logs)
         raise SystemExit('Something went wrong with MDTraj')
         
