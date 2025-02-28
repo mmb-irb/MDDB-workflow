@@ -6,6 +6,7 @@ import mdtraj as mdt
 
 from model_workflow.utils.auxiliar import round_to_thousandths, save_json, otherwise
 from model_workflow.utils.auxiliar import numerate_filename, get_analysis_name
+from model_workflow.utils.auxiliar import reprint, delete_previous_log
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
@@ -149,7 +150,7 @@ def clusters_analysis (
         n_clusters = 0
         while n_clusters != target_n_clusters:
             # Find clusters
-            print(f'Trying with cutoff {cutoff}', end='')
+            print(f' Trying with cutoff {cutoff}', end='')
             clusters = clustering(distance_matrix, cutoff)
             n_clusters = len(clusters)
             print(f' -> Found {n_clusters} clusters')
@@ -162,6 +163,8 @@ def clusters_analysis (
             # If we already tried the updated cutoff then we are close enough to the desired number of clusters
             if cutoff in already_tried_cutoffs:
                 break
+            # Erase previous log and write in the same line
+            delete_previous_log()
 
         # Count the number of frames per cluster
         cluster_lengths = [ len(cluster) for cluster in clusters ]
@@ -186,7 +189,7 @@ def clusters_analysis (
             transitions.append(transition)
             previous_cluster = cluster
 
-        print(f'Found {len(transitions)} transitions')
+        print(f' Found {len(transitions)} transitions')
 
         # Count every different transition
         transition_counts = {}
@@ -199,6 +202,7 @@ def clusters_analysis (
         representative_frames = []
         # Save the screenshot parameters so we can keep images coherent between clusters
         screenshot_parameters = None
+        print(' Generating cluster screenshots') # This will be reprinted
         for c, cluster in enumerate(clusters):
             most_representative_frame = None
             min_distance = float('inf') # Positive infinity
@@ -226,7 +230,9 @@ def clusters_analysis (
             # Set the screenshot filename from the input template
             screenshot_filename = output_screenshots_filename.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
             # Generate the screenshot
-            screenshot_parameters = get_screenshot(AUXILIAR_PDB_FILENAME, screenshot_filename, parameters=screenshot_parameters)
+            reprint(f' Generating cluster screenshot {c+1}/{n_clusters}')
+            screenshot_parameters = get_screenshot(AUXILIAR_PDB_FILENAME, screenshot_filename,
+                parameters=screenshot_parameters, message=None)
 
         # Set the output clusters which include all frames in the cluster and the main or more representative frame
         output_clusters = []
