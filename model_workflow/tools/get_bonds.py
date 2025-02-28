@@ -116,7 +116,7 @@ def get_bonds_canonical_frame (
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
     # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots)
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots,patience=patience)
     if step != 1: raise ValueError('If we are skipping frames then the code below will silently return a wrong reference frame')
     print(f'Searching reference bonds canonical frame. Only first {min(patience, count)} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
