@@ -29,10 +29,16 @@ def get_screenshot (
     # This is useful to keep screenshots coherent between different clusters/markov states
     # Note that a slight movement in the molecule may make the rotation logic here use a different angle
     # Thus the image could be radically different and misleading, since the change could be minimal
-    parameters : Optional[dict] = None
+    parameters : Optional[dict] = None,
+    # Edit the message displayed when starting to generate the screenshot
+    # Note that we pass it through here instead of just printing before calling the function for a reason
+    # The input structure argument may be a smart dependency thus calling more code before this function
+    # Also this function is used by other tools which may want to change the log or supress it
+    message : Optional[str] = '-> Generating screenshot',
 ) -> dict:
 
-    print('-> Generating screenshot')
+    # Log the starting message in case it was passed
+    if message: print(message)
 
     # Check the output screenshot file extension is JPG
     if output_screenshot_filename.split('.')[-1] != 'jpg':

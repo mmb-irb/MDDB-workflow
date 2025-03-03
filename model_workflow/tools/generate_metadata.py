@@ -18,7 +18,8 @@ def generate_project_metadata (
     pdb_ids : List[str],
     register : dict,
     output_metadata_filename : str,
-    ligand_customized_names : str
+    ligand_customized_names : str,
+    processed_interactions : list,
     ):
 
     print('-> Generating project metadata')
@@ -27,8 +28,11 @@ def generate_project_metadata (
     (boxsizex, boxsizey, boxsizez) = get_box_size(
         input_structure_filename, input_trajectory_filename)
 
-    # Count different type of atoms and residues
-    (systats, protats, prot, dppc, sol, na, cl) = get_atoms_count(structure)
+    # Count different types of atoms and residues
+    (system_atoms, system_residues, protein_atoms, protein_residues,
+    nucleic_atoms, nucleic_residues, lipid_atoms, lipid_residues,
+    carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
+    counter_cations, counter_anions, counter_ions) = get_atoms_count(structure)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
@@ -80,6 +84,18 @@ def generate_project_metadata (
     # In case this is an ensemble and not a time related trajectory and not an ensemble, the framestep may be missing
     framestep = None if md_type == 'ensemble' else get_input('framestep')
 
+    # Set which part of processed interactions is to be kept in metadata
+    # Note that we exclude residues and residue indices to avoid overcrowding metadata
+    # The 'type' field is kept although it is not an input but something calculated
+    # This is because the 'type' field is valuable as a search field
+    excluded_fields = { 'residues_1', 'residues_2', 'interface_1', 'interface_2',
+        'residue_indices_1', 'residue_indices_2', 'interface_indices_1', 'interface_indices_2',
+        'pt_residues_1', 'pt_residues_2', 'pt_interface_1', 'pt_interface_2', 'strong_bonds' }
+    interactions = []
+    for processed_interaction in processed_interactions:
+        interaction = { k: v for k, v in processed_interaction.items() if k not in excluded_fields }
+        interactions.append(interaction)
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -113,14 +129,22 @@ def generate_project_metadata (
         'FF': forcefields,
         'WAT': get_input('wat'),
         'BOXTYPE': get_input('boxtype'),
-        'SYSTATS': systats,
-        'PROTATS': protats,
-        'PROT': prot,
-        'DPPC': dppc,
-        'SOL': sol,
-        'NA': na,
-        'CL': cl,
-        'INTERACTIONS': get_input('interactions'),
+        'SYSTATS': system_atoms,
+        'SYSTRES': system_residues,
+        'PROTATS': protein_atoms,
+        'PROTRES': protein_residues,
+        'NUCLATS': nucleic_atoms,
+        'NUCLRES': nucleic_residues,
+        'LIPIATS': lipid_atoms,
+        'LIPIRES': lipid_residues,
+        'CARBATS': carbohydrates_atoms,
+        'CARBRES': carbohydrates_residues,
+        'SOLVATS': solvent_atoms,
+        'SOLVRES': solvent_residues,
+        'COUNCAT': counter_cations,
+        'COUNANI': counter_anions,
+        'COUNION': counter_ions,
+        'INTERACTIONS': interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
         'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),

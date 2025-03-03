@@ -305,7 +305,6 @@ boxtype:
 # Each interaction has the following attributes:
 #    - name: a string tag used to relate interaction analyses data with their corresponding residues.
 #     In addition, the name is used to label the corresponding analyses in the web client
-#    - type: for instance 'protein-protein', 'protein-ligand', etc. This field was requested by a referee
 #    - agent_1: the name of the first agent in the interaction, which is used to label in the client
 #    - selection_1: the VMD selection of the first agent in the interaction
 #    - agent_2: the name of the second agent in the interaction, which is used to label in the client
@@ -318,13 +317,11 @@ boxtype:
 #
 # interactions:
 #   - name: protein-ligand interaction
-#     type: protein-ligand
 #     agent_1: protein
 #     selection_1: not resname lig
 #     agent_2: ligand
 #     selection_2: resname lig
 #   - name: domain-domain interaction
-#     type: protein interdomain interaction
 #     agent_1: domain 1
 #     selection_1: resid 2 to 291
 #     agent_2: domain 2
@@ -332,8 +329,6 @@ boxtype:
 
 interactions:
 
-# [EXPERIMENTAL INPUT]
-#
 # Set those residues which are under periodic boundary conditions (PBC)
 # These residues are excluded from the imaging centering and fitting
 # These residues are excluded in the follwoing analyses:
@@ -346,8 +341,15 @@ interactions:
 #    - PCA: Sudden jumps make not sense in PCA and they eclipse non-PBC movements
 #    - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
 #    - Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
+#    - Clusters: Since Clustering is RMSD-based it has the same limitations
 #
-# Note that this input is used mostly for membranes since the most tipical residues under periodic boundary conditions (solvent and counter ions) are usually removed from the trajectory. They are to be included in this field as well when they are not removed. This field is also useful for those scenarions with several protein or nucleic acid molecules floating around and crossing boundaries. In this situation you can not image and fit all molecules. You must focus in one molecule and let the others stay in PBC.
+# If this field is set to 'auto' then PBC residues are set automatically
+# Solvent, counter ions and membrane lipids are selected in this cases
+# Note that these are the most tipical residues under periodic boundary conditions
+#
+# This field is also useful for those scenarions with several protein or nucleic acid molecules floating around
+# In this situation you can not image and fit all molecules
+# You must focus in one molecule and let the others stay in periodic boundary conditions
 #
 # These residues are defined using VMD selection lenguage.
 #
@@ -358,7 +360,7 @@ interactions:
 #
 # pbc_selection: water or ions
 
-pbc_selection:
+pbc_selection: auto
 
 #------------------------------------------------------------------------------------------------------------
 # REPRESENTATION PARAMETERS

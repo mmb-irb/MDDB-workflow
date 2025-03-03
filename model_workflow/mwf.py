@@ -41,7 +41,8 @@ from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files, is_glob, parse_glob
+from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files
+from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -1069,7 +1070,10 @@ class MD:
             mercy = self.project.mercy,
             register = self.register,
             frames_limit = 1000,
-            interaction_cutoff = self.project.interaction_cutoff
+            interaction_cutoff = self.project.interaction_cutoff,
+            interactions_auto = self.project.interactions_auto,
+            ligand_map = self.project.ligand_map,
+            pbc_selection = self.pbc_selection,
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
@@ -1106,8 +1110,14 @@ class MD:
             warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
             self.project._pbc_selection = self.structure.select_pbc_guess()
             return self.project._pbc_selection
+        # If the input PBC selection is 'auto' then set it automatically as well
+        if self.input_pbc_selection == 'auto':
+            self.project._pbc_selection = self.structure.select_pbc_guess()
+            return self.project._pbc_selection
         # Otherwise use the input value
-        if not self.input_pbc_selection: return Selection()
+        if not self.input_pbc_selection:
+            self.project._pbc_selection = Selection()
+            return self.project._pbc_selection
         self.project._pbc_selection = self.structure.select(self.input_pbc_selection)
         print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(self.project._pbc_selection)} atoms')
         return self.project._pbc_selection
@@ -1366,17 +1376,19 @@ class MD:
     def run_clusters_analysis (self, overwrite : bool = False):
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
-        # The number of output analyses should be the same number of valid processed interactions
-        # Otherwise we are missing some analysis
         if exists(output_analysis_filepath) and not overwrite:
             return
-        # Set the output filepaths for all runs
-        output_run_filepath = self.md_pathify(OUTPUT_CLUSTERS_RUNS_FILENAME)
         # Set the output filepaths for additional images generated in this analysis
         output_screenshot_filepath = self.md_pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
         # In case the overwirte argument is passed delete all already existing outputs
         if overwrite:
-            for outputs in [ output_run_filepath, output_screenshot_filepath ]:
+            # Delete the summary if it exists
+            if exists(output_analysis_filepath):
+                remove(output_analysis_filepath)
+            # Get the glob-patterned path of the output analyses
+            output_analysis_glob_pattern = glob_filename(output_analysis_filepath)
+            # Iterate glob matches
+            for outputs in [ output_analysis_glob_pattern, output_screenshot_filepath ]:
                 existing_outputs = glob(outputs)
                 for existing_output in existing_outputs:
                     if exists(existing_output):
@@ -1389,8 +1401,7 @@ class MD:
             structure = self.structure,
             snapshots = self.snapshots,
             pbc_selection = self.pbc_selection,
-            output_analysis_filename = output_analysis_filepath,
-            output_run_filepath = output_run_filepath,
+            output_analysis_filepath = output_analysis_filepath,
             output_screenshots_filename = output_screenshot_filepath,
         )
 
@@ -1416,24 +1427,31 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_HBONDS_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
-        # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
-        # WARNING: However, the output file size depends on the trajectory
-        # WARNING: Files have no limit, but analyses must be no heavier than 16Mb in BSON format
+        # If the analysis is to be overwritten then delete all previous outputs
+        if overwrite:
+            glob_pattern = glob_filename(output_analysis_filepath)
+            existing_outputs = glob(glob_pattern)
+            for existing_output in existing_outputs:
+                if exists(existing_output):
+                    remove(existing_output)
+        # Run the the analysis
+        # WARNING: the output file size depends on the number of hydrogen bonds
+        # WARNING: analyses must be no heavier than 16Mb in BSON format
         # WARNING: In case of large surface interaction the output analysis may be larger than the limit
-        # DANI: Esto no puede quedar así
-        # DANI: Me sabe muy mal perder resolución con este análisis, porque en cáculo es muy rápido
-        # DANI: Hay que crear un sistema de carga en mongo alternativo para análisis pesados
         hydrogen_bonds(
             input_topology_filename = self.structure_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
+            #output_analysis_filepath = output_analysis_filepath, # For the new version
             structure = self.structure,
             interactions = self.processed_interactions,
+            # Old fields
             snapshots = self.snapshots,
             frames_limit = 200,
-            # is_time_dependend = self.is_time_dependend,
-            # time_splits = 100,
-            # populations = self.populations
+            # New fields
+            #is_time_dependend = self.project.is_time_dependend,
+            #time_splits = 100,
+            #populations = self.populations
         )
 
     # SASA, solvent accessible surfave analysis
@@ -1532,6 +1550,7 @@ class MD:
             return
         if not getattr(self.project, 'membrane_map', None):
             print('Membrane map is not available. Skipping density analysis')
+            return
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,
@@ -1631,7 +1650,7 @@ class Project:
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
-        #nassa_config: str = DEFAULT_NASSA_CONFIG_FILENAME,
+        interactions_auto : Optional[str] = None,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : Optional[int] = None,
     ):
@@ -1739,7 +1758,7 @@ class Project:
         self.rmsd_cutoff = rmsd_cutoff
         self.interaction_cutoff = interaction_cutoff
         self.sample_trajectory = sample_trajectory
-
+        self.interactions_auto = interactions_auto
         # Set the inputs, where values from the inputs file will be stored
         self._inputs = None
 
@@ -2368,6 +2387,7 @@ class Project:
         self._protein_map = generate_protein_mapping(
             structure = self.structure,
             protein_references_file = protein_references_file,
+            database_url = self.database_url,
             register = self.register,
             mercy = self.mercy,
             forced_references = self.forced_references,
@@ -2404,6 +2424,7 @@ class Project:
         chains = generate_chain_references(
             structure = self.structure,
             chains_references_file = chains_references_file,
+            database_url=self.database_url
             #chain_name=self.structure.chain_name,
         )
         return chains
@@ -2501,6 +2522,7 @@ class Project:
             register = self.register,
             output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,
+            processed_interactions = self.reference_md.processed_interactions
         )
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
@@ -2665,6 +2687,14 @@ md_requestables = {
 # List of requestables for the console
 requestables = { **project_requestables, **md_requestables }
 
+# Set groups of dependencies to be requested together using only one flag
+DEPENDENCY_FLAGS = {
+    'download': list(input_files.keys()),
+    'setup': list(processed_files.keys()),
+    'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
+    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ]
+}
+
 # The actual main function
 def workflow (
     # Project parameters
@@ -2712,13 +2742,24 @@ def workflow (
     tasks = None
     # If the download argument is passed then just make sure input files are available
     if download:
+        warn('The "-d" or "--download" argument is deprecated. Please use "-i download" instead.')
         tasks = list(input_files.keys())
     # If the setup argument is passed then just process input files
     elif setup:
+        warn('The "-s" or "--setup" argument is deprecated. Please use "-i setup" instead.')
         tasks = list(processed_files.keys())
     # If the include argument then add only the specified tasks to the list
     elif include and len(include) > 0:
-        tasks = include
+        tasks = [ *include ]
+        # Find for special flags among included
+        for flag, dependencies, in DEPENDENCY_FLAGS.items():
+            if flag not in tasks: continue
+            # If the flag is found then remove it and write the corresponding dependencie instead
+            # Make sure not to duplicate a dependency if it was already included
+            tasks.remove(flag)
+            for dep in dependencies:
+                if dep in tasks: continue
+                tasks.append(dep)
     # Set the default tasks otherwise
     else:
         tasks = [

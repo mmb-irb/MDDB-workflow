@@ -15,12 +15,12 @@ def get_pdb_frames (
     frames_limit : Optional[int] = None,
     output_frames_prefix : str = 'frame',
     pbar_bool : bool = False,
+    patience=float('inf')
 ):
-
-    # Load the trajectory using pytraj
-    trajectory = get_pytraj_trajectory(topology_filename, trajectory_filename)
-    # WARNING: Do not read trajectory.n_frames to get the number of snapshots or you will read the whole trajectory
+    # WARNING: Do not set a pytraj iterload trajectory and read its 'n_frames' to get the snapshots
+    # WARNING: Trying to read the number o frames of a xtc trajectory will read the whole trajectory
     # WARNING: This may be a lot of time for a huge trajectory. Use the snapshots input instead
+
     # In case we are missing a frames limit set the limit as the number os snapshots
     if frames_limit == None:
         frames_limit = snapshots
@@ -33,21 +33,23 @@ def get_pdb_frames (
         snapshots,
         frames_limit
     )
-    frames_list = range(0, frames_count)
 
     def frames_generator():
         # Get the current directory at this point and use it to delete old files, in case we change the directory
         cwd = os.getcwd()
         # Create a progress bar
-        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=frames_count, unit='frame')
+        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=min(frames_count, patience), unit='frame')
         # Or print an empty line for the reprint to not delete a previous log
         else: print()
         # Extract each frame in pdb format
-        for f in frames_list:
+        for f in range(frames_count):
+            # Get the actual frame number
+            # We display latter the frame with a +1 to make it 1-based instead of 0-based
+            frame_number = f * frames_step
             # Update the current frame log
             if pbar_bool: pbar.update(1); pbar.refresh()
-            else: reprint('Frame ' + str(f+1) + ' / ' + str(frames_count))
-            current_frame = cwd + '/' + output_frames_prefix + str(f) + '.pdb'
+            else: reprint(f'Frame {frame_number+1} ({f+1} / {frames_count})')
+            current_frame = f'{cwd}/{output_frames_prefix}{frame_number+1}.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
             yield current_frame
@@ -67,6 +69,6 @@ def get_pdb_frame (
     # Load the trajectory using pytraj
     trajectory = get_pytraj_trajectory(topology_filename, trajectory_filename)
     trajectory_frame = trajectory[frame:frame+1]
-    trajectory_frame_filename = 'frame' + str(frame) + '.pdb'
+    trajectory_frame_filename = f'frame{frame}.pdb'
     pt.write_traj(trajectory_frame_filename, trajectory_frame, overwrite=True)
     return trajectory_frame_filename

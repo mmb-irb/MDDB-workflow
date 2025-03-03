@@ -5,7 +5,7 @@ from subprocess import call
 from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
 
-from model_workflow.mwf import workflow, Project, requestables
+from model_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.conversions import convert
@@ -287,7 +287,7 @@ run_parser.add_argument(
 run_parser.add_argument(
     "-url", "--database_url",
     default=DEFAULT_API_URL,
-    help="API URL to download missing data")
+    help=f"API URL to download missing data. Default value is {DEFAULT_API_URL}")
 
 run_parser.add_argument(
     "-stru", "--input_structure_filepath",
@@ -430,19 +430,25 @@ run_parser.add_argument(
     help="If passed, download just a few frames (10 by default) from the trajectory instead of it all")
 
 # Set a list with the alias of all requestable dependencies
-choices = list(requestables.keys())
+choices = list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys())
 
 run_parser.add_argument(
     "-i", "--include",
     nargs='*',
     choices=choices,
-    help="Set the unique analyses or tools to be run. All other steps will be skipped")
+    help=("Set the unique analyses or tools to be run. All other steps will be skipped.\n"
+        "There are also some additional flags to define a preconfigured group of dependeces:\n"
+        "- download: Check/download input files (redundant if you request any analysis)\n"
+        "- setup: Process input files and run the tests (redundant if you request any analysis\n"
+        "- network: Run dependencies which require internet connection\n"
+        "- minimal: Run dependencies required by the web client to work"))
 
 run_parser.add_argument(
     "-e", "--exclude",
     nargs='*',
     choices=choices,
-    help="Set the analyses or tools to be skipped. All other steps will be run")
+    help=("Set the analyses or tools to be skipped. All other steps will be run.\n"
+        "Note that if we exclude a dependency of something else then it will be run anyway."))
 
 run_parser.add_argument(
     "-ow", "--overwrite",
@@ -452,7 +458,8 @@ run_parser.add_argument(
     action=custom,
     const=True,
     choices=choices,
-    help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool")
+    help=("Set the output files to be overwritten thus re-runing its corresponding analysis or tool.\n"
+        "Use this flag alone to overwrite everything."))
 
 run_parser.add_argument(
     "-rcut", "--rmsd_cutoff",
@@ -467,6 +474,18 @@ run_parser.add_argument(
     default=DEFAULT_INTERACTION_CUTOFF,
     help=(f"Set the cutoff for the interactions analysis to fail (default {(DEFAULT_INTERACTION_CUTOFF)}).\n"
         "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
+
+run_parser.add_argument(
+    "-iauto", "--interactions_auto",
+    type=str,
+    nargs='?',
+    const=True,
+    help=("Guess input interactions automatically. Available options:\n"
+        "   greedy (default) - All chains against all chains\n"
+        "   humble - If there are only two chains then select the interaction between them\n"
+        "   <chain letter> - All chains against this specific chain\n"
+        "   ligands - All chains against every ligand")
+)
 
 # Add a new to command to aid in the inputs file setup
 inputs_parser = subparsers.add_parser("inputs",

@@ -1074,6 +1074,7 @@ def workflow_nassa(
     # If the helical parameter analysis is not selected, the NASSA analysis will be run
     # To run this, the user has to provide the configuration file with the information needed
     if config_file_path and analysis_names is not None:
+        config_file_path = Path(config_file_path)
         print(f'  Using config file {config_file_path}')
         # Load the configuration file
         try:

@@ -44,6 +44,7 @@ sys.stderr = stderr_backup
 def generate_protein_mapping (
     structure : 'Structure',
     protein_references_file : 'File',
+    database_url : str,
     register : dict,
     mercy : List[str] = [],
     forced_references : Union[list,dict] = [],
@@ -74,7 +75,7 @@ def generate_protein_mapping (
         reference = references.get(uniprot_accession, None)
         if reference:
             return reference, True
-        reference = get_mdposit_reference(uniprot_accession)
+        reference = get_mdposit_reference(uniprot_accession, database_url)
         if reference:
             return reference, True
         reference = get_uniprot_reference(uniprot_accession)
@@ -457,9 +458,9 @@ def blast (sequence : str) -> Optional[str]:
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
 # If the reference is not found or there is any error then return None and keep going, we do not really need this
-def get_mdposit_reference (uniprot_accession : str) -> Optional[dict]:
+def get_mdposit_reference (uniprot_accession : str, database_url : str) -> Optional[dict]:
     # Request MDposit
-    request_url = 'https://mdposit-dev.mddbr.eu/api/rest/v1/references/' + uniprot_accession
+    request_url = f'{database_url}rest/v1/references/{uniprot_accession}'
     try:
         with urllib.request.urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
@@ -628,23 +629,23 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
 # 3. In case it is a covid spike, align the previous sequence against all saved variants (they are in 'utils')
 from model_workflow.resources.covid_variants import covid_spike_variants
 def get_sequence_metadata (structure : 'Structure', protein_references_file : 'File', residue_map : dict) -> dict:
-    # First mine the sequences from the structure
-    # Set a different sequence for each chain
-    sequences = [ chain.get_sequence() for chain in structure.chains ]
-    # Now classify sequences according to if they belong to protein or nucleic sequences
-    protein_sequences = []
-    nucleic_sequences = []
-    for sequence in sequences:
-        # If the sequence is all X then it is probably not either protein or nucleic
-        test = re.match(r'^[X]*$', sequence)
-        if test: continue
-        # If its a nucleic sequence
-        test = re.match(r'^[ACGTUX]*$', sequence)
-        if test:
-            nucleic_sequences.append(sequence)
-        # Otherwise we consider it a protein sequence
-        else:
-            protein_sequences.append(sequence)
+    # Mine sequences from the structure
+    sequences = []
+    # Classify sequences according to if they belong to protein or nucleic sequences
+    protein_sequences = set()
+    nucleic_sequences = set()
+    # Iterate structure chains
+    for chain in structure.chains:
+        # Get the current chain sequence and add it to the list
+        sequence = chain.get_sequence()
+        sequences.append(sequence)
+        # Get the chain classification
+        classification = chain.get_classification()
+        # Depending on what it is, add the sequence also in the corresponding list
+        if classification == 'protein':
+            protein_sequences.add(sequence)
+        elif classification == 'dna' or classification == 'rna':
+            nucleic_sequences.add(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -724,8 +725,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
-        'protein_sequences': protein_sequences,
-        'nucleic_sequences': nucleic_sequences,
+        'protein_sequences': list(protein_sequences),
+        'nucleic_sequences': list(nucleic_sequences),
         'domains': domains,
         'cv19_variant': variant
     }

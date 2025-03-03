@@ -5,6 +5,7 @@ from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, 
 import os
 from os import rename, listdir
 from os.path import isfile
+import re
 import sys
 import json
 import yaml
@@ -295,3 +296,26 @@ def request_pdb_data (pdb_id : str, query : str) -> dict:
     if parsed_response == None:
         raise ValueError(f'PDB id {pdb_id} not found')
     return parsed_response
+
+# Given a filename, set a sufix number on it, right before the extension
+# Set also the number of zeros to fill the name
+def numerate_filename (filename : str, number : int, zeros : int = 2, separator : str = '_') -> str:
+    splits = filename.split('.')
+    sufix = separator + str(number).zfill(zeros)
+    return '.'.join(splits[0:-1]) + sufix + '.' + splits[-1]
+
+# Given a filename, set a sufix including '*', right before the extension
+# This should match all filenames onbtanied through the numerate_filename function when used in bash
+def glob_filename (filename : str, separator : str = '_') -> str:
+    splits = filename.split('.')
+    sufix = separator + '*'
+    return '.'.join(splits[0:-1]) + sufix + '.' + splits[-1]
+
+# Given a filename with the the pattern 'mda.xxxx.json', get the 'xxxx' out of it
+def get_analysis_name (filename : str) -> str:
+    name_search = re.search(r'/mda.([A-Za-z0-9_-]*).json$', filename)
+    if not name_search:
+        raise ValueError(f'Wrong expected format in filename {filename}')
+    # To make it coherent with the rest of analyses, the analysis name become parsed when loaded in the database
+    # Every '_' is replaced by '-' so we must keep the analysis name coherent or the web client will not find it
+    return name_search[1].replace('_', '-')
