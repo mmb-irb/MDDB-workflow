@@ -91,18 +91,23 @@ class Remote:
         atom_selection : Optional[str] = None,
         format : Optional[str] = None
     ):
-        # Set the base URL
-        request_url = self.url + '/trajectory'
-        # Additional arguments to be included in the URL
-        arguments = []
-        if frame_selection:
-            arguments.append(f'frames={frame_selection}')
-        if atom_selection:
-            arguments.append(f'atoms={atom_selection}')
-        if format:
-            arguments.append(f'format={format}')
-        if len(arguments) > 0:
-            request_url += '?' + '&'.join(arguments)
+        if  [frame_selection, atom_selection, format] == [None,None,'xtc']:
+            # If we dont have a specific request, we can download the main trajectory 
+            # directly from the trajectory.xtc file so it is faster
+            request_url = f'{self.url}/files/trajectory.xtc'
+        else:
+            # Set the base URL
+            request_url = self.url + '/trajectory'
+            # Additional arguments to be included in the URL
+            arguments = []
+            if frame_selection:
+                arguments.append(f'frames={frame_selection}')
+            if atom_selection:
+                arguments.append(f'atoms={atom_selection}')
+            if format:
+                arguments.append(f'format={format}')
+            if len(arguments) > 0:
+                request_url += '?' + '&'.join(arguments)
         # Send the request
         print(f'Downloading main trajectory ({output_file.path})')
         try:
