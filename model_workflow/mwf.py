@@ -2331,7 +2331,7 @@ class Project:
     # Protein residues mapping
     def get_protein_map (self) -> List[dict]:
         # If we already have a stored value then return it
-        if self._protein_map:
+        if self._protein_map != None:
             return self._protein_map
         # Set the protein references file
         protein_references_filepath = self.project_pathify(PROTEIN_REFERENCES_FILENAME)
