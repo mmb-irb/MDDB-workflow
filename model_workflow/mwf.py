@@ -663,6 +663,18 @@ class MD:
             # Update the cache
             self.register.update_cache(FILTERED, current_filtered_parameters)
 
+        # --- provisional reference structure ---
+
+        # Now that we have a filtered PDB file we can set a provisional structure instance
+        # Note that this structure is not yet corrected so it must be used with care
+        # Otherwise we could have silent errors
+        provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
+        # Also we can set a provisional PBC selection
+        # This selection is useful both for imaging/fitting and for the correction
+        # We will make sure that the provisonal and the final PBC selections match
+        # Since this is proviosonal we will make it silent
+        provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
+
         # --- IMAGING AND FITTING ------------------------------------------------------------
 
         # There is no logical way to know if the trajectory is already imaged or it must be imaged
@@ -698,10 +710,6 @@ class MD:
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
         if must_image and (missing_imaged_output or not same_imaged_parameters):
-            # Set a provisional PBC selection
-            # Note that we can not rely in the standard PBC selection since it is parsed through the structure
-            # However we still don't have the standard structure available
-            provisional_pbc_selection = self.input_pbc_selection if self.project.is_inputs_file_available() else 'guess'
             print(' * Imaging and fitting')
             image_and_fit(
                 input_structure_file = filtered_structure_file,
@@ -712,7 +720,8 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                input_pbc_selection = provisional_pbc_selection
+                structure = provisional_structure,
+                pbc_selection = provisional_pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
@@ -763,7 +772,9 @@ class MD:
             input_topology_file = filtered_topology_file,
             output_structure_file = corrected_structure_file,
             output_trajectory_file = corrected_trajectory_file,
-            MD = self
+            MD = self,
+            structure = provisional_structure,
+            pbc_selection = provisional_pbc_selection
         )
 
         # If the corrected output exists then use it
@@ -816,7 +827,6 @@ class MD:
                 else:
                     processed_file.rename_to(output_file)
 
-
         # Save the internal variables
         self._structure_file = output_structure_file
         self._trajectory_file = output_trajectory_file
@@ -831,6 +841,15 @@ class MD:
 
         # Update the parameters used to get the last processed structure and trajectory files
         self.register.update_cache(PROCESSED, current_processed_parameters)
+
+        # --- Definitive PBC selection ---
+
+        # Now that we have the corrected structure we can set the definitive PBC atoms
+        # Make sure the selection is identical to the provisional selection
+        if self.pbc_selection != provisional_pbc_selection:
+            raise InputError('PBC selection is not consistent after correcting the structure. '
+                'Please consider using a different PBC selection. '
+                'Avoid relying in atom distances or elements to avoid this problem.')
 
         # --- RUNNING FINAL TESTS ------------------------------------------------------------
 
@@ -969,6 +988,11 @@ class MD:
         if self._structure:
             return self._structure
         # Otherwise we must set the structure
+        # Make sure the structure file exists at this point
+        if not self.structure_file.exists:
+            raise ValueError('Trying to set standard structure but file '
+                f'{self.structure_file.path} does not exist yet. Are you trying '
+                'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
         self._structure = setup_structure(self.structure_file.path)
         # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
@@ -1097,26 +1121,52 @@ class MD:
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
+    # Internal function to set PBC selection
+    def _set_pbc_selection (self , reference_structure : 'Structure', verbose : bool = True):
+        # Otherwise we must set the PBC selection
+        print('Setting PBC atoms selection')
+        selection_string = None
+        # If there is inputs file then get the input pbc selection
+        if self.project.is_inputs_file_available():
+            if verbose: print(' Using selection string in the inputs file')
+            selection_string = self.input_pbc_selection
+        # If there is no inputs file we guess PBC atoms automatically
+        else:
+            if verbose: print(' No inputs file -> Selection string will be set automatically')
+            selection_string = 'auto'
+        # Parse the selection string using the reference structure
+        parsed_selection = None
+        # If the input PBC selection is 'auto' then guess it automatically
+        if selection_string == 'auto':
+            if verbose: print(' Guessing PBC atoms as solvent, counter ions and lipids')
+            parsed_selection = reference_structure.select_pbc_guess()
+        # If we have a valid input value then use it
+        elif selection_string:
+            if verbose: print(f' Selecting PBC atoms "{selection_string}"')
+            parsed_selection = reference_structure.select(selection_string)
+        # If we have an input value but it is empty then we set an empty selection
+        else:
+            if verbose: print(' No PBC atoms selected')
+            parsed_selection = Selection()
+        # Lof the parsed selection size
+        if verbose: print(f' Parsed PBC selection has {len(parsed_selection)} atoms')
+        # Log a few of the selected residue names
+        if verbose and parsed_selection:
+            selected_residues = reference_structure.get_selection_residues(parsed_selection)
+            selected_residue_names = list(set([ residue.name for residue in selected_residues ]))
+            limit = 3 # Show a maximum of 3 residue names
+            example_residue_names = ', '.join(selected_residue_names[0:limit])
+            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+            print('  e.g. ' + example_residue_names)
+        return parsed_selection
+
     # Periodic boundary conditions atom selection
     def get_pbc_selection (self) -> List[int]:
         # If we already have a stored value then return it
         if self.project._pbc_selection:
             return self.project._pbc_selection
-        # If there is no inputs file then asume there are no PBC atoms and warn the user
-        if not self.project.is_inputs_file_available():
-            warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
-            self.project._pbc_selection = self.structure.select_pbc_guess()
-            return self.project._pbc_selection
-        # If the input PBC selection is 'auto' then set it automatically as well
-        if self.input_pbc_selection == 'auto':
-            self.project._pbc_selection = self.structure.select_pbc_guess()
-            return self.project._pbc_selection
-        # Otherwise use the input value
-        if not self.input_pbc_selection:
-            self.project._pbc_selection = Selection()
-            return self.project._pbc_selection
-        self.project._pbc_selection = self.structure.select(self.input_pbc_selection)
-        print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(self.project._pbc_selection)} atoms')
+        # Otherwise we must set the PBC selection
+        self.project._pbc_selection = self._set_pbc_selection(self.structure)
         return self.project._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
@@ -1178,14 +1228,14 @@ class MD:
         # Otherwise it means we have input files which are not to be processed
         # So we must calculate from here the reference frame
         # Get the rest of inputs
-        atom_elements = [ atom.element for atom in self.structure.atoms ]
+        non_pbc_ions_selection = self.structure.select_ions() - self.pbc_selection
         # Find the first frame in the whole trajectory where safe bonds are respected
         self._reference_frame = get_bonds_canonical_frame(
             structure_filepath = structure_filepath,
             trajectory_filepath = trajectory_filepath,
             snapshots = self.snapshots,
             reference_bonds = self.safe_bonds,
-            atom_elements = atom_elements
+            excluded_atoms_selection = non_pbc_ions_selection
         )
         return self._reference_frame
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")

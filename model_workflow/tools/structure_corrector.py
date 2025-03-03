@@ -37,7 +37,11 @@ def structure_corrector (
     input_topology_file : Optional['File'],
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
-    MD : 'MD'
+    MD : 'MD',
+    # Note that this is an early provisional structure
+    structure : 'Structure',
+    # Note that this is an early provisional atom selection
+    pbc_selection : str,
 ) -> dict:
 
     # Extract some MD features
@@ -45,9 +49,6 @@ def structure_corrector (
     register = MD.register
     mercy = MD.project.mercy
     trust = MD.project.trust
-
-    # Import the pdb file and parse it to a structure object
-    structure = Structure.from_pdb_file(input_structure_file.path)
 
     # Write the inital output structure file which will be overwritten several times further
     structure.generate_pdb_file(output_structure_file.path)
@@ -67,6 +68,11 @@ def structure_corrector (
     # Unstable atom bonds ----------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # Get a selection of ion atoms which are not in PBC
+    # These ions are usually "twiked" to be bonded to another atom although there is no real covalent bond
+    # They are not taken in count when testing coherent bonds or looking for the reference frame
+    non_pbc_ions_selection = structure.select_ions() - pbc_selection
+
     # Set if stable bonds have to be checked
     # Note that we must not skip this even if the test already passed
     # It may be a corrected structure the one which passed the structure, while this structure comes from the raw input
@@ -85,7 +91,6 @@ def structure_corrector (
     )
     # If safe bonds do not match structure bonds then we have to fix it
     safe_bonds_frame = None
-    atom_elements = [ atom.element for atom in structure.atoms ]
     def check_stable_bonds ():
         # If we have been requested to skip this test then we are done
         if not must_check_stable_bonds:
@@ -96,7 +101,7 @@ def structure_corrector (
         register.remove_warnings(STABLE_BONDS_FLAG)
         # If bonds match from the begining we are done as well
         print('Checking default structure bonds')
-        if do_bonds_match(structure.bonds, safe_bonds, atom_elements, verbose=True, atoms=structure.atoms):
+        if do_bonds_match(structure.bonds, safe_bonds, non_pbc_ions_selection, verbose=True, atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
@@ -109,7 +114,8 @@ def structure_corrector (
             trajectory_filepath = input_trajectory_file.path,
             snapshots = snapshots,
             reference_bonds = safe_bonds,
-            atom_elements = atom_elements
+            # Atoms whose bonds are not taken in count
+            excluded_atoms_selection = non_pbc_ions_selection
         )
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:

@@ -1,6 +1,6 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import load_json
-from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.type_hints import *
 import pytraj as pt
@@ -10,10 +10,11 @@ from collections import Counter
 def do_bonds_match (
     bonds_1 : List[ List[int] ],
     bonds_2 : List[ List[int] ],
-    # Atom elements must be passed since we do not evaluate bonds with ions
-    atom_elements : List[str],
+    # A selection of atoms whose bonds are not evaluated
+    excluded_atoms_selection : 'Selection',
     # Set verbose as true to show which are the atoms preventing the match
     verbose : bool = False,
+    # The rest of inputs are just for logs and debug
     atoms : Optional[ List['Atom'] ] = None,
     counter_list : Optional[ List[int] ] = None
 ) -> bool:
@@ -21,18 +22,15 @@ def do_bonds_match (
     if len(bonds_1) != len(bonds_2):
         raise ValueError(f'The number of atoms is not matching in both bond lists ({len(bonds_1)} and {len(bonds_2)})')
     # Find ion atom indices
-    ion_atom_indices = set()
-    for atom_index, atom_element in enumerate(atom_elements):
-        if atom_element in SUPPORTED_ION_ELEMENTS:
-            ion_atom_indices.add(atom_index)
+    excluded_atom_indices = set(excluded_atoms_selection.atom_indices)
     # For each atom, check bonds to match perfectly
     # Order is not important
     for atom_index, (atom_bonds_1, atom_bonds_2) in enumerate(zip(bonds_1, bonds_2)):
         # Skip ion bonds
-        if atom_index in ion_atom_indices:
+        if atom_index in excluded_atom_indices:
             continue
-        atom_bonds_set_1 = set(atom_bonds_1) - ion_atom_indices
-        atom_bonds_set_2 = set(atom_bonds_2) - ion_atom_indices
+        atom_bonds_set_1 = set(atom_bonds_1) - excluded_atom_indices
+        atom_bonds_set_2 = set(atom_bonds_2) - excluded_atom_indices
         # Check atom bonds to match
         if len(atom_bonds_set_1) != len(atom_bonds_set_2) or any(bond not in atom_bonds_set_2 for bond in atom_bonds_set_1):
             if verbose:
@@ -46,7 +44,7 @@ def do_bonds_match (
                 else:
                     print(f' Mismatch in atom with index {atom_index}:')
                     it_is_atom_indices = ','.join([ str(index) for index in atom_bonds_set_1 ])
-                    print(f' It is bondes to atoms with indices {it_is_atom_indices}')
+                    print(f' It is bonded to atoms with indices {it_is_atom_indices}')
                     it_should_be_atom_indices = ','.join([ str(index) for index in atom_bonds_set_2 ])
                     print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
             # Save for failure analysis
@@ -110,8 +108,9 @@ def get_bonds_canonical_frame (
     trajectory_filepath : str,
     snapshots : int,
     reference_bonds : List[ List[int] ],
-    atom_elements : List[str],
+    excluded_atoms_selection : 'Selection',
     patience : int = 100, # Limit of frames to check before we surrender
+    verbose : bool = True,
 ) -> Optional[int]:
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
@@ -125,12 +124,14 @@ def get_bonds_canonical_frame (
     for frame_number, frame_pdb in enumerate(frames):
         # Get the actual frame number
         bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, reference_bonds, atom_elements, counter_list=counter_list):
+        if do_bonds_match(bonds, reference_bonds, excluded_atoms_selection, counter_list=counter_list, verbose=verbose):
             reference_bonds_frame = frame_number
             break
         # If we didn't find a canonical frame at this point we probablty won't
         if frame_number >= patience:
             break
+        # Give it an extra line for the PDB frames logger to earse it so we do not loose previous logs
+        if verbose: print()
     frames.close()
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:

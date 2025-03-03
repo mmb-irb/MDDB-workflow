@@ -1687,10 +1687,22 @@ class Structure:
     def get_selection_residue_indices (self, selection : 'Selection') -> List[int]:
         return list(set([ self.atoms[atom_index].residue_index for atom_index in selection.atom_indices ]))
     
+    # Given a selection, get a list of residues implicated
+    # Note that if a single atom from the residue is in the selection then the residue is returned
+    def get_selection_residues (self, selection : 'Selection') -> List['Residue']:
+        residue_indices = self.get_selection_residue_indices(selection)
+        return [ self.residues[index] for index in residue_indices ]
+    
     # Given a selection, get a list of chain indices for chains implicated
     # Note that if a single atom from the chain is in the selection then the chain index is returned
     def get_selection_chain_indices (self, selection : 'Selection') -> List[int]:
         return list(set([ self.atoms[atom_index].chain_index for atom_index in selection.atom_indices ]))
+    
+    # Given a selection, get a list of chains implicated
+    # Note that if a single atom from the chain is in the selection then the chain is returned
+    def get_selection_chains (self, selection : 'Selection') -> List['Chain']:
+        chain_indices = self.get_selection_chain_indices(selection)
+        return [ self.chains[index] for index in chain_indices ]
     
     # Get type of the chain
     def get_selection_classification (self, selection : 'Selection') -> str:
