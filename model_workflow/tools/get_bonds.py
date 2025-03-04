@@ -128,9 +128,6 @@ def get_bonds_canonical_frame (
         if do_bonds_match(bonds, reference_bonds, atom_elements, counter_list=counter_list):
             reference_bonds_frame = frame_number
             break
-        # If we didn't find a canonical frame at this point we probablty won't
-        if frame_number >= patience:
-            break
     frames.close()
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:
