@@ -1548,9 +1548,6 @@ class MD:
         output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
         if exists(output_analysis_filepath) and not overwrite:
             return
-        if not getattr(self.project, 'membrane_map', None):
-            print('Membrane map is not available. Skipping density analysis')
-            return
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,
@@ -1565,8 +1562,6 @@ class MD:
         output_thickness_filepath = self.md_pathify(OUTPUT_THICKNESS_FILENAME)
         if exists(output_thickness_filepath) and not overwrite:
             return
-        if not getattr(self.project, 'membrane_map', None):
-            print('Membrane map is not available. Skipping thickness analysis')
         # Run the analysis
         thickness(
             input_structure_filepath = self.structure_file.path,
@@ -1580,8 +1575,6 @@ class MD:
         output_apl_filepath = self.md_pathify(OUTPUT_APL_FILENAME)
         if exists(output_apl_filepath) and not overwrite:
             return
-        if not getattr(self.project, 'membrane_map', None):
-            print('Membrane map is not available. Skipping area per lipid analysis')
         # Run the analysis
         area_per_lipid(
             input_structure_filepath = self.structure_file.path,
@@ -1594,14 +1587,13 @@ class MD:
         output_lipid_order_filepath = self.md_pathify(OUTPUT_LIPID_ORDER_FILENAME)
         if exists(output_lipid_order_filepath) and not overwrite:
             return
-        if not getattr(self.project, 'membrane_map', None):
-            print('Membrane map is not available. Skipping area per lipid analysis')
         # Run the analysis
         lipid_order(
             input_trajectory_filepath = self.trajectory_file.path,
             topology_file=self.project.standard_topology_file,
             output_analysis_filepath = output_lipid_order_filepath,
             membrane_map = self.project.membrane_map,
+            snapshots = self.snapshots,
         )
         
 # The project is the main project
@@ -2475,12 +2467,15 @@ class Project:
         mem_map_file = File(mem_map_filepath)
         # If the file already exists then send it
         if mem_map_file.exists and not overwrite:
-            return load_json(mem_map_file.path)
-        self._membrane_map = generate_membrane_mapping(
-            structure = self.structure,
-            topology_file=self.standard_topology_file,
-            structure_file=self.structure_file,
-        )
+            self._membrane_map =  load_json(mem_map_file.path)
+        else:
+            self._membrane_map = generate_membrane_mapping(
+                structure = self.structure,
+                topology_file=self.standard_topology_file,
+                structure_file=self.structure_file,
+            )   
+        if self._membrane_map is None or self._membrane_map['n_mems'] == 0:
+            print('No membrane available. Related analyses will be skipped.')
         return self._membrane_map
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 

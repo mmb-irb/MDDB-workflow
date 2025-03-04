@@ -2,6 +2,7 @@ from biobb_mem.lipyphilic_biobb.lpp_zpositions import lpp_zpositions, frame_df
 from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
+from contextlib import redirect_stdout
 import os
 
 
@@ -12,13 +13,11 @@ def thickness (
     membrane_map: dict,
     snapshots : int,
     frames_limit: int = 100):
-    print('-> Running thickness analysis')
 
-    if membrane_map['n_mems'] == 0:
-        # Do something special for density analysis for 
-        # membranes like leaflets separation, polargroups, etc.
-        print(' No membranes found in the structure. Skipping analysis.')
+    if membrane_map is None or membrane_map['n_mems'] == 0:
+        print('-> Skipping thickness analysis')
         return
+    print('-> Running thickness analysis')
 
     tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frames_limit)
     head_sel = []
@@ -34,10 +33,12 @@ def thickness (
         'ignore_no_box': True,
         'disable_logs': True
     }
-    lpp_zpositions(input_top_path=input_structure_filepath,
-                   input_traj_path=input_trajectory_filepath,
-                   output_positions_path='.zpositions.csv',
-                   properties=prop)
+    print(' Running BioBB LiPyphilic ZPositions')
+    with redirect_stdout(None):
+        lpp_zpositions(input_top_path=input_structure_filepath,
+                    input_traj_path=input_trajectory_filepath,
+                    output_positions_path='.zpositions.csv',
+                    properties=prop)
     df = frame_df('.zpositions.csv') # Per frame data
     os.remove('.zpositions.csv')
 

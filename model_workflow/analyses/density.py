@@ -13,11 +13,11 @@ def density (
     snapshots : int,
     density_types = ['number', 'mass', 'charge', 'electron'],
     frames_limit = 1000):
-    print('-> Running density analysis')
 
-    if membrane_map['n_mems'] == 0:
-        print(' No membranes found in the structure. Skipping density analysis.')
+    if membrane_map is None or membrane_map['n_mems'] == 0:
+        print('-> Skipping density analysis')
         return
+    print('-> Running density analysis')
 
     # Load
     tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frames_limit)

@@ -8,7 +8,7 @@ from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.warnings import warn
-
+from contextlib import redirect_stdout
 
 def generate_membrane_mapping(structure : 'Structure',
                               topology_file : 'File',
@@ -35,14 +35,13 @@ def generate_membrane_mapping(structure : 'Structure',
         - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
-     # Patch case where there no internet
+    # Patch case where there no internet
     try:
         # This would return a ConnectionError
         is_in_swiss_lipids('test')
     except:
         # Then we map the lipids/membrane
-        warn('There is a problem connecting to the SwissLipids database.\n'
-             'Skipping membrane mapping.')
+        warn('There was a problem connecting to the SwissLipids database.')
         return None
     print('-> Generating membrane mapping')
     assert topology_file.extension == 'json', 'Input topology file must be in json format: '+ topology_file.extension
@@ -78,7 +77,7 @@ def generate_membrane_mapping(structure : 'Structure',
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'polar_atoms': {}, 'references': references}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
-        print('No lipids found in the structure.')
+        # no lipids found in the structure.
         save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
         return mem_map_js
     
@@ -103,10 +102,11 @@ def generate_membrane_mapping(structure : 'Structure',
         'return_hydrogen': True
     }
     output_ndx_path = "tmp_mem_map.ndx"
-    print('Running BioBB FATSLiM Membranes:')
-    fatslim_membranes(input_top_path=structure_file.absolute_path,
-                    output_ndx_path=output_ndx_path,
-                    properties=prop)
+    print(' Running BioBB FATSLiM Membranes')
+    with redirect_stdout(None):
+        fatslim_membranes(input_top_path=structure_file.absolute_path,
+                        output_ndx_path=output_ndx_path,
+                        properties=prop)
     # Parse the output to get the membrane mapping
     mem_map = parse_index(output_ndx_path)
     os.remove(output_ndx_path)

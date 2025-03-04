@@ -1,3 +1,4 @@
+from model_workflow.tools.get_pytraj_trajectory import calculate_frame_step
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
@@ -9,16 +10,19 @@ def lipid_order (
     input_trajectory_filepath : str,
     topology_file : 'File',
     output_analysis_filepath : str,
-    membrane_map: dict,):
-    print('-> Running lipid order analysis')
+    membrane_map: dict,
+    snapshots : int,
+    frames_limit: int = 100):
 
-    if membrane_map['n_mems'] == 0:
-        print(' No membranes found in the structure. Skipping analysis.')
+    if membrane_map is None or membrane_map['n_mems'] == 0:
+        print('-> Skipping lipid order analysis')
         return
+    print('-> Running lipid order analysis')
     
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, input_trajectory_filepath)
     order_parameters_dict = {}
+    frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     for ref_data in membrane_map['references'].values():
         # Take the first residue of the reference (all residues are the same)
         res = u.select_atoms(f'resname {ref_data["resname"]}').residues[0]
@@ -38,7 +42,7 @@ def lipid_order (
             order_parameters = []
             costheta_sums = {C_name: np.zeros(len(ch_pairs[C_name]['C'])) for C_name in C_names}
             n = 0
-            for ts in u.trajectory[0:10001:100]:
+            for ts in u.trajectory[0:snapshots:frame_step]:
                 for C_name in C_names:
                     d = u.atoms[ch_pairs[C_name]['C']].positions - u.atoms[ch_pairs[C_name]['H']].positions
                     costheta_sums[C_name] += d[:,2]**2/np.linalg.norm(d, axis=1)**2
