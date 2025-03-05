@@ -11,6 +11,9 @@ from model_workflow.tools.residues_library import residue_name_2_letter
 from model_workflow.utils.auxiliar import load_json, save_json, RemoteServiceError
 from model_workflow.utils.type_hints import *
 
+# Set analysis version
+CHAINS_VERSION = '0.1'
+
 # Get the sequence and name of the chain in the structure and request the InterProScan 
 def request_interpsocan (sequence : str) -> str:
     # Set the request URL
@@ -213,6 +216,7 @@ def generate_chain_references (
             interproscan_result = check_interproscan_result(interproscan_jobid)
             # Get corresponding chain data and add the InterProScan results
             chain_data = next(data for data in chains_data if data['sequence'] == sequence)
+            chain_data['version'] = CHAINS_VERSION
             chain_data['interproscan'] = interproscan_result
             # Remove version and pathways so Mongo don't get confused when they change
             del chain_data['interproscan']['interproscan-version']
