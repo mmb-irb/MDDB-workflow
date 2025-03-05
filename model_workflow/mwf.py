@@ -2486,9 +2486,18 @@ class Project:
         # If we already have a stored value then return it
         if self._pdb_references:
             return self._pdb_references
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
+        # If the file already exists and we must overwrite it then delete it here
+        if pdb_references_file.exists and must_overwrite:
+            pdb_references_file.remove()
         # Otherwise we must find the value
         self._pdb_references = generate_pdb_references(
             pdb_ids = self.pdb_ids,
@@ -2499,22 +2508,13 @@ class Project:
 
     # Define the PDB references output file
     def get_pdb_references_file (self) -> File:
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
-        # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
-        # If the file already exists then return it
-        # However if we must overwrite then delete it and proceed to produce it again
-        if pdb_references_file.exists:
-            if not must_overwrite:
-                return pdb_references_file
-            pdb_references_file.remove()
-        # Ask for the PDB references thus producing the PDB references file
+        # Ask for the references thus producing the requested output file
+        # WARNING: We must always run the references, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
         self.get_pdb_references()
         return pdb_references_file
     pdb_references_file = property(get_pdb_references_file, None, None, "File including PDB refereces data (read only)")
@@ -2524,9 +2524,18 @@ class Project:
         # If we already have a stored value then return it
         if self._protein_map != None:
             return self._protein_map
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the protein references file
         protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
         protein_references_file = File(protein_references_filepath)
+        # If the file already exists and we must overwrite it then delete it here
+        if protein_references_file.exists and must_overwrite:
+            protein_references_file.remove()
         # Otherwise we must find the value
         self._protein_map = generate_protein_mapping(
             structure = self.structure,
@@ -2542,23 +2551,15 @@ class Project:
 
     # Define the output file of the protein mapping including protein references
     def get_protein_references_file (self) -> File:
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
-        # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
         # Set the protein references file
         protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
         protein_references_file = File(protein_references_filepath)
-        # If the file already exists then return it
-        # However if we must overwrite then delete it and proceed to produce it again
-        if protein_references_file.exists:
-            if not must_overwrite:
-                return protein_references_file
-            protein_references_file.remove()
-        # Ask for the protein map thus producing the protein references file
+        # Ask for the map thus producing the requested output file
+        # WARNING: We must always run the map, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
         self.get_protein_map()
+        # Return the file
         return protein_references_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
@@ -2591,9 +2592,18 @@ class Project:
         # If we already have a stored value then return it
         if self._ligand_map != None:
             return self._ligand_map
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the ligand references file
         ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
         ligand_references_file = File(ligand_references_filepath)
+        # If the file already exists and we must overwrite it then delete it here
+        if ligand_references_file.exists and must_overwrite:
+            ligand_references_file.remove()
         # Otherwise we must find the value
         self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             structure = self.structure,
@@ -2608,22 +2618,13 @@ class Project:
 
     # Define the output file of the ligand mapping including ligand references
     def get_ligand_references_file (self) -> File:
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
-        # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
         # Set the ligand references file
         ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
         ligand_references_file = File(ligand_references_filepath)
-        # If the file already exists then return it
-        # However if we must overwrite then delete it and proceed to produce it again
-        if ligand_references_file.exists:
-            if not must_overwrite:
-                return ligand_references_file
-            ligand_references_file.remove()
-        # Ask for the ligand map thus producing the ligand references file
+        # Ask for the map thus producing the requested output file
+        # WARNING: We must always run the map, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
         self.get_ligand_map()
         return ligand_references_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
@@ -2850,9 +2851,9 @@ analyses = {
 project_requestables = {
     **project_input_files,
     **project_processed_files,
-    'pdbs': Project.get_pdb_references_file,
-    'mapping': Project.get_protein_references_file,
-    'ligands': Project.get_ligand_references_file,
+    'pdbs': Project.get_pdb_references,
+    'mapping': Project.get_protein_map,
+    'ligands': Project.get_ligand_map,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
