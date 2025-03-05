@@ -8,7 +8,6 @@ from shutil import which
 GLOBALS = {
     # Set if symlinks are allowed
     'no_symlinks': False,
-    'overwrite': set()
 }
 
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
