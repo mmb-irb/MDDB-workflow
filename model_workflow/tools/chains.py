@@ -194,7 +194,16 @@ def generate_chain_references (
     if len(pending_jobids) == 0:
         print(' All reference chains are already in the backup file')
         return chains_data
+    # RUBEN: Separated functions so can be used in the references updater
+    get_interproscan_results(pending_jobids, interproscan_jobids, chains_data, chains_references_file)
 
+
+def get_interproscan_results (
+    pending_jobids : list,
+    interproscan_jobids : dict,
+    chains_data : list,
+    chains_references_file : 'File',
+) -> None:
     # Iterate over the jobids to check the status and get the results
     # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list 
     # until there are no more jobids in either list
@@ -229,5 +238,5 @@ def generate_chain_references (
             pending_jobids.remove(interproscan_jobid)
             # Save the result
             save_json(chains_data, chains_references_file.path)
-    
+
     print(' Protein chains data obtained              ')
