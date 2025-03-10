@@ -294,8 +294,27 @@ def request_pdb_data (pdb_id : str, query : str) -> dict:
     # Get the response
     parsed_response = json.loads(response.text)['data'][data_key]
     if parsed_response == None:
-        raise ValueError(f'PDB id {pdb_id} not found')
+        new_pdb_id = request_replaced_pdb(pdb_id)
+        if new_pdb_id:
+            parsed_response = request_pdb_data(new_pdb_id, query)
+        else:
+            print(f'PDB id {pdb_id} not found')
     return parsed_response
+
+# Use the RCSB REST API to get the replaced PDB id
+# This is useful when the PDB is obsolete and has been replaced
+def request_replaced_pdb(pdb_id):
+    query_url = 'https://data.rcsb.org/rest/v1/holdings/removed/'+pdb_id
+    response = requests.get(query_url, headers={'Content-Type': 'application/json'})
+    # Check if the response is OK
+    if response.status_code == 200:
+        try:
+            return response.json()['rcsb_repository_holdings_removed']['id_codes_replaced_by'][0]
+        except:
+            print(f'Error when mining replaced PDB id for {pdb_id}')
+            return None
+    else:
+        return None
 
 # Given a filename, set a sufix number on it, right before the extension
 # Set also the number of zeros to fill the name
