@@ -110,7 +110,7 @@ def get_bonds_canonical_frame (
     reference_bonds : List[ List[int] ],
     excluded_atoms_selection : 'Selection',
     patience : int = 100, # Limit of frames to check before we surrender
-    verbose : bool = True,
+    verbose : bool = False,
 ) -> Optional[int]:
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
