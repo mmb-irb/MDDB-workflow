@@ -3,6 +3,9 @@ import sys
 import json
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from rdkit.Chem import rdFingerprintGenerator
+from rdkit.Chem.Draw import IPythonConsole
+from rdkit import DataStructs
 from mordred import Calculator, descriptors
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
@@ -241,8 +244,10 @@ def find_chembl_pubchem (id_chembl):
 
 # Calculate the Morgan fingerprint and the Mordred descriptors from a ligand SMILES
 def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
-    smiles = Chem.MolFromSmiles(smiles)
-
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
+        return None
     # We can select the different submodules of mordred descriptors, avaible in: 'https://mordred-descriptor.github.io/documentation/master/'
     #calc = Calculator(descriptors, ignore_3D=True)
     calc = Calculator([descriptors.ABCIndex, 
@@ -250,20 +255,26 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
                        descriptors.AcidBase.BasicGroupCount, 
                        descriptors.RingCount], ignore_3D=True)
 
-    #print(f"Number of descriptors in calculator: {len(calc.descriptors)}")
-
     # Calculate Mordred results
-    mordred_results = calc(smiles).drop_missing().asdict()
-
-    #print(f"Number of calculated descriptors: {len(results_dict)}")
-    #print(results_dict)
+    mordred_results = calc(mol).drop_missing().asdict()
 
     ######## MORGAN FINGERPRINT ###########
+    morgan_fp_bit_array = list(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024))
+    morgan_fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+    ao = rdFingerprintGenerator.AdditionalOutput()
+    ao.AllocateAtomCounts()
+    ao.AllocateAtomToBits()
+    ao.AllocateBitInfoMap()
+    fp = morgan_fp_gen.GetFingerprint(mol,additionalOutput=ao)
+    highlight_atoms = {}
+    for bit, atoms in ao.GetBitInfoMap().items():
+        highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
+    print("Morgan fingerprint:", highlight_atoms)
 
-    morgan_fp = list(AllChem.GetMorganFingerprintAsBitVect(smiles, radius=2, nBits=1024))
-
-    #print("Morgan fingerprint:")
-    #print(list(morgan_fp))
+    morgan_fp = {
+        'bit_array': morgan_fp_bit_array,
+        'highlight_atoms': highlight_atoms
+    }
 
     return mordred_results, morgan_fp
 
