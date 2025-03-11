@@ -46,35 +46,47 @@ def get_pdb_reference (pdb_id : str) -> dict:
                 rcsb_polymer_entity_container_identifiers { asym_ids uniprot_ids }
                 rcsb_entity_source_organism { scientific_name }
             }
+            exptl { method }
         }
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
-    # Mine data
-    pdb_data = {}
-    pdb_data['id'] = parsed_response['rcsb_id']
-    pdb_data['title'] = parsed_response['struct']['title']
-    pdb_data['class'] = parsed_response['struct_keywords']['pdbx_keywords']
-    pdb_data['authors'] = [ author['name'] for author in parsed_response['audit_author'] ]
-    pdb_data['date'] = parsed_response['rcsb_accession_info']['initial_release_date']
-    pdb_data['method'] = parsed_response['refine'][0]['pdbx_refine_id']
-    pdb_data['resolution'] = parsed_response['refine'][0]['ls_d_res_high']
-    chain_uniprots = {}
-    organisms = []
-    for polymer in parsed_response['polymer_entities']:
-        identifier = polymer['rcsb_polymer_entity_container_identifiers']
-        # Get the organisms
-        organisms += [ organism['scientific_name'] for organism in polymer['rcsb_entity_source_organism'] ]
-        # Get the uniprot
-        uniprots = identifier.get('uniprot_ids', None)
-        if not uniprots: continue
-        if len(uniprots) > 1: raise ValueError('Multiple PDB ids in the same chain?')
-        uniprot_id = uniprots[0]
-        chains = identifier['asym_ids']
-        for chain in chains:
-            chain_uniprots[chain] = uniprot_id
-    pdb_data['chain_uniprots'] = chain_uniprots
-    pdb_data['organisms'] = organisms
+    try:
+        # Mine data
+        pdb_data = {}
+        pdb_data['id'] = parsed_response['rcsb_id']
+        pdb_data['title'] = parsed_response['struct']['title']
+        pdb_data['class'] = parsed_response['struct_keywords']['pdbx_keywords']
+        pdb_data['authors'] = [ author['name'] for author in parsed_response['audit_author'] ]
+        pdb_data['date'] = parsed_response['rcsb_accession_info']['initial_release_date']
+        # pdbx_refine_id not on every PDB like in 1FI3
+        #pdb_data['method'] = parsed_response['refine'][0]['pdbx_refine_id']
+        pdb_data['method'] = parsed_response['exptl'][0]['method']
+        # ls_d_res_high not on every PDB like in 1FI3
+        # pdb_data['resolution'] = parsed_response['refine'][0]['ls_d_res_high']
+        chain_uniprots = {}
+        organisms = []
+        for polymer in parsed_response['polymer_entities']:
+            identifier = polymer['rcsb_polymer_entity_container_identifiers']
+            # Get the organisms
+            organism_entries = polymer['rcsb_entity_source_organism']
+            if organism_entries != None:
+                organisms += [ organism['scientific_name'] for organism in organism_entries ]
+            # Get the uniprot
+            uniprots = identifier.get('uniprot_ids', None)
+            if not uniprots: continue
+            if len(uniprots) > 1:  
+                print(f'PDB {pdb_id} has multiple uniprots: {uniprots}. Saving only the first one')
+            uniprot_id = uniprots[0]
+            chains = identifier['asym_ids']
+            for chain in chains:
+                chain_uniprots[chain] = uniprot_id
+        pdb_data['chain_uniprots'] = chain_uniprots
+        pdb_data['organisms'] = organisms
+    except Exception as e:
+        print(f'Error when mining PDB data for {pdb_id}')
+        print('Got the response:', parsed_response, '.Setting noref')
+        pdb_data = {'id': 'noref'}
     return pdb_data
 
 # Set service URLs to be requested
