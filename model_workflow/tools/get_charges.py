@@ -9,6 +9,7 @@ from model_workflow.utils.type_hints import *
 import re
 
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from model_workflow.utils.gmx_spells import get_tpr_charges as get_tpr_charges_gromacs
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
@@ -99,35 +100,8 @@ def get_tpr_charges (topology_filename : str) -> list:
     try:
         charges = get_tpr_charges_mdanalysis(topology_filename)
     except:
-        print('WARNING: mdanalysis failed to extract charges. Using manual extraction...')
-        charges = get_tpr_charges_manual(topology_filename)
-    return charges
-
-# This works for the new tpr format (tested in 122)
-def get_tpr_charges_manual (topology_filename : str) -> list:
-    charges = []
-    # Read the tpr file making a 'dump'
-    process = run([
-        GROMACS_EXECUTABLE,
-        "dump",
-        "-s",
-        topology_filename,
-        "-quiet"
-    ], stdout=PIPE, stderr=PIPE)
-    readable_tpr = process.stdout.decode()
-    # Mine the atomic charges
-    for line in readable_tpr.split('\n'):
-        # Skip everything which is not atomic charges data
-        if line[0:16] != '            atom':
-            continue
-        # Parse the line to get only charges
-        search = re.search(r"q=([0-9e+-. ]*),", line)
-        if search:
-            charges.append(float(search[1]))
-    if len(charges) == 0:
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Charges extraction from tpr file has failed')
+        print(' MDAnalysis failed to extract charges. Using manual extraction...')
+        charges = get_tpr_charges_gromacs(topology_filename)
     return charges
 
 # This works for the old tpr format (tested in 112)

@@ -2,8 +2,11 @@ from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import load_json
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
+from model_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
+from model_workflow.utils.gmx_spells import get_tpr_atom_count
 from model_workflow.utils.type_hints import *
 import pytraj as pt
+from MDAnalysis.topology.TPRParser import TPRParser
 from collections import Counter
 
 # Check if two sets of bonds match perfectly
@@ -157,36 +160,69 @@ def get_bonds_canonical_frame (
 
     return reference_bonds_frame
 
-# Extract bonds from a source file
-def mine_topology_bonds (bonds_source_file : 'File') -> list:
+# Extract bonds from a source file and format them per atom
+def mine_topology_bonds (bonds_source_file : 'File') -> List[ List[int] ]:
     if not bonds_source_file or not bonds_source_file.exists:
         return None
+    print('Mining atom bonds from topology file')
     # If we have the standard topology then get bonds from it
     if bonds_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
-        print(f'Bonds in the "{bonds_source_file.filename}" file will be used')
+        print(f' Bonds in the "{bonds_source_file.filename}" file will be used')
         standard_topology = load_json(bonds_source_file.path)
-        bonds = standard_topology.get('atom_bonds', None)
-        if bonds:
-            return bonds
+        atom_bonds = standard_topology.get('atom_bonds', None)
+        if atom_bonds: return atom_bonds
         print('  There were no bonds in the topology file. Is this an old file?')
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
-    if bonds_source_file.is_pytraj_supported():
-        print(f'Bonds will be mined from "{bonds_source_file.path}"')
+    elif bonds_source_file.is_pytraj_supported():
+        print(f' Bonds will be mined from "{bonds_source_file.path}"')
         pt_topology = pt.load_topology(filename=bonds_source_file.path)
-        atom_bonds = [ [] for i in range(pt_topology.n_atoms) ]
-        for bond in pt_topology.bonds:
-            a,b = bond.indices
-            # Make sure atom indices are regular integers so they are JSON serializables
-            atom_bonds[a].append(int(b))
-            atom_bonds[b].append(int(a))
-        # If there is any bonding data then return bonds
-        if any(len(bonds) > 0 for bonds in atom_bonds):
-            return atom_bonds
-        # If all bonds are empty then it means the parsing failed or the pytraj topology has no bonds
-        # We must guess them
-        print(' Bonds could not be mined')
-    # If we can not mine bonds then return None and they will be guessed further
+        raw_bonds = [ bonds.indices for bonds in pt_topology.bonds ]
+        # Sort bonds
+        atom_count = pt_topology.n_atoms
+        atom_bonds = sort_bonds(raw_bonds, atom_count)
+        # If there is any bonding data then return atom bonds
+        if any(len(bonds) > 0 for bonds in atom_bonds): return atom_bonds
+    # If we have a TPR then use our own tool
+    elif bonds_source_file.format == 'tpr':
+        print(f' Bonds will be mined from TPR file "{bonds_source_file.path}"')
+        raw_bonds = get_tpr_bonds(bonds_source_file.path)
+        # Sort bonds
+        atom_count = get_tpr_atom_count(bonds_source_file.path)
+        atom_bonds = sort_bonds(raw_bonds, atom_count)
+        # If there is any bonding data then return atom bonds
+        if any(len(bonds) > 0 for bonds in atom_bonds): return atom_bonds
+    # If we failed to mine bonds then return None and they will be guessed further
+    print (' Failed to mine bonds -> They will be guessed from atom distances and radius')
     return None
+
+# Get TPR bonds
+# Try 2 different methods and hope 1 of them works
+def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+    try:
+        bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
+    except:
+        print(' MDAnalysis failed to extract bonds. Using manual extraction...')
+        bonds = get_tpr_bonds_gromacs(tpr_filepath)
+    return bonds
+
+# Get TPR bonds using MDAnalysis
+def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+    parser = TPRParser(tpr_filepath)
+    topology = parser.parse()
+    bonds = list(topology.bonds.values)
+    return bonds
+
+# Sort bonds according to our format: a list with the bonded atom indices for each atom
+# Source data is the usual format to store bonds: a list of tuples with every pair of bonded atoms
+def sort_bonds (source_bonds : List[ Tuple[int, int] ], atom_count : int) -> List[ List[int] ]:
+    # Set a list of lists with an empty list for every atom
+    atom_bonds = [ [] for i in range(atom_count) ]
+    for bond in source_bonds:
+        a,b = bond
+        # Make sure atom indices are regular integers so they are JSON serializables
+        atom_bonds[a].append(int(b))
+        atom_bonds[b].append(int(a))
+    return atom_bonds
 
 # Get safe bonds
 # First try to mine bonds from a topology files
