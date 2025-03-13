@@ -41,7 +41,7 @@ def updater(ref_type = 'proteins'):
         options = json.loads(response.read().decode("utf-8"))
     project_ids = set(options[metafields[ref_type]].keys())
     # Remove null uniprot values
-    project_ids -= set(['null', 'noref'])
+    project_ids -= set(['null', 'noref', '', 'no', 'ab initio', 'NONE', 'None', ' 7Z85', 'No']) # TODO: remove all except noref from DB
     project_ids_count = len(project_ids)
     print('There are ' + str(project_ids_count) + ' different ids among projects')
     # Request all references
@@ -84,6 +84,10 @@ def updater(ref_type = 'proteins'):
         # Write references to a new file
         save_json(new_references, references_filename)
     elif ref_type == 'pdbs':
+        n = len(project_ids)
+        # Remove pdb id duplicates on lower case
+        project_ids = {pid.upper() for pid in project_ids}
+        print(n-len(project_ids), 'duplicates removed by using upper case')
         generate_pdb_references(project_ids,File(references_filename))
     elif ref_type == 'chains':
         # References from interproscan with existing projects (non orphan)
@@ -114,7 +118,6 @@ def updater(ref_type = 'proteins'):
 
         if scan_sequences:
             print(f"Processing {len(scan_sequences)} sequences that need interproscan analysis")
-            assert False
             # Convert set to list for indexing
             sequences_list = list(scan_sequences)
             batch_size = 10
@@ -133,7 +136,7 @@ def updater(ref_type = 'proteins'):
                 # Get the pending interpsocan jobids 
                 pending_jobids = list(interproscan_jobids.values())
                 # Get results and add to references
-                batch_references = []
+                batch_references = [{'sequence': sequence, 'interproscan': None} for sequence in batch]
                 get_interproscan_results(pending_jobids, interproscan_jobids, batch_references, File(references_filename))
                 # Add batch results to main references list
                 new_references.extend(batch_references)
@@ -143,4 +146,4 @@ def updater(ref_type = 'proteins'):
         save_json(new_references, references_filename)
 
 updater(ref_type='pdbs')
-updater(ref_type='chains')
+#updater(ref_type='chains')
