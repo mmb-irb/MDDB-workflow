@@ -1,6 +1,7 @@
 # Auxiliar generic functions and classes used along the workflow
 
-from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
+from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
+from model_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 
 import os
 from os import rename, listdir
@@ -62,6 +63,10 @@ def get_new_letter(current_letters : set) -> Optional[str]:
 # Given a residue name, return its single letter
 def residue_name_to_letter (residue_name : str) -> str:
     return RESIDUE_NAME_LETTERS.get(residue_name, 'X')
+
+# Given a protein residue name, return its single letter
+def protein_residue_name_to_letter (residue_name : str) -> str:
+    return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
 # Set a JSON loader with additional logic to better handle problems
 def load_json (filepath : str) -> dict: 

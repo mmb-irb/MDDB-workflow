@@ -295,9 +295,9 @@ SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S' ])
 SUPPORTED_ION_ELEMENTS = set([ 'K', 'F', 'Cl', 'Na', 'Zn', 'Mg', 'Fe', 'Br', 'Mn', 'I', 'Ca' ])
 SUPPORTED_ELEMENTS = SUPPORTED_POLYMER_ELEMENTS.union(SUPPORTED_ION_ELEMENTS)
 
-# Set a dictionary with all residue names and their equivalent letters
-RESIDUE_NAME_LETTERS = {
-    # Amino acids
+# Set a dictionaries with all residue names and their equivalent letters
+# Amino acids
+PROTEIN_RESIDUE_NAME_LETTERS = {
     'ALA':'A',
     'ALAN':'A',
     'ALAC':'A',
@@ -374,7 +374,9 @@ RESIDUE_NAME_LETTERS = {
     'VAL':'V',
     'VALN':'V',
     'VALC':'V',
-    # Nucleotides
+}
+# Nucleotides
+NUCLEIC_RESIDUE_NAME_LETTERS = {
     'A': 'A',
     'A3': 'A',
     'A5': 'A',
@@ -407,6 +409,8 @@ RESIDUE_NAME_LETTERS = {
     'DG3': 'G',
     'DG5': 'G',
 }
+# All of them together
+RESIDUE_NAME_LETTERS = { **PROTEIN_RESIDUE_NAME_LETTERS, **NUCLEIC_RESIDUE_NAME_LETTERS }
 
 # Set typical residue names to guess what residues are
 STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4'}
