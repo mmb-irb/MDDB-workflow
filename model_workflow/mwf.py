@@ -740,6 +740,10 @@ class MD:
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
             # Update the cache
             self.register.update_cache(IMAGED, current_imaged_parameters)
+            # Update the provisional strucutre coordinates
+            imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
+            imaged_structure_coords = [ atom.coords for atom in imaged_structure.atoms ]
+            provisional_structure.set_new_coordinates(imaged_structure_coords)
 
         # --- CORRECTING STRUCTURE ------------------------------------------------------------
 
@@ -780,13 +784,12 @@ class MD:
         # This function reads and or modifies the following MD variables:
         #   snapshots, safe_bonds, register, mercy, trust
         structure_corrector(
-            input_structure_file = imaged_structure_file,
+            structure = provisional_structure,
             input_trajectory_file = imaged_trajectory_file,
             input_topology_file = filtered_topology_file,
             output_structure_file = corrected_structure_file,
             output_trajectory_file = corrected_trajectory_file,
             MD = self,
-            structure = provisional_structure,
             pbc_selection = provisional_pbc_selection
         )
 

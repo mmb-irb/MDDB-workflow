@@ -32,14 +32,13 @@ from model_workflow.utils.type_hints import *
 # This function also sets some values in the passed MD
 
 def structure_corrector (
-    input_structure_file : 'File',
+    # Note that this is an early provisional structure
+    structure : 'Structure',
     input_trajectory_file : Optional['File'],
     input_topology_file : Optional['File'],
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
     MD : 'MD',
-    # Note that this is an early provisional structure
-    structure : 'Structure',
     # Note that this is an early provisional atom selection
     pbc_selection : str,
 ) -> dict:
@@ -68,10 +67,11 @@ def structure_corrector (
     # Unstable atom bonds ----------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # Set some atoms which are to be skipped from these test given their "fake" nature
     # Get a selection of ion atoms which are not in PBC
-    # These ions are usually "twiked" to be bonded to another atom although there is no real covalent bond
+    # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
     # They are not taken in count when testing coherent bonds or looking for the reference frame
-    non_pbc_ions_selection = structure.select_ions() - pbc_selection
+    excluded_atoms_selection = structure.select_ions() - pbc_selection
 
     # Set if stable bonds have to be checked
     # Note that we must not skip this even if the test already passed
@@ -101,7 +101,7 @@ def structure_corrector (
         register.remove_warnings(STABLE_BONDS_FLAG)
         # If bonds match from the begining we are done as well
         print('Checking default structure bonds')
-        if do_bonds_match(structure.bonds, safe_bonds, non_pbc_ions_selection, verbose=True, atoms=structure.atoms):
+        if do_bonds_match(structure.bonds, safe_bonds, excluded_atoms_selection, verbose=True,atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
@@ -115,7 +115,7 @@ def structure_corrector (
             snapshots = snapshots,
             reference_bonds = safe_bonds,
             # Atoms whose bonds are not taken in count
-            excluded_atoms_selection = non_pbc_ions_selection
+            excluded_atoms_selection = excluded_atoms_selection
         )
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
