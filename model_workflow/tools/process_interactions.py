@@ -62,7 +62,6 @@ def process_interactions (
 
         # Get structure chains which are not completely in PBC
         target_chains = [ chain for chain in structure.chains if chain.get_selection() - pbc_selection ]
-    
         # The greedy option is to find all possible interactions between chains
         if auto == 'autogreedy' or auto == 'greedy':
             # Use itertools to get all possible combinations of chains
@@ -121,26 +120,33 @@ def process_interactions (
                 raise InputError('No ligand map is detected. Skipping ligand interactions')
             # Iterate over the list of matched ligands in the structure
             for ligand in ligand_map:
-                # Match the ligand residue with the chain it belongs to and its classification
-                residues = [ structure.residues[index] for index in ligand['residue_indices'] ]
-                ligand_chains = set([ residue.chain for residue in residues ])
-                # AGUS: la clasificacion del ligando deberia mejorarse para no ser 'Other Chain' sino 'ligand' --> modificar Chain
-                ligand_classifications = set([ chain.classification for chain in ligand_chains ])
-                ligand_selection = ', '.join([ str(index) for index in ligand['residue_indices'] ])
-                # Create the ligand interaction with all chains
-                for chain in target_chains:
-                    # Skip interaction of the ligand with itself
-                    if chain in ligand_chains: continue
-                    # Skip interaction if the ligand classifications are the same as the chain classification
-                    if chain.classification in ligand_classifications: continue
-                    interaction = {
-                        "name": f"ligand {ligand['name']}-chain {chain.name} interaction",
-                        "agent_1": f"ligand {ligand['name']}",
-                        "agent_2": f"chain {chain.name}",
-                        "selection_1": f"residue {ligand_selection}", # AGUS: esto es un parche, podría haber más de un residuo por ligando ¿?
-                        "selection_2": f"chain {chain.name}"
-                    }
-                    interactions.append(interaction)
+                # Get the ligand atom selection
+                ligand_selection = structure.select_residue_indices(ligand['residue_indices'])
+                # Get ligand fragments
+                # AGUS: De esta forma evitamos que si un mismo ligando aparece más de una vez en la simulación (solo habrá un ligand map con el mismo nombre),
+                # AGUS: se hagan las interacciones correspondientes con cada uno de estos, es decir, como si fueran ligandos diferentes (cada uno con su respectiva interacción)
+                ligand_fragments = structure.find_fragments(ligand_selection)
+                for lf, ligand_fragment in enumerate(ligand_fragments, 1):
+                    # Match the ligand residue with the chain it belongs to and its classification
+                    ligand_residue_indices = structure.get_selection_residue_indices(ligand_fragment)
+                    residues = [ structure.residues[index] for index in ligand_residue_indices ]
+                    ligand_chains = set([ residue.chain for residue in residues ])
+                    # AGUS: la clasificacion del ligando deberia mejorarse para no ser 'Other Chain' sino 'ligand' --> modificar Chain
+                    ligand_classifications = set([ chain.classification for chain in ligand_chains ])
+                    # Create the ligand interaction with all chains
+                    for chain in target_chains:
+                        # Skip interaction of the ligand with itself
+                        if chain in ligand_chains: continue
+                        # Skip interaction if the ligand classifications are the same as the chain classification
+                        if chain.classification in ligand_classifications: continue
+                        interaction = {
+                            "name": f"ligand {ligand['name']} {lf}-chain {chain.name} interaction",
+                            "agent_1": f"ligand {ligand['name']} {lf}",
+                            "agent_2": f"chain {chain.name}",
+                            "selection_1": ligand_fragment.to_vmd(), # AGUS: parcheado por si hubiera más de un residuo por ligando ¿?
+                            "selection_2": f"chain {chain.name}"
+                        }
+                        interactions.append(interaction)
             mercy = STABLE_INTERACTIONS_FLAG
 
         else:
@@ -154,7 +160,6 @@ def process_interactions (
     interaction_names = [ interaction['name'] for interaction in interactions ]
     if len(set(interaction_names)) < len(interaction_names):
         raise InputError('Interactions must have unique names')
-
     # Check input interactions to be correct
     for interaction in interactions:
         # Check agents have different names
