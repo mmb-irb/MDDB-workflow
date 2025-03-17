@@ -194,8 +194,8 @@ forced_references:
 #   - pubchem: the PubChem accession
 #   - drugbank: the DrugBank accession
 #   - chembl: the ChEMBL accession
-# Optionally, a list of residue indices may be provided to force the mapping
-#   - residue: a list of residue indices
+# Optionally, a list of vmd selections may be provided to force the mapping
+#   - vmd_selection: a list of vmd selections (chain D)
 #
 # Ligands are mapped in the standard topology file
 # In addition, an RMSD analysis is run for every defined ligand
