@@ -183,9 +183,13 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
 def find_drugbank_pubchem (drugbank_id):
     # Request Drugbank
     request_url = Request(
-        url= f'https://go.drugbank.com/drugs/{drugbank_id}',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
+    url=f'https://go.drugbank.com/drugs/{drugbank_id}',
+    headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    }
+)
     pubchem_id = None
     try:
         with urlopen(request_url) as response:
