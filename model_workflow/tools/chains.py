@@ -5,10 +5,8 @@ import time
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
-from urllib import request
 
-from model_workflow.tools.residues_library import residue_name_2_letter
-from model_workflow.utils.auxiliar import load_json, save_json, RemoteServiceError
+from model_workflow.utils.auxiliar import load_json, save_json, protein_residue_name_to_letter
 from model_workflow.utils.type_hints import *
 
 # Set analysis version
@@ -107,7 +105,7 @@ def get_protein_parsed_chains (structure : 'Structure') -> list:
         # Iterate over the residues in the chain
         for residue in chain.residues:
             # Translate the residue letter to his equivalent in the aminoacids library
-            letter = residue_name_2_letter(residue.name, 'aminoacids')
+            letter = protein_residue_name_to_letter(residue.name)
             sequence += letter
         # If all residues are 'X' then it means this is not a protein
         if all(letter == 'X' for letter in sequence):

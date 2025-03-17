@@ -390,6 +390,65 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
     atom_count = mine_system_atoms_count(error_logs)
     return atom_count
 
+# Read a tpr file by converting it to ASCII
+def get_tpr_content (tpr_filepath : str) -> Tuple[str, str]:
+    # Read the tpr file making a 'dump'
+    process = run([
+        GROMACS_EXECUTABLE,
+        "dump",
+        "-s",
+        tpr_filepath,
+        "-quiet"
+    ], stdout=PIPE, stderr=PIPE)
+    return process.stdout.decode(), process.stderr.decode()
+
+# Regular expresion to mine atom charges
+GROMACS_TPR_ATOM_CHARGES_REGEX = r"q=([0-9e+-. ]*),"
+
+# Get tpr atom charges
+# This works for the new tpr format (tested in 122)
+def get_tpr_charges (tpr_filepath : str) -> List[float]:
+    # Read the TPR
+    tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
+    # Mine the atomic charges
+    charges = []
+    # Iterate tpr content lines
+    for line in tpr_content.split('\n'):
+        # Skip everything which is not atomic charges data
+        if line[0:16] != '            atom': continue
+        # Parse the line to get only charges
+        match = search(GROMACS_TPR_ATOM_CHARGES_REGEX, line)
+        if match: charges.append(float(match[1]))
+    # If we successfully got atom charges then return them
+    if len(charges) > 0: return charges
+    # If there are no charges at the end then something went wrong
+    print(tpr_error_logs)
+    raise RuntimeError(f'Charges extraction from tpr file "{tpr_filepath}" has failed')
+
+# Regular expresion to mine atom bonds
+GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*[0-9]* type=[0-9]* \((BONDS|CONSTR)\)\s*([0-9]*)\s*([0-9]*)$"
+
+# Get tpr atom bonds
+def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+    # Read the TPR
+    tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
+    # Mine the atomic bonds
+    bonds = []
+    # Iterate tpr content lines
+    for line in tpr_content.split('\n'):
+        # Parse the line to get only atomic bonds
+        match = search(GROMACS_TPR_ATOM_BONDS_REGEX, line)
+        # If this is not a line with bonding data then skip it
+        if not match: continue
+        # Get atom indices of bonded atoms
+        bond = ( int(match[2]), int(match[3]) )
+        bonds.append(bond)
+    # If we successfully got atom bonds then return them
+    if len(bonds) > 0: return bonds
+    # If there are no bonds at the end then something went wrong
+    print(tpr_error_logs)
+    raise RuntimeError(f'Bonds extraction from tpr file "{tpr_filepath}" has failed')
+
 # Filter topology atoms
 # DANI: Note that a TPR file is not a structure but a topology
 # DANI: However it is important that the argument is called 'structure' for the format finder
