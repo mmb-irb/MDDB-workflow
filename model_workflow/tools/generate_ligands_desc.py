@@ -249,11 +249,19 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
         print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
         return None
     # We can select the different submodules of mordred descriptors, avaible in: 'https://mordred-descriptor.github.io/documentation/master/'
-    #calc = Calculator(descriptors, ignore_3D=True)
-    calc = Calculator([descriptors.ABCIndex, 
-                       descriptors.AcidBase.AcidicGroupCount, 
-                       descriptors.AcidBase.BasicGroupCount, 
-                       descriptors.RingCount], ignore_3D=True)
+    calc = Calculator([
+        descriptors.ABCIndex,  # Índice de ramificación
+        descriptors.AcidBase.AcidicGroupCount,  # Grupos ácidos
+        descriptors.AcidBase.BasicGroupCount,  # Grupos básicos
+        descriptors.RingCount,  # Conteo de anillos
+        descriptors.Constitutional,  # Propiedades generales como número de átomos, peso molecular
+        descriptors.TopologicalCharge,  # Índices topológicos, Cargas parciales, polaridad
+        descriptors.HydrogenBond,  # Donantes y aceptores de enlaces de hidrógeno
+        descriptors.Lipinski,  # Reglas de Lipinski (drug-likeness)
+        descriptors.FragmentComplexity,  # Identificación de subestructuras frecuentes
+        descriptors.PathCount,  # Conteo de caminos moleculares
+    ], ignore_3D=True)
+
 
     # Calculate Mordred results
     mordred_results = calc(mol).drop_missing().asdict()
@@ -266,17 +274,11 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
     ao.AllocateAtomToBits()
     ao.AllocateBitInfoMap()
     fp = morgan_fp_gen.GetFingerprint(mol,additionalOutput=ao)
-    highlight_atoms = {}
+    morgan_highlight_atoms = {}
     for bit, atoms in ao.GetBitInfoMap().items():
-        highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
-    print("Morgan fingerprint:", highlight_atoms)
+        morgan_highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
 
-    morgan_fp = {
-        'bit_array': morgan_fp_bit_array,
-        'highlight_atoms': highlight_atoms
-    }
-
-    return mordred_results, morgan_fp
+    return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms
 
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
@@ -380,8 +382,15 @@ def generate_ligand_mapping (
         formula = ligand_data['formula']
         if formula in visited_formulas:
             print(f'WARNING: Ligand with PubChem Id {pubchem_id} has a formula which has been already matched')
-            ligands_data.pop()
-            continue
+            # AGUS: en este punto si el usuario ha definido el mismo ligando con diferente selección quiere decir que está repetido
+            # AGUS: y que deberíamos mantener el ligando para diferentes residuos matcheados
+            if forced_selection:
+                visited_formulas.pop()
+                ligands_data.pop()
+                print(f'WARNING: Ligand with PubChem Id {pubchem_id} has been forced by the user and its repeated')
+            else:
+                ligands_data.pop()
+                continue
         # Add it to the list of visited formulas
         visited_formulas.append(formula)
         # If the user defined a ligand name, it will be respectedand added to the metadata
@@ -391,14 +400,12 @@ def generate_ligand_mapping (
             ligand_names[pubchem_id] = user_forced_ligand_name
         # Map structure residues with the current ligand
         # If the user forced the residues then use them
-        forced_residues = ligand.get('residues', None)
-        if forced_residues:
+        forced_selection = ligand.get('selection', None)
+        if forced_selection:
             # Could be a single residue or a list of residues
-            if type(forced_residues) == list:
-                forced_residues = [int(residue) for residue in forced_residues]
-            else:
-                forced_residues = [int(forced_residues)]
-            ligand_map = { 'name': pubchem_id, 'residue_indices': forced_residues, 'match': { 'ref': { 'pubchem': pubchem_id } } }
+            selection_atoms = structure.select(forced_selection)
+            residue_indices = structure.get_selection_residue_indices(selection_atoms)
+            ligand_map = { 'name': pubchem_id, 'residue_indices': residue_indices, 'match': { 'ref': { 'pubchem': pubchem_id } } }
         # If the user did not force the residues then map them
         else:
             ligand_map = map_ligand_residues(structure, ligand_data)
@@ -423,9 +430,10 @@ def generate_ligand_mapping (
         # If the ligand matched then calculate some additional data
         # Get morgan and mordred descriptors, the SMILES is needed for this part
         smiles = ligand_data['smiles']
-        mordred_results, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
+        mordred_results, morgan_fp_bit_array, morgan_highlight_atoms = obtain_mordred_morgan_descriptors(smiles)
         ligand_data['mordred'] = mordred_results
-        ligand_data['morgan'] = morgan_fp
+        ligand_data['morgan_fp_bit_array'] = morgan_fp_bit_array
+        ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
 
