@@ -17,7 +17,6 @@ from model_workflow.utils.constants import *
 
 # Import local tools
 from model_workflow.tools.topology_manager import setup_structure
-from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
@@ -48,7 +47,7 @@ from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
-from model_workflow.utils.pyt_spells import get_frames_count
+from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.type_hints import *
 

@@ -8,7 +8,7 @@ import re
 
 from distutils.version import StrictVersion
 
-from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import delete_previous_log, save_json
 from model_workflow.utils.type_hints import *
 
@@ -24,7 +24,7 @@ def rmsd_per_residue (
 
     print('-> Running RMSD per residue analysis')
 
-    # Parse the trajectory intro ptraj
+    # Parse the trajectory intro pytraj
     # Reduce it in case it exceeds the frames limit
     pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
 
@@ -73,7 +73,7 @@ def rmsd_per_residue (
     # Run the analysis in pytraj
     # The result data is a custom pytraj class: pytraj.datasets.datasetlist.DatasetList
     # This class has keys but its attributes can not be accessed through the key
-    # They must be accessed thorugh the index
+    # They must be accessed through the index
     # DANI: When the 'resname' argument is missing it prints "Error: Range::SetRange(None): Range is -1 for None"
     # DANI: However there is no problem and the analysis runs flawlessly
     # DANI: For this reason we call this function with no resname and then we remove the log

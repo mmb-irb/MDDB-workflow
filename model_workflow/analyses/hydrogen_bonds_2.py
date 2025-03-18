@@ -14,7 +14,7 @@ import re
 from math import ceil
 from os.path import exists
 
-from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
+from model_workflow.utils.pyt_spells import get_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name
 from model_workflow.utils.type_hints import *
 

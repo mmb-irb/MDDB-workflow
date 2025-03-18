@@ -8,7 +8,7 @@ import numpy
 
 from model_workflow.utils.auxiliar import save_json
 
-from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 
 # Set a limit of values that can be stored in the analysis without exceeding the mongo limit of 16Mb
 # Also, this limit is a good reference to avoid loading huge analyses which would lead to long response time in the client

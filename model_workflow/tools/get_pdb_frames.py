@@ -1,4 +1,4 @@
-from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory, get_reduced_pytraj_trajectory
+from model_workflow.utils.pyt_spells import get_pytraj_trajectory, get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import reprint
 from tqdm import tqdm
 import os
