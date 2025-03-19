@@ -169,33 +169,35 @@ def get_inchi_keys (
 
 
 @lru_cache(maxsize=None)
-def is_in_LIPID_MAPS(inchikey) -> dict:
+def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
     """Search the InChi keys in LIPID MAPS"""
     headers = {'accept': 'json'}
     # https://www.lipidmaps.org/resources/rest
     # Output item = physchem, is the only one that returns data for the inchi key
     # for only the two first layers (main and atom connection)
     # To see InChiKey layers: https://www.inchi-trust.org/
-    first_layer = inchikey[:14]
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{first_layer}/physchem"
+    key = inchikey[:14] if only_first_layer else inchikey
+    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        js = response.text
-        if js != '[]':
-           return js        
+        js = response.json()
+        if js != []:
+           return js      
+        else:
+            return False  
     else:
         print(f"Error for {inchikey}: {response.status_code}")
 
 
 # @lru_cache(maxsize=None)
-def is_in_swiss_lipids(inchikey, only_first_layer=True) -> dict:
+def is_in_swiss_lipids(inchikey, only_first_layer=False) -> dict:
     """Search the InChi keys in LIPID MAPS"""
     key = inchikey[:14] if only_first_layer else inchikey
     headers = {'accept': 'json'}
     url = f"https://www.swisslipids.org/api/index.php/advancedSearch?InChIkey={key}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        return response.json()
+        return response.json()[0]
     else:
         return False
     

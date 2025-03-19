@@ -5,7 +5,7 @@ from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
 from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
-from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids
+from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.warnings import warn
 from contextlib import redirect_stdout
@@ -53,11 +53,15 @@ def generate_membrane_mapping(structure : 'Structure',
     lipid_ridx, glclipid_ridx = [], []
     references = {}
     for inchikey, res_data in inchi_keys.items():
-        lipid_data = is_in_swiss_lipids(inchikey)
+        SL_data = is_in_swiss_lipids(inchikey)
+        LM_data = is_in_LIPID_MAPS(inchikey)
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
-        if lipid_data:
+        if SL_data or LM_data:
             references[inchikey] = {'resname': list(res_data['resname'])[0],
-                                    'swisslipids': lipid_data}
+                                    'resindices': list(map(int, res_data['resindices'])),
+                                    'swisslipids': SL_data,
+                                    'lipidmaps': LM_data,
+                                    }
             lipid_ridx.extend(res_data['resindices'])
             if all('fatty' not in classes for classes in res_data['classification']):
                 warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is not '
@@ -71,10 +75,9 @@ def generate_membrane_mapping(structure : 'Structure',
             if any('fatty' in classes for classes in res_data['classification']):
                 warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is '
                      f'classified as fatty but is not a lipid.\n'
-                     f'Resindices: {str(res_data["resindices"])}\n'
-                     'In case it is a lipid, please add it to the LIPID MAPS database: https://www.lipidmaps.org/new/reg/')
+                     f'Resindices: {str(res_data["resindices"])}')
     # Prepare the membrane mapping OBJ/JSON
-    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'polar_atoms': {}, 'references': references}
+    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'references': references}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
