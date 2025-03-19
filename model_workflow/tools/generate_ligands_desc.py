@@ -260,7 +260,7 @@ def find_chembl_pubchem (id_chembl):
 
 # Calculate the Morgan fingerprint and the Mordred descriptors from a ligand SMILES
 def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
-    mol = Chem.MolFromInchi(smiles)
+    mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
         return None
