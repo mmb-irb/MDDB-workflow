@@ -2976,7 +2976,7 @@ def workflow (
     if overwrite:
         # If the overwrite argument is simply true then add all requestables to the overwritable
         if type(overwrite) == bool:
-            for task in requestables:
+            for task in tasks:
                 overwritables.add(task)
         # If the overwrite argument is a list of tasks then iterate them
         elif type(overwrite) == list:
