@@ -62,6 +62,7 @@ from model_workflow.analyses.density import density
 from model_workflow.analyses.thickness import thickness
 from model_workflow.analyses.area_per_lipid import area_per_lipid
 from model_workflow.analyses.lipid_order import lipid_order
+from model_workflow.analyses.lipid_interactions import lipid_interactions
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1595,6 +1596,19 @@ class MD:
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
+    def run_lipid_interactions_analysis (self, overwrite : bool = False):
+        # Do not run the analysis if the output file already exists
+        output_lipid_interactions_filepath = self.md_pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
+        if exists(output_lipid_interactions_filepath) and not overwrite:
+            return
+        # Run the analysis
+        lipid_interactions(
+            input_trajectory_filepath = self.trajectory_file.path,
+            topology_file=self.project.standard_topology_file,
+            output_analysis_filepath = output_lipid_interactions_filepath,
+            membrane_map = self.project.membrane_map,
+            snapshots = self.snapshots,
+        )
         
 # The project is the main project
 # A project is a set of related MDs
@@ -2656,6 +2670,7 @@ analyses = {
     'thickness': MD.run_thickness_analysis,
     'apl': MD.run_apl_analysis,
     'lorder': MD.run_lipid_order_analysis,
+    'linter': MD.run_lipid_interactions_analysis,
 }
 
 # Project requestable tasks
@@ -2670,6 +2685,7 @@ project_requestables = {
     'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
     'membrane': Project.get_membrane_map, 
+    'membranes': Project.get_membrane_map, 
 }
 # MD requestable tasks
 md_requestables = {
