@@ -176,8 +176,20 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
                     raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code: ' + request_url)
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     
+    # Mine de INCHI and INCHIKEY
+    inchi_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChI'), None)
+    if inchi_section == None:
+        raise RuntimeError('Wrong Pubchem data structure: no InChI: ' + request_url)
+    if inchi_section:
+        inchi = inchi_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    
+    inchikey_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChIKey'), None)
+    if inchikey_section == None:
+        raise RuntimeError('Wrong Pubchem data structure: no InChIKey: ' + request_url)
+    if inchikey_section:
+        inchikey = inchikey_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     # Prepare the pubchem data to be returned
-    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id }
+    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id, 'inchi': inchi, 'inchikey': inchikey }
 
 
 def find_drugbank_pubchem (drugbank_id):
@@ -252,6 +264,9 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
     if mol is None:
         print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
         return None
+
+    AllChem.Compute2DCoords(mol)
+    mol_block = Chem.MolToMolBlock(mol)
     # We can select the different submodules of mordred descriptors, avaible in: 'https://mordred-descriptor.github.io/documentation/master/'
     calc = Calculator([
         descriptors.ABCIndex,  # Índice de ramificación
@@ -282,7 +297,7 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
     for bit, atoms in ao.GetBitInfoMap().items():
         morgan_highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
 
-    return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms
+    return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block
 
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
@@ -434,10 +449,11 @@ def generate_ligand_mapping (
         # If the ligand matched then calculate some additional data
         # Get morgan and mordred descriptors, the SMILES is needed for this part
         smiles = ligand_data['smiles']
-        mordred_results, morgan_fp_bit_array, morgan_highlight_atoms = obtain_mordred_morgan_descriptors(smiles)
+        mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block = obtain_mordred_morgan_descriptors(smiles)
         ligand_data['mordred'] = mordred_results
         ligand_data['morgan_fp_bit_array'] = morgan_fp_bit_array
         ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
+        ligand_data['mol_block'] = mol_block
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
 
