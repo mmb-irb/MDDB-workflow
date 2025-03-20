@@ -355,6 +355,11 @@ run_parser.add_argument(
         "e.g. remianing solvent and counter ion molecules, membrane lipids, etc."))
 
 run_parser.add_argument(
+    "-cg", "--cg_selection",
+    default=None,
+    help="Selection of atoms which are not actual atoms but Coarse Grained beads.")
+
+run_parser.add_argument(
     "-pcafit", "--pca_fit_selection",
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
     help="Atom selection for the pca fitting in vmd syntax")

@@ -1,5 +1,5 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.auxiliar import load_json
+from model_workflow.utils.auxiliar import load_json, InputError
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
@@ -240,6 +240,9 @@ def find_safe_bonds (
     safe_bonds = mine_topology_bonds(input_topology_file)
     if safe_bonds:
         return safe_bonds
+    # If bonds are to be guessed then make sure there are no coarse grain atoms
+    if structure.select_cg():
+        raise InputError('We cannot guess bonds from a coarse grain structure. Please provide a topology')
     # If failed to mine topology bonds then guess stable bonds
     print('Bonds will be guessed by atom distances and radius')
     # Find stable bonds if necessary

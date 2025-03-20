@@ -8,15 +8,11 @@
 # DANI: Esto hace que al hacer un subset con solo las más populadas a penas capturemos ninguna transición
 # DANI: Se podrían prerocesar los datos para hacer clusters o algo similar
 
-from os import remove
-
 import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot 
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
-
-auxiliar_pdb_filename = '.model.pdb'
 
 def markov (
     input_topology_filename : str,
@@ -55,14 +51,14 @@ def markov (
     next_frame = next(selected_frames)
     # Conserve only the desired frames
     frame_coordinates = {}
-    for frame_number, chunk in enumerate(trajectory):
+    for frame_number, frame in enumerate(trajectory):
         # Update the current frame log
-        print(' Frame ' + str(frame_number), end='\r')
+        print(f' Frame {frame_number}', end='\r')
         # Skip the current frame if we do not need it
         if frame_number != next_frame:
             continue
         # Save it otherwise
-        frame_coordinates[frame_number] = chunk
+        frame_coordinates[frame_number] = frame
         # Update the next frame
         next_frame = next(selected_frames, None)
         if next_frame == None:
@@ -76,20 +72,22 @@ def markov (
             transition = transitions[frame][other_frame]
             row.append(transition)
         transitions_matrix.append(row)
+    # Make a copy of the structure to avoid mutating the original structure
+    reference_structure = structure.copy()
     print(' Taking screenshots of selected frames')
-    frame_count = str(len(frame_coordinates))
+    frame_count = len(frame_coordinates)
     # For each frame coordinates, generate PDB file, take a scrrenshot and delete it
-    for i, coordinates in enumerate(frame_coordinates.values(), 1):
+    for i, frame in enumerate(frame_coordinates.values(), 1):
         # Update the current frame log
-        print('  Screenshot ' + str(i) + '/' + frame_count, end='\r')
-        # Generate the pdb file
-        coordinates.save(auxiliar_pdb_filename)
+        print(f'  Screenshot {i}/{frame_count}', end='\r')
+        # Get the actual coordinates
+        coordinates = frame.xyz[0] * 10 # We multiply by to restor Ångstroms
+        # Update the reference structure coordinates
+        reference_structure.set_new_coordinates(coordinates)
         # Set the screenshot filename
-        screenshot_filename = 'markov_screenshot_' + str(i).zfill(2) + '.jpg'
+        screenshot_filename = f'markov_screenshot_{str(i).zfill(2)}.jpg'
         # Generate the screenshot
-        get_screenshot(auxiliar_pdb_filename, screenshot_filename)
-        # Remove the pdb file
-        remove(auxiliar_pdb_filename)
+        get_screenshot(reference_structure, screenshot_filename)
     # Export the analysis data to a json file
     data = {
         'frames': highest_population_frames,

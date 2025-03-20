@@ -1,20 +1,21 @@
 from subprocess import run, PIPE
 from os import environ, remove
 from os.path import exists
-from typing import List, Tuple, Optional
 from PIL import Image
 import math
 import numpy as np
 
 from model_workflow.utils.auxiliar import ToolError
-from model_workflow.utils.structures import Structure
+from model_workflow.utils.type_hints import *
 
 # The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon. 
 # SciPy provides a method "scipy. spatial. ConvexHull()" to create a Convex Hull
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import cdist
 
-auxiliary_tga_filename = '.transition_screenshot.tga'
+# Auxiliar files
+AUXILIAR_PDB_FILENAME = '.screenshot_structure.pdb'
+AUXILIAR_TGA_FILENAME = '.transition_screenshot.tga'
 
 # Use this to draw some shapes as references in the screenshot
 # This is useful for debugging purposes only
@@ -23,7 +24,7 @@ debug = False
 # Python function to obtain a screenshot from the pdb file using VMD a molecular modelling and visualization computer program
 # Return the rotation values used to take the photo so they can be saved and reused
 def get_screenshot (
-    input_structure_filename : str,
+    structure : 'Structure',
     output_screenshot_filename : str,
     # You may pass the camera rotation, translation and zoom parameters so they are not calculated again
     # This is useful to keep screenshots coherent between different clusters/markov states
@@ -43,6 +44,9 @@ def get_screenshot (
     # Check the output screenshot file extension is JPG
     if output_screenshot_filename.split('.')[-1] != 'jpg':
         raise SystemExit('You must provide a .jpg file name!')
+    
+    # Produce a PDB file to feed VMD
+    structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)
 
     # Number of pixels to scale in x 
     x_number_pixels = 350
@@ -80,7 +84,7 @@ def get_screenshot (
     # Run VMD
     process = run([
         "vmd",
-        input_structure_filename,
+        AUXILIAR_PDB_FILENAME,
         "-e",
         commands_filename_1,
         "-dispdev",
@@ -100,11 +104,6 @@ def get_screenshot (
         line = file.readline().split()
         line = [float(i) for i in line]
     vmd_center_coordinates = line
-
-    # Load the whole structure
-    # WARNING: Note that custom atoms selection is not yet supported, although we could do it one day
-    # WARNING: Not selecting all atoms but a subselection may cause problems when centering the image right now
-    structure = Structure.from_pdb_file(input_structure_filename)
 
     # Set the camera rotation, translation and zoom values to get the optimal picture
     angle = None
@@ -312,7 +311,10 @@ def get_screenshot (
     # This is because terminals are better hidden than represented as ligands, this would be missleading
     cartoon_selection = structure.select_cartoon(include_terminals=True)
     non_cartoon_selection = structure.invert_selection(cartoon_selection)
-
+    # Also coarse grain beads have to be considered
+    # We cannot paint them by their elements so we must rely in atom names or chains
+    cg_selection = structure.select_cg()
+    non_cartoon_selection -= cg_selection
     # Set a file name for the VMD script file
     commands_filename_2 = '.commands_2.vmd'
 
@@ -347,7 +349,19 @@ def get_screenshot (
             # Change the current material of the representation of the molecule
             file.write('mol material Opaque \n')
             # Using the new changes performed previously add a new representation to the new molecule
-            file.write('mol addrep top \n') 
+            file.write('mol addrep top \n')
+        # In case we have coarse grain beads
+        if cg_selection:
+            # Change the default representation model to CPK (ball and stick)
+            file.write('mol representation cpk \n')
+            # Change the default atom coloring method setting to Chain
+            file.write('mol color chain \n')
+            # Set the default atom selection to atoms to be represented as CPK
+            file.write(f'mol selection "{cg_selection.to_vmd()}" \n')
+            # Change the current material of the representation of the molecule
+            file.write('mol material Opaque \n')
+            # Using the new changes performed previously add a new representation to the new molecule
+            file.write('mol addrep top \n')
         # Change projection from perspective (used by VMD by default) to orthographic
         file.write('display projection orthographic \n')
         # Select all atoms
@@ -387,14 +401,14 @@ def get_screenshot (
             # file.write('draw line {' + tuple_to_vmd(min_ypoint) + '} {' + tuple_to_vmd(max_ypoint) + '}\n')
 
         # Finally generate the image from the current view
-        file.write(f'render TachyonInternal {auxiliary_tga_filename} \n')
+        file.write(f'render TachyonInternal {AUXILIAR_TGA_FILENAME} \n')
         # Exit VMD
         file.write('exit\n')
 
     # Run VMD
     process = run([
         "vmd",
-        input_structure_filename,
+        AUXILIAR_PDB_FILENAME,
         "-e",
         commands_filename_2,
         "-dispdev",
@@ -402,20 +416,20 @@ def get_screenshot (
     ], stdout=PIPE, stderr=PIPE)
     logs = process.stdout.decode()
     # If the output file does not exist at this point then it means something went wrong with VMD
-    if not exists(auxiliary_tga_filename):
+    if not exists(AUXILIAR_TGA_FILENAME):
         print(logs)
         error_logs = process.stderr.decode()
         print(error_logs)
         raise SystemExit('Something went wrong with VMD while taking the screenshot')
 
-    im = Image.open(auxiliary_tga_filename)
+    im = Image.open(AUXILIAR_TGA_FILENAME)
     # converting to jpg
     rgb_im = im.convert("RGB")
     # exporting the image
     rgb_im.save(output_screenshot_filename)
 
     # Remove trash files
-    trash_files = [ commands_filename_1, commands_filename_2, auxiliary_tga_filename, center_filename ]
+    trash_files = [ AUXILIAR_PDB_FILENAME, commands_filename_1, commands_filename_2, AUXILIAR_TGA_FILENAME, center_filename ]
     for trash_file in trash_files:
         remove(trash_file)
 

@@ -53,6 +53,16 @@ def custom_excepthook (exception_class, message, traceback):
     sys.__excepthook__(exception_class, message, traceback)
 sys.excepthook = custom_excepthook
 
+# Set a placeholder for "WRONG" bonds, not to be used
+# Thus if they are read anywhere we rise an error
+class BondsPlaceholder ():
+    def __str__ (self) -> str:
+        return '<Bonds not be used>'
+    def __repr__ (self) -> str:
+        return str(self)
+    def __iter__ (self):
+        raise RuntimeError('Trying to use bonds which are not to be used: coming from coarse grained atoms')
+
 # Set a function to get the next letter from an input letter in alphabetic order
 # Return None if we run out of letters
 letters = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',

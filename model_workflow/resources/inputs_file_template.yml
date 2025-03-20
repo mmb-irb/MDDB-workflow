@@ -362,6 +362,11 @@ interactions:
 
 pbc_selection: auto
 
+# Set those atoms which are not actual "atoms" but coarse grained (CG) beads
+# EXPERIMENTAL INPUT
+
+cg_selection:
+
 #------------------------------------------------------------------------------------------------------------
 # REPRESENTATION PARAMETERS
 #------------------------------------------------------------------------------------------------------------

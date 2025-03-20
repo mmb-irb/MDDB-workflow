@@ -28,18 +28,17 @@ def filter_atoms (
     output_structure_file : 'File',
     output_trajectory_file : 'File',
     output_topology_file : Optional['File'],
+    # Reference structure used to parse the actual selection
+    reference_structure : 'Structure',
     # Filter selection may be a custom selection or true
     # If true then we run a default filtering of water and counter ions
     filter_selection : Union[bool, str],
-    filter_selection_syntax : str = 'vmd'
+    filter_selection_syntax : str = 'vmd',
 ):
 
     # Handle missing filter selection
     if not filter_selection:
         return
-    
-    # Load the reference structure
-    reference_structure = Structure.from_pdb_file(input_structure_file.path)
 
     # Parse the selection to be filtered
     # WARNING: Note that the structure is not corrected at this point and there may be limitations

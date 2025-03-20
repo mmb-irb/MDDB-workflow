@@ -10,7 +10,6 @@ import io
 import re
 import numpy
 from glob import glob
-from inspect import getfullargspec
 
 # Constants
 from model_workflow.utils.constants import *
@@ -629,6 +628,19 @@ class MD:
 
         # Topologies are never converted, but they are kept in their original format
 
+        # --- provisional reference structure ---
+
+        # Now that we MUST have a PDB file we can set a provisional structure instance
+        # Note that this structure is not yet corrected so it must be used with care
+        # Otherwise we could have silent errors
+        provisional_structure = Structure.from_pdb_file(converted_structure_file.path)
+        # Now we can set a provisional coarse grain selection
+        # This selection is useful to avoid problems with CG atom elements
+        # Since this is proviosonal we will make it silent
+        provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
+        for atom_index in provisional_cg_selection.atom_indices:
+            provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
+
         # --- FILTERING ATOMS ------------------------------------------------------------
 
         # Find out if we need to filter
@@ -668,7 +680,8 @@ class MD:
                 output_structure_file = filtered_structure_file,
                 output_trajectory_file = incompleted_filtered_trajectory_file,
                 output_topology_file = filtered_topology_file, # We genereate the definitive topology
-                filter_selection = self.project.filter_selection
+                reference_structure = provisional_structure,
+                filter_selection = self.project.filter_selection,
             )
             # Once filetered, rename the trajectory file as completed
             rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
@@ -677,10 +690,16 @@ class MD:
 
         # --- provisional reference structure ---
 
-        # Now that we have a filtered PDB file we can set a provisional structure instance
+        # Now that we have a filtered PDB file we have to update provisional structure instance
         # Note that this structure is not yet corrected so it must be used with care
         # Otherwise we could have silent errors
         provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
+        # Again, set the coarse grain atoms
+        # Since elements may be needed to guess PBC selection we must solve them right before
+        # Since this is proviosonal we will make it silent
+        provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
+        for atom_index in provisional_cg_selection.atom_indices:
+            provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
         # Also we can set a provisional PBC selection
         # This selection is useful both for imaging/fitting and for the correction
         # We will make sure that the provisonal and the final PBC selections match
@@ -1015,6 +1034,9 @@ class MD:
         # If we fail to get bonds from topology then just go along with the default structure bonds
         if not self.register.tests.get(STABLE_BONDS_FLAG, None):
             self._structure.bonds = self.safe_bonds
+        # Same procedure if we have coarse grain atoms
+        elif self.cg_selection:
+            self._structure.bonds = self.safe_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 
@@ -1147,11 +1169,13 @@ class MD:
     # Assign the MD input getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
+    input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
 
     # Internal function to set PBC selection
-    def _set_pbc_selection (self , reference_structure : 'Structure', verbose : bool = True):
+    # It may parse the inputs file selection string if it is available or guess it otherwise
+    def _set_pbc_selection (self, reference_structure : 'Structure', verbose : bool = True) -> 'Selection':
         # Otherwise we must set the PBC selection
-        print('Setting PBC atoms selection')
+        if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
         selection_string = None
         # If there is inputs file then get the input pbc selection
         if self.project.is_inputs_file_available():
@@ -1165,6 +1189,10 @@ class MD:
         parsed_selection = None
         # If the input PBC selection is 'auto' then guess it automatically
         if selection_string == 'auto':
+            # To guess PBC atoms (with the current implementation) we must make sure ther eis no CG
+            if reference_structure.has_cg():
+                raise InputError('We can not guess PBC atoms in CG systems. Please set PBC atoms manually.\n'
+                    ' Use the "-pbc" argument or set the inputs file "pbc_selection" field.')
             if verbose: print(' Guessing PBC atoms as solvent, counter ions and lipids')
             parsed_selection = reference_structure.select_pbc_guess()
         # If we have a valid input value then use it
@@ -1188,9 +1216,9 @@ class MD:
         return parsed_selection
 
     # Periodic boundary conditions atom selection
-    def get_pbc_selection (self) -> List[int]:
+    def get_pbc_selection (self) -> 'Selection':
         # If we already have a stored value then return it
-        if self.project._pbc_selection:
+        if self.project._pbc_selection != None:
             return self.project._pbc_selection
         # Otherwise we must set the PBC selection
         self.project._pbc_selection = self._set_pbc_selection(self.structure)
@@ -1204,7 +1232,7 @@ class MD:
         # If we already have a stored value then return it
         if self.project._pbc_residues:
             return self.project._pbc_residues
-        # If there is no inputs file then asume there are no PBC residues and warn the user
+        # If there is no inputs file then asume there are no PBC residues
         if not self.pbc_selection:
             self.project._pbc_residues = []
             return self.project._pbc_residues
@@ -1213,6 +1241,69 @@ class MD:
         print(f'PBC residues "{self.input_pbc_selection}" -> {len(self.project._pbc_residues)} residues')
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
+
+    # Set the coare grain selection
+    # DANI: Esto algún día habría que tratar de automatizarlo
+    def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = True) -> 'Selection':
+        if verbose: print('Setting Coarse Grained (CG) atoms selection')
+        # If there is no inputs file then asum there is no CG selection
+        if not self.project.is_inputs_file_available():
+            if verbose: print(' No inputs file -> Asuming there is no CG at all')
+            return Selection()
+        # Otherwise we use the selection string from the inputs
+        if verbose: print(' Using selection string in the inputs file')
+        selection_string = self.input_cg_selection
+        # If the selection is empty, again, assume there is no CG selection
+        if not selection_string:
+            print(' Empty selection -> There is no CG at all')
+            return Selection()
+        # Otherwise, process it
+        # If we have a valid input value then use it
+        elif selection_string:
+            if verbose: print(f' Selecting CG atoms "{selection_string}"')
+            parsed_selection = reference_structure.select(selection_string)
+        # If we have an input value but it is empty then we set an empty selection
+        else:
+            if verbose: print(' No CG atoms selected')
+            parsed_selection = Selection()
+        # Lof the parsed selection size
+        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
+        # Log a few of the selected residue names
+        if verbose and parsed_selection:
+            selected_residues = reference_structure.get_selection_residues(parsed_selection)
+            selected_residue_names = list(set([ residue.name for residue in selected_residues ]))
+            limit = 3 # Show a maximum of 3 residue names
+            example_residue_names = ', '.join(selected_residue_names[0:limit])
+            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+            print('  e.g. ' + example_residue_names)
+        return parsed_selection
+
+    # Coarse grain atom selection
+    def get_cg_selection (self) -> 'Selection':
+        # If we already have a stored value then return it
+        if self.project._cg_selection:
+            return self.project._cg_selection
+        # Otherwise we must set the PBC selection
+        self.project._cg_selection = self._set_cg_selection(self.structure)
+        return self.project._cg_selection
+    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+
+    # Indices of residues in coarse grain
+    # WARNING: Do not inherit project cg residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
+    def get_cg_residues (self) -> List[int]:
+        # If we already have a stored value then return it
+        if self.project._cg_residues:
+            return self.project._cg_residues
+        # If there is no inputs file then asume there are no cg residues
+        if not self.cg_selection:
+            self.project._cg_residues = []
+            return self.project._cg_residues
+        # Otherwise we parse the selection and return the list of residue indices     
+        self.project._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
+        print(f'CG residues "{self.input_cg_selection}" -> {len(self.project._cg_residues)} residues')
+        return self.project._cg_residues
+    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
     # Atom charges
     # Inherited from project
@@ -1256,13 +1347,18 @@ class MD:
         # So we must calculate from here the reference frame
         # Get the rest of inputs
         non_pbc_ions_selection = self.structure.select_ions() - self.pbc_selection
+        excluded_atoms_selection = non_pbc_ions_selection + self.structure.select_cg()
+        # If all atoms are to be excluded then set the first frame as the reference frame and stop here
+        if len(excluded_atoms_selection) == len(self.structure.atoms):
+            self._reference_frame = 0
+            return self._reference_frame
         # Find the first frame in the whole trajectory where safe bonds are respected
         self._reference_frame = get_bonds_canonical_frame(
             structure_filepath = structure_filepath,
             trajectory_filepath = trajectory_filepath,
             snapshots = self.snapshots,
             reference_bonds = self.safe_bonds,
-            excluded_atoms_selection = non_pbc_ions_selection
+            excluded_atoms_selection = excluded_atoms_selection
         )
         return self._reference_frame
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
@@ -1773,6 +1869,7 @@ class Project:
         # Processing and analysis instructions
         filter_selection : Union[bool, str] = False,
         pbc_selection : Optional[str] = None,
+        cg_selection : Optional[str] = None,
         image : bool = False,
         fit : bool = False,
         translation : List[float] = [0, 0, 0],
@@ -1866,6 +1963,7 @@ class Project:
         self.filter_selection = filter_selection
         # PBC selection may come from the console or from the inputs
         self._input_pbc_selection = pbc_selection
+        self._input_cg_selection = cg_selection
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1897,6 +1995,8 @@ class Project:
         # Other values which may be found/calculated on demand
         self._pbc_selection = None
         self._pbc_residues = None
+        self._cg_selection = None
+        self._cg_residues = None
         self._safe_bonds = None
         self._charges = None
         self._populations = None
@@ -2311,6 +2411,22 @@ class Project:
         return self._input_pbc_selection
     input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
+    # CG selection may come from the console or from the inputs file
+    # Console has priority over the inputs file
+    def get_input_cg_selection (self) -> Optional[str]:
+        # If we have an internal value then return it
+        if self._input_cg_selection:
+            return self._input_cg_selection
+        # As an exception, we avoid asking for the inputs file if it is not available
+        # This input is required for some early processing steps where we do not need the inputs file for anything else
+        if not self.is_inputs_file_available():
+            return None
+        # Otherwise, find it in the inputs
+        # Get the input value, whose key must exist
+        self._input_cg_selection = self.get_input('cg_selection')
+        return self._input_cg_selection
+    input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
+
     # Set additional values infered from input values
 
     # Set if MDs are time dependent
@@ -2384,6 +2500,12 @@ class Project:
     def get_pbc_residues (self) -> List[int]:
         return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
+
+    # Indices of residues in coarse grain
+    def get_cg_residues (self) -> List[int]:
+        return self.reference_md.cg_residues
+    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
 
      # Safe bonds
     def get_safe_bonds (self) -> List[List[int]]:
@@ -2728,6 +2850,7 @@ class Project:
             charges = self.charges,
             residue_map = self.residue_map,
             pbc_residues = self.pbc_residues,
+            cg_residues = self.cg_residues,
             output_topology_filepath = self._standard_topology_file.path
         )
         # Register the last modification times of the new generated standard topology file
@@ -2752,7 +2875,7 @@ class Project:
             return screenshot_file
         # Otherwise, generate it
         get_screenshot(
-            input_structure_filename = self.structure_file.path,
+            structure = self.structure,
             output_screenshot_filename = screenshot_file.path,
         )
         return screenshot_file

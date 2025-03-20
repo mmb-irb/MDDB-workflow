@@ -1,26 +1,21 @@
 # Generic analyses
 # Easy and fast trajectory analyses carried by Gromacs
 
-from subprocess import run, PIPE, Popen
-from os.path import exists
-from os import remove
 from numpy import mean, std
 
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.type_hints import *
 
-# Set an auxiliar data filename
-rmsf_data_filename = '.rmsf_data.xvg'
-
-# Set a residual data filename
-# This analysis produces a 'noelem' file which is never used and thus removed
-output_noelem_filename = '.noelem.pdb'
+from MDAnalysis import Universe
+from MDAnalysis.analysis import rms
 
 # Fluctuation
 # 
 # Perform the fluctuation analysis
+# LORE: Fluctuation analysis was done with Gromacs before
+# LORE: However Gromacs required masses and atom radii, which was a problem in coarse grain
 def rmsf (
     input_topology_filename : str,
     input_trajectory_filename : str,
@@ -28,38 +23,20 @@ def rmsf (
     pbc_selection : 'Selection'):
 
     print('-> Running RMSF analysis')
-    
-    # Run Gromacs
-    p = Popen([
-        "echo",
-        "System",
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "rmsf",
-        "-s",
-        input_topology_filename,
-        "-f",
-        input_trajectory_filename,
-        '-o',
-        rmsf_data_filename,
-        '-oq',
-        output_noelem_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
 
-    # If the output does not exist at this point it means something went wrong with gromacs
-    if not exists(rmsf_data_filename):
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with GROMACS')
+    # Load the MDAnalysis universe
+    # Make MDAnalysis warnings and logs grey
+    print(GREY_HEADER, end='\r')
+    universe = Universe(input_topology_filename, input_trajectory_filename)
+    print(COLOR_END, end='\r')
 
-    # Read the output file and parse it
-    raw_rmsf_data = xvg_parse(rmsf_data_filename, ['atom', 'rmsf'])
-    rmsf_values = raw_rmsf_data['rmsf']
+    # Run the analysis in all atoms
+    # Even atoms to be excluded (e.g. PBC) are excluded later to don't mess atom results order
+    all_atoms = universe.select_atoms('all')
+    rmsf_analysis = rms.RMSF(all_atoms).run()
+    # Make a list of it because it is a ndarray, which is not JSON serializable
+    # Access to the values thorugh 'results.rmsf' instead of a direct 'rmsf' to avoid a deprecation warning
+    rmsf_values = list(rmsf_analysis.results.rmsf)
 
     # Filter out values from PBC residue atoms since they may have not sense
     for index in pbc_selection.atom_indices:
@@ -82,12 +59,9 @@ def rmsf (
                 'max': max(actual_rmsf_values),
                 'data': rmsf_values # Keep all values here to make the list length match the number of atoms
             }
-        }
+        },
+        'version': '0.1.0'
     }
 
     # Export formatted data to a json file
     save_json(rmsf_data, output_analysis_filename)
-
-    # Cleanup both the auxiliar and the residual files
-    remove(rmsf_data_filename)
-    remove(output_noelem_filename)

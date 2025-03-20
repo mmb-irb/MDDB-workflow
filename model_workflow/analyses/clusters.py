@@ -11,8 +11,6 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
 
-AUXILIAR_PDB_FILENAME = '.model.pdb'
-
 # Run the cluster analysis
 def clusters_analysis (
     input_structure_file : 'File',
@@ -226,12 +224,11 @@ def clusters_analysis (
             # WARNING: to avoid this we add the coordinates to the structure
             # coordinates.save(AUXILIAR_PDB_FILENAME)
             auxiliar_structure.set_new_coordinates(coordinates)
-            auxiliar_structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)
             # Set the screenshot filename from the input template
             screenshot_filename = output_screenshots_filename.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
             # Generate the screenshot
             reprint(f' Generating cluster screenshot {c+1}/{n_clusters}')
-            screenshot_parameters = get_screenshot(AUXILIAR_PDB_FILENAME, screenshot_filename,
+            screenshot_parameters = get_screenshot(auxiliar_structure, screenshot_filename,
                 parameters=screenshot_parameters, message=None)
 
         # Set the output clusters which include all frames in the cluster and the main or more representative frame

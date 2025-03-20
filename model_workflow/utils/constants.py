@@ -376,30 +376,14 @@ PROTEIN_RESIDUE_NAME_LETTERS = {
     'VALC':'V',
 }
 # Nucleotides
-NUCLEIC_RESIDUE_NAME_LETTERS = {
-    'A': 'A',
-    'A3': 'A',
-    'A5': 'A',
+DNA_RESIDUE_NAME_LETTERS = {
     'DA': 'A',
-    'RA': 'A',
-    'C': 'C',
-    'C3': 'C',
-    'C5': 'C',
-    'DC': 'C',
-    'RC': 'C',
     'T': 'T',
     'T3': 'T',
     'T5': 'T',
     'DT': 'T',
-    'G': 'G',
-    'G3': 'G',
-    'G5': 'G',
+    'DC': 'C',
     'DG': 'G',
-    'RG': 'G',
-    'U': 'U',
-    'U3': 'U',
-    'U5': 'U',
-    'RU': 'U',
     'DA3': 'A',
     'DA5': 'A',
     'DT3': 'T',
@@ -409,8 +393,50 @@ NUCLEIC_RESIDUE_NAME_LETTERS = {
     'DG3': 'G',
     'DG5': 'G',
 }
+RNA_RESIDUE_NAME_LETTERS = {
+    'RA': 'A',
+    'U': 'U',
+    'U3': 'U',
+    'U5': 'U',
+    'RU': 'U',
+    'RC': 'C',
+    'RG': 'G',
+    'RA3': 'A',
+    'RA5': 'A',
+    'RU3': 'U',
+    'RU5': 'U',
+    'RC3': 'C',
+    'RC5': 'C',
+    'RG3': 'G',
+    'RG5': 'G',
+}
+NUCLEIC_RESIDUE_NAME_LETTERS = {
+    **DNA_RESIDUE_NAME_LETTERS,
+    **RNA_RESIDUE_NAME_LETTERS,
+    'A': 'A',
+    'A3': 'A',
+    'A5': 'A',
+    'C': 'C',
+    'C3': 'C',
+    'C5': 'C',
+    'G': 'G',
+    'G3': 'G',
+    'G5': 'G',
+}
 # All of them together
 RESIDUE_NAME_LETTERS = { **PROTEIN_RESIDUE_NAME_LETTERS, **NUCLEIC_RESIDUE_NAME_LETTERS }
+
+# Lipid common residue names
+# Source: https://github.com/NMRLipids/Databank/blob/main/Scripts/DatabankLib/settings/molecules.py#L10
+# Meanings: https://github.com/NMRLipids/Databank/blob/48fdf2c4149d0db8900ce08b0e74dc1836dcfab3/Scripts/BuildDatabank/docs/source/moleculesAndMapping.md?plain=1#L50
+FATTY_RESIDUE_NAMES = {
+    "POPC", "POPG", "POPS", "POPE", "PYPC", "PAzePCprot", "PAzePCdeprot", "DMPC", 
+    "DPPC", "DPPE", "DPPG", "DEPC", "DRPC", "DYPC", "DLPC", "DLIPC", "DOG", "DOPC", 
+    "DOPE", "DDOPC", "DOPS", "DSPC", "DAPC", "DMTAP", "SDG", "SDPE", "SOPC", "POPI", 
+    "SAPI", "SAPI24", "SAPI25", "SLPI", "CER", "CER180", "DHMDMAB", "SLiPC", "SM16",
+    "SM18", "TOCL", "TLCL_0H", "TMCL", "GM1", "DPPGK", "GB3", "BOG"
+}
+STEROID_RESIDUE_NAMES = { "CHL", "CHL1", "CHOL", "DCHOL" }
 
 # Set typical residue names to guess what residues are
 STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4'}
@@ -421,6 +447,7 @@ STANDARD_COUNTER_ANION_ATOM_NAMES = {'CL', 'CLA'}
 STANDARD_COUNTER_ION_ATOM_NAMES = STANDARD_COUNTER_CATION_ATOM_NAMES.union(STANDARD_COUNTER_ANION_ATOM_NAMES)
 STANDARD_DUMMY_ATOM_NAMES = {'MW'}
 DUMMY_ATOM_ELEMENT = 'Dm'
+CG_ATOM_ELEMENT = 'Cg'
 
 # Topology flags
 

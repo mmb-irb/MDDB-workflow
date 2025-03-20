@@ -1,5 +1,3 @@
-import json
-
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
 
@@ -9,6 +7,7 @@ def generate_topology (
     charges : List[int],
     residue_map : dict,
     pbc_residues : List[int],
+    cg_residues : List[int],
     output_topology_filepath : str
 ):
 
@@ -77,7 +76,8 @@ def generate_topology (
         'chain_names': chain_names,
         # Residues map
         **residue_map,
-        # Save also the pbc residues here
-        'pbc_residues': pbc_residues
+        # Save also some residue indices lists here
+        'pbc_residues': pbc_residues,
+        'cg_residues': cg_residues,
     }
     save_json(topology, output_topology_filepath)
