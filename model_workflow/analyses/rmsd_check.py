@@ -118,11 +118,12 @@ def check_trajectory_integrity (
             if outliers_count >= 4:
                 print(' etc...')
                 break
-            print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}')
+            print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}. RMSD jump: {rmsd_jump:4f}')
             outliers_count += 1
 
     # Always print the maximum z score and its frames
-    print(f' Maximum z score {max_z_score} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
+    print(f' Maximum z score {max_z_score:4f} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}.\n'
+          f' Mean: {mean_rmsd_jump:4f}. Stdv: {stdv_rmsd_jump:4f}')
 
     # If there were any outlier then the check has failed
     if outliers_count > 0:
