@@ -88,7 +88,10 @@ class Selection:
         indices = [ index + 1 for index in self.atom_indices ]
         # Make ranges for atoms in a row
         return '@' + ranger(indices)
-
+    
+    def to_ngl (self) -> str:
+        return '@' + ','.join([ str(index) for index in self.atom_indices ])
+    
     # Get a string made of all indexes separated by underscores
     # This string can be then passed as a bash argument and easily parsed by other programms
     # Indices can start from 0 or from 1

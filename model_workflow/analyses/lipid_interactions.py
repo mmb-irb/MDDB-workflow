@@ -24,13 +24,13 @@ def lipid_interactions (
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, input_trajectory_filepath)
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-    lipids = [ data['resname'] for data in membrane_map['references'].values()]
+    lipids = set([ data['resname'] for data in membrane_map['references'].values()])
     lipids_str = " ".join(lipids)
     resids = np.unique(u.select_atoms('protein').resindices)
     ocupancy = {resid: Counter() for resid in resids}
 
     # Only iterate through the frames you need
-    for ts in u.trajectory[0:1:frame_step]:
+    for ts in u.trajectory[0:snapshots:frame_step]:
         # Select non-protein atoms near the protein once
         non_protein_near = u.select_atoms(f'(around 6 protein) and (resname {lipids_str}) and not protein')
         # Make residue selections only once
@@ -43,14 +43,12 @@ def lipid_interactions (
             ocupancy[resid].update(Counter(nearby.residues.resnames))
 
     ocupancy_arrs = {lipid: np.zeros(len(ocupancy)) for lipid in lipids}
-    print()
     for resid, counter in ocupancy.items():
         for lipid, count in counter.items():
             ocupancy_arrs[lipid][resid] = count
 
     # Normalize the occupancy arrays by dividing by the number of frames
     for lipid in lipids:
-        print(lipids,type(ocupancy_arrs[lipid]))
         ocupancy_arrs[lipid] /= frame_count
         ocupancy_arrs[lipid] = ocupancy_arrs[lipid].tolist()
     # Save the data

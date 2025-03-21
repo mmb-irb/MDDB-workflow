@@ -59,6 +59,7 @@ def thickness (
         'thickness': df['thickness'].tolist(),
         'std_thickness': df['std_thickness'].tolist(),
         'midplane_z': midplane_z,
+        'step': frame_step
         }
     }
     save_json(data, output_analysis_filepath)

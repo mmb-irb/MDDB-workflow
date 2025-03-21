@@ -59,6 +59,7 @@ def generate_membrane_mapping(structure : 'Structure',
         if SL_data or LM_data:
             references[inchikey] = {'resname': list(res_data['resname'])[0],
                                     'resindices': list(map(int, res_data['resindices'])),
+                                    'indices': structure.select_residue_indices(res_data['resindices']).to_ngl(),
                                     'swisslipids': SL_data,
                                     'lipidmaps': LM_data,
                                     }
