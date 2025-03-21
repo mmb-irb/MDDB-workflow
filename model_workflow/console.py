@@ -142,7 +142,7 @@ def main ():
             raise InputError(f'Empty selection {selection}')
         structure.chainer(selection, args.letter, args.whole_fragments)
         structure.generate_pdb_file(args.output_structure)
-        print('You got it ;)')
+        print(f'Changes written to {args.output_structure}')
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
