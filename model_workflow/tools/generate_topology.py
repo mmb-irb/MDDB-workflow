@@ -1,4 +1,4 @@
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, MISSING_BONDS, MISSING_CHARGES
 from model_workflow.utils.type_hints import *
 
 # Generate a json file to be uploaded to the database (mongo) with topology data
@@ -27,7 +27,7 @@ def generate_topology (
 
     # Set the atom bonds
     # In order to make it more standard sort atom bonds by their indices
-    atom_bonds = [ sorted(atom_indices) for atom_indices in structure.bonds ]
+    atom_bonds = [ float('nan') if atom_indices == MISSING_BONDS else sorted(atom_indices) for atom_indices in structure.bonds ]
 
     # Residue data
     structure_residues = structure.residues
@@ -58,7 +58,7 @@ def generate_topology (
         chain_names[index] = chain.name
 
     # Check we have charges and, if not, set charges as None (i.e. null for mongo)
-    atom_charges = charges if charges and len(charges) > 0 else None
+    atom_charges = charges if charges != MISSING_CHARGES and len(charges) > 0 else None
     if not atom_charges:
         print('WARNING: Topology is missing atom charges')
 

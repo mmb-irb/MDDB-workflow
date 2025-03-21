@@ -39,7 +39,8 @@ from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files
 from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
@@ -78,7 +79,7 @@ from model_workflow.analyses.markov import markov
 unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
 sys.stdout = unbuffered
 
-# Set an special exception for input errors
+# Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 # Run a fix in gromacs if not done before
@@ -479,10 +480,10 @@ class MD:
         output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         output_trajectory_file = File(output_trajectory_filepath)
         output_topology_filepath = self.project.topology_filepath
-        output_topology_file = File(output_topology_filepath) if output_topology_filepath else None
+        output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
 
         # If all output files already exist we may skip the processing
-        topology_already_processed = output_topology_file == None or output_topology_file.exists
+        topology_already_processed = output_topology_file == MISSING_TOPOLOGY or output_topology_file.exists
         outputs_exist = output_structure_file.exists and output_trajectory_file.exists and topology_already_processed
 
         # Check which tests are to be run
@@ -515,7 +516,7 @@ class MD:
             self.register.reset_cache()
 
         # In case there is a topology to be processed...
-        if output_topology_file != None:
+        if output_topology_file != MISSING_TOPOLOGY:
             # If there is no topology then we must run some tests
             if not output_topology_file.exists:
                 required_tests.update(TOPOLOGY_TESTS)
@@ -572,6 +573,11 @@ class MD:
         # Also make sure processing parameters are the same that the last time
         if outputs_exist and len(required_tests) == 0 and same_processed_paramaters:
             return
+
+        # Make sure we do not enter in a loop
+        # This may happen when we read/call an output value/file by mistake
+        if hasattr(self, '_processed'): raise RuntimeError('Looped processing')
+        self._processed = True
 
         print('-> Processing input files')
 
@@ -870,7 +876,7 @@ class MD:
         # This way we know if they have been modifed in the future and checkings need to be rerun
         self.register.update_mtime(output_structure_file)
         self.register.update_mtime(output_trajectory_file)
-        if output_topology_file != None:
+        if output_topology_file != MISSING_TOPOLOGY:
             self.project.register.update_mtime(output_topology_file)
 
         # Update the parameters used to get the last processed structure and trajectory files
@@ -1199,14 +1205,15 @@ class MD:
         elif selection_string:
             if verbose: print(f' Selecting PBC atoms "{selection_string}"')
             parsed_selection = reference_structure.select(selection_string)
+            if not parsed_selection:
+                raise InputError(f'PBC selection "{selection_string}" selected no atoms')
         # If we have an input value but it is empty then we set an empty selection
         else:
             if verbose: print(' No PBC atoms selected')
             parsed_selection = Selection()
-        # Lof the parsed selection size
-        if verbose: print(f' Parsed PBC selection has {len(parsed_selection)} atoms')
         # Log a few of the selected residue names
         if verbose and parsed_selection:
+            print(f' Parsed PBC selection has {len(parsed_selection)} atoms')
             selected_residues = reference_structure.get_selection_residues(parsed_selection)
             selected_residue_names = list(set([ residue.name for residue in selected_residues ]))
             limit = 3 # Show a maximum of 3 residue names
@@ -2223,7 +2230,7 @@ class Project:
         # 2 - The standard topology file will not include atom charges
         # 3 - Bonds will be guessed
         if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
-            return None
+            return MISSING_TOPOLOGY
         # Set a function to parse possible glob notation
         def parse (filepath : str) -> str:
             # If there is no glob pattern then just return the string as is
@@ -2263,13 +2270,13 @@ class Project:
     # If the file is not found try to download it
     def get_input_topology_file (self) -> Optional[File]:
         # If we already have a value then return it
-        if self._input_topology_file:
+        if self._input_topology_file != None:
             return self._input_topology_file
         # Set the input topology filepath
         input_topology_filepath = self.get_input_topology_filepath()
         # If the input filepath is None then it menas we must proceed without a topology
-        if input_topology_filepath == None:
-            self._input_topology_file = None
+        if input_topology_filepath == MISSING_TOPOLOGY:
+            self._input_topology_file = MISSING_TOPOLOGY
             return self._input_topology_file
         # If no input is passed then we check the inputs file
         # Set the file
@@ -2443,7 +2450,7 @@ class Project:
     # Set the expected output topology filename given the input topology filename
     # Note that topology formats are conserved
     def inherit_topology_filename (self) -> Optional[str]:
-        if self.input_topology_file == None:
+        if self.input_topology_file == MISSING_TOPOLOGY:
             return None
         filename = self.input_topology_file.filename
         if not filename:
@@ -2467,10 +2474,10 @@ class Project:
     def get_topology_file (self) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
-        if self._topology_file:
+        if self._topology_file != None:
             return self._topology_file
         # If the file already exists then we are done
-        self._topology_file = File(self.topology_filepath)
+        self._topology_file = File(self.topology_filepath) if self.topology_filepath != None else MISSING_TOPOLOGY
         # Run the processing logic
         self.reference_md.process_input_files()
         # Now that the file is sure to exist we return it

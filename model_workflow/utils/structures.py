@@ -10,7 +10,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
-from model_workflow.utils.auxiliar import InputError, BondsPlaceholder
+from model_workflow.utils.auxiliar import InputError, MISSING_BONDS
 from model_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn
 from model_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from model_workflow.utils.constants import STANDARD_COUNTER_CATION_ATOM_NAMES, STANDARD_COUNTER_ANION_ATOM_NAMES
@@ -1584,7 +1584,7 @@ class Structure:
             atom_indices = get_vmd_selection_atom_indices(pdb_filename, selection_string)
             os.remove(pdb_filename)
             if len(atom_indices) == 0:
-                return None
+                return Selection()
             return Selection(atom_indices)
         if syntax == 'prody':
             # In we do not have prody in our environment then we cannot proceed
@@ -1593,7 +1593,7 @@ class Structure:
             prody_topology = self.get_prody_topology()
             prody_selection = prody_topology.select(selection_string)
             if not prody_selection:
-                return None
+                return Selection()
             return Selection.from_prody(prody_selection)
         if syntax == 'pytraj':
             # In we do not have pytraj in our environment then we cannot proceed
@@ -1603,7 +1603,7 @@ class Structure:
             pytraj_selection = pytraj_topology[selection_string]
             atom_indices = [ atom.index for atom in pytraj_selection.atoms ]
             if len(atom_indices) == 0:
-                return None
+                return Selection()
             return Selection(atom_indices)
 
         raise InputError(f'Syntax {syntax} is not supported. Choose one of the following: vmd, prody, pytraj')
@@ -2403,7 +2403,7 @@ class Structure:
         # For every atom in CG, replace its bonds with a class which will raise and error when read
         # Thus we make sure using these wrong bonds anywhere further will result in failure
         for atom_index in self.select_cg().atom_indices:
-            covalent_bonds[atom_index] = BondsPlaceholder()
+            covalent_bonds[atom_index] = MISSING_BONDS
         # Remove the auxiliar pdb file
         os.remove(auxiliar_pdb_filename)
         return covalent_bonds

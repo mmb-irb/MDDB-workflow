@@ -1,7 +1,8 @@
 # Import local tools
 from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-from model_workflow.utils.auxiliar import TestFailure, get_new_letter, save_json, warn
+from model_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
+from model_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
@@ -31,7 +32,7 @@ def structure_corrector (
     # Note that this is an early provisional structure
     structure : 'Structure',
     input_trajectory_file : Optional['File'],
-    input_topology_file : Optional['File'],
+    input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
     MD : 'MD',
@@ -185,6 +186,11 @@ def structure_corrector (
     # In case there are not chains at all
     if len(chains) == 1 and ( chains[0].name == ' ' or chains[0].name == 'X' ):
         print('WARNING: chains are missing and they will be added')
+        # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
+        # Note that we rely in fragments (and thus in bonds) to guess chains
+        if next((True for bonds in structure.bonds if bonds == MISSING_BONDS), False):
+            raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
+                ' Please either provide a topology or set chains in the structure PDB file.')
         # Run the chainer
         structure.auto_chainer()
         # Update the structure file using the corrected structure

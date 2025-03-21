@@ -6,7 +6,8 @@ from subprocess import run, PIPE, Popen
 from model_workflow.tools.topology_manager import get_chains, set_chains
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.structures import Structure
-from model_workflow.utils.auxiliar import InputError
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.type_hints import *
 
 # Set the default centering/fitting selection (vmd syntax): protein and nucleic acids
 CENTER_SELECTION_NAME = 'protein_and_nucleic_acids'
@@ -24,7 +25,7 @@ def image_and_fit (
     input_trajectory_file : 'File',
     # This must be in .tpr format
     # This is optional if there are no PBC residues
-    input_topology_file : 'File', 
+    input_topology_file : Union['File', Exception], 
     output_structure_file : 'File',
     output_trajectory_file : 'File',
     image : bool, fit : bool,
@@ -43,7 +44,7 @@ def image_and_fit (
     
     # In order to run the imaging with PBC residues we need a .tpr file, not just the .pdb file
     # This is because there is a '-pbc mol' step which only works with a .tpr file
-    is_tpr_available = input_topology_file and input_topology_file.format == 'tpr'
+    is_tpr_available = input_topology_file != MISSING_TOPOLOGY and input_topology_file.format == 'tpr'
     has_pbc_atoms = bool(pbc_selection)
     if image and not is_tpr_available and has_pbc_atoms:
         raise InputError('In order to image a simulation with PBC residues using Gromacs it is mandatory to provide a .tpr file')

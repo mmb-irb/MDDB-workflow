@@ -1,5 +1,5 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.auxiliar import load_json, InputError
+from model_workflow.utils.auxiliar import load_json, MISSING_BONDS, MISSING_TOPOLOGY
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
@@ -161,8 +161,10 @@ def get_bonds_canonical_frame (
     return reference_bonds_frame
 
 # Extract bonds from a source file and format them per atom
-def mine_topology_bonds (bonds_source_file : 'File') -> List[ List[int] ]:
-    if not bonds_source_file or not bonds_source_file.exists:
+def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ List[int] ]:
+    # If there is no topology then return no bonds at all
+    print(bonds_source_file)
+    if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
     print('Mining atom bonds from topology file')
     # If we have the standard topology then get bonds from it
@@ -229,7 +231,7 @@ def sort_bonds (source_bonds : List[ Tuple[int, int] ], atom_count : int) -> Lis
 # If the mining fails then search for the most stable bonds
 # If we turst in stable bonds then simply return the structure bonds
 def find_safe_bonds (
-    input_topology_file : 'File',
+    input_topology_file : Union['File', Exception],
     input_structure_file : 'File',
     input_trajectory_file : 'File',
     must_check_stable_bonds : bool,
@@ -240,9 +242,12 @@ def find_safe_bonds (
     safe_bonds = mine_topology_bonds(input_topology_file)
     if safe_bonds:
         return safe_bonds
-    # If bonds are to be guessed then make sure there are no coarse grain atoms
-    if structure.select_cg():
-        raise InputError('We cannot guess bonds from a coarse grain structure. Please provide a topology')
+    # Get a selection including coarse grain atoms in the structure
+    cg_selection = structure.select_cg()
+    # If all bonds are in coarse grain the set all bonds "wrong" already
+    if len(cg_selection) == structure.atom_count:
+        safe_bonds = [ MISSING_BONDS for atom in range(structure.atom_count) ]
+        return safe_bonds
     # If failed to mine topology bonds then guess stable bonds
     print('Bonds will be guessed by atom distances and radius')
     # Find stable bonds if necessary
@@ -250,8 +255,18 @@ def find_safe_bonds (
         # Using the trajectory, find the most stable bonds
         print('Checking bonds along trajectory to determine which are stable')
         safe_bonds = get_most_stable_bonds(input_structure_file.path, input_trajectory_file.path, snapshots)
+        discard_coarse_grain_bonds(safe_bonds, cg_selection)
         return safe_bonds
     # If we trust stable bonds then simply use structure bonds
     print('Default structure bonds will be used since they have been marked as trusted')
     safe_bonds = structure.bonds
+    discard_coarse_grain_bonds(safe_bonds, cg_selection)
     return safe_bonds
+
+# Given a list of bonds, discard the ones in the coarse grain selection
+# Note that the input list will be mutated
+def discard_coarse_grain_bonds (bonds : list, cg_selection : 'Selection'):
+    # For every atom in CG, replace its bonds with a class which will raise and error when read
+    # Thus we make sure using these wrong bonds anywhere further will result in failure
+    for atom_index in cg_selection.atom_indices:
+        bonds[atom_index] = MISSING_BONDS
