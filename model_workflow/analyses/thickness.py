@@ -1,5 +1,5 @@
 from biobb_mem.lipyphilic_biobb.lpp_zpositions import lpp_zpositions, frame_df
-from model_workflow.tools.get_pytraj_trajectory import get_reduced_pytraj_trajectory
+from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout

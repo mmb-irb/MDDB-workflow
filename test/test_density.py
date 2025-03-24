@@ -35,6 +35,26 @@ class TestDensityAnalysis:
         # Load the results
         results = load_json(output_file)
         reference = load_json(analysis_file.path)
+
+        # Compare structure and keys
+        assert set(results.keys()) == set(reference.keys()), \
+            f"Result keys don't match: {set(results.keys())} vs {set(reference.keys())}"
+        
+        assert set(results.get('data', {}).keys()) == set(reference.get('data', {}).keys()), \
+            "Data subkeys don't match"
+        
+        # Check components exist
+        assert 'comps' in results.get('data', {}), "Missing 'comps' key in results"
+        assert 'z' in results.get('data', {}), "Missing 'z' key in results"
+
+        # Check z array length matches
+        assert len(results['data']['z']) == len(reference['data']['z']), \
+            f"Z array length mismatch: {len(results['data']['z'])} vs {len(reference['data']['z'])}"
+        
+        # Check same number of components
+        assert len(results['data']['comps']) == len(reference['data']['comps']), \
+            f"Component count mismatch: {len(results['data']['comps'])} vs {len(reference['data']['comps'])}"
+        
         # Compare results with reference data using checksums
         # Convert JSON to string in a deterministic way (sorted keys)
         result_str = json.dumps(results, sort_keys=True)
