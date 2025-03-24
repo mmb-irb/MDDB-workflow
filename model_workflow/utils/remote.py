@@ -135,6 +135,18 @@ class Remote:
             file_content = load_json(output_file.path)
             save_json(file_content, output_file.path, indent = 4)
 
+    # Get analysis data
+    def download_analysis_data(self, analysis_type: str, output_file: 'File'):
+        request_url = f'{self.url}/analyses/{analysis_type}'
+        print(f'Downloading {analysis_type} analysis data\n')
+        try:
+            urllib.request.urlretrieve(request_url, output_file.path)
+            # Format JSON if needed
+            file_content = load_json(output_file.path)
+            save_json(file_content, output_file.path, indent=4)
+        except:
+            raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url}')
+        
 # from https://gist.github.com/leimao/37ff6e990b3226c2c9670a2cd1e4a6f5
 def my_hook(t):
     """Wraps tqdm instance.
