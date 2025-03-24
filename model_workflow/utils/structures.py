@@ -10,11 +10,15 @@ from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
-from model_workflow.utils.auxiliar import InputError, is_imported, residue_name_to_letter, otherwise, warn, reprint
+from model_workflow.utils.auxiliar import InputError, MISSING_BONDS
+from model_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn
 from model_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from model_workflow.utils.constants import STANDARD_COUNTER_CATION_ATOM_NAMES, STANDARD_COUNTER_ANION_ATOM_NAMES
 from model_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
-from model_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM_ELEMENT
+from model_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM_ELEMENT, CG_ATOM_ELEMENT
+from model_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
+from model_workflow.utils.constants import DNA_RESIDUE_NAME_LETTERS, RNA_RESIDUE_NAME_LETTERS
+from model_workflow.utils.constants import FATTY_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
 
 import pytraj
 # Import these libraries if they are available
@@ -248,6 +252,10 @@ class Atom:
         # If the atom name is among the known dummy atoms then return a standard element for dummy atoms
         if self.name.upper() in STANDARD_DUMMY_ATOM_NAMES:
             return DUMMY_ATOM_ELEMENT
+        # If the element is already the "coarse grained" flag then return this very same flag
+        # WARNING: This has to be preset before guessing or the guess may fail
+        if self.is_cg():
+            return CG_ATOM_ELEMENT
         # If the name is SOD and it is a lonely atom then it is clearly sodium, not sulfur
         if self.name.upper() == 'SOD' and self.residue.atom_count == 1:
             return 'Na'
@@ -292,13 +300,17 @@ class Atom:
             # Finally, try with the first character alone
             if character in SUPPORTED_ELEMENTS:
                 return character
-        raise InputError(f"Not recognized element in '{name}'")
+        raise InputError(f"Cannot guess atom element from atom name '{name}'")
 
     # Get a standard label
     def get_label (self) -> str:
         return f'{self.residue.label}.{self.name} (index {self.index})'
     # The atom standard label (read only)
     label = property(get_label, None, None)
+
+    # Ask if the current atom is in coarse grain
+    def is_cg (self) -> bool:
+        return self.element == CG_ATOM_ELEMENT
 
 # A residue
 class Residue:
@@ -401,7 +413,7 @@ class Residue:
         self.set_atom_indices(new_atom_indices)
     atoms = property(get_atoms, set_atoms, None, "The atoms in this residue")
 
-    # Set the number of atoms in the residue
+    # Get the number of atoms in the residue
     def get_atom_count (self) -> int:
         return len(self.atom_indices)
     atom_count = property(get_atom_count, None, None, "The number of atoms in the residue (read only)")
@@ -518,6 +530,8 @@ class Residue:
         # Return the internal value, if any
         if self._classification:
             return self._classification
+        # If this is a CG residue then we can not classify it
+        if self.is_cg(): return self.get_classification_by_name()
         # If we dont have a value then we must classify the residue
         # -------------------------------------------------------------------------------------------------------
         # Ions are single atom residues
@@ -650,7 +664,30 @@ class Residue:
         # -------------------------------------------------------------------------------------------------------
         self._classification = 'other'
         return self._classification
-
+    
+    # Set an alternative function to "try" to classify the residues according only to its name
+    # This is useful for corase grain residues whose atoms may not reflect the real atoms
+    # WARNING: This logic is very limited and will return "unknown" most of the times
+    # WARNING: This logic relies mostly in atom names, which may be not standard
+    def get_classification_by_name (self) -> str:
+        if self.name in PROTEIN_RESIDUE_NAME_LETTERS:
+            return 'protein'
+        if self.name in DNA_RESIDUE_NAME_LETTERS:
+            return 'dna'
+        if self.name in RNA_RESIDUE_NAME_LETTERS:
+            return 'rna'
+        if self.name in NUCLEIC_RESIDUE_NAME_LETTERS:
+            return 'nucleic'
+        if self.name in FATTY_RESIDUE_NAMES:
+            return 'fatty'
+        if self.name in STEROID_RESIDUE_NAMES:
+            return 'steroid'
+        if self.name in STANDARD_COUNTER_ION_ATOM_NAMES:
+            return 'ion'
+        if self.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+            return 'solvent'
+        # If we do not know what it is
+        return 'unknown'
 
     # The residue biochemistry classification (read only)
     classification = property(get_classification, None, None)
@@ -776,6 +813,11 @@ class Residue:
     # The residue standard label (read only)
     label = property(get_label, None, None)
 
+    # Ask if the current residue is in coarse grain
+    # Note that we asome there may be not hybrid aa/cg residues
+    def is_cg (self) -> bool:
+        return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
+
 # A chain
 class Chain:
     def __init__ (self,
@@ -892,10 +934,15 @@ class Chain:
         return sum([ residue.atoms for residue in self.residues ], [])
     atoms = property(get_atoms, None, None, "Atoms in the chain (read only)")
 
-    # Number of atoms in the chain (read only)
+    # Get the number of atoms in the chain (read only)
     def get_atom_count (self) -> int:
         return len(self.atom_indices)
     atom_count = property(get_atom_count, None, None, "Number of atoms in the chain (read only)")
+
+    # Get the number of residues in the chain (read only)
+    def get_residue_count (self) -> int:
+        return len(self._residue_indices)
+    residue_count = property(get_residue_count, None, None, "Number of residues in the chain (read only)")
 
     # Get the chain classification
     def get_classification (self) -> str:
@@ -926,6 +973,10 @@ class Chain:
         chain_copy._index = self._index
         chain_copy.residue_indices = self.residue_indices
         return chain_copy
+    
+    # Ask if the current chain has at least one coarse grain atom/residue
+    def has_cg (self) -> bool:
+        return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
 
 # A structure is a group of atoms organized in chains and residues
 class Structure:
@@ -1289,7 +1340,8 @@ class Structure:
         # Setup atoms
         for atom in mdanalysis_universe.atoms:
             name = atom.name
-            element = atom.element
+            # WARNING: MDAnalysis cannot handle reading an element of an atom with no element
+            element = atom.element if hasattr(atom, 'element') else '?'
             #coords = atom.position # DANI: Esto da error si no hay coordenadas
             parsed_atom = Atom(name=name, element=element)
             parsed_atoms.append(parsed_atom)
@@ -1371,10 +1423,20 @@ class Structure:
             return cls.from_tpr_file(mysterious_file.path)
         raise InputError(f'Not supported format ({mysterious_file.format}) to setup a Structure')
 
-    # Set the number of atoms in the structure
+    # Get the number of atoms in the structure
     def get_atom_count (self) -> int:
         return len(self.atoms)
     atom_count = property(get_atom_count, None, None, "The number of atoms in the structure (read only)")
+
+    # Get the number of residues in the structure (read only)
+    def get_residue_count (self) -> int:
+        return len(self.residues)
+    residue_count = property(get_residue_count, None, None, "Number of residues in the structure (read only)")
+
+    # Get the number of chains in the structure (read only)
+    def get_chain_count (self) -> int:
+        return len(self.chains)
+    chain_count = property(get_chain_count, None, None, "Number of chains in the structure (read only)")
 
     # Fix atom elements by guessing them when missing
     # Set all elements with the first letter upper and the second (if any) lower
@@ -1522,7 +1584,7 @@ class Structure:
             atom_indices = get_vmd_selection_atom_indices(pdb_filename, selection_string)
             os.remove(pdb_filename)
             if len(atom_indices) == 0:
-                return None
+                return Selection()
             return Selection(atom_indices)
         if syntax == 'prody':
             # In we do not have prody in our environment then we cannot proceed
@@ -1531,7 +1593,7 @@ class Structure:
             prody_topology = self.get_prody_topology()
             prody_selection = prody_topology.select(selection_string)
             if not prody_selection:
-                return None
+                return Selection()
             return Selection.from_prody(prody_selection)
         if syntax == 'pytraj':
             # In we do not have pytraj in our environment then we cannot proceed
@@ -1541,7 +1603,7 @@ class Structure:
             pytraj_selection = pytraj_topology[selection_string]
             atom_indices = [ atom.index for atom in pytraj_selection.atoms ]
             if len(atom_indices) == 0:
-                return None
+                return Selection()
             return Selection(atom_indices)
 
         raise InputError(f'Syntax {syntax} is not supported. Choose one of the following: vmd, prody, pytraj')
@@ -1645,6 +1707,10 @@ class Structure:
     # WARNING: This is just a guess
     def select_pbc_guess (self) -> 'Selection':
         return self.select_water() + self.select_counter_ions() + self.select_lipids()
+    
+    # Select coarse grain atoms
+    def select_cg (self) -> 'Selection':
+        return Selection([ atom.index for atom in self.atoms if atom.element == CG_ATOM_ELEMENT ])
 
     # Select cartoon representable regions for VMD
     # Rules are:
@@ -1658,11 +1724,11 @@ class Structure:
         # Set fragments which are candidate to be cartoon representable
         fragments = []
         # Get protein fragments according to VMD
-        protein_selection = self.select_protein() if include_terminals else self.select('protein', syntax='vmd')
+        protein_selection = self.select_protein() - self.select_cg() if include_terminals else self.select('protein', syntax='vmd')
         if protein_selection:
             fragments += list(self.find_fragments(protein_selection))
         # Get nucleic fragments according to VMD
-        nucleic_selection = self.select_nucleic()
+        nucleic_selection = self.select_nucleic() - self.select_cg()
         if nucleic_selection:
             fragments += list(self.find_fragments(nucleic_selection))
         # Set the final selection including all valid fragments
@@ -1687,10 +1753,22 @@ class Structure:
     def get_selection_residue_indices (self, selection : 'Selection') -> List[int]:
         return list(set([ self.atoms[atom_index].residue_index for atom_index in selection.atom_indices ]))
     
+    # Given a selection, get a list of residues implicated
+    # Note that if a single atom from the residue is in the selection then the residue is returned
+    def get_selection_residues (self, selection : 'Selection') -> List['Residue']:
+        residue_indices = self.get_selection_residue_indices(selection)
+        return [ self.residues[index] for index in residue_indices ]
+    
     # Given a selection, get a list of chain indices for chains implicated
     # Note that if a single atom from the chain is in the selection then the chain index is returned
     def get_selection_chain_indices (self, selection : 'Selection') -> List[int]:
         return list(set([ self.atoms[atom_index].chain_index for atom_index in selection.atom_indices ]))
+    
+    # Given a selection, get a list of chains implicated
+    # Note that if a single atom from the chain is in the selection then the chain is returned
+    def get_selection_chains (self, selection : 'Selection') -> List['Chain']:
+        chain_indices = self.get_selection_chain_indices(selection)
+        return [ self.chains[index] for index in chain_indices ]
     
     # Get type of the chain
     def get_selection_classification (self, selection : 'Selection') -> str:
@@ -2273,11 +2351,11 @@ class Structure:
         for atom in self.atoms:
             # Do not check this atom bonds if this may be an ion
             # Most authors "force" dummy bonds in these atoms to make them stable
-            if atom.element in SUPPORTED_ION_ELEMENTS:
-                continue
+            if atom.element in SUPPORTED_ION_ELEMENTS: continue
             # Ignore dummy atoms as well
-            if atom.element == DUMMY_ATOM_ELEMENT:
-                continue
+            if atom.element == DUMMY_ATOM_ELEMENT: continue
+            # Ignore coarse grain atoms as well
+            if atom.element == CG_ATOM_ELEMENT: continue
             # Get actual number of bonds in the current atom both with and without ion bonds
             # LORE: This was a problem since some ions are force-bonded but bonds are actually not real
             # LORE: When an ion is forced we may end up with hyrogens with 2 bonds or carbons with 5 bonds
@@ -2322,6 +2400,10 @@ class Structure:
         self.generate_pdb_file(auxiliar_pdb_filename)
         # Get covalent bonds between both residue atoms
         covalent_bonds = get_covalent_bonds(auxiliar_pdb_filename, selection)
+        # For every atom in CG, replace its bonds with a class which will raise and error when read
+        # Thus we make sure using these wrong bonds anywhere further will result in failure
+        for atom_index in self.select_cg().atom_indices:
+            covalent_bonds[atom_index] = MISSING_BONDS
         # Remove the auxiliar pdb file
         os.remove(auxiliar_pdb_filename)
         return covalent_bonds
@@ -2494,7 +2576,32 @@ class Structure:
             protein_residue_index = self.atoms[protein_bond].residue_index
             # Set the PTM
             yield { 'name': ptm_classification, 'residue_index': protein_residue_index }
-            
+
+    # Ask if the structure has at least one coarse grain atom/residue
+    def has_cg (self) -> bool:
+        return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
+
+    # Calculate the distances between each pair of atoms in the whole structure
+    # DANI: Not tested
+    # def get_atom_distances_matrix (self) -> List[ List[ int ] ]:
+    #     matrix = []
+    #     for a, first_atom in enumerate(self.atoms):
+    #         # Set a new row in the matrix
+    #         current_row = []
+    #         for b, second_atom in enumerate(self.atoms):
+    #             # If this is the same atom then add a 0
+    #             if a == b:
+    #                 current_row.append(0)
+    #                 continue
+    #             # If we already calculated this value in the reverse way then reuse it
+    #             if a > b:
+    #                 current_row.append(matrix[a][b])
+    #                 continue
+    #             # Calculate the distance
+    #             distance = calculate_distance(first_atom, second_atom)
+    #             current_row.append(distance)
+    #         matrix.append(current_row)
+    #     return matrix
 
 ### Related functions ###
 

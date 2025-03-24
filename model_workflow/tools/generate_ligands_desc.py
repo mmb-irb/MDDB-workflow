@@ -3,6 +3,9 @@ import sys
 import json
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from rdkit.Chem import rdFingerprintGenerator
+from rdkit.Chem.Draw import IPythonConsole
+from rdkit import DataStructs
 from mordred import Calculator, descriptors
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
@@ -173,16 +176,32 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
                     raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code: ' + request_url)
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     
+    # Mine de INCHI and INCHIKEY
+    inchi_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChI'), None)
+    if inchi_section == None:
+        raise RuntimeError('Wrong Pubchem data structure: no InChI: ' + request_url)
+    if inchi_section:
+        inchi = inchi_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    
+    inchikey_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChIKey'), None)
+    if inchikey_section == None:
+        raise RuntimeError('Wrong Pubchem data structure: no InChIKey: ' + request_url)
+    if inchikey_section:
+        inchikey = inchikey_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     # Prepare the pubchem data to be returned
-    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id }
+    return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id, 'inchi': inchi, 'inchikey': inchikey }
 
 
 def find_drugbank_pubchem (drugbank_id):
     # Request Drugbank
     request_url = Request(
-        url= f'https://go.drugbank.com/drugs/{drugbank_id}',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
+    url=f'https://go.drugbank.com/drugs/{drugbank_id}',
+    headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    }
+)
     pubchem_id = None
     try:
         with urlopen(request_url) as response:
@@ -241,31 +260,44 @@ def find_chembl_pubchem (id_chembl):
 
 # Calculate the Morgan fingerprint and the Mordred descriptors from a ligand SMILES
 def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
-    smiles = Chem.MolFromSmiles(smiles)
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
+        return None
 
+    AllChem.Compute2DCoords(mol)
+    mol_block = Chem.MolToMolBlock(mol)
     # We can select the different submodules of mordred descriptors, avaible in: 'https://mordred-descriptor.github.io/documentation/master/'
-    #calc = Calculator(descriptors, ignore_3D=True)
-    calc = Calculator([descriptors.ABCIndex, 
-                       descriptors.AcidBase.AcidicGroupCount, 
-                       descriptors.AcidBase.BasicGroupCount, 
-                       descriptors.RingCount], ignore_3D=True)
+    calc = Calculator([
+        descriptors.ABCIndex,  # Índice de ramificación
+        descriptors.AcidBase.AcidicGroupCount,  # Grupos ácidos
+        descriptors.AcidBase.BasicGroupCount,  # Grupos básicos
+        descriptors.RingCount,  # Conteo de anillos
+        descriptors.Constitutional,  # Propiedades generales como número de átomos, peso molecular
+        descriptors.TopologicalCharge,  # Índices topológicos, Cargas parciales, polaridad
+        descriptors.HydrogenBond,  # Donantes y aceptores de enlaces de hidrógeno
+        descriptors.Lipinski,  # Reglas de Lipinski (drug-likeness)
+        descriptors.FragmentComplexity,  # Identificación de subestructuras frecuentes
+        descriptors.PathCount,  # Conteo de caminos moleculares
+    ], ignore_3D=True)
 
-    #print(f"Number of descriptors in calculator: {len(calc.descriptors)}")
 
     # Calculate Mordred results
-    mordred_results = calc(smiles).drop_missing().asdict()
-
-    #print(f"Number of calculated descriptors: {len(results_dict)}")
-    #print(results_dict)
+    mordred_results = calc(mol).drop_missing().asdict()
 
     ######## MORGAN FINGERPRINT ###########
+    morgan_fp_bit_array = list(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024))
+    morgan_fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+    ao = rdFingerprintGenerator.AdditionalOutput()
+    ao.AllocateAtomCounts()
+    ao.AllocateAtomToBits()
+    ao.AllocateBitInfoMap()
+    fp = morgan_fp_gen.GetFingerprint(mol,additionalOutput=ao)
+    morgan_highlight_atoms = {}
+    for bit, atoms in ao.GetBitInfoMap().items():
+        morgan_highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
 
-    morgan_fp = list(AllChem.GetMorganFingerprintAsBitVect(smiles, radius=2, nBits=1024))
-
-    #print("Morgan fingerprint:")
-    #print(list(morgan_fp))
-
-    return mordred_results, morgan_fp
+    return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block
 
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
@@ -369,8 +401,15 @@ def generate_ligand_mapping (
         formula = ligand_data['formula']
         if formula in visited_formulas:
             print(f'WARNING: Ligand with PubChem Id {pubchem_id} has a formula which has been already matched')
-            ligands_data.pop()
-            continue
+            # AGUS: en este punto si el usuario ha definido el mismo ligando con diferente selección quiere decir que está repetido
+            # AGUS: y que deberíamos mantener el ligando para diferentes residuos matcheados
+            if forced_selection:
+                visited_formulas.pop()
+                ligands_data.pop()
+                print(f'WARNING: Ligand with PubChem Id {pubchem_id} has been forced by the user and its repeated')
+            else:
+                ligands_data.pop()
+                continue
         # Add it to the list of visited formulas
         visited_formulas.append(formula)
         # If the user defined a ligand name, it will be respectedand added to the metadata
@@ -380,14 +419,12 @@ def generate_ligand_mapping (
             ligand_names[pubchem_id] = user_forced_ligand_name
         # Map structure residues with the current ligand
         # If the user forced the residues then use them
-        forced_residues = ligand.get('residues', None)
-        if forced_residues:
+        forced_selection = ligand.get('selection', None)
+        if forced_selection:
             # Could be a single residue or a list of residues
-            if type(forced_residues) == list:
-                forced_residues = [int(residue) for residue in forced_residues]
-            else:
-                forced_residues = [int(forced_residues)]
-            ligand_map = { 'name': pubchem_id, 'residue_indices': forced_residues, 'match': { 'ref': { 'pubchem': pubchem_id } } }
+            selection_atoms = structure.select(forced_selection)
+            residue_indices = structure.get_selection_residue_indices(selection_atoms)
+            ligand_map = { 'name': pubchem_id, 'residue_indices': residue_indices, 'match': { 'ref': { 'pubchem': pubchem_id } } }
         # If the user did not force the residues then map them
         else:
             ligand_map = map_ligand_residues(structure, ligand_data)
@@ -412,9 +449,11 @@ def generate_ligand_mapping (
         # If the ligand matched then calculate some additional data
         # Get morgan and mordred descriptors, the SMILES is needed for this part
         smiles = ligand_data['smiles']
-        mordred_results, morgan_fp = obtain_mordred_morgan_descriptors(smiles)
+        mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block = obtain_mordred_morgan_descriptors(smiles)
         ligand_data['mordred'] = mordred_results
-        ligand_data['morgan'] = morgan_fp
+        ligand_data['morgan_fp_bit_array'] = morgan_fp_bit_array
+        ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
+        ligand_data['mol_block'] = mol_block
     # Export ligands to a file
     save_json(ligands_data, output_ligands_filepath)
 

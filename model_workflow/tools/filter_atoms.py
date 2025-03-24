@@ -8,7 +8,7 @@ import pytraj as pt
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.structures import Structure
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY
 from model_workflow.utils.gmx_spells import get_tpr_atom_count
 from model_workflow.utils.type_hints import *
 from model_workflow.tools.get_charges import get_raw_charges
@@ -24,22 +24,21 @@ filter_group_name = "not_water_or_counter_ions"
 def filter_atoms (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
-    input_topology_file : Optional['File'],
+    input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : 'File',
-    output_topology_file : Optional['File'],
+    output_topology_file : Union['File', Exception],
+    # Reference structure used to parse the actual selection
+    reference_structure : 'Structure',
     # Filter selection may be a custom selection or true
     # If true then we run a default filtering of water and counter ions
     filter_selection : Union[bool, str],
-    filter_selection_syntax : str = 'vmd'
+    filter_selection_syntax : str = 'vmd',
 ):
 
     # Handle missing filter selection
     if not filter_selection:
         return
-    
-    # Load the reference structure
-    reference_structure = Structure.from_pdb_file(input_structure_file.path)
 
     # Parse the selection to be filtered
     # WARNING: Note that the structure is not corrected at this point and there may be limitations
@@ -78,7 +77,7 @@ def filter_atoms (
         pdb_filter(input_structure_file.path, output_structure_file.path, index_filename)
 
     # Filter topology according to the file format
-    if input_topology_file != None and input_topology_file.exists:
+    if input_topology_file != MISSING_TOPOLOGY and input_topology_file.exists:
         print('Filtering topology...')
         # Pytraj supported formats
         if input_topology_file.is_pytraj_supported():
@@ -156,7 +155,7 @@ def filter_atoms (
         output_structure_file.set_symlink_to(input_structure_file)
     if not output_trajectory_file.exists:
         output_trajectory_file.set_symlink_to(input_trajectory_file)
-    if output_topology_file != None and not output_topology_file.exists:
+    if output_topology_file != MISSING_TOPOLOGY and not output_topology_file.exists:
         output_topology_file.set_symlink_to(input_topology_file)
 
 # Filter atoms in a pdb file

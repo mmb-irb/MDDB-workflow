@@ -10,14 +10,12 @@ import io
 import re
 import numpy
 from glob import glob
-from inspect import getfullargspec
 
 # Constants
 from model_workflow.utils.constants import *
 
 # Import local tools
 from model_workflow.tools.topology_manager import setup_structure
-from model_workflow.tools.get_pytraj_trajectory import get_pytraj_trajectory
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
@@ -41,14 +39,15 @@ from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, warn, load_json, load_yaml, list_files
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files
 from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
-from model_workflow.utils.pyt_spells import get_frames_count
+from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.type_hints import *
 
@@ -84,12 +83,17 @@ from model_workflow.analyses.markov import markov
 unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
 sys.stdout = unbuffered
 
-# Set an special exception for input errors
+# Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
 fix_gromacs_masses()
+
+# Set some variables which are defined at the end but may be later ready by previously defined functions
+requestables = {}
+inverted_requestables = {}
+overwritables = set()
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -159,7 +163,7 @@ class MD:
 
         # Set a new MD specific register
         # In case the directory is the project directory itself, use the project register
-        register_file = File(self.md_pathify(REGISTER_FILENAME))
+        register_file = File(self.pathify(REGISTER_FILENAME))
         if register_file.path == self.project.register.file.path:
             self.register = self.project.register
         else:
@@ -167,9 +171,17 @@ class MD:
 
     def __repr__ (self):
         return f'<MD ({len(self.structure.atoms)} atoms)>'
+    
+    # This function is able to find its caller "self" function
+    # Then it finds its associated label in the requestables
+    def _get_task (self) -> str:
+        caller_data = sys._getframe().f_back
+        caller_name = caller_data.f_code.co_name
+        caller_func = getattr(self, caller_name).__func__
+        return inverted_requestables[caller_func]
 
     # Given a filename or relative path, add the MD directory path at the beginning
-    def md_pathify (self, filename_or_relative_path : str) -> str:
+    def pathify (self, filename_or_relative_path : str) -> str:
         return self.directory + '/' + filename_or_relative_path
 
     # Input structure file ------------
@@ -195,7 +207,7 @@ class MD:
                 abs_parsed_filepath = abs_glob_parse[0]
                 return abs_parsed_filepath
             # Check the MD directory
-            md_relative_filepath = self.md_pathify(input_path)
+            md_relative_filepath = self.pathify(input_path)
             md_glob_parse = parse_glob(md_relative_filepath)
             if len(md_glob_parse) > 1:
                 raise InputError(f'Multiple structures found with "{input_path}": {", ".join(md_glob_parse)}')
@@ -203,7 +215,7 @@ class MD:
             if md_parsed_filepath and File(md_parsed_filepath).exists:
                 return md_parsed_filepath
             # Check the project directory
-            project_relative_filepath = self.project.project_pathify(input_path)
+            project_relative_filepath = self.project.pathify(input_path)
             project_glob_parse = parse_glob(project_relative_filepath)
             if len(project_glob_parse) > 1:
                 raise InputError(f'Multiple structures found with "{input_path}": {", ".join(project_glob_parse)}')
@@ -318,7 +330,7 @@ class MD:
                 return absolute_parsed_paths
             # If trajectory paths are not absolute then check if they are relative to the MD directory
             # Get paths relative to the current MD directory
-            md_relative_paths = [ self.md_pathify(path) for path in checked_paths ]
+            md_relative_paths = [ self.pathify(path) for path in checked_paths ]
             # In case there are glob characters we must parse the paths
             md_parsed_paths = parse_all_glob(md_relative_paths)
             # Check we successfully defined some trajectory file
@@ -328,7 +340,7 @@ class MD:
                     return md_parsed_paths
             # If no trajectory files where found then asume they are relative to the project
             # Get paths relative to the project directory
-            project_relative_paths = [ self.project.project_pathify(path) for path in checked_paths ]
+            project_relative_paths = [ self.project.pathify(path) for path in checked_paths ]
             # In case there are glob characters we must parse the paths
             project_parsed_paths = parse_all_glob(project_relative_paths)
             # Check we successfully defined some trajectory file
@@ -361,7 +373,7 @@ class MD:
             if inputs_value:
                 return relativize_and_parse_paths(inputs_value)
         # If no input trajectory is passed then asume it is the default
-        default_trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
+        default_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         default_trajectory_file = File(default_trajectory_filepath)
         if default_trajectory_file.exists or self.remote:
             return relativize_and_parse_paths([ TRAJECTORY_FILENAME ])
@@ -467,15 +479,15 @@ class MD:
         input_topology_file = self.project.input_topology_file
 
         # Set the output filepaths
-        output_structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
+        output_structure_filepath = self.pathify(STRUCTURE_FILENAME)
         output_structure_file = File(output_structure_filepath)
-        output_trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
+        output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         output_trajectory_file = File(output_trajectory_filepath)
         output_topology_filepath = self.project.topology_filepath
-        output_topology_file = File(output_topology_filepath) if output_topology_filepath else None
+        output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
 
         # If all output files already exist we may skip the processing
-        topology_already_processed = output_topology_file == None or output_topology_file.exists
+        topology_already_processed = output_topology_file == MISSING_TOPOLOGY or output_topology_file.exists
         outputs_exist = output_structure_file.exists and output_trajectory_file.exists and topology_already_processed
 
         # Check which tests are to be run
@@ -508,7 +520,7 @@ class MD:
             self.register.reset_cache()
 
         # In case there is a topology to be processed...
-        if output_topology_file != None:
+        if output_topology_file != MISSING_TOPOLOGY:
             # If there is no topology then we must run some tests
             if not output_topology_file.exists:
                 required_tests.update(TOPOLOGY_TESTS)
@@ -566,6 +578,11 @@ class MD:
         if outputs_exist and len(required_tests) == 0 and same_processed_paramaters:
             return
 
+        # Make sure we do not enter in a loop
+        # This may happen when we read/call an output value/file by mistake
+        if hasattr(self, '_processed'): raise RuntimeError('Looped processing')
+        self._processed = True
+
         print('-> Processing input files')
 
         # --- FIRST CHECK -----------------------------------------------------------------------
@@ -577,7 +594,7 @@ class MD:
         # Set the output format for the already converted structure
         input_structure_format = self.input_structure_file.format
         output_structure_format = output_structure_file.format
-        converted_structure_filepath = self.md_pathify(CONVERTED_STRUCTURE)
+        converted_structure_filepath = self.pathify(CONVERTED_STRUCTURE)
         # If input structure already matches the output format then avoid the renaming
         if input_structure_format == output_structure_format:
             converted_structure_filepath = input_structure_file.path
@@ -591,7 +608,7 @@ class MD:
         input_trajectories_format = list(input_trajectory_formats)[0]
         output_trajectory_format = output_trajectory_file.format
         # Set the output file for the already converted trajectory
-        converted_trajectory_filepath = self.md_pathify(CONVERTED_TRAJECTORY)
+        converted_trajectory_filepath = self.pathify(CONVERTED_TRAJECTORY)
         # If input trajectory already matches the output format and is unique then avoid the renaming
         if input_trajectories_format == output_trajectory_format and len(input_trajectory_files) == 1:
             converted_trajectory_filepath = input_trajectory_files[0].path
@@ -601,7 +618,7 @@ class MD:
 
         # Set an intermeidate file for the trajectory while it is being converted
         # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
-        incompleted_converted_trajectory_filepath = self.md_pathify(INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY)
+        incompleted_converted_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY)
         incompleted_converted_trajectory_file = File(incompleted_converted_trajectory_filepath)
         # If there is an incomplete trajectory then remove it
         if incompleted_converted_trajectory_file.exists:
@@ -621,6 +638,19 @@ class MD:
 
         # Topologies are never converted, but they are kept in their original format
 
+        # --- provisional reference structure ---
+
+        # Now that we MUST have a PDB file we can set a provisional structure instance
+        # Note that this structure is not yet corrected so it must be used with care
+        # Otherwise we could have silent errors
+        provisional_structure = Structure.from_pdb_file(converted_structure_file.path)
+        # Now we can set a provisional coarse grain selection
+        # This selection is useful to avoid problems with CG atom elements
+        # Since this is proviosonal we will make it silent
+        provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
+        for atom_index in provisional_cg_selection.atom_indices:
+            provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
+
         # --- FILTERING ATOMS ------------------------------------------------------------
 
         # Find out if we need to filter
@@ -629,13 +659,13 @@ class MD:
 
         # Set output filenames for the already filtered structure and trajectory
         # Note that this is the only step affecting topology and thus here we output the definitive topology
-        filtered_structure_file = File(self.md_pathify(FILTERED_STRUCTURE)) if must_filter else converted_structure_file
-        filtered_trajectory_file = File(self.md_pathify(FILTERED_TRAJECTORY)) if must_filter else converted_trajectory_file
+        filtered_structure_file = File(self.pathify(FILTERED_STRUCTURE)) if must_filter else converted_structure_file
+        filtered_trajectory_file = File(self.pathify(FILTERED_TRAJECTORY)) if must_filter else converted_trajectory_file
         filtered_topology_file = output_topology_file if must_filter else input_topology_file
 
         # Set an intermeidate file for the trajectory while it is being filtered
         # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while filtering
-        incompleted_filtered_trajectory_filepath = self.md_pathify(INCOMPLETE_PREFIX + FILTERED_TRAJECTORY)
+        incompleted_filtered_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + FILTERED_TRAJECTORY)
         incompleted_filtered_trajectory_file = File(incompleted_filtered_trajectory_filepath)
         # If there is an incomplete trajectory then remove it
         if incompleted_filtered_trajectory_file.exists:
@@ -660,12 +690,31 @@ class MD:
                 output_structure_file = filtered_structure_file,
                 output_trajectory_file = incompleted_filtered_trajectory_file,
                 output_topology_file = filtered_topology_file, # We genereate the definitive topology
-                filter_selection = self.project.filter_selection
+                reference_structure = provisional_structure,
+                filter_selection = self.project.filter_selection,
             )
             # Once filetered, rename the trajectory file as completed
             rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
             # Update the cache
             self.register.update_cache(FILTERED, current_filtered_parameters)
+
+        # --- provisional reference structure ---
+
+        # Now that we have a filtered PDB file we have to update provisional structure instance
+        # Note that this structure is not yet corrected so it must be used with care
+        # Otherwise we could have silent errors
+        provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
+        # Again, set the coarse grain atoms
+        # Since elements may be needed to guess PBC selection we must solve them right before
+        # Since this is proviosonal we will make it silent
+        provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
+        for atom_index in provisional_cg_selection.atom_indices:
+            provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
+        # Also we can set a provisional PBC selection
+        # This selection is useful both for imaging/fitting and for the correction
+        # We will make sure that the provisonal and the final PBC selections match
+        # Since this is proviosonal we will make it silent
+        provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
 
         # --- IMAGING AND FITTING ------------------------------------------------------------
 
@@ -674,12 +723,12 @@ class MD:
         must_image = self.project.image or self.project.fit
 
         # Set output filenames for the already filtered structure and trajectory
-        imaged_structure_file = File(self.md_pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
-        imaged_trajectory_file = File(self.md_pathify(IMAGED_TRAJECTORY)) if must_image else filtered_trajectory_file
+        imaged_structure_file = File(self.pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
+        imaged_trajectory_file = File(self.pathify(IMAGED_TRAJECTORY)) if must_image else filtered_trajectory_file
 
         # Set an intermeidate file for the trajectory while it is being imaged
         # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while imaging
-        incompleted_imaged_trajectory_filepath = self.md_pathify(INCOMPLETE_PREFIX + IMAGED_TRAJECTORY)
+        incompleted_imaged_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + IMAGED_TRAJECTORY)
         incompleted_imaged_trajectory_file = File(incompleted_imaged_trajectory_filepath)
         # If there is an incomplete trajectory then remove it
         if incompleted_imaged_trajectory_file.exists:
@@ -702,10 +751,6 @@ class MD:
         # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
         # Fit the trajectory by removing the translation and rotation if it is required
         if must_image and (missing_imaged_output or not same_imaged_parameters):
-            # Set a provisional PBC selection
-            # Note that we can not rely in the standard PBC selection since it is parsed through the structure
-            # However we still don't have the standard structure available
-            provisional_pbc_selection = self.input_pbc_selection if self.project.is_inputs_file_available() else 'guess'
             print(' * Imaging and fitting')
             image_and_fit(
                 input_structure_file = filtered_structure_file,
@@ -716,12 +761,17 @@ class MD:
                 image = self.project.image,
                 fit = self.project.fit,
                 translation = self.project.translation,
-                input_pbc_selection = provisional_pbc_selection
+                structure = provisional_structure,
+                pbc_selection = provisional_pbc_selection
             )
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
             # Update the cache
             self.register.update_cache(IMAGED, current_imaged_parameters)
+            # Update the provisional strucutre coordinates
+            imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
+            imaged_structure_coords = [ atom.coords for atom in imaged_structure.atoms ]
+            provisional_structure.set_new_coordinates(imaged_structure_coords)
 
         # --- CORRECTING STRUCTURE ------------------------------------------------------------
 
@@ -755,19 +805,20 @@ class MD:
         print(' * Correcting structure')
 
         # Set output filenames for the already filtered structure and trajectory
-        corrected_structure_file = File(self.md_pathify(CORRECTED_STRUCTURE))
-        corrected_trajectory_file = File(self.md_pathify(CORRECTED_TRAJECTORY))
+        corrected_structure_file = File(self.pathify(CORRECTED_STRUCTURE))
+        corrected_trajectory_file = File(self.pathify(CORRECTED_TRAJECTORY))
 
         # Correct the structure
         # This function reads and or modifies the following MD variables:
         #   snapshots, safe_bonds, register, mercy, trust
         structure_corrector(
-            input_structure_file = imaged_structure_file,
+            structure = provisional_structure,
             input_trajectory_file = imaged_trajectory_file,
             input_topology_file = filtered_topology_file,
             output_structure_file = corrected_structure_file,
             output_trajectory_file = corrected_trajectory_file,
-            MD = self
+            MD = self,
+            pbc_selection = provisional_pbc_selection
         )
 
         # If the corrected output exists then use it
@@ -820,7 +871,6 @@ class MD:
                 else:
                     processed_file.rename_to(output_file)
 
-
         # Save the internal variables
         self._structure_file = output_structure_file
         self._trajectory_file = output_trajectory_file
@@ -830,11 +880,20 @@ class MD:
         # This way we know if they have been modifed in the future and checkings need to be rerun
         self.register.update_mtime(output_structure_file)
         self.register.update_mtime(output_trajectory_file)
-        if output_topology_file != None:
+        if output_topology_file != MISSING_TOPOLOGY:
             self.project.register.update_mtime(output_topology_file)
 
         # Update the parameters used to get the last processed structure and trajectory files
         self.register.update_cache(PROCESSED, current_processed_parameters)
+
+        # --- Definitive PBC selection ---
+
+        # Now that we have the corrected structure we can set the definitive PBC atoms
+        # Make sure the selection is identical to the provisional selection
+        if self.pbc_selection != provisional_pbc_selection:
+            raise InputError('PBC selection is not consistent after correcting the structure. '
+                'Please consider using a different PBC selection. '
+                'Avoid relying in atom distances or elements to avoid this problem.')
 
         # --- RUNNING FINAL TESTS ------------------------------------------------------------
 
@@ -910,7 +969,7 @@ class MD:
         if self._structure_file:
             return self._structure_file
         # Set the file
-        structure_filepath = self.md_pathify(STRUCTURE_FILENAME)
+        structure_filepath = self.pathify(STRUCTURE_FILENAME)
         self._structure_file = File(structure_filepath)
         # Run the processing logic
         self.process_input_files()
@@ -925,7 +984,7 @@ class MD:
         if self._trajectory_file:
             return self._trajectory_file
         # If the file already exists then we are done
-        trajectory_filepath = self.md_pathify(TRAJECTORY_FILENAME)
+        trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         self._trajectory_file = File(trajectory_filepath)
         # Run the processing logic
         self.process_input_files()
@@ -973,12 +1032,20 @@ class MD:
         if self._structure:
             return self._structure
         # Otherwise we must set the structure
+        # Make sure the structure file exists at this point
+        if not self.structure_file.exists:
+            raise ValueError('Trying to set standard structure but file '
+                f'{self.structure_file.path} does not exist yet. Are you trying '
+                'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
         self._structure = setup_structure(self.structure_file.path)
         # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds
         if not self.register.tests.get(STABLE_BONDS_FLAG, None):
+            self._structure.bonds = self.safe_bonds
+        # Same procedure if we have coarse grain atoms
+        elif self.cg_selection:
             self._structure.bonds = self.safe_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
@@ -999,7 +1066,7 @@ class MD:
     # First frame filename
     def get_first_frame_file (self) -> str:
         # If the file already exists then send it
-        first_frame_filepath = self.md_pathify(FIRST_FRAME_FILENAME)
+        first_frame_filepath = self.pathify(FIRST_FRAME_FILENAME)
         first_frame_file = File(first_frame_filepath)
         if first_frame_file.exists:
             return first_frame_file
@@ -1015,7 +1082,7 @@ class MD:
     # Average structure filename
     def get_average_structure_file (self) -> str:
         # If the file already exists then send it
-        average_structure_filepath = self.md_pathify(AVERAGE_STRUCTURE_FILENAME)
+        average_structure_filepath = self.pathify(AVERAGE_STRUCTURE_FILENAME)
         average_structure_file = File(average_structure_filepath)
         if average_structure_file.exists:
             return average_structure_file
@@ -1028,12 +1095,18 @@ class MD:
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
     # MD metadata filename
-    def get_metadata_file (self, overwrite : bool = False) -> File:
+    def get_metadata_file (self) -> File:
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the metadata file
-        metadata_filepath = self.md_pathify(OUTPUT_METADATA_FILENAME)
+        metadata_filepath = self.pathify(OUTPUT_METADATA_FILENAME)
         metadata_file = File(metadata_filepath)
-        # If the file already exists then send it
-        if metadata_file.exists and not overwrite:
+        # If the file already exists
+        if metadata_file.exists and not must_overwrite:
             return metadata_file
         # Otherwise, generate it
         generate_md_metadata(
@@ -1049,16 +1122,22 @@ class MD:
 
     # The processed interactions
     # This is a bit exceptional since it is a value to be used and an analysis file to be generated
-    def get_processed_interactions (self, overwrite : bool = False) -> List[dict]:
+    def get_processed_interactions (self) -> List[dict]:
         # If we already have a stored value then return it
         if self._processed_interactions != None:
             return self._processed_interactions
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the processed interactions file
-        processed_interactions_filepath = self.md_pathify(OUTPUT_PROCESSED_INTERACTIONS_FILENAME)
+        processed_interactions_filepath = self.pathify(OUTPUT_PROCESSED_INTERACTIONS_FILENAME)
         processed_interactions_file = File(processed_interactions_filepath)
         # If the file already exists then processed interactions will be read from it
-        # If the overwrite argument is passed we must delete it here
-        if processed_interactions_file.exists and overwrite:
+        # If we must overwrite then we must delete it here
+        if processed_interactions_file.exists and must_overwrite:
             processed_interactions_file.remove()
         # Otherwise, process interactions
         self._processed_interactions = process_interactions(
@@ -1100,27 +1179,60 @@ class MD:
     # Assign the MD input getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
+    input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
+
+    # Internal function to set PBC selection
+    # It may parse the inputs file selection string if it is available or guess it otherwise
+    def _set_pbc_selection (self, reference_structure : 'Structure', verbose : bool = True) -> 'Selection':
+        # Otherwise we must set the PBC selection
+        if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
+        selection_string = None
+        # If there is inputs file then get the input pbc selection
+        if self.project.is_inputs_file_available():
+            if verbose: print(' Using selection string in the inputs file')
+            selection_string = self.input_pbc_selection
+        # If there is no inputs file we guess PBC atoms automatically
+        else:
+            if verbose: print(' No inputs file -> Selection string will be set automatically')
+            selection_string = 'auto'
+        # Parse the selection string using the reference structure
+        parsed_selection = None
+        # If the input PBC selection is 'auto' then guess it automatically
+        if selection_string == 'auto':
+            # To guess PBC atoms (with the current implementation) we must make sure ther eis no CG
+            if reference_structure.has_cg():
+                raise InputError('We can not guess PBC atoms in CG systems. Please set PBC atoms manually.\n'
+                    ' Use the "-pbc" argument or set the inputs file "pbc_selection" field.')
+            if verbose: print(' Guessing PBC atoms as solvent, counter ions and lipids')
+            parsed_selection = reference_structure.select_pbc_guess()
+        # If we have a valid input value then use it
+        elif selection_string:
+            if verbose: print(f' Selecting PBC atoms "{selection_string}"')
+            parsed_selection = reference_structure.select(selection_string)
+            if not parsed_selection:
+                raise InputError(f'PBC selection "{selection_string}" selected no atoms')
+        # If we have an input value but it is empty then we set an empty selection
+        else:
+            if verbose: print(' No PBC atoms selected')
+            parsed_selection = Selection()
+        # Log a few of the selected residue names
+        if verbose and parsed_selection:
+            print(f' Parsed PBC selection has {len(parsed_selection)} atoms')
+            selected_residues = reference_structure.get_selection_residues(parsed_selection)
+            selected_residue_names = list(set([ residue.name for residue in selected_residues ]))
+            limit = 3 # Show a maximum of 3 residue names
+            example_residue_names = ', '.join(selected_residue_names[0:limit])
+            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+            print('  e.g. ' + example_residue_names)
+        return parsed_selection
 
     # Periodic boundary conditions atom selection
-    def get_pbc_selection (self) -> List[int]:
+    def get_pbc_selection (self) -> 'Selection':
         # If we already have a stored value then return it
-        if self.project._pbc_selection:
+        if self.project._pbc_selection != None:
             return self.project._pbc_selection
-        # If there is no inputs file then asume there are no PBC atoms and warn the user
-        if not self.project.is_inputs_file_available():
-            warn('Since there is no inputs file we guess PBC atoms as solvent, counter ions and lipids')
-            self.project._pbc_selection = self.structure.select_pbc_guess()
-            return self.project._pbc_selection
-        # If the input PBC selection is 'auto' then set it automatically as well
-        if self.input_pbc_selection == 'auto':
-            self.project._pbc_selection = self.structure.select_pbc_guess()
-            return self.project._pbc_selection
-        # Otherwise use the input value
-        if not self.input_pbc_selection:
-            self.project._pbc_selection = Selection()
-            return self.project._pbc_selection
-        self.project._pbc_selection = self.structure.select(self.input_pbc_selection)
-        print(f'Parsed PBC selection "{self.input_pbc_selection}" -> {len(self.project._pbc_selection)} atoms')
+        # Otherwise we must set the PBC selection
+        self.project._pbc_selection = self._set_pbc_selection(self.structure)
         return self.project._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
@@ -1131,7 +1243,7 @@ class MD:
         # If we already have a stored value then return it
         if self.project._pbc_residues:
             return self.project._pbc_residues
-        # If there is no inputs file then asume there are no PBC residues and warn the user
+        # If there is no inputs file then asume there are no PBC residues
         if not self.pbc_selection:
             self.project._pbc_residues = []
             return self.project._pbc_residues
@@ -1140,6 +1252,69 @@ class MD:
         print(f'PBC residues "{self.input_pbc_selection}" -> {len(self.project._pbc_residues)} residues')
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
+
+    # Set the coare grain selection
+    # DANI: Esto algún día habría que tratar de automatizarlo
+    def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = True) -> 'Selection':
+        if verbose: print('Setting Coarse Grained (CG) atoms selection')
+        # If there is no inputs file then asum there is no CG selection
+        if not self.project.is_inputs_file_available():
+            if verbose: print(' No inputs file -> Asuming there is no CG at all')
+            return Selection()
+        # Otherwise we use the selection string from the inputs
+        if verbose: print(' Using selection string in the inputs file')
+        selection_string = self.input_cg_selection
+        # If the selection is empty, again, assume there is no CG selection
+        if not selection_string:
+            print(' Empty selection -> There is no CG at all')
+            return Selection()
+        # Otherwise, process it
+        # If we have a valid input value then use it
+        elif selection_string:
+            if verbose: print(f' Selecting CG atoms "{selection_string}"')
+            parsed_selection = reference_structure.select(selection_string)
+        # If we have an input value but it is empty then we set an empty selection
+        else:
+            if verbose: print(' No CG atoms selected')
+            parsed_selection = Selection()
+        # Lof the parsed selection size
+        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
+        # Log a few of the selected residue names
+        if verbose and parsed_selection:
+            selected_residues = reference_structure.get_selection_residues(parsed_selection)
+            selected_residue_names = list(set([ residue.name for residue in selected_residues ]))
+            limit = 3 # Show a maximum of 3 residue names
+            example_residue_names = ', '.join(selected_residue_names[0:limit])
+            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+            print('  e.g. ' + example_residue_names)
+        return parsed_selection
+
+    # Coarse grain atom selection
+    def get_cg_selection (self) -> 'Selection':
+        # If we already have a stored value then return it
+        if self.project._cg_selection:
+            return self.project._cg_selection
+        # Otherwise we must set the PBC selection
+        self.project._cg_selection = self._set_cg_selection(self.structure)
+        return self.project._cg_selection
+    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+
+    # Indices of residues in coarse grain
+    # WARNING: Do not inherit project cg residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
+    def get_cg_residues (self) -> List[int]:
+        # If we already have a stored value then return it
+        if self.project._cg_residues:
+            return self.project._cg_residues
+        # If there is no inputs file then asume there are no cg residues
+        if not self.cg_selection:
+            self.project._cg_residues = []
+            return self.project._cg_residues
+        # Otherwise we parse the selection and return the list of residue indices     
+        self.project._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
+        print(f'CG residues "{self.input_cg_selection}" -> {len(self.project._cg_residues)} residues')
+        return self.project._cg_residues
+    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
     # Atom charges
     # Inherited from project
@@ -1182,14 +1357,19 @@ class MD:
         # Otherwise it means we have input files which are not to be processed
         # So we must calculate from here the reference frame
         # Get the rest of inputs
-        atom_elements = [ atom.element for atom in self.structure.atoms ]
+        non_pbc_ions_selection = self.structure.select_ions() - self.pbc_selection
+        excluded_atoms_selection = non_pbc_ions_selection + self.structure.select_cg()
+        # If all atoms are to be excluded then set the first frame as the reference frame and stop here
+        if len(excluded_atoms_selection) == len(self.structure.atoms):
+            self._reference_frame = 0
+            return self._reference_frame
         # Find the first frame in the whole trajectory where safe bonds are respected
         self._reference_frame = get_bonds_canonical_frame(
             structure_filepath = structure_filepath,
             trajectory_filepath = trajectory_filepath,
             snapshots = self.snapshots,
             reference_bonds = self.safe_bonds,
-            atom_elements = atom_elements
+            excluded_atoms_selection = excluded_atoms_selection
         )
         return self._reference_frame
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
@@ -1224,10 +1404,16 @@ class MD:
     # ---------------------------------------------------------------------------------
 
     # RMSDs
-    def run_rmsds_analysis (self, overwrite : bool = False):
+    def run_rmsds_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_RMSDS_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_RMSDS_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # WARNING: This analysis is fast enought to use the full trajectory
         # WARNING: However, the output file size depends on the trajectory size
@@ -1245,10 +1431,16 @@ class MD:
         )
 
     # TM scores
-    def run_tmscores_analysis (self, overwrite : bool = False):
+    def run_tmscores_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_TMSCORES_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_TMSCORES_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Here we set a small frames limit since this anlaysis is a bit slow
         tmscores(
@@ -1263,10 +1455,16 @@ class MD:
         )
 
     # RMSF, atom fluctuation
-    def run_rmsf_analysis (self, overwrite : bool = False):
+    def run_rmsf_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_RMSF_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_RMSF_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # This analysis is fast and the output size depends on the number of atoms only
         # For this reason here it is used the whole trajectory with no frames limit
@@ -1278,10 +1476,16 @@ class MD:
         )
 
     # RGYR, radius of gyration
-    def run_rgyr_analysis (self, overwrite : bool = False):
+    def run_rgyr_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_RGYR_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_RGYR_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size
@@ -1297,10 +1501,16 @@ class MD:
         )
 
     # PCA, principal component analysis
-    def run_pca_analysis (self, overwrite : bool = False):
+    def run_pca_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_PCA_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_PCA_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # WARNING: This analysis will generate several output files
         # File 'pca.average.pdb' is generated by the PCA and it was used by the client but not anymore
@@ -1309,7 +1519,7 @@ class MD:
             input_topology_file = self.structure_file,
             input_trajectory_file = self.trajectory_file,
             output_analysis_filepath = output_analysis_filepath,
-            output_trajectory_projections_prefix = self.md_pathify(OUTPUT_PCA_PROJECTION_PREFIX),
+            output_trajectory_projections_prefix = self.pathify(OUTPUT_PCA_PROJECTION_PREFIX),
             snapshots = self.snapshots,
             frames_limit = 2000,
             structure = self.structure,
@@ -1323,10 +1533,16 @@ class MD:
     # DANI: Puede saltar un error de imposible alojar tanta memoria
     # DANI: Puede comerse toda la ram y que al final salte un error de 'Terminado (killed)'
     # DANI: De momento me lo salto
-    # def run_pca_contacts (self, overwrite : bool = False):
+    # def run_pca_contacts (self):
+    #     # Get the task name
+    #     task = self._get_task()
+    #     # Check if this dependency is to be overwriten
+    #     must_overwrite = task in overwritables
+    #     # Update the overwritables so this is not remade further in the same run
+    #     overwritables.discard(task)
     #     # Do not run the analysis if the output file already exists
-    #     output_analysis_filepath = self.md_pathify(OUTPUT_PCA_CONTACTS_FILENAME)
-    #     if exists(output_analysis_filepath) and not overwrite:
+    #     output_analysis_filepath = self.pathify(OUTPUT_PCA_CONTACTS_FILENAME)
+    #     if exists(output_analysis_filepath) and not must_overwrite:
     #         return
     #     pca_contacts(
     #         trajectory = self.trajectory_file.path,
@@ -1336,10 +1552,16 @@ class MD:
     #     )
 
     # RMSD per residue
-    def run_rmsd_perres_analysis (self, overwrite : bool = False):
+    def run_rmsd_perres_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_RMSD_PERRES_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_RMSD_PERRES_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size. It may be pretty big
@@ -1354,10 +1576,16 @@ class MD:
         )
 
     # RMSD pairwise
-    def run_rmsd_pairwise_analysis (self, overwrite : bool = False):
+    def run_rmsd_pairwise_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge
@@ -1374,15 +1602,21 @@ class MD:
         )
 
     # Clusters
-    def run_clusters_analysis (self, overwrite : bool = False):
+    def run_clusters_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_CLUSTERS_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_CLUSTERS_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Set the output filepaths for additional images generated in this analysis
-        output_screenshot_filepath = self.md_pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
+        output_screenshot_filepath = self.pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
         # In case the overwirte argument is passed delete all already existing outputs
-        if overwrite:
+        if must_overwrite:
             # Delete the summary if it exists
             if exists(output_analysis_filepath):
                 remove(output_analysis_filepath)
@@ -1407,10 +1641,16 @@ class MD:
         )
 
     # Distance per residue
-    def run_dist_perres_analysis (self, overwrite : bool = False):
+    def run_dist_perres_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_DIST_PERRES_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_DIST_PERRES_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
         distance_per_residue(
@@ -1423,13 +1663,19 @@ class MD:
         )
 
     # Hydrogen bonds
-    def run_hbonds_analysis (self, overwrite : bool = False):
+    def run_hbonds_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_HBONDS_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_HBONDS_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # If the analysis is to be overwritten then delete all previous outputs
-        if overwrite:
+        if must_overwrite:
             glob_pattern = glob_filename(output_analysis_filepath)
             existing_outputs = glob(glob_pattern)
             for existing_output in existing_outputs:
@@ -1456,10 +1702,16 @@ class MD:
         )
 
     # SASA, solvent accessible surfave analysis
-    def run_sas_analysis (self, overwrite : bool = False):
+    def run_sas_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_SASA_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_SASA_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Run the analysis
         sasa(
@@ -1473,16 +1725,22 @@ class MD:
         )
 
     # Energies
-    def run_energies_analysis (self, overwrite : bool = False):
+    def run_energies_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_ENERGIES_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_ENERGIES_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Run the analysis
         energies(
             input_trajectory_file = self.trajectory_file,
             output_analysis_filename = output_analysis_filepath,
-            energies_folder = self.md_pathify(ENERGIES_FOLDER),
+            energies_folder = self.pathify(ENERGIES_FOLDER),
             structure = self.structure,
             interactions = self.processed_interactions,
             charges = self.charges,
@@ -1491,28 +1749,40 @@ class MD:
         )
 
     # Pockets
-    def run_pockets_analysis (self, overwrite : bool = False):
+    def run_pockets_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_POCKETS_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_POCKETS_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Run the analysis
         pockets(
             structure_file = self.structure_file,
             trajectory_file = self.trajectory_file,
-            pockets_prefix = self.md_pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
+            pockets_prefix = self.pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
             output_analysis_filepath = output_analysis_filepath,
-            mdpocket_folder = self.md_pathify(POCKETS_FOLDER),
+            mdpocket_folder = self.pathify(POCKETS_FOLDER),
             pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
         )
 
     # Helical parameters
-    def run_helical_analysis (self, overwrite : bool = False):
+    def run_helical_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Run the analysis
         helical_parameters(
@@ -1524,10 +1794,16 @@ class MD:
         )
         
     # Markov
-    def run_markov_analysis (self, overwrite : bool = False):
+    def run_markov_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_MARKOV_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_MARKOV_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # If there are no populations file then stop here to avoid the log and calculating dependencies
         if not self.populations:
@@ -1544,10 +1820,16 @@ class MD:
         )
     # MEMBRANE ANALYSES    
     # Density
-    def run_density_analysis (self, overwrite : bool = False):
+    def run_density_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.md_pathify(OUTPUT_DENSITY_FILENAME)
-        if exists(output_analysis_filepath) and not overwrite:
+        output_analysis_filepath = self.pathify(OUTPUT_DENSITY_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Run the analysis
         density(
@@ -1558,10 +1840,16 @@ class MD:
             structure = self.structure,
             snapshots = self.snapshots,
         )
-    def run_thickness_analysis (self, overwrite : bool = False):
+    def run_thickness_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_thickness_filepath = self.md_pathify(OUTPUT_THICKNESS_FILENAME)
-        if exists(output_thickness_filepath) and not overwrite:
+        if exists(output_thickness_filepath) and not must_overwrite:
             return
         # Run the analysis
         thickness(
@@ -1571,10 +1859,16 @@ class MD:
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
-    def run_apl_analysis (self, overwrite : bool = False):
+    def run_apl_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_apl_filepath = self.md_pathify(OUTPUT_APL_FILENAME)
-        if exists(output_apl_filepath) and not overwrite:
+        if exists(output_apl_filepath) and not must_overwrite:
             return
         # Run the analysis
         area_per_lipid(
@@ -1583,10 +1877,16 @@ class MD:
             output_analysis_filepath = output_apl_filepath,
             membrane_map = self.project.membrane_map,
         )
-    def run_lipid_order_analysis (self, overwrite : bool = False):
+    def run_lipid_order_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_lipid_order_filepath = self.md_pathify(OUTPUT_LIPID_ORDER_FILENAME)
-        if exists(output_lipid_order_filepath) and not overwrite:
+        if exists(output_lipid_order_filepath) and not must_overwrite:
             return
         # Run the analysis
         lipid_order(
@@ -1596,10 +1896,16 @@ class MD:
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
-    def run_lipid_interactions_analysis (self, overwrite : bool = False):
+    def run_lipid_interactions_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_lipid_interactions_filepath = self.md_pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
-        if exists(output_lipid_interactions_filepath) and not overwrite:
+        if exists(output_lipid_interactions_filepath) and not must_overwrite:
             return
         # Run the analysis
         lipid_interactions(
@@ -1647,6 +1953,7 @@ class Project:
         # Processing and analysis instructions
         filter_selection : Union[bool, str] = False,
         pbc_selection : Optional[str] = None,
+        cg_selection : Optional[str] = None,
         image : bool = False,
         fit : bool = False,
         translation : List[float] = [0, 0, 0],
@@ -1740,6 +2047,7 @@ class Project:
         self.filter_selection = filter_selection
         # PBC selection may come from the console or from the inputs
         self._input_pbc_selection = pbc_selection
+        self._input_cg_selection = cg_selection
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1771,6 +2079,8 @@ class Project:
         # Other values which may be found/calculated on demand
         self._pbc_selection = None
         self._pbc_residues = None
+        self._cg_selection = None
+        self._cg_residues = None
         self._safe_bonds = None
         self._charges = None
         self._populations = None
@@ -1785,16 +2095,24 @@ class Project:
         self._mds = None
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
-        self.resorted_bonds_file = File(self.project_pathify(RESORTED_BONDS_FILENAME))
-        self.resorted_charges_file = File(self.project_pathify(RESORTED_CHARGES_FILENAME))
+        self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
+        self.resorted_charges_file = File(self.pathify(RESORTED_CHARGES_FILENAME))
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        register_file = File(self.project_pathify(REGISTER_FILENAME))
+        register_file = File(self.pathify(REGISTER_FILENAME))
         self.register = Register(register_file)
 
+    # This function is able to find its caller "self" function
+    # Then it finds its associated label in the requestables
+    def _get_task (self) -> str:
+        caller_data = sys._getframe().f_back
+        caller_name = caller_data.f_code.co_name
+        caller_func = getattr(self, caller_name).__func__
+        return inverted_requestables[caller_func]
+
     # Given a filename or relative path, add the project directory path at the beginning
-    def project_pathify (self, filename_or_relative_path : str) -> str:
+    def pathify (self, filename_or_relative_path : str) -> str:
         return self.directory + '/' + filename_or_relative_path
 
     # Check MD directories to be right
@@ -1956,17 +2274,17 @@ class Project:
         local_files = list_files(self.directory)
         accepted_topology_filename = find_first_accepted_topology_filename(local_files)
         if accepted_topology_filename:
-            return self.project_pathify(accepted_topology_filename)
+            return self.pathify(accepted_topology_filename)
         # In case we did not find a topology among the local files, repeat the process with the remote files
         if self.remote:
             remote_files = self.remote.available_files
             accepted_topology_filename = find_first_accepted_topology_filename(remote_files)
             if accepted_topology_filename:
-                return self.project_pathify(accepted_topology_filename)
+                return self.pathify(accepted_topology_filename)
         # If no actual topology is to be found then try with the standard topology instead
         # Check if the standard topology file is available
         # Note that we do not use standard_topology_file property to avoid generating it at this point
-        standard_topology_filepath = self.project_pathify(STANDARD_TOPOLOGY_FILENAME)
+        standard_topology_filepath = self.pathify(STANDARD_TOPOLOGY_FILENAME)
         standard_topology_file = File(standard_topology_filepath)
         if standard_topology_file.exists:
             return standard_topology_filepath
@@ -1989,7 +2307,7 @@ class Project:
         # 2 - The standard topology file will not include atom charges
         # 3 - Bonds will be guessed
         if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
-            return None
+            return MISSING_TOPOLOGY
         # Set a function to parse possible glob notation
         def parse (filepath : str) -> str:
             # If there is no glob pattern then just return the string as is
@@ -2029,13 +2347,13 @@ class Project:
     # If the file is not found try to download it
     def get_input_topology_file (self) -> Optional[File]:
         # If we already have a value then return it
-        if self._input_topology_file:
+        if self._input_topology_file != None:
             return self._input_topology_file
         # Set the input topology filepath
         input_topology_filepath = self.get_input_topology_filepath()
         # If the input filepath is None then it menas we must proceed without a topology
-        if input_topology_filepath == None:
-            self._input_topology_file = None
+        if input_topology_filepath == MISSING_TOPOLOGY:
+            self._input_topology_file = MISSING_TOPOLOGY
             return self._input_topology_file
         # If no input is passed then we check the inputs file
         # Set the file
@@ -2056,7 +2374,7 @@ class Project:
             # Find available .itp files and download each of them
             itp_filenames = [filename for filename in self.remote.available_files if filename[-4:] == '.itp']
             for itp_filename in itp_filenames:
-                itp_filepath = self.project_pathify(itp_filename)
+                itp_filepath = self.pathify(itp_filename)
                 itp_file = File(itp_filepath)
                 self.remote.download_file(itp_file)
         return self._input_topology_file
@@ -2177,6 +2495,22 @@ class Project:
         return self._input_pbc_selection
     input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
+    # CG selection may come from the console or from the inputs file
+    # Console has priority over the inputs file
+    def get_input_cg_selection (self) -> Optional[str]:
+        # If we have an internal value then return it
+        if self._input_cg_selection:
+            return self._input_cg_selection
+        # As an exception, we avoid asking for the inputs file if it is not available
+        # This input is required for some early processing steps where we do not need the inputs file for anything else
+        if not self.is_inputs_file_available():
+            return None
+        # Otherwise, find it in the inputs
+        # Get the input value, whose key must exist
+        self._input_cg_selection = self.get_input('cg_selection')
+        return self._input_cg_selection
+    input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
+
     # Set additional values infered from input values
 
     # Set if MDs are time dependent
@@ -2193,7 +2527,7 @@ class Project:
     # Set the expected output topology filename given the input topology filename
     # Note that topology formats are conserved
     def inherit_topology_filename (self) -> Optional[str]:
-        if self.input_topology_file == None:
+        if self.input_topology_file == MISSING_TOPOLOGY:
             return None
         filename = self.input_topology_file.filename
         if not filename:
@@ -2217,10 +2551,10 @@ class Project:
     def get_topology_file (self) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
-        if self._topology_file:
+        if self._topology_file != None:
             return self._topology_file
         # If the file already exists then we are done
-        self._topology_file = File(self.topology_filepath)
+        self._topology_file = File(self.topology_filepath) if self.topology_filepath != None else MISSING_TOPOLOGY
         # Run the processing logic
         self.reference_md.process_input_files()
         # Now that the file is sure to exist we return it
@@ -2250,6 +2584,12 @@ class Project:
     def get_pbc_residues (self) -> List[int]:
         return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
+
+    # Indices of residues in coarse grain
+    def get_cg_residues (self) -> List[int]:
+        return self.reference_md.cg_residues
+    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
 
      # Safe bonds
     def get_safe_bonds (self) -> List[List[int]]:
@@ -2354,9 +2694,18 @@ class Project:
         # If we already have a stored value then return it
         if self._pdb_references:
             return self._pdb_references
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the PDB references file
-        pdb_references_filepath = self.project_pathify(PDB_REFERENCES_FILENAME)
+        pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
+        # If the file already exists and we must overwrite it then delete it here
+        if pdb_references_file.exists and must_overwrite:
+            pdb_references_file.remove()
         # Otherwise we must find the value
         self._pdb_references = generate_pdb_references(
             pdb_ids = self.pdb_ids,
@@ -2366,17 +2715,14 @@ class Project:
     pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
 
     # Define the PDB references output file
-    def get_pdb_references_file (self, overwrite : bool = False) -> File:
+    def get_pdb_references_file (self) -> File:
         # Set the PDB references file
-        pdb_references_filepath = self.project_pathify(PDB_REFERENCES_FILENAME)
+        pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
-        # If the file already exists then return it
-        # However if the overwrite argument is passed then delete it and proceed to produce it again
-        if pdb_references_file.exists:
-            if not overwrite:
-                return pdb_references_file
-            pdb_references_file.remove()
-        # Ask for the PDB references thus producing the PDB references file
+        # Ask for the references thus producing the requested output file
+        # WARNING: We must always run the references, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
         self.get_pdb_references()
         return pdb_references_file
     pdb_references_file = property(get_pdb_references_file, None, None, "File including PDB refereces data (read only)")
@@ -2384,11 +2730,20 @@ class Project:
     # Protein residues mapping
     def get_protein_map (self) -> List[dict]:
         # If we already have a stored value then return it
-        if self._protein_map:
+        if self._protein_map != None:
             return self._protein_map
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the protein references file
-        protein_references_filepath = self.project_pathify(PROTEIN_REFERENCES_FILENAME)
+        protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
         protein_references_file = File(protein_references_filepath)
+        # If the file already exists and we must overwrite it then delete it here
+        if protein_references_file.exists and must_overwrite:
+            protein_references_file.remove()
         # Otherwise we must find the value
         self._protein_map = generate_protein_mapping(
             structure = self.structure,
@@ -2403,28 +2758,32 @@ class Project:
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
     # Define the output file of the protein mapping including protein references
-    def get_protein_references_file (self, overwrite : bool = False) -> File:
+    def get_protein_references_file (self) -> File:
         # Set the protein references file
-        protein_references_filepath = self.project_pathify(PROTEIN_REFERENCES_FILENAME)
+        protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
         protein_references_file = File(protein_references_filepath)
-        # If the file already exists then return it
-        # However if the overwrite argument is passed then delete it and proceed to produce it again
-        if protein_references_file.exists:
-            if not overwrite:
-                return protein_references_file
-            protein_references_file.remove()
-        # Ask for the protein map thus producing the protein references file
+        # Ask for the map thus producing the requested output file
+        # WARNING: We must always run the map, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
         self.get_protein_map()
+        # Return the file
         return protein_references_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
     # Get chain references
-    def get_chain_references (self, overwrite : bool = False) -> List[str]:
+    def get_chain_references (self) -> List[str]:
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the chains references file
-        chains_references_filepath = self.project_pathify(OUTPUT_CHAINS_FILENAME)
+        chains_references_filepath = self.pathify(OUTPUT_CHAINS_FILENAME)
         chains_references_file = File(chains_references_filepath)
-        # If the file already exists and the overwrite option is passed then remove it
-        if chains_references_file.exists and overwrite:
+        # If the file already exists and we must overwrite then remove it
+        if chains_references_file.exists and must_overwrite:
             chains_references_file.remove()
         # Call the function to generate the chain references
         chains = generate_chain_references(
@@ -2441,9 +2800,18 @@ class Project:
         # If we already have a stored value then return it
         if self._ligand_map != None:
             return self._ligand_map
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the ligand references file
-        ligand_references_filepath = self.project_pathify(LIGAND_REFERENCES_FILENAME)
+        ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
         ligand_references_file = File(ligand_references_filepath)
+        # If the file already exists and we must overwrite it then delete it here
+        if ligand_references_file.exists and must_overwrite:
+            ligand_references_file.remove()
         # Otherwise we must find the value
         self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             structure = self.structure,
@@ -2457,30 +2825,33 @@ class Project:
     ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
 
     # Define the output file of the ligand mapping including ligand references
-    def get_ligand_references_file (self, overwrite : bool = False) -> File:
+    def get_ligand_references_file (self) -> File:
         # Set the ligand references file
-        ligand_references_filepath = self.project_pathify(LIGAND_REFERENCES_FILENAME)
+        ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
         ligand_references_file = File(ligand_references_filepath)
-        # If the file already exists then return it
-        # However if the overwrite argument is passed then delete it and proceed to produce it again
-        if ligand_references_file.exists:
-            if not overwrite:
-                return ligand_references_file
-            ligand_references_file.remove()
-        # Ask for the ligand map thus producing the ligand references file
+        # Ask for the map thus producing the requested output file
+        # WARNING: We must always run the map, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
         self.get_ligand_map()
         return ligand_references_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
-    def get_membrane_map (self, overwrite : bool = False) -> List[dict]:
+    def get_membrane_map (self) -> List[dict]:
         # If we already have a stored value then return it
         if self._membrane_map:
             return self._membrane_map
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the membrane mapping file
-        mem_map_filepath = self.project_pathify(MEMBRANE_MAPPING_FILENAME)
+        mem_map_filepath = self.pathify(MEMBRANE_MAPPING_FILENAME)
         mem_map_file = File(mem_map_filepath)
         # If the file already exists then send it
-        if mem_map_file.exists and not overwrite:
+        if mem_map_file.exists and not must_overwrite:
             self._membrane_map =  load_json(mem_map_file.path)
         else:
             self._membrane_map = generate_membrane_mapping(
@@ -2508,13 +2879,19 @@ class Project:
         return self._residue_map
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
-    # Metadata filename
-    def get_metadata_file (self, overwrite : bool = False) -> File:
+    # Project metadata filename
+    def get_metadata_file (self) -> File:
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the metadata file
-        metadata_filepath = self.project_pathify(OUTPUT_METADATA_FILENAME)
+        metadata_filepath = self.pathify(OUTPUT_METADATA_FILENAME)
         metadata_file = File(metadata_filepath)
         # If the file already exists then send it
-        if metadata_file.exists and not overwrite:
+        if metadata_file.exists and not must_overwrite:
             return metadata_file
         # Set an input getter that gets the input as soon as called
         def get_input (name : str):
@@ -2537,16 +2914,22 @@ class Project:
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
     # Standard topology filename
-    def get_standard_topology_file (self, overwrite : bool = False) -> File:
+    def get_standard_topology_file (self) -> File:
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._standard_topology_file:
             return self._standard_topology_file
         # Set the standard topology file
-        standard_topology_filepath = self.project_pathify(STANDARD_TOPOLOGY_FILENAME)
+        standard_topology_filepath = self.pathify(STANDARD_TOPOLOGY_FILENAME)
         self._standard_topology_file = File(standard_topology_filepath)
         # If the file already exists and it is not to be overwirtten then send it
-        if self._standard_topology_file.exists and not overwrite:
+        if self._standard_topology_file.exists and not must_overwrite:
             return self._standard_topology_file
         # Otherwise, generate it
         generate_topology(
@@ -2554,6 +2937,7 @@ class Project:
             charges = self.charges,
             residue_map = self.residue_map,
             pbc_residues = self.pbc_residues,
+            cg_residues = self.cg_residues,
             output_topology_filepath = self._standard_topology_file.path
         )
         # Register the last modification times of the new generated standard topology file
@@ -2563,16 +2947,22 @@ class Project:
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
     # Screenshot filename
-    def get_screenshot_filename (self, overwrite : bool = False) -> str:
+    def get_screenshot_filename (self) -> str:
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
         # Set the screenshot file
-        screenshot_filepath = self.project_pathify(OUTPUT_SCREENSHOT_FILENAME)
+        screenshot_filepath = self.pathify(OUTPUT_SCREENSHOT_FILENAME)
         screenshot_file = File(screenshot_filepath)
         # If the file already exists then send it
-        if screenshot_file.exists and not overwrite:
+        if screenshot_file.exists and not must_overwrite:
             return screenshot_file
         # Otherwise, generate it
         get_screenshot(
-            input_structure_filename = self.structure_file.path,
+            structure = self.structure,
             output_screenshot_filename = screenshot_file.path,
         )
         return screenshot_file
@@ -2677,9 +3067,9 @@ analyses = {
 project_requestables = {
     **project_input_files,
     **project_processed_files,
-    'pdbs': Project.get_pdb_references_file,
-    'mapping': Project.get_protein_references_file,
-    'ligands': Project.get_ligand_references_file,
+    'pdbs': Project.get_pdb_references,
+    'mapping': Project.get_protein_map,
+    'ligands': Project.get_ligand_map,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
@@ -2695,8 +3085,11 @@ md_requestables = {
     'interactions': MD.get_processed_interactions,
     'mdmeta': MD.get_metadata_file,
 }
-# List of requestables for the console
-requestables = { **project_requestables, **md_requestables }
+# Requestables for the console
+# Note that this constant is global
+requestables.update({ **project_requestables, **md_requestables })
+# Inverted requestables for every function to know which is its 'label'
+inverted_requestables.update({ v: k for k, v in requestables.items() })
 
 # Set groups of dependencies to be requested together using only one flag
 DEPENDENCY_FLAGS = {
@@ -2793,29 +3186,28 @@ def workflow (
             tasks = [ name for name in tasks if name not in exclude ]
 
     # If the user requested to overwrite something, make sure it is in the tasks list
-    if overwrite and type(overwrite) == list:
-        for task in overwrite:
-            if task not in tasks:
-                raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
 
+    # Update the overwritable variable with the requested overwrites
+    if overwrite:
+        # If the overwrite argument is simply true then add all requestables to the overwritable
+        if type(overwrite) == bool:
+            for task in tasks:
+                overwritables.add(task)
+        # If the overwrite argument is a list of tasks then iterate them
+        elif type(overwrite) == list:
+            for task in overwrite:
+                # Make sure the task to be overwriten is among the tasks to be run
+                if task not in tasks:
+                    raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
+                # Add it to the global variable
+                overwritables.add(task)
+        else: raise ValueError('Not supported overwrite type')
     # Run the project tasks now
     project_tasks = [ task for task in tasks if task in project_requestables ]
     for task in project_tasks:
-        # Get the function to be called
+        # Get the function to be called and call it
         getter = requestables[task]
-        # Check if the current task is to run even if output files exists thus overriding them
-        must_overwrite = overwrite == True or ( type(overwrite) == list and task in overwrite )
-        # If we must overwrite then call the function with the overwrite parameter set as true
-        if must_overwrite:
-            # Make sure the function to be called has the overwrite argument
-            function_arguments = getfullargspec(getter)[0]
-            if 'overwrite' not in function_arguments:
-                raise InputError(f'Task "{task}" does not support overwrite')
-            # Finally call the function
-            getter(project, overwrite=True)
-        # Call the function with no additional arguments otherwise
-        else:
-            getter(project)
+        getter(project)
 
     # Get the MD tasks
     md_tasks = [ task for task in tasks if task in md_requestables ]
@@ -2831,21 +3223,9 @@ def workflow (
 
         # Run the MD tasks
         for task in md_tasks:
-            # Get the function to be called
+            # Get the function to be called and call it
             getter = requestables[task]
-            # Check if the current task is to run even if output files exists thus overriding them
-            must_overwrite = overwrite == True or ( type(overwrite) == list and task in overwrite )
-            # If we must overwrite then call the function with the overwrite parameter set as true
-            if must_overwrite:
-                # Make sure the function to be called has the overwrite argument
-                function_arguments = getfullargspec(getter)[0]
-                if 'overwrite' not in function_arguments:
-                    raise InputError(f'Task "{task}" does not support overwrite')
-                # Finally call the function
-                getter(md, overwrite=True)
-            # Call the function with no additional arguments otherwise
-            else:
-                getter(md)
+            getter(md)
 
         # Remove gromacs backups and other trash files from this MD
         remove_trash(md.directory)

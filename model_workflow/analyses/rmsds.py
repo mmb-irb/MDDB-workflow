@@ -24,37 +24,34 @@ def rmsds(
     structure : 'Structure',
     pbc_selection : 'Selection',
     ligand_map : List[dict],
-    default_selections : List[str] = ['protein', 'nucleic'],
     ):
 
     print('-> Running RMSDs analysis')
 
-    # Parse the selections to meaningfull atom indices
-    parsed_selections = {}
-    for default_selection in default_selections:
-        parsed_selection = structure.select(default_selection, syntax='vmd')
-        # If the default selection is not empty then add it to the list
-        if parsed_selection:
-            parsed_selections[default_selection] = parsed_selection
+    # Set the default selections to be analyzed
+    default_selections = {
+        'protein': structure.select_protein(),
+        'nucleic': structure.select_nucleic()
+    }
+
+    # Set selections to be analyzed
+    selections = { **default_selections }
 
     # If there is a ligand map then parse them to selections as well
-    if ligand_map:
-        for ligand in ligand_map:
-            selection_name = 'ligand ' + ligand['name']
-            parsed_selection = structure.select_residue_indices(ligand['residue_indices'])
-            # If the ligand has less than 3 atoms then gromacs can not fit it so it will fail
-            if len(parsed_selection) < 3:
-                continue
-            parsed_selections[selection_name] = parsed_selection
-            # If the ligand selection totally overlaps with any default selections then remove the default
-            for default_selection in default_selections:
-                default_parsed_selection = parsed_selections.get(default_selection, None)
-                if default_parsed_selection and default_parsed_selection == parsed_selection:
-                    del parsed_selections[default_selection]
+    for ligand in ligand_map:
+        selection_name = 'ligand ' + ligand['name']
+        selection = structure.select_residue_indices(ligand['residue_indices'])
+        # If the ligand has less than 3 atoms then gromacs can not fit it so it will fail
+        if len(selection) < 3: continue
+        # Add current ligand selection to be analyzed
+        selections[selection_name] = selection
+        # If the ligand selection totally overlaps with a default selection then remove the default
+        for default_selection_name, default_selection in default_selections.items():
+            if default_selection == selection: del selections[default_selection_name]
 
     # Remove PBC residues from parsed selections
     non_pbc_selections = {}
-    for selection_name, selection in parsed_selections.items():
+    for selection_name, selection in selections.items():
         # Substract PBC atoms
         non_pbc_selection = selection - pbc_selection
         # If selection after substracting pbc atoms becomes empty then discard it
@@ -67,6 +64,9 @@ def rmsds(
     if len(non_pbc_selections) == 0:
         print('  The RMSDs analysis will be skipped since there is nothing to analyze')
         return
+    
+    # Get the coarse grain selection
+    cg_selection = structure.select_cg()
 
     # The start will be always 0 since we start with the first frame
     start = 0
@@ -93,9 +93,13 @@ def rmsds(
         reference_name = REFERENCE_LABELS[reference.filename]
         for group_name, group_selection in non_pbc_selections.items():
             # Set the analysis filename
-            rmsd_analysis = 'rmsd.' + reference_name + '.' + group_name.lower() + '.xvg'
+            rmsd_analysis = f'rmsd.{reference_name}.{group_name.lower()}.xvg'
+            # If part of the selection has coarse grain atoms then skip mass weighting
+            # Otherwise Gromacs may fail since the atom name may not be in the atommass library
+            has_cg = group_selection & cg_selection
             # Run the rmsd
-            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis)
+            print(f' Reference: {reference_name}, Selection: {group_name},{" NOT" if has_cg else ""} mass weighted')
+            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis, skip_mass_weighting=has_cg)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
             # Format the mined data and append it to the overall output
@@ -120,7 +124,8 @@ def rmsd (
     reference_filepath : str,
     trajectory_filepath : str,
     selection : 'Selection', # This selection will never be empty, since this is checked previously
-    output_analysis_filepath : str):
+    output_analysis_filepath : str,
+    skip_mass_weighting : bool = False):
 
     # Convert the selection to a ndx file gromacs can read
     selection_name = 'rmsd_selection'
@@ -146,6 +151,8 @@ def rmsd (
         output_analysis_filepath,
         '-n',
         ndx_filename,
+        # Supress mass weighting if requested
+        *([ '-mw', 'no' ] if skip_mass_weighting else []),
         '-quiet'
     ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
     # Consuming the output makes the process run

@@ -1,4 +1,4 @@
-from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json
+from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
 from model_workflow.utils.gmx_spells import mine_system_atoms_count
@@ -6,7 +6,7 @@ from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 
 from re import match, search
-from typing import List, Optional, Tuple
+from typing import *
 from subprocess import run, PIPE, Popen
 from scipy.io import netcdf_file
 import mdtraj as mdt
@@ -20,20 +20,22 @@ GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntraje
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
-TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr', 'nc', 'dcd', 'mdcrd', 'pdb' }
+TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr', 'nc', 'dcd', 'crd', 'pdb' }
 STRUCTURE_SUPPORTED_FORMATS = { *TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro' }
 GROMACS_TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr'}
 
 # Check input files coherence and intergrity
 # If there is any problem then raise an input error
-def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : Optional['File']):
+def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : Union['File', Exception]):
 
     # Get a sample trajectory file and then check its format
     # All input trajectory files must have the same format
     trajectory_sample = input_trajectory_files[0]
 
     # Check input files are supported by the workflow
-    if input_topology_file != None and input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
+    if input_topology_file != MISSING_TOPOLOGY and input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
+        if input_topology_file.format in { 'pdb', 'gro' }:
+            raise InputError('A structure file is not supported as topology anymore. If there is no topology then use the argument "-top no"')
         raise InputError(f'Topology {input_topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
     if trajectory_sample.format not in TRAJECTORY_SUPPORTED_FORMATS:
         raise InputError(f'Trajectory {trajectory_sample.path} has a not supported format. Try one of these: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}')
@@ -58,7 +60,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             error_message = str(error)
             if error_message == NETCDF_DTYPE_ERROR:
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
-                pytraj_input_topology = input_topology_file if input_topology_file != None else input_structure_file
+                pytraj_input_topology = input_topology_file if input_topology_file != MISSING_TOPOLOGY else input_structure_file
                 first_corrupted_frame = find_first_corrupted_frame(pytraj_input_topology.path, trajectory_file.path)
                 print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
                 raise InputError('Corrupted input trajectory file')
@@ -92,7 +94,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
     def get_topology_and_trajectory_atoms (topology_file : 'File', trajectory_file : 'File') -> Tuple[int, int]:
         # To do so rely on different tools depending on the topology format
         # If there is no topology file then just compare strucutre and trajectory an exit
-        if topology_file == None:
+        if topology_file == MISSING_TOPOLOGY:
             # We do not have a topology atom count to return
             # Without a valid topology we can not count trajectory atoms either
             return None, None

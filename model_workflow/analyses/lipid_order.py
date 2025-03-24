@@ -1,4 +1,4 @@
-from model_workflow.tools.get_pytraj_trajectory import calculate_frame_step
+from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *

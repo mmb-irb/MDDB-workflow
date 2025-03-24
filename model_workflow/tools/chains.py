@@ -5,11 +5,12 @@ import time
 from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
-from urllib import request
 
-from model_workflow.tools.residues_library import residue_name_2_letter
-from model_workflow.utils.auxiliar import load_json, save_json, RemoteServiceError
+from model_workflow.utils.auxiliar import load_json, save_json, protein_residue_name_to_letter
 from model_workflow.utils.type_hints import *
+
+# Set analysis version
+CHAINS_VERSION = '0.1'
 
 # Get the sequence and name of the chain in the structure and request the InterProScan 
 def request_interpsocan (sequence : str) -> str:
@@ -104,7 +105,7 @@ def get_protein_parsed_chains (structure : 'Structure') -> list:
         # Iterate over the residues in the chain
         for residue in chain.residues:
             # Translate the residue letter to his equivalent in the aminoacids library
-            letter = residue_name_2_letter(residue.name, 'aminoacids')
+            letter = protein_residue_name_to_letter(residue.name)
             sequence += letter
         # If all residues are 'X' then it means this is not a protein
         if all(letter == 'X' for letter in sequence):
@@ -191,7 +192,16 @@ def generate_chain_references (
     if len(pending_jobids) == 0:
         print(' All reference chains are already in the backup file')
         return chains_data
+    # RUBEN: Separated functions so can be used in the references updater
+    get_interproscan_results(pending_jobids, interproscan_jobids, chains_data, chains_references_file)
 
+
+def get_interproscan_results (
+    pending_jobids : list,
+    interproscan_jobids : dict,
+    chains_data : list,
+    chains_references_file : 'File',
+) -> None:
     # Iterate over the jobids to check the status and get the results
     # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list 
     # until there are no more jobids in either list
@@ -213,6 +223,7 @@ def generate_chain_references (
             interproscan_result = check_interproscan_result(interproscan_jobid)
             # Get corresponding chain data and add the InterProScan results
             chain_data = next(data for data in chains_data if data['sequence'] == sequence)
+            chain_data['version'] = CHAINS_VERSION
             chain_data['interproscan'] = interproscan_result
             # Remove version and pathways so Mongo don't get confused when they change
             del chain_data['interproscan']['interproscan-version']
@@ -225,5 +236,5 @@ def generate_chain_references (
             pending_jobids.remove(interproscan_jobid)
             # Save the result
             save_json(chains_data, chains_references_file.path)
-    
+
     print(' Protein chains data obtained              ')

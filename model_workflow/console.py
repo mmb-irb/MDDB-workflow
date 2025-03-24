@@ -142,7 +142,7 @@ def main ():
             raise InputError(f'Empty selection {selection}')
         structure.chainer(selection, args.letter, args.whole_fragments)
         structure.generate_pdb_file(args.output_structure)
-        print('You got it ;)')
+        print(f'Changes written to {args.output_structure}')
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
@@ -353,6 +353,11 @@ run_parser.add_argument(
     default=None,
     help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory.\n"
         "e.g. remianing solvent and counter ion molecules, membrane lipids, etc."))
+
+run_parser.add_argument(
+    "-cg", "--cg_selection",
+    default=None,
+    help="Selection of atoms which are not actual atoms but Coarse Grained beads.")
 
 run_parser.add_argument(
     "-pcafit", "--pca_fit_selection",

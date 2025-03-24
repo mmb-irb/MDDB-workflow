@@ -1,19 +1,23 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.auxiliar import load_json
-from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, SUPPORTED_ION_ELEMENTS
+from model_workflow.utils.auxiliar import load_json, MISSING_BONDS, MISSING_TOPOLOGY
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
+from model_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
+from model_workflow.utils.gmx_spells import get_tpr_atom_count
 from model_workflow.utils.type_hints import *
 import pytraj as pt
+from MDAnalysis.topology.TPRParser import TPRParser
 from collections import Counter
 
 # Check if two sets of bonds match perfectly
 def do_bonds_match (
     bonds_1 : List[ List[int] ],
     bonds_2 : List[ List[int] ],
-    # Atom elements must be passed since we do not evaluate bonds with ions
-    atom_elements : List[str],
+    # A selection of atoms whose bonds are not evaluated
+    excluded_atoms_selection : 'Selection',
     # Set verbose as true to show which are the atoms preventing the match
     verbose : bool = False,
+    # The rest of inputs are just for logs and debug
     atoms : Optional[ List['Atom'] ] = None,
     counter_list : Optional[ List[int] ] = None
 ) -> bool:
@@ -21,18 +25,15 @@ def do_bonds_match (
     if len(bonds_1) != len(bonds_2):
         raise ValueError(f'The number of atoms is not matching in both bond lists ({len(bonds_1)} and {len(bonds_2)})')
     # Find ion atom indices
-    ion_atom_indices = set()
-    for atom_index, atom_element in enumerate(atom_elements):
-        if atom_element in SUPPORTED_ION_ELEMENTS:
-            ion_atom_indices.add(atom_index)
+    excluded_atom_indices = set(excluded_atoms_selection.atom_indices)
     # For each atom, check bonds to match perfectly
     # Order is not important
     for atom_index, (atom_bonds_1, atom_bonds_2) in enumerate(zip(bonds_1, bonds_2)):
         # Skip ion bonds
-        if atom_index in ion_atom_indices:
+        if atom_index in excluded_atom_indices:
             continue
-        atom_bonds_set_1 = set(atom_bonds_1) - ion_atom_indices
-        atom_bonds_set_2 = set(atom_bonds_2) - ion_atom_indices
+        atom_bonds_set_1 = set(atom_bonds_1) - excluded_atom_indices
+        atom_bonds_set_2 = set(atom_bonds_2) - excluded_atom_indices
         # Check atom bonds to match
         if len(atom_bonds_set_1) != len(atom_bonds_set_2) or any(bond not in atom_bonds_set_2 for bond in atom_bonds_set_1):
             if verbose:
@@ -46,7 +47,7 @@ def do_bonds_match (
                 else:
                     print(f' Mismatch in atom with index {atom_index}:')
                     it_is_atom_indices = ','.join([ str(index) for index in atom_bonds_set_1 ])
-                    print(f' It is bondes to atoms with indices {it_is_atom_indices}')
+                    print(f' It is bonded to atoms with indices {it_is_atom_indices}')
                     it_should_be_atom_indices = ','.join([ str(index) for index in atom_bonds_set_2 ])
                     print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
             # Save for failure analysis
@@ -110,8 +111,9 @@ def get_bonds_canonical_frame (
     trajectory_filepath : str,
     snapshots : int,
     reference_bonds : List[ List[int] ],
-    atom_elements : List[str],
+    excluded_atoms_selection : 'Selection',
     patience : int = 100, # Limit of frames to check before we surrender
+    verbose : bool = False,
 ) -> Optional[int]:
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
@@ -125,7 +127,7 @@ def get_bonds_canonical_frame (
     for frame_number, frame_pdb in enumerate(frames):
         # Get the actual frame number
         bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, reference_bonds, atom_elements, counter_list=counter_list):
+        if do_bonds_match(bonds, reference_bonds, excluded_atoms_selection, counter_list=counter_list, verbose=verbose):
             reference_bonds_frame = frame_number
             break
     frames.close()
@@ -153,43 +155,78 @@ def get_bonds_canonical_frame (
 
     return reference_bonds_frame
 
-# Extract bonds from a source file
-def mine_topology_bonds (bonds_source_file : 'File') -> list:
-    if not bonds_source_file or not bonds_source_file.exists:
+# Extract bonds from a source file and format them per atom
+def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ List[int] ]:
+    # If there is no topology then return no bonds at all
+    print(bonds_source_file)
+    if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
+    print('Mining atom bonds from topology file')
     # If we have the standard topology then get bonds from it
     if bonds_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
-        print(f'Bonds in the "{bonds_source_file.filename}" file will be used')
+        print(f' Bonds in the "{bonds_source_file.filename}" file will be used')
         standard_topology = load_json(bonds_source_file.path)
-        bonds = standard_topology.get('atom_bonds', None)
-        if bonds:
-            return bonds
+        atom_bonds = standard_topology.get('atom_bonds', None)
+        if atom_bonds: return atom_bonds
         print('  There were no bonds in the topology file. Is this an old file?')
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
-    if bonds_source_file.is_pytraj_supported():
-        print(f'Bonds will be mined from "{bonds_source_file.path}"')
+    elif bonds_source_file.is_pytraj_supported():
+        print(f' Bonds will be mined from "{bonds_source_file.path}"')
         pt_topology = pt.load_topology(filename=bonds_source_file.path)
-        atom_bonds = [ [] for i in range(pt_topology.n_atoms) ]
-        for bond in pt_topology.bonds:
-            a,b = bond.indices
-            # Make sure atom indices are regular integers so they are JSON serializables
-            atom_bonds[a].append(int(b))
-            atom_bonds[b].append(int(a))
-        # If there is any bonding data then return bonds
-        if any(len(bonds) > 0 for bonds in atom_bonds):
-            return atom_bonds
-        # If all bonds are empty then it means the parsing failed or the pytraj topology has no bonds
-        # We must guess them
-        print(' Bonds could not be mined')
-    # If we can not mine bonds then return None and they will be guessed further
+        raw_bonds = [ bonds.indices for bonds in pt_topology.bonds ]
+        # Sort bonds
+        atom_count = pt_topology.n_atoms
+        atom_bonds = sort_bonds(raw_bonds, atom_count)
+        # If there is any bonding data then return atom bonds
+        if any(len(bonds) > 0 for bonds in atom_bonds): return atom_bonds
+    # If we have a TPR then use our own tool
+    elif bonds_source_file.format == 'tpr':
+        print(f' Bonds will be mined from TPR file "{bonds_source_file.path}"')
+        raw_bonds = get_tpr_bonds(bonds_source_file.path)
+        # Sort bonds
+        atom_count = get_tpr_atom_count(bonds_source_file.path)
+        atom_bonds = sort_bonds(raw_bonds, atom_count)
+        # If there is any bonding data then return atom bonds
+        if any(len(bonds) > 0 for bonds in atom_bonds): return atom_bonds
+    # If we failed to mine bonds then return None and they will be guessed further
+    print (' Failed to mine bonds -> They will be guessed from atom distances and radius')
     return None
+
+# Get TPR bonds
+# Try 2 different methods and hope 1 of them works
+def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+    try:
+        bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
+    except:
+        print(' MDAnalysis failed to extract bonds. Using manual extraction...')
+        bonds = get_tpr_bonds_gromacs(tpr_filepath)
+    return bonds
+
+# Get TPR bonds using MDAnalysis
+def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+    parser = TPRParser(tpr_filepath)
+    topology = parser.parse()
+    bonds = list(topology.bonds.values)
+    return bonds
+
+# Sort bonds according to our format: a list with the bonded atom indices for each atom
+# Source data is the usual format to store bonds: a list of tuples with every pair of bonded atoms
+def sort_bonds (source_bonds : List[ Tuple[int, int] ], atom_count : int) -> List[ List[int] ]:
+    # Set a list of lists with an empty list for every atom
+    atom_bonds = [ [] for i in range(atom_count) ]
+    for bond in source_bonds:
+        a,b = bond
+        # Make sure atom indices are regular integers so they are JSON serializables
+        atom_bonds[a].append(int(b))
+        atom_bonds[b].append(int(a))
+    return atom_bonds
 
 # Get safe bonds
 # First try to mine bonds from a topology files
 # If the mining fails then search for the most stable bonds
 # If we turst in stable bonds then simply return the structure bonds
 def find_safe_bonds (
-    input_topology_file : 'File',
+    input_topology_file : Union['File', Exception],
     input_structure_file : 'File',
     input_trajectory_file : 'File',
     must_check_stable_bonds : bool,
@@ -200,6 +237,12 @@ def find_safe_bonds (
     safe_bonds = mine_topology_bonds(input_topology_file)
     if safe_bonds:
         return safe_bonds
+    # Get a selection including coarse grain atoms in the structure
+    cg_selection = structure.select_cg()
+    # If all bonds are in coarse grain the set all bonds "wrong" already
+    if len(cg_selection) == structure.atom_count:
+        safe_bonds = [ MISSING_BONDS for atom in range(structure.atom_count) ]
+        return safe_bonds
     # If failed to mine topology bonds then guess stable bonds
     print('Bonds will be guessed by atom distances and radius')
     # Find stable bonds if necessary
@@ -207,8 +250,18 @@ def find_safe_bonds (
         # Using the trajectory, find the most stable bonds
         print('Checking bonds along trajectory to determine which are stable')
         safe_bonds = get_most_stable_bonds(input_structure_file.path, input_trajectory_file.path, snapshots)
+        discard_coarse_grain_bonds(safe_bonds, cg_selection)
         return safe_bonds
     # If we trust stable bonds then simply use structure bonds
     print('Default structure bonds will be used since they have been marked as trusted')
     safe_bonds = structure.bonds
+    discard_coarse_grain_bonds(safe_bonds, cg_selection)
     return safe_bonds
+
+# Given a list of bonds, discard the ones in the coarse grain selection
+# Note that the input list will be mutated
+def discard_coarse_grain_bonds (bonds : list, cg_selection : 'Selection'):
+    # For every atom in CG, replace its bonds with a class which will raise and error when read
+    # Thus we make sure using these wrong bonds anywhere further will result in failure
+    for atom_index in cg_selection.atom_indices:
+        bonds[atom_index] = MISSING_BONDS

@@ -1,19 +1,16 @@
 import pytraj as pt
 
-from os.path import exists
 from json import load
-from pathlib import Path
-from subprocess import run, PIPE
+
+from model_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_CHARGES
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from model_workflow.utils.gmx_spells import get_tpr_charges as get_tpr_charges_gromacs
 from model_workflow.utils.type_hints import *
-
-import re
-
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
 
-def get_charges (charges_source_file : 'File') -> List[float]:
+def get_charges (charges_source_file : Union['File', Exception]) -> List[float]:
     """
     Extract charges from a source file.
 
@@ -22,9 +19,10 @@ def get_charges (charges_source_file : 'File') -> List[float]:
                  otherwise None if the file does not exist.
 
     """
-    if not charges_source_file or not charges_source_file.exists:
-        return None
-    print('Charges in the "' + charges_source_file.filename + '" file will be used')
+    # If there is no topology at all
+    if charges_source_file == MISSING_TOPOLOGY or not charges_source_file.exists:
+        return MISSING_CHARGES
+    print(f'Charges in the "{charges_source_file.path}" file will be used')
     charges = None
     # If we have the standard topology then get charges from it
     if charges_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
@@ -42,7 +40,7 @@ def get_charges (charges_source_file : 'File') -> List[float]:
     elif charges_source_file.format == 'tpr':
         charges = get_tpr_charges(charges_source_file.path)
     else:
-        raise ValueError('Charges file (' + charges_source_file.filename + ') is in a non supported format')
+        raise ValueError(f'Charges file ({charges_source_file.path}) is in a non supported format')
     return charges
 
 # Given a topology which includes charges
@@ -99,35 +97,8 @@ def get_tpr_charges (topology_filename : str) -> list:
     try:
         charges = get_tpr_charges_mdanalysis(topology_filename)
     except:
-        print('WARNING: mdanalysis failed to extract charges. Using manual extraction...')
-        charges = get_tpr_charges_manual(topology_filename)
-    return charges
-
-# This works for the new tpr format (tested in 122)
-def get_tpr_charges_manual (topology_filename : str) -> list:
-    charges = []
-    # Read the tpr file making a 'dump'
-    process = run([
-        GROMACS_EXECUTABLE,
-        "dump",
-        "-s",
-        topology_filename,
-        "-quiet"
-    ], stdout=PIPE, stderr=PIPE)
-    readable_tpr = process.stdout.decode()
-    # Mine the atomic charges
-    for line in readable_tpr.split('\n'):
-        # Skip everything which is not atomic charges data
-        if line[0:16] != '            atom':
-            continue
-        # Parse the line to get only charges
-        search = re.search(r"q=([0-9e+-. ]*),", line)
-        if search:
-            charges.append(float(search[1]))
-    if len(charges) == 0:
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Charges extraction from tpr file has failed')
+        print(' MDAnalysis failed to extract charges. Using manual extraction...')
+        charges = get_tpr_charges_gromacs(topology_filename)
     return charges
 
 # This works for the old tpr format (tested in 112)

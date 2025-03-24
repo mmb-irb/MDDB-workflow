@@ -1,11 +1,8 @@
-from os import remove
-from os.path import exists
-from json import load
-
 # Import local tools
 from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-from model_workflow.utils.auxiliar import TestFailure, get_new_letter, save_json, warn
+from model_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
+from model_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
@@ -32,12 +29,15 @@ from model_workflow.utils.type_hints import *
 # This function also sets some values in the passed MD
 
 def structure_corrector (
-    input_structure_file : 'File',
+    # Note that this is an early provisional structure
+    structure : 'Structure',
     input_trajectory_file : Optional['File'],
-    input_topology_file : Optional['File'],
+    input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
-    MD : 'MD'
+    MD : 'MD',
+    # Note that this is an early provisional atom selection
+    pbc_selection : str,
 ) -> dict:
 
     # Extract some MD features
@@ -45,9 +45,6 @@ def structure_corrector (
     register = MD.register
     mercy = MD.project.mercy
     trust = MD.project.trust
-
-    # Import the pdb file and parse it to a structure object
-    structure = Structure.from_pdb_file(input_structure_file.path)
 
     # Write the inital output structure file which will be overwritten several times further
     structure.generate_pdb_file(output_structure_file.path)
@@ -85,31 +82,39 @@ def structure_corrector (
     )
     # If safe bonds do not match structure bonds then we have to fix it
     safe_bonds_frame = None
-    atom_elements = [ atom.element for atom in structure.atoms ]
     def check_stable_bonds ():
+        # Save the current structure bonds to further compare with the safe bonds
+        current_bonds = structure.bonds
+        # Now force safe bonds in the structure even if they "match" already
+        # Note that some bonds are excluded from the check and they may be wrong in the structure
+        # e.g. coarse grain atom bonds
+        structure.bonds = safe_bonds
         # If we have been requested to skip this test then we are done
-        if not must_check_stable_bonds:
-            # Set the safe bonds as the structure bonds, just in case
-            structure.bonds = safe_bonds
-            return
+        if not must_check_stable_bonds: return
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
+        # Set some atoms which are to be skipped from these test given their "fake" nature
+        # Get a selection of ion atoms which are not in PBC
+        # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
+        # They are not taken in count when testing coherent bonds or looking for the reference frame
+        non_pbc_ions_selection = structure.select_ions() - pbc_selection
+        # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
+        excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg()
         # If bonds match from the begining we are done as well
         print('Checking default structure bonds')
-        if do_bonds_match(structure.bonds, safe_bonds, atom_elements, verbose=True, atoms=structure.atoms):
+        if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
         print(' They are wrong')
-        # Set the safe bonds as the structure bonds
-        structure.bonds = safe_bonds
         # Find the first frame in the whole trajectory where safe bonds are respected
         safe_bonds_frame = get_bonds_canonical_frame(
             structure_filepath = output_structure_file.path,
             trajectory_filepath = input_trajectory_file.path,
             snapshots = snapshots,
             reference_bonds = safe_bonds,
-            atom_elements = atom_elements
+            # Atoms whose bonds are not taken in count
+            excluded_atoms_selection = excluded_atoms_selection
         )
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
@@ -131,7 +136,7 @@ def structure_corrector (
         for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
             atom_1.coords = atom_2.coords
         # Remove the safe bonds frame since it is not required anymore
-        remove(safe_bonds_frame_filename)
+        safe_bonds_frame_structure.remove()
         # Set the modified variable as true since we have changes the structure
         # Update the structure file using the corrected structure
         print(' The structure file has been modified -> ' + output_structure_file.filename)
@@ -181,9 +186,12 @@ def structure_corrector (
     # In case there are not chains at all
     if len(chains) == 1 and ( chains[0].name == ' ' or chains[0].name == 'X' ):
         print('WARNING: chains are missing and they will be added')
-
+        # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
+        # Note that we rely in fragments (and thus in bonds) to guess chains
+        if next((True for bonds in structure.bonds if bonds == MISSING_BONDS), False):
+            raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
+                ' Please either provide a topology or set chains in the structure PDB file.')
         # Run the chainer
-        #structure.chainer()
         structure.auto_chainer()
         # Update the structure file using the corrected structure
         print(' The structure file has been modified -> ' + output_structure_file.filename)

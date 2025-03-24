@@ -1,6 +1,4 @@
-import json
-
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, MISSING_BONDS, MISSING_CHARGES
 from model_workflow.utils.type_hints import *
 
 # Generate a json file to be uploaded to the database (mongo) with topology data
@@ -9,6 +7,7 @@ def generate_topology (
     charges : List[int],
     residue_map : dict,
     pbc_residues : List[int],
+    cg_residues : List[int],
     output_topology_filepath : str
 ):
 
@@ -28,7 +27,7 @@ def generate_topology (
 
     # Set the atom bonds
     # In order to make it more standard sort atom bonds by their indices
-    atom_bonds = [ sorted(atom_indices) for atom_indices in structure.bonds ]
+    atom_bonds = [ float('nan') if atom_indices == MISSING_BONDS else sorted(atom_indices) for atom_indices in structure.bonds ]
 
     # Residue data
     structure_residues = structure.residues
@@ -59,7 +58,7 @@ def generate_topology (
         chain_names[index] = chain.name
 
     # Check we have charges and, if not, set charges as None (i.e. null for mongo)
-    atom_charges = charges if charges and len(charges) > 0 else None
+    atom_charges = charges if charges != MISSING_CHARGES and len(charges) > 0 else None
     if not atom_charges:
         print('WARNING: Topology is missing atom charges')
 
@@ -77,7 +76,8 @@ def generate_topology (
         'chain_names': chain_names,
         # Residues map
         **residue_map,
-        # Save also the pbc residues here
-        'pbc_residues': pbc_residues
+        # Save also some residue indices lists here
+        'pbc_residues': pbc_residues,
+        'cg_residues': cg_residues,
     }
     save_json(topology, output_topology_filepath)

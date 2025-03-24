@@ -1,6 +1,7 @@
 # Auxiliar generic functions and classes used along the workflow
 
-from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, YELLOW_HEADER, COLOR_END
+from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
+from model_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 
 import os
 from os import rename, listdir
@@ -52,6 +53,11 @@ def custom_excepthook (exception_class, message, traceback):
     sys.__excepthook__(exception_class, message, traceback)
 sys.excepthook = custom_excepthook
 
+# Set a special exceptions for when the topology is missing
+MISSING_TOPOLOGY = Exception('Missing topology')
+MISSING_CHARGES = Exception('Missing atom charges')
+MISSING_BONDS = Exception('Missing atom bonds')
+
 # Set a function to get the next letter from an input letter in alphabetic order
 # Return None if we run out of letters
 letters = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
@@ -62,6 +68,10 @@ def get_new_letter(current_letters : set) -> Optional[str]:
 # Given a residue name, return its single letter
 def residue_name_to_letter (residue_name : str) -> str:
     return RESIDUE_NAME_LETTERS.get(residue_name, 'X')
+
+# Given a protein residue name, return its single letter
+def protein_residue_name_to_letter (residue_name : str) -> str:
+    return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
 # Set a JSON loader with additional logic to better handle problems
 def load_json (filepath : str) -> dict: 
@@ -294,8 +304,27 @@ def request_pdb_data (pdb_id : str, query : str) -> dict:
     # Get the response
     parsed_response = json.loads(response.text)['data'][data_key]
     if parsed_response == None:
-        raise ValueError(f'PDB id {pdb_id} not found')
+        new_pdb_id = request_replaced_pdb(pdb_id)
+        if new_pdb_id:
+            parsed_response = request_pdb_data(new_pdb_id, query)
+        else:
+            print(f'PDB id {pdb_id} not found')
     return parsed_response
+
+# Use the RCSB REST API to get the replaced PDB id
+# This is useful when the PDB is obsolete and has been replaced
+def request_replaced_pdb(pdb_id):
+    query_url = 'https://data.rcsb.org/rest/v1/holdings/removed/'+pdb_id
+    response = requests.get(query_url, headers={'Content-Type': 'application/json'})
+    # Check if the response is OK
+    if response.status_code == 200:
+        try:
+            return response.json()['rcsb_repository_holdings_removed']['id_codes_replaced_by'][0]
+        except:
+            print(f'Error when mining replaced PDB id for {pdb_id}')
+            return None
+    else:
+        return None
 
 # Given a filename, set a sufix number on it, right before the extension
 # Set also the number of zeros to fill the name

@@ -23,10 +23,11 @@ from pathlib import Path
 from glob import glob
 import re
 import math
-from subprocess import run, PIPE, Popen
+from subprocess import run, PIPE
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
@@ -614,44 +615,33 @@ def set_cmip_elements (structure : 'Structure'):
                     'ERROR: Hydrogen bonded to not supported heavy atom: ' + bonded_atom_element)
         atom.element = element
 
-protein_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS',
-                    'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
-
-rna_residues = ['RA', 'RU', 'RC', 'RG']
+# Set residue names with no endings
+protein_mid_residue_names = { name for name in PROTEIN_RESIDUE_NAME_LETTERS if name[-1] not in {'N','C'} }
+nucleic_mid_residue_names = { name for name in NUCLEIC_RESIDUE_NAME_LETTERS if name[-1] not in {'5','3'} }
 
 # Change residue names in a structure to meet the CMIP requirements
 # Change terminal residue names by adding an 'N' or 'C'
 def name_terminal_residues (structure : 'Structure'):
-
+    # Iterate chains
     for chain in structure.chains:
-
-        residues = chain.residues
-
         # Check if the first residue is tagged as a terminal residue
         # If not, rename it
-        first_residue = residues[0]
-        first_residue_name = first_residue.name
+        first_residue = chain.residues[0]
         # In case it is a protein
-        if first_residue_name in protein_residues:
-            first_residue_name += 'N'
-            first_residue.name = first_residue_name
+        if first_residue.name in protein_mid_residue_names:
+            first_residue.name += 'N'
         # In case it is RNA
-        elif first_residue_name in rna_residues:
-            first_residue_name += '5'
-            first_residue.name = first_residue_name
-
+        elif first_residue.name in nucleic_mid_residue_names:
+            first_residue.name += '5'
         # Check if the last residue is tagged as 'C' terminal
         # If not, rename it
-        last_residue = residues[-1]
-        last_residue_name = last_residue.name
+        last_residue = chain.residues[-1]
         # In case it is a protein
-        if last_residue_name in protein_residues:
-            last_residue_name += 'C'
-            last_residue.name = last_residue_name
+        if last_residue.name in protein_mid_residue_names:
+            last_residue.name += 'C'
         # In case it is RNA
-        elif last_residue_name in rna_residues:
-            last_residue_name += '3'
-            last_residue.name = last_residue_name
+        elif last_residue.name in nucleic_mid_residue_names:
+            last_residue.name += '3'
 
 def mine_cmip_output (logs):
     center, density, units = (), (), ()

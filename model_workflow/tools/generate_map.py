@@ -1,9 +1,8 @@
 import sys
 import json
-import re
 import urllib.request
 
-from model_workflow.tools.residues_library import residue_name_2_letter
+from model_workflow.utils.auxiliar import protein_residue_name_to_letter
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from model_workflow.utils.type_hints import *
@@ -351,7 +350,7 @@ def get_parsed_chains (structure : 'Structure') -> list:
         sequence = ''
         residue_indices = []
         for residue in chain.residues:
-            letter = residue_name_2_letter(residue.name, 'aminoacids')
+            letter = protein_residue_name_to_letter(residue.name)
             sequence += letter
             residue_indices.append(residue.index)
         sequence_object = { 'name': name, 'sequence': sequence, 'residue_indices': residue_indices }
