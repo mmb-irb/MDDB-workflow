@@ -1,7 +1,7 @@
 import sys
 import json
 import urllib.request
-
+import numpy as np
 from model_workflow.utils.auxiliar import protein_residue_name_to_letter
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -9,30 +9,50 @@ from model_workflow.utils.type_hints import *
 
 import xmltodict
 
-from Bio import pairwise2
-from Bio.pairwise2 import format_alignment
+from Bio import Align
 from Bio.Blast import NCBIWWW
-
-# Bio.SubsMat library shows a huge deprecation warning
-# This is disturbing so we supress its output while importing it
+from Bio.Align import substitution_matrices, Alignment
 
 # Save current stderr to further restore it
 stderr_backup = sys.stderr
 # Suppress stderr
-sys.stderr = None
+#sys.stderr = None
 # Import the function
-from Bio.SubsMat import MatrixInfo
+#from Bio.SubsMat import MatrixInfo
 # Restore stderr
-sys.stderr = stderr_backup
+#sys.stderr = stderr_backup
 
-# from Bio import Align
-# from Bio.Align import substitution_matrices
+# AGUS: Necesitamos que la secuencia de aa alineada tenga gaps identificados con guiones y pairwaise2 (biopython < 1.80) no lo hace
+# AGUS: Para actualizar a biopython >= 1.80 pairwaise2 ya no existe y no podemos obtener el mismo outoput que necesitábamos
+# AGUS: Esta función parece resolver el problema: https://github.com/biopython/biopython/issues/4769
+# Set the aligner 
+aligner = Align.PairwiseAligner(mode='local')
+aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
+aligner.open_gap_score = -10
+aligner.extend_gap_score = -0.5
+def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
+    coords = alignment.coordinates
 
-# # Set the aligner
-# aligner = Align.PairwiseAligner(mode='local')
-# aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
-# aligner.open_gap_score = -10
-# aligner.extend_gap_score = -0.5
+    # We need to add two columns on each side of the coordinates matrix.
+    # The first column will always point to the start of the sequences,
+    # hence filled with zeros.
+    new_coords = np.zeros((2, coords.shape[1] + 4), dtype=int)
+
+    # The last w column will always point to the end of sequences,
+    # hence filled with the length of the respective sequences.
+    target_len = len(alignment.sequences[0])
+    query_len = len(alignment.sequences[1])
+    last_col = np.array([target_len, query_len])
+    new_coords[:, -1] = last_col
+
+    # The middle columns will contain the original coordinates.
+    new_coords[:, 2:-2] = coords
+
+    # The second and one before last columns will point to the end of sequence,
+    # with less unaligned positions.
+    new_coords[:, 1] = coords[:, 0] - coords[:, 0].min()
+    new_coords[:, -2] = coords[:, -1] + (last_col - coords[:, -1]).min()
+    return Alignment(sequences=alignment.sequences, coordinates=new_coords)
 
 # Map the structure aminoacids sequences against the standard reference sequences
 # References are uniprot accession ids and they are optional
@@ -373,11 +393,12 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
         return None
 
     # Return the new sequence as best aligned as possible with the reference sequence
-    alignments = pairwise2.align.localds(ref_sequence, new_sequence, MatrixInfo.blosum62, -10, -0.5)
+    #alignments = pairwise2.align.localds(ref_sequence, new_sequence, MatrixInfo.blosum62, -10, -0.5)
     # DANI: Habría que hacerlo de esta otra forma según el deprecation warning (arriba hay más código)
     # DANI: El problema es que el output lo tiene todo menos la sequencia en formato alienada
-    # DANI: i.e. formato '----VNLTT', que es justo el que necesito
-    #alignments = aligner.align(ref_sequence, new_sequence)
+    # DANI: i.e. formato '----VNLTT' (con los gaps identificados con guiones), que es justo el que necesito
+    # Actualized code for biopython >= 1.80
+    alignments = aligner.align(ref_sequence, new_sequence)
 
     # In case there are no alignments it means the current chain has nothing to do with this reference
     # Then an array filled with None is returned
@@ -387,12 +408,15 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
     # Several alignments may be returned, specially when it is a difficult or impossible alignment
     # Output format example: '----VNLTT'
     best_alignment = alignments[0]
-    aligned_sequence = best_alignment[1]
-    score = alignments[0][2]
-    # WARNING: Do not use 'aligned_sequence' length here since it has the total sequence length
+    best_alignment_with_gaps = add_leading_and_trailing_gaps(best_alignment)
+    # Extract the allignment sequences
+    #aligned_ref, aligned_sequence = best_alignment_with_gaps.sequences
+    aligned_ref = best_alignment_with_gaps[0] # AGUS: Puede ser útil en el futuro
+    aligned_sequence = best_alignment_with_gaps[1]
+    # Obtain the score of the alignment
+    score = best_alignment.score
+    # Calculate the normalized score
     normalized_score = score / len(new_sequence)
-    if verbose:
-        print(format_alignment(*alignments[0]))
 
     # If the normalized score does not reaches the minimum we consider the alignment is not valid
     # It may happen when the reference goes for a specific chain but we must map all chains
@@ -417,7 +441,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
         # Get the current residue of the new sequence
         equivalent_letter = new_sequence[aligned_index]
         if not letter == equivalent_letter:
-            raise SystemExit('Something was wrong :S')
+            raise SystemExit(f'Something was wrong at position {l} :S')
         # 'X' residues cannot be mapped since reference sequences should never have any 'X'
         if letter == 'X':
             aligned_mapping.append(None)

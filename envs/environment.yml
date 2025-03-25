@@ -9,10 +9,7 @@ dependencies:
   # From ambertools we use pytraj mostly
   - ambertools
   # From biopython we use the sequence alignment tools
-  # WARNING: Functions we use from biopython do not exist in further versions
-  # WARNING: Implementation of new versions is half done (code is comented) but limitations were found
-  # WARNING: Upgrading this dependency may be difficult
-  - biopython=1.79
+  - biopython>1.79
   # CMIP is used for the energies analysis
   - bioconda::cmip
   # Fpocket is used for the pockets analysis
