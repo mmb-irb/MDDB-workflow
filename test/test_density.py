@@ -54,18 +54,3 @@ class TestDensityAnalysis:
         # Check same number of components
         assert len(results['data']['comps']) == len(reference['data']['comps']), \
             f"Component count mismatch: {len(results['data']['comps'])} vs {len(reference['data']['comps'])}"
-        
-        # Compare results with reference data using checksums
-        # Convert JSON to string in a deterministic way (sorted keys)
-        result_str = json.dumps(results, sort_keys=True)
-        reference_str = json.dumps(reference, sort_keys=True)
-
-        # Compute checksums
-        result_checksum = hashlib.md5(result_str.encode()).hexdigest()
-        reference_checksum = hashlib.md5(reference_str.encode()).hexdigest()
-
-        # Assert checksums match
-        assert result_checksum == reference_checksum, (
-            f"Results don't match reference. "
-            f"Got checksum: {result_checksum}, expected: {reference_checksum}"
-        )

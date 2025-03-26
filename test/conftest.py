@@ -1,12 +1,11 @@
 import os
 import pytest
-import tempfile
-from pathlib import Path
-
-from model_workflow.utils.remote import Remote
 from model_workflow.utils.file import File
-from model_workflow.utils.structures import Structure, Selection
+from model_workflow.utils.remote import Remote
+from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import load_json
+from unittest.mock import patch
+from io import StringIO
 
 # Constants
 DATABASE_URL = "https://irb-dev.mddbr.eu/api/"
@@ -101,3 +100,10 @@ def membrane_map(remote_client, test_data_dir):
     file_obj = load_json(file_obj.path)
     return file_obj
 
+
+@pytest.fixture
+def capture_stdout():
+    """Capture stdout for testing console output"""
+    buffer = StringIO()
+    with patch('sys.stdout', buffer):
+        yield buffer
