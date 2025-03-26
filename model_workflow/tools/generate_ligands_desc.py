@@ -1,11 +1,8 @@
 import os
-import sys
 import json
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import rdFingerprintGenerator
-from rdkit.Chem.Draw import IPythonConsole
-from rdkit import DataStructs
 from mordred import Calculator, descriptors
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
