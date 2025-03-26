@@ -3,6 +3,29 @@ from subprocess import run, PIPE, Popen
 from math import ceil
 
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, INCOMPLETE_PREFIX, GREY_HEADER, COLOR_END
+from model_workflow.utils.type_hints import *
+
+def calculate_frame_step(snapshots, reduced_trajectory_frames_limit):
+    # Calculate the step between frames in the reduced trajectory to match the final number of frames
+    # WARNING: Since the step must be an integer the thorical step must be rounded
+    # This means the specified final number of frames may not be accomplished, but it is okey
+    # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
+    # This means the final number of frames will be the specified or less
+    # CRITICAL WARNING:
+    # This formula is exactly the same that the client uses to request stepped frames to the API
+    # This means that the client and the workflow are coordinated and these formulas must not change
+    # If you decide to change this formula (in both workflow and client)...
+    # You will have to run again all the database analyses with reduced trajectories
+    step = ceil(snapshots / reduced_trajectory_frames_limit)
+
+    # Calculate also the final number of frames given the current step and return this value
+    # WARNING: It may seem that the final number of frames is math.floor(snapshots / step)
+    # HOWEVER, the frame 0 also counts so it would be math.floor() + 1
+    # HOWEVER, when snapshots / step % 0, the last frame is not returned
+    # For this reason, the final number of frames is equal to the ceiling of the division
+    frames = ceil(snapshots / step)
+
+    return step, frames
 
 # Get a reduced version of the provided trajectory
 # Frames are taken along the whole trajectory
@@ -35,16 +58,7 @@ def get_reduced_trajectory (
     incomplete_trajectory_file = input_trajectory_file.get_prefixed_file(INCOMPLETE_PREFIX)
 
     # Calculate the step between frames in the reduced trajectory to match the final number of frames
-    # WARNING: Since the step must be an integer the thorical step must be rounded
-    # This means the specified final number of frames may not be accomplished, but it is okey
-    # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
-    # This means the final number of frames will be the specified or less
-    # CRITICAL WARNING:
-    # This formula is exactly the same that the client uses to request stepped frames to the API
-    # This means that the client and the workflow are coordinated and these formulas must not change
-    # If you decide to change this formula (in both workflow and client)...
-    # You will have to run again all the database analyses with reduced trajectories
-    step = ceil(snapshots / reduced_trajectory_frames_limit)
+    step, frames = calculate_frame_step(snapshots, reduced_trajectory_frames_limit)
 
     # Create the reduced trajectory if it does not exist yet
     if not output_trajectory_file.exists:
@@ -77,12 +91,7 @@ def get_reduced_trajectory (
         # Once the trajectory is complete we rename it as complete
         incomplete_trajectory_file.rename_to(output_trajectory_file)
 
-    # Calculate also the final number of frames given the current step and return this value
-    # WARNING: It may seem that the final number of frames is math.floor(snapshots / step)
-    # HOWEVER, the frame 0 also counts so it would be math.floor() + 1
-    # HOWEVER, when snapshots / step % 0, the last frame is not returned
-    # For this reason, the final number of frames is equal to the ceiling of the division
-    frames = ceil(snapshots / step)
+    
 
     # Return gromacs logs
     return output_trajectory_file.path, step, frames

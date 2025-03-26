@@ -1,6 +1,6 @@
 import urllib.request
 import json
-
+from tqdm import tqdm
 from model_workflow.utils.auxiliar import load_json, save_json, InputError
 from model_workflow.utils.type_hints import *
 
@@ -91,25 +91,32 @@ class Remote:
         atom_selection : Optional[str] = None,
         format : Optional[str] = None
     ):
-        # Set the base URL
-        request_url = self.url + '/trajectory'
-        # Additional arguments to be included in the URL
-        arguments = []
-        if frame_selection:
-            arguments.append(f'frames={frame_selection}')
-        if atom_selection:
-            arguments.append(f'atoms={atom_selection}')
-        if format:
-            arguments.append(f'format={format}')
-        if len(arguments) > 0:
-            request_url += '?' + '&'.join(arguments)
+        if  [frame_selection, atom_selection, format] == [None,None,'xtc']:
+            # If we dont have a specific request, we can download the main trajectory 
+            # directly from the trajectory.xtc file so it is faster
+            request_url = f'{self.url}/files/trajectory.xtc'
+        else:
+            # Set the base URL
+            request_url = self.url + '/trajectory'
+            # Additional arguments to be included in the URL
+            arguments = []
+            if frame_selection:
+                arguments.append(f'frames={frame_selection}')
+            if atom_selection:
+                arguments.append(f'atoms={atom_selection}')
+            if format:
+                arguments.append(f'format={format}')
+            if len(arguments) > 0:
+                request_url += '?' + '&'.join(arguments)
         # Send the request
-        print(f'Downloading main trajectory ({output_file.path})\n')
+        print(f'Downloading main trajectory ({output_file.path})')
         try:
-            urllib.request.urlretrieve(request_url, output_file.path)
+            with tqdm(unit = 'B', unit_scale = True, unit_divisor = 1024, 
+                      miniters = 1, desc = ' Progress', leave=False) as t:
+                urllib.request.urlretrieve(request_url, output_file.path, reporthook = my_hook(t))
         except:
             raise Exception('Something went wrong when downloading the main trajectory: ' + request_url)
-        
+
     # Download the inputs file
     def download_inputs_file (self, output_file : 'File'):
         request_url = self.url + '/inputs'
@@ -127,3 +134,44 @@ class Remote:
         if is_json:
             file_content = load_json(output_file.path)
             save_json(file_content, output_file.path, indent = 4)
+
+    # Get analysis data
+    def download_analysis_data(self, analysis_type: str, output_file: 'File'):
+        request_url = f'{self.url}/analyses/{analysis_type}'
+        print(f'Downloading {analysis_type} analysis data\n')
+        try:
+            urllib.request.urlretrieve(request_url, output_file.path)
+            # Format JSON if needed
+            file_content = load_json(output_file.path)
+            save_json(file_content, output_file.path, indent=4)
+        except:
+            raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url}')
+        
+# from https://gist.github.com/leimao/37ff6e990b3226c2c9670a2cd1e4a6f5
+def my_hook(t):
+    """Wraps tqdm instance.
+    Don't forget to close() or __exit__()
+    the tqdm instance once you're done with it (easiest using `with` syntax).
+    Example
+    -------
+    >>> with tqdm(...) as t:
+    ...     reporthook = my_hook(t)
+    ...     urllib.urlretrieve(..., reporthook=reporthook)
+    """
+    last_b = [0]
+
+    def update_to(b=1, bsize=1, tsize=None):
+        """
+        b  : int, optional
+            Number of blocks transferred so far [default: 1].
+        bsize  : int, optional
+            Size of each block (in tqdm units) [default: 1].
+        tsize  : int, optional
+            Total size (in tqdm units). If [default: None] remains unchanged.
+        """
+        if tsize is not None:
+            t.total = tsize
+        t.update((b - last_b[0]) * bsize)
+        last_b[0] = b
+
+    return update_to

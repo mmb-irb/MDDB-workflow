@@ -58,6 +58,10 @@ from model_workflow.analyses.rmsf import rmsf
 from model_workflow.analyses.rgyr import rgyr
 from model_workflow.analyses.pca import pca
 from model_workflow.analyses.density import density
+from model_workflow.analyses.thickness import thickness
+from model_workflow.analyses.area_per_lipid import area_per_lipid
+from model_workflow.analyses.lipid_order import lipid_order
+from model_workflow.analyses.lipid_interactions import lipid_interactions
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1814,6 +1818,7 @@ class MD:
             #transitions = self.transitions,
             rmsd_selection = PROTEIN_AND_NUCLEIC,
         )
+    # MEMBRANE ANALYSES    
     # Density
     def run_density_analysis (self):
         # Get the task name
@@ -1826,9 +1831,6 @@ class MD:
         output_analysis_filepath = self.pathify(OUTPUT_DENSITY_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
             return
-        if not getattr(self.project, 'membrane_map', None):
-            print('Membrane map is not available. Skipping density analysis')
-            return
         # Run the analysis
         density(
             input_structure_filepath = self.structure_file.path,
@@ -1836,6 +1838,81 @@ class MD:
             output_analysis_filepath = output_analysis_filepath,
             membrane_map = self.project.membrane_map,
             structure = self.structure,
+            snapshots = self.snapshots,
+        )
+    def run_thickness_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
+        # Do not run the analysis if the output file already exists
+        output_thickness_filepath = self.md_pathify(OUTPUT_THICKNESS_FILENAME)
+        if exists(output_thickness_filepath) and not must_overwrite:
+            return
+        # Run the analysis
+        thickness(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_thickness_filepath,
+            membrane_map = self.project.membrane_map,
+            snapshots = self.snapshots,
+        )
+    def run_apl_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
+        # Do not run the analysis if the output file already exists
+        output_apl_filepath = self.md_pathify(OUTPUT_APL_FILENAME)
+        if exists(output_apl_filepath) and not must_overwrite:
+            return
+        # Run the analysis
+        area_per_lipid(
+            input_structure_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_apl_filepath,
+            membrane_map = self.project.membrane_map,
+        )
+    def run_lipid_order_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
+        # Do not run the analysis if the output file already exists
+        output_lipid_order_filepath = self.md_pathify(OUTPUT_LIPID_ORDER_FILENAME)
+        if exists(output_lipid_order_filepath) and not must_overwrite:
+            return
+        # Run the analysis
+        lipid_order(
+            input_trajectory_filepath = self.trajectory_file.path,
+            topology_file=self.project.standard_topology_file,
+            output_analysis_filepath = output_lipid_order_filepath,
+            membrane_map = self.project.membrane_map,
+            snapshots = self.snapshots,
+        )
+    def run_lipid_interactions_analysis (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in overwritables
+        # Update the overwritables so this is not remade further in the same run
+        overwritables.discard(task)
+        # Do not run the analysis if the output file already exists
+        output_lipid_interactions_filepath = self.md_pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
+        if exists(output_lipid_interactions_filepath) and not must_overwrite:
+            return
+        # Run the analysis
+        lipid_interactions(
+            input_trajectory_filepath = self.trajectory_file.path,
+            topology_file=self.project.standard_topology_file,
+            output_analysis_filepath = output_lipid_interactions_filepath,
+            membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
         
@@ -2775,12 +2852,15 @@ class Project:
         mem_map_file = File(mem_map_filepath)
         # If the file already exists then send it
         if mem_map_file.exists and not must_overwrite:
-            return load_json(mem_map_file.path)
-        self._membrane_map = generate_membrane_mapping(
-            structure = self.structure,
-            topology_file=self.standard_topology_file,
-            structure_file=self.structure_file,
-        )
+            self._membrane_map =  load_json(mem_map_file.path)
+        else:
+            self._membrane_map = generate_membrane_mapping(
+                structure = self.structure,
+                topology_file=self.standard_topology_file,
+                structure_file=self.structure_file,
+            )   
+        if self._membrane_map is None or self._membrane_map['n_mems'] == 0:
+            print('No membrane available. Related analyses will be skipped.')
         return self._membrane_map
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
@@ -2976,7 +3056,11 @@ analyses = {
     'rmsf': MD.run_rmsf_analysis,
     'sas': MD.run_sas_analysis,
     'tmscore': MD.run_tmscores_analysis,
-    'density': MD.run_density_analysis
+    'density': MD.run_density_analysis,
+    'thickness': MD.run_thickness_analysis,
+    'apl': MD.run_apl_analysis,
+    'lorder': MD.run_lipid_order_analysis,
+    'linter': MD.run_lipid_interactions_analysis,
 }
 
 # Project requestable tasks
@@ -2991,6 +3075,7 @@ project_requestables = {
     'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
     'membrane': Project.get_membrane_map, 
+    'membranes': Project.get_membrane_map, 
 }
 # MD requestable tasks
 md_requestables = {
