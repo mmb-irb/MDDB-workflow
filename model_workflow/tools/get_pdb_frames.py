@@ -38,11 +38,12 @@ def get_pdb_frames (
         # Get the current directory at this point and use it to delete old files, in case we change the directory
         cwd = os.getcwd()
         # Create a progress bar
-        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=min(frames_count, patience), unit='frame')
+        n_frames = min(frames_count, patience)
+        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=n_frames, unit='frame')
         # Or print an empty line for the reprint to not delete a previous log
         else: print()
         # Extract each frame in pdb format
-        for f in range(frames_count):
+        for f in range(n_frames):
             # Get the actual frame number
             # We display latter the frame with a +1 to make it 1-based instead of 0-based
             frame_number = f * frames_step

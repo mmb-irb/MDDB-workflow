@@ -130,11 +130,6 @@ def get_bonds_canonical_frame (
         if do_bonds_match(bonds, reference_bonds, excluded_atoms_selection, counter_list=counter_list, verbose=verbose):
             reference_bonds_frame = frame_number
             break
-        # If we didn't find a canonical frame at this point we probablty won't
-        if frame_number >= patience:
-            break
-        # Give it an extra line for the PDB frames logger to earse it so we do not loose previous logs
-        if verbose: print()
     frames.close()
     # If no frame has the canonical bonds then we return None
     if reference_bonds_frame == None:
