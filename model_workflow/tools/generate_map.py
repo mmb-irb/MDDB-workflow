@@ -81,7 +81,7 @@ def generate_protein_mapping (
     # If forced references is a list of dictionaries then it means the input is wrongly formatted
     # This may happen since the inputs file is in YAML format, and a simple hyphen makes the difference
     # We can fix it from here anyway
-    if type(forced_references) == list and type(forced_references[0]) == dict:
+    if type(forced_references) == list and len(forced_references) > 0 and type(forced_references[0]) == dict:
         forced_references = { k: v for fr in forced_references for k, v in fr.items() }
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
     strict_references = type(forced_references) == dict
