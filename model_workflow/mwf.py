@@ -1848,7 +1848,7 @@ class MD:
         # Update the overwritables so this is not remade further in the same run
         overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_thickness_filepath = self.md_pathify(OUTPUT_THICKNESS_FILENAME)
+        output_thickness_filepath = self.pathify(OUTPUT_THICKNESS_FILENAME)
         if exists(output_thickness_filepath) and not must_overwrite:
             return
         # Run the analysis
@@ -1867,7 +1867,7 @@ class MD:
         # Update the overwritables so this is not remade further in the same run
         overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_apl_filepath = self.md_pathify(OUTPUT_APL_FILENAME)
+        output_apl_filepath = self.pathify(OUTPUT_APL_FILENAME)
         if exists(output_apl_filepath) and not must_overwrite:
             return
         # Run the analysis
@@ -1885,7 +1885,7 @@ class MD:
         # Update the overwritables so this is not remade further in the same run
         overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_lipid_order_filepath = self.md_pathify(OUTPUT_LIPID_ORDER_FILENAME)
+        output_lipid_order_filepath = self.pathify(OUTPUT_LIPID_ORDER_FILENAME)
         if exists(output_lipid_order_filepath) and not must_overwrite:
             return
         # Run the analysis
@@ -1904,7 +1904,7 @@ class MD:
         # Update the overwritables so this is not remade further in the same run
         overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_lipid_interactions_filepath = self.md_pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
+        output_lipid_interactions_filepath = self.pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
         if exists(output_lipid_interactions_filepath) and not must_overwrite:
             return
         # Run the analysis
