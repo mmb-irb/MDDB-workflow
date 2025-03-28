@@ -3,12 +3,14 @@ import inspect
 import model_workflow.utils.vmd_spells as vmd_spells
 from model_workflow.utils.auxiliar import load_json, load_yaml
 from model_workflow.tools.process_interactions import process_interactions, load_interactions
+from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+
 
 class TestVMD:
     @pytest.fixture(scope="session")
     def test_accession(self):
         """Override the default accession with a test-specific one"""
-        return "A01VD.1"  # Different accession for this test file
+        return "A01JP.1"  # Different accession for this test file
 
     @pytest.fixture(scope="session")
     def analysis_type(self):
@@ -39,8 +41,8 @@ class TestVMD:
         assert result == js_bonds
 
 
-    # Test for get_interface_atom_indices
-    def test_get_interface_atom_indices(self, analysis_file, structure, structure_file, trajectory_file, inputs_file):
+    # Test for get_interface_atom_indices and get_covalent_bonds_between
+    def test_get_interface(self, analysis_file, structure, structure_file, trajectory_file, inputs_file):
         ref_inter = load_interactions (analysis_file, structure)
 
         inputs_file = load_yaml(inputs_file.path)
@@ -48,9 +50,16 @@ class TestVMD:
         signature = inspect.signature(process_interactions)
         distance_cutoff = signature.parameters['distance_cutoff'].default
         
+        reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
+        structure_file,
+        trajectory_file,
+        1214,
+        1000,
+        )
+        
         out_inter = vmd_spells.get_interface_atom_indices(
             structure_file.path,
-            trajectory_file.path, # we should be using reduced_trajectory_filepath, but snapshots < 50
+            reduced_trajectory_filepath, # we should be using reduced_trajectory_filepath, but snapshots < 50
             inputs_file['interactions'][0]['selection_1'],
             inputs_file['interactions'][0]['selection_2'],
             distance_cutoff)
@@ -62,6 +71,9 @@ class TestVMD:
         assert residue_indices_1 == ref_inter[0]['interface_indices_1']
         assert residue_indices_2 == ref_inter[0]['interface_indices_2']
 
-    # Test for get_covalent_bonds_between
-    def test_get_covalent_bonds_between(self):
-        pass
+
+        strong_bonds = vmd_spells.get_covalent_bonds_between(structure_file.path, 
+                                                             inputs_file['interactions'][0]['selection_1'],
+                                                             inputs_file['interactions'][0]['selection_2'])
+        
+        assert ref_inter[0]['strong_bonds'] == [list(bond) for bond in strong_bonds]
