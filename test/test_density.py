@@ -2,8 +2,6 @@ import pytest
 import os
 from model_workflow.utils.auxiliar import load_json
 from model_workflow.analyses.density import density
-import hashlib
-import json
 
 
 class TestDensityAnalysis:
