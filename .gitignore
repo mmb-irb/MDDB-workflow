@@ -2,3 +2,4 @@
 __pycache__
 model_workflow.egg-info
 mwf.tar.gz
+test/test_data/
