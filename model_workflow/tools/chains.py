@@ -6,7 +6,7 @@ from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 
-from model_workflow.utils.auxiliar import load_json, save_json, protein_residue_name_to_letter
+from model_workflow.utils.auxiliar import warn,load_json, save_json, protein_residue_name_to_letter
 from model_workflow.utils.type_hints import *
 
 # Set analysis version
@@ -202,10 +202,17 @@ def get_interproscan_results (
     chains_data : list,
     chains_references_file : 'File',
 ) -> None:
+    # Set the timeout for the InterProScan jobs
+    # AGUS: a veces ha llegado a tardar ~6 minutos que es excesivo, creo que  minutos es suficiente tiempo de espera
+    TIMEOUT = 300  # 5 min (seg)
+    start_time = time.time()
     # Iterate over the jobids to check the status and get the results
     # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list 
     # until there are no more jobids in either list
     while len(pending_jobids) >= 1:
+        if time.time() - start_time > TIMEOUT:
+            warn("Waiting time exceeded the limit. Chains data could not be obtained. Exiting analysis.")
+            return
         time.sleep(3)  # Wait for 3 seconds
         print(f' We are still waiting for {len(pending_jobids)} jobs to finish', end='\r')
         for sequence, interproscan_jobid in interproscan_jobids.items():
