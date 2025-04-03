@@ -1,3 +1,5 @@
+from os import remove
+
 # Import local tools
 from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
@@ -136,7 +138,7 @@ def structure_corrector (
         for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
             atom_1.coords = atom_2.coords
         # Remove the safe bonds frame since it is not required anymore
-        safe_bonds_frame_structure.remove()
+        remove(safe_bonds_frame_filename)
         # Set the modified variable as true since we have changes the structure
         # Update the structure file using the corrected structure
         print(' The structure file has been modified -> ' + output_structure_file.filename)
