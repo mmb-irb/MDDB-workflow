@@ -1,7 +1,7 @@
 name: mwf_env
 channels:
-  - anaconda
   - conda-forge
+  - nodefaults
 dependencies:
   - python=3.9
   # Use pyyaml to read the inputs.yaml file
