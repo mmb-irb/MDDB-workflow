@@ -1,6 +1,8 @@
 # Main handler of the toolbelt
 import os
 import math
+import numpy as np
+import re
 from scipy.special import comb # DANI: Substituye al math.comb porque fué añadido en python 3.8 y nosotros seguimos en 3.7
 from bisect import bisect
 from typing import Optional, Union, Tuple, List, Generator, Set
@@ -512,6 +514,12 @@ class Residue:
     def get_bonded_residues (self) -> List['Residue']:
         return [ self.structure.residues[residue_index] for residue_index in self.get_bonded_residue_indices() ]
 
+    # Geiven another residue, check if it is bonded with this resiude
+    def is_bonded_with_residue (self, other : 'Residue') -> bool:
+        bonded_atom_indices = set(self.get_bonded_atom_indices())
+        if next((index for index in other.atom_indices if index in bonded_atom_indices), None) != None: return True
+        return False
+
     # Get the residue biochemistry classification
     # WARNING: Note that this logic will not work in a structure without hydrogens
     # Available classifications:
@@ -977,6 +985,14 @@ class Chain:
     # Ask if the current chain has at least one coarse grain atom/residue
     def has_cg (self) -> bool:
         return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
+    
+    # Find a residue by its number and insertion code
+    def get_residue_by_number (self, number : int, icode : str = '') -> Optional['Residue']:
+        # Iterate chain residues
+        for residue in self.residues:
+            if residue.number == number and residue.icode == icode:
+                return residue
+        return None
 
 # A structure is a group of atoms organized in chains and residues
 class Structure:
@@ -1209,9 +1225,16 @@ class Structure:
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
 
     # Set the structure from a pdb file
+    # You may filter the PDB content for a specific model
+    # Some weird numeration systems are not supported and, when encountered, they are ignored
+    # In these cases we set our own numeration system
+    # Set the flexible numeration argument as false to avoid this behaviour, thus crashing instead
     @classmethod
-    def from_pdb (cls, pdb_content : str):
-        pdb_lines = pdb_content.split('\n')
+    def from_pdb (cls, pdb_content : str, model : Optional[int] = None, flexible_numeration : bool = True):
+        # Filter the PDB content in case a model was passed
+        filtered_pdb_content = filter_model(pdb_content, model) if model else pdb_content
+        # Split the PDB content in lines
+        pdb_lines = filtered_pdb_content.split('\n')
         # Before we start, we must guess the numeration system
         # To do so mine all residue numbers
         all_residue_number_characters = set()
@@ -1228,9 +1251,10 @@ class Structure:
         all_residue_number_characters.discard(' ')
         # If we find a non-numerical and non-alphabetical character then we assume it has a weird numeration system
         # Since we can not support every scenario, in this cases we set the numeration totally ignoring the one in the PDB
-        weird_character = next((character for character in all_residue_number_characters if not character.isalnum()), None)
+        weird_character = next((character for character in all_residue_number_characters if not (character.isalnum() or character == '-')), None)
         if weird_character:
-            warn(f'Weird residue numeration including "{weird_character}" characters system found in the PDB file. Ignoring it.')
+            if flexible_numeration == False: raise InputError(f'Not supported numeration system including "{weird_character}" characters')
+            warn(f'Weird residue numeration including "{weird_character}" characters found in the PDB file. Ignoring it.')
             residue_numeration_base = None
         # Search among all resiude numbers any letters (non-numerical characters)
         elif next((letter for letter in alphanumerical_letters if letter in all_residue_number_characters), None):
@@ -1243,13 +1267,12 @@ class Structure:
         parsed_atoms = []
         parsed_residues = []
         parsed_chains = []
+        # Save chains and residues also in dictionaries only to find them faster
+        name_chains = {}
+        label_residues = {}
+        # Keep track of the last issued atom and residue indices
         atom_index = -1
         residue_index = -1
-        last_chain_name = None
-        last_residue_name = None
-        last_residue_number = None
-        last_residue_icode = None
-        last_issued_residue_number = None
         for line in pdb_lines:
             # Parse atoms only
             start = line[0:6]
@@ -1259,7 +1282,7 @@ class Structure:
             # Mine all atom data
             atom_name = line[11:16].strip()
             residue_name = line[17:21].strip()
-            chain = line[21:22]
+            chain_name = line[21:22]
             residue_number = line[22:26]
             icode = line[26:27]
             if icode == ' ':
@@ -1268,67 +1291,168 @@ class Structure:
             y_coord = float(line[38:46])
             z_coord = float(line[46:54])
             element = line[76:78].strip()
-            # Set the parsed atom, residue and chain
+            # Set the parsed atom
             parsed_atom = Atom(name=atom_name, element=element, coords=(x_coord, y_coord, z_coord))
             # Add the parsed atom to the list and update the current atom index
             parsed_atoms.append(parsed_atom)
-            atom_index += 1
-            # Check if this atom belongs to the same chain than the previous atom
-            same_chain = last_chain_name == chain
-            # Check if this atom belongs to the same residue than the previous atom
-            same_residue = same_chain and last_residue_name == residue_name and last_residue_number == residue_number and last_residue_icode == icode
-            # Update last values
-            last_chain_name = chain
-            last_residue_name = residue_name
-            last_residue_number = residue_number
-            last_residue_icode = icode
-            # Update the residue atom indices
-            # If the residue equals the last parsed residue then use the previous instead
-            if same_residue:
-                parsed_residue = parsed_residues[-1]
-                parsed_residue.atom_indices.append(atom_index)
-                # If it is the same residue then it will be the same chain as well so we can proceed
-                continue
-            # Parse the residue number if it is to be parsed
-            if residue_numeration_base:
-                parsed_residue_number = int(residue_number, residue_numeration_base)
-            # If we decided to ignore the numeration system then we just issue the new residue number
-            else:
-                if not same_chain: last_issued_residue_number = 0
-                parsed_residue_number = last_issued_residue_number + 1
-                last_issued_residue_number = parsed_residue_number
-            #print(f'Residue {residue_index+1} with number {residue_number} ({hexadecimal_residue_numbers}) -> {parsed_residue_number}')
-            # Now parse the residue and add it to the list
-            parsed_residue = Residue(name=residue_name, number=parsed_residue_number, icode=icode)
-            parsed_residues.append(parsed_residue)
-            residue_index += 1
-            # Add current atom to the new residue
-            parsed_residue.atom_indices.append(atom_index)
-            # If the chain equals the last parsed chain then use the previous instead
-            if same_chain:
-                parsed_chain = parsed_chains[-1]
+            # Get the parsed chain
+            parsed_chain = name_chains.get(chain_name, None)
+            # If the parsed chain was not yet instantiated then do it now
+            if not parsed_chain:
+                parsed_chain = Chain(name=chain_name)
+                parsed_chains.append(parsed_chain)
+                name_chains[chain_name] = parsed_chain
+            # Get the parsed residue
+            residue_label = (chain_name, residue_number, icode)
+            parsed_residue = label_residues.get(residue_label, None)
+            # If the parsed residue was not yet instantiated then do it now
+            if not parsed_residue:
+                # Parse the residue number if it is to be parsed
+                if residue_numeration_base:
+                    parsed_residue_number = int(residue_number, residue_numeration_base)
+                # If we decided to ignore the numeration system then we just issue a new residue number
+                # Use the last residue number from the current chain as reference
+                else:
+                    chain_last_residue_index = parsed_chain.residue_indices[-1] if len(parsed_chain.residue_indices) > 0 else None
+                    chain_last_residue_number = parsed_residues[chain_last_residue_index].number if chain_last_residue_index != None else 0
+                    parsed_residue_number = chain_last_residue_number + 1
+                # Instantiate the new parsed residue
+                parsed_residue = Residue(name=residue_name, number=parsed_residue_number, icode=icode)
+                parsed_residues.append(parsed_residue)
+                label_residues[residue_label] = parsed_residue
+                # Add current residue to the parsed chain
+                residue_index += 1
                 parsed_chain.residue_indices.append(residue_index)
-                continue
-            # Otherwise, parse the chain and include the new chain in the list
-            parsed_chain = Chain(name=chain)
-            parsed_chains.append(parsed_chain)
-            # Add current atom to the new chain
-            parsed_chain.residue_indices.append(residue_index)
+            # Add current atom to the parsed residue
+            atom_index += 1
+            parsed_residue.atom_indices.append(atom_index)
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains, residue_numeration_base=residue_numeration_base)
 
     # Set the structure from a pdb file
+    # You may filter the input PDB file for a specific model
+    # Some weird numeration systems are not supported and, when encountered, they are ignored
+    # In these cases we set our own numeration system
+    # Set the flexible numeration argument as false to avoid this behaviour, thus crashing instead
     @classmethod
-    def from_pdb_file (cls, pdb_filename : str):
-        pdb_file = File(pdb_filename)
+    def from_pdb_file (cls, pdb_filepath : str, model : Optional[int] = None, flexible_numeration : bool = True):
+        pdb_file = File(pdb_filepath)
         if not pdb_file.exists:
-            raise InputError(f'File "{pdb_filename}" not found')
+            raise InputError(f'File "{pdb_filepath}" not found')
         if not pdb_file.format == 'pdb':
-            raise InputError(f'"{pdb_filename}" is not a name for a pdb file')
+            raise InputError(f'"{pdb_filepath}" is not a path for a pdb file')
         # Read the pdb file
         pdb_content = None
-        with open(pdb_filename, 'r') as file:
+        with open(pdb_filepath, 'r') as file:
             pdb_content = file.read()
-        return cls.from_pdb(pdb_content)
+        return cls.from_pdb(pdb_content, model, flexible_numeration)
+    
+    # Set the structure from mmcif
+    # https://biopandas.github.io/biopandas/tutorials/Working_with_mmCIF_Structures_in_DataFrames/
+    # You may filter the content for a specific model
+    # You may ask for the author notation instead of the standarized notation for legacy reasons
+    # This may have an effect in atom names, residue names, residue numbers and chain names
+    @classmethod
+    def from_mmcif (cls, mmcif_content : str, model : Optional[int] = None, author_notation : bool = False):
+        # Read the pdb content line by line and set the parsed atoms, residues and chains
+        parsed_atoms = []
+        parsed_residues = []
+        parsed_chains = []
+        # Save chains and residues also in dictionaries only to find them faster
+        name_chains = {}
+        label_residues = {}
+        # Keep track of the last issued atom and residue indices
+        atom_index = -1
+        residue_index = -1
+        # Iterate the content line by line
+        lines = iter(mmcif_content.split('\n'))
+        # Now mine atoms data
+        atom_headers = { 'ATOM', 'HETATM', 'ANISOU' }
+        for line in lines:
+            # Values are separated by spaces
+            values = line.split()
+            # If this is not atom line then we are done
+            if len(values) == 0 or values[0] not in atom_headers: continue
+            # Get the atom model number if a model number was passed
+            # Note that then model is a number greater than 0
+            if model: 
+                model_number = int(values[20])
+                # If the model number odes not match then skip it
+                if model != model_number: continue
+            # Mine atom data
+            # Next value is just the atom number, we do not need it
+            # atom_number = values[1]
+            # Mine the atom element
+            element = values[2]
+            # Mine the atom name
+            atom_name = values[3].replace('"','')
+            # Next value is a place holder to indicate alternate conformation, according to the docs
+            # I don't know what this is but we do not need it
+            # idk = values[4]
+            # Mine the residue name
+            residue_name = values[5]
+            # Mine the chain name
+            chain_name = values[6]
+            # Next value is the chain number, we do not need it
+            # chain_number = values[7]
+            # Residue number is '.' for chains with only one residue
+            residue_number = 1 if values[8] == '.' else int(values[8])
+            icode = '' if values[9] == '?' else values[9]
+            x_coord = float(values[10])
+            y_coord = float(values[11])
+            z_coord = float(values[12])
+            # Next value is the occupancy, we do not need it
+            # occupancy = float(values[13])
+            # Next value is the isotropic displacement, we do not need it
+            # isotropic = float(values[14])
+            # Next value is the charge, we do not need it
+            # charge = None if values[15] == '?' else float(values[15])
+            # The rest of values are alternative author values
+            if author_notation:
+                residue_number = int(values[16])
+                residue_name = values[17]
+                chain_name = values[18]
+                atom_name = values[19].replace('"','')
+            # Set the parsed atom
+            parsed_atom = Atom(name=atom_name, element=element, coords=(x_coord, y_coord, z_coord))
+            # Add the parsed atom to the list and update the current atom index
+            parsed_atoms.append(parsed_atom)
+            # Get the parsed chain
+            parsed_chain = name_chains.get(chain_name, None)
+            # If the parsed chain was not yet instantiated then do it now
+            if not parsed_chain:
+                parsed_chain = Chain(name=chain_name)
+                parsed_chains.append(parsed_chain)
+                name_chains[chain_name] = parsed_chain
+            # Get the parsed residue
+            residue_label = (chain_name, residue_number, icode)
+            parsed_residue = label_residues.get(residue_label, None)
+            # If the parsed residue was not yet instantiated then do it now
+            if not parsed_residue:
+                # Instantiate the new parsed residue
+                parsed_residue = Residue(name=residue_name, number=residue_number, icode=icode)
+                parsed_residues.append(parsed_residue)
+                label_residues[residue_label] = parsed_residue
+                # Add current residue to the parsed chain
+                residue_index += 1
+                parsed_chain.residue_indices.append(residue_index)
+            # Add current atom to the parsed residue
+            atom_index += 1
+            parsed_residue.atom_indices.append(atom_index)
+        return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
+
+    # Set the structure from a mmcif file
+    @classmethod
+    def from_mmcif_file (cls, mmcif_filepath : str, model : Optional[int] = None, author_notation : bool = False):
+        mmcif_file = File(mmcif_filepath)
+        if not mmcif_file.exists:
+            raise InputError(f'File "{mmcif_filepath}" not found')
+        if not mmcif_file.format == 'cif':
+            raise InputError(f'"{mmcif_filepath}" is not a path for a mmcif file')
+        # Read the mmcif file
+        mmcif_content = None
+        with open(mmcif_filepath, 'r') as file:
+            mmcif_content = file.read()
+        return cls.from_mmcif(mmcif_content, model, author_notation)
 
     # Set the structure from an MD analysis object
     @classmethod
@@ -1519,8 +1643,8 @@ class Structure:
     dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
 
     # Generate a pdb file with current structure
-    def generate_pdb_file (self, pdb_filename : str):
-        with open(pdb_filename, "w") as file:
+    def generate_pdb_file (self, pdb_filepath : str):
+        with open(pdb_filepath, "w") as file:
             file.write('REMARK workflow generated pdb file\n')
             for a, atom in enumerate(self.atoms):
                 residue = atom.residue
@@ -1552,10 +1676,10 @@ class Structure:
         if not is_imported('prody'):
             raise InputError('Missing dependency error: prody')
         # Generate the prody topology
-        pdb_filename = '.structure.pdb'
-        self.generate_pdb_file(pdb_filename)
-        prody_topology = prody.parsePDB(pdb_filename)
-        os.remove(pdb_filename)
+        pdb_filepath = '.structure.pdb'
+        self.generate_pdb_file(pdb_filepath)
+        prody_topology = prody.parsePDB(pdb_filepath)
+        os.remove(pdb_filepath)
         return prody_topology
 
     # Get the structure equivalent pytraj topology
@@ -1564,10 +1688,10 @@ class Structure:
         if not is_imported('pytraj'):
             raise InputError('Missing dependency error: pytraj')
         # Generate a pdb file from the current structure to feed pytraj
-        pdb_filename = '.structure.pdb'
-        self.generate_pdb_file(pdb_filename)
-        pytraj_topology = pytraj.load_topology(filename = pdb_filename)
-        os.remove(pdb_filename)
+        pdb_filepath = '.structure.pdb'
+        self.generate_pdb_file(pdb_filepath)
+        pytraj_topology = pytraj.load_topology(filename = pdb_filepath)
+        os.remove(pdb_filepath)
         return pytraj_topology
 
     # Select atoms from the structure thus generating an atom indices list
@@ -1578,11 +1702,11 @@ class Structure:
     def select (self, selection_string : str, syntax : str = 'vmd') -> Optional['Selection']:
         if syntax == 'vmd':
             # Generate a pdb for vmd to read it
-            pdb_filename = '.structure.pdb'
-            self.generate_pdb_file(pdb_filename)
+            pdb_filepath = '.structure.pdb'
+            self.generate_pdb_file(pdb_filepath)
             # Use vmd to find atom indices
-            atom_indices = get_vmd_selection_atom_indices(pdb_filename, selection_string)
-            os.remove(pdb_filename)
+            atom_indices = get_vmd_selection_atom_indices(pdb_filepath, selection_string)
+            os.remove(pdb_filepath)
             if len(atom_indices) == 0:
                 return Selection()
             return Selection(atom_indices)
@@ -2009,8 +2133,19 @@ class Structure:
         return next_available_chain_name
 
     # Get a chain by its name
-    def get_chain_by_name (self, name : str) -> 'Chain':
+    def get_chain_by_name (self, name : str) -> Optional['Chain']:
         return next((c for c in self.chains if c.name == name), None)
+    
+    # Find a residue by its chain, number and insertion code
+    def find_residue (self, chain_name : str, number : int, icode : str = '') -> Optional['Residue']:
+        # Get the corresponding chain
+        target_chain = self.get_chain_by_name(chain_name)
+        if not target_chain: return None
+        # Iterate chain residues
+        for residue in target_chain.residues:
+            if residue.number == number and residue.icode == icode:
+                return residue
+        return None
 
     # Get a summary of the structure
     def display_summary (self):
@@ -2245,7 +2380,7 @@ class Structure:
                 # Bonds must be reset since atom indices have changes
                 self._bonds = None
                 # Prepare the trajectory atom sorter which must be returned
-                # Include atom indices already so the user has to provide only the structure and trajectory filenames
+                # Include atom indices already so the user has to provide only the structure and trajectory filepaths
                 def trajectory_atom_sorter (
                     input_structure_file : 'File',
                     input_trajectory_file : 'File',
@@ -2396,16 +2531,16 @@ class Structure:
         # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
         self.fix_atom_elements()
         # Generate a pdb strucutre to feed vmd
-        auxiliar_pdb_filename = '.structure.pdb'
-        self.generate_pdb_file(auxiliar_pdb_filename)
+        auxiliar_pdb_filepath = '.structure.pdb'
+        self.generate_pdb_file(auxiliar_pdb_filepath)
         # Get covalent bonds between both residue atoms
-        covalent_bonds = get_covalent_bonds(auxiliar_pdb_filename, selection)
+        covalent_bonds = get_covalent_bonds(auxiliar_pdb_filepath, selection)
         # For every atom in CG, replace its bonds with a class which will raise and error when read
         # Thus we make sure using these wrong bonds anywhere further will result in failure
         for atom_index in self.select_cg().atom_indices:
             covalent_bonds[atom_index] = MISSING_BONDS
         # Remove the auxiliar pdb file
-        os.remove(auxiliar_pdb_filename)
+        os.remove(auxiliar_pdb_filepath)
         return covalent_bonds
 
     # Make a copy of the current structure
@@ -2581,28 +2716,6 @@ class Structure:
     def has_cg (self) -> bool:
         return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
 
-    # Calculate the distances between each pair of atoms in the whole structure
-    # DANI: Not tested
-    # def get_atom_distances_matrix (self) -> List[ List[ int ] ]:
-    #     matrix = []
-    #     for a, first_atom in enumerate(self.atoms):
-    #         # Set a new row in the matrix
-    #         current_row = []
-    #         for b, second_atom in enumerate(self.atoms):
-    #             # If this is the same atom then add a 0
-    #             if a == b:
-    #                 current_row.append(0)
-    #                 continue
-    #             # If we already calculated this value in the reverse way then reuse it
-    #             if a > b:
-    #                 current_row.append(matrix[a][b])
-    #                 continue
-    #             # Calculate the distance
-    #             distance = calculate_distance(first_atom, second_atom)
-    #             current_row.append(distance)
-    #         matrix.append(current_row)
-    #     return matrix
-
 ### Related functions ###
 
 # Calculate the distance between two atoms
@@ -2611,6 +2724,48 @@ def calculate_distance (atom_1 : Atom, atom_2 : Atom) -> float:
     for i in { 'x': 0, 'y': 1, 'z': 2 }.values():
         squared_distances_sum += (atom_1.coords[i] - atom_2.coords[i])**2
     return math.sqrt(squared_distances_sum)
+
+# Calculate the angle between 3 atoms
+# https://stackoverflow.com/questions/35176451/python-code-to-calculate-angle-between-three-point-using-their-3d-coordinates
+def calculate_angle (atom_1 : Atom, atom_2 : Atom, atom_3 : Atom) -> float:
+    # Get coordinates in numpy arrays, which allows to easily calculate the difference
+    a = np.array(atom_1.coords)
+    b = np.array(atom_2.coords)
+    c = np.array(atom_3.coords)
+    # Set the two vectors which make the angle
+    ba = a - b
+    bc = c - b
+    # Calculate the angle between these 2 vectors
+    cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+    angle = np.arccos(cosine_angle)
+    return np.degrees(angle)
+
+# Calculate the torsion between 4 atoms
+# https://stackoverflow.com/questions/20305272/dihedral-torsion-angle-from-four-points-in-cartesian-coordinates-in-python
+def calculate_torsion (atom_1 : Atom, atom_2 : Atom, atom_3 : Atom, atom_4 : Atom) -> float:
+    p0 = np.array(atom_1.coords)
+    p1 = np.array(atom_2.coords)
+    p2 = np.array(atom_3.coords)
+    p3 = np.array(atom_4.coords)
+    # Ge some vectors
+    b0 = -1.0*(p1 - p0)
+    b1 = p2 - p1
+    b2 = p3 - p2
+    # normalize b1 so that it does not influence magnitude of vector
+    # rejections that come next
+    b1 /= np.linalg.norm(b1)
+    # vector rejections
+    # v = projection of b0 onto plane perpendicular to b1
+    #   = b0 minus component that aligns with b1
+    # w = projection of b2 onto plane perpendicular to b1
+    #   = b2 minus component that aligns with b1
+    v = b0 - np.dot(b0, b1)*b1
+    w = b2 - np.dot(b2, b1)*b1
+    # angle between v and w in a plane is the torsion angle
+    # v and w may not be normalized but that's fine since tan is y/x
+    x = np.dot(v, w)
+    y = np.dot(np.cross(b1, v), w)
+    return float(np.degrees(np.arctan2(y, x)))
 
 ### Auxiliar functions ###
 
@@ -2646,3 +2801,31 @@ lower_numbers = {
 }
 def get_lower_numbers (numbers_text : str) -> str:
     return ''.join([ lower_numbers[c] for c in numbers_text ])
+
+# Set a function to filter lines in PDB content for a specific model
+def filter_model (pdb_content : str, model : int) -> str:
+    # Make sure the PDB content has multiple models
+    # If not, then teturn the whole PDB content ignoring the flag
+    generic_model_header_regex = r'\nMODEL\s*[0-9]*\s*\n'
+    if not re.search(generic_model_header_regex, pdb_content):
+        print(f'PDB content has no models at all so it will be loaded as is (ignored model "{model}").')
+        return pdb_content
+    # If a model was passed then it means we must filter the PDB content
+    filtered_pdb_content = ''
+    # Search PDB lines until we find our model's header
+    model_header_regex = rf'^MODEL\s*{model}'
+    pdb_lines = iter(pdb_content.split('\n'))
+    for line in pdb_lines:
+        if not re.match(model_header_regex, line): continue
+        # If we just found the header
+        filtered_pdb_content = line
+        break
+    # If we did not find the header then stop here
+    if not filtered_pdb_content: raise RuntimeError(f'Could not find model "{model}" header')
+    # Add every line to the filtered content until we find the tail
+    model_footer_regex = r'^ENDMDL'
+    for line in pdb_lines:
+        filtered_pdb_content += '\n' + line
+        if re.match(model_footer_regex, line): return filtered_pdb_content
+    # If we did not find the footer then stop here
+    raise RuntimeError(f'Could not find model "{model}" footer')

@@ -246,6 +246,7 @@ EXTENSION_FORMATS = {
     # Structures
     'pdb': 'pdb',
     'gro': 'gro',
+    'cif': 'cif',
     # Trajectories
     'xtc': 'xtc',
     'trr': 'trr',
@@ -295,9 +296,24 @@ PYTRAJ_PARM_FORMAT = {
 }
 
 # Elements supported while correcting atom elements
+# DANI: Ba was found in PDB 1J6S
+# DANI: Lu was found in PDB 1DUH
+# DANI: U was found in PDB 2GIC
+# DANI: V was found in PDB 2P7E
+# DANI: Tb was found in PDB 359D
+# DANI: Ag was found in PDB 5AY2
+
+# Set elements which are always "bonded"
 SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S' ])
-SUPPORTED_ION_ELEMENTS = set([ 'K', 'F', 'Cl', 'Na', 'Zn', 'Mg', 'Fe', 'Br', 'Mn', 'I', 'Ca' ])
-SUPPORTED_ELEMENTS = SUPPORTED_POLYMER_ELEMENTS.union(SUPPORTED_ION_ELEMENTS)
+# Set elements which may be found both "bonded" or "alone"
+SUPPORTED_COORDINATED_ELEMENTS = set([ 'Zn', 'Fe', 'Mn', 'Co', 'Lu', 'U', 'V', 'Al', 'Ba', 'Be', 'F' ])
+# Set elements which are always "alone"
+SUPPORTED_ION_ELEMENTS = set([ 'K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl' ])
+SUPPORTED_ELEMENTS = {
+    *SUPPORTED_POLYMER_ELEMENTS,
+    *SUPPORTED_COORDINATED_ELEMENTS,
+    *SUPPORTED_ION_ELEMENTS
+}
 
 # Set a dictionaries with all residue names and their equivalent letters
 # Amino acids
