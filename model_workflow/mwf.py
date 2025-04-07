@@ -93,7 +93,6 @@ fix_gromacs_masses()
 # Set some variables which are defined at the end but may be later ready by previously defined functions
 requestables = {}
 inverted_requestables = {}
-overwritables = set()
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -168,6 +167,9 @@ class MD:
             self.register = self.project.register
         else:
             self.register = Register(register_file)
+
+        # Set tasks whose output is to be overwritten
+        self.overwritables = set()
 
     def __repr__ (self):
         return f'<MD ({len(self.structure.atoms)} atoms)>'
@@ -1099,9 +1101,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the metadata file
         metadata_filepath = self.pathify(OUTPUT_METADATA_FILENAME)
         metadata_file = File(metadata_filepath)
@@ -1129,9 +1131,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the processed interactions file
         processed_interactions_filepath = self.pathify(OUTPUT_PROCESSED_INTERACTIONS_FILENAME)
         processed_interactions_file = File(processed_interactions_filepath)
@@ -1408,9 +1410,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RMSDS_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1435,9 +1437,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_TMSCORES_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1459,9 +1461,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RMSF_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1480,9 +1482,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RGYR_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1505,9 +1507,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_PCA_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1537,9 +1539,9 @@ class MD:
     #     # Get the task name
     #     task = self._get_task()
     #     # Check if this dependency is to be overwriten
-    #     must_overwrite = task in overwritables
+    #     must_overwrite = task in self.overwritables
     #     # Update the overwritables so this is not remade further in the same run
-    #     overwritables.discard(task)
+    #     self.overwritables.discard(task)
     #     # Do not run the analysis if the output file already exists
     #     output_analysis_filepath = self.pathify(OUTPUT_PCA_CONTACTS_FILENAME)
     #     if exists(output_analysis_filepath) and not must_overwrite:
@@ -1556,9 +1558,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RMSD_PERRES_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1580,9 +1582,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1606,9 +1608,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_CLUSTERS_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1645,9 +1647,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_DIST_PERRES_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1667,9 +1669,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_HBONDS_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1706,9 +1708,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_SASA_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1729,9 +1731,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_ENERGIES_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1753,9 +1755,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_POCKETS_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1777,9 +1779,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1798,9 +1800,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_MARKOV_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1824,9 +1826,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_DENSITY_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
@@ -1844,9 +1846,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_thickness_filepath = self.pathify(OUTPUT_THICKNESS_FILENAME)
         if exists(output_thickness_filepath) and not must_overwrite:
@@ -1863,9 +1865,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_apl_filepath = self.pathify(OUTPUT_APL_FILENAME)
         if exists(output_apl_filepath) and not must_overwrite:
@@ -1881,9 +1883,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_lipid_order_filepath = self.pathify(OUTPUT_LIPID_ORDER_FILENAME)
         if exists(output_lipid_order_filepath) and not must_overwrite:
@@ -1900,9 +1902,9 @@ class MD:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_lipid_interactions_filepath = self.pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
         if exists(output_lipid_interactions_filepath) and not must_overwrite:
@@ -2102,6 +2104,9 @@ class Project:
         # This is useful to track previous workflow runs and problems
         register_file = File(self.pathify(REGISTER_FILENAME))
         self.register = Register(register_file)
+
+        # Set tasks whose output is to be overwritten
+        self.overwritables = set()
 
     # This function is able to find its caller "self" function
     # Then it finds its associated label in the requestables
@@ -2697,9 +2702,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
@@ -2735,9 +2740,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the protein references file
         protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
         protein_references_file = File(protein_references_filepath)
@@ -2776,9 +2781,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the chains references file
         chains_references_filepath = self.pathify(OUTPUT_CHAINS_FILENAME)
         chains_references_file = File(chains_references_filepath)
@@ -2803,9 +2808,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the ligand references file
         ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
         ligand_references_file = File(ligand_references_filepath)
@@ -2844,9 +2849,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the membrane mapping file
         mem_map_filepath = self.pathify(MEMBRANE_MAPPING_FILENAME)
         mem_map_file = File(mem_map_filepath)
@@ -2884,9 +2889,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the metadata file
         metadata_filepath = self.pathify(OUTPUT_METADATA_FILENAME)
         metadata_file = File(metadata_filepath)
@@ -2918,9 +2923,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._standard_topology_file:
@@ -2951,9 +2956,9 @@ class Project:
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
-        must_overwrite = task in overwritables
+        must_overwrite = task in self.overwritables
         # Update the overwritables so this is not remade further in the same run
-        overwritables.discard(task)
+        self.overwritables.discard(task)
         # Set the screenshot file
         screenshot_filepath = self.pathify(OUTPUT_SCREENSHOT_FILENAME)
         screenshot_file = File(screenshot_filepath)
@@ -3188,6 +3193,7 @@ def workflow (
     # If the user requested to overwrite something, make sure it is in the tasks list
 
     # Update the overwritable variable with the requested overwrites
+    overwritables = set()
     if overwrite:
         # If the overwrite argument is simply true then add all requestables to the overwritable
         if type(overwrite) == bool:
@@ -3202,8 +3208,11 @@ def workflow (
                 # Add it to the global variable
                 overwritables.add(task)
         else: raise ValueError('Not supported overwrite type')
-    # Run the project tasks now
+    # Get project tasks
     project_tasks = [ task for task in tasks if task in project_requestables ]
+    # Set project overwritables
+    project.overwritables = set([ task for task in project_tasks if task in overwritables ])
+    # Run the project tasks now
     for task in project_tasks:
         # Get the function to be called and call it
         getter = requestables[task]
@@ -3220,7 +3229,8 @@ def workflow (
     # Now iterate over the different MDs
     for md in project.mds:
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
-
+        # Set project overwritables
+        md.overwritables = set([ task for task in md_tasks if task in overwritables ])
         # Run the MD tasks
         for task in md_tasks:
             # Get the function to be called and call it
