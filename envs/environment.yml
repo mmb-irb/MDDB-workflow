@@ -27,7 +27,7 @@ dependencies:
   - numpy
   - scipy
   # VMD is used for some processing steps
-  - vmd
+  - vmd=1.9.3=hbf76b22_2
   # Parser to read blast results
   - xmltodict
   # Ligands analyses
