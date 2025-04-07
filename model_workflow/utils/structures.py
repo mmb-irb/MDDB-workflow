@@ -1541,6 +1541,8 @@ class Structure:
         mysterious_file = File(mysterious_filepath)
         if mysterious_file.format == 'pdb':
             return cls.from_pdb_file(mysterious_file.path)
+        if mysterious_file.format == 'cif':
+            return cls.from_mmcif_file(mysterious_file.path)
         if mysterious_file.format == 'prmtop':
             return cls.from_prmtop_file(mysterious_file.path)
         if mysterious_file.format == 'tpr':
