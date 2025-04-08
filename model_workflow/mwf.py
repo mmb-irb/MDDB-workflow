@@ -942,13 +942,12 @@ class MD:
                 continue
             # If the test has been always skipped then issue a warning
             elif test_result == None:
-                # Set the test skip flag and remove previous warnings
-                test_skip_flag = 'skip_' + test_name
-                self.register.remove_warnings(test_skip_flag)
+                # Remove previous warnings
+                self.register.remove_warnings(test_name)
                 # Get test pretty name
                 test_nice_name = NICE_NAMES[test_name]
                 # Issue the corresponding warning            
-                self.register.add_warning(test_skip_flag, test_nice_name + ' was skipped and never run before')
+                self.register.add_warning(test_name, test_nice_name + ' was skipped and never run before')
             else:
                 raise ValueError('Test value is not supported')
             
