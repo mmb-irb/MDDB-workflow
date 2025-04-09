@@ -1,35 +1,18 @@
-# MoDEL Workflow
+# MDDB Workflow
 
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.
-Both standard files and analysis results are to be uploaded to the database using the [loader](https://mmb.irbbarcelona.org/gitlab/aluciani/MoDEL-CNS_DB_loader).
+Both standard files and analysis results are to be uploaded to the database using the [loader](https://github.com/mmb-irb/MDDB-loader).
 
 ## Installation
 
 This will install the package and create the entry point `mwf` to be used when executing the workflow.<br />
 Note that internet access is required to install the workflow using this protocol. If you are working in a machine where there is not internet then head to the 'Installation in HPC' section.
 
-First clone the workflow repo:
-
-`git clone https://mmb.irbbarcelona.org/gitlab/d.beltran.anadon/MoDEL-workflow.git`
-
-Now create a new environment using the `environment.yml` file in this repo:
-
-`cd MoDEL-workflow`<br />
-`conda env create --file envs/environment.yml`
-
-Activate the new enviornment
-
-`conda activate mwf_env`
-
-Then install the workflow module in development mode:
-
-`python setup.py develop`
+`conda install bioconda::mddb`
 
 At this point your environment is ready to use and it includes the `mwf` command.<br />
 From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
-
-
 ---
 
 ## Installation in HPC

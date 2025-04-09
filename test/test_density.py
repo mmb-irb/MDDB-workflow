@@ -5,11 +5,11 @@ from model_workflow.analyses.density import density
 
 
 class TestDensityAnalysis:
-    @pytest.fixture(scope="session")
+    @pytest.fixture(scope="class", autouse=True)
     def analysis_type(self):
         return "density"
     
-    @pytest.fixture(scope="function")
+    @pytest.fixture(scope="class")
     def output_file(self, test_data_dir):
         """Create an output file path for the density analysis results"""
         return os.path.join(test_data_dir, "density_output.json")

@@ -12,12 +12,12 @@ from io import StringIO
 DATABASE_URL = "https://irb-dev.mddbr.eu/api/"
 TEST_DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def test_accession():
     """Default accession ID for tests"""
     return "A01M9.1"  # Default value
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def test_data_dir(test_accession):
     """Create a persistent directory for test data that remains across test runs"""
     # Create a project-specific test data directory
@@ -26,12 +26,12 @@ def test_data_dir(test_accession):
     os.makedirs(test_data_dir, exist_ok=True)
     return test_data_dir
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def remote_client(test_accession):
     """Create a Remote client for the test accession"""
     return Remote(database_url=DATABASE_URL, accession=test_accession)
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def structure_file(remote_client, test_data_dir, test_accession):
     """Download and provide the standard structure file"""
     output_path = os.path.join(test_data_dir, f"structure.pdb")
@@ -44,13 +44,13 @@ def structure_file(remote_client, test_data_dir, test_accession):
     return file_obj
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def structure(structure_file):
     """Load the structure into a Structure object"""
     return setup_structure(structure_file.path)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def topology_file(remote_client, test_data_dir):
     """Download and provide the standard topology file"""
     output_path = os.path.join(test_data_dir, STANDARD_TOPOLOGY_FILENAME)
@@ -62,7 +62,7 @@ def topology_file(remote_client, test_data_dir):
     
     return file_obj
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def trajectory_file(remote_client, test_data_dir):
     """Download and provide a trajectory file with a limited frame selection for testing"""
     # For testing, we only need a small subset of frames
@@ -79,7 +79,7 @@ def trajectory_file(remote_client, test_data_dir):
         )
     return file_obj
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def inputs_file(remote_client, test_data_dir):
     """Download and provide a trajectory file with a limited frame selection for testing"""
     # For testing, we only need a small subset of frames
@@ -92,7 +92,7 @@ def inputs_file(remote_client, test_data_dir):
         remote_client.download_inputs_file(file_obj)
     return file_obj
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def analysis_file(remote_client, test_data_dir, analysis_type):
     """Download and provide the standard structure file"""
     output_path = os.path.join(test_data_dir, f"mda.{analysis_type}.json")
@@ -104,7 +104,7 @@ def analysis_file(remote_client, test_data_dir, analysis_type):
     
     return file_obj
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="class")
 def membrane_map(remote_client, test_data_dir):
     """Download and provide the standard structure file"""
     output_path = os.path.join(test_data_dir, MEMBRANE_MAPPING_FILENAME)
