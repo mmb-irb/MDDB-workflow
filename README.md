@@ -13,6 +13,7 @@ Note that internet access is required to install the workflow using this protoco
 
 At this point your environment is ready to use and it includes the `mwf` command.<br />
 From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
+
 ---
 
 ## Installation in HPC
