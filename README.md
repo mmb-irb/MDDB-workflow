@@ -6,10 +6,11 @@ Both standard files and analysis results are to be uploaded to the database usin
 
 ## Installation
 
-This will install the package and create the entry point `mwf` to be used when executing the workflow.<br />
-Note that internet access is required to install the workflow using this protocol. If you are working in a machine where there is not internet then head to the 'Installation in HPC' section.
+This will install the package and create the entry point `mwf` to be used when executing the workflow. Note that internet access is required to install the workflow using this protocol.
 
-`conda install bioconda::mddb`
+Then install the workflow module in development mode:
+
+`python -m pip install -e .`
 
 At this point your environment is ready to use and it includes the `mwf` command.<br />
 From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
