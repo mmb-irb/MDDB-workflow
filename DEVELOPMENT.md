@@ -1,13 +1,10 @@
 ## Installation
 
-First clone the workflow repo:
-
-`git clone https://github.com/mmb-irb/MDDB-workflow mwf`
-
-Now create a new environment using the `environment.yml` file in this repo:
+First clone the workflow repo and create a new environment using the `environment.yml` file in this repo:
 
 ``` shell
-cd MDDB-workflow
+git clone https://github.com/mmb-irb/MDDB-workflow mwf
+cd mwf
 conda env create --file envs/environment.yml
 ```
 

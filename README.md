@@ -13,13 +13,10 @@ Both standard files and analysis results are to be uploaded to the database usin
 This will install the package and create the entry point `mwf` to be used when executing the workflow.<br />
 Note that internet access is required to install the workflow using this protocol. If you are working in a machine where there is not internet then head to the 'Installation in HPC' section.
 
-First clone the workflow repo:
-
-`git clone https://github.com/mmb-irb/MDDB-workflow.git mwf`
-
-Now create a new environment using the `environment.yml` file in this repo:
+First clone the workflow repo and create a new environment using the `environment.yml` file in this repo:
 
 ``` shell
+git clone https://github.com/mmb-irb/MDDB-workflow mwf
 cd mwf
 conda env create --file envs/environment.yml
 ```
