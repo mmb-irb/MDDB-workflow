@@ -81,4 +81,8 @@ At this point your environment is ready to use and it includes the `mwf` command
 
 ## Usage
 
-For detailed instructions on how to use the workflow, please refer to the [Usage Guide](./USAGE.md).
+For detailed instructions on how to use the workflow, please refer to the [usage guide](./USAGE.md).
+
+## Development
+
+For instructions about how to develop and test check the [development Guide](./DEVELOPMENT.md).
