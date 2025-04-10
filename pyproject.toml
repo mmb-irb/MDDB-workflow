@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mddb_wf"
 version = "0.0.1"
 requires-python = ">=3.9.0"
+dependencies = ["tmscoring"]
 
 [project.optional-dependencies]
 dev = [

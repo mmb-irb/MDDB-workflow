@@ -22,3 +22,7 @@ python -m pip install -e ".[dev]"
 ## Build
 
 `python -m build --wheel`
+
+## Build conda
+
+Test the build with [bioconda-utils](https://bioconda.github.io/contributor/building-locally.html).

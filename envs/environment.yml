@@ -4,7 +4,6 @@ channels:
   - nodefaults
 dependencies:
   - python=3.9
-  - argparse
   # Use pyyaml to read the inputs.yaml file
   - pyyaml
   # From ambertools we use pytraj mostly
