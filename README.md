@@ -24,7 +24,7 @@ Activate the new enviornment
 
 Then install the workflow module in development mode:
 
-`python -m pip install -e`
+`python -m pip install -e .`
 
 At this point your environment is ready to use and it includes the `mwf` command.<br />
 From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
