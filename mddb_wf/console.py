@@ -244,7 +244,7 @@ common_parser = ArgumentParser(add_help=False)
 common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true', help="Do not use symlinks internally")
 
 # Define console arguments to call the workflow
-parser = ArgumentParser(description="MoDEL Workflow", formatter_class=RawTextHelpFormatter)
+parser = ArgumentParser(description="MDDB Workflow", formatter_class=RawTextHelpFormatter)
 subparsers = parser.add_subparsers(help='Name of the subcommand to be used', dest="subcommand")
 
 # Set the run subcommand
