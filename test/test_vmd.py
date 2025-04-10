@@ -1,9 +1,9 @@
 import pytest
 import inspect
-import model_workflow.utils.vmd_spells as vmd_spells
-from model_workflow.utils.auxiliar import load_json, load_yaml
-from model_workflow.tools.process_interactions import process_interactions, load_interactions
-from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+import mddb_wf.utils.vmd_spells as vmd_spells
+from mddb_wf.utils.auxiliar import load_json, load_yaml
+from mddb_wf.tools.process_interactions import process_interactions, load_interactions
+from mddb_wf.tools.get_reduced_trajectory import get_reduced_trajectory
 
 
 class TestVMD:

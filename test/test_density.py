@@ -1,7 +1,7 @@
 import pytest
 import os
-from model_workflow.utils.auxiliar import load_json
-from model_workflow.analyses.density import density
+from mddb_wf.utils.auxiliar import load_json
+from mddb_wf.analyses.density import density
 
 
 class TestDensityAnalysis:

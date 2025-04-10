@@ -1,10 +1,10 @@
 import os
 import pytest
-from model_workflow.utils.constants import *
-from model_workflow.utils.file import File
-from model_workflow.utils.remote import Remote
-from model_workflow.tools.topology_manager import setup_structure
-from model_workflow.utils.auxiliar import load_json, load_yaml
+from mddb_wf.utils.constants import *
+from mddb_wf.utils.file import File
+from mddb_wf.utils.remote import Remote
+from mddb_wf.tools.topology_manager import setup_structure
+from mddb_wf.utils.auxiliar import load_json, load_yaml
 from unittest.mock import patch
 from io import StringIO
 

@@ -1,5 +1,9 @@
 # MDDB Workflow
 
+<div align="center">
+    <img src="./mddb_wf/resources/mddb.png" width="640" height="320">
+</div>
+
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.
 Both standard files and analysis results are to be uploaded to the database using the [loader](https://github.com/mmb-irb/MDDB-loader).
@@ -11,23 +15,23 @@ Note that internet access is required to install the workflow using this protoco
 
 First clone the workflow repo:
 
-`git clone https://github.com/mmb-irb/MDDB-workflow.git`
+`git clone https://github.com/mmb-irb/MDDB-workflow.git mwf`
 
 Now create a new environment using the `environment.yml` file in this repo:
 
-`cd MDDB-workflow`<br />
-`conda env create --file envs/environment.yml`
+``` shell
+cd mwf
+conda env create --file envs/environment.yml
+```
 
-Activate the new enviornment
+Activate the new enviornment and then install the workflow module in development mode:
 
-`conda activate mwf_env`
+``` shell
+conda activate mwf_env
+python -m pip install -e .
+```
 
-Then install the workflow module in development mode:
-
-`python -m pip install -e`
-
-At this point your environment is ready to use and it includes the `mwf` command.<br />
-From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
+At this point your environment is ready to use and it includes the `mwf` command. From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
 
 
 ---
@@ -50,8 +54,10 @@ Now pack the mwf environment with:
 
 This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
 
-`mkdir mwf_env`<br />
-`tar -xzf mwf.tar.gz -C mwf_env` 
+``` shell
+mkdir mwf_env
+tar -xzf mwf.tar.gz -C mwf_env
+``` 
 
 Activate the mwf environment:
 
@@ -63,16 +69,19 @@ Make a conda unpack
 
 Now copy the whole workflow repository from your local machine to the remote machine.
 
-`git clone https://mmb.irbbarcelona.org/gitlab/d.beltran.anadon/MoDEL-workflow.git`<br />
-`rsync -avP MoDEL-workflow <remote>:<path>`
+``` shell
+git clone https://github.com/mmb-irb/MDDB-workflow.git mwf
+rsync -avP mwf <remote>:<path>
+```
 
 Then install it in develop mode with:
 
-`cd MoDEL-workflow`<br />
-`python setup.py develop`
+``` shell
+cd <path>
+python -m pip install -e .
+```
 
-At this point your environment is ready to use and it includes the `mwf` command.<br />
-From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
+At this point your environment is ready to use and it includes the `mwf` command. From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
 
 ---
 
@@ -146,7 +155,7 @@ If they all pass then we can continue with the analyses.
 Before we start, we need the **inputs file**.<br />
 This file contains burocratic data, MD parameters and some additional metadata which is used by the workflow to adapt the analyses.
 
-In order to generate this file, a template to build the file explaining every field in detail is provided. You can find it in the workflow repository, at [model_workflow/resources/inputs_file_template.yml](model_workflow/resources/inputs_file_template.yml) or open it by simply running the following command:
+In order to generate this file, a template to build the file explaining every field in detail is provided. You can find it in the workflow repository, at [mddb_wf/resources/inputs_file_template.yml](mddb_wf/resources/inputs_file_template.yml) or open it by simply running the following command:
 
 `mwf inputs`
 
