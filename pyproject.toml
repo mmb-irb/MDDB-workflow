@@ -17,12 +17,12 @@ dev = [
 mwf = "mddb_wf.console:main"
 
 [tool.setuptools]
-packages = ["mddb_wf"]
+packages = ["mddb_wf", "mddb_wf.analyses", "mddb_wf.tools", "mddb_wf.utils"]
 include-package-data = true
 
 [tool.setuptools.package-data]
 # Include files in the resources but not subfolders
-"mddb_wf" = ["resources/*", "**/*.py"]
+"mddb_wf" = ["resources/*"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
