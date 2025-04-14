@@ -41,8 +41,7 @@ dependencies:
   - requests # To check is molecules is in LIPID MAPS
   # We must declare pip explicitly according to a warning
   - pip
-  - pip:
-    # This library is used to calculate TM scores and it is not in conda
-    # WARNING: this library is not mantained and it depends in an outdated version of iminuit
-    # WARNING: we would have to maintain it ourselves in further python versions
-    - tmscoring
+  # This library is used to calculate TM scores and it is not in conda
+  # WARNING: this library is not mantained and it depends in an outdated version of iminuit
+  # WARNING: we would have to maintain it ourselves in further python versions
+  - tmscoring
