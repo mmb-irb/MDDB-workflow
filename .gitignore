@@ -1,5 +1,11 @@
 .gitignore
 __pycache__
-model_workflow.egg-info
-mwf.tar.gz
+# Test
+.coverage
+.pytest_cache/
 test/test_data/
+# Build
+build/
+dist/
+*.egg-info
+mwf.tar.gz

@@ -1,6 +1,6 @@
 import pytraj as pyt
 import math
-from distutils.version import StrictVersion
+from packaging.version import Version
 from typing import Optional
 
 from model_workflow.utils.auxiliar import InputError
@@ -28,7 +28,7 @@ def get_pytraj_trajectory (
     # This happens with some random pdbs which pytraj considers to have 0 Mols
     # More info: https://github.com/Amber-MD/cpptraj/pull/820
     # DANI: Esto es útil en pytraj <= 2.0.5 pero hace fallar el código a partir de pytraj 2.0.6
-    if StrictVersion(pyt.__version__) <= StrictVersion('2.0.5'):
+    if Version(pyt.__version__) <= Version('2.0.5'):
         pyt_trajectory.top.start_new_mol()
 
     # Filter away atoms which ARE NOT in the atom selection

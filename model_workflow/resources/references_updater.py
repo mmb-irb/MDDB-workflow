@@ -41,7 +41,7 @@ def updater(ref_type = 'proteins'):
         options = json.loads(response.read().decode("utf-8"))
     project_ids = set(options[metafields[ref_type]].keys())
     # Remove null uniprot values
-    project_ids -= set(['null', 'noref', '', 'no', 'ab initio', 'NONE', 'None', ' 7Z85', 'No']) # TODO: remove all except noref from DB
+    project_ids -= set(['null', 'noref'])
     project_ids_count = len(project_ids)
     print('There are ' + str(project_ids_count) + ' different ids among projects')
     # Request all references
