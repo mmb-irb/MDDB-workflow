@@ -78,8 +78,8 @@ def energies (
         return
 
     # Make sure we have charges
-    if not charges or len(charges) == 0:
-        print('No charges were passed')
+    if not charges or type(charges) == Exception:
+        print('Atom charges are not available -> This analysis will be skipped')
         return
 
     # Set the auxiliar files further required as CMIP inputs
