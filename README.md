@@ -63,13 +63,13 @@ Make a conda unpack
 
 Now copy the whole workflow repository from your local machine to the remote machine.
 
-`git clone https://mmb.irbbarcelona.org/gitlab/d.beltran.anadon/MoDEL-workflow.git`<br />
-`rsync -avP MoDEL-workflow <remote>:<path>`
+`git clone https://github.com/mmb-irb/MDDB-workflow.git`<br />
+`rsync -avP MDDB-workflow <remote>:<path>`
 
 Then install it in develop mode with:
 
-`cd MoDEL-workflow`<br />
-`python setup.py develop`
+`cd MDDB-workflow`<br />
+`python -m pip install --no-build-isolation --no-index --no-deps -e .`
 
 At this point your environment is ready to use and it includes the `mwf` command.<br />
 From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
