@@ -599,6 +599,14 @@ def bi_populations(bfiles):
     zetac = read_series(zetac) 
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
     zetaw = read_series(zetaw) 
+    # Fix angles that are negative and over 360 degrees
+    epsilc = fix_angles2(epsilc) 
+    # Fix angles that are negative and over 360 degrees
+    epsilw = fix_angles2(epsilw)
+    # Fix angles that are negative and over 360 degrees
+    zetac = fix_angles2(zetac)
+    # Fix angles that are negative and over 360 degrees
+    zetaw = fix_angles2(zetaw) 
     # Compute differences between Epsilon and Zeta values
     diff_epsil_zeta = angles_diff_ze(epsilc,zetac,epsilw,zetaw) 
     BI,BII = bi_pop(diff_epsil_zeta)
