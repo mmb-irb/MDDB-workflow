@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model_workflow"
+version = "0.0.1"
+requires-python = ">=3.9.0"
+dependencies = [
+    'argparse',
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[project.scripts]
+mwf = "model_workflow.console:main"
+
+[tool.setuptools]
+packages = ["model_workflow"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+# Include files in the resources but not subfolders
+"model_workflow" = ["resources/*"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

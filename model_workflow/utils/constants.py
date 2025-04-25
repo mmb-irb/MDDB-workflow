@@ -72,6 +72,11 @@ DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
 DEFAULT_POPULATIONS_FILENAME = 'populations.json'
 DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
 
+# An old system for when original topology is very wrong and charges must be provided manually
+RAW_CHARGES_FILENAME = 'charges.txt'
+# Accepted topology formats for atomic charges mining
+ACCEPTED_TOPOLOGY_FORMATS = ['tpr', 'top', 'psf', 'prmtop', 'prm7']
+
 # Input files processing intermediate steps
 # We name differenlty every intermediate file and we never rename/overwrite any input or intermediate file
 # This allows us to know where we were in case the process was interrupted and not repeat steps on reset
@@ -110,11 +115,6 @@ REGISTER_FILENAME = '.register.json'
 RESORTED_CHARGES_FILENAME = 'resorted_charges.json'
 RESORTED_BONDS_FILENAME = 'resorted_bonds.json'
 
-# An old system for when original topology is very wrong and charges must be provided manually
-RAW_CHARGES_FILENAME = 'charges.txt'
-# Accepted topology formats for atomic charges mining
-ACCEPTED_TOPOLOGY_FORMATS = ['tpr', 'top', 'psf', 'prmtop', 'prm7']
-
 # Set generated file names
 FIRST_FRAME_FILENAME = 'first_frame.pdb'
 AVERAGE_STRUCTURE_FILENAME = 'average.pdb'
@@ -130,9 +130,9 @@ REFERENCE_LABELS = {
 # Set the PDB (Protein Data Bank) references filename
 PDB_REFERENCES_FILENAME = 'pdb_references.json'
 # Set the protein references filename
-PROTEIN_REFERENCES_FILENAME = 'references.json'
+PROTEIN_REFERENCES_FILENAME = 'protein_references.json'
 # Set the ligand references filename
-LIGAND_REFERENCES_FILENAME = 'ligands.json'
+LIGAND_REFERENCES_FILENAME = 'ligand_references.json'
 # Set the ligand references filename
 MEMBRANE_MAPPING_FILENAME = 'mda.mem_map.json'
 # Set the chains filename
@@ -302,13 +302,14 @@ PYTRAJ_PARM_FORMAT = {
 # DANI: V was found in PDB 2P7E
 # DANI: Tb was found in PDB 359D
 # DANI: Ag was found in PDB 5AY2
+# DANI: Rb was found in PDB 3GGK
 
 # Set elements which are always "bonded"
 SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S' ])
 # Set elements which may be found both "bonded" or "alone"
 SUPPORTED_COORDINATED_ELEMENTS = set([ 'Zn', 'Fe', 'Mn', 'Co', 'Lu', 'U', 'V', 'Al', 'Ba', 'Be', 'F' ])
 # Set elements which are always "alone"
-SUPPORTED_ION_ELEMENTS = set([ 'K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl' ])
+SUPPORTED_ION_ELEMENTS = set([ 'K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl', 'Rb' ])
 SUPPORTED_ELEMENTS = {
     *SUPPORTED_POLYMER_ELEMENTS,
     *SUPPORTED_COORDINATED_ELEMENTS,
