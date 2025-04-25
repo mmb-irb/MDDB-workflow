@@ -3,7 +3,7 @@ import MDAnalysis
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
 from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
@@ -43,8 +43,16 @@ def generate_membrane_mapping(structure : 'Structure',
         # Then we map the lipids/membrane
         warn('There was a problem connecting to the SwissLipids database.')
         return None
+    # Prepare the membrane mapping OBJ/JSON
+    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'references': None}
     print('-> Generating membrane mapping')
     assert topology_file.extension == 'json', 'Input topology file must be in json format: '+ topology_file.extension
+    # Check the topology has charges or the code further will fail
+    topology_data = load_json(topology_file.absolute_path)
+    topology_charges = topology_data.get('atom_charges', None)
+    if not topology_charges:
+        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+        return mem_map_js
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
     # Get InChI keys of non-proteic/non-nucleic residues
@@ -78,7 +86,7 @@ def generate_membrane_mapping(structure : 'Structure',
                      f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}')
     # Prepare the membrane mapping OBJ/JSON
-    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'references': references}
+    mem_map_js['references'] = references
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
