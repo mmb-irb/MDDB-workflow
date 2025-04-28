@@ -1,10 +1,10 @@
 import os
 import pytest
-from mddb_wf.utils.constants import *
-from mddb_wf.utils.file import File
-from mddb_wf.utils.remote import Remote
-from mddb_wf.tools.topology_manager import setup_structure
-from mddb_wf.utils.auxiliar import load_json, load_yaml
+from model_workflow.utils.constants import *
+from model_workflow.utils.file import File
+from model_workflow.utils.remote import Remote
+from model_workflow.tools.topology_manager import setup_structure
+from model_workflow.utils.auxiliar import load_json, load_yaml
 from unittest.mock import patch
 from io import StringIO
 
@@ -95,7 +95,7 @@ def inputs_file(remote_client, test_data_dir):
 @pytest.fixture(scope="class")
 def analysis_file(remote_client, test_data_dir, analysis_type):
     """Download and provide the standard structure file"""
-    output_path = os.path.join(test_data_dir, f"mda.{analysis_type}.json")
+    output_path = os.path.join(test_data_dir, f"mda.{analysis_type}_REF.json")
     file_obj = File(output_path)
     
     # Only download if file doesn't exist yet

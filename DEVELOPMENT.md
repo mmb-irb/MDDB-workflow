@@ -17,7 +17,7 @@ python -m pip install -e ".[dev]"
 
 ## Testing
 
-`pytest --cov-report term --cov=mddb_wf test`
+`pytest --cov-report term --cov=model_workflow test`
 
 ## Build
 

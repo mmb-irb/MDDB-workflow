@@ -1,20 +1,20 @@
 import pytest
 import inspect
-import mddb_wf.utils.vmd_spells as vmd_spells
-from mddb_wf.utils.auxiliar import load_json, load_yaml
-from mddb_wf.tools.process_interactions import process_interactions, load_interactions
-from mddb_wf.tools.get_reduced_trajectory import get_reduced_trajectory
+import model_workflow.utils.vmd_spells as vmd_spells
+from model_workflow.utils.auxiliar import load_json, load_yaml
+from model_workflow.tools.process_interactions import process_interactions, load_interactions
+from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
 
 class TestVMD:
     @pytest.fixture(scope="class", autouse=True)
-    def test_accession(self):
-        """Override the default accession with a test-specific one"""
-        return "A01JP.1"  # Different accession for this test file
-
-    @pytest.fixture(scope="class", autouse=True)
     def analysis_type(self):
         return "interactions"
+
+    @pytest.fixture(scope="class", autouse=True)
+    def test_accession(self):
+        """Override the default accession with a test-specific one"""
+        return "A01JP.1"  # Different accession for this test fil
 
     # Test for escape_tcl_selection
     def test_escape_tcl_selection(self):

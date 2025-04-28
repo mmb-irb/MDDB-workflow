@@ -2,7 +2,7 @@ import sys
 import pytest
 from io import StringIO
 from unittest.mock import patch
-from mddb_wf.console import parser, main
+from model_workflow.console import parser, main
 
 
 class TestConsoleArgumentParsing:
@@ -16,7 +16,7 @@ class TestConsoleArgumentParsing:
     def test_no_arguments(self):
         """Test behavior when no arguments are provided"""
         # Set up empty arguments
-        sys.argv = ['mddb_wf']
+        sys.argv = ['model_workflow']
         
         # Capture the output of parser.print_help() for comparison
         expected_help_buffer = StringIO()
@@ -46,7 +46,7 @@ class TestConsoleIntegration:
     ])
     def test_subcommand_help(self, capture_stdout, subcommand):
         """Test that help text is printed for each subcommand"""
-        sys.argv = ['mddb_wf', subcommand, '-h']
+        sys.argv = ['model_workflow', subcommand, '-h']
         
         # Run the main function, which should print help
         with pytest.raises(SystemExit):

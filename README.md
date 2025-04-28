@@ -1,7 +1,7 @@
 # MDDB Workflow
 
 <div align="center">
-    <img src="./mddb_wf/resources/mddb.png" width="640" height="320">
+    <img src="./model_workflow/resources/mddb.png" width="640" height="320">
 </div>
 
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
