@@ -28,3 +28,18 @@ include-package-data = true
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.conda-deny]
+safe-licenses = [
+    "Apache-2.0",
+    "Unlicense",
+    "WTFPL",
+    "MIT",
+    "PSF-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "LGPL-2.1-or-later",
+    "LGPL-2.1-only",
+    "Zlib",
+]
