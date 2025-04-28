@@ -136,11 +136,14 @@ def main ():
 
     # In case the chainer tool was called
     elif subcommand == 'chainer':
+        # Parse the structure
         structure = Structure.from_pdb_file(args.input_structure)
+        # Select atom accoridng to inputs
         selection = structure.select(args.selection_string, args.selection_syntax) if args.selection_string else structure.select_all()
-        if not selection:
-            raise InputError(f'Empty selection {selection}')
+        if not selection: raise InputError(f'Empty selection {selection}')
+        # Run the chainer logic
         structure.chainer(selection, args.letter, args.whole_fragments)
+        # Generate the output file from the modified structure
         structure.generate_pdb_file(args.output_structure)
         print(f'Changes written to {args.output_structure}')
     # If user wants to run the NASSA analysis
@@ -590,7 +593,8 @@ chainer_parser.add_argument(
     help="Atom selection (the whole structure by default)")
 chainer_parser.add_argument(
     "-syn", "--selection_syntax", default='vmd',
-    help="Atom selection syntax")
+    choices=Structure.SUPPORTED_SELECTION_SYNTAXES,
+    help="Atom selection syntax (VMD syntax by default)")
 chainer_parser.add_argument(
     "-let", "--letter",
     help="New chain letter (one letter per fragment by default)")

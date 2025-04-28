@@ -148,14 +148,42 @@ class Atom:
         self.set_residue_index(new_residue_index)
     residue = property(get_residue, set_residue, None, "The atom residue")
 
-    # The atom chain index according to parent structure chains (read only)
-    # In order to change the chain index it must be changed in the atom residue
+    # The atom chain index according to parent structure chains
     def get_chain_index (self) -> Optional[int]:
         # The residue may be missing if the atom has been set rawly
         if not self.residue:
             return None
         return self.residue.chain_index
-    chain_index = property(get_chain_index, None, None, "The atom chain index according to parent structure chains (read only)")
+    # Set a new chain index
+    # WARNING: You may create a new residue in this process
+    def set_chain_index (self, new_chain_index : int):
+        # If the new chain index is the current chain index do nothing
+        # WARNING: It is important to stop this here or it could delete a chain which is not to be deleted
+        if new_chain_index == self.chain_index:
+            return
+        # If there is not strucutre yet it means the chain is beeing set before the structure
+        # We just save the chain index and wait for the structure to be set
+        if not self.structure:
+            self._chain_index = new_chain_index
+            return
+        # Relational indices are updated through a top-down hierarchy
+        # Affected chains are the ones to update this residue internal chain index
+        # WARNING: It is critical to find the new chain before removing/adding residues
+        # WARNING: It may happend that we remove the last residue in the current chain and the current chain is purged
+        # WARNING: Thus the 'new_chain_index' would be obsolete since the structure.chains list would have changed
+        new_chain = self.structure.chains[new_chain_index]
+        # set the new residue where this atom will be appended
+        new_residue = new_chain.find_residue(self.residue.number, self.residue.icode)
+        # If it does not exist yet then create it
+        # It will be a copy of the current residue (name, number and icode) but in the new chain
+        if not new_residue:
+            new_residue = Residue(self.residue.name, self.residue.number, self.residue.icode)
+            self.structure.set_new_residue(new_residue)
+            new_chain.add_residue(new_residue)
+        # Now remove this atom from its current residue and move it to the new chain residue
+        self.residue.remove_atom(self)
+        new_residue.add_atom(self)
+    chain_index = property(get_chain_index, set_chain_index, None, "The atom chain index according to parent structure chains (read only)")
 
     # The atom chain (read only)
     # In order to change the chain it must be changed in the atom residue
@@ -433,6 +461,9 @@ class Residue:
     def remove_atom (self, current_atom : 'Atom'):
         # Remove the current atom index from the atom indices list
         self.atom_indices.remove(current_atom.index) # This index MUST be in the list
+        # If we removed the last atom then this residue must be removed from its structure
+        if len(self.atom_indices) == 0 and self.structure:
+            self.structure.purge_residue(self)
         # Update the atom internal index
         current_atom._residue_index = None
 
@@ -924,7 +955,7 @@ class Chain:
     # WARNING: Note that this function does not trigger the set_residue_indices
     def remove_residue (self, residue : 'Residue'):
         self.residue_indices.remove(residue.index) # This index MUST be in the list
-        # If we removed the last index then this chain must be removed from its structure
+        # If we removed the last residue then this chain must be removed from its structure
         if len(self.residue_indices) == 0 and self.structure:
             self.structure.purge_chain(self)
         # Update the residue internal chain index
@@ -987,7 +1018,7 @@ class Chain:
         return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
     
     # Find a residue by its number and insertion code
-    def get_residue_by_number (self, number : int, icode : str = '') -> Optional['Residue']:
+    def find_residue (self, number : int, icode : str = '') -> Optional['Residue']:
         # Iterate chain residues
         for residue in self.residues:
             if residue.number == number and residue.icode == icode:
@@ -1701,6 +1732,7 @@ class Structure:
     # - vmd (default)
     # - prody
     # - pytraj
+    SUPPORTED_SELECTION_SYNTAXES = { 'vmd', 'prody', 'pytraj' }
     def select (self, selection_string : str, syntax : str = 'vmd') -> Optional['Selection']:
         if syntax == 'vmd':
             # Generate a pdb for vmd to read it
@@ -1732,7 +1764,8 @@ class Structure:
                 return Selection()
             return Selection(atom_indices)
 
-        raise InputError(f'Syntax {syntax} is not supported. Choose one of the following: vmd, prody, pytraj')
+        options = ', '.join(self.SUPPORTED_SELECTION_SYNTAXES)
+        raise InputError(f'Syntax "{syntax}" is not supported. Choose one of the following: {options}')
 
     # Set a function to make selections using atom indices
     def select_atom_indices (self, atom_indices : List[int]) -> 'Selection':
@@ -2043,8 +2076,7 @@ class Structure:
         if selection == None:
             selection = self.select_all()
         # If the selection is empty then there is nothing to do here
-        if len(selection) == 0:
-            return
+        if len(selection) == 0: return
         # If a letter is specified then the logic is way simpler
         if letter:
             self.set_selection_chain_name(selection, letter)
@@ -2115,14 +2147,11 @@ class Structure:
         if not chain:
             chain = Chain(name=letter)
             self.set_new_chain(chain)
-        # Convert the selection to residues
-        # WARNING: Remember to never use a set when handling residues or you may eliminate 'duplicated' residues
-        residue_indices = self.get_selection_residue_indices(selection)
         # Set the chain index of every residue to the new chain
-        for residue_index in residue_indices:
+        for atom_index in selection.atom_indices:
             # WARNING: Chain index has to be read every iteration since it may change. Do not save it
-            residue = self.residues[residue_index]
-            residue.set_chain_index(chain.index)
+            atom = self.atoms[atom_index]
+            atom.set_chain_index(chain.index)
 
     # Get the next available chain name
     # Find alphabetically the first letter which is not yet used as a chain name
@@ -2143,19 +2172,16 @@ class Structure:
         # Get the corresponding chain
         target_chain = self.get_chain_by_name(chain_name)
         if not target_chain: return None
-        # Iterate chain residues
-        for residue in target_chain.residues:
-            if residue.number == number and residue.icode == icode:
-                return residue
-        return None
+        # Find the residue in the target chain
+        target_chain.find_residue(number, icode)
 
     # Get a summary of the structure
     def display_summary (self):
-        print('Atoms: ' + str(self.atom_count))
-        print('Residues: ' + str(len(self.residues)))
-        print('Chains: ' + str(len(self.chains)))
+        print(f'Atoms: {self.atom_count}')
+        print(f'Residues: {len(self.residues)}')
+        print(f'Chains: {len(self.chains)}')
         for chain in self.chains:
-            print('Chain ' + chain.name + ' (' + str(len(chain.residue_indices)) + ' residues)')
+            print(f'Chain {chain.name} ({len(chain.residue_indices)} residues)')
             print(' -> ' + chain.get_sequence())
 
     # There may be chains which are equal in the structure (i.e. same chain name)

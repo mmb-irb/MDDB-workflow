@@ -73,7 +73,7 @@ Then install it in develop mode with:
 
 ``` shell
 cd <path>
-python -m pip install -e .
+python -m pip install --no-build-isolation --no-index --no-deps -e .
 ```
 
 At this point your environment is ready to use and it includes the `mwf` command. From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
