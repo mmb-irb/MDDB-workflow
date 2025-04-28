@@ -16,7 +16,7 @@ on:
 
 jobs:
   # Name of the Job
-  lint_and_test:
+  testing:
     strategy:
       matrix:
         os: [ubuntu-latest]
