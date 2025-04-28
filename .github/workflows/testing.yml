@@ -1,4 +1,4 @@
-name: tests
+name: Pytest
 
 on:
   workflow_dispatch: ~
@@ -47,7 +47,7 @@ jobs:
           micromamba-version: '2.0.2-2'
           post-cleanup: 'all'
           init-shell: bash
-          environment-file: envs/environment.yaml
+          environment-file: envs/environment.yml
           create-args: >-
             python=${{ matrix.python-version }}
             pytest
