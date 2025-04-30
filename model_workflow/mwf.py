@@ -5,6 +5,7 @@
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
 from os.path import exists, isdir, isabs, relpath
+from shutil import rmtree
 import sys
 import io
 import re
@@ -1761,13 +1762,17 @@ class MD:
         output_analysis_filepath = self.pathify(OUTPUT_POCKETS_FILENAME)
         if exists(output_analysis_filepath) and not must_overwrite:
             return
+        # If we must overwritte pockets then delete the pockets folder and everything inside
+        mdpocket_folder = self.pathify(POCKETS_FOLDER)
+        if must_overwrite:
+            rmtree(mdpocket_folder)
         # Run the analysis
         pockets(
             structure_file = self.structure_file,
             trajectory_file = self.trajectory_file,
             pockets_prefix = self.pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
             output_analysis_filepath = output_analysis_filepath,
-            mdpocket_folder = self.pathify(POCKETS_FOLDER),
+            mdpocket_folder = mdpocket_folder,
             pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
