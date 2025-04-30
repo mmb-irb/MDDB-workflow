@@ -4,7 +4,6 @@ from datetime import datetime
 from time import strftime, gmtime
 
 from model_workflow.utils.auxiliar import load_json, save_json, warn
-from model_workflow.utils.constants import REGISTER_FILENAME, YELLOW_HEADER, COLOR_END
 from model_workflow.utils.type_hints import *
 
 # Set dates format
@@ -17,7 +16,9 @@ class Register:
         # Save the previous register
         self.file = register_file
         # Save the current workflow call
-        self.call = ' '.join(argv)
+        # Quote those arguments including space, since it means they were quoted when inputed
+        quoted_argv = [ f"'{arg}'" if ' ' in arg else arg for arg in argv ]
+        self.call = ' '.join(quoted_argv)
         # Save the current date
         self.date = datetime.today().strftime(date_style)
         # Set record for the modification times of processed input files
