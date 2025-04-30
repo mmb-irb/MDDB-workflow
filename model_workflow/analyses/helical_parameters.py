@@ -201,7 +201,7 @@ def hydrogen_bonds(
 
     ################
     # 2. From the dry.inpcrd file we will generate the .dat file
-    output_dat_file = os.path.join(folder_path, "NAhbonds.dat")
+    output_dat_file = os.path.join(folder_path, "mda.NAhbonds.dat")
 
     # Crear el directorio si no existe
     os.makedirs(folder_path, exist_ok=True)
