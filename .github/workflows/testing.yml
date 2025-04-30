@@ -1,0 +1,65 @@
+name: Pytest
+
+on:
+  workflow_dispatch: ~
+  # push:
+  #   branches: [ release ]
+  #   paths-ignore:
+  #     - '.gitignore'
+  #     - 'DEVELOPMENT.md'
+  #     - 'pyproject.toml'
+  #     - 'README.md'
+  #     - 'USAGE.md'
+  #     - 'manual_tools/'
+  # schedule:
+  #   - cron: "0 */6 * * *" # every 6 hours
+
+jobs:
+  # Name of the Job
+  testing:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.9"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - run: echo "Repository -> ${{ github.repository }}"
+      - run: echo "Branch -> ${{ github.ref }}"
+      - run: echo "Trigger event -> ${{ github.event_name }}"
+      - run: echo "Runner OS -> ${{ runner.os }}"
+
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+
+      - name: Remove all micromamba installations
+        run: |
+          rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
+          touch $HOME/.bash_profile
+
+      - name: setup-micromamba
+        uses: mamba-org/setup-micromamba@v2.0.0
+        with:
+          generate-run-shell: true
+          micromamba-version: '2.0.2-2'
+          post-cleanup: 'all'
+          init-shell: bash
+          environment-file: envs/environment.yml
+          create-args: >-
+            python=${{ matrix.python-version }}
+            pytest
+            pytest-cov
+            pip
+
+      - name: List installed package versions
+        shell: bash -l {0}
+        run: micromamba list
+
+      - name: Run tests
+        shell: bash -l {0}
+        run: |
+          # Producction one
+          pytest test --cov-report term --cov=model_workflow
