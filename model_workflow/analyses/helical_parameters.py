@@ -111,6 +111,7 @@ def helical_parameters (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     structure : 'Structure',
+    structure_filename : str,
     frames_limit : int,
     dna_selection : str = None
 ):
@@ -153,7 +154,18 @@ def helical_parameters (
     folder_path = False
     if '/' in input_trajectory_filename:
         folder_path = input_trajectory_filename.split('/')[-2]
-    terminal_execution(input_trajectory_filename, input_topology_filename, residue_index_ranges, sequences[0],folder_path)
+
+    # Run the hydrogen bond analysis to generate .dat file
+    hydrogen_bonds(
+        input_topology_filename,
+        input_trajectory_filename,
+        output_analysis_filename,
+        folder_path,
+        structure_filename,
+    )
+
+    return
+    terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit)
     # Set the path into the original directory outside the folder helicalparameters
@@ -162,6 +174,97 @@ def helical_parameters (
     # DANI: Estamos teniendo NaNs que no son soportados más adelante, hay que eliminarlos
     save_json(dictionary_information, output_analysis_filename)
     
+# Function to execute cpptraj and calculate .dat file (Hydrogen Bonds)
+def hydrogen_bonds(
+    input_topology_filename : str,
+    input_trajectory_filename : str,
+    output_analysis_filename : str,
+    folder_path : str,
+    input_structure_filename : str,
+):
+    # This analysis is done using cpptraj and its done by two steps
+    # 1. Crate the cpptraj.in file to generate the dry trajectory (cpptraj_dry.inpcrd)
+    # parm_path = f"/orozco/projects/ABCix/ProductionFiles" 
+    # setup_path = f"/orozco/projects/ABCix/ProductionFiles/SETUP" 
+
+    # # Config cpptraj
+    # cpptraj_in_file = f"{folder_path}/cpptraj.in"
+    # cpptraj_out_file = f"{folder_path}/cpptraj_dry.inpcrd"
+
+    # if not os.path.exists(cpptraj_out_file):
+
+
+    #     # Exec cpptraj
+    #     cpptraj_command = f"cpptraj {cpptraj_in_file}" 
+    #     res = subprocess.run(cpptraj_command, shell=True)
+
+
+    ################
+    # 2. From the dry.inpcrd file we will generate the .dat file
+    output_dat_file = os.path.join(folder_path, "NAhbonds.dat")
+
+    # Crear el directorio si no existe
+    os.makedirs(folder_path, exist_ok=True)
+
+    print(f"Saving .dat file to: {output_dat_file}")
+
+    # Crear el contenido del input de cpptraj usando las variables
+    cpptraj_script = f"""
+    # Load the topology file
+    parm {input_topology_filename}
+
+    # Load the initial reference structure
+    trajin {input_structure_filename}
+
+    # Load the trajectory
+    trajin {input_trajectory_filename}
+
+    # Run the NA structure analysis
+    nastruct NA
+
+    # Run the command to process the trajectory
+    run
+
+    # Write out hydrogen bond information to a file
+    writedata {output_dat_file} NA[hb]
+
+    # Quit
+    quit
+    """
+    print("Executing cpptraj...")
+    # Execute cpptraj with the generated script
+    subprocess.run(["cpptraj"], input=cpptraj_script, text=True, check=True)
+
+    # Check if the output file was created
+    if not os.path.exists(output_dat_file):
+        raise SystemExit(f"Error: {output_dat_file} was not created. Check the cpptraj command and input files.")
+
+    # Renumber the dat file because the first line is repeated
+    # AGUS: con esto tuvimos muchos problemas en el proyecto de ABCix y al final optamos por eliminar la primera línea y renumerar todo 
+    # AGUS: además, también sirvió para comprimir el archivo y leerlo mejor
+    def renumber_dat_file(file_path):
+        with open(file_path, 'r') as file:
+            lines = file.readlines()  
+
+        counter = 1
+        first = True
+
+        renumbered_lines = []
+        for line in lines:
+            if line.strip().startswith('#'):
+                renumbered_lines.append(line)
+            elif first:
+                first = False
+                continue
+            else:
+                renumbered_lines.append(f"{counter} {' '.join(map(str, line.split()[1:]))}\n")
+                counter += 1
+
+        with open(file_path, 'w') as file:
+            file.writelines(renumbered_lines)
+        print("Renumbering the dat file...")
+    # Renumber the dat file
+    renumber_dat_file(output_dat_file)
 
 # Function to execute Curves+ and Canals software to generate the output needed
 def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,folder_path):

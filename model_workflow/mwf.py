@@ -1787,10 +1787,11 @@ class MD:
             return
         # Run the analysis
         helical_parameters(
-            input_topology_filename = self.structure_file.path,
+            input_topology_filename = self.topology_file.path,
             input_trajectory_filename = self.trajectory_file.path,
             output_analysis_filename = output_analysis_filepath,
             structure = self.structure,
+            structure_filename= self.structure_file.path,
             frames_limit = None,
         )
         
