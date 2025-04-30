@@ -2,6 +2,8 @@ import sys
 import os
 from subprocess import run, PIPE
 
+# DANI: This is deprecared
+
 # This tool allows you to set the chain of all atoms in a selection
 # This is powered by VMD and thus the selection lenguage must be the VMD's
 # Arguments are as follows:

@@ -7,7 +7,7 @@ dependencies:
   - python=3.9
   - pyyaml
   - ambertools
-  - biopython=1.79
+  - biopython>1.79
   - curves
   - gromacs
   - mdanalysis
@@ -17,6 +17,7 @@ dependencies:
   - rdkit
   - mordred
   - iminuit
+  - requests
   - vmd
   - pip:
     - tmscoring
