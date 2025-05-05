@@ -1764,7 +1764,7 @@ class MD:
             return
         # If we must overwritte pockets then delete the pockets folder and everything inside
         mdpocket_folder = self.pathify(POCKETS_FOLDER)
-        if must_overwrite:
+        if must_overwrite and exists(mdpocket_folder):
             rmtree(mdpocket_folder)
         # Run the analysis
         pockets(
