@@ -82,7 +82,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
             for chain in chains:
                 chain_uniprots[chain] = uniprot_id
         pdb_data['chain_uniprots'] = chain_uniprots
-        pdb_data['organisms'] = organisms
+        pdb_data['organisms'] = list(set(organisms))
     except Exception as e:
         print(f'Error when mining PDB data for {pdb_id}')
         print('Got the response:', parsed_response, '.Setting noref')
