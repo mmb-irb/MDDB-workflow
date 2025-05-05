@@ -201,7 +201,7 @@ def hydrogen_bonds(
 
     ################
     # 2. From the dry.inpcrd file we will generate the .dat file
-    output_dat_file = os.path.join(folder_path, "mda.NAhbonds.dat")
+    output_dat_file = os.path.join(folder_path, "mda.nahbonds.dat")
 
     # Crear el directorio si no existe
     os.makedirs(folder_path, exist_ok=True)
@@ -265,6 +265,77 @@ def hydrogen_bonds(
         print("Renumbering the dat file...")
     # Renumber the dat file
     renumber_dat_file(output_dat_file)
+    
+    # Set the function to compress the dat file to .bin file
+    def compress_dat_to_bin(output_dat_file):
+        data = []
+        with open(output_dat_file, 'r') as file:
+            # Skip the first line since it is only the headers
+            next(file)
+            for line in file:
+                # Skip the first line since it is only the row number
+                numbers = [ int(s) for s in line.strip().split()[1:] ]
+                data += numbers
+
+        # Data is a list of numeric values
+        # Bit size is the number of bits for each value in data to be occupied
+        def store_bits_dat (data : list, bit_size : int, filepath : str):
+            from struct import pack
+            # Check bit size to make sense
+            if bit_size <= 0:
+                raise ValueError('Bit size must a number greater than 0')
+            if bit_size % 8 == 0:
+                raise ValueError('Bit size is multiple of 8 so bytes must be used instead of bits')
+            # Start writting the output file
+            with open(filepath, 'wb') as file:
+                bit_count = 0
+                current_byte = ''
+                # Iterate over data list values
+                for value in data:
+                    # Parse the value to binary and make sure the binary is as long as the bit size
+                    bits = format(value, 'b').zfill(bit_size)
+                    if len(bits) != bit_size:
+                        raise ValueError(f'Value {value} cannot be stored in {bit_size} bits')
+                    # Add bits one by one to the current byte to be written
+                    for bit in bits:
+                        current_byte += bit
+                        bit_count += 1
+                        # If the current byte is full then write it to the output file
+                        if bit_count == 8:
+                            #print(current_byte + ' -> ' + str(int(current_byte, 2)))
+                            file.write(pack('<B', int(current_byte, 2)))
+                            current_byte = ''
+                            bit_count = 0
+                # If last byte is truncated then fill it with 0s and write it
+                if bit_count != 0:
+                    last_byte = current_byte.ljust(8, '0')
+                    file.write(pack('<B', int(last_byte, 2)))
+        
+        # Set the name of the binary dat file
+        bin_file_path = output_dat_file.replace('.dat', '.bin')
+        # Call the function to store the bits in the binary file
+        store_bits_dat(data, 2, bin_file_path)
+        # Set the name of the meta file and create the meta data corresponding to the binary dat file
+        meta_file_path = bin_file_path + '.meta.json'
+        meta_data = {
+            'x': {
+                'name': 'bases',
+                'length': 20
+            },
+            'y': {
+                'name': 'frames',
+                'length': 500000
+            },
+            'bitsize': 2,
+        }
+        save_json(meta_data, meta_file_path)
+    
+    # Compress the dat file to .bin file
+    compress_dat_to_bin(output_dat_file)
+    print("Dat file compressed to bin file, removing original dat file...")
+    # Remove the original dat file
+    os.remove(output_dat_file)
+
 
 # Function to execute Curves+ and Canals software to generate the output needed
 def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,folder_path):
