@@ -201,10 +201,12 @@ def hydrogen_bonds(
 
     ################
     # 2. From the dry.inpcrd file we will generate the .dat file
-    output_dat_file = os.path.join(folder_path, "mda.nahbonds.dat")
-
-    # Crear el directorio si no existe
-    os.makedirs(folder_path, exist_ok=True)
+    # Create the helical parameters folder
+    helical_parameters_folder = f"{folder_path}/helical_parameters"
+    # If the folder already exists dont create it again
+    if not os.path.exists(helical_parameters_folder):
+        os.mkdir(helical_parameters_folder)
+    output_dat_file = os.path.join(helical_parameters_folder, "mdf.nahbonds.dat")
 
     print(f"Saving .dat file to: {output_dat_file}")
 
