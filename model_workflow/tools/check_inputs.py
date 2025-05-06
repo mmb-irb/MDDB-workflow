@@ -208,7 +208,12 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
                 f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms\n' +
                 f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
         
-        # If the counts match then anslo get the structure atom count and compare
+        # If the topology file is already the structure file then there is no need to check it
+        if input_structure_file == input_topology_file:
+            print(f'Topology and trajectory files match in number of atoms: {trajectory_atom_count}')
+            return
+
+        # If the counts match then also get the structure atom count and compare
         structure_atom_count = get_structure_atoms(input_structure_file)
 
         # Make sure it matches the topology and trajectory atom count
