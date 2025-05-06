@@ -7,6 +7,7 @@ from mordred import Calculator, descriptors
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.structures import Structure
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
@@ -455,14 +456,16 @@ def generate_ligand_mapping (
     save_json(ligands_data, output_ligands_filepath)
 
     # Log matched ligands
-    if len(ligand_maps) > 0:
+    if not ligand_maps:
+        print('No ligands were matched')
+    else:
         print('Matched ligands:')
         for ligand_map in ligand_maps:
-            residue_count = len(ligand_map["residue_indices"])
-            plural_sufix = '' if residue_count == 1 else 's'
-            print(f' - {ligand_map["name"]}: {residue_count} residue{plural_sufix}')
-    else:
-        print('No ligands were matched')
+            residue_selections = ligand_map["chain_residue_selection"]
+            residue_count = len(residue_selections)
+            plural_suffix = '' if residue_count == 1 else 's'
+
+            print(f' - {ligand_map["name"]}: {residue_count} residue{plural_suffix}')
 
     return ligand_maps, ligand_names
     
@@ -661,13 +664,20 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
     # From pubchem mine the atoms of the ligands and save it in a dict
     ligand_atom_element_count = count_atom_elements(ligand_data['formula'])
     matched_residues = []
+    chain_residue_selection = []
     # Get ligand pubchem id
     pubchem_id = ligand_data['pubchem']
     for residue, residue_atom_element_count in atom_elements_per_residue.items():
         if match_ligandsID_to_res(ligand_atom_element_count, residue_atom_element_count):
+            #matched_residues.append(residue.index)
+            for chain in structure.chains:
+                if chain.index == residue.chain.index:
+                    chain_name = chain.name
+                    break
             matched_residues.append(residue.index)
+            chain_residue_selection.append((chain_name, residue.index))
     # Format the output as we expect it
-    ligand_map = { 'name': pubchem_id, 'residue_indices': matched_residues, 'match': { 'ref': { 'pubchem': pubchem_id } } }
+    ligand_map = { 'name': pubchem_id, 'residue_indices': matched_residues, 'chain_residue_selection': chain_residue_selection, 'match': { 'ref': { 'pubchem': pubchem_id } } }
     return ligand_map
 
 # Given a smiles, get the pubchem id
