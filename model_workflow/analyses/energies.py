@@ -26,7 +26,7 @@ import math
 from subprocess import run, PIPE
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import load_json, save_json, warn, numerate_filename, get_analysis_name
 from model_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
@@ -48,7 +48,7 @@ resources = str(Path(__file__).parent.parent / "resources")
 # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies (
     input_trajectory_file : File,
-    output_analysis_filename : str,
+    output_analysis_filepath : str,
     # Set a folder to be created in order to store residual output files from this analysis
     energies_folder : str,
     structure : 'Structure',
@@ -108,7 +108,7 @@ def energies (
                 exceeds = True
                 break
         if exceeds:
-            print('WARNING: ' + interaction['name'] + ' is exceeding the CMIP atom count limit of ' + str(cmip_atom_limit) + ' and it will be skipped for this analysis')
+            warn(f'{interaction["name"]} is exceeding the CMIP atom count limit of {cmip_atom_limit} and it will be skipped for this analysis')
             interaction['exceeds'] = True
 
     # This anlaysis produces many residual output files
@@ -551,30 +551,39 @@ def energies (
         remove(filepath)
 
     # Now calculated residue average values through all frames for each pair of interaction agents
-    output_analysis = []
+    output_summary = []
     for i, interaction in enumerate(non_exceeding_interactions):
-
         # Check if the interaction as been marked as 'exceeds', in which case we skip it
-        if interaction.get('exceeds', False):
-            continue
-
+        if interaction.get('exceeds', False): continue
+        # Get the numerated output filepath for this specific interaction
+        numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
+        # Add the root of the output analysis filename to the run data
+        analysis_name = get_analysis_name(numbered_output_analysis_filepath)
+        # Get the interaction name
+        name = interaction['name']
+        # Add this interaction to the final summary
+        output_summary.append({
+            'name': name,
+            'analysis': analysis_name
+        })
+        # If the output file already exists then skip this iteration
+        if exists(numbered_output_analysis_filepath): continue
         # Get the main data
         data = interactions_data[i]
-
         # Format data
         agent1_output = format_data([ frame['agent1'] for frame in data ])
         agent2_output = format_data([ frame['agent2'] for frame in data ])
-
         # Format the results data and append it to the output data
         output = {
-            'name': interaction['name'],
+            'name': name,
             'agent1': agent1_output,
             'agent2': agent2_output,
         }
-        output_analysis.append(output)
+        # Export the current interaction analysis in json format
+        save_json(output, numbered_output_analysis_filepath)
 
-    # Finally, export the analysis in json format
-    save_json({'data': output_analysis}, output_analysis_filename)
+    # Finally, export the summary in json format
+    save_json(output_summary, output_analysis_filepath)
 
     # Remove the backup to avoid accidentally reusing it when the output file is deleted
     energies_backup.remove()

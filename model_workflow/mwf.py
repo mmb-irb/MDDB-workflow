@@ -1735,14 +1735,18 @@ class MD:
         # Update the overwritables so this is not remade further in the same run
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_ENERGIES_FILENAME)
+        energies_folder = self.pathify(ENERGIES_FOLDER)
+        output_analysis_filepath = f'{energies_folder}/{OUTPUT_ENERGIES_FILENAME}'
         if exists(output_analysis_filepath) and not must_overwrite:
             return
+        # If we must overwrite then delete the whole energies directory
+        if must_overwrite and exists(energies_folder):
+            rmtree(energies_folder)
         # Run the analysis
         energies(
             input_trajectory_file = self.trajectory_file,
-            output_analysis_filename = output_analysis_filepath,
-            energies_folder = self.pathify(ENERGIES_FOLDER),
+            output_analysis_filepath = output_analysis_filepath,
+            energies_folder = energies_folder,
             structure = self.structure,
             interactions = self.processed_interactions,
             charges = self.charges,
