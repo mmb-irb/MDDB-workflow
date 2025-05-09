@@ -163,6 +163,7 @@ OUTPUT_DIST_PERRES_FILENAME = 'mda.dist_perres.json'
 OUTPUT_HBONDS_FILENAME = 'mda.hbonds.json'
 OUTPUT_SASA_FILENAME = 'mda.sasa.json'
 OUTPUT_ENERGIES_FILENAME = 'mda.energies.json'
+OUTPUT_DIHEDRAL_ENERGIES_FILENAME = 'mda.dihenergies.json'
 OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
 OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket' # WARNING: If this is changed then the pockets function must be updated as well
 OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
