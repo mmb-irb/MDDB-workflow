@@ -5,10 +5,11 @@
 import os
 from os.path import exists
 
-from subprocess import run, PIPE, STDOUT, Popen
+from subprocess import run, PIPE, STDOUT
 
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.auxiliar import warn
 
 # Set characters to be escaped since they have a meaning in TCL
 TCL_RESERVED_CHARACTERS = ['"','[',']']
@@ -25,7 +26,7 @@ commands_filename = '.commands.vmd'
 
 # List all the vmd supported trajectory formats
 vmd_supported_structure_formats = {'pdb', 'prmtop', 'psf', 'parm', 'gro'} # DANI: Esto lo he hecho rápido, hay muchas más
-vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb'}
+vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb', 'rst7'}
 
 # Set a vmd format translator
 vmd_format = {
@@ -40,7 +41,8 @@ vmd_format = {
     'trr': 'trr',
     'netcdf': 'netcdf',
     'nc': 'netcdf',
-    'cdf': 'netcdf'
+    'cdf': 'netcdf',
+    'rst7': 'rst7'
 }
 
 # Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file
@@ -186,7 +188,7 @@ def merge_and_convert_trajectories (
     output_trajectory_filename : str
     ):
 
-    print('WARNING: You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
+    warn('You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
     print('Note that we cannot display the progress of the conversion since we are using VMD')
 
     # Get the format to export coordinates
@@ -242,7 +244,7 @@ merge_and_convert_trajectories.format_sets = [
     {
         'inputs': {
             'input_structure_filename': vmd_supported_structure_formats,
-            'input_trajectory_filenames': {'mdcrd', 'crd'}
+            'input_trajectory_filenames': {'mdcrd', 'crd', 'rst7'}
         },
         'outputs': {
             # NEVER FORGET: VMD cannot write to all formats it supports to read

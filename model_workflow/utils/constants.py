@@ -257,6 +257,8 @@ EXTENSION_FORMATS = {
     'crd': 'crd',
     'mdcrd': 'crd',
     'trj': 'crd',
+    # Restart files (may be used as single frame trajectories)
+    'rst7': 'rst7',
     # Other
     'json': 'json',
     'yaml': 'yaml',
