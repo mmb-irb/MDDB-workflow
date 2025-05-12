@@ -126,6 +126,10 @@ def reprint (text : str):
 def warn (message : str):
     print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
 
+# Get the mean/average of a list of values
+def mean(values : List[float]) -> float:
+    return sum(values) / len(values)
+
 # Round a number to hundredths
 def round_to_hundredths (number : float) -> float:
     return round(number * 100) / 100

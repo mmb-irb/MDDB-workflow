@@ -3,9 +3,10 @@ import numpy as np
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.auxiliar import save_json, mean
 
 # Calculate torsions and then dihedral energies for every dihedral along the trajectory
-def dihedral_energies (
+def compute_dihedral_energies (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
     output_analysis_filepath : str,
@@ -14,6 +15,18 @@ def dihedral_energies (
     frames_limit : int,
 ):
     print('-> Running dihedral energies analysis')
+
+    # Set a dict with the results of energies calculations
+    # Atom indices are used as keys
+    dihedral_energies = {}
+    for dihedral_data in dihedrals_data:
+        atom_indices = dihedral_data['atom_indices']
+        dihedral_energies[atom_indices] = {
+            'atom_indices': list(atom_indices),
+            'torsion': [],
+            'ee': [],
+            'vdw': [],
+        }
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
@@ -30,35 +43,78 @@ def dihedral_energies (
     # To do so, prepare a list with every group of atoms conforming a dihedral
     dihedral_atom_indices = [ data['atom_indices'] for data in dihedrals_data ]
 
-    # Compute dihedral torsions
+    # Compute dihedral torsions using MDtraj
     trajectory_torsions = mdt.compute_dihedrals(traj, dihedral_atom_indices)
 
     # Results are returned by frame
     # DANI: Creo, porque he hecho las pruebas con una trayectoria de 1 frame xD
-    # Iterate frames and calculate dihedran energies for each frame
+    # Iterate frames and calculate dihedral energies for each frame
     for frame_torsions in trajectory_torsions:
 
-        # Iterate every dihedral
+        # Iterate every dihedral with its torsion
         for dihedral_data, torsion in zip(dihedrals_data, frame_torsions):
+            atom_indices = dihedral_data['atom_indices']
+            # Dihedral torsion energy is the sum of the torsion energy of its terms
+            torsion_energy = 0
+            # Iterate dihedral terms
+            for term in dihedral_data['terms']:
+                # Get dihedral term parameters
+                k = term['force']
+                if k == 0: continue
+                n = term['period']
+                δ = term['phase']
+                φ = torsion
+                # Calculate the dihedral torsion energy according to the formula
+                term_energy = (k/2) * (1 + np.cos(n*φ - δ))
+                torsion_energy += term_energy
+            # Add torison energies to the dihedral energies object
+            dihedral_energies[atom_indices]['torsion'].append(torsion_energy)
 
-            # Calculate the dihedral energy according to the formula
-            k = dihedral_data['force_constant']
-            n = dihedral_data['periodicity']
-            δ = dihedral_data['phase']
-            φ = torsion
+    # Now calculate non covalent energies
+    # These energies are always computed between atoms 1-4 in the dihedral
+    # i.e. atoms in both ends
+    dihedral_1_4_indices = [ [ data['atom_indices'][0], data['atom_indices'][3] ] for data in dihedrals_data ]
 
-            print(f'Dihedral number (1-based): {dihedral_data["index"] + 1}')
-            print(f'Dihedral atom indices (0-based): {dihedral_data["atom_indices"]}')
-            print(f'k: {k}')
-            print(f'n: {n}')
-            print(f'δ: {δ}')
-            print(f'φ: {φ}')
-            print(f'n*φ - δ: {n*φ - δ}')
-            print(f'cos(n*φ - δ): {np.cos(n*φ - δ)}')
+    # Compute atom distance along the trajectory using MDtraj
+    trajectory_distances = mdt.compute_distances(traj, dihedral_1_4_indices)
+            
+    # Results are returned by frame
+    # Iterate frames and calculate dihedral energies for each frame
+    for frame_distances in trajectory_distances:
 
-            dihedral_energy = (k/2) * (1 + np.cos(n*φ - δ))
+        # Iterate every dihedral with its 1-4 distance
+        for dihedral_data, distance in zip(dihedrals_data, frame_distances):
+            # Get dihedral parameters
+            scee = dihedral_data.get('ee_scaling', None)
+            # It may happen that a dihedral has not end interactions at all
+            # This happens for instance in rings, to avoid double counting
+            if scee == None: continue
+            scnb = dihedral_data['vdw_scaling']
+            acoef = dihedral_data['lj_acoef']
+            bcoef = dihedral_data['lj_bcoef']
+            # Note that charges are not actual atom charges, but they are already scaled
+            q1 = dihedral_data['atom1_charge']
+            q4 = dihedral_data['atom4_charge']
+            # MDtraj outputs in nm and we want distance in Angstroms
+            r14 = distance * 10
+            # Calculate the dihedral electrostatic energy according to the formula
+            ee_energy = (1/scee) * (q1 * q4) / r14
+            # Calculate the dihedral Var Der Waals energy according to the formula
+            vdw_energy = (1/scnb) * (( acoef / (r14 ** 12) ) - ( bcoef / (r14 ** 6) ))
+            # Add non covalent energies to the dihedral energies object
+            atom_indices = dihedral_data['atom_indices']
+            dihedral_energies[atom_indices]['ee'].append(ee_energy)
+            dihedral_energies[atom_indices]['vdw'].append(vdw_energy)
 
-            print(f'Dihedral energy: {dihedral_energy} kcal/mol?')
+    # Reformat output data by calculating average values instead of per-frame values
+    output_data = []
+    for energies in dihedral_energies.values():
+        output_data.append({
+            'indices': energies['atom_indices'],
+            'torsion': mean(energies['torsion']),
+            'ee': mean(energies['ee']) if len(energies['ee']) > 0 else None,
+            'vdw': mean(energies['vdw']) if len(energies['vdw']) > 0 else None,
+        })
 
-
-            raise SystemExit('Hold up')
+    # Write results to disk
+    save_json(output_data, output_analysis_filepath)

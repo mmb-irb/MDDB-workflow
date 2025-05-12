@@ -10,7 +10,9 @@ AMBER_FLAG_FORMAT_TYPES = {
     '20a4': str,
     '1a80': str,
     '10I8': int,
+    '20I4': int,
     '1I8': int,
+    '3I8': int,
     '5E16.8': float,
 }
 
@@ -111,6 +113,7 @@ class Topology:
 
     # Amber topologies only
     # Get dihedrals data in a standarized format
+    # https://ambermd.org/FileFormats.php
     def _get_dihedrals_data_amber (self) -> List[dict]:
         # Get dihedral-related values from the topology
         including_hydrogens = self.mine_amber_flag('DIHEDRALS_INC_HYDROGEN')
@@ -118,9 +121,17 @@ class Topology:
         force_constants = self.mine_amber_flag('DIHEDRAL_FORCE_CONSTANT')
         preiodicities = self.mine_amber_flag('DIHEDRAL_PERIODICITY')
         phases = self.mine_amber_flag('DIHEDRAL_PHASE')
+        ee_scale_factors = self.mine_amber_flag('SCEE_SCALE_FACTOR')
+        vdw_scale_factors = self.mine_amber_flag('SCNB_SCALE_FACTOR')
+        charges = self.mine_amber_flag('CHARGE')
+        atom_types = self.mine_amber_flag('ATOM_TYPE_INDEX')
+        ntypes = len(set(atom_types))
+        nonbonded_parameter_indices = self.mine_amber_flag('NONBONDED_PARM_INDEX')
+        lj_acoefs = self.mine_amber_flag('LENNARD_JONES_ACOEF')
+        lj_bcoefs = self.mine_amber_flag('LENNARD_JONES_BCOEF')
         # Start processing dihedrals by finding their implicated atoms and "type"
         # These values are listed in groups of 5 integer numbers (4 atoms + 1 type)
-        dihedrals_data = []
+        dihedrals_data = {}
         all_dihedrals = including_hydrogens + excluding_hydrogens
         dihedral_count = int(len(all_dihedrals) / 5)
         for dih in range(dihedral_count):
@@ -131,9 +142,12 @@ class Topology:
             # Some docs say yo also havo to add 1, but this is only to have the 1-based numeration
             # If you want the 0-based index then is just dividing by 3
             # Also the third index may be negative for some dihedrals but this is not literal
-            # The negative number means the dihedral was ignored for 1-4 coordination energies calculations
+            # The negative number means the dihedral was ignored for end interaction calculations
+            # This means its 1-4 atom electrostatic and van der waals energies are ignored
+            # We make a tuple out of atom indices so we can use them as keys to group dihedrals
+            # Note that some dihedrals have multiple terms
             encrypted_atom_indices = dihedral_numbers[0:4]
-            atom_indices = [ int(abs(index)/3) for index in encrypted_atom_indices ]
+            atom_indices = tuple([ int(abs(index)/3) for index in encrypted_atom_indices ])
             ignored_1_4_energies = dihedral_numbers[2] < 0
             dihedral_type = dihedral_numbers[4]
             # Get the correspondong dihedral constants
@@ -141,13 +155,45 @@ class Topology:
             dihedral_index = dihedral_type - 1
             force_constant = force_constants[dihedral_index]
             periodicity = preiodicities[dihedral_index]
+            if periodicity < 0:
+                raise ValueError('Negative preiodicity is documented but not yet supported')
             phase = phases[dihedral_index]
-            dihedrals_data.append({
-                'index': dihedral_index,
-                'atom_indices': atom_indices,
-                'ignored_1_4_energies': ignored_1_4_energies,
-                'force_constant': force_constant,
-                'periodicity': periodicity,
+            # Get the current dihedral data
+            dihedral_data = dihedrals_data.get(atom_indices, None)
+            if dihedral_data == None:
+                # Create a new object if this is the first time to access this specific dihedral
+                dihedrals_data[atom_indices] = { 'atom_indices': atom_indices, 'terms': [] }
+                dihedral_data = dihedrals_data[atom_indices]
+            # Add current dihedral term
+            dihedral_data['terms'].append({
+                #'index': dihedral_index,
+                'force': force_constant,
+                'period': periodicity,
                 'phase': phase,
             })
-        return dihedrals_data
+            # If this dihedral term is not the one used to calculate non covalent energies the continue
+            if ignored_1_4_energies: continue
+            # Mine non covalent energy factors
+            # These values are noted for the whole dihedral and not for each term
+            # This is because multiterm dihedrals do not have more than one term with end interactions
+            ee_scale_factor = ee_scale_factors[dihedral_index]
+            vdw_scale_factor = vdw_scale_factors[dihedral_index]
+            dihedral_data['ee_scaling'] = ee_scale_factor
+            dihedral_data['vdw_scaling'] = vdw_scale_factor
+            atom1_index = atom_indices[0]
+            dihedral_data['atom1_charge'] = charges[atom1_index]
+            atom4_index = atom_indices[3]
+            dihedral_data['atom4_charge'] = charges[atom4_index]
+            # To get the next two values we need to find a complex index
+            # We substract 1 to atom type inidces to get 0-based indices
+            atom1_type_index = atom_types[atom1_index] - 1
+            atom4_type_index = atom_types[atom4_index] - 1
+            # Thus the parameter index becomes also 0-based
+            nonbonded_parameter_index_index = (ntypes * atom1_type_index) + atom4_type_index
+            nonbonded_parameter_index = nonbonded_parameter_indices[nonbonded_parameter_index_index]
+            # And this is the index we use to get the parameters we really want
+            dihedral_data['lj_acoef'] = lj_acoefs[nonbonded_parameter_index]
+            dihedral_data['lj_bcoef'] = lj_bcoefs[nonbonded_parameter_index]
+
+
+        return list(dihedrals_data.values())

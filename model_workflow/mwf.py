@@ -73,7 +73,7 @@ from model_workflow.analyses.distance_per_residue import distance_per_residue
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
-from model_workflow.analyses.dihedral_energies import dihedral_energies
+from model_workflow.analyses.dihedral_energies import compute_dihedral_energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
 from model_workflow.analyses.helical_parameters import helical_parameters
@@ -1769,7 +1769,7 @@ class MD:
         if exists(output_analysis_filepath) and not must_overwrite:
             return
         # Run the analysis
-        dihedral_energies(
+        compute_dihedral_energies(
             input_structure_file = self.structure_file,
             input_trajectory_file = self.trajectory_file,
             output_analysis_filepath = output_analysis_filepath,
