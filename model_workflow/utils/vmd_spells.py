@@ -5,10 +5,11 @@
 import os
 from os.path import exists
 
-from subprocess import run, PIPE, STDOUT, Popen
+from subprocess import run, PIPE, STDOUT
 
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.auxiliar import warn
 
 # Set characters to be escaped since they have a meaning in TCL
 TCL_RESERVED_CHARACTERS = ['"','[',']']
@@ -25,7 +26,7 @@ commands_filename = '.commands.vmd'
 
 # List all the vmd supported trajectory formats
 vmd_supported_structure_formats = {'pdb', 'prmtop', 'psf', 'parm', 'gro'} # DANI: Esto lo he hecho rápido, hay muchas más
-vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb'}
+vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb', 'rst7'}
 
 # Set a vmd format translator
 vmd_format = {
@@ -40,7 +41,8 @@ vmd_format = {
     'trr': 'trr',
     'netcdf': 'netcdf',
     'nc': 'netcdf',
-    'cdf': 'netcdf'
+    'cdf': 'netcdf',
+    'rst7': 'rst7'
 }
 
 # Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file
@@ -186,7 +188,7 @@ def merge_and_convert_trajectories (
     output_trajectory_filename : str
     ):
 
-    print('WARNING: You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
+    warn('You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
     print('Note that we cannot display the progress of the conversion since we are using VMD')
 
     # Get the format to export coordinates
@@ -242,7 +244,7 @@ merge_and_convert_trajectories.format_sets = [
     {
         'inputs': {
             'input_structure_filename': vmd_supported_structure_formats,
-            'input_trajectory_filenames': {'mdcrd', 'crd'}
+            'input_trajectory_filenames': {'mdcrd', 'crd', 'rst7'}
         },
         'outputs': {
             # NEVER FORGET: VMD cannot write to all formats it supports to read
@@ -536,18 +538,18 @@ def get_interface_atom_indices (
         # First get the whole selection atom indices
         # -------------------------------------------
         # Select the specified atoms
-        file.write('set selection [atomselect top "' + selection_1 + '"]\n')
+        file.write(f'set selection [atomselect top "{selection_1}"]\n')
         # Save atom indices from the selection
         file.write('set indices [$selection list]\n')
         # Write atom indices to a file
-        file.write('set indices_file [open ' + selection_1_filename + ' w]\n')
+        file.write(f'set indices_file [open {selection_1_filename} w]\n')
         file.write('puts $indices_file $indices\n')
         # Select the specified atoms
-        file.write('set selection [atomselect top "' + selection_2 + '"]\n')
+        file.write(f'set selection [atomselect top "{selection_2}"]\n')
         # Save atom indices from the selection
         file.write('set indices [$selection list]\n')
         # Write atom indices to a file
-        file.write('set indices_file [open ' + selection_2_filename + ' w]\n')
+        file.write(f'set indices_file [open {selection_2_filename} w]\n')
         file.write('puts $indices_file $indices\n')
         # -------------------------------------------
         # Now get the interface selection atom indices
@@ -556,8 +558,8 @@ def get_interface_atom_indices (
         # Capture indices for each frame in the trajectory
         file.write('set accumulated_interface1_atom_indices []\n')
         file.write('set accumulated_interface2_atom_indices []\n')
-        file.write('set interface1 [atomselect top "' + interface_selection_1 + '"]\n')
-        file.write('set interface2 [atomselect top "' + interface_selection_2 + '"]\n')
+        file.write(f'set interface1 [atomselect top "{interface_selection_1}"]\n')
+        file.write(f'set interface2 [atomselect top "{interface_selection_2}"]\n')
         # Capture the number of frames where the interaction happens
         file.write('set iframes 0\n')
         # Get the number of frames in the trajectory
@@ -575,25 +577,25 @@ def get_interface_atom_indices (
         file.write('    $interface2 update\n')
         file.write('    set interface2_atom_indices [$interface2 list]\n')
         file.write('    set accumulated_interface2_atom_indices [concat $accumulated_interface2_atom_indices $interface2_atom_indices ]\n')
-        # If there was at least one residue in one of the interactions then add one to the interaction frame count
+        # If there was at least one atom in one of the interactions then add one to the interaction frame count
         # Note that checking both interactions would be redundant so one is enough
         file.write('    if { [llength $interface1_atom_indices] > 0 } {\n')
         file.write('        incr iframes\n')
         file.write('    }\n')
         file.write('}\n')
         # Write the number of interacting frames and total frames to files
-        file.write('set iframes_file [open ' + interacting_frames_filename + ' w]\n')
+        file.write(f'set iframes_file [open {interacting_frames_filename} w]\n')
         file.write('puts $iframes_file $iframes\n')
-        file.write('set nframes_file [open ' + total_frames_filename + ' w]\n')
+        file.write(f'set nframes_file [open {total_frames_filename} w]\n')
         file.write('puts $nframes_file $nframes\n')
         # Remove duplicated indices
-        file.write('lsort -unique $accumulated_interface1_atom_indices\n')
-        file.write('lsort -unique $accumulated_interface2_atom_indices\n')
+        file.write('set unique_interface1_atom_indices [lsort -unique $accumulated_interface1_atom_indices]\n')
+        file.write('set unique_interface2_atom_indices [lsort -unique $accumulated_interface2_atom_indices]\n')
         # Write indices to files
-        file.write('set indices_file [open ' + interface_selection_1_filename + ' w]\n')
-        file.write('puts $indices_file $accumulated_interface1_atom_indices\n')
-        file.write('set indices_file [open ' + interface_selection_2_filename + ' w]\n')
-        file.write('puts $indices_file $accumulated_interface2_atom_indices\n')
+        file.write(f'set indices_file [open {interface_selection_1_filename} w]\n')
+        file.write('puts $indices_file $unique_interface1_atom_indices\n')
+        file.write(f'set indices_file [open {interface_selection_2_filename} w]\n')
+        file.write('puts $indices_file $unique_interface2_atom_indices\n')
         file.write('exit\n')
 
     # Run VMD

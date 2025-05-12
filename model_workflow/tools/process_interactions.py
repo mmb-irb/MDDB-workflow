@@ -61,7 +61,9 @@ def process_interactions (
             print(f' |-> Processing interactions automatically. Chain "{auto[0]}" is selected')
 
         # Get structure chains which are not completely in PBC
-        target_chains = [ chain for chain in structure.chains if chain.get_selection() - pbc_selection ]
+        target_selection = structure.select_protein()
+        target_structure = structure.filter(target_selection)
+        target_chains = [ chain for chain in target_structure.chains if chain.get_selection() - pbc_selection ]
         # The greedy option is to find all possible interactions between chains
         if auto == 'autogreedy' or auto == 'greedy':
             # Use itertools to get all possible combinations of chains
@@ -268,6 +270,10 @@ def process_interactions (
             interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
             interaction['interface_indices_' + agent] = interface_residue_indices
             interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
+            # Save atom indices in the interaction object
+            interaction[f'atom_indices_{agent}'] = atom_indices
+            interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
+            interaction['version'] = '1.0.0'
 
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
@@ -298,6 +304,11 @@ def process_interactions (
         'residue_indices_2',
         'interface_indices_1',
         'interface_indices_2',
+        'atom_indices_1',
+        'atom_indices_2',
+        'interface_atom_indices_1',
+        'interface_atom_indices_2',
+        'version',
         'strong_bonds',
         FAILED_INTERACTION_FLAG
     ]

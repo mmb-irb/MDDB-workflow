@@ -12,7 +12,7 @@ from model_workflow.utils.mdt_spells import merge_and_convert_trajectories as md
 from model_workflow.utils.mdt_spells import merge_and_convert_trajectories_alternative as mdt_merge_and_convert_trajectories_alternative
 from model_workflow.utils.mdt_spells import merge_and_convert_trajectories_unefficient as mdt_merge_and_convert_trajectories_unefficient
 from model_workflow.utils.vmd_spells import merge_and_convert_trajectories as vmd_merge_and_convert_trajectories
-from model_workflow.utils.auxiliar import InputError
+from model_workflow.utils.auxiliar import InputError, warn
 
 # Set functions to performe structure conversions
 # These functions must have 'input_structure_filename' and 'output_structure_filename' keywords
@@ -105,7 +105,7 @@ def convert (
         if input_structure_format == output_structure_format:
             copyfile(input_structure_file.path, output_structure_file.path)
             return
-        print('Getting structure in ' + output_structure_format + ' format from ' + input_structure_format + ' file')
+        print(f'Getting structure in {output_structure_format} format from {input_structure_format} file')
         # Otherwise, we must convert
         # Choose the right conversion function according to input and output formats
         request_format_set = {
@@ -123,8 +123,7 @@ def convert (
         ), None)
         # If there is no function to handle this specific conversion we stop here
         if not suitable:
-            raise InputError('Conversion from ' + input_structure_format +
-                ' to ' + output_structure_format + ' is not supported')
+            raise InputError(f'Conversion from {input_structure_format} to {output_structure_format} is not supported')
         converting_function, formats = suitable
         # Find the function keywords
         # This is important since some functions may need a trajectory input in addition
@@ -132,9 +131,7 @@ def convert (
         required_trajectory = 'input_trajectory_filename' in converting_function_keywords
         if required_trajectory:
             if len(input_trajectory_files) == 0:
-                raise InputError('The structure input format ' + input_structure_format +
-                ' is missing coordinates and the output format ' + output_structure_format +
-                ' needs them. An input trajectory file is required.')
+                raise InputError(f'The structure input format {input_structure_format} is missing coordinates and the output format {output_structure_format} needs them. An input trajectory file is required.')
             converting_function(
                 input_structure_filename=input_structure_file.path,
                 input_trajectory_filename=trajectory_sample.path,
@@ -159,7 +156,7 @@ def convert (
         if trajectory_files_count == 1 and input_trajectory_format == output_trajectory_format:
             copyfile(trajectory_sample.path, output_trajectory_file.path)
             return
-        print('Converting trajectory format from ' + input_trajectory_format + ' to ' + output_trajectory_format)
+        print(f'Converting trajectory format from {input_trajectory_format} to {output_trajectory_format}')
         # Otherwise, we must convert
         # Choose the right conversion function according to input and output formats
         request_format_set = {
@@ -177,15 +174,14 @@ def convert (
         ), None)
         # If there is no function to handle this specific conversion we try to combine several functions in order to do it
         if not suitable:
-            print('WARNING: There is no function to do the conversion directly. Trying to combine multiple functions...')
+            warn('There is no function to do the conversion directly. Trying to combine multiple functions...')
             suitable = next(get_format_set_suitable_combination(
                 available_functions=trajectory_converting_functions,
                 available_request_format_sets=[request_format_set],
             ), None)
         # If there is no function to handle this specific conversion we stop here
         if not suitable:
-            raise InputError('Conversion from ' + input_trajectory_format +
-                ' to ' + output_trajectory_format + ' is not supported')
+            raise InputError(f'Conversion from {input_trajectory_format} to {output_trajectory_format} is not supported')
         converting_function, formats = suitable
         # Get the input structure expected format
         expected_input_structure_formats = formats['inputs'].get('input_structure_filename', False)

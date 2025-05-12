@@ -158,7 +158,6 @@ def get_bonds_canonical_frame (
 # Extract bonds from a source file and format them per atom
 def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ List[int] ]:
     # If there is no topology then return no bonds at all
-    print(bonds_source_file)
     if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
     print('Mining atom bonds from topology file')

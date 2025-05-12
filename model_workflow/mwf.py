@@ -46,6 +46,7 @@ from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
+from model_workflow.utils.topologies import Topology
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
 from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
@@ -72,6 +73,7 @@ from model_workflow.analyses.distance_per_residue import distance_per_residue
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
+from model_workflow.analyses.dihedral_energies import dihedral_energies
 from model_workflow.analyses.pockets import pockets
 from model_workflow.analyses.rmsd_check import check_trajectory_integrity
 from model_workflow.analyses.helical_parameters import helical_parameters
@@ -1735,17 +1737,43 @@ class MD:
         # Update the overwritables so this is not remade further in the same run
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_ENERGIES_FILENAME)
+        energies_folder = self.pathify(ENERGIES_FOLDER)
+        output_analysis_filepath = f'{energies_folder}/{OUTPUT_ENERGIES_FILENAME}'
         if exists(output_analysis_filepath) and not must_overwrite:
             return
+        # If we must overwrite then delete the whole energies directory
+        if must_overwrite and exists(energies_folder):
+            rmtree(energies_folder)
         # Run the analysis
         energies(
             input_trajectory_file = self.trajectory_file,
-            output_analysis_filename = output_analysis_filepath,
-            energies_folder = self.pathify(ENERGIES_FOLDER),
+            output_analysis_filepath = output_analysis_filepath,
+            energies_folder = energies_folder,
             structure = self.structure,
             interactions = self.processed_interactions,
             charges = self.charges,
+            snapshots = self.snapshots,
+            frames_limit = 100,
+        )
+
+    # Dihedral energies
+    def run_dihedral_energies (self):
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in self.overwritables
+        # Update the overwritables so this is not remade further in the same run
+        self.overwritables.discard(task)
+        # Do not run the analysis if the output file already exists
+        output_analysis_filepath = self.pathify(OUTPUT_DIHEDRAL_ENERGIES_FILENAME)
+        if exists(output_analysis_filepath) and not must_overwrite:
+            return
+        # Run the analysis
+        dihedral_energies(
+            input_structure_file = self.structure_file,
+            input_trajectory_file = self.trajectory_file,
+            output_analysis_filepath = output_analysis_filepath,
+            dihedrals_data = self.project.dihedrals,
             snapshots = self.snapshots,
             frames_limit = 100,
         )
@@ -1764,7 +1792,7 @@ class MD:
             return
         # If we must overwritte pockets then delete the pockets folder and everything inside
         mdpocket_folder = self.pathify(POCKETS_FOLDER)
-        if must_overwrite:
+        if must_overwrite and exists(mdpocket_folder):
             rmtree(mdpocket_folder)
         # Run the analysis
         pockets(
@@ -1847,6 +1875,7 @@ class MD:
             structure = self.structure,
             snapshots = self.snapshots,
         )
+    # Thickness
     def run_thickness_analysis (self):
         # Get the task name
         task = self._get_task()
@@ -1866,6 +1895,7 @@ class MD:
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
+    # Area per lipid
     def run_apl_analysis (self):
         # Get the task name
         task = self._get_task()
@@ -1884,6 +1914,7 @@ class MD:
             output_analysis_filepath = output_apl_filepath,
             membrane_map = self.project.membrane_map,
         )
+    # Lipid order
     def run_lipid_order_analysis (self):
         # Get the task name
         task = self._get_task()
@@ -2090,6 +2121,8 @@ class Project:
         self._cg_residues = None
         self._safe_bonds = None
         self._charges = None
+        self._topology_reader = None
+        self._dihedrals = None
         self._populations = None
         self._transitions = None
         self._pdb_ids = None
@@ -2654,6 +2687,24 @@ class Project:
         return self._charges
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
+    # Topolody data reader
+    def get_topology_reader (self) -> 'Topology':
+        # If we already have a stored value then return it
+        if self._topology_reader: return self._topology_reader
+        # Instantiate the topology reader
+        self._topology_reader = Topology(self.topology_file)
+        return self._topology_reader
+    topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
+
+    # Dihedrals data
+    def get_dihedrals (self) -> List[dict]:
+        # If we already have a stored value then return it
+        if self._dihedrals: return self._dihedrals
+        # Calculate the dihedrals otherwise
+        self._dihedrals = self.topology_reader.get_dihedrals_data()
+        return self._dihedrals
+    dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
+
     # Equilibrium populations from a MSM
     def get_populations (self) -> Optional[List[float]]:
         # If we already have a stored value then return it
@@ -3053,6 +3104,7 @@ analyses = {
     'clusters': MD.run_clusters_analysis,
     'dist': MD.run_dist_perres_analysis,
     'energies': MD.run_energies_analysis,
+    'dihedrals': MD.run_dihedral_energies,
     'hbonds': MD.run_hbonds_analysis,
     'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
