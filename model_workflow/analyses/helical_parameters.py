@@ -10,6 +10,9 @@ import glob
 from model_workflow.utils.auxiliar import save_json, store_binary_data
 from model_workflow.utils.type_hints import *
 
+from model_workflow.utils.nucleicacid import NucleicAcid
+from model_workflow.tools.nassa_loaders import load_sequence2
+from model_workflow.tools.nassa_loaders import load_serfile
 conda_prefix = os.environ['CONDA_PREFIX']
 # If this path does not exist then it means curves is not installed
 curves_path = conda_prefix + '/.curvesplus'
@@ -156,18 +159,17 @@ def helical_parameters (
         folder_path = input_trajectory_filename.split('/')[-2]
 
     # Run the hydrogen bond analysis to generate .dat file
-    hydrogen_bonds(
-        input_topology_filename,
-        input_trajectory_filename,
-        output_analysis_filename,
-        folder_path,
-        structure_filename,
-    )
+    # hydrogen_bonds(
+    #     input_topology_filename,
+    #     input_trajectory_filename,
+    #     output_analysis_filename,
+    #     folder_path,
+    #     structure_filename,
+    # )
 
-    return
-    terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
+    # terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
-    dictionary_information = send_files(sequences[0], frames_limit)
+    dictionary_information = send_files(sequences[0], frames_limit, folder_path)
     # Set the path into the original directory outside the folder helicalparameters
     os.chdir(actual_path)
     # Convert the dictionary into a json file
@@ -411,48 +413,50 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,f
         raise SystemExit('Something went wrong with Canals software')
 
 
-def send_files(sequence,frames_limit):
+def send_files(sequence,frames_limit, folder_path):
     files_averages = []
     files_backbones = []
     files_allbackbones = []
     # Iterate over all files in the directory
+    helical_parameters_folder = f"{folder_path}/helical_parameters"
+    os.chdir(helical_parameters_folder)
     for file in os.listdir():
         if not file.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
             continue
-        data = []
-        with open(file, 'r') as ser_file:
-            # Skip the first line since it is only the headers
-            n_lines = 0
-            for line in ser_file:
-                # Skip the first line since it is only the row number
-                numbers = [ s for s in line.strip().split()[1:] ]
-                data += numbers
-                n_lines += 1
-                # if len(data) > 1000:
-                #     break
-        # Save the file with the same name but with .bin extension and mdf prefix
-        file_name = 'mdf.' + file
-        file_path = os.path.join(os.getcwd(), file_name.replace('.ser', '.bin'))
-        # Store data in a binary format
-        store_binary_data(
-            data=data,
-            byte_size=4, # 32 bits
-            filepath=file_path
-        )
-        # We need the meta file to store the information about the binary file (with the same name and .meta.json extension)
-        name_meta_file = file_path + '.meta.json'
-        meta_data = {
-            'x': {
-                'name': 'bases',
-                'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
-            },
-            'y': {
-                'name': 'frames',
-                'length': n_lines # Total number of lines in the file os the number of frames
-            },
-            'bitsize': 32, # 32 bits
-        }
-        save_json(meta_data, name_meta_file)
+        # data = []
+        # with open(file, 'r') as ser_file:
+        #     # Skip the first line since it is only the headers
+        #     n_lines = 0
+        #     for line in ser_file:
+        #         # Skip the first line since it is only the row number
+        #         numbers = [ s for s in line.strip().split()[1:] ]
+        #         data += numbers
+        #         n_lines += 1
+        #         # if len(data) > 1000:
+        #         #     break
+        # # Save the file with the same name but with .bin extension and mdf prefix
+        # file_name = 'mdf.' + file
+        # file_path = os.path.join(os.getcwd(), file_name.replace('.ser', '.bin'))
+        # # Store data in a binary format
+        # store_binary_data(
+        #     data=data,
+        #     byte_size=4, # 32 bits
+        #     filepath=file_path
+        # )
+        # # We need the meta file to store the information about the binary file (with the same name and .meta.json extension)
+        # name_meta_file = file_path + '.meta.json'
+        # meta_data = {
+        #     'x': {
+        #         'name': 'bases',
+        #         'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
+        #     },
+        #     'y': {
+        #         'name': 'frames',
+        #         'length': n_lines # Total number of lines in the file os the number of frames
+        #     },
+        #     'bitsize': 32, # 32 bits
+        # }
+        # save_json(meta_data, name_meta_file)
 
 
         #  THIS PART OF THE CODE IS TO ANALYZE THE FILES AND COMPUTE THE AVERAGES, STANDARD DEVIATIONS AND TIME SERIES
@@ -476,21 +480,188 @@ def send_files(sequence,frames_limit):
 
     
 
-    information_dictionary = {'avg_res':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}},'ts':{'backbone':{},
-                              'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}}}
-    
+    information_dictionary = {'avg_res':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}, 'stiffness':{}}}
+
+    information_dictionary0 = get_stiffness(sequence,files_averages,information_dictionary,frames_limit)
+    # 'ts':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}}
+    # Before there was another field called 'ts' or time series but it was removed because now it is included in the .ser and .bin files
+
     # Work with files that correspond to the different blocks of Helical Parameters and perform the different computations to each block 
 
     # Call function to distribute the different files to compute their averages
-    information_dictionary1 = flow_files_average(files_averages,information_dictionary,sequence)
+    information_dictionary1 = flow_files_average(files_averages,information_dictionary0,sequence)
 
     # Call function to distribute the files related to backbone torsions and perform different calculcations to each
     information_dictionary2 = flow_files_backbone(files_backbones,information_dictionary1) 
 
     # Call function to distribut all files and compute Time Series in all of them
-    info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit) 
+    #info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit) 
+    print('FINAL DF: ',information_dictionary2)
+    return information_dictionary2 # Return the dictionary to convert it to a json
 
-    return info_dictionary # Return the dictionary to convert it to a json
+# Function to compute the stiffness 
+def get_stiffness(sequence,files,info_dict,frames_limit):
+    # Create and object (as NASSA does) to store the sequence and the corresponding .ser info so then we can calculate the stiffness
+    extracted = {}
+    # First parse the sequence to obtain the NucleicAcid object as NASSA wf does
+    seq = []
+    seq.append(load_sequence2(sequence, unit_len=6))
+    print(seq)
+    extracted['sequences'] = seq
+    # Set the hexamer coordinates
+    # AGUS: si son pentámeros habría que añadir las coordenadas:  shear stagger stretch chic chiw buckle opening propel
+    cordinate_list = ['shift','slide','rise','roll','tilt','twist']
+    for coord in cordinate_list:
+        crd_data = []
+        for ser_file in files:
+            if ser_file.split('_')[-1].split('.')[0].lower() == coord:
+                ser = load_serfile(
+                    ser_file)
+                crd_data.append(ser)
+        extracted[coord.lower()] = crd_data
+        print(f"loaded {len(crd_data)} files for coordinate <{coord}>")
+    results = transform(extracted)
+    # Add the results stiffness to the dictionary
+    info_dict['avg_res']['stiffness'] = results  
+    return info_dict
+
+# AGUS: estas tres funciones siguientes son una copia de NASSA pero modificada para este caso ya que NASSA 
+# AGUS: funciona para todas las secuencias o MD al mismo tiempo y el WF para cada proyecto/MD
+# AGUS: además, ahora se define por defecto el nombre de la unidad como hexámero
+def transform(data, unit_name='hexamer'):
+    sequences = data.pop('sequences')
+    results = {"stiffness": [], "covariances": {}, "constants": {}}
+    for traj, seq in enumerate(sequences):
+        traj_series = {coord.lower(): data[coord][traj]
+                        for coord in data.keys()}
+        traj_results = get_stiffness_seq(
+            seq,
+            traj_series)
+        results["stiffness"].append(traj_results["stiffness"])
+        covariances_serializable = {
+            key: df.to_dict(orient="split")  # 'index', 'columns', 'data'
+            for key, df in traj_results["covariances"].items()
+        }
+        results["covariances"].update(covariances_serializable)
+        constants_serializable = {
+            key: df.to_dict(orient="split")  # 'index', 'columns', 'data'
+            for key, df in traj_results["constants"].items()
+        }
+        results["constants"].update(constants_serializable)
+
+    # AGUS: aquí se hace un cambio en la estructura del diccionario de stiffness para que sea más fácil de manejar en front end
+    stiffness_by_coord = {}
+    for item in results["stiffness"]:
+        for key, value in item.items():
+            if key == "hexamer":
+                continue  
+            if key not in stiffness_by_coord:
+                stiffness_by_coord[key] = []
+            stiffness_by_coord[key].append(value)
+    results["stiffness"] = stiffness_by_coord
+    for key, value in results["stiffness"].items():
+        # Si es una lista con Series adentro, concatenamos y convertimos a list
+        if isinstance(value, list) and all(hasattr(v, "tolist") for v in value):
+            combined = pd.concat(value)
+            results["stiffness"][key] = combined.tolist()
+        # Si es una sola Series
+        elif hasattr(value, "tolist"):
+            results["stiffness"][key] = value.tolist()
+    return results
+def get_stiffness_seq(
+        sequence,
+        series_dict):
+    # get stiffness table for a given trajectory
+    coordinates = list(series_dict.keys())
+    results = {"stiffness": {}, "covariances": {}, "constants": {}}
+    diagonals = {}
+    start = sequence.flanksize # + 2
+    end = sequence.size - (sequence.baselen + sequence.flanksize - 1) # +2
+    print(f"start: {start}, end: {end}")
+    for i in range(start, end):
+        hexamer = sequence.get_subunit(i)
+        #ic_hexamer = sequence.inverse_complement(hexamer)
+        cols_dict = {coord: series_dict[coord][i+1]
+                        for coord in series_dict.keys()}
+        #print(f"cols_dict: {cols_dict}")
+        stiffness_diag, cte, cov_df = get_subunit_stiffness(
+            cols_dict,
+            coordinates)
+        diagonals[hexamer] = np.append(
+            stiffness_diag,
+            [np.product(stiffness_diag), np.sum(stiffness_diag)])
+        # diagonals[ic_hexamer] = np.append(
+        #     stiffness_diag,
+        #     [np.product(stiffness_diag), np.sum(stiffness_diag)])
+        results["covariances"][hexamer] = cov_df
+        #results["covariances"][ic_hexamer] = cov_df
+        results["constants"][hexamer] = cte
+        #results["constants"][ic_hexamer] = cte
+    # build stiffness table
+    columns = [sequence.unit_name] + coordinates + ["product", "sum"]
+    results["stiffness"] = pd.DataFrame.from_dict(
+        diagonals,
+        orient="index").reset_index()
+    results["stiffness"].columns = columns
+    return results
+def get_subunit_stiffness(
+        cols_dict,
+        coordinates,
+        scaling=[1, 1, 1, 10.6, 10.6, 10.6],
+        KT=0.592186827):
+    import numpy.ma as ma
+    def circ_avg(xarr, degrees=True):
+        n = len(xarr)
+        if degrees:
+            # convert to radians
+            xarr = xarr * np.pi / 180
+        av = np.arctan2(
+            (np.sum(np.sin(xarr)))/n,
+            (np.sum(np.cos(xarr)))/n) * 180 / np.pi
+        return av
+    # AGUS: insisto, está adaptado solamente para hexámeros
+    # if (self.unit_len % 2) == 0:
+    SH_av = cols_dict["shift"].mean()
+    SL_av = cols_dict["slide"].mean()
+    RS_av = cols_dict["rise"].mean()
+    TL_av = circ_avg(cols_dict["tilt"])
+    RL_av = circ_avg(cols_dict["roll"])
+    TW_av = circ_avg(cols_dict["twist"])
+    # elif (self.unit_len % 2) == 1:
+    #     SH_av = cols_dict["shear"].mean()
+    #     SL_av = cols_dict["stretch"].mean()
+    #     RS_av = cols_dict["stagger"].mean()
+    #     CW_av = cols_dict["chiw"].mean()
+    #     CC_av = cols_dict["chic"].mean()
+    #     TL_av = self.circ_avg(cols_dict["buckle"])
+    #     RL_av = self.circ_avg(cols_dict["propel"])
+    #     TW_av = self.circ_avg(cols_dict["opening"])
+    cols_arr = [cols_dict[coord] for coord in coordinates]
+    cols_arr = np.array(cols_arr).T
+
+    cv = ma.cov(ma.masked_invalid(cols_arr), rowvar=False)
+    cv.filled(np.nan)
+
+    cov_df = pd.DataFrame(cv, columns=coordinates, index=coordinates)
+    stiff = np.linalg.inv(cv) * KT
+    #print(stiff)
+    # Added two new variables: ChiC and ChiW -> 8 (for PENTAMERS) => in NASSA (here only for hexamers)
+    if (6 % 2) == 0:
+        last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av] #, CW_av, CC_av]
+        stiff = np.append(stiff, last_row).reshape(7, 6)
+    # elif (self.unit_len % 2) == 1:
+    #     last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av, CW_av, CC_av]
+    #     print(last_row)
+    #     stiff = np.append(stiff, last_row).reshape(9, 8)
+    #     scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
+    
+    stiff = stiff.round(6)
+    stiff_diag = np.diagonal(stiff) * np.array(scaling)
+
+    cte = pd.DataFrame(stiff)
+    cte.columns = coordinates
+    cte.index = coordinates + ["avg"]
+    return stiff_diag, cte, cov_df
 
 # Function to check whether the file is from one block or another regarding Helical parameters, the value of baselen could change
 def checking(helpar_name):
@@ -599,16 +770,18 @@ def flow_files_average(files,info_dict,sequence):
 
 # Compute average and standard deviation
 def average_std(dataf,baselen,sequence):
+    # For hexamers, baselen has to be 2
+    baselen = 2 
     # discard first and last base(pairs) from sequence
-    dataf = dataf[dataf.columns[1:-1]]
-
-    sequence = sequence[1:]
+    dataf = dataf[dataf.columns[2:17]]
+    # sequence = sequence[1:]
+    # print("sequence: ",sequence)
     xlabels = [
         f"{sequence[i:i+1+baselen]}"
-        for i in range(len(dataf.columns) - baselen)]
+        for i in range(len(dataf.columns))] # - baselen
     means = dataf.mean(axis=0).iloc[:len(xlabels)]
     stds = dataf.std(axis=0).iloc[:len(xlabels)]
-    return means,stds
+    return means,stds 
 
 # OTHER FUNCTIONS THAT MUST PERFORM OTHER CALCULATIONS REGARDING TO THE LAST BLOCK OF HELICAL PARAMETERS (BACKBONE TORSIONS)
 # THERE ARE 3 DIFFERENT FUNCTIONS EACH ONE COMPUTING DIFFERENT ASPECTS OF THE FLEXIBILITY IN THE BACKBONE 
