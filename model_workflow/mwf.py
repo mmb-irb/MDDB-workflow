@@ -3100,11 +3100,10 @@ md_processed_files = {
 processed_files = { **project_processed_files, **md_processed_files }
 
 # List of available analyses
-analyses = {
+default_analyses = {
     'clusters': MD.run_clusters_analysis,
     'dist': MD.run_dist_perres_analysis,
     'energies': MD.run_energies_analysis,
-    'dihedrals': MD.run_dihedral_energies,
     'hbonds': MD.run_hbonds_analysis,
     'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
@@ -3124,6 +3123,12 @@ analyses = {
     'lorder': MD.run_lipid_order_analysis,
     'linter': MD.run_lipid_interactions_analysis,
 }
+
+extra_analyses = {
+    'dihedrals': MD.run_dihedral_energies,
+}
+
+analyses = { **default_analyses, **extra_analyses }
 
 # Project requestable tasks
 project_requestables = {
@@ -3238,7 +3243,7 @@ def workflow (
             # MD tasks
             'mdmeta',
             'interactions',
-            *analyses.keys(),
+            *default_analyses.keys(),
         ]
         # WARNING: Do not run helical by default, it will fail in the default environment
         # There is a separated enviornment to run this analysis
