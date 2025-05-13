@@ -85,15 +85,14 @@ def generate_project_metadata (
     framestep = None if md_type == 'ensemble' else get_input('framestep')
 
     # Set which part of processed interactions is to be kept in metadata
-    # Note that we exclude residues and residue indices to avoid overcrowding metadata
+    # Note that we exclude residues and atom indices to avoid overcrowding metadata
     # The 'type' field is kept although it is not an input but something calculated
     # This is because the 'type' field is valuable as a search field
-    excluded_fields = { 'residues_1', 'residues_2', 'interface_1', 'interface_2',
-        'residue_indices_1', 'residue_indices_2', 'interface_indices_1', 'interface_indices_2',
-        'pt_residues_1', 'pt_residues_2', 'pt_interface_1', 'pt_interface_2', 'strong_bonds' }
+    kept_fields = { 'name', 'agent_1', 'agent_2', 'selection_1',
+        'selection_2', 'type' }
     interactions = []
     for processed_interaction in processed_interactions:
-        interaction = { k: v for k, v in processed_interaction.items() if k not in excluded_fields }
+        interaction = { k: v for k, v in processed_interaction.items() if k in kept_fields }
         interactions.append(interaction)
 
     # Write the metadata file
