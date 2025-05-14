@@ -162,8 +162,25 @@ class Topology:
             dihedral_data = dihedrals_data.get(atom_indices, None)
             if dihedral_data == None:
                 # Create a new object if this is the first time to access this specific dihedral
-                dihedrals_data[atom_indices] = { 'atom_indices': atom_indices, 'terms': [] }
-                dihedral_data = dihedrals_data[atom_indices]
+                dihedral_data = { 'atom_indices': atom_indices, 'terms': [] }
+                # Get end atom indices
+                atom1_index = atom_indices[0]
+                atom4_index = atom_indices[3]
+                # Mine atom charges for the end atoms
+                dihedral_data['atom1_charge'] = charges[atom1_index]
+                dihedral_data['atom4_charge'] = charges[atom4_index]
+                # To get the next two values we need to find a complex index
+                # We substract 1 to atom type inidces to get 0-based indices
+                atom1_type_index = atom_types[atom1_index] - 1
+                atom4_type_index = atom_types[atom4_index] - 1
+                # Thus the parameter index becomes also 0-based
+                nonbonded_parameter_index_index = (ntypes * atom1_type_index) + atom4_type_index
+                nonbonded_parameter_index = nonbonded_parameter_indices[nonbonded_parameter_index_index]
+                # And this is the index we use to get the parameters we really want
+                dihedral_data['lj_acoef'] = lj_acoefs[nonbonded_parameter_index]
+                dihedral_data['lj_bcoef'] = lj_bcoefs[nonbonded_parameter_index]
+                # Save the new dihedral dict in the overall dict
+                dihedrals_data[atom_indices] = dihedral_data
             # Add current dihedral term
             dihedral_data['terms'].append({
                 #'index': dihedral_index,
@@ -180,20 +197,8 @@ class Topology:
             vdw_scale_factor = vdw_scale_factors[dihedral_index]
             dihedral_data['ee_scaling'] = ee_scale_factor
             dihedral_data['vdw_scaling'] = vdw_scale_factor
+            # Get end atom indices
             atom1_index = atom_indices[0]
-            dihedral_data['atom1_charge'] = charges[atom1_index]
             atom4_index = atom_indices[3]
-            dihedral_data['atom4_charge'] = charges[atom4_index]
-            # To get the next two values we need to find a complex index
-            # We substract 1 to atom type inidces to get 0-based indices
-            atom1_type_index = atom_types[atom1_index] - 1
-            atom4_type_index = atom_types[atom4_index] - 1
-            # Thus the parameter index becomes also 0-based
-            nonbonded_parameter_index_index = (ntypes * atom1_type_index) + atom4_type_index
-            nonbonded_parameter_index = nonbonded_parameter_indices[nonbonded_parameter_index_index]
-            # And this is the index we use to get the parameters we really want
-            dihedral_data['lj_acoef'] = lj_acoefs[nonbonded_parameter_index]
-            dihedral_data['lj_bcoef'] = lj_bcoefs[nonbonded_parameter_index]
-
 
         return list(dihedrals_data.values())

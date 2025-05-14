@@ -84,12 +84,12 @@ def compute_dihedral_energies (
 
         # Iterate every dihedral with its 1-4 distance
         for dihedral_data, distance in zip(dihedrals_data, frame_distances):
-            # Get dihedral parameters
-            scee = dihedral_data.get('ee_scaling', None)
-            # It may happen that a dihedral has not end interactions at all
-            # This happens for instance in rings, to avoid double counting
-            if scee == None: continue
-            scnb = dihedral_data['vdw_scaling']
+            # Get scaling factors for both electrostatic and Van Der Waals parameters
+            # Note that these may be missing for some dihedrals since all its terms are to be ignored
+            # SANTI: Cuando esto pasa hay que caluclar la energía igualmente, pero sin escalarla
+            scee = dihedral_data.get('ee_scaling', 1)
+            scnb = dihedral_data.get('vdw_scaling', 1)
+            # get Leonard-Johns constants to calculate Van Der Waals energies
             acoef = dihedral_data['lj_acoef']
             bcoef = dihedral_data['lj_bcoef']
             # Note that charges are not actual atom charges, but they are already scaled
