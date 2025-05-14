@@ -3270,18 +3270,25 @@ def workflow (
                 # Add it to the global variable
                 overwritables.add(task)
         else: raise ValueError('Not supported overwrite type')
+
     # Get project tasks
     project_tasks = [ task for task in tasks if task in project_requestables ]
+    # Get the MD tasks
+    md_tasks = [ task for task in tasks if task in md_requestables ]
+
     # Set project overwritables
     project.overwritables = set([ task for task in project_tasks if task in overwritables ])
+    # Set MD overwrittables
+    # Note that this must be done before running project tasks
+    # Some project tasks rely in MD tasks
+    for md in project.mds:
+        md.overwritables = set([ task for task in md_tasks if task in overwritables ])
+
     # Run the project tasks now
     for task in project_tasks:
         # Get the function to be called and call it
         getter = requestables[task]
         getter(project)
-
-    # Get the MD tasks
-    md_tasks = [ task for task in tasks if task in md_requestables ]
 
     # If there are no MD tasks then we are done already
     if len(md_tasks) == 0:
@@ -3291,8 +3298,6 @@ def workflow (
     # Now iterate over the different MDs
     for md in project.mds:
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
-        # Set project overwritables
-        md.overwritables = set([ task for task in md_tasks if task in overwritables ])
         # Run the MD tasks
         for task in md_tasks:
             # Get the function to be called and call it
