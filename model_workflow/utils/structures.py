@@ -1963,11 +1963,11 @@ class Structure:
 
         # Special cases
         relevant_threshold = 0.3
-        if proportions["dna"] > relevant_threshold and proportions["rna"] > relevant_threshold:
+        if proportions.get("dna", 0) > relevant_threshold and proportions.get("rna", 0) > relevant_threshold:
             return "nucleic"
-        if proportions["carbohydrate"] > relevant_threshold and proportions["protein"] > relevant_threshold:
+        if proportions.get("carbohydrate", 0) > relevant_threshold and proportions.get("protein", 0) > relevant_threshold:
             return "glycoprotein"
-        if proportions["fatty"] > relevant_threshold and proportions["steroid"] > relevant_threshold:
+        if proportions.get("fatty", 0) > relevant_threshold and proportions.get("steroid", 0) > relevant_threshold:
             return "lipid"
         
         # Any other combinations of different main proportions
