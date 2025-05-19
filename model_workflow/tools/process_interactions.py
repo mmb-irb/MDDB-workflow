@@ -4,7 +4,7 @@
 import itertools
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn, reprint
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
@@ -155,37 +155,42 @@ def process_interactions (
             raise InputError(f'Invalid input auto interactions "{auto}"')
 
     # If there are no interactions return an empty list
-    if not interactions or len(interactions) == 0:
+    interaction_count = len(interactions)
+    if not interactions or interaction_count == 0:
         return []
     
     # Make sure there are no interactions with the same name
     interaction_names = [ interaction['name'] for interaction in interactions ]
     if len(set(interaction_names)) < len(interaction_names):
         raise InputError('Interactions must have unique names')
+    # Print an empty line for the next reprint
+    print()
     # Check input interactions to be correct
-    for interaction in interactions:
+    for i, interaction in enumerate(interactions, 1):
+        name = interaction["name"]
+        reprint(f' Finding interaction type in {name} ({i}/{interaction_count})')
         # Check agents have different names
         if interaction['agent_1'] == interaction['agent_2']:
-            raise InputError(f'Interaction agents must have different names at {interaction["name"]}')
+            raise InputError(f'Interaction agents must have different names at {name}')
         # Check agents have different selections
         if interaction['selection_1'] == interaction['selection_2']:
-            raise InputError(f'Interaction agents must have different selections at {interaction["name"]}')
+            raise InputError(f'Interaction agents must have different selections at {name}')
         # Make sure both agents have valid selections
         agent_1_selection = structure.select(interaction['selection_1'])
         if not agent_1_selection:
-            raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
+            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
         agent_2_selection = structure.select(interaction['selection_2'])
         if not agent_2_selection:
-            raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
+            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
         # Make sure selections do not overlap at all
         # This makes not sense as interactions are implemented in this workflow
         overlap = agent_1_selection & agent_2_selection
         if overlap:
-            raise InputError(f'Agents in interaction "{interaction["name"]}" have {len(overlap)} overlapping atoms')
+            raise InputError(f'Agents in interaction "{name}" have {len(overlap)} overlapping atoms')
         # Check if there was a type already assigned to the interaction
         # This is not supported anymore since the interaction type is set automatically
         if 'type' in interaction:
-            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{interaction["name"]}".\n'
+            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{name}".\n'
                  'Interaction type is now calculated and the input interaction type is no longer supported.\n'
                  'Note that the input value will be ignored')
         # Set the interaction type

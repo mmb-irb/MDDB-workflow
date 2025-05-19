@@ -3100,11 +3100,10 @@ md_processed_files = {
 processed_files = { **project_processed_files, **md_processed_files }
 
 # List of available analyses
-analyses = {
+default_analyses = {
     'clusters': MD.run_clusters_analysis,
     'dist': MD.run_dist_perres_analysis,
     'energies': MD.run_energies_analysis,
-    'dihedrals': MD.run_dihedral_energies,
     'hbonds': MD.run_hbonds_analysis,
     'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
@@ -3124,6 +3123,12 @@ analyses = {
     'lorder': MD.run_lipid_order_analysis,
     'linter': MD.run_lipid_interactions_analysis,
 }
+
+extra_analyses = {
+    'dihedrals': MD.run_dihedral_energies,
+}
+
+analyses = { **default_analyses, **extra_analyses }
 
 # Project requestable tasks
 project_requestables = {
@@ -3238,7 +3243,7 @@ def workflow (
             # MD tasks
             'mdmeta',
             'interactions',
-            *analyses.keys(),
+            *default_analyses.keys(),
         ]
         # WARNING: Do not run helical by default, it will fail in the default environment
         # There is a separated enviornment to run this analysis
@@ -3265,18 +3270,25 @@ def workflow (
                 # Add it to the global variable
                 overwritables.add(task)
         else: raise ValueError('Not supported overwrite type')
+
     # Get project tasks
     project_tasks = [ task for task in tasks if task in project_requestables ]
+    # Get the MD tasks
+    md_tasks = [ task for task in tasks if task in md_requestables ]
+
     # Set project overwritables
     project.overwritables = set([ task for task in project_tasks if task in overwritables ])
+    # Set MD overwrittables
+    # Note that this must be done before running project tasks
+    # Some project tasks rely in MD tasks
+    for md in project.mds:
+        md.overwritables = set([ task for task in md_tasks if task in overwritables ])
+
     # Run the project tasks now
     for task in project_tasks:
         # Get the function to be called and call it
         getter = requestables[task]
         getter(project)
-
-    # Get the MD tasks
-    md_tasks = [ task for task in tasks if task in md_requestables ]
 
     # If there are no MD tasks then we are done already
     if len(md_tasks) == 0:
@@ -3286,8 +3298,6 @@ def workflow (
     # Now iterate over the different MDs
     for md in project.mds:
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
-        # Set project overwritables
-        md.overwritables = set([ task for task in md_tasks if task in overwritables ])
         # Run the MD tasks
         for task in md_tasks:
             # Get the function to be called and call it

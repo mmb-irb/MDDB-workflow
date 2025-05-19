@@ -40,6 +40,7 @@ def generate_residue_mapping(
         if reference == NO_REFERABLE_FLAG:
             if NO_REFERABLE_FLAG not in reference_ids:
                 reference_ids.append(NO_REFERABLE_FLAG)
+                reference_types.append('protein')
             reference_index = reference_ids.index(NO_REFERABLE_FLAG)
             for residue_index in data['residue_indices']:
                 residue_reference_indices[residue_index] = reference_index
@@ -48,6 +49,7 @@ def generate_residue_mapping(
         if reference == NOT_FOUND_FLAG:
             if NOT_FOUND_FLAG not in reference_ids:
                 reference_ids.append(NOT_FOUND_FLAG)
+                reference_types.append('protein')
             reference_index = reference_ids.index(NOT_FOUND_FLAG)
             for residue_index in data['residue_indices']:
                 residue_reference_indices[residue_index] = reference_index
