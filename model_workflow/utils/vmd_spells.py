@@ -565,6 +565,7 @@ def get_interface_atom_indices (
         # Get the number of frames in the trajectory
         file.write('set nframes [molinfo top get numframes]\n')
         # Iterate over each frame
+        # Note that we skip the first frame (i = 1, not i = 0) since it belongs to the structure
         file.write('for { set i 1 } { $i < $nframes } { incr i } {\n')
         # Update the selection in the current frame
         file.write('    $interface1 frame $i\n')
@@ -587,7 +588,9 @@ def get_interface_atom_indices (
         file.write(f'set iframes_file [open {interacting_frames_filename} w]\n')
         file.write('puts $iframes_file $iframes\n')
         file.write(f'set nframes_file [open {total_frames_filename} w]\n')
-        file.write('puts $nframes_file $nframes\n')
+        # Note that we must substract 1 from the total frames count since the first frame was skipped
+        file.write('set cframes [expr $nframes - 1]\n')
+        file.write('puts $nframes_file $cframes\n')
         # Remove duplicated indices
         file.write('set unique_interface1_atom_indices [lsort -unique $accumulated_interface1_atom_indices]\n')
         file.write('set unique_interface2_atom_indices [lsort -unique $accumulated_interface2_atom_indices]\n')
