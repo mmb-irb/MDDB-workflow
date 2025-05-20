@@ -728,6 +728,7 @@ def flow_files_average(files,info_dict,sequence):
         # Convert the files into Pandas dataframe to make the computations and data manipulation easily
         dataframe = read_series(file) 
         df1,df2 = average_std(dataframe,baselen,sequence)
+        df1i,df2i = average_std_intra(dataframe,baselen,sequence)
         if helpword in ["roll","tilt","twist","rise","shift","slide"]: 
             # INTER BASEPAIR BLOCK
             info_dict['avg_res']['interbp'][helpword] = {'avg':{},'std':{}}
@@ -741,20 +742,20 @@ def flow_files_average(files,info_dict,sequence):
             # INTRA BASEPAIR BLOCK
             info_dict['avg_res']['intrabp'][helpword] = {'avg':{},'std':{}}
             #  we want to store all the information regarding the averages 
-            info_dict['avg_res']['intrabp'][helpword]['avg'] = df1.T.values.tolist() 
+            info_dict['avg_res']['intrabp'][helpword]['avg'] = df1i.T.values.tolist() 
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['intrabp'][helpword]['std'] = df2.T.values.tolist() 
+            info_dict['avg_res']['intrabp'][helpword]['std'] = df2i.T.values.tolist() 
 
         elif helpword in ["xdisp","ydisp","inclin","tip"]:
             # AXIS BASEPAIR BLOCK 
             info_dict['avg_res']['axisbp'][helpword] = {'avg':{},'std':{}} 
 
             #  we want to store all the information regarding the averages
-            info_dict['avg_res']['axisbp'][helpword]['avg'] = df1.T.values.tolist()  
+            info_dict['avg_res']['axisbp'][helpword]['avg'] = df1i.T.values.tolist()  
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['axisbp'][helpword]['std'] = df2.T.values.tolist() 
+            info_dict['avg_res']['axisbp'][helpword]['std'] = df2i.T.values.tolist() 
 
         else:
             # GROOVES BLOCK
@@ -774,6 +775,20 @@ def average_std(dataf,baselen,sequence):
     baselen = 2 
     # discard first and last base(pairs) from sequence
     dataf = dataf[dataf.columns[2:17]]
+    # sequence = sequence[1:]
+    # print("sequence: ",sequence)
+    xlabels = [
+        f"{sequence[i:i+1+baselen]}"
+        for i in range(len(dataf.columns))] # - baselen
+    means = dataf.mean(axis=0).iloc[:len(xlabels)]
+    stds = dataf.std(axis=0).iloc[:len(xlabels)]
+    return means,stds 
+
+def average_std_intra(dataf,baselen,sequence):
+    # For hexamers, baselen has to be 2
+    baselen = 2 
+    # discard first and last base(pairs) from sequence
+    dataf = dataf[dataf.columns[2:18]]
     # sequence = sequence[1:]
     # print("sequence: ",sequence)
     xlabels = [
