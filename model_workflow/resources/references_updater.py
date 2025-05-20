@@ -18,7 +18,7 @@ reference_filenames = { 'proteins': PROTEIN_REFERENCES_FILENAME,
                         'pdbs':     PDB_REFERENCES_FILENAME,
                         'chains':   OUTPUT_CHAINS_FILENAME
                         }
-metafields = { 'proteins': 'metadata.REFERENCES', 
+metafields = { 'proteins': 'metadata.REFERENCES',
                'ligands':  'metadata.LIGANDS',
                'pdbs':     'metadata.PDBIDS',
                'chains':   'metadata.PROTSEQ'
