@@ -208,12 +208,18 @@ def process_interactions (
     # Load the backup and return its content as it is
     if processed_interactions_file.exists:
         loaded_interactions = load_interactions(processed_interactions_file, structure)
-        # Merge the loaded interactions with the input interactions to cover all fields
-        complete_interactions = []
-        for input_interaction, loaded_interaction in zip(interactions, loaded_interactions):
-            complete_interaction = { **input_interaction, **loaded_interaction }
-            complete_interactions.append(complete_interaction)
-        return complete_interactions
+        # Make sure the backup has atom indices
+        sample = loaded_interactions[0]
+        has_atom_indices = 'atom_indices_1' in sample
+        if has_atom_indices:
+            # Merge the loaded interactions with the input interactions to cover all fields
+            complete_interactions = []
+            for input_interaction, loaded_interaction in zip(interactions, loaded_interactions):
+                complete_interaction = { **input_interaction, **loaded_interaction }
+                complete_interactions.append(complete_interaction)
+            return complete_interactions
+        # Otherwise it means this is not a compatible version and we must run interactions again
+        warn('Interactions backup is obsolete. Interactions will be calculated again')
 
     # Reset warnings related to this analysis
     register.remove_warnings(STABLE_INTERACTIONS_FLAG)
