@@ -496,7 +496,6 @@ def send_files(sequence,frames_limit, folder_path):
 
     # Call function to distribut all files and compute Time Series in all of them
     #info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit) 
-    print('FINAL DF: ',information_dictionary2)
     return information_dictionary2 # Return the dictionary to convert it to a json
 
 # Function to compute the stiffness 
@@ -506,7 +505,6 @@ def get_stiffness(sequence,files,info_dict,frames_limit):
     # First parse the sequence to obtain the NucleicAcid object as NASSA wf does
     seq = []
     seq.append(load_sequence2(sequence, unit_len=6))
-    print(seq)
     extracted['sequences'] = seq
     # Set the hexamer coordinates
     # AGUS: si son pentámeros habría que añadir las coordenadas:  shear stagger stretch chic chiw buckle opening propel
