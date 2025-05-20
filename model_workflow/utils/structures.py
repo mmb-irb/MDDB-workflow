@@ -2570,6 +2570,18 @@ class Structure:
         # Remove the auxiliar pdb file
         os.remove(auxiliar_pdb_filepath)
         return covalent_bonds
+    
+    # Make a copy of the bonds list
+    def copy_bonds (self) -> List[List[int]]:
+        new_bonds = []
+        for atom_bonds in self.bonds:
+            # Missing bonds coming from CG atoms are forwarded
+            if atom_bonds == MISSING_BONDS:
+                new_bonds.append(MISSING_BONDS)
+                continue
+            # Copy also the inner lists to avoid further mutation of the original structure
+            new_bonds.append([ atom_index for atom_index in atom_bonds ])
+        return new_bonds
 
     # Make a copy of the current structure
     def copy (self) -> 'Structure':
@@ -2577,7 +2589,7 @@ class Structure:
         residue_copies = [ residue.copy() for residue in self.residues ]
         chain_copies = [ chain.copy() for chain in self.chains ]
         structure_copy = Structure(atom_copies, residue_copies, chain_copies)
-        structure_copy.bonds = [ [ atom_index for atom_index in atom_bonds ] for atom_bonds in self.bonds ]
+        structure_copy.bonds = self.copy_bonds()
         return structure_copy
 
     # Merge currnet structure with another structure

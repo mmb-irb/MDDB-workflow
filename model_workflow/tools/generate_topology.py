@@ -1,4 +1,5 @@
-from model_workflow.utils.auxiliar import warn, save_json, MISSING_BONDS, MISSING_CHARGES
+from model_workflow.utils.auxiliar import warn, save_json, MISSING_CHARGES
+from model_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from model_workflow.utils.type_hints import *
 
 # Generate a json file to be uploaded to the database (mongo) with topology data
@@ -27,7 +28,14 @@ def generate_topology (
 
     # Set the atom bonds
     # In order to make it more standard sort atom bonds by their indices
-    atom_bonds = [ float('nan') if atom_indices == MISSING_BONDS else sorted(atom_indices) for atom_indices in structure.bonds ]
+    # Also replace missing bonds exceptions by a json serializable flag
+    atom_bonds = []
+    for atom_indices in structure.bonds:
+        if atom_indices == MISSING_BONDS:
+            atom_bonds.append(JSON_SERIALIZABLE_MISSING_BONDS)
+            continue
+        print(atom_indices)
+        atom_bonds.append(sorted(atom_indices))
 
     # Residue data
     structure_residues = structure.residues
