@@ -1179,6 +1179,8 @@ class Structure:
             raise ValueError(f'{residue} is not in the structure already')
         if len(residue.atom_indices) > 0:
             raise ValueError(f'{residue} is still having atoms and thus it cannot be purged')
+        # Remove the purged residue from its chain
+        if residue.chain: residue.chain.remove_residue(residue)
         # Get the current index of the residue to be purged
         purged_index = residue.index
         # Residues and their atoms below this index are not to be modified
