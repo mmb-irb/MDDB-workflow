@@ -426,7 +426,7 @@ def get_tpr_charges (tpr_filepath : str) -> List[float]:
     raise RuntimeError(f'Charges extraction from tpr file "{tpr_filepath}" has failed')
 
 # Regular expresion to mine atom bonds
-GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*[0-9]* type=[0-9]* \((BONDS|CONSTR)\)\s*([0-9]*)\s*([0-9]*)$"
+GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*[0-9]* type=[0-9]* \((BONDS|CONSTR|CONNBONDS)\)\s*([0-9]*)\s*([0-9]*)$"
 
 # Get tpr atom bonds
 def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
