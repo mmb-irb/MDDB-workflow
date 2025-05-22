@@ -10,7 +10,6 @@
 # topology has been corrected previously and duplicated atoms have been renamed
 
 import pytraj as pt
-import numpy
 import re
 
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
@@ -59,12 +58,19 @@ def hydrogen_bonds (
     # Save each analysis to a dict which will be parsed to json
     output_analysis = []
 
+    # Iterate interactions
     for interaction in interactions:
+
+        # If the interaction has coarse grain atoms then just skip it
+        # Note that this analysis makes not sense if the interaction is not atomistic
+        # FUN FACT: If tried, pytraj fails so spectacularly it is is not even able to report the error
+        # RuntimeError: Failed to setup action. Use pytraj._verbose() to turn on the error report.
+        if interaction.get('has_cg', False): continue
         
         # Select all interface residues in pytraj notation
         pt_interface = interaction['pt_interface_1'] + interaction['pt_interface_2']
         if len(pt_interface) == 0:
-            raise ValueError('There are no interface residues for interaction "' + interaction['name'] + '"')
+            raise ValueError(f'There are no interface residues for interaction "{interaction["name"]}"')
         pt_selection = ':' + ','.join(map(str, pt_interface))
 
         # Run the analysis
@@ -136,4 +142,5 @@ def hydrogen_bonds (
         )
 
     # Export the analysis in json format
-    save_json({ 'data': output_analysis }, output_analysis_filename)
+    if len(output_analysis) > 0:
+        save_json({ 'data': output_analysis }, output_analysis_filename)
