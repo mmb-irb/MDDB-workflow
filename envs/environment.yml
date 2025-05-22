@@ -1,4 +1,4 @@
-name: mwf_envvv
+name: mwf_env
 channels:
   - conda-forge
   - nodefaults
