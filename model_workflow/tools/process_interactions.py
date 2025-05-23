@@ -9,6 +9,10 @@ from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
 
+# Set the default distance cutoff in Ångstroms (Å)
+# This is useful for atomistic simulations
+DEFAULT_DISTANCE_CUTOFF = 5
+
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'
 
@@ -33,8 +37,6 @@ def process_interactions (
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,
-    # The cutoff distance is in Ångstroms (Å)
-    distance_cutoff : float = 5,
     ) -> list:
 
     print('-> Processing interactions')
@@ -232,8 +234,24 @@ def process_interactions (
         frames_limit,
     )
 
+    # Get the structure coarse grain selection for further reference
+    cg_selection = structure.select_cg()
+
     # Iterate over each defined interaction
     for interaction in interactions:
+        # Set the distance cutoff
+        distance_cutoff = interaction.get('distance_cutoff', DEFAULT_DISTANCE_CUTOFF)
+        # Find if this interaction has coarse grain atoms involved
+        agent_1_selection = structure.select(interaction['selection_1'])
+        agent_2_selection = structure.select(interaction['selection_2'])
+        has_agent_1_cg = bool(agent_1_selection & cg_selection)
+        has_agent_2_cg = bool(agent_2_selection & cg_selection)
+        interaction['has_cg'] = has_agent_1_cg or has_agent_2_cg
+        # Check if we are using the defualt atomistic distance while selections are coarse grain
+        # If this is the case then warn the user
+        if interaction['has_cg'] and distance_cutoff == DEFAULT_DISTANCE_CUTOFF:
+            warn(f'Using atomistic default distance cutoff ({distance_cutoff}Å) with coarse grain agent(s)\n'
+            f'  You may need to manually specify the distance cutoff in the inputs file for interaction "{interaction["name"]}"')
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices(
             structure_file.path,
@@ -250,8 +268,8 @@ def process_interactions (
             print(f'Interaction "{interaction["name"]}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
                 f'This means the interaction {meaning_log}.\n'
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
-                '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
-                '   - Agent 2 selection: ' + interaction['selection_2'])
+                f'   - Agent 1 selection: {interaction["selection_1"]}\n'
+                f'   - Agent 2 selection: {interaction["selection_2"]}')
             # Check if we must have mercy in case of interaction failure
             must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
             if must_be_killed:
@@ -274,13 +292,13 @@ def process_interactions (
             if len(residue_indices) == 0:
                 agent_name = interaction['agent_' + agent]
                 raise ValueError(f'Empty selection for agent "{agent_name}" in interaction "{interaction["name"]}": {interaction["selection_" + agent]}')
-            interaction['residue_indices_' + agent] = residue_indices
-            interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
+            interaction[f'residue_indices_{agent}'] = residue_indices
+            interaction[f'residues_{agent}'] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
             interface_atom_indices = interface_results[f'selection_{agent}_interface_atom_indices']
             interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
-            interaction['interface_indices_' + agent] = interface_residue_indices
-            interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
+            interaction[f'interface_indices_{agent}'] = interface_residue_indices
+            interaction[f'interface_{agent}'] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
             # Save atom indices in the interaction object
             interaction[f'atom_indices_{agent}'] = atom_indices
             interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
@@ -321,6 +339,7 @@ def process_interactions (
         'interface_atom_indices_2',
         'version',
         'strong_bonds',
+        'has_cg',
         FAILED_INTERACTION_FLAG
     ]
 

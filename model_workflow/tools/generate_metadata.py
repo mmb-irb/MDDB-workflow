@@ -89,7 +89,7 @@ def generate_project_metadata (
     # The 'type' field is kept although it is not an input but something calculated
     # This is because the 'type' field is valuable as a search field
     kept_fields = { 'name', 'agent_1', 'agent_2', 'selection_1',
-        'selection_2', 'type' }
+        'selection_2', 'distance_cutoff', 'type' }
     interactions = []
     for processed_interaction in processed_interactions:
         interaction = { k: v for k, v in processed_interaction.items() if k in kept_fields }
