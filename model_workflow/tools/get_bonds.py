@@ -1,5 +1,6 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.auxiliar import load_json, MISSING_BONDS, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import load_json, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
@@ -8,6 +9,7 @@ from model_workflow.utils.type_hints import *
 import pytraj as pt
 from MDAnalysis.topology.TPRParser import TPRParser
 from collections import Counter
+from math import isnan
 
 # Check if two sets of bonds match perfectly
 def do_bonds_match (
@@ -158,7 +160,6 @@ def get_bonds_canonical_frame (
 # Extract bonds from a source file and format them per atom
 def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ List[int] ]:
     # If there is no topology then return no bonds at all
-    print(bonds_source_file)
     if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
     print('Mining atom bonds from topology file')
@@ -166,7 +167,15 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ 
     if bonds_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
         print(f' Bonds in the "{bonds_source_file.filename}" file will be used')
         standard_topology = load_json(bonds_source_file.path)
-        atom_bonds = standard_topology.get('atom_bonds', None)
+        standard_atom_bonds = standard_topology.get('atom_bonds', None)
+        # Convert missing bonds flags
+        # These come from coarse grain (CG) simulations with no topology
+        atom_bonds = []
+        for bonds in standard_atom_bonds:
+            if bonds == JSON_SERIALIZABLE_MISSING_BONDS:
+                atom_bonds.append(MISSING_BONDS)
+                continue
+            atom_bonds.append(bonds)
         if atom_bonds: return atom_bonds
         print('  There were no bonds in the topology file. Is this an old file?')
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj

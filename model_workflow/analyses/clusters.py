@@ -102,7 +102,6 @@ def clusters_analysis (
         # Set the output analysis filename from the input template
         # e.g. replica_1/mda.clusters_*.json -> replica_1/mda.clusters_01.json
         numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, r)
-        print(numbered_output_analysis_filepath)
         # Get the run name
         name = run['name']
         # Add the root of the output analysis filename to the run data

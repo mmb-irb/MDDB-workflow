@@ -1179,6 +1179,8 @@ class Structure:
             raise ValueError(f'{residue} is not in the structure already')
         if len(residue.atom_indices) > 0:
             raise ValueError(f'{residue} is still having atoms and thus it cannot be purged')
+        # Remove the purged residue from its chain
+        if residue.chain: residue.chain.remove_residue(residue)
         # Get the current index of the residue to be purged
         purged_index = residue.index
         # Residues and their atoms below this index are not to be modified
@@ -1963,11 +1965,11 @@ class Structure:
 
         # Special cases
         relevant_threshold = 0.3
-        if proportions["dna"] > relevant_threshold and proportions["rna"] > relevant_threshold:
+        if proportions.get("dna", 0) > relevant_threshold and proportions.get("rna", 0) > relevant_threshold:
             return "nucleic"
-        if proportions["carbohydrate"] > relevant_threshold and proportions["protein"] > relevant_threshold:
+        if proportions.get("carbohydrate", 0) > relevant_threshold and proportions.get("protein", 0) > relevant_threshold:
             return "glycoprotein"
-        if proportions["fatty"] > relevant_threshold and proportions["steroid"] > relevant_threshold:
+        if proportions.get("fatty", 0) > relevant_threshold and proportions.get("steroid", 0) > relevant_threshold:
             return "lipid"
         
         # Any other combinations of different main proportions
@@ -2570,6 +2572,18 @@ class Structure:
         # Remove the auxiliar pdb file
         os.remove(auxiliar_pdb_filepath)
         return covalent_bonds
+    
+    # Make a copy of the bonds list
+    def copy_bonds (self) -> List[List[int]]:
+        new_bonds = []
+        for atom_bonds in self.bonds:
+            # Missing bonds coming from CG atoms are forwarded
+            if atom_bonds == MISSING_BONDS:
+                new_bonds.append(MISSING_BONDS)
+                continue
+            # Copy also the inner lists to avoid further mutation of the original structure
+            new_bonds.append([ atom_index for atom_index in atom_bonds ])
+        return new_bonds
 
     # Make a copy of the current structure
     def copy (self) -> 'Structure':
@@ -2577,7 +2591,7 @@ class Structure:
         residue_copies = [ residue.copy() for residue in self.residues ]
         chain_copies = [ chain.copy() for chain in self.chains ]
         structure_copy = Structure(atom_copies, residue_copies, chain_copies)
-        structure_copy.bonds = [ [ atom_index for atom_index in atom_bonds ] for atom_bonds in self.bonds ]
+        structure_copy.bonds = self.copy_bonds()
         return structure_copy
 
     # Merge currnet structure with another structure

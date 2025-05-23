@@ -71,6 +71,12 @@ def hydrogen_bonds (
     # Iterate interactions
     for i, interaction in enumerate(interactions):
 
+        # If the interaction has coarse grain atoms then just skip it
+        # Note that this analysis makes not sense if the interaction is not atomistic
+        # FUN FACT: If tried, pytraj fails so spectacularly it is is not even able to report the error
+        # RuntimeError: Failed to setup action. Use pytraj._verbose() to turn on the error report.
+        if interaction.get('has_cg', False): continue
+
         # Get the interaction name
         name = interaction['name']
         # Set a filename for the current interaction data
@@ -203,4 +209,5 @@ def hydrogen_bonds (
         save_json(interaction_data, numbered_output_analysis_filepath)
 
     # Export the analysis in json format
-    save_json(output_summary, output_analysis_filepath)
+    if len(output_summary) > 0:
+        save_json(output_summary, output_analysis_filepath)

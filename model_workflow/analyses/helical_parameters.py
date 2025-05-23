@@ -10,6 +10,9 @@ import glob
 from model_workflow.utils.auxiliar import save_json, store_binary_data
 from model_workflow.utils.type_hints import *
 
+from model_workflow.utils.nucleicacid import NucleicAcid
+from model_workflow.tools.nassa_loaders import load_sequence2
+from model_workflow.tools.nassa_loaders import load_serfile
 conda_prefix = os.environ['CONDA_PREFIX']
 # If this path does not exist then it means curves is not installed
 curves_path = conda_prefix + '/.curvesplus'
@@ -111,6 +114,7 @@ def helical_parameters (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     structure : 'Structure',
+    structure_filename : str,
     frames_limit : int,
     dna_selection : str = None
 ):
@@ -153,15 +157,189 @@ def helical_parameters (
     folder_path = False
     if '/' in input_trajectory_filename:
         folder_path = input_trajectory_filename.split('/')[-2]
-    terminal_execution(input_trajectory_filename, input_topology_filename, residue_index_ranges, sequences[0],folder_path)
+
+    # Run the hydrogen bond analysis to generate .dat file
+    # hydrogen_bonds(
+    #     input_topology_filename,
+    #     input_trajectory_filename,
+    #     output_analysis_filename,
+    #     folder_path,
+    #     structure_filename,
+    # )
+
+    # terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
-    dictionary_information = send_files(sequences[0], frames_limit)
+    dictionary_information = send_files(sequences[0], frames_limit, folder_path)
     # Set the path into the original directory outside the folder helicalparameters
     os.chdir(actual_path)
     # Convert the dictionary into a json file
     # DANI: Estamos teniendo NaNs que no son soportados más adelante, hay que eliminarlos
     save_json(dictionary_information, output_analysis_filename)
     
+# Function to execute cpptraj and calculate .dat file (Hydrogen Bonds)
+def hydrogen_bonds(
+    input_topology_filename : str,
+    input_trajectory_filename : str,
+    output_analysis_filename : str,
+    folder_path : str,
+    input_structure_filename : str,
+):
+    # This analysis is done using cpptraj and its done by two steps
+    # 1. Crate the cpptraj.in file to generate the dry trajectory (cpptraj_dry.inpcrd)
+    # parm_path = f"/orozco/projects/ABCix/ProductionFiles" 
+    # setup_path = f"/orozco/projects/ABCix/ProductionFiles/SETUP" 
+
+    # # Config cpptraj
+    # cpptraj_in_file = f"{folder_path}/cpptraj.in"
+    # cpptraj_out_file = f"{folder_path}/cpptraj_dry.inpcrd"
+
+    # if not os.path.exists(cpptraj_out_file):
+
+
+    #     # Exec cpptraj
+    #     cpptraj_command = f"cpptraj {cpptraj_in_file}" 
+    #     res = subprocess.run(cpptraj_command, shell=True)
+
+
+    ################
+    # 2. From the dry.inpcrd file we will generate the .dat file
+    # Create the helical parameters folder
+    helical_parameters_folder = f"{folder_path}/helical_parameters"
+    # If the folder already exists dont create it again
+    if not os.path.exists(helical_parameters_folder):
+        os.mkdir(helical_parameters_folder)
+    output_dat_file = os.path.join(helical_parameters_folder, "mdf.nahbonds.dat")
+
+    print(f"Saving .dat file to: {output_dat_file}")
+
+    # Crear el contenido del input de cpptraj usando las variables
+    cpptraj_script = f"""
+    # Load the topology file
+    parm {input_topology_filename}
+
+    # Load the initial reference structure
+    trajin {input_structure_filename}
+
+    # Load the trajectory
+    trajin {input_trajectory_filename}
+
+    # Run the NA structure analysis
+    nastruct NA
+
+    # Run the command to process the trajectory
+    run
+
+    # Write out hydrogen bond information to a file
+    writedata {output_dat_file} NA[hb]
+
+    # Quit
+    quit
+    """
+    print("Executing cpptraj...")
+    # Execute cpptraj with the generated script
+    subprocess.run(["cpptraj"], input=cpptraj_script, text=True, check=True)
+
+    # Check if the output file was created
+    if not os.path.exists(output_dat_file):
+        raise SystemExit(f"Error: {output_dat_file} was not created. Check the cpptraj command and input files.")
+
+    # Renumber the dat file because the first line is repeated
+    # AGUS: con esto tuvimos muchos problemas en el proyecto de ABCix y al final optamos por eliminar la primera línea y renumerar todo 
+    # AGUS: además, también sirvió para comprimir el archivo y leerlo mejor
+    def renumber_dat_file(file_path):
+        with open(file_path, 'r') as file:
+            lines = file.readlines()  
+
+        counter = 1
+        first = True
+
+        renumbered_lines = []
+        for line in lines:
+            if line.strip().startswith('#'):
+                renumbered_lines.append(line)
+            elif first:
+                first = False
+                continue
+            else:
+                renumbered_lines.append(f"{counter} {' '.join(map(str, line.split()[1:]))}\n")
+                counter += 1
+
+        with open(file_path, 'w') as file:
+            file.writelines(renumbered_lines)
+        print("Renumbering the dat file...")
+    # Renumber the dat file
+    renumber_dat_file(output_dat_file)
+    
+    # Set the function to compress the dat file to .bin file
+    def compress_dat_to_bin(output_dat_file):
+        data = []
+        with open(output_dat_file, 'r') as file:
+            # Skip the first line since it is only the headers
+            next(file)
+            for line in file:
+                # Skip the first line since it is only the row number
+                numbers = [ int(s) for s in line.strip().split()[1:] ]
+                data += numbers
+
+        # Data is a list of numeric values
+        # Bit size is the number of bits for each value in data to be occupied
+        def store_bits_dat (data : list, bit_size : int, filepath : str):
+            from struct import pack
+            # Check bit size to make sense
+            if bit_size <= 0:
+                raise ValueError('Bit size must a number greater than 0')
+            if bit_size % 8 == 0:
+                raise ValueError('Bit size is multiple of 8 so bytes must be used instead of bits')
+            # Start writting the output file
+            with open(filepath, 'wb') as file:
+                bit_count = 0
+                current_byte = ''
+                # Iterate over data list values
+                for value in data:
+                    # Parse the value to binary and make sure the binary is as long as the bit size
+                    bits = format(value, 'b').zfill(bit_size)
+                    if len(bits) != bit_size:
+                        raise ValueError(f'Value {value} cannot be stored in {bit_size} bits')
+                    # Add bits one by one to the current byte to be written
+                    for bit in bits:
+                        current_byte += bit
+                        bit_count += 1
+                        # If the current byte is full then write it to the output file
+                        if bit_count == 8:
+                            #print(current_byte + ' -> ' + str(int(current_byte, 2)))
+                            file.write(pack('<B', int(current_byte, 2)))
+                            current_byte = ''
+                            bit_count = 0
+                # If last byte is truncated then fill it with 0s and write it
+                if bit_count != 0:
+                    last_byte = current_byte.ljust(8, '0')
+                    file.write(pack('<B', int(last_byte, 2)))
+        
+        # Set the name of the binary dat file
+        bin_file_path = output_dat_file.replace('.dat', '.bin')
+        # Call the function to store the bits in the binary file
+        store_bits_dat(data, 2, bin_file_path)
+        # Set the name of the meta file and create the meta data corresponding to the binary dat file
+        meta_file_path = bin_file_path + '.meta.json'
+        meta_data = {
+            'x': {
+                'name': 'bases',
+                'length': 20
+            },
+            'y': {
+                'name': 'frames',
+                'length': 500000
+            },
+            'bitsize': 2,
+        }
+        save_json(meta_data, meta_file_path)
+    
+    # Compress the dat file to .bin file
+    compress_dat_to_bin(output_dat_file)
+    print("Dat file compressed to bin file, removing original dat file...")
+    # Remove the original dat file
+    os.remove(output_dat_file)
+
 
 # Function to execute Curves+ and Canals software to generate the output needed
 def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,folder_path):
@@ -235,48 +413,50 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,f
         raise SystemExit('Something went wrong with Canals software')
 
 
-def send_files(sequence,frames_limit):
+def send_files(sequence,frames_limit, folder_path):
     files_averages = []
     files_backbones = []
     files_allbackbones = []
     # Iterate over all files in the directory
+    helical_parameters_folder = f"{folder_path}/helical_parameters"
+    os.chdir(helical_parameters_folder)
     for file in os.listdir():
         if not file.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
             continue
-        data = []
-        with open(file, 'r') as ser_file:
-            # Skip the first line since it is only the headers
-            n_lines = 0
-            for line in ser_file:
-                # Skip the first line since it is only the row number
-                numbers = [ s for s in line.strip().split()[1:] ]
-                data += numbers
-                n_lines += 1
-                # if len(data) > 1000:
-                #     break
-        # Save the file with the same name but with .bin extension and mdf prefix
-        file_name = 'mdf.' + file
-        file_path = os.path.join(os.getcwd(), file_name.replace('.ser', '.bin'))
-        # Store data in a binary format
-        store_binary_data(
-            data=data,
-            byte_size=4, # 32 bits
-            filepath=file_path
-        )
-        # We need the meta file to store the information about the binary file (with the same name and .meta.json extension)
-        name_meta_file = file_path + '.meta.json'
-        meta_data = {
-            'x': {
-                'name': 'bases',
-                'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
-            },
-            'y': {
-                'name': 'frames',
-                'length': n_lines # Total number of lines in the file os the number of frames
-            },
-            'bitsize': 32, # 32 bits
-        }
-        save_json(meta_data, name_meta_file)
+        # data = []
+        # with open(file, 'r') as ser_file:
+        #     # Skip the first line since it is only the headers
+        #     n_lines = 0
+        #     for line in ser_file:
+        #         # Skip the first line since it is only the row number
+        #         numbers = [ s for s in line.strip().split()[1:] ]
+        #         data += numbers
+        #         n_lines += 1
+        #         # if len(data) > 1000:
+        #         #     break
+        # # Save the file with the same name but with .bin extension and mdf prefix
+        # file_name = 'mdf.' + file
+        # file_path = os.path.join(os.getcwd(), file_name.replace('.ser', '.bin'))
+        # # Store data in a binary format
+        # store_binary_data(
+        #     data=data,
+        #     byte_size=4, # 32 bits
+        #     filepath=file_path
+        # )
+        # # We need the meta file to store the information about the binary file (with the same name and .meta.json extension)
+        # name_meta_file = file_path + '.meta.json'
+        # meta_data = {
+        #     'x': {
+        #         'name': 'bases',
+        #         'length': len(numbers) # Number of columns.  It is the last value of the bucle for line in ser_file (maybe it causes problems)
+        #     },
+        #     'y': {
+        #         'name': 'frames',
+        #         'length': n_lines # Total number of lines in the file os the number of frames
+        #     },
+        #     'bitsize': 32, # 32 bits
+        # }
+        # save_json(meta_data, name_meta_file)
 
 
         #  THIS PART OF THE CODE IS TO ANALYZE THE FILES AND COMPUTE THE AVERAGES, STANDARD DEVIATIONS AND TIME SERIES
@@ -300,21 +480,186 @@ def send_files(sequence,frames_limit):
 
     
 
-    information_dictionary = {'avg_res':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}},'ts':{'backbone':{},
-                              'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}}}
-    
+    information_dictionary = {'avg_res':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}, 'stiffness':{}}}
+
+    information_dictionary0 = get_stiffness(sequence,files_averages,information_dictionary,frames_limit)
+    # 'ts':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}}
+    # Before there was another field called 'ts' or time series but it was removed because now it is included in the .ser and .bin files
+
     # Work with files that correspond to the different blocks of Helical Parameters and perform the different computations to each block 
 
     # Call function to distribute the different files to compute their averages
-    information_dictionary1 = flow_files_average(files_averages,information_dictionary,sequence)
+    information_dictionary1 = flow_files_average(files_averages,information_dictionary0,sequence)
 
     # Call function to distribute the files related to backbone torsions and perform different calculcations to each
     information_dictionary2 = flow_files_backbone(files_backbones,information_dictionary1) 
 
     # Call function to distribut all files and compute Time Series in all of them
-    info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit) 
+    #info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit) 
+    return information_dictionary2 # Return the dictionary to convert it to a json
 
-    return info_dictionary # Return the dictionary to convert it to a json
+# Function to compute the stiffness 
+def get_stiffness(sequence,files,info_dict,frames_limit):
+    # Create and object (as NASSA does) to store the sequence and the corresponding .ser info so then we can calculate the stiffness
+    extracted = {}
+    # First parse the sequence to obtain the NucleicAcid object as NASSA wf does
+    seq = []
+    seq.append(load_sequence2(sequence, unit_len=6))
+    extracted['sequences'] = seq
+    # Set the hexamer coordinates
+    # AGUS: si son pentámeros habría que añadir las coordenadas:  shear stagger stretch chic chiw buckle opening propel
+    cordinate_list = ['shift','slide','rise','roll','tilt','twist']
+    for coord in cordinate_list:
+        crd_data = []
+        for ser_file in files:
+            if ser_file.split('_')[-1].split('.')[0].lower() == coord:
+                ser = load_serfile(
+                    ser_file)
+                crd_data.append(ser)
+        extracted[coord.lower()] = crd_data
+        print(f"loaded {len(crd_data)} files for coordinate <{coord}>")
+    results = transform(extracted)
+    # Add the results stiffness to the dictionary
+    info_dict['avg_res']['stiffness'] = results  
+    return info_dict
+
+# AGUS: estas tres funciones siguientes son una copia de NASSA pero modificada para este caso ya que NASSA 
+# AGUS: funciona para todas las secuencias o MD al mismo tiempo y el WF para cada proyecto/MD
+# AGUS: además, ahora se define por defecto el nombre de la unidad como hexámero
+def transform(data, unit_name='hexamer'):
+    sequences = data.pop('sequences')
+    results = {"stiffness": [], "covariances": {}, "constants": {}}
+    for traj, seq in enumerate(sequences):
+        traj_series = {coord.lower(): data[coord][traj]
+                        for coord in data.keys()}
+        traj_results = get_stiffness_seq(
+            seq,
+            traj_series)
+        results["stiffness"].append(traj_results["stiffness"])
+        covariances_serializable = {
+            key: df.to_dict(orient="split")  # 'index', 'columns', 'data'
+            for key, df in traj_results["covariances"].items()
+        }
+        results["covariances"].update(covariances_serializable)
+        constants_serializable = {
+            key: df.to_dict(orient="split")  # 'index', 'columns', 'data'
+            for key, df in traj_results["constants"].items()
+        }
+        results["constants"].update(constants_serializable)
+
+    # AGUS: aquí se hace un cambio en la estructura del diccionario de stiffness para que sea más fácil de manejar en front end
+    stiffness_by_coord = {}
+    for item in results["stiffness"]:
+        for key, value in item.items():
+            if key == "hexamer":
+                continue  
+            if key not in stiffness_by_coord:
+                stiffness_by_coord[key] = []
+            stiffness_by_coord[key].append(value)
+    results["stiffness"] = stiffness_by_coord
+    for key, value in results["stiffness"].items():
+        # Si es una lista con Series adentro, concatenamos y convertimos a list
+        if isinstance(value, list) and all(hasattr(v, "tolist") for v in value):
+            combined = pd.concat(value)
+            results["stiffness"][key] = combined.tolist()
+        # Si es una sola Series
+        elif hasattr(value, "tolist"):
+            results["stiffness"][key] = value.tolist()
+    return results
+def get_stiffness_seq(
+        sequence,
+        series_dict):
+    # get stiffness table for a given trajectory
+    coordinates = list(series_dict.keys())
+    results = {"stiffness": {}, "covariances": {}, "constants": {}}
+    diagonals = {}
+    start = sequence.flanksize # + 2
+    end = sequence.size - (sequence.baselen + sequence.flanksize - 1) # +2
+    print(f"start: {start}, end: {end}")
+    for i in range(start, end):
+        hexamer = sequence.get_subunit(i)
+        #ic_hexamer = sequence.inverse_complement(hexamer)
+        cols_dict = {coord: series_dict[coord][i+1]
+                        for coord in series_dict.keys()}
+        #print(f"cols_dict: {cols_dict}")
+        stiffness_diag, cte, cov_df = get_subunit_stiffness(
+            cols_dict,
+            coordinates)
+        diagonals[hexamer] = np.append(
+            stiffness_diag,
+            [np.product(stiffness_diag), np.sum(stiffness_diag)])
+        # diagonals[ic_hexamer] = np.append(
+        #     stiffness_diag,
+        #     [np.product(stiffness_diag), np.sum(stiffness_diag)])
+        results["covariances"][hexamer] = cov_df
+        #results["covariances"][ic_hexamer] = cov_df
+        results["constants"][hexamer] = cte
+        #results["constants"][ic_hexamer] = cte
+    # build stiffness table
+    columns = [sequence.unit_name] + coordinates + ["product", "sum"]
+    results["stiffness"] = pd.DataFrame.from_dict(
+        diagonals,
+        orient="index").reset_index()
+    results["stiffness"].columns = columns
+    return results
+def get_subunit_stiffness(
+        cols_dict,
+        coordinates,
+        scaling=[1, 1, 1, 10.6, 10.6, 10.6],
+        KT=0.592186827):
+    import numpy.ma as ma
+    def circ_avg(xarr, degrees=True):
+        n = len(xarr)
+        if degrees:
+            # convert to radians
+            xarr = xarr * np.pi / 180
+        av = np.arctan2(
+            (np.sum(np.sin(xarr)))/n,
+            (np.sum(np.cos(xarr)))/n) * 180 / np.pi
+        return av
+    # AGUS: insisto, está adaptado solamente para hexámeros
+    # if (self.unit_len % 2) == 0:
+    SH_av = cols_dict["shift"].mean()
+    SL_av = cols_dict["slide"].mean()
+    RS_av = cols_dict["rise"].mean()
+    TL_av = circ_avg(cols_dict["tilt"])
+    RL_av = circ_avg(cols_dict["roll"])
+    TW_av = circ_avg(cols_dict["twist"])
+    # elif (self.unit_len % 2) == 1:
+    #     SH_av = cols_dict["shear"].mean()
+    #     SL_av = cols_dict["stretch"].mean()
+    #     RS_av = cols_dict["stagger"].mean()
+    #     CW_av = cols_dict["chiw"].mean()
+    #     CC_av = cols_dict["chic"].mean()
+    #     TL_av = self.circ_avg(cols_dict["buckle"])
+    #     RL_av = self.circ_avg(cols_dict["propel"])
+    #     TW_av = self.circ_avg(cols_dict["opening"])
+    cols_arr = [cols_dict[coord] for coord in coordinates]
+    cols_arr = np.array(cols_arr).T
+
+    cv = ma.cov(ma.masked_invalid(cols_arr), rowvar=False)
+    cv.filled(np.nan)
+
+    cov_df = pd.DataFrame(cv, columns=coordinates, index=coordinates)
+    stiff = np.linalg.inv(cv) * KT
+    #print(stiff)
+    # Added two new variables: ChiC and ChiW -> 8 (for PENTAMERS) => in NASSA (here only for hexamers)
+    if (6 % 2) == 0:
+        last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av] #, CW_av, CC_av]
+        stiff = np.append(stiff, last_row).reshape(7, 6)
+    # elif (self.unit_len % 2) == 1:
+    #     last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av, CW_av, CC_av]
+    #     print(last_row)
+    #     stiff = np.append(stiff, last_row).reshape(9, 8)
+    #     scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
+    
+    stiff = stiff.round(6)
+    stiff_diag = np.diagonal(stiff) * np.array(scaling)
+
+    cte = pd.DataFrame(stiff)
+    cte.columns = coordinates
+    cte.index = coordinates + ["avg"]
+    return stiff_diag, cte, cov_df
 
 # Function to check whether the file is from one block or another regarding Helical parameters, the value of baselen could change
 def checking(helpar_name):
@@ -381,6 +726,7 @@ def flow_files_average(files,info_dict,sequence):
         # Convert the files into Pandas dataframe to make the computations and data manipulation easily
         dataframe = read_series(file) 
         df1,df2 = average_std(dataframe,baselen,sequence)
+        df1i,df2i = average_std_intra(dataframe,baselen,sequence)
         if helpword in ["roll","tilt","twist","rise","shift","slide"]: 
             # INTER BASEPAIR BLOCK
             info_dict['avg_res']['interbp'][helpword] = {'avg':{},'std':{}}
@@ -394,20 +740,20 @@ def flow_files_average(files,info_dict,sequence):
             # INTRA BASEPAIR BLOCK
             info_dict['avg_res']['intrabp'][helpword] = {'avg':{},'std':{}}
             #  we want to store all the information regarding the averages 
-            info_dict['avg_res']['intrabp'][helpword]['avg'] = df1.T.values.tolist() 
+            info_dict['avg_res']['intrabp'][helpword]['avg'] = df1i.T.values.tolist() 
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['intrabp'][helpword]['std'] = df2.T.values.tolist() 
+            info_dict['avg_res']['intrabp'][helpword]['std'] = df2i.T.values.tolist() 
 
         elif helpword in ["xdisp","ydisp","inclin","tip"]:
             # AXIS BASEPAIR BLOCK 
             info_dict['avg_res']['axisbp'][helpword] = {'avg':{},'std':{}} 
 
             #  we want to store all the information regarding the averages
-            info_dict['avg_res']['axisbp'][helpword]['avg'] = df1.T.values.tolist()  
+            info_dict['avg_res']['axisbp'][helpword]['avg'] = df1i.T.values.tolist()  
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['axisbp'][helpword]['std'] = df2.T.values.tolist() 
+            info_dict['avg_res']['axisbp'][helpword]['std'] = df2i.T.values.tolist() 
 
         else:
             # GROOVES BLOCK
@@ -423,16 +769,32 @@ def flow_files_average(files,info_dict,sequence):
 
 # Compute average and standard deviation
 def average_std(dataf,baselen,sequence):
+    # For hexamers, baselen has to be 2
+    baselen = 2 
     # discard first and last base(pairs) from sequence
-    dataf = dataf[dataf.columns[1:-1]]
-
-    sequence = sequence[1:]
+    dataf = dataf[dataf.columns[2:17]]
+    # sequence = sequence[1:]
+    # print("sequence: ",sequence)
     xlabels = [
         f"{sequence[i:i+1+baselen]}"
-        for i in range(len(dataf.columns) - baselen)]
+        for i in range(len(dataf.columns))] # - baselen
     means = dataf.mean(axis=0).iloc[:len(xlabels)]
     stds = dataf.std(axis=0).iloc[:len(xlabels)]
-    return means,stds
+    return means,stds 
+
+def average_std_intra(dataf,baselen,sequence):
+    # For hexamers, baselen has to be 2
+    baselen = 2 
+    # discard first and last base(pairs) from sequence
+    dataf = dataf[dataf.columns[2:18]]
+    # sequence = sequence[1:]
+    # print("sequence: ",sequence)
+    xlabels = [
+        f"{sequence[i:i+1+baselen]}"
+        for i in range(len(dataf.columns))] # - baselen
+    means = dataf.mean(axis=0).iloc[:len(xlabels)]
+    stds = dataf.std(axis=0).iloc[:len(xlabels)]
+    return means,stds 
 
 # OTHER FUNCTIONS THAT MUST PERFORM OTHER CALCULATIONS REGARDING TO THE LAST BLOCK OF HELICAL PARAMETERS (BACKBONE TORSIONS)
 # THERE ARE 3 DIFFERENT FUNCTIONS EACH ONE COMPUTING DIFFERENT ASPECTS OF THE FLEXIBILITY IN THE BACKBONE 
@@ -599,6 +961,14 @@ def bi_populations(bfiles):
     zetac = read_series(zetac) 
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
     zetaw = read_series(zetaw) 
+    # Fix angles that are negative and over 360 degrees
+    epsilc = fix_angles2(epsilc) 
+    # Fix angles that are negative and over 360 degrees
+    epsilw = fix_angles2(epsilw)
+    # Fix angles that are negative and over 360 degrees
+    zetac = fix_angles2(zetac)
+    # Fix angles that are negative and over 360 degrees
+    zetaw = fix_angles2(zetaw) 
     # Compute differences between Epsilon and Zeta values
     diff_epsil_zeta = angles_diff_ze(epsilc,zetac,epsilw,zetaw) 
     BI,BII = bi_pop(diff_epsil_zeta)

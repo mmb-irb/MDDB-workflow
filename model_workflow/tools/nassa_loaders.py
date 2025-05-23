@@ -27,6 +27,45 @@ def load_sequence(seqfile, unit_len, unit_name=None):
         unit_len=unit_len)
     return nucleic_acid
 
+# This function is a copy of the previous one, but it does not read from a file.
+# It is used to load a sequence from a string. It is used in the helical parameters analysis.
+def load_sequence2(sequence, unit_len, unit_name='hexamer'):
+    """
+    Load single text file containing forward and inverse-complementary sequences.
+
+    :param str seq_file: a string with the path to the sequences file.
+    :param str unit_name: name of subunit to be analyzed.
+    :param int unit_len: length of subunit to be analyzed.
+    :returns: NASequence object for loaded sequence.
+    """
+    #assert isinstance(seqfile, str) or isinstance(seqfile, pathlib.Path)
+    #sequences = pathlib.Path(seqfile).read_text().split()
+    sequences = [sequence]
+    if len(sequences) == 1:
+        sequences.append(reverse_sequence(sequence))
+    if len(sequences) < 2:
+        sequences.append(None)
+        try:
+            assert len(sequences) == 2
+        except AssertionError:
+            raise AssertionError("Error in sequence file! Check its not empty")
+    nucleic_acid = NucleicAcid(
+        sequence=sequences[0],
+        ic_sequence=sequences[1],
+        unit_name=unit_name,
+        unit_len=unit_len)
+    return nucleic_acid
+# This function is used to reverse the sequence and obtain the inverse complement.
+def reverse_sequence(sequence,DNA=True):
+    if DNA: # If DNA flag is tru we want to compute the inverse using T instead of U
+        A_base = "T"
+    else: # Now it is RNA so we want to convert T to U
+        A_base = "U"
+    inverse = {"A":A_base,"G":"C","C":"G",A_base:"A"} # Dictionary to convert easily the sequence 
+    inv_seq = ""
+    for i in sequence[::-1]: # Traverse the sequence from the end to the beginning
+        inv_seq += inverse[i] # Obtain the complementary base 
+    return inv_seq # Return the inverse complement
 
 def write_sequence(nucleic_acid, filename):
     assert isinstance(nucleic_acid, NucleicAcid)

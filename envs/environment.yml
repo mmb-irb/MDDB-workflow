@@ -40,6 +40,9 @@ dependencies:
   - bioconda::biobb_mem=5.0.6
   - requests # To check is molecules is in LIPID MAPS
   # We must declare pip explicitly according to a warning
+  # AGUS: por problemas en el cluster con certificados y requests, la versión de 'openssl' 
+  # AGUS: tiene que ser forzada porque la 3.5 (la más nueva) da conflictos
+  - conda-forge::openssl=3.4.1
   - pip
   # This library is used to calculate TM scores and it is not in conda
   # WARNING: this library is not mantained and it depends in an outdated version of iminuit

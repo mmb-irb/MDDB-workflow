@@ -293,22 +293,24 @@ boxtype:
 #
 # Interactions are defined by the 'agents' which are meant to interact pairwise
 # An 'agent' may be anything, even a group of unrelated molecules
-# The only condition is that agents must be defined by residues
-# Residues of different agents which are close enought will be considered as interface residues
-# These residues will be the ones considered in interface analyses
-# If no interface residues are found then the interaction is considered not valid and the user is warned
+# Atoms of different agents which are close enought will be considered as interface atoms
+# These atoms will be the ones considered in interface analyses
+# If no interface atoms are found then the interaction is considered not valid and the user is warned
 #
 # Interactions are uploaded to the database as part of the project metadata and as an independent analysis
-# Project metadata includes the interaction name, agents name and agent residues selections (vmd syntax)
-# Analysis data includes also every agent residue indices (both the whole agent and the interface only)
+# Project metadata includes the interaction name, agents name and agent atom selections (vmd syntax)
+# Analysis data includes also every agent atom indices (both the whole agent and the interface only)
 #
 # Each interaction has the following attributes:
-#    - name: a string tag used to relate interaction analyses data with their corresponding residues.
+#    - name: a string tag used to relate interaction analyses data with their corresponding atoms.
 #     In addition, the name is used to label the corresponding analyses in the web client
 #    - agent_1: the name of the first agent in the interaction, which is used to label in the client
 #    - selection_1: the VMD selection of the first agent in the interaction
 #    - agent_2: the name of the second agent in the interaction, which is used to label in the client
 #    - selection_2: the VMD selection of the second agent in the interaction
+#    - (optional) distance_cutoff: the distance used to determine which atoms are in the interface (in Å)
+#     The defualt value is intended for atomistic simulations
+#     Thus coarse grain interactions may need manual input distance cutoff
 #
 # VMD atom selection language:
 # https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
@@ -326,6 +328,12 @@ boxtype:
 #     selection_1: resid 2 to 291
 #     agent_2: domain 2
 #     selection_2: resid 2 to 291
+#   - name: dna-dna hybridization
+#     agent_1: strain A
+#     selection_1: chain A
+#     agent_2: strain B
+#     selection_2: chain B
+#     distance_cutoff: 10
 
 interactions:
 

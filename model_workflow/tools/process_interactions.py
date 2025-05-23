@@ -4,10 +4,14 @@
 import itertools
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn, reprint
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
+
+# Set the default distance cutoff in Ångstroms (Å)
+# This is useful for atomistic simulations
+DEFAULT_DISTANCE_CUTOFF = 5
 
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'
@@ -33,8 +37,6 @@ def process_interactions (
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,
-    # The cutoff distance is in Ångstroms (Å)
-    distance_cutoff : float = 5,
     ) -> list:
 
     print('-> Processing interactions')
@@ -61,7 +63,9 @@ def process_interactions (
             print(f' |-> Processing interactions automatically. Chain "{auto[0]}" is selected')
 
         # Get structure chains which are not completely in PBC
-        target_chains = [ chain for chain in structure.chains if chain.get_selection() - pbc_selection ]
+        target_selection = structure.select_protein()
+        target_structure = structure.filter(target_selection)
+        target_chains = [ chain for chain in target_structure.chains if chain.get_selection() - pbc_selection ]
         # The greedy option is to find all possible interactions between chains
         if auto == 'autogreedy' or auto == 'greedy':
             # Use itertools to get all possible combinations of chains
@@ -153,37 +157,42 @@ def process_interactions (
             raise InputError(f'Invalid input auto interactions "{auto}"')
 
     # If there are no interactions return an empty list
-    if not interactions or len(interactions) == 0:
+    interaction_count = len(interactions)
+    if not interactions or interaction_count == 0:
         return []
     
     # Make sure there are no interactions with the same name
     interaction_names = [ interaction['name'] for interaction in interactions ]
     if len(set(interaction_names)) < len(interaction_names):
         raise InputError('Interactions must have unique names')
+    # Print an empty line for the next reprint
+    print()
     # Check input interactions to be correct
-    for interaction in interactions:
+    for i, interaction in enumerate(interactions, 1):
+        name = interaction["name"]
+        reprint(f' Finding interaction type in {name} ({i}/{interaction_count})')
         # Check agents have different names
         if interaction['agent_1'] == interaction['agent_2']:
-            raise InputError(f'Interaction agents must have different names at {interaction["name"]}')
+            raise InputError(f'Interaction agents must have different names at {name}')
         # Check agents have different selections
         if interaction['selection_1'] == interaction['selection_2']:
-            raise InputError(f'Interaction agents must have different selections at {interaction["name"]}')
+            raise InputError(f'Interaction agents must have different selections at {name}')
         # Make sure both agents have valid selections
         agent_1_selection = structure.select(interaction['selection_1'])
         if not agent_1_selection:
-            raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
+            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
         agent_2_selection = structure.select(interaction['selection_2'])
         if not agent_2_selection:
-            raise InputError(f'Interaction "{interaction["name"]}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
+            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
         # Make sure selections do not overlap at all
         # This makes not sense as interactions are implemented in this workflow
         overlap = agent_1_selection & agent_2_selection
         if overlap:
-            raise InputError(f'Agents in interaction "{interaction["name"]}" have {len(overlap)} overlapping atoms')
+            raise InputError(f'Agents in interaction "{name}" have {len(overlap)} overlapping atoms')
         # Check if there was a type already assigned to the interaction
         # This is not supported anymore since the interaction type is set automatically
         if 'type' in interaction:
-            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{interaction["name"]}".\n'
+            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{name}".\n'
                  'Interaction type is now calculated and the input interaction type is no longer supported.\n'
                  'Note that the input value will be ignored')
         # Set the interaction type
@@ -201,12 +210,18 @@ def process_interactions (
     # Load the backup and return its content as it is
     if processed_interactions_file.exists:
         loaded_interactions = load_interactions(processed_interactions_file, structure)
-        # Merge the loaded interactions with the input interactions to cover all fields
-        complete_interactions = []
-        for input_interaction, loaded_interaction in zip(interactions, loaded_interactions):
-            complete_interaction = { **input_interaction, **loaded_interaction }
-            complete_interactions.append(complete_interaction)
-        return complete_interactions
+        # Make sure the backup has atom indices
+        sample = loaded_interactions[0]
+        has_atom_indices = 'atom_indices_1' in sample
+        if has_atom_indices:
+            # Merge the loaded interactions with the input interactions to cover all fields
+            complete_interactions = []
+            for input_interaction, loaded_interaction in zip(interactions, loaded_interactions):
+                complete_interaction = { **input_interaction, **loaded_interaction }
+                complete_interactions.append(complete_interaction)
+            return complete_interactions
+        # Otherwise it means this is not a compatible version and we must run interactions again
+        warn('Interactions backup is obsolete. Interactions will be calculated again')
 
     # Reset warnings related to this analysis
     register.remove_warnings(STABLE_INTERACTIONS_FLAG)
@@ -219,8 +234,24 @@ def process_interactions (
         frames_limit,
     )
 
+    # Get the structure coarse grain selection for further reference
+    cg_selection = structure.select_cg()
+
     # Iterate over each defined interaction
     for interaction in interactions:
+        # Set the distance cutoff
+        distance_cutoff = interaction.get('distance_cutoff', DEFAULT_DISTANCE_CUTOFF)
+        # Find if this interaction has coarse grain atoms involved
+        agent_1_selection = structure.select(interaction['selection_1'])
+        agent_2_selection = structure.select(interaction['selection_2'])
+        has_agent_1_cg = bool(agent_1_selection & cg_selection)
+        has_agent_2_cg = bool(agent_2_selection & cg_selection)
+        interaction['has_cg'] = has_agent_1_cg or has_agent_2_cg
+        # Check if we are using the defualt atomistic distance while selections are coarse grain
+        # If this is the case then warn the user
+        if interaction['has_cg'] and distance_cutoff == DEFAULT_DISTANCE_CUTOFF:
+            warn(f'Using atomistic default distance cutoff ({distance_cutoff}Å) with coarse grain agent(s)\n'
+            f'  You may need to manually specify the distance cutoff in the inputs file for interaction "{interaction["name"]}"')
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices(
             structure_file.path,
@@ -237,8 +268,8 @@ def process_interactions (
             print(f'Interaction "{interaction["name"]}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
                 f'This means the interaction {meaning_log}.\n'
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
-                '   - Agent 1 selection: ' + interaction['selection_1'] + '\n'
-                '   - Agent 2 selection: ' + interaction['selection_2'])
+                f'   - Agent 1 selection: {interaction["selection_1"]}\n'
+                f'   - Agent 2 selection: {interaction["selection_2"]}')
             # Check if we must have mercy in case of interaction failure
             must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
             if must_be_killed:
@@ -261,13 +292,17 @@ def process_interactions (
             if len(residue_indices) == 0:
                 agent_name = interaction['agent_' + agent]
                 raise ValueError(f'Empty selection for agent "{agent_name}" in interaction "{interaction["name"]}": {interaction["selection_" + agent]}')
-            interaction['residue_indices_' + agent] = residue_indices
-            interaction['residues_' + agent] = [ structure.residues[residue_index] for residue_index in residue_indices ]
+            interaction[f'residue_indices_{agent}'] = residue_indices
+            interaction[f'residues_{agent}'] = [ structure.residues[residue_index] for residue_index in residue_indices ]
             # Then with interface atoms/residues
             interface_atom_indices = interface_results[f'selection_{agent}_interface_atom_indices']
             interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
-            interaction['interface_indices_' + agent] = interface_residue_indices
-            interaction['interface_' + agent] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
+            interaction[f'interface_indices_{agent}'] = interface_residue_indices
+            interaction[f'interface_{agent}'] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
+            # Save atom indices in the interaction object
+            interaction[f'atom_indices_{agent}'] = atom_indices
+            interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
+            interaction['version'] = '1.0.0'
 
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
@@ -298,7 +333,13 @@ def process_interactions (
         'residue_indices_2',
         'interface_indices_1',
         'interface_indices_2',
+        'atom_indices_1',
+        'atom_indices_2',
+        'interface_atom_indices_1',
+        'interface_atom_indices_2',
+        'version',
         'strong_bonds',
+        'has_cg',
         FAILED_INTERACTION_FLAG
     ]
 

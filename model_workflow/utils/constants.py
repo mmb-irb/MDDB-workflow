@@ -38,7 +38,7 @@ TEXT_EDITORS = {
 AVAILABLE_TEXT_EDITORS = { name: command for name, command in TEXT_EDITORS.items() if which(command) }
 
 # Database
-DEFAULT_API_URL = 'https://irb.mddbr.eu/api/'
+DEFAULT_API_URL = 'https://irb-dev.mddbr.eu/api/'
 
 # Selections
 # Set a standard selection for protein and nucleic acid backbones in vmd syntax
@@ -163,6 +163,7 @@ OUTPUT_DIST_PERRES_FILENAME = 'mda.dist_perres.json'
 OUTPUT_HBONDS_FILENAME = 'mda.hbonds.json'
 OUTPUT_SASA_FILENAME = 'mda.sasa.json'
 OUTPUT_ENERGIES_FILENAME = 'mda.energies.json'
+OUTPUT_DIHEDRAL_ENERGIES_FILENAME = 'mda.dihenergies.json'
 OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
 OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket' # WARNING: If this is changed then the pockets function must be updated as well
 OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
@@ -257,6 +258,8 @@ EXTENSION_FORMATS = {
     'crd': 'crd',
     'mdcrd': 'crd',
     'trj': 'crd',
+    # Restart files (may be used as single frame trajectories)
+    'rst7': 'rst7',
     # Other
     'json': 'json',
     'yaml': 'yaml',

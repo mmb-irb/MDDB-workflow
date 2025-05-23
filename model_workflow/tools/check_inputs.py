@@ -2,6 +2,7 @@ from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
 from model_workflow.utils.gmx_spells import mine_system_atoms_count
+from model_workflow.utils.vmd_spells import vmd_to_pdb
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 
@@ -20,14 +21,17 @@ GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntraje
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
-TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr', 'nc', 'dcd', 'crd', 'pdb' }
+TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr', 'nc', 'dcd', 'crd', 'pdb', 'rst7' }
 STRUCTURE_SUPPORTED_FORMATS = { *TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro' }
 GROMACS_TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr'}
+
+# Auxiliar PDB file which may be generated to load non supported restart files
+AUXILIAR_PDB_BILE = '.auxiliar.pdb'
 
 # Check input files coherence and intergrity
 # If there is any problem then raise an input error
 def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : Union['File', Exception]):
-
+    
     # Get a sample trajectory file and then check its format
     # All input trajectory files must have the same format
     trajectory_sample = input_trajectory_files[0]
@@ -169,10 +173,19 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             else:
                 topology_atom_count = trajectory_atom_count = trajectory.n_atoms
             return topology_atom_count, trajectory_atom_count
+        # At this point the topology should be supported by MDtraj
+        # However, f the trajectory is a restart file MDtraj will not be able to read it
+        # Make the conversion here, since restart files are single-frame trajectories this should be fast
+        use_auxiliar_pdb = False
+        if trajectory_file.format == 'rst7':
+            # Generate the auxiliar PDB file
+            vmd_to_pdb(topology_file.path, trajectory_file.path, AUXILIAR_PDB_BILE)
+            use_auxiliar_pdb = True
         # For any other format use MDtraj
         try:
             # Note that declaring the iterator will not fail even when there is a mismatch
-            trajectory = mdt.iterload(trajectory_file.path, top=topology_file.path, chunk=1)
+            trajectory_path = AUXILIAR_PDB_BILE if use_auxiliar_pdb else trajectory_file.path
+            trajectory = mdt.iterload(trajectory_path, top=topology_file.path, chunk=1)
             # We must consume the generator first value to make the error raise
             frame = next(trajectory)
             # Now obtain the number of atoms from the frame we just read
@@ -208,7 +221,12 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
                 f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms\n' +
                 f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
         
-        # If the counts match then anslo get the structure atom count and compare
+        # If the topology file is already the structure file then there is no need to check it
+        if input_structure_file == input_topology_file:
+            print(f'Topology and trajectory files match in number of atoms: {trajectory_atom_count}')
+            return
+
+        # If the counts match then also get the structure atom count and compare
         structure_atom_count = get_structure_atoms(input_structure_file)
 
         # Make sure it matches the topology and trajectory atom count

@@ -32,6 +32,9 @@ def filter_atoms (
     selection_syntax : str = 'vmd'
 ):
 
+    # If we have no output at all then there is nothing to do
+    if not output_structure_file and not output_trajectory_file:
+        raise InputError('No output structure neither output trajectory was specified')
     # If we have output but not input we must complain
     if output_structure_file and not input_structure_file:
         raise InputError('Missing input structure when output structure is requested')
