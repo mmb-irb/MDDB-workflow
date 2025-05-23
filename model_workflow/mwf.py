@@ -3163,7 +3163,8 @@ DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
-    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ]
+    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
+    'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
 }
 
 # The actual main function
