@@ -362,7 +362,9 @@ def generate_ligand_mapping (
     # Save the maps of every ligand
     ligand_maps = []
     # Get cached ligand data
-    ligand_data_cache = register.cache.get(LIGANDS_DATA, {})
+    # AGUS: esto lo creamos por alguna razón para que funcione sin internet (en el cluster) pero realmente
+    # AGUS: llena todo el archivo .register con datos que no son necesarios porque toda esa info está en el ligand_references.json
+    #ligand_data_cache = register.cache.get(LIGANDS_DATA, {})
     # Iterate input ligands
     for ligand in ligands:
         # Set the pubchem id which may be assigned in different steps
@@ -376,27 +378,29 @@ def generate_ligand_mapping (
         # Check if we already have this ligand data
         ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
         # If we do not have its data try to get from the cache
-        if not ligand_data:
-            # If this is a ligand not in ligans.json but in cache it means it comes from PDB, never form user inputs
-            # For this reason, this ligand will always have a PubChem id
-            pubchem_id = ligand.get('pubchem', None)
-            if pubchem_id:
-                ligand_data = ligand_data_cache.get(pubchem_id, None)
-            # If we still have no ligand data then request it to PubChem
-            if not ligand_data:
-                ligand_data = obtain_ligand_data_from_pubchem(ligand)
-                # Save data mined from PubChem in the cache
-                pubchem_id = ligand_data['pubchem']
-                ligand_data_cache[pubchem_id] = { **ligand_data }
-                register.update_cache(LIGANDS_DATA, ligand_data_cache)
+        # if not ligand_data:
+        #     # If this is a ligand not in ligans.json but in cache it means it comes from PDB, never form user inputs
+        #     # For this reason, this ligand will always have a PubChem id
+        #     pubchem_id = ligand.get('pubchem', None)
+        #     if pubchem_id:
+        #         ligand_data = ligand_data_cache.get(pubchem_id, None)
+        #     # If we still have no ligand data then request it to PubChem
+        #     if not ligand_data:
+        #         ligand_data = obtain_ligand_data_from_pubchem(ligand)
+        #         # Save data mined from PubChem in the cache
+        #         pubchem_id = ligand_data['pubchem']
+        #         ligand_data_cache[pubchem_id] = { **ligand_data }
+        #         register.update_cache(LIGANDS_DATA, ligand_data_cache)
         # Add current ligand data to the general list
+        if not ligand_data:
+            ligand_data = obtain_ligand_data_from_pubchem(ligand)
         ligands_data.append(ligand_data)
         # Get pubchem id
-        pubchem_id = ligand_data['pubchem']
+        pubchem_id = ligand_data.get('pubchem', None)
         # If we already visited a different ligand but with identical formula then we skip this ligand 
         # Note that the mapping will be identical thus overwritting the previous map
         # However, ligands forced by the user are processed before so we keep them as priority
-        formula = ligand_data['formula']
+        formula = ligand_data.get('formula', None)
         if formula in visited_formulas:
             print(f'WARNING: Ligand with PubChem Id {pubchem_id} has a formula which has been already matched')
             # AGUS: en este punto si el usuario ha definido el mismo ligando con diferente selección quiere decir que está repetido
