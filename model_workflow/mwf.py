@@ -69,7 +69,6 @@ from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
 from model_workflow.analyses.clusters import clusters_analysis
 from model_workflow.analyses.distance_per_residue import distance_per_residue
-#from model_workflow.analyses.hydrogen_bonds_2 import hydrogen_bonds
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
@@ -1690,19 +1689,14 @@ class MD:
         # WARNING: analyses must be no heavier than 16Mb in BSON format
         # WARNING: In case of large surface interaction the output analysis may be larger than the limit
         hydrogen_bonds(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            #output_analysis_filepath = output_analysis_filepath, # For the new version
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath, # For the new version
+            populations = self.populations,
             structure = self.structure,
             interactions = self.processed_interactions,
-            # Old fields
-            snapshots = self.snapshots,
-            frames_limit = 200,
-            # New fields
-            #is_time_dependend = self.project.is_time_dependend,
-            #time_splits = 100,
-            #populations = self.populations
+            is_time_dependend = self.project.is_time_dependend,
+            time_splits = 100,
         )
 
     # SASA, solvent accessible surfave analysis
