@@ -552,7 +552,7 @@ class MD:
             if test_result == True or test_result == 'na': continue
             # If the test result is None then it means it has never been run
             # If the test result is false then it means it failed
-            required_tests.update(checking)
+            required_tests.update([checking])
 
         # Check if the processing parameters (filter, image, etc.) have changed since the last time
         # If so, then we must reset all tests and rerun the processing
