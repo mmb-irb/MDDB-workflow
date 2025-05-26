@@ -26,3 +26,9 @@ python -m pip install -e ".[dev]"
 ## Build conda
 
 Test the build with [bioconda-utils](https://bioconda.github.io/contributor/building-locally.html).
+
+## Build docs
+
+`make -C docs/ htmld`
+
+Open `docs/_build/html/index.html` to see the results.

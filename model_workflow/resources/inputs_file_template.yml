@@ -1,28 +1,24 @@
 ---
 
-# Inputs file
-#
-# This file defines a set of fields which are then read and used by the workflow
-# Every field is explained and example values are provided
+# This file defines a set of fields which are then read and used by the workflow.
+# Every field is explained and example values are provided.
 
 
 #------------------------------------------------------------------------------------------------------------
 # PROJECT METADATA
 #------------------------------------------------------------------------------------------------------------
+# The following metadata has no effect on the workflow itself, but it will be written to the output metadata file.
+# These values will be uploaded to the database and then exposed in the project overview.
+# They may be also useful to search this project using the browser.
 
-# The following metadata has no effect on the workflow itself, but it will be written to the output metadata file
-# These values will be uploaded to the database and then exposed in the project overview
-# They may be also useful to search this project using the browser
-
-
-# Write a breif description or title for this trajectory for the overview page
-# This name may be used by the client to search the trajectory in the database
-# The name is displayed in the overview page
+# Write a brief description or title for this trajectory for the overview page.
+# This name may be used by the client to search the trajectory in the database.
+# The name is displayed in the overview page.
 
 name: My project
 
-# Write additional comments about the project
-# The description is displayed in the overview page
+# Write additional comments about the project.
+# The description is displayed in the overview page.
 #
 # Example:
 #
@@ -30,8 +26,9 @@ name: My project
 
 description:
 
-# Write author names
-# Authors are displayed in the overview page
+# Write author names.
+# Authors are displayed in the overview page.
+# IMPORTANT: Check already existing values for this field to avoid making duplicates
 #
 # Example:
 #
@@ -39,12 +36,12 @@ description:
 #   - My name
 #   - My partner's name
 #
-# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 authors:
 
-# Write author group name/s
-# The group is displayed in the overview page
+# Write author group name/s.
+# The group is displayed in the overview page.
+# IMPORTANT: Check already existing values for this field to avoid making duplicates.
 #
 # Example:
 #
@@ -52,32 +49,34 @@ authors:
 #   - My group
 #   - My partner's group
 #
-# IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 groups:
 
-# How to contact the authors (e.g. a mail)
-# The contact is displayed in the overview page
+# How to contact the authors (e.g. a mail).
+# The contact is displayed in the overview page.
 
 contact:
 
-# Program (software) name which carried the trajectory and its version
-# Program and version are both displayed in the overview page
-# IMPORTANT: Check already existing values for this field to avoid making duplicates
+# Program (software) name which carried the trajectory and its version.
+# Program and version are both displayed in the overview page.
+# IMPORTANT: Check already existing values for this field to avoid making duplicates.
 #
 # Example:
 #
 # program: GROMACS
-# version: 2024.2
+
 
 program:
+# Example:
+#
+# version: 2024.2
 version:
 
-# Type of molecular dynamics
-# At this moment there are only two options in this field: 'trajectory' and 'ensemble'
+# Type of molecular dynamics.
+# At this moment there are only two options in this field: 'trajectory' and 'ensemble'.
 # Note that this field has an effect on the client:
-# Some time-dependent analysis will change the labels of their axes in order to make sense
-# For instance RMSD X axis will be labeled as 'frames' instead of 'time'
+# Some time-dependent analysis will change the labels of their axes in order to make sense.
+# For instance RMSD X axis will be labeled as 'frames' instead of 'time'.
 #
 # Example:
 #
@@ -85,9 +84,8 @@ version:
 
 type:
 
-# MD method is displayed in the overview
-# e.g. Classical MD, Targeted MD, Biased MD (Accelerated Weighted Ensemble)
-# e.g. Enhanced sampling (Hamiltonian Replica Exchange) ...
+# MD method is displayed in the overview.
+# e.g. Classical MD, Targeted MD, Biased MD (Accelerated Weighted Ensemble), Enhanced sampling (Hamiltonian Replica Exchange) ...
 #
 # Example:
 #
@@ -95,50 +93,53 @@ type:
 
 method:
 
-# License and link to the license web page
-# The license is displayed in the overview page
-# Under the license there is a 'More information' button
-# The link is used to redirect the user when this button is clicked
+# License and link to the license web page.
+# The license is displayed in the overview page.
+# Under the license there is a 'More information' button.
+# The link is used to redirect the user when this button is clicked.
 #
 # Example:
 #
 # license: This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License
-# linkcense: https://creativecommons.org/licenses/by/4.0/
+
 
 license:
+
+# Example:
+# 
+# linkcense: https://creativecommons.org/licenses/by/4.0/
+
 linkcense:
 
-# Citation for refering this simulation or related paper
-# The citation is displayed in the overview page
+# Citation for refering this simulation or related paper.
+# The citation is displayed in the overview page.
 # To set a citation use the following instructions:
-# To add a line break type '(br)' inside the citation string
-# To add superior text type '^' before each character
+# to add a line break type '(br)' inside the citation string,
+# to add superior text type '^' before each character.
 
 citation:
 
-# Acknowledgements to be shown in the overview page
-# e.g. I would like to thank my funders ...
+# Acknowledgements to be shown in the overview page.
+# e.g. I would like to thank my funders...
 
 thanks:
 
-# OPTIONAL: Use this field to force a custom accession
-# Accession is a short code to refer this project in your local database 
-# If no accession is forced then a default formatted accession will be generated when loading the project
+# OPTIONAL: Use this field to force a custom accession.
+# Accession is a short code to refer this project in your local database.
+# If no accession is forced then a default formatted accession will be generated when loading the project.
 
 accession:
 
 #------------------------------------------------------------------------------------------------------------
 # REFERENCES
 #------------------------------------------------------------------------------------------------------------
+# References to other databases to enrich our data.
 
-# References to other databases to enrich our data
-
-# Links to somewhere related to the simulation
-# These links are displayed in the overview page
-#
-# WARNING: This field has no effect in our workflow BUT others may rely on it
-# MolSSI uses this field to find simulations in our database and place the embed viewer in their website
-# You must fit to the standard when adding a new MolSSI simulation
+# Links to somewhere related to the simulation.
+# These links are displayed in the overview page.
+# MolSSI uses this field to find simulations in our database and place the embed viewer in their website.
+# You must fit to the standard when adding a new MolSSI simulation.
+# NOTE: This field has no effect in our workflow BUT others may rely on it.
 #
 # Example:
 #
@@ -162,23 +163,23 @@ links:
 
 pdb_ids:
 
-# Set which reference sequences must be used in order to map residues in the structure of the simulation
-# UniProt accession ids are accepted
-# Forced references may be not provided or just cover the structure partially
-# Then a blast will be run for each orphan chain sequence
-# In addition, UniProt accession ids may be guessed from the PDB ids, when provided
-# Forced references may be provided as a list
-# In this scenario UniProt sequences are aligned to chain sequences to guess which UniProt belongs to each chain
-# Forced references may be provided as a dictionary
-# Tthen the user specifies which reference belongs to each chain
-# Use the "noref" flag to mark a chain as "no referable" (e.g. antibodies, synthetic constructs)
+# Set which reference sequences must be used in order to map residues in the structure of the simulation.
+# UniProt accession ids are accepted.
+# Forced references may be not provided or just cover the structure partially.
+# Then a blast will be run for each orphan chain sequence.
+# In addition, UniProt accession ids may be guessed from the PDB ids, when provided.
 #
-# Examples:
+# Forced references may be provided as a list.
+# In this scenario UniProt sequences are aligned to chain sequences to guess which UniProt belongs to each chain.
+# Forced references may be provided as a dictionary.
+# Then the user specifies which reference belongs to each chain.
+# Use the "noref" flag to mark a chain as "no referable" (e.g. antibodies, synthetic constructs).
+#
+# Example:
 #
 # forced_references:
 #   - Q9BYF1
 #   - P0DTC2
-#
 # forced_references:
 #   A: Q9BYF1
 #   B: P0DTC2
@@ -186,14 +187,15 @@ pdb_ids:
 
 forced_references:
 
-# Set ligands in the simulation
-# The workflow identifies ligands by their pubchem accession
-# If a pubchem accession is passed then it is used
-# Otherwise, the pubchem accession is found using other database accessions
+# Set ligands in the simulation.
+# The workflow identifies ligands by their pubchem accession.
+# If a pubchem accession is passed then it is used.
+# Otherwise, the pubchem accession is found using other database accessions.
 # Each ligand must have at least one of the following attributes:
 #   - pubchem: the PubChem accession
 #   - drugbank: the DrugBank accession
 #   - chembl: the ChEMBL accession
+#
 # Optionally, a list of vmd selections may be provided to force the mapping
 #   - vmd_selection: a list of vmd selections (chain D)
 #
@@ -212,13 +214,12 @@ ligands:
 #------------------------------------------------------------------------------------------------------------
 # SIMULATION METADATA
 #------------------------------------------------------------------------------------------------------------
-
-# Simulation parameters
+# Simulation parameters.
 # DANI: Algún día esto será minado automáticamente
 
-# Time framestep in nanoseconds (ns)
-# May be None if this is not a trajectory, but an ensemble
-# Framestep is an important value since it is used in many graph axes in the web client
+# Time framestep in nanoseconds (ns).
+# May be None if this is not a trajectory, but an ensemble.
+# Framestep is an important value since it is used in many graph axes in the web client.
 #
 # Example:
 #
@@ -226,9 +227,8 @@ ligands:
 
 framestep:
 
-# The rest of values are displayed in the web client as trajectory metadata
-# These values do not affect other outcomes in the workflow
-
+# The rest of values are displayed in the web client as trajectory metadata.
+# These values do not affect other outcomes in the workflow.
 # Simulation timestep in femtoseconds (fs)
 #
 # Example:
@@ -237,7 +237,7 @@ framestep:
 
 timestep:
 
-# Temperature in Kelvin (K)
+# Temperature in Kelvin (K).
 #
 # Example:
 #
@@ -258,7 +258,7 @@ ensemble:
 # Force fields
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 #
-# Example
+# Example:
 #
 # ff:
 #   - Amber ff14SB
@@ -266,7 +266,7 @@ ensemble:
 
 ff:
 
-# Water force fields
+# Water force fields.
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 #
 # Example:
@@ -276,7 +276,7 @@ ff:
 wat:
 
 # Boxtype
-# e.g. Triclinic, Cubic, Dodecahedron
+# e.g. Triclinic, Cubic, Dodecahedron.
 # IMPORTANT: Check already existing values for this field to avoid making duplicates
 
 boxtype:
@@ -284,7 +284,6 @@ boxtype:
 #------------------------------------------------------------------------------------------------------------
 # ANALYSIS PARAMETERS
 #------------------------------------------------------------------------------------------------------------
-
 # These fields have an impact in the analysis workflow.
 
 
@@ -302,15 +301,15 @@ boxtype:
 # Analysis data includes also every agent atom indices (both the whole agent and the interface only)
 #
 # Each interaction has the following attributes:
-#    - name: a string tag used to relate interaction analyses data with their corresponding atoms.
-#     In addition, the name is used to label the corresponding analyses in the web client
-#    - agent_1: the name of the first agent in the interaction, which is used to label in the client
-#    - selection_1: the VMD selection of the first agent in the interaction
-#    - agent_2: the name of the second agent in the interaction, which is used to label in the client
-#    - selection_2: the VMD selection of the second agent in the interaction
-#    - (optional) distance_cutoff: the distance used to determine which atoms are in the interface (in Å)
-#     The defualt value is intended for atomistic simulations
-#     Thus coarse grain interactions may need manual input distance cutoff
+#    - name: a string tag used to relate interaction analyses data with their corresponding atoms. In addition, the name is used to label the corresponding analyses in the web client.
+#    - agent_1: the name of the first agent in the interaction, which is used to label in the client.
+#    - selection_1: the VMD selection of the first agent in the interaction.
+#    - agent_2: the name of the second agent in the interaction, which is used to label in the client.
+#    - selection_2: the VMD selection of the second agent in the interaction.
+#    - distance_cutoff (optional): the distance used to determine which atoms are in the interface (in Å).
+# 
+# The defualt value is intended for atomistic simulations.
+# Thus coarse grain interactions may need manual input distance cutoff
 #
 # VMD atom selection language:
 # https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
@@ -359,26 +358,22 @@ interactions:
 # In this situation you can not image and fit all molecules
 # You must focus in one molecule and let the others stay in periodic boundary conditions
 #
-# These residues are defined using VMD selection lenguage.
+# These residues are defined using VMD selection language: https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
 #
-# VMD atom selection language:
-# https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
-#
-# Example
+# Example:
 #
 # pbc_selection: water or ions
 
 pbc_selection: auto
 
-# Set those atoms which are not actual "atoms" but coarse grained (CG) beads
-# EXPERIMENTAL INPUT
+# Set those atoms which are not actual "atoms" but coarse grained (CG) beads.
+# IMPORTANT: EXPERIMENTAL INPUT
 
 cg_selection:
 
 #------------------------------------------------------------------------------------------------------------
 # REPRESENTATION PARAMETERS
 #------------------------------------------------------------------------------------------------------------
-#
 # These fields have an impact in the display of the simulation once in the web client
 
 
@@ -397,18 +392,16 @@ chainnames:
 # - Purple color
 # - Low opacity
 #
-# To define a membrane it is required a name and a selection in VMD selection lenguage
+# To define a membrane it is required a name and a selection in VMD selection language: https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
 #
-# VMD atom selection language:
-# https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
-#
-# LORE
-# This field is the predecessor of the 'pbc_selection' field
-# Now it is deprecated but we are still maintaining it
+# LORE:
+# This field is the predecessor of the 'pbc_selection' field.
+# Now it is deprecated but we are still maintaining it.
 # One day this information may be useful and we already have it in the database.
 #
 # DANI: Aunque este campo ya no debería tener efecto en el workflow sigue teniendo uno:
-# DANI: El análisis de pockets no corre si hay membranas
+#
+# DANI: El análisis de pockets no corre si hay membranas.
 #
 # Example:
 #
@@ -469,12 +462,15 @@ orientation:
 #------------------------------------------------------------------------------------------------------------
 # OTHERS
 #------------------------------------------------------------------------------------------------------------
+# Other metadata 
 
 # Set if we have any multimeric form
 # e.g. monomer, dimer, trimer
 # This field was requested by the referees
 # Its only use for now is as a parameter in project queries
 # DANI: Esto es provisional, lo suyo sería automatizarlo
+#
+# Example:
 #
 # multimeric:
 #   - monomer
@@ -485,10 +481,9 @@ multimeric:
 #------------------------------------------------------------------------------------------------------------
 # COLLECTIONS
 #------------------------------------------------------------------------------------------------------------
-#
+# Set also additional collection related metadata values.
+
 # Set to which collection does this simulation belong to.
-# Set also additional collection_related metadata values.
-#
 # Currently supported collections:
 #   - cv19
 #   - mcns
@@ -498,10 +493,8 @@ multimeric:
 
 collections:
 
-#### BioExcel-CV19 specific metadata fields
-
+# BioExcel-CV19 specific metadata fields.
 # Set which family does this trajectory belong to.
-#
 # Supported units:
 # - RBD-ACE2
 # - RBD
@@ -529,16 +522,15 @@ cv19_nanobs:
 #------------------------------------------------------------------------------------------------------------
 # INPUT FILES
 #------------------------------------------------------------------------------------------------------------
-#
-# Directories for every MD in the project
-# Input file paths for topology, trajectory and structure
-# Note that all these values may be specified thorugh command line as well
+# Directories for every MD in the project.
+# Input file paths for topology, trajectory and structure.
+# Note that all these values may be specified thorugh command line as well.
 
-# Each project may contain several Molecular Dynamics (MD)
-# Each MD is to be stored in an independent folder when running the workflow
-# Each MD must have a different name, which will be used also to assign directories in the workflow
+# Each project may contain several Molecular Dynamics (MD).
+# Each MD is to be stored in an independent folder when running the workflow.
+# Each MD must have a different name, which will be used also to assign directories in the workflow.
 #
-# MDs may include additional metadata to overwrite the project metadata for a specific case
+# MDs may include additional metadata to overwrite the project metadata for a specific case.
 #
 # Example:
 #
@@ -552,7 +544,7 @@ cv19_nanobs:
 
 mds:
 
-# Also the reference MD is to be defined by providing the index of the MDs list
+# Also the reference MD is to be defined by providing the index of the MDs list.
 # If there is not an MD which is more important than others then simply set the first MD (0) as the reference
 #
 # Example:
@@ -561,11 +553,11 @@ mds:
 
 mdref:
 
-# Input topology, trajectroy and structure files
+# Input topology, trajectory and structure files.
 #
 # LORE
-# These files have been passed to the workflow through command line traditionally
-# Now the inputs file also provides this option
+# These files have been passed to the workflow through command line traditionally.
+# Now the inputs file also provides this option.
 
 input_topology_filepath:
 input_structure_filepath:

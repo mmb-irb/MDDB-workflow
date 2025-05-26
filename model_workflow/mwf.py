@@ -191,8 +191,8 @@ class MD:
 
     # Input structure file ------------
 
-    # Set a function to get input structure file path
     def get_input_structure_filepath (self) -> str:
+        """Set a function to get input structure file path"""
         # Set a function to find out if a path is relative to MD directories or to the project directory
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
@@ -269,9 +269,9 @@ class MD:
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')
 
-    # Get the input pdb filename from the inputs
-    # If the file is not found try to download it
     def get_input_structure_file (self) -> str:
+        """Get the input pdb filename from the inputs.
+        If the file is not found try to download it."""
         # If the input structure file is already defined then return it
         if self._input_structure_file:
             return self._input_structure_file
@@ -299,8 +299,8 @@ class MD:
 
     # Input trajectory filename ------------
 
-    # Set a function to get input trajectory file paths
     def get_input_trajectory_filepaths (self) -> str:
+        """Set a function to get input trajectory file paths."""
         # Set a function to check and fix input trajectory filepaths
         # Also relativize paths to the current MD directory and parse glob notation
         def relativize_and_parse_paths (input_paths : List[str]) -> List[str]:
@@ -385,9 +385,9 @@ class MD:
         # If there is no trajectory available then we surrender
         raise InputError('There is not input trajectory at all')
 
-    # Get the input trajectory filename(s) from the inputs
-    # If file(s) are not found try to download it
     def get_input_trajectory_files (self) -> str:
+        """Get the input trajectory filename(s) from the inputs.
+        If file(s) are not found try to download it."""
         # If we already defined input trajectory files then return them
         if self._input_trajectory_files != None:
             return self._input_trajectory_files
@@ -419,8 +419,8 @@ class MD:
         return self._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
-    # MD specific inputs
     def get_md_inputs (self) -> dict:
+        """MD specific inputs."""
         # If we already have a value stored then return it
         if self._md_inputs:
             return self._md_inputs
@@ -452,11 +452,10 @@ class MD:
 
     # ---------------------------------
 
-    # Check if a file exists
-    # If not, try to download it from the database
-    # If the file is not found in the database it is fine, we do not even warn the user
-    # Note that this function is used to get populations and transitions files, which are not common
     def get_file (self, target_file : File) -> bool:
+        """Check if a file exists. If not, try to download it from the database.
+        If the file is not found in the database it is fine, we do not even warn the user.
+        Note that this function is used to get populations and transitions files, which are not common."""
         # If it exists we are done
         if target_file.exists:
             return True
@@ -474,10 +473,9 @@ class MD:
 
     # Processed files ----------------------------------------------------      
 
-    # Process input files to generate the processed files
-    # This process corrects and standarizes the topology, the trajectory and the structure
     def process_input_files (self):
-
+        """Process input files to generate the processed files.
+        This process corrects and standarizes the topology, the trajectory and the structure."""
         # Set the input filepaths
         input_structure_file = self.input_structure_file
         input_trajectory_files = self.input_trajectory_files
@@ -1700,7 +1698,7 @@ class MD:
             snapshots = self.snapshots,
             frames_limit = 200,
             # New fields
-            #is_time_dependend = self.project.is_time_dependend,
+            #is_time_dependent = self.project.is_time_dependent,
             #time_splits = 100,
             #populations = self.populations
         )
@@ -2263,9 +2261,9 @@ class Project:
 
     # Inputs filename ------------
 
-    # Set a function to check if inputs file is available
-    # Note that asking for it when it is not available will lead to raising an input error
     def is_inputs_file_available (self) -> bool:
+        """Set a function to check if inputs file is available.
+        Note that asking for it when it is not available will lead to raising an input error."""
         # If name is not declared then it is impossible to reach it
         if not self._inputs_file:
             return False
@@ -2277,8 +2275,8 @@ class Project:
             return True
         return False
 
-    # Set a function to load the inputs file
     def get_inputs_file (self) -> File:
+        """Set a function to load the inputs file"""
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
@@ -2296,9 +2294,10 @@ class Project:
 
     # Topology filename ------------
 
-    # If there is not input topology filepath, we must try to guess it among the files in the project directory
-    # Note that if we can download from the remote then we must check the remote available files as well
+    
     def guess_input_topology_filepath (self) -> Optional[str]:
+        """If there is not input topology filepath, we try to guess it among the files in the project directory.
+        Note that if we can download from the remote then we must check the remote available files as well."""
         # Find the first supported topology file according to its name and format
         def find_first_accepted_topology_filename (available_filenames : List[str]) -> Optional[str]:
             for filename in available_filenames:
@@ -2307,7 +2306,7 @@ class Project:
                 filename_splits = filename.split('.')
                 if len(filename_splits) != 2 or filename_splits[0] != 'topology':
                     continue
-                # Then make sure its format is among the acceoted topology formats
+                # Then make sure its format is among the accepted topology formats
                 extension = filename_splits[1]
                 format = EXTENSION_FORMATS[extension]
                 if format in ACCEPTED_TOPOLOGY_FORMATS:
@@ -2341,14 +2340,15 @@ class Project:
         # If we did not find any valid topology filepath at this point then return None
         return None
 
-    # Get the input topology filepath from the inputs or try to guess it
+    
     def get_input_topology_filepath (self) -> Optional[str]:
-        # If the input topology filepath is a 'no' flag then we consider there is no topology at all
-        # So far we extract atom charcges and atom bonds from the topology file
-        # In this scenario we can keep working but there are some consecuences:
-        # 1 - Analysis using atom charges usch as 'energies' will be skipped
-        # 2 - The standard topology file will not include atom charges
-        # 3 - Bonds will be guessed
+        """Get the input topology filepath from the inputs or try to guess it.
+        If the input topology filepath is a 'no' flag then we consider there is no topology at all
+        So far we extract atom charges and atom bonds from the topology file
+        In this scenario we can keep working but there are some consecuences:
+        1 - Analysis using atom charges such as 'energies' will be skipped
+        2 - The standard topology file will not include atom charges
+        3 - Bonds will be guessed"""
         if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
             return MISSING_TOPOLOGY
         # Set a function to parse possible glob notation
@@ -2386,9 +2386,9 @@ class Project:
             '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
             '  Some analyses such us the interaction energies will be skiped')
 
-    # Get the input topology file
-    # If the file is not found try to download it
     def get_input_topology_file (self) -> Optional[File]:
+        """Get the input topology file.
+        If the file is not found try to download it."""
         # If we already have a value then return it
         if self._input_topology_file != None:
             return self._input_topology_file
@@ -2556,14 +2556,14 @@ class Project:
 
     # Set additional values infered from input values
 
-    # Set if MDs are time dependent
     def check_is_time_dependent (self) -> bool:
+        """Set if MDs are time dependent."""
         if self.input_type == 'trajectory':
             return True
         elif self.input_type == 'ensemble':
             return False
         raise InputError('Not supported input type value: ' + self.input_type)
-    is_time_dependend = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
+    is_time_dependent = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
     # Processed files ----------------------------------------------------
 

@@ -11,6 +11,8 @@ requires-python = ">=3.9.0"
 dev = [
     "pytest",
     "pytest-cov",
+    "sphinx",
+    "sphinx_rtd_theme",
 ]
 
 [project.scripts]
