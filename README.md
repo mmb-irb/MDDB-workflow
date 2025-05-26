@@ -78,11 +78,10 @@ python -m pip install --no-build-isolation --no-index --no-deps -e .
 
 At this point your environment is ready to use and it includes the `mwf` command. From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
 
-
 ## Usage
 
-For detailed instructions on how to use the workflow, please refer to the [usage guide](./USAGE.md).
+For detailed instructions on how to use the workflow, please refer to the [usage guide](usage:).
 
 ## Development
 
-For instructions about how to develop and test check the [development Guide](./DEVELOPMENT.md).
+For instructions about how to develop and test check the [development Guide](development:).
