@@ -29,6 +29,6 @@ Test the build with [bioconda-utils](https://bioconda.github.io/contributor/buil
 
 ## Build docs
 
-`make -C docs/ htmld`
+`make -C docs/ html`
 
 Open `docs/_build/html/index.html` to see the results.
