@@ -3,21 +3,21 @@
 # Perform the RMSD analysis for pair of frames in the trajectory
 # The analysis is carried by pytraj
 
+from os.path import exists
+
 import pytraj as pt
 
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, warn
 from model_workflow.utils.type_hints import *
 
 # Perform an analysis for the overall structure and then one more analysis for each interaction
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
-# The pytraj trajectory ('pt_trajectory') may be reduced
 # Take a minimal subset of atoms representing both proteins and nucleic acids
-
 def rmsd_pairwise(
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    input_topology_filepath : str,
+    input_trajectory_filepath : str,
+    output_analysis_filepath : str,
     interactions : list,
     snapshots : int,
     frames_limit : int,
@@ -30,77 +30,109 @@ def rmsd_pairwise(
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath, snapshots, frames_limit)
 
     # Parse the overall selection
-    selection = structure.select(overall_selection, syntax='vmd')
+    parsed_overall_selection = structure.select(overall_selection, syntax='vmd')
     # If the default selection is empty then use all atoms instead
-    if not selection:
+    if not parsed_overall_selection:
         print(f' Default selection "{overall_selection}" is empty -> All atoms will be used instead')
-        selection = structure.select_all()
+        parsed_overall_selection = structure.select_all()
     # If the default selection has one atom only then use all atoms instead
     # Note that a single atom selection will lead to all RMSD values beeing 0 since there is a previous alignment
-    if len(selection) == 1:
+    if len(parsed_overall_selection) == 1:
         print(f' Default selection "{overall_selection}" has 1 atom only -> All atoms will be used instead')
-        selection = structure.select_all()
+        parsed_overall_selection = structure.select_all()
 
     # Remove PBC residues from the selection
-    selection -= pbc_selection
-    if not selection:
+    parsed_overall_selection -= pbc_selection
+    if not parsed_overall_selection:
         print(f' Empty selection after substracting PBC atoms')
         return
-    print(f' Analyzing {len(selection)} atoms')
 
-    # Run the analysis
-    data = pt.pairwise_rmsd(pt_trajectory, selection.to_pytraj())
-    # Convert data to a normal list, since numpy ndarrays are not json serializable
-    data = data.tolist()
-    # In case there is no data we stop here
-    if len(data) == 0:
-        raise SystemExit('Something went wrong with pytraj')
+    # Save each analysis to a dict which will be parsed to json
+    output_summary = []
 
-    # Set the final structure data
-    output_analysis = [
-        {
+    # Set a filename for the current interaction data
+    overall_output_analysis_filepath = numerate_filename(output_analysis_filepath, 0)
+    # Get the root name out of the output analysis filepath
+    overall_analysis_name = get_analysis_name(overall_output_analysis_filepath)
+    # Add it to the summary
+    output_summary.append({
+        'name': 'Overall',
+        'analysis': overall_analysis_name,
+    })
+
+    # If the overall output file does not exist then run the overall analysis
+    if not exists(overall_output_analysis_filepath):
+        print(f' Analyzing overall structure ({len(parsed_overall_selection)} atoms)')
+        # Run the analysis
+        data = pt.pairwise_rmsd(pt_trajectory, parsed_overall_selection.to_pytraj())
+        # Convert data to a normal list, since numpy ndarrays are not json serializable
+        data = data.tolist()
+        # In case there is no data we stop here
+        if len(data) == 0: raise SystemExit('Something went wrong with pytraj')
+        # Write the overall analysis output data to disk
+        save_json({
             'name': 'Overall',
             'rmsds': data,
-        }
-    ]
+            'start': 0,
+            'step': frame_step
+        }, overall_output_analysis_filepath)
 
     # Get all not failed interactions
     valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
-    
-    # Make sure we have valid interactions
-    # DANI: Esto es temporal, lo suyo sería que las interacciones válidas si sean analizadas
-    # DANI: Lo que pasa es que pronto cambiaré los análisis de interacciones para que se haga 1 por interacción
-    # DANI: De manera que no merece la pena invertir tiempo en dar soporte a esto ahora
-    if len(valid_interactions) != len(interactions):
-        print('There are no valid interactions -> This analysis will be skipped')
-        save_json({'data': output_analysis, 'start': 0, 'step': frame_step}, output_analysis_filename)
-        return
 
     # Repeat the analysis with the interface residues of each interaction
-    for interaction in interactions:
+    for i, interaction in enumerate(valid_interactions, 1):
+        # Get the interaction name
+        name = interaction['name']
+        # Parse the interaction selection
+        interaction_atom_indices = interaction['interface_atom_indices_1'] + interaction['interface_atom_indices_2']
+        interaction_selection = structure.select_atom_indices(interaction_atom_indices)
+        # If the interaction selection matches the overall selection then reuse its data
+        # This was very unlinkly until we started to support coarse grain systems
+        # Now a CG DNA-DNA hybridization will likely fall here
+        if interaction_selection == parsed_overall_selection:
+            # Warn the user
+            warning = 'Interface selection is identical to overall selection. Data will be reused.'
+            warn(f'{name}: {warning}')
+            output_summary.append({
+                'name': name,
+                # Add a note so nobody thinks this is an error
+                'note': warning,
+                'analysis': overall_analysis_name
+            })
+            # At this point overall analysis outout should already exists so we skip the analysis
+            continue
 
-        # Select all interface residues in pytraj notation
-        pt_interface = interaction['pt_interface_1'] + \
-            interaction['pt_interface_2']
-        pt_selection = ':' + ','.join(map(str, pt_interface))
+        # Set a filename for the current interaction data
+        numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
+        # Add the root of the output analysis filename to the run data
+        analysis_name = get_analysis_name(numbered_output_analysis_filepath)
+        # Append current interaction to the summary
+        output_summary.append({
+            'name': name,
+            'analysis': analysis_name
+        })
 
+        # If the analysis already exists then proceed to the next interaction
+        if exists(numbered_output_analysis_filepath): continue
+        print(f' Analyzing "{name}" interface ({len(interaction_selection)} atoms)')
         # Run the analysis
-        data = pt.pairwise_rmsd(pt_trajectory, pt_selection)
+        data = pt.pairwise_rmsd(pt_trajectory, interaction_selection.to_pytraj())
         # Convert data to a normal list, since numpy ndarrays are not json serializable
         data = data.tolist()
-
-        output_analysis.append(
-            {
-                'name': interaction['name'],
-                'rmsds': data,
-            }
-        )
+        # Write the interaction analysis output data to disk
+        save_json({
+            'name': name,
+            'rmsds': data,
+            'start': 0,
+            'step': frame_step
+        }, numbered_output_analysis_filepath)
 
     # Write in the analysis the starting frame and the step between frames
     # By default the first frame in the reduced trajectory is the first frame (0)
 
     # Export the analysis in json format
-    save_json({'data': output_analysis, 'start': 0, 'step': frame_step}, output_analysis_filename)
+    save_json(output_summary, output_analysis_filepath)

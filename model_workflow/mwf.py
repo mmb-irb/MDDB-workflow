@@ -42,7 +42,7 @@ from model_workflow.tools.check_inputs import check_inputs
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files
-from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
+from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -69,7 +69,6 @@ from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
 from model_workflow.analyses.clusters import clusters_analysis
 from model_workflow.analyses.distance_per_residue import distance_per_residue
-#from model_workflow.analyses.hydrogen_bonds_2 import hydrogen_bonds
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
@@ -1587,14 +1586,13 @@ class MD:
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
+        if must_overwrite: purge_glob(output_analysis_filepath)
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge
         rmsd_pairwise(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
             interactions = self.processed_interactions,
             structure = self.structure,
             pbc_selection = self.pbc_selection,
@@ -1688,19 +1686,14 @@ class MD:
         # WARNING: analyses must be no heavier than 16Mb in BSON format
         # WARNING: In case of large surface interaction the output analysis may be larger than the limit
         hydrogen_bonds(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            #output_analysis_filepath = output_analysis_filepath, # For the new version
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath, # For the new version
+            populations = self.populations,
             structure = self.structure,
             interactions = self.processed_interactions,
-            # Old fields
-            snapshots = self.snapshots,
-            frames_limit = 200,
-            # New fields
-            #is_time_dependent = self.project.is_time_dependent,
-            #time_splits = 100,
-            #populations = self.populations
+            is_time_dependent = self.project.is_time_dependent,
+            time_splits = 100,
         )
 
     # SASA, solvent accessible surfave analysis
@@ -3163,7 +3156,8 @@ DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
-    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ]
+    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
+    'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
 }
 
 # The actual main function

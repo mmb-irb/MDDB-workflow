@@ -205,13 +205,17 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ 
 # Try 2 different methods and hope 1 of them works
 def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
     try:
-        bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
-    except:
-        print(' MDAnalysis failed to extract bonds. Using manual extraction...')
         bonds = get_tpr_bonds_gromacs(tpr_filepath)
+    except:
+        print(' Our tool failed to extract bonds. Using MDAnalysis extraction...')
+        bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
     return bonds
 
 # Get TPR bonds using MDAnalysis
+# WARNING: Sometimes this function takes additional constrains as actual bonds
+# DANI: si miras los topology.bonds.values estos enlaces falsos van al final
+# DANI: Lo veo porque los índices están en orden ascendente y veulven a empezar
+# DANI: He pedido ayuda aquí https://github.com/MDAnalysis/mdanalysis/pull/463
 def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> List[ Tuple[int, int] ]:
     parser = TPRParser(tpr_filepath)
     topology = parser.parse()
