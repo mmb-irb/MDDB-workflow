@@ -1,3 +1,5 @@
+# Developing MDDB Workflow
+
 ## Installation
 
 First clone the workflow repo and create a new environment using the `environment.yml` file in this repo:
@@ -12,14 +14,14 @@ Activate the new enviornment and then install the workflow module in development
 
 ``` shell
 conda activate mwf_env
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,docs]"
 ```
 
 ## Testing
 
 `pytest --cov-report term --cov=model_workflow test`
 
-## Build
+## Build wheel
 
 `python -m build --wheel`
 

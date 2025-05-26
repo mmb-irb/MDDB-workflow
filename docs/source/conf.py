@@ -25,6 +25,7 @@ extensions = [
     'sphinx.ext.autodoc',       # To automatically pull in docstrings
     'sphinx.ext.napoleon',      # To parse Google/NumPy style docstrings
     'sphinx_rtd_theme',         # ReadTheDocs theme
+    'myst_parser',              # For Markdown support
 ]
 
 # Napoleon settings

@@ -5,9 +5,11 @@ MDDB Workflow
    :maxdepth: 2
    :caption: Contents:
 
+   Introduction <readme>
    usage
    input
    mwf
+   develop
 
 Indices and tables
 ==================
