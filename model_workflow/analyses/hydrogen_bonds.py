@@ -15,7 +15,7 @@ from math import ceil
 from os.path import exists
 
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name
+from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, reprint
 from model_workflow.utils.type_hints import *
 
 # Perform an hydrogen bonds analysis for each interaction interface
@@ -93,6 +93,7 @@ def hydrogen_bonds (
     output_summary = []
 
     # Iterate interactions
+    print()
     for i, interaction in enumerate(interactions):
 
         # If the interaction has coarse grain atoms then just skip it
@@ -103,6 +104,7 @@ def hydrogen_bonds (
 
         # Get the interaction name
         name = interaction['name']
+        reprint(f' Processing {name} ({i}/{len(interactions)})')
         # Set a filename for the current interaction data
         numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
 
