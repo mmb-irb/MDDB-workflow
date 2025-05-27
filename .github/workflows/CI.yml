@@ -43,7 +43,7 @@ jobs:
       #     touch $HOME/.bash_profile
 
       - name: Setup-micromamba
-        uses: mamba-org/setup-micromamba@v2.0.0
+        uses: mamba-org/setup-micromamba@v2.0.4
         with:
           generate-run-shell: true
           micromamba-version: '2.0.2-2'
@@ -57,7 +57,6 @@ jobs:
             pip
           cache-environment: true
           cache-downloads: true
-          cache-environment-key: "${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}-${{ hashFiles('envs/environment.yml') }}"
 
       - name: List installed package versions
         shell: bash -l {0}
