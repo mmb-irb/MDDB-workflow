@@ -3,7 +3,7 @@ build:
   os: ubuntu-24.04
   tools:
     # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#build-tools-python
-    python: "miniconda3-4.7"
+    python: "mambaforge-4.10"
   # jobs:
   #   build:
   #     html:
