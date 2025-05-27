@@ -1150,7 +1150,6 @@ class MD:
             snapshots = self.snapshots,
             processed_interactions_file = processed_interactions_file,
             mercy = self.project.mercy,
-            register = self.register,
             frames_limit = 1000,
             interaction_cutoff = self.project.interaction_cutoff,
             interactions_auto = self.project.interactions_auto,
@@ -1159,11 +1158,6 @@ class MD:
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
-
-    def count_valid_interactions (self) -> int:
-        valid_interactions = [ interaction for interaction in self.processed_interactions if not interaction.get('failed', False) ]
-        return len(valid_interactions)
-    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed processed_interactions (read only)")
 
     # Set a function to get input values which may be MD specific
     # If the MD input is missing then we use the project input

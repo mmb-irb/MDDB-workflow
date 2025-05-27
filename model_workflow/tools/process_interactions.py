@@ -13,6 +13,21 @@ from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_inte
 # This is useful for atomistic simulations
 DEFAULT_DISTANCE_CUTOFF = 5
 
+# Set which fields are to be uploaded to the database only
+# i.e. not vmd selections or residue numbers
+UPLOAD_FIELDS = [
+    'name',
+    'agent_1',
+    'agent_2',
+    'atom_indices_1',
+    'atom_indices_2',
+    'interface_atom_indices_1',
+    'interface_atom_indices_2',
+    'version',
+    'strong_bonds',
+    'has_cg'
+]
+
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'
 
@@ -29,7 +44,6 @@ def process_interactions (
     snapshots : int,
     processed_interactions_file : 'File',
     mercy : List[str],
-    register : 'Register',
     frames_limit : int,
     interactions_auto : str,
     ligand_map : List[dict],
@@ -40,6 +54,9 @@ def process_interactions (
     ) -> list:
 
     print('-> Processing interactions')
+
+    # Set if we are to have mercy when an interaction fails
+    have_mercy = STABLE_INTERACTIONS_FLAG in mercy
 
     # Copy input interactions to avoid input mutation
     interactions = []
@@ -78,7 +95,7 @@ def process_interactions (
                     "selection_2": f"chain {chain2.name}"
                 }
                 interactions.append(interaction)
-            mercy = STABLE_INTERACTIONS_FLAG
+            have_mercy = True
             
         # The humble option is to find the interaction between two chains. If there are more than two chains then it won't work
         elif auto == 'autohumble' or auto == 'humble':
@@ -116,7 +133,7 @@ def process_interactions (
                 interactions.append(interaction)
         
             # In this case, we assume that the user wants to interact the selected chain with all other chains so we force the analysis to be run anyway
-            mercy = STABLE_INTERACTIONS_FLAG
+            have_mercy = True
         
         elif auto == 'ligands':
             # If there are no ligands present or matched in the structure then we skip ligand interactions
@@ -151,7 +168,7 @@ def process_interactions (
                             "selection_2": f"chain {chain.name}"
                         }
                         interactions.append(interaction)
-            mercy = STABLE_INTERACTIONS_FLAG
+            have_mercy = True
 
         else:
             raise InputError(f'Invalid input auto interactions "{auto}"')
@@ -223,9 +240,6 @@ def process_interactions (
         # Otherwise it means this is not a compatible version and we must run interactions again
         warn('Interactions backup is obsolete. Interactions will be calculated again')
 
-    # Reset warnings related to this analysis
-    register.remove_warnings(STABLE_INTERACTIONS_FLAG)
-
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
         structure_file,
@@ -271,19 +285,18 @@ def process_interactions (
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
                 f'   - Agent 1 selection: {interaction["selection_1"]}\n'
                 f'   - Agent 2 selection: {interaction["selection_2"]}')
-            # Check if we must have mercy in case of interaction failure
-            must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
-            if must_be_killed:
-                raise TestFailure('An interaction failed to be set.\n'
-                    'Use the "--mercy interact" flag for the workflow to continue.\n'
-                    'Failed interactions will be removed from further analyses.')
+            # If we are not to have mercy in case of interaction failure then stop here
+            if not have_mercy: raise TestFailure('An interaction failed to be set.\n'
+                'Use the "--mercy interact" flag for the workflow to continue.\n'
+                'Failed interactions will be ignored and will not appear in further analyses.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
+            # To not mess the interactions iteration we simply flag the interaction
+            # It will be removed further
+            warn(f'Interaction "{interaction_name}" will be ignored and will not appear in further analyses')
             interaction[FAILED_INTERACTION_FLAG] = True
-             # If this is an automated process then there is no need to warn the user
-            if auto: continue
-            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) are not stable enough so their analyses are skipped')
             continue
+
         # Iterate interaction agents
         for agent in ['1','2']:
             # Get agent name and selection for logging purposes
@@ -317,36 +330,25 @@ def process_interactions (
         interface_residue_indices = sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])
         print(f'{interaction_name} (time: {pretty_frames_percent} %) (type: {interaction["type"]}) -> {interface_residue_indices}')
 
-    # Write the interactions file with the fields to be uploaded to the database only
-    # i.e. not vmd selections
-    file_keys = [
-        'name',
-        'agent_1',
-        'agent_2',
-        'atom_indices_1',
-        'atom_indices_2',
-        'interface_atom_indices_1',
-        'interface_atom_indices_2',
-        'version',
-        'strong_bonds',
-        'has_cg',
-        FAILED_INTERACTION_FLAG
-    ]
+    # Filter away interactions whcih have failed
+    valid_interactions = [ inte for inte in interactions if not inte.get(FAILED_INTERACTION_FLAG, False) ]
+
+    # If there are no valid interactions then stop here
+    if len(valid_interactions) == 0: return []
+
+    # Create interaction duplicates to avoid mutating the already processed interactions
+    # Then fill these duplicates only with those fields to be uploaded to the database
     file_interactions = []
-    for interaction in interactions:
-        file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
+    for interaction in valid_interactions:
+        file_interaction = { key: value for key, value in interaction.items() if key in UPLOAD_FIELDS }
         file_interactions.append(file_interaction)
+    
+    # Write them to disk
+    save_json(file_interactions, processed_interactions_file.path, indent = 4)
 
-    # If automatic interactions are being processed then we must remove failed interactions (this is necessary for futher analyses)
-    # AGUS: en principio esto es temporal 
-    if auto:
-        interactions = [ interaction for interaction in interactions if not interaction.get(FAILED_INTERACTION_FLAG, False) ]
-
-    # Save the interactions file unless all interactions failed
-    any_valid_interactions = any( (not interaction.get(FAILED_INTERACTION_FLAG, False)) for interaction in interactions )
-    if any_valid_interactions:
-        save_json(file_interactions, processed_interactions_file.path, indent = 4)
-    return interactions
+    # Finally return the processed interactions
+    print(f' There is a total of {len(valid_interactions)} valid interactions')
+    return valid_interactions
 
 # Load interactions from an already existing interactions file
 def load_interactions (processed_interactions_file : 'File', structure : 'Structure') -> list:
