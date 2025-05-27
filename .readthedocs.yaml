@@ -9,8 +9,8 @@ build:
     # pre_create_environment:
     #   - conda update --yes --quiet --name=base --channel=defaults conda
     post_create_environment:
+      - mamba activate mwf_env
       - env
-      - CONDA_PREFIX=/home/docs/checkouts/readthedocs.org/user_builds/mddb-workflow/checkouts/latest
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#conda
