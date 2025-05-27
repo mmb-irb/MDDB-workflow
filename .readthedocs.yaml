@@ -7,9 +7,10 @@ build:
   jobs:
     post_create_environment:
       - env
+      - conda init bash
     pre_build:
       - env
-      - conda init bash
+      - echo $CONDA_ENVS_PATH/$CONDA_DEFAULT_ENV
       - conda activate $CONDA_DEFAULT_ENV
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
