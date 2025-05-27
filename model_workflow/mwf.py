@@ -2566,8 +2566,8 @@ class Project:
         standard_format = self.input_topology_file.format
         return 'topology.' + standard_format
 
-    # Get the processed topology file path
     def get_topology_filepath (self) -> str:
+        """Get the processed topology file path."""
         # If we have a stored value then return it
         if self._topology_filepath:
             return self._topology_filepath
@@ -2576,8 +2576,8 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    # Get the processed topology file
     def get_topology_file (self) -> str:
+        """Get the processed topology file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._topology_file != None:
@@ -2736,8 +2736,8 @@ class Project:
         return self._pdb_ids
     pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
 
-    # PDB references
     def get_pdb_references (self) -> List[dict]:
+        """Get PDB references."""
         # If we already have a stored value then return it
         if self._pdb_references:
             return self._pdb_references
@@ -2761,8 +2761,8 @@ class Project:
         return self._pdb_references
     pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
 
-    # Define the PDB references output file
     def get_pdb_references_file (self) -> File:
+        """Define the PDB references output file."""
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)

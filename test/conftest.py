@@ -13,6 +13,11 @@ from io import StringIO
 DATABASE_URL = "https://irb-dev.mddbr.eu/api/"
 TEST_DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "CI: tests related to continuous integration"
+    )
+
 @pytest.fixture(scope="class")
 def test_accession():
     """Default accession ID for tests"""
