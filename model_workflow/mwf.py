@@ -16,7 +16,6 @@ from glob import glob
 from model_workflow.utils.constants import *
 
 # Import local tools
-from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
@@ -1041,7 +1040,7 @@ class MD:
                 f'{self.structure_file.path} does not exist yet. Are you trying '
                 'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
-        self._structure = setup_structure(self.structure_file.path)
+        self._structure = Structure.from_pdb_file(self.structure_file.path)
         # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds

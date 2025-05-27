@@ -307,19 +307,7 @@ def process_interactions (
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
         strong_bonds = get_covalent_bonds_between(structure_file.path, interaction['selection_1'], interaction['selection_2'])
-
-        # Translate all residues selections to pytraj notation
-        # These values are used along the workflow but not added to metadata
-        converter = structure.residue_2_pytraj_residue_index
-        interaction.update(
-            {
-                'pt_residues_1': list(map(converter, interaction['residues_1'])),
-                'pt_residues_2': list(map(converter, interaction['residues_2'])),
-                'pt_interface_1': list(map(converter, interaction['interface_1'])),
-                'pt_interface_2': list(map(converter, interaction['interface_2'])),
-                'strong_bonds': strong_bonds
-            }
-        )
+        interaction['strong_bonds'] = strong_bonds
 
         print(f'{interaction["name"]} ({pretty_frames_percent}) (type: {interaction["type"]}) -> {sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])}')
 
@@ -380,10 +368,4 @@ def load_interactions (processed_interactions_file : 'File', structure : 'Struct
             raise ValueError(f'Empty selection for agent "{interaction["agent_2"]}" in interaction "{interaction["name"]}"')
         interaction['interface_1'] = [ residues[index] for index in interaction['interface_indices_1'] ]
         interaction['interface_2'] = [ residues[index] for index in interaction['interface_indices_2'] ]
-        # Transform to pytraj
-        converter = structure.residue_2_pytraj_residue_index
-        interaction['pt_residues_1'] = list(map(converter, interaction['residues_1']))
-        interaction['pt_residues_2'] = list(map(converter, interaction['residues_2']))
-        interaction['pt_interface_1'] = list(map(converter, interaction['interface_1']))
-        interaction['pt_interface_2'] = list(map(converter, interaction['interface_2']))
     return interactions
