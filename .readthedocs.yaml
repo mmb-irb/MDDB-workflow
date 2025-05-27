@@ -5,7 +5,7 @@ build:
     python: "3.9"
 python:
   install:
-    - requirements: requirements.txt
+    - requirements: docs/source/requirements.txt
     - method: pip
       path: .
       extra_requirements:
