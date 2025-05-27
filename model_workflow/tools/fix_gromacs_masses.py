@@ -22,7 +22,7 @@ resources = str(Path(__file__).parent.parent / "resources")
 custom_masses_file = File(resources + '/atommass.dat')
 
 # Set the path to the gromacs masses file
-gromacs_masses_directory = environ.get('CONDA_PREFIX') + '/share/gromacs/top'
+gromacs_masses_directory = environ.get('CONDA_PREFIX','') + '/share/gromacs/top'
 gromacs_masses_file = File(gromacs_masses_directory + '/atommass.dat')
 
 # Set the backup filename

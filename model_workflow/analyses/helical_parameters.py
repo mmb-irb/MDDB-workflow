@@ -13,7 +13,7 @@ from model_workflow.utils.type_hints import *
 from model_workflow.utils.nucleicacid import NucleicAcid
 from model_workflow.tools.nassa_loaders import load_sequence2
 from model_workflow.tools.nassa_loaders import load_serfile
-conda_prefix = os.environ.get('CONDA_PREFIX')
+conda_prefix = os.environ.get('CONDA_PREFIX','')
 # If this path does not exist then it means curves is not installed
 curves_path = conda_prefix + '/.curvesplus'
 # Note that this is not a file, but the prefix to 3 different files
