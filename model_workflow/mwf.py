@@ -2573,8 +2573,8 @@ class Project:
         standard_format = self.input_topology_file.format
         return 'topology.' + standard_format
 
-    # Get the processed topology file path
     def get_topology_filepath (self) -> str:
+        """Get the processed topology file path."""
         # If we have a stored value then return it
         if self._topology_filepath:
             return self._topology_filepath
