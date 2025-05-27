@@ -5,14 +5,10 @@ build:
     # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#build-tools-python
     python: "mambaforge-4.10"
   jobs:
-    post_create_environment:
-      - env
-      - conda init bash
-    pre_build:
-      - env
-      - echo $CONDA_ENVS_PATH/$CONDA_DEFAULT_ENV
-      - conda activate $CONDA_DEFAULT_ENV
-
+    build:
+      html:
+        - CONDA_PREFIX=$CONDA_ENVS_PATH/$CONDA_DEFAULT_ENV && python -m sphinx -T -b html -d _build/doctrees -D language=en . $READTHEDOCS_OUTPUT/html; env
+        - env
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#conda
 conda:
