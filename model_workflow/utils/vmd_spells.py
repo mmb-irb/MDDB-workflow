@@ -592,8 +592,10 @@ def get_interface_atom_indices (
         file.write('set cframes [expr $nframes - 1]\n')
         file.write('puts $nframes_file $cframes\n')
         # Remove duplicated indices
-        file.write('set unique_interface1_atom_indices [lsort -unique $accumulated_interface1_atom_indices]\n')
-        file.write('set unique_interface2_atom_indices [lsort -unique $accumulated_interface2_atom_indices]\n')
+        # Use the -integer argument to do the correct sorting
+        # Otherwise numbers are sorted as strings so you have 1, 10, 100, 2, etc.
+        file.write('set unique_interface1_atom_indices [lsort -integer -unique $accumulated_interface1_atom_indices]\n')
+        file.write('set unique_interface2_atom_indices [lsort -integer -unique $accumulated_interface2_atom_indices]\n')
         # Write indices to files
         file.write(f'set indices_file [open {interface_selection_1_filename} w]\n')
         file.write('puts $indices_file $unique_interface1_atom_indices\n')
