@@ -189,7 +189,7 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 # Set register cache flags
 SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
-LIGANDS_DATA = 'ligandata'
+NOT_MATCHED_LIGANDS = 'notmatchedligands'
 
 # Set the different test flags
 STABLE_BONDS_FLAG = 'stabonds'

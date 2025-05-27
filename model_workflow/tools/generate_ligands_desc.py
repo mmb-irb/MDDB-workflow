@@ -4,7 +4,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import rdFingerprintGenerator
 from mordred import Calculator, descriptors
-from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
+from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.structures import Structure
@@ -284,19 +284,40 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
     mordred_results = calc(mol).drop_missing().asdict()
 
     ######## MORGAN FINGERPRINT ###########
-    morgan_fp_bit_array = list(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024))
     morgan_fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
     ao = rdFingerprintGenerator.AdditionalOutput()
     ao.AllocateAtomCounts()
     ao.AllocateAtomToBits()
     ao.AllocateBitInfoMap()
     fp = morgan_fp_gen.GetFingerprint(mol,additionalOutput=ao)
+    morgan_fp_bit_array = list(fp)
     morgan_highlight_atoms = {}
     for bit, atoms in ao.GetBitInfoMap().items():
         morgan_highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
 
     return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block
 
+# Check the register to see if the ligand has already been matched or not, if not the ligand is skipped
+def check_matched_ligand (ligand: dict, ligand_data: dict, register: 'Register') -> bool:
+    # The pubchem id could be in the ligands data or the ligand input
+    pubchem_id_1 = ligand.get('pubchem', None)
+    if ligand_data != None:
+        pubchem_id_2 = ligand_data.get('pubchem', None)
+    else:
+        pubchem_id_2 = None
+    # If we have no pubchem id then we cannot check if the ligand matched
+    if not pubchem_id_1 and not pubchem_id_2:
+        return False
+    # If we have a pubchem id then check if it is already in the cache
+    cache_not_matched = register.cache.get(NOT_MATCHED_LIGANDS, {})
+    
+    for pubchem in cache_not_matched.keys():
+        if pubchem == pubchem_id_1 or pubchem == pubchem_id_2:
+            print(f" Ligand with PubChem id {pubchem} didn't match before, skipping it")
+            return True
+    
+    return False
+    
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
     structure : 'Structure',
@@ -377,6 +398,8 @@ def generate_ligand_mapping (
             raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
         # Check if we already have this ligand data
         ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
+        # Check if the ligand didn't match before
+        if check_matched_ligand(ligand, ligand_data, register): continue
         # If we do not have its data try to get from the cache
         # if not ligand_data:
         #     # If this is a ligand not in ligans.json but in cache it means it comes from PDB, never form user inputs
@@ -445,6 +468,11 @@ def generate_ligand_mapping (
             # Otherwise simply remove it from the final ligand references file and the forwarded maps 
             ligands_data.pop()
             ligand_maps.pop()
+            # Update the cache with the pubchem id of the ligands that didn't match
+            not_matched_pubchems = register.cache.get(NOT_MATCHED_LIGANDS, {})
+            not_matched_pubchems[ligand_map['name']] = ligand_map['name'] # AGUS: la key y el value son el mismo valor, no sé me ocurre otro 
+            register.update_cache(NOT_MATCHED_LIGANDS, not_matched_pubchems)
+            # Delete the name
             ligand_name = ligand_names.get(pubchem_id, None)
             if ligand_name != None:
                 del ligand_names[pubchem_id]
