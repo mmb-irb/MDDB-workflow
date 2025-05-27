@@ -80,8 +80,8 @@ At this point your environment is ready to use and it includes the `mwf` command
 
 ## Usage
 
-For detailed instructions on how to use the workflow, please refer to the [usage guide](usage:).
+For detailed instructions on how to use the workflow, please refer to the [usage guide](https://mddb-workflow.readthedocs.io/en/latest/usage.html).
 
 ## Development
 
-For instructions about how to develop and test check the [development Guide](development:).
+For instructions about how to develop and test check the [development guide](https://mddb-workflow.readthedocs.io/en/latest/develop.html).

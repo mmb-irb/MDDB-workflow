@@ -1,0 +1,19 @@
+/* Change link colors */
+.wy-nav-content a {
+    color: #9915E7;
+}
+
+/* Change background color of the content area */
+.wy-nav-content {
+    background: #f8f9fa;
+}
+
+.wy-menu-vertical header, .wy-menu-vertical p.caption,
+.wy-side-nav-search .wy-dropdown>a, .wy-side-nav-search>a {
+    color: #9915E7;
+}
+
+/* Change code block background */
+.highlight {
+    background: #7110b01f;
+}

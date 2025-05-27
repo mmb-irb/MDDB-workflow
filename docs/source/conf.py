@@ -35,20 +35,12 @@ napoleon_numpy_docstring = False
 # Source suffix (this is for input files, still RST if that's what you're writing)
 source_suffix = '.rst'
 
+def setup(app):
+    app.add_css_file('custom.css')
 # Add the ReadTheDocs theme
 html_theme = 'sphinx_rtd_theme'
-
-# List of patterns, relative to source directory, that match files and directories to ignore when looking for source files.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-
-myst_enable_extensions = [
-    "substitution",
-]
-# URL scheme customization for MyST Parser
-myst_url_schemes = {
-    "http": None,
-    "https": None,
-    "usage": "usage.html",
-    "development": "development.html"
-}
-
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-html_favicon
+html_favicon = '_static/MDDB_favicon.png'
+html_logo = '_static/MDDB_Logo_colour.png'
+html_theme_options = {'style_nav_header_background': "#FFFFFF",}
+html_static_path = ['_static']
