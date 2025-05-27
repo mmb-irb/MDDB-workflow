@@ -1,18 +1,20 @@
-name: Pytest
+name: CI
 
 on:
   workflow_dispatch: ~
-  # push:
-  #   branches: [ release ]
-  #   paths-ignore:
-  #     - '.gitignore'
-  #     - 'DEVELOPMENT.md'
-  #     - 'pyproject.toml'
-  #     - 'README.md'
-  #     - 'USAGE.md'
-  #     - 'manual_tools/'
+  push:
+    # Only run on pushes to the master branch
+    branches: [ master ]
+    # Only run on changes to the model_workflow directory
+    paths:
+      - 'model_workflow/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'model_workflow/**'
+  # every 6 hours
   # schedule:
-  #   - cron: "0 */6 * * *" # every 6 hours
+  #   - cron: "0 */6 * * *" 
 
 jobs:
   # Name of the Job
@@ -58,8 +60,6 @@ jobs:
         shell: bash -l {0}
         run: micromamba list
 
-      - name: Run tests
+      - name: Run CI tests
         shell: bash -l {0}
-        run: |
-          # Producction one
-          pytest test --cov-report term --cov=model_workflow
+        run: pytest -m CI
