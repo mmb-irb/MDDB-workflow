@@ -35,6 +35,18 @@ If you need to apply specific commits from another branch:
 git cherry-pick <commit>
 ```
 
+Or move a change to another branch:
+```shell
+# Save your changes to Git's stash
+git stash
+
+# Switch to branch
+git checkout <branch>
+
+# Apply your stashed changes
+git stash apply  
+```
+
 Once you're done with your changes, you can create a [pull request (PR)](https://github.com/mmb-irb/MDDB-workflow/pulls) to merge your branch into the main repository. This will trigger the continuous development (CI) tests for some quick check quality checks. It is advised to resolve the PR  with a code review from a peer as a way to check for possible problems, sharing knowledge about the workflow and getting ideas for improvements.
 
 ## Making a release

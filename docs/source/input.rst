@@ -405,7 +405,7 @@ Each interaction has the following attributes:
 
 - distance_cutoff (optional): the distance used to determine which atoms are in the interface (in Å).
 
-The defualt value is intended for atomistic simulations.
+The default value is intended for atomistic simulations.
 Thus coarse grain interactions may need manual input distance cutoff
 
 VMD atom selection language:

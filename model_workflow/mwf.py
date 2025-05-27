@@ -2933,8 +2933,9 @@ class Project:
         return self._residue_map
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
-    # Project metadata filename
+    
     def get_metadata_file (self) -> File:
+        """Project metadata filename"""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
