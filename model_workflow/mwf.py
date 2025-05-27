@@ -35,11 +35,7 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
-# Workaround for Readthedocs
-try:
-    from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
-except:
-    pass
+from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 from model_workflow.tools.check_inputs import check_inputs
 
 # Import local utils
@@ -94,10 +90,7 @@ MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
-try:
-    fix_gromacs_masses()
-except:
-    print("Warning: Could not run fix_gromacs_masses(), continuing without it")
+fix_gromacs_masses()
 
 # Set some variables which are defined at the end but may be later ready by previously defined functions
 requestables = {}
