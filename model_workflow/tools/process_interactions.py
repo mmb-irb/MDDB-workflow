@@ -355,7 +355,6 @@ def load_interactions (processed_interactions_file : 'File', structure : 'Struct
     interactions = load_json(processed_interactions_file.path)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
-        print(interaction.keys())
         # If the interaction failed then there will be minimal information
         if interaction.get(FAILED_INTERACTION_FLAG, False):
             continue
