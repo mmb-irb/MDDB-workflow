@@ -5,16 +5,11 @@ build:
     # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#build-tools-python
     python: "mambaforge-4.10"
   jobs:
-  #   # https://docs.readthedocs.com/platform/stable/build-customization.html#update-conda-version
-  #   # pre_create_environment:
-  #   #   - conda update --yes --quiet --name=base --channel=defaults conda
     post_create_environment:
-      # https://docs.readthedocs.com/platform/stable/reference/environment-variables.html#envvar-READTHEDOCS_VIRTUALENV_PATH
       - env
     pre_build:
       - env
-      - export CONDA_PREFIX=/home/docs/checkouts/readthedocs.org/user_builds/mddb-workflow/checkouts/latest
-      - echo $CONDA_PREFIX
+      - conda activate $CONDA_DEFAULT_ENV
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#conda
