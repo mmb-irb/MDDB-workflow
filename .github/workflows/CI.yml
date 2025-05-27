@@ -18,7 +18,7 @@ on:
 
 jobs:
   # Name of the Job
-  testing:
+  install_and_test:
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -42,7 +42,7 @@ jobs:
           rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
           touch $HOME/.bash_profile
 
-      - name: setup-micromamba
+      - name: Setup-micromamba
         uses: mamba-org/setup-micromamba@v2.0.0
         with:
           generate-run-shell: true
@@ -59,6 +59,10 @@ jobs:
       - name: List installed package versions
         shell: bash -l {0}
         run: micromamba list
+      
+      - name: Install model_workflow
+        shell: bash -l {0}
+        run: python -m pip install -e .
 
       - name: Run CI tests
         shell: bash -l {0}
