@@ -3,25 +3,28 @@
 # Perform the distance per residue analysis between each pair of interacting agents
 # The analysis is carried by pytraj
 
+from os.path import exists
+
 import pytraj as pt
 import numpy
 
-from model_workflow.utils.auxiliar import save_json
-
+from model_workflow.utils.auxiliar import save_json, get_analysis_name, numerate_filename, reprint, warn
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
+from model_workflow.utils.type_hints import *
 
 # Set a limit of values that can be stored in the analysis without exceeding the mongo limit of 16Mb
 # Also, this limit is a good reference to avoid loading huge analyses which would lead to long response time in the client
 # This is an aproximation below the limit which has been observed experimentally
-n_values_limit = 400000
+N_VALUES_LIMIT = 400000
 
 # Calculate the distance mean and standard deviation of each pair of residues*
 # * Where each residue is from a different agent
 # Note that the distances are calculated for all residues in the agent, not only the interface residues
 def distance_per_residue (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    input_topology_filepath : str,
+    input_trajectory_filepath : str,
+    output_analysis_filepath : str,
+    structure : 'Structure',
     interactions : list,
     snapshots : int,
     frames_limit : int
@@ -44,58 +47,72 @@ def distance_per_residue (
     if len(valid_interactions) != len(interactions):
         print('There are no valid interactions -> This analysis will be skipped')
         return
+    
+    # Set a reference system to handle conversions to pytraj residue numeration
+    # First set the pytraj topology
+    pytraj_topology = structure.get_pytraj_topology()
+    pytraj_residues = list(pytraj_topology.residues)
+    # Transform a structure residue to the pytraj residue numeration (1, 2, ... n)
+    def residue_2_pytraj_residue_index (residue : 'Residue') -> int:
+        residue_index = residue.index
+        residue_number = residue.number
+        residue_name = residue.name[0:3]
+        # And check that this residue data matches the pytraj residues data
+        pytraj_residue = pytraj_residues[residue_index]
+        if (residue_number == pytraj_residue.original_resid and residue_name == pytraj_residue.name):
+            return residue_index + 1
+        # If not, we must iterate over all pytraj residues to find a match
+        for index, pytraj_residue in enumerate(pytraj_residues):
+            if (residue_number == pytraj_residue.original_resid and residue_name == pytraj_residue.name):
+                return index + 1
+        # Return None if there is no match
+        return None
 
-    # First of all, calculate the number of values for each interaction
-    # If we have more values than we can store then flag some interactions as reduced
-    # Flag interactions one by one starting by the biggest one until we are below the limit of values
-    # Those interactions will store only residues in the interface in order to reduce the number of values
-    interaction_n_values = []
-    for interaction in interactions:
-        n_values = len(interaction['residues_1']) * len(interaction['residues_2'])
-        interaction_n_values.append(n_values)
-    reduced_analyses = [ False ] * len(interactions)
-    # We must be below the limit in order to proceed
-    while sum(interaction_n_values) > n_values_limit:
-        # Get the number of values for each interaction which has not been yet reduced
-        non_reduced_n_values = [ n_values for i, n_values in enumerate(interaction_n_values) if not reduced_analyses[i] ]
-        # If there are not more analysis to reduce then we can not respect the limit
-        if len(non_reduced_n_values) == 0:
-            # Prepare a small report
-            for i, interaction in enumerate(interactions):
-                n_values = interaction_n_values[i]
-                print('     ' + interaction['name'] + ' -> ' + str(n_values) + ' values')
-            raise ValueError('We are still over the limit of values after reducing all analyses')
-        # Find the non-reduced interaction with the greatest number of values
-        maximum_non_reduced_n_values = max(non_reduced_n_values)
-        biggest_interaction_index = interaction_n_values.index(maximum_non_reduced_n_values)
-        interaction = interactions[biggest_interaction_index]
-        # Calculate the reduced number of values and set the interaction as reduced
-        reduced_n_values = len(interaction['interface_1']) * len(interaction['interface_2'])
-        interaction_n_values[biggest_interaction_index] = reduced_n_values
-        reduced_analyses[biggest_interaction_index] = True
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath, snapshots, frames_limit)
+    # Save each analysis to a dict which will be parsed to json
+    # Here we keep track of the summary, which will also be parsed to json at the end
+    output_summary = []
     # Run the analysis for each interaction
-    output_analysis = []
+    print()
     for n, interaction in enumerate(interactions):
-        interaction_name = interaction['name']
-        print('Running distance per residue analysis for ' + interaction_name)
-        # Check if the analysis has been reduced for this interaction
-        reduced = reduced_analyses[n]
+        # Get the interaction name
+        name = interaction['name']
+        # Set a filename for the current interaction data
+        numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, n)
+        # Add the root of the output analysis filename to the run data
+        analysis_name = get_analysis_name(numbered_output_analysis_filepath)
+        # Append current interaction to the summary
+        output_summary.append({
+            'name': name,
+            'analysis': analysis_name
+        })
+        # If the file already exists then skip to the next
+        if exists(numbered_output_analysis_filepath): continue
+        reprint(f' Analyzing {name} ({n+1}/{len(interactions)})')
+        # Get the residues to be used for this interaction
+        residues_1, residues_2 = interaction['residues_1'], interaction['residues_2']
+        # First of all, calculate the number of values for this interaction
+        # If the interaction has more values than we can store then it will be reduced
+        # Reduced interactions will store only residues in the interface in order to fit
+        n_values = len(residues_1) * len(residues_2)
+        reduced = n_values > N_VALUES_LIMIT        
         # Contact Matrix -- Initialization
         # Create 2 lists filled with 0s with the length of the residue number arrays respectively
         if reduced:
-            print('     The analysis has been reduced to interface residues only for this interaction')
+            warn('The analysis has been reduced to interface residues only for this interaction')
             residues_1, residues_2 = interaction['interface_1'], interaction['interface_2']
-            pt_residues_1, pt_residues_2 = interaction['pt_interface_1'], interaction['pt_interface_2']
-        else:
-            residues_1, residues_2 = interaction['residues_1'], interaction['residues_2']
-            pt_residues_1, pt_residues_2 = interaction['pt_residues_1'], interaction['pt_residues_2']
+            n_values = len(residues_1) * len(residues_2)
+            if n_values > N_VALUES_LIMIT: raise ValueError('Too many values, even after reducing')
+        # Show the size of the matrix
         h,w = len(residues_2), len(residues_1)
-        print('     ' + str(h) + 'x' + str(w) + ' residues')
+        print(f'     {h}x{w} residues')
         means_matrix = [[0 for x in range(w)] for y in range(h)]
         stdvs_matrix = [[0 for x in range(w)] for y in range(h)]
+        # Convert residues to pytraj residue numbers
+        pt_residues_1 = list(map(residue_2_pytraj_residue_index, residues_1))
+        pt_residues_2 = list(map(residue_2_pytraj_residue_index, residues_2))
         # Contact Matrix -- Calculation
         for i, r2 in enumerate(pt_residues_2):
             for j, r1 in enumerate(pt_residues_1):
@@ -106,11 +123,10 @@ def distance_per_residue (
                 means_matrix[i][j] = mean
                 stdvs_matrix[i][j] = stdv
         # Set the output data for this interaction
-        output = {
-            'name': interaction_name,
+        save_json({
+            'name': name,
             'means': means_matrix,
             'stdvs': stdvs_matrix,
-        }
-        output_analysis.append(output)
+        }, numbered_output_analysis_filepath)
     # Export the analysis in json format
-    save_json({ 'data': output_analysis }, output_analysis_filename)
+    save_json(output_summary, output_analysis_filepath)

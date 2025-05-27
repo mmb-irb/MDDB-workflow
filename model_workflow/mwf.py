@@ -1652,13 +1652,13 @@ class MD:
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_DIST_PERRES_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
+        if must_overwrite: purge_glob(output_analysis_filepath)
         # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
         distance_per_residue(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
+            structure = self.structure,
             interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
