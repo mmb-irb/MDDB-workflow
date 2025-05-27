@@ -13,7 +13,8 @@ build:
       - env
     pre_build:
       - env
-      - CONDA_PREFIX=/home/docs/checkouts/readthedocs.org/user_builds/mddb-workflow/checkouts/latest
+      - export CONDA_PREFIX=/home/docs/checkouts/readthedocs.org/user_builds/mddb-workflow/checkouts/latest
+      - echo $CONDA_PREFIX
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#conda
