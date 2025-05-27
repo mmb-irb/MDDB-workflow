@@ -94,7 +94,10 @@ MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
-fix_gromacs_masses()
+try:
+    fix_gromacs_masses()
+except:
+    print("Warning: Could not run fix_gromacs_masses(), continuing without it")
 
 # Set some variables which are defined at the end but may be later ready by previously defined functions
 requestables = {}
