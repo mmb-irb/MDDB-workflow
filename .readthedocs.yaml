@@ -1,6 +1,6 @@
 version: 2
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04
   tools:
     # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#build-tools-python
     python: "mambaforge-4.10"
@@ -9,8 +9,8 @@ build:
     # pre_create_environment:
     #   - conda update --yes --quiet --name=base --channel=defaults conda
     post_create_environment:
-      - echo $READTHEDOCS_VIRTUALENV_PATH
-      - CONDA_VERSION=$READTHEDOCS_VIRTUALENV_PATH
+      - env
+      - CONDA_PREFIX=/home/docs/checkouts/readthedocs.org/user_builds/mddb-workflow/checkouts/latest
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#conda
