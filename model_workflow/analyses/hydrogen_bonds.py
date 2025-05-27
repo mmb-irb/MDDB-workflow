@@ -104,7 +104,7 @@ def hydrogen_bonds (
 
         # Get the interaction name
         name = interaction['name']
-        reprint(f' Processing {name} ({i}/{len(interactions)})')
+        reprint(f' Processing {name} ({i+1}/{len(interactions)})')
         # Set a filename for the current interaction data
         numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
 
@@ -117,8 +117,7 @@ def hydrogen_bonds (
         })
 
         # If the analysis already exists then proceed to the next interaction
-        if exists(numbered_output_analysis_filepath):
-            continue
+        if exists(numbered_output_analysis_filepath): continue
         
         # Get interface atom indices
         interface_atom_indices_1 = interaction['interface_atom_indices_1']
