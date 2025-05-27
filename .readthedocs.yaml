@@ -9,6 +9,7 @@ build:
       - env
     pre_build:
       - env
+      - conda init bash
       - conda activate $CONDA_DEFAULT_ENV
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
