@@ -2583,8 +2583,8 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    # Get the processed topology file
     def get_topology_file (self) -> str:
+        """Get the processed topology file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._topology_file != None:
