@@ -2768,8 +2768,8 @@ class Project:
         return self._pdb_references
     pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
 
-    # Define the PDB references output file
     def get_pdb_references_file (self) -> File:
+        """Define the PDB references output file."""
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
