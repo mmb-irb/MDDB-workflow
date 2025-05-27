@@ -2743,8 +2743,8 @@ class Project:
         return self._pdb_ids
     pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
 
-    # PDB references
     def get_pdb_references (self) -> List[dict]:
+        """Get PDB references."""
         # If we already have a stored value then return it
         if self._pdb_references:
             return self._pdb_references
