@@ -16,7 +16,6 @@ from glob import glob
 from model_workflow.utils.constants import *
 
 # Import local tools
-from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
@@ -42,7 +41,7 @@ from model_workflow.tools.check_inputs import check_inputs
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files
-from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename
+from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
 from model_workflow.utils.register import Register
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
@@ -69,7 +68,6 @@ from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
 from model_workflow.analyses.clusters import clusters_analysis
 from model_workflow.analyses.distance_per_residue import distance_per_residue
-#from model_workflow.analyses.hydrogen_bonds_2 import hydrogen_bonds
 from model_workflow.analyses.hydrogen_bonds import hydrogen_bonds
 from model_workflow.analyses.sasa import sasa
 from model_workflow.analyses.energies import energies
@@ -553,7 +551,7 @@ class MD:
             if test_result == True or test_result == 'na': continue
             # If the test result is None then it means it has never been run
             # If the test result is false then it means it failed
-            required_tests.update(checking)
+            required_tests.update([checking])
 
         # Check if the processing parameters (filter, image, etc.) have changed since the last time
         # If so, then we must reset all tests and rerun the processing
@@ -1042,7 +1040,7 @@ class MD:
                 f'{self.structure_file.path} does not exist yet. Are you trying '
                 'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
-        self._structure = setup_structure(self.structure_file.path)
+        self._structure = Structure.from_pdb_file(self.structure_file.path)
         # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds
@@ -1152,7 +1150,6 @@ class MD:
             snapshots = self.snapshots,
             processed_interactions_file = processed_interactions_file,
             mercy = self.project.mercy,
-            register = self.register,
             frames_limit = 1000,
             interaction_cutoff = self.project.interaction_cutoff,
             interactions_auto = self.project.interactions_auto,
@@ -1161,11 +1158,6 @@ class MD:
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
-
-    def count_valid_interactions (self) -> int:
-        valid_interactions = [ interaction for interaction in self.processed_interactions if not interaction.get('failed', False) ]
-        return len(valid_interactions)
-    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed processed_interactions (read only)")
 
     # Set a function to get input values which may be MD specific
     # If the MD input is missing then we use the project input
@@ -1589,14 +1581,13 @@ class MD:
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
+        if must_overwrite: purge_glob(output_analysis_filepath)
         # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
         # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge
         rmsd_pairwise(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
             interactions = self.processed_interactions,
             structure = self.structure,
             pbc_selection = self.pbc_selection,
@@ -1654,13 +1645,13 @@ class MD:
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_DIST_PERRES_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
+        if must_overwrite: purge_glob(output_analysis_filepath)
         # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
         distance_per_residue(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
+            structure = self.structure,
             interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
@@ -1690,19 +1681,14 @@ class MD:
         # WARNING: analyses must be no heavier than 16Mb in BSON format
         # WARNING: In case of large surface interaction the output analysis may be larger than the limit
         hydrogen_bonds(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            #output_analysis_filepath = output_analysis_filepath, # For the new version
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath, # For the new version
+            populations = self.populations,
             structure = self.structure,
             interactions = self.processed_interactions,
-            # Old fields
-            snapshots = self.snapshots,
-            frames_limit = 200,
-            # New fields
-            #is_time_dependend = self.project.is_time_dependend,
-            #time_splits = 100,
-            #populations = self.populations
+            is_time_dependend = self.project.is_time_dependend,
+            time_splits = 100,
         )
 
     # SASA, solvent accessible surfave analysis
@@ -2580,8 +2566,8 @@ class Project:
         standard_format = self.input_topology_file.format
         return 'topology.' + standard_format
 
-    # Get the processed topology file path
     def get_topology_filepath (self) -> str:
+        """Get the processed topology file path."""
         # If we have a stored value then return it
         if self._topology_filepath:
             return self._topology_filepath
@@ -2590,8 +2576,8 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    # Get the processed topology file
     def get_topology_file (self) -> str:
+        """Get the processed topology file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._topology_file != None:
@@ -2750,8 +2736,8 @@ class Project:
         return self._pdb_ids
     pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
 
-    # PDB references
     def get_pdb_references (self) -> List[dict]:
+        """Get PDB references."""
         # If we already have a stored value then return it
         if self._pdb_references:
             return self._pdb_references
@@ -2775,8 +2761,8 @@ class Project:
         return self._pdb_references
     pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
 
-    # Define the PDB references output file
     def get_pdb_references_file (self) -> File:
+        """Define the PDB references output file."""
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
@@ -3163,7 +3149,8 @@ DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
-    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ]
+    'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
+    'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
 }
 
 # The actual main function

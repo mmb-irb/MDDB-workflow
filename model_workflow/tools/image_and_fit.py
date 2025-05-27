@@ -3,11 +3,25 @@
 
 from subprocess import run, PIPE, Popen
 
-from model_workflow.tools.topology_manager import get_chains, set_chains
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.type_hints import *
+
+# Set a pair of independent auxiliar functions to save and recover chains from a pdb file
+# WARNING: These functions must be used only when the pdb has not changed in number of atoms
+
+# Get a list with each atom chain from a pdb
+def get_chains (pdb_filename : str) -> list:
+    structure = Structure.from_pdb_file(pdb_filename)
+    chains = structure.chains
+    return chains
+
+# Set each atom chain from a pdb from a list
+def set_chains (pdb_filename : str, chains : list):
+    structure = Structure.from_pdb_file(pdb_filename)
+    structure.chains = chains
+    structure.generate_pdb_file(pdb_filename)
 
 # Set the default centering/fitting selection (vmd syntax): protein and nucleic acids
 CENTER_SELECTION_NAME = 'protein_and_nucleic_acids'

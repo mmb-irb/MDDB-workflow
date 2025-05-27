@@ -1,22 +1,24 @@
-name: Pytest
+name: CI
 
 on:
   workflow_dispatch: ~
-  # push:
-  #   branches: [ release ]
-  #   paths-ignore:
-  #     - '.gitignore'
-  #     - 'DEVELOPMENT.md'
-  #     - 'pyproject.toml'
-  #     - 'README.md'
-  #     - 'USAGE.md'
-  #     - 'manual_tools/'
+  push:
+    # Only run on pushes to the master branch
+    branches: [ master ]
+    # Only run on changes to the model_workflow directory
+    paths:
+      - 'model_workflow/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'model_workflow/**'
+  # every 6 hours
   # schedule:
-  #   - cron: "0 */6 * * *" # every 6 hours
+  #   - cron: "0 */6 * * *" 
 
 jobs:
   # Name of the Job
-  testing:
+  install_and_test:
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -35,13 +37,13 @@ jobs:
         run: |
           ls ${{ github.workspace }}
 
-      - name: Remove all micromamba installations
-        run: |
-          rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
-          touch $HOME/.bash_profile
+      # - name: Remove all micromamba installations
+      #   run: |
+      #     rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
+      #     touch $HOME/.bash_profile
 
-      - name: setup-micromamba
-        uses: mamba-org/setup-micromamba@v2.0.0
+      - name: Setup-micromamba
+        uses: mamba-org/setup-micromamba@v2.0.4
         with:
           generate-run-shell: true
           micromamba-version: '2.0.2-2'
@@ -53,13 +55,17 @@ jobs:
             pytest
             pytest-cov
             pip
+          cache-environment: true
+          cache-downloads: true
 
       - name: List installed package versions
         shell: bash -l {0}
         run: micromamba list
-
-      - name: Run tests
+      
+      - name: Install model_workflow
         shell: bash -l {0}
-        run: |
-          # Producction one
-          pytest test --cov-report term --cov=model_workflow
+        run: python -m pip install -e .
+
+      - name: Run CI tests
+        shell: bash -l {0}
+        run: pytest -m CI

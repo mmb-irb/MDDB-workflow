@@ -4,8 +4,8 @@ from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE
 from model_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 
 import os
-from os import rename, listdir
-from os.path import isfile
+from os import rename, listdir, remove
+from os.path import isfile, exists
 import re
 import sys
 import json
@@ -339,11 +339,18 @@ def numerate_filename (filename : str, number : int, zeros : int = 2, separator 
     return '.'.join(splits[0:-1]) + sufix + '.' + splits[-1]
 
 # Given a filename, set a sufix including '*', right before the extension
-# This should match all filenames onbtanied through the numerate_filename function when used in bash
+# This should match all filenames obtanied through the numerate_filename function when used in bash
 def glob_filename (filename : str, separator : str = '_') -> str:
     splits = filename.split('.')
     sufix = separator + '*'
     return '.'.join(splits[0:-1]) + sufix + '.' + splits[-1]
+
+# Delete all files matched by the glob_filename function
+def purge_glob (filename : str):
+    glob_pattern = glob_filename(filename)
+    existing_outputs = glob(glob_pattern)
+    for existing_output in existing_outputs:
+        if exists(existing_output): remove(existing_output)
 
 # Given a filename with the the pattern 'mda.xxxx.json', get the 'xxxx' out of it
 def get_analysis_name (filename : str) -> str:

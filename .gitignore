@@ -1,11 +1,18 @@
+.ipynb_checkpoints
 .gitignore
+.vscode
 __pycache__
+
 # Test
 .coverage
 .pytest_cache/
 test/test_data/
+
 # Build
 build/
 dist/
 *.egg-info
 mwf.tar.gz
+
+# Docs
+docs/_build/

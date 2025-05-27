@@ -449,7 +449,8 @@ run_parser.add_argument(
         "- download: Check/download input files (redundant if you request any analysis)\n"
         "- setup: Process input files and run the tests (redundant if you request any analysis\n"
         "- network: Run dependencies which require internet connection\n"
-        "- minimal: Run dependencies required by the web client to work"))
+        "- minimal: Run dependencies required by the web client to work\n"
+        "- interdeps: Run interactions and all its dependent analyses"))
 
 run_parser.add_argument(
     "-e", "--exclude",

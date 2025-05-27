@@ -3,7 +3,8 @@ import pytest
 from model_workflow.utils.constants import *
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
-from model_workflow.tools.topology_manager import setup_structure
+# DANI: Esta función ya no exitse, la eliminé
+#from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.utils.auxiliar import load_json, load_yaml
 from unittest.mock import patch
 from io import StringIO
@@ -11,6 +12,11 @@ from io import StringIO
 # Constants
 DATABASE_URL = "https://irb-dev.mddbr.eu/api/"
 TEST_DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "CI: tests related to continuous integration"
+    )
 
 @pytest.fixture(scope="class")
 def test_accession():
@@ -43,11 +49,11 @@ def structure_file(remote_client, test_data_dir, test_accession):
     
     return file_obj
 
-
-@pytest.fixture(scope="class")
-def structure(structure_file):
-    """Load the structure into a Structure object"""
-    return setup_structure(structure_file.path)
+# DANI: Esta función ya no exitse, la eliminé
+# @pytest.fixture(scope="class")
+# def structure(structure_file):
+#     """Load the structure into a Structure object"""
+#     return setup_structure(structure_file.path)
 
 
 @pytest.fixture(scope="class")
