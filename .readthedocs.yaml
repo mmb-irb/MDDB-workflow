@@ -9,7 +9,9 @@ build:
     # pre_create_environment:
     #   - conda update --yes --quiet --name=base --channel=defaults conda
     post_create_environment:
+      # https://docs.readthedocs.com/platform/stable/reference/environment-variables.html#envvar-READTHEDOCS_VIRTUALENV_PATH
       - mamba init
+      - source /home/docs/.bashrc
       - mamba activate $CONDA_DEFAULT_ENV
       - env
 
