@@ -19,7 +19,7 @@ python -m pip install -e ".[dev,docs]"
 
 ## Develop on a branch
 
-When working on new features or bug fixes, it's best practice to develop on a separate branch:
+The development process is inspired in [trunk-based development](https://trunkbaseddevelopment.com/). When working on new features or bug fixes, it's best practice to develop on a separate branch:
 
 ```shell
 # Create and switch to a new branch
