@@ -4,6 +4,8 @@ import subprocess
 name = "model_workflow"
 __all__ = ["resources", "tools", "utils"]
 
+# Workaround to fix ReadTheDocs build issue with conda environments
+# when fix_gromacs_masses and helical_parameters are called.
 if "CONDA_PREFIX" not in os.environ:
     try:
         # Get the path of the python executable
