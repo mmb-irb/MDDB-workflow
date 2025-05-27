@@ -24,13 +24,11 @@ class Register:
         # Set record for the modification times of processed input files
         # This allows to know if any of those files have been modified and thus we must reset some register fields
         self.mtimes = {}
-        # Set a cache for some already calculated values
-        self.cache = {}
         # Set the tests tracker
         self.tests = {}
         # Set the warnings list, which will be filled by failing tests
         self.warnings = []
-        # Inherit cache, test results and warning from the register last entry
+        # Inherit test results and warning from the register last entry
         self.entries = []
         if self.file.exists:
             # Read the register in disk
@@ -38,9 +36,6 @@ class Register:
             last_entry = self.entries[-1]
             # Inherit modification times
             self.mtimes = last_entry.get('mtimes', {})
-            # Inherit the cache
-            for field_name, field_value in last_entry['cache'].items():
-                self.cache[field_name] = field_value
             # Inherit test results
             for test_name, test_result in last_entry['tests'].items():
                 self.tests[test_name] = test_result
@@ -62,7 +57,6 @@ class Register:
             'call': self.call,
             'date': self.date,
             'mtimes': self.mtimes,
-            'cache': self.cache,
             'tests': self.tests,
             'warnings': self.warnings,
         }
@@ -101,17 +95,6 @@ class Register:
         if new_mtime == previous_mtime:
             return False
         return True
-
-    # Update the cache and save the register
-    def update_cache (self, key : str, value):
-        self.cache[key] = value
-        self.save()
-
-    # Reset the cache
-    # This is called when some input files are modified
-    def reset_cache (self):
-        self.cache = {}
-        self.save()
 
     # Update a test result and save the register
     def update_test (self, key : str, value : Optional[bool]):
