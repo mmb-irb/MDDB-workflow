@@ -9,7 +9,8 @@ build:
     # pre_create_environment:
     #   - conda update --yes --quiet --name=base --channel=defaults conda
     post_create_environment:
-      - which python
+      - echo $READTHEDOCS_VIRTUALENV_PATH
+      - CONDA_VERSION=$READTHEDOCS_VIRTUALENV_PATH
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/config-file/v2.html#conda
