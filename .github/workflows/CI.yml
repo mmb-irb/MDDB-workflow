@@ -37,10 +37,10 @@ jobs:
         run: |
           ls ${{ github.workspace }}
 
-      - name: Remove all micromamba installations
-        run: |
-          rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
-          touch $HOME/.bash_profile
+      # - name: Remove all micromamba installations
+      #   run: |
+      #     rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
+      #     touch $HOME/.bash_profile
 
       - name: Setup-micromamba
         uses: mamba-org/setup-micromamba@v2.0.0
@@ -55,6 +55,9 @@ jobs:
             pytest
             pytest-cov
             pip
+          cache-environment: true
+          cache-downloads: true
+          cache-environment-key: "${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}-${{ hashFiles('envs/environment.yml') }}"
 
       - name: List installed package versions
         shell: bash -l {0}
