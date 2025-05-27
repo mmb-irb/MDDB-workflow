@@ -10,7 +10,7 @@ build:
     #   - conda update --yes --quiet --name=base --channel=defaults conda
     post_create_environment:
       - mamba init
-      - conda activate $CONDA_DEFAULT_ENV
+      - mamba activate $CONDA_DEFAULT_ENV
       - env
 
 # https://test.org.stsewd.dev/es/readthedocs-docs-build-commands/guides/conda.html
