@@ -126,11 +126,12 @@ class MD:
         # Save the directory
         # If it is an absolute then make it relative to the project
         if isabs(directory):
-            # This function alreadt removes the final slash
+            # This function already removes the final slash
             self.directory = relpath(directory, self.project.directory)
         # Otherwise save it as is but just removing the final slash (if any)
         else:
             self.directory = remove_final_slash(directory)
+        self.directory = self.project.pathify(self.directory)
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
@@ -486,7 +487,7 @@ class MD:
         output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         output_trajectory_file = File(output_trajectory_filepath)
         output_topology_filepath = self.project.topology_filepath
-        output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
+        output_topology_file = File(self.pathify(output_topology_filepath)) if output_topology_filepath else MISSING_TOPOLOGY
 
         # If all output files already exist we may skip the processing
         topology_already_processed = output_topology_file == MISSING_TOPOLOGY or output_topology_file.exists
@@ -829,7 +830,7 @@ class MD:
         corrected_structure_file = corrected_structure_file if corrected_structure_file.exists else imaged_structure_file
         corrected_trajectory_file = corrected_trajectory_file if corrected_trajectory_file.exists else imaged_trajectory_file
 
-        # Set for every type of file (structure, trajectory and topology) tte input, the las processed step and the output files
+        # Set for every type of file (structure, trajectory and topology) the input, the last processed step and the output files
         input_and_output_files = [
             (input_structure_file, corrected_structure_file, output_structure_file),
             (input_trajectory_files[0], corrected_trajectory_file, output_trajectory_file),
@@ -2009,7 +2010,7 @@ class Project:
 
         # Set the inputs file
         # Set the expected default name in case there is no inputs file since it may be downloaded
-        self._inputs_file = File(DEFAULT_INPUTS_FILENAME)
+        self._inputs_file = File(self.pathify(DEFAULT_INPUTS_FILENAME))
         # If there is an input filepath then use it
         if inputs_filepath:
             self._inputs_file = File(inputs_filepath)
@@ -3047,21 +3048,22 @@ def name_2_directory (name : str) -> str:
         directory = directory.replace(character, '')
     return directory
 
-# Set a function to check for problematic characters in a directory path
 def check_directory (directory : str) -> str:
+    """Check for problematic characters in a directory path."""
     # Remove problematic characters
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
         if character in directory:
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
-# Set a function to convert an MD directory into an equivalent MD name
 def directory_2_name (directory : str) -> str:
+    """Convert an MD directory into an equivalent MD name."""
     # Replace white spaces with underscores
     name = directory.replace('_', ' ')
     return name
 
-# Remove the final slash if exists since it may cuse problems when recognizing input directories
 def remove_final_slash (directory : str) -> str:
+    """Remove the final slash if exists since it may cause 
+    problems when recognizing input directories."""
     if directory[-1] == '/':
         return directory[:-1]
     return directory
