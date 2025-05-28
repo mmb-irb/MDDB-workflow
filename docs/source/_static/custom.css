@@ -8,6 +8,10 @@
     background: #f8f9fa;
 }
 
+.wy-menu-vertical a:active{
+    background: #9915E7;
+}
+
 .wy-menu-vertical header, .wy-menu-vertical p.caption,
 .wy-side-nav-search .wy-dropdown>a, .wy-side-nav-search>a {
     color: #9915E7;
@@ -16,4 +20,41 @@
 /* Change code block background */
 .highlight {
     background: #7110b01f;
+}
+
+.rst-content .warning{
+    background: #cf05ca12;
+}
+.rst-content .warning .admonition-title{
+    background: #cf05ca;
+}
+
+
+.rst-content code.literal, 
+.rst-content tt.literal, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt
+{
+    color: #3a29f6;
+}
+.rst-content .note {
+    background: #3a29f61f;
+}
+
+.rst-content .note .admonition-title {
+    background: #3a29f6;
+}
+
+.rst-content .note {
+    background: #3a29f61f;
+}
+
+/* API Reference */
+html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt
+{
+    color: #3a29f6;
+}
+
+html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt
+ {
+    background: #cf05ca12;
+    border-top: 3px solid #a411ec;
 }

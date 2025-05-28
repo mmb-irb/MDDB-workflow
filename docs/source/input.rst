@@ -1,6 +1,6 @@
-.. _input_file_documentation:
+.. _input_file_documentation: generated with generate_input_docs.py
 
-Input File Documentation
+Input Metadata File
 ==========================
 
 .. note::
