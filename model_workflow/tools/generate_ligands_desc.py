@@ -172,7 +172,6 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
                 ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
                 if ligands_pdb == None:
                     raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code: ' + request_url)
-                print(ligands_pdb)
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     
     # Mine de INCHI and INCHIKEY
