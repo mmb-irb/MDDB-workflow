@@ -298,8 +298,8 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
 
     return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block
 
-# Check the register to see if the ligand has already been matched or not, if not the ligand is skipped
-def check_matched_ligand (ligand: dict, ligand_data: dict, register: 'Register') -> bool:
+# Check the cache to see if the ligand has already been matched or not, if not the ligand is skipped
+def check_matched_ligand (ligand: dict, ligand_data: dict, cache: 'Cache') -> bool:
     # The pubchem id could be in the ligands data or the ligand input
     pubchem_id_1 = ligand.get('pubchem', None)
     if ligand_data != None:
@@ -310,7 +310,7 @@ def check_matched_ligand (ligand: dict, ligand_data: dict, register: 'Register')
     if not pubchem_id_1 and not pubchem_id_2:
         return False
     # If we have a pubchem id then check if it is already in the cache
-    cache_not_matched = register.cache.get(NOT_MATCHED_LIGANDS, {})
+    cache_not_matched = cache.retrieve(NOT_MATCHED_LIGANDS, {})
     
     for pubchem in cache_not_matched.keys():
         if pubchem == pubchem_id_1 or pubchem == pubchem_id_2:
@@ -322,7 +322,7 @@ def check_matched_ligand (ligand: dict, ligand_data: dict, register: 'Register')
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
     structure : 'Structure',
-    register : 'Register',
+    cache : 'Cache',
     input_ligands : Optional[List[dict]],
     input_pdb_ids : List[str],
     output_ligands_filepath : str,
@@ -336,7 +336,8 @@ def generate_ligand_mapping (
     if input_ligands:
         ligands += input_ligands
     # Check we have cached pdb 2 pubchem values
-    pdb_to_pubchem_cache = register.cache.get(PDB_TO_PUBCHEM, {})
+    pdb_to_pubchem_cache = cache.retrieve(PDB_TO_PUBCHEM, {})
+    new_data_to_cache = False
     # Get input ligands from the pdb ids, if any
     if input_pdb_ids:
         for pdb_id in input_pdb_ids:
@@ -352,13 +353,15 @@ def generate_ligand_mapping (
             # If we had no cached pdb 2 pubchem then ask for them
             if pubchem_ids_from_pdb == None:
                 pubchem_ids_from_pdb = pdb_to_pubchem(pdb_id)
-                # Save the result in the cache
+                # Save the result in the cache object so it is saved to cache later
                 pdb_to_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
-                register.update_cache(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
+                new_data_to_cache = True
             for pubchem_id in pubchem_ids_from_pdb:
                 # Ligands in the structure (PDB) and the 'inputs.json' could be the same so it's not necessary to do it twice
                 if not any('pubchem' in ligand and ligand['pubchem'] == pubchem_id for ligand in ligands):
                     ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
+    # Save all pdb to pubchem results in cache, in case there is anything new
+    if new_data_to_cache: cache.update(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
 
     # If no input ligands are passed then stop here
     if len(ligands) == 0:
@@ -385,8 +388,8 @@ def generate_ligand_mapping (
     ligand_maps = []
     # Get cached ligand data
     # AGUS: esto lo creamos por alguna razón para que funcione sin internet (en el cluster) pero realmente
-    # AGUS: llena todo el archivo .register con datos que no son necesarios porque toda esa info está en el ligand_references.json
-    #ligand_data_cache = register.cache.get(LIGANDS_DATA, {})
+    # AGUS: llena el cache con datos que no son necesarios porque toda esa info está en el ligand_references.json
+    #ligand_data_cache = cache.retrieve(LIGANDS_DATA, {})
     # Iterate input ligands
     for ligand in ligands:
         # Set the pubchem id which may be assigned in different steps
@@ -400,7 +403,7 @@ def generate_ligand_mapping (
         # Check if we already have this ligand data
         ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
         # Check if the ligand didn't match before
-        if check_matched_ligand(ligand, ligand_data, register): continue
+        if check_matched_ligand(ligand, ligand_data, cache): continue
         # If we do not have its data try to get from the cache
         # if not ligand_data:
         #     # If this is a ligand not in ligans.json but in cache it means it comes from PDB, never form user inputs
@@ -414,7 +417,7 @@ def generate_ligand_mapping (
         #         # Save data mined from PubChem in the cache
         #         pubchem_id = ligand_data['pubchem']
         #         ligand_data_cache[pubchem_id] = { **ligand_data }
-        #         register.update_cache(LIGANDS_DATA, ligand_data_cache)
+        #         cache.update(LIGANDS_DATA, ligand_data_cache)
         # Add current ligand data to the general list
         if not ligand_data:
             ligand_data = obtain_ligand_data_from_pubchem(ligand)
@@ -470,9 +473,9 @@ def generate_ligand_mapping (
             ligands_data.pop()
             ligand_maps.pop()
             # Update the cache with the pubchem id of the ligands that didn't match
-            not_matched_pubchems = register.cache.get(NOT_MATCHED_LIGANDS, {})
+            not_matched_pubchems = cache.retrieve(NOT_MATCHED_LIGANDS, {})
             not_matched_pubchems[ligand_map['name']] = ligand_map['name'] # AGUS: la key y el value son el mismo valor, no sé me ocurre otro 
-            register.update_cache(NOT_MATCHED_LIGANDS, not_matched_pubchems)
+            cache.update(NOT_MATCHED_LIGANDS, not_matched_pubchems)
             # Delete the name
             ligand_name = ligand_names.get(pubchem_id, None)
             if ligand_name != None:

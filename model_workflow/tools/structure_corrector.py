@@ -258,8 +258,7 @@ def structure_corrector (
         # Sort trajectory coordinates in case atoms were sorted
         if input_trajectory_file.path and structure.trajectory_atom_sorter:
             # Save a warning in the register
-            print('WARNING: Atoms have been sorted to solve splitted residues')
-            register.update_cache('resorted_atoms', True)
+            warn('Atoms have been sorted to solve splitted residues')
             print('Creating resorted files for atom bonds and charges')
             # Bonds are already resorted
             save_json(safe_bonds, MD.project.resorted_bonds_file.path, indent=4)
