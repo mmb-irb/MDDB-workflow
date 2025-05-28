@@ -172,6 +172,7 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
                 ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
                 if ligands_pdb == None:
                     raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code: ' + request_url)
+                print(ligands_pdb)
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     
     # Mine de INCHI and INCHIKEY
@@ -753,8 +754,6 @@ def smiles_to_pubchem_id (smiles : str) -> Optional[str]:
     return str(pubchem_id)
 
 # Given a PDB ligand code, get its pubchem
-# DANI: Me rindo, he perdido demasiado tiempo con esto
-# DANI: La api del pdb solo me devuelve errores 400 que no me dicen cual es el problema
 def pdb_ligand_to_pubchem (pdb_ligand_id : str) -> Optional[str]:
     # Set the request query
     query = '''query molecule($id:String!){
@@ -841,9 +840,19 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
-    # Mine data
+    # Mine data for nonpolymer entities
     nonpolymers = parsed_response['nonpolymer_entities']
-    if nonpolymers == None: return []
+    # If there are no nonpolymer entities, another type of entitie could be used
+    # AGUS: esto es un caso muy concreto que me encontré con el PDB 1N3W
+    # AGUS: el ligando en este caso es una 'Biologically Interesting Molecules' y se muestran como 'PRD_'
+    prd_code = None
+    if nonpolymers == None:
+        # Get the prd ligand code
+        prd_code = get_prd_ligand_code(pdb_id)
+        if prd_code != None:
+            return [prd_code]
+
+    if nonpolymers == None and prd_code == None: return []
     # Iterate nonpolymer entities to mine each PDB code
     ligand_codes = []
     for nonpolymer in nonpolymers:
@@ -851,6 +860,23 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
         ligand_codes.append(ligand_code)
     print(f' Ligand codes for PDB id {pdb_id}: ' + ', '.join(ligand_codes))
     return ligand_codes
+
+# Given a PDB id, get its PRD ligand code
+def get_prd_ligand_code (pdb_id : str) -> Optional[str]:
+    query = '''query structure($id: String!) {
+        entry(entry_id: $id) {
+            pdbx_molecule_features {
+                prd_id
+            }
+        }
+    }'''
+    parsed_response = request_pdb_data(pdb_id, query)
+    prd_id = parsed_response.get('pdbx_molecule_features', {})[0].get('prd_id', None) # AGUS: podría haber casos donde haya más de uno? 
+    if prd_id is None:
+        print(f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}')
+        return None
+    # If the PRD id is not empty then return it
+    return prd_id
 
 # Given a pdb id, get its pubchem ids
 # DANI: De momento no usamos las SMILES que alguna vez me han dado problemas (e.g. 2I3I)
