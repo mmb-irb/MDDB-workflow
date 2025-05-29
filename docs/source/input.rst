@@ -1,6 +1,6 @@
 .. _input_file_documentation: generated with generate_input_docs.py
 
-Input Metadata File
+Input File
 ==========================
 
 .. note::
@@ -456,7 +456,9 @@ These residues are excluded in the follwoing analyses:
 
 - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
 
-- Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
+- Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(
+.. tip::
+ Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
 
 - Clusters: Since Clustering is RMSD-based it has the same limitations
 
@@ -496,43 +498,16 @@ These fields have an impact in the display of the simulation once in the web cli
 ``chainnames``
 ~~~~~~~~~~~~~~
 
-Set optional custom chain names which may be longer than a single letter
-This names are used to label chains in the web client
-
-chainnames:
-A: Protein
-B: Ligand
-
-``membranes``
-~~~~~~~~~~~~~
-
-Set those elements which must be considered membrane
-These elements will be representated in the web client with a specific pattern:
-
-- Licorice
-
-- Purple color
-
-- Low opacity
-
-To define a membrane it is required a name and a selection in VMD selection language: https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
-
-LORE:
-This field is the predecessor of the 'pbc_selection' field.
-Now it is deprecated but we are still maintaining it.
-One day this information may be useful and we already have it in the database.
-
-DANI: Aunque este campo ya no debería tener efecto en el workflow sigue teniendo uno:
-
-DANI: El análisis de pockets no corre si hay membranas.
+Set optional custom chain names which may be longer than a single letter.
+This names are used to label chains in the web client.
 
 
 
 ::
 
-	membranes:
-	  - name: Cell membrane
-	  selection: chain M
+	chainnames:
+	  A: Protein
+	  B: Ligand
 
 ``customs``
 ~~~~~~~~~~~
@@ -600,7 +575,9 @@ Set if we have any multimeric form
 e.g. monomer, dimer, trimer
 This field was requested by the referees
 Its only use for now is as a parameter in project queries
-DANI: Esto es provisional, lo suyo sería automatizarlo
+
+.. tip::
+ Esto es provisional, lo suyo sería automatizarlo
 
 
 

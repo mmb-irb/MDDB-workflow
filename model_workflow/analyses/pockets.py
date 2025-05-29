@@ -19,7 +19,7 @@
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 from os.path import exists, getsize, split
-from os import mkdir, remove, chdir
+from os import mkdir, remove, chdir, getcwd
 import re
 import collections
 
@@ -91,8 +91,7 @@ def pockets (
     # Thus we can know how many directories back we need to jump to get back to the original directory
     if md_path[0] == '/': raise ValueError('This path should not be absolute, the fix below will not work')
     if md_path[-1] == '/': md_path = md_path[0:-1]
-    directory_jumps_count = md_path.count('/') + 1
-    recovery_path = '/'.join([ '..' for n in range(directory_jumps_count) ])
+    recovery_path = getcwd()
 
     # Move to the MD path so all relative paths become shorter
     chdir(md_path)
@@ -425,7 +424,7 @@ def pockets (
 
             # Write the pdb file
             with open(new_pdb_filename,'w') as file:
-                for line in new_pdb_lines:
+                for line in new_pdb_lines: 
                     file.write(line)
 
             # Run the mdpocket analysis focusing in this specific pocket

@@ -135,6 +135,9 @@ def extract_yaml_documentation(yaml_file_path):
                     elif "NOTE:" in description_text:
                         description_text = description_text.replace(
                             "NOTE:", "\n.. note::\n").strip() + "\n\n"
+                    elif "DANI:" in description_text:
+                        description_text = description_text.replace(
+                            "DANI:", "\n.. tip::\n").strip() + "\n\n"
                     # Check if there's an example in the description
                     if "Example:" in description_text:
                         parts = description_text.split("Example:", 1)

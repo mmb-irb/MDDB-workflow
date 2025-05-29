@@ -58,3 +58,7 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
     background: #cf05ca12;
     border-top: 3px solid #a411ec;
 }
+
+.rst-content .viewcode-link {
+    color: #cf05ca;
+}

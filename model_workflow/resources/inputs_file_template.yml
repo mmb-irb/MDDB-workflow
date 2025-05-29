@@ -347,7 +347,7 @@ interactions:
 #    - RMSF: Sudden jumps in PBC residues result in non-sense high peaks
 #    - PCA: Sudden jumps make not sense in PCA and they eclipse non-PBC movements
 #    - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
-#    - Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
+#    - Pockets: Residues close to the boundary may be considered to have pockets while they have not (DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)
 #    - Clusters: Since Clustering is RMSD-based it has the same limitations
 #
 # If this field is set to 'auto' then PBC residues are set automatically
@@ -377,8 +377,10 @@ cg_selection:
 # These fields have an impact in the display of the simulation once in the web client
 
 
-# Set optional custom chain names which may be longer than a single letter
-# This names are used to label chains in the web client
+# Set optional custom chain names which may be longer than a single letter.
+# This names are used to label chains in the web client.
+#
+# Example:
 #
 # chainnames:
 #   A: Protein

@@ -50,7 +50,7 @@ If the file is not found try to download it.
 ``pdbs``
 ~~~~~~~~
 
-
+Get PDB references.
 
 ``pmeta``
 ~~~~~~~~~
@@ -75,7 +75,7 @@ Project metadata filename
 ``topology``
 ~~~~~~~~~~~~
 
-
+Get the processed topology file.
 
 ``transitions``
 ~~~~~~~~~~~~~~~

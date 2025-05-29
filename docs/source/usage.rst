@@ -77,15 +77,11 @@ Note also that the not-raw (or just 'processed') topology is still in amber form
 
 In this example we run the most basic processing, but there are a couple of additional features we may require.
 
-* Filtering: Argument ``-filt`` is used to filter atoms you want to keep in all files (topology, structure and trajectory). The ``-filt`` argument alone applies the default filtering: water and counter ions. However the ``-filt`` argument may be followed by some text to apply a custom filtering selection according to |VMD syntax|. Here is an example on how to filter away everything which is not protein or nucleic acids:
+* Filtering: Argument ``-filt`` is used to filter atoms you want to keep in all files (topology, structure and trajectory). The ``-filt`` argument alone applies the default filtering: water and counter ions. However the ``-filt`` argument may be followed by some text to apply a custom filtering selection according to |VMD syntax|. Here is an example on how to filter away everything which is not protein or nucleic acids: ``mwf run (...) -filt 'protein or nucleic'``
 
 .. |VMD syntax| raw:: html
 
     <a href="https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html" target="_blank">VMD syntax</a>
-
-  .. code-block:: bash
-
-     mwf run (...) -filt 'protein or nucleic'
 
 * Imaging and fitting: It is not easy to automatize the imaging process so it is recommended that you manually image your trajectories. However, the workflow is provided with a generic imaging protocol which may be useful in some generic cases. Use the ``-img`` argument to image and the ``-fit`` argument to fit the trajectory.
 
