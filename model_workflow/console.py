@@ -1,10 +1,11 @@
 from pathlib import Path
 from os.path import exists
-from shutil import copyfile, which
+from shutil import copyfile
 from subprocess import call
 from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action
-import argparse
+from textwrap import wrap
+
 from model_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
@@ -27,43 +28,16 @@ test_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/usage.html#tests
 class CustomHelpFormatter(RawTextHelpFormatter):
     """Custom formatter for argparse help text with better organization and spacing"""
     
-    def __init__(self, prog, indent_increment=2, max_help_position=30, width=80):
+    def __init__(self, prog, indent_increment=2, max_help_position=6, width=None):
         super().__init__(prog, indent_increment, max_help_position, width)
         
     def _split_lines(self, text, width):
-        """Handle newlines better in help text"""
-        if text.startswith('\n'):
-            parts = text.strip().split('\n')
-            return [p for p in parts]
-        return super()._split_lines(text, width)
-    
-    def _format_action_invocation(self, action):
-        """Format the display of options with choices more cleanly"""
-        if not action.option_strings:
-            # This is a positional argument
-            return super()._format_action_invocation(action)
-            
-        # For options with choices, format them nicely
-        opts = ', '.join(action.option_strings)
-        
-        # Special case for include, exclude, and overwrite
-        if action.dest in ['include', 'exclude', 'overwrite']:
-            opts = ', '.join(action.option_strings)
-            metavar = 'ANALYSIS'
-            return f"{opts} {metavar}"
-        if action.nargs == 0:
-            # Boolean flag
-            return opts
-        else:
-            # Format with metavar or choices
-            metavar = self._format_args(action, action.dest.upper())
-            if action.choices:
-                choice_str = '{' + ','.join(sorted(str(c) for c in action.choices)) + '}'
-                # if action.nargs is not None and action.nargs != 1:
-                #     choice_str += ' ...'
-                return f"{opts} [{choice_str}]"
-            else:
-                return f"{opts} {metavar}"
+        lines = []
+        for line in text.splitlines():
+            if line.strip() != '':
+                lines.extend(wrap(line, width, break_long_words=False, replace_whitespace=False))
+        return lines
+
     def _format_usage(self, usage, actions, groups, prefix):
         essential_usage = super()._format_usage(usage, actions, groups, prefix)
         # Remove lines about arguments -i, -e, -ow from usage
@@ -79,6 +53,35 @@ class CustomHelpFormatter(RawTextHelpFormatter):
                 filtered_lines.append(line)
         essential_usage = '\n'.join(filtered_lines)
         return essential_usage
+    
+    def _format_action_invocation(self, action):
+        """Format the display of options with choices more cleanly"""
+        if not action.option_strings:
+            # This is a positional argument
+            return super()._format_action_invocation(action)
+            
+        # For options with choices, format them nicely
+        opts = ', '.join(action.option_strings)
+        
+        # Special case for include, exclude, and overwrite
+        if action.dest in ['include', 'exclude', 'overwrite']:
+            opts = ', '.join(action.option_strings)
+            metavar = 'TASKS'
+            return f"{opts} {metavar}"
+        if action.nargs == 0:
+            # Boolean flag
+            return opts
+        else:
+            # Format with metavar or choices
+            metavar = self._format_args(action, action.dest.upper())
+            if action.choices:
+                choice_str = '{' + ','.join(sorted(str(c) for c in action.choices)) + '}'
+                # if action.nargs is not None and action.nargs != 1:
+                #     choice_str += ' ...'
+                return f"{opts} [{choice_str}]"
+            else:
+                return f"{opts} {metavar}"
+
     
 # Main ---------------------------------------------------------------------------------            
 
@@ -347,9 +350,9 @@ run_parser_input_group.add_argument(
     action='append',
     nargs='*',
     default=None,
-    help=("Configuration of a specific MD. You may declare as many as you want.\n"
-          "Every MD requires a directory name, a structure path and at least one trajectory path.\n"
-          "The structure is -md <directory> <structure> <trajectory 1> <trajectory 2> ...\n"
+    help=("Configuration of a specific MD. You may declare as many as you want."
+          "Every MD requires a directory name, a structure path and at least one trajectory path."
+          "The structure is -md <directory> <structure> <trajectory 1> <trajectory 2>... "
           "Note that all trajectories from the same MD will be merged.")
 )
 run_parser_input_group.add_argument(
@@ -420,11 +423,11 @@ run_parser_workflow_group.add_argument(
     type=str,
     nargs='?',
     const=True,
-    help=("Guess input interactions automatically. Available options:\n"
-        "   greedy (default) - All chains against all chains\n"
-        "   humble - If there are only two chains then select the interaction between them\n"
-        "   <chain letter> - All chains against this specific chain\n"
-        "   ligands - All chains against every ligand")
+    help=("""Guess input interactions automatically. Available options:
+  - greedy (default): All chains against all chains
+  - humble: If there are only two chains then select the interaction between them
+  - <chain letter>: All chains against this specific chain
+  - ligands: All chains against every ligand""")
 )
 
 # Set a group for the selection options
@@ -434,13 +437,13 @@ run_parser_selection_group.add_argument(
     nargs='?',
     default=False,
     const=True,
-    help=("Atoms selection to be filtered in VMD format\n"
+    help=("Atoms selection to be filtered in VMD format. "
         "If the argument is passed alone (i.e. with no selection) then water and counter ions are filtered"))
 run_parser_selection_group.add_argument(
     "-pbc", "--pbc_selection",
     default=None,
-    help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory.\n"
-        "e.g. remianing solvent and counter ion molecules, membrane lipids, etc."))
+    help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory. "
+        "e.g. remaining solvent and counter ion molecules, membrane lipids, etc."))
 run_parser_selection_group.add_argument(
     "-cg", "--cg_selection",
     default=None,
@@ -498,22 +501,21 @@ run_parser_checks_group.add_argument(
     action=custom,
     const=AVAILABLE_FAILURES,
     choices=AVAILABLE_FAILURES,
-    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
+    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow."
         "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
 )
 
 # Set a list with the alias of all requestable dependencies
 choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))
 
-run_parser_analysis_group = run_parser.add_argument_group('ANALYSIS OPTIONS', description=f"Available analysis: {choices}")
+run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS', description=f"Available tasks: {choices}")
 run_parser_analysis_group.add_argument(
     "-i", "--include",
     nargs='*',
     choices=choices,
-    help="""Set the unique analyses or tools to be run. All other steps will be skipped.
-There are also some additional flags to define a preconfigured group of dependencies:
-  - download: Check/download input files (redundant if you request any analysis)
-  - setup: Process input files and run the tests (redundant if you request any analysis)
+    help="""Set the unique analyses or tools to be run. All other steps will be skipped. There are also some additional flags to define a preconfigured group of dependencies:
+  - download: Check/download input files (already ran with analyses)
+  - setup: Process and test input files (already ran with analyses)
   - network: Run dependencies which require internet connection
   - minimal: Run dependencies required by the web client to work
   - interdeps: Run interactions and all its dependent analyses""")
@@ -521,8 +523,7 @@ run_parser_analysis_group.add_argument(
     "-e", "--exclude",
     nargs='*',
     choices=choices,
-    help=("Set the analyses or tools to be skipped. All other steps will be run.\n"
-        "Note that if we exclude a dependency of something else then it will be run anyway."))
+    help=("Set the analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway."))
 run_parser_analysis_group.add_argument(
     "-ow", "--overwrite",
     type=str,
@@ -531,8 +532,7 @@ run_parser_analysis_group.add_argument(
     action=custom,
     const=True,
     choices=choices,
-    help=("Set the output files to be overwritten thus re-runing its corresponding analysis or tool.\n"
-        "Use this flag alone to overwrite everything."))
+    help=("Set the output files to be overwritten thus re-runing its corresponding analysis or tool. Use this flag alone to overwrite everything."))
 
 
 # Add a new to command to aid in the inputs file setup
