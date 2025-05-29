@@ -19,7 +19,7 @@ def generate_project_metadata (
     register : dict,
     output_metadata_filename : str,
     ligand_customized_names : str,
-    processed_interactions : list,
+    interactions : list,
     ):
 
     print('-> Generating project metadata')
@@ -90,10 +90,10 @@ def generate_project_metadata (
     # This is because the 'type' field is valuable as a search field
     kept_fields = { 'name', 'agent_1', 'agent_2', 'selection_1',
         'selection_2', 'distance_cutoff', 'type' }
-    interactions = []
-    for processed_interaction in processed_interactions:
-        interaction = { k: v for k, v in processed_interaction.items() if k in kept_fields }
-        interactions.append(interaction)
+    metadata_interactions = []
+    for interaction in interactions:
+        metadata_interaction = { k: v for k, v in interaction.items() if k in kept_fields }
+        metadata_interactions.append(metadata_interaction)
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
@@ -143,7 +143,7 @@ def generate_project_metadata (
         'COUNCAT': counter_cations,
         'COUNANI': counter_anions,
         'COUNION': counter_ions,
-        'INTERACTIONS': interactions,
+        'INTERACTIONS': metadata_interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
         'CHAINNAMES': chainnames,
         'MEMBRANES': get_input('membranes'),

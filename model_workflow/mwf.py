@@ -1168,7 +1168,7 @@ class MD:
             pbc_selection = self.pbc_selection,
         )
         return self._processed_interactions
-    processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
+    interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     # Set a function to get input values which may be MD specific
     # If the MD input is missing then we use the project input
@@ -1554,7 +1554,7 @@ class MD:
     #     pca_contacts(
     #         trajectory = self.trajectory_file.path,
     #         topology = self.pdb_filename,
-    #         interactions = self.processed_interactions,
+    #         interactions = self.interactions,
     #         output_analysis_filename = output_analysis_filepath
     #     )
 
@@ -1599,7 +1599,7 @@ class MD:
             input_topology_filepath = self.structure_file.path,
             input_trajectory_filepath = self.trajectory_file.path,
             output_analysis_filepath = output_analysis_filepath,
-            interactions = self.processed_interactions,
+            interactions = self.interactions,
             structure = self.structure,
             pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
@@ -1638,7 +1638,7 @@ class MD:
         clusters_analysis(
             input_structure_file = self.structure_file,
             input_trajectory_file = self.trajectory_file,
-            interactions = self.processed_interactions,
+            interactions = self.interactions,
             structure = self.structure,
             snapshots = self.snapshots,
             pbc_selection = self.pbc_selection,
@@ -1663,7 +1663,7 @@ class MD:
             input_trajectory_filepath = self.trajectory_file.path,
             output_analysis_filepath = output_analysis_filepath,
             structure = self.structure,
-            interactions = self.processed_interactions,
+            interactions = self.interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
         )
@@ -1697,7 +1697,7 @@ class MD:
             output_analysis_filepath = output_analysis_filepath, # For the new version
             populations = self.populations,
             structure = self.structure,
-            interactions = self.processed_interactions,
+            interactions = self.interactions,
             is_time_dependend = self.project.is_time_dependend,
             time_splits = 100,
         )
@@ -1747,7 +1747,7 @@ class MD:
             output_analysis_filepath = output_analysis_filepath,
             energies_folder = energies_folder,
             structure = self.structure,
-            interactions = self.processed_interactions,
+            interactions = self.interactions,
             charges = self.charges,
             snapshots = self.snapshots,
             frames_limit = 100,
@@ -2970,7 +2970,7 @@ class Project:
             register = self.register,
             output_metadata_filename = metadata_file.path,
             ligand_customized_names = self.pubchem_name_list,
-            processed_interactions = self.reference_md.processed_interactions
+            interactions = self.reference_md.interactions
         )
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
