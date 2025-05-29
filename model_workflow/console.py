@@ -24,6 +24,7 @@ nassa_template = str(Path(__file__).parent / "resources" / "nassa_template.yml")
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
 test_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/usage.html#tests-and-other-checking-processes'
+task_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/tasks.html'
 
 class CustomHelpFormatter(RawTextHelpFormatter):
     """Custom formatter for argparse help text with better organization and spacing"""
@@ -482,7 +483,7 @@ def pretty_list (availables : List[str]) -> str:
     final_line += f'\nTo know more about each test please visit:\n{test_docs_url}'
     return final_line
 
-run_parser_checks_group = run_parser.add_argument_group('INPUT CHECKS OPTIONS')
+run_parser_checks_group = run_parser.add_argument_group('INPUT CHECKS OPTIONS', description=f"For more information about each check please visit:\n{test_docs_url}")
 run_parser_checks_group.add_argument(
     "-t", "--trust",
     type=str,
@@ -491,7 +492,7 @@ run_parser_checks_group.add_argument(
     action=custom,
     const=AVAILABLE_CHECKINGS,
     choices=AVAILABLE_CHECKINGS,
-    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n" + pretty_list(AVAILABLE_CHECKINGS)
+    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone. " + pretty_list(AVAILABLE_CHECKINGS)
 )
 run_parser_checks_group.add_argument(
     "-m", "--mercy",
@@ -501,14 +502,14 @@ run_parser_checks_group.add_argument(
     action=custom,
     const=AVAILABLE_FAILURES,
     choices=AVAILABLE_FAILURES,
-    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow."
-        "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
+    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow. "
+        "Note that all checkings are allowed to fail if the argument is passed alone. " + pretty_list(AVAILABLE_FAILURES))
 )
 
 # Set a list with the alias of all requestable dependencies
 choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))
 
-run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS', description=f"Available tasks: {choices}")
+run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS', description=f"Available tasks: {choices}\nFor more information about each task please visit:\n{task_docs_url}")
 run_parser_analysis_group.add_argument(
     "-i", "--include",
     nargs='*',
