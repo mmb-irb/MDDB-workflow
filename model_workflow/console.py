@@ -3,7 +3,7 @@ from os.path import exists
 from shutil import copyfile
 from subprocess import call
 from typing import List
-from argparse import ArgumentParser, RawTextHelpFormatter, Action
+from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAction
 from textwrap import wrap
 
 from model_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
@@ -45,7 +45,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
         lines = essential_usage.split('\n')
         filtered_lines = []
         for line in lines:
-            if line.strip().startswith("[-i"):
+            if line.strip().startswith("[-i "):
                 line = line.replace("[-i", "[-i/-e/-ow")
                 filtered_lines.append(line)
             elif line.strip().startswith("[-e") or line.strip().startswith("[-ow"):
@@ -83,7 +83,33 @@ class CustomHelpFormatter(RawTextHelpFormatter):
             else:
                 return f"{opts} {metavar}"
 
-    
+class CustomArgumentParser(ArgumentParser):
+    """This parser extends the ArgumentParser to handle subcommands and errors more gracefully."""
+    def error(self, message):
+        # Check for subcommand in sys.argv
+        import sys
+        # Extract subcommand from command line if it exists
+        subcommands = [choice for action in self._subparsers._actions 
+                      if isinstance(action, _SubParsersAction)
+                      for choice in action.choices]
+        if len(sys.argv) > 1 and sys.argv[1] in subcommands:
+            self.subcommand = sys.argv[1]
+            
+        # Now continue with your existing logic
+        if hasattr(self, 'subcommand') and self.subcommand:
+            self._print_message(f"{self.prog} {self.subcommand}: error: {message}\n", sys.stderr)
+            # Show help for the specific subparser
+            for action in self._subparsers._actions:
+                if isinstance(action, _SubParsersAction):
+                    for choice, subparser in action.choices.items():
+                        if choice == self.subcommand:
+                            subparser.print_usage()
+                            break
+        else:
+            # Default error behavior for main parser
+            self.print_usage(sys.stderr)
+            self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
+        sys.exit(2) 
 # Main ---------------------------------------------------------------------------------            
 
 # Function called through argparse
@@ -91,6 +117,8 @@ def main ():
     # Parse input arguments from the console
     # The vars function converts the args object to a dictionary
     args = parser.parse_args()
+    if hasattr(args, 'subcommand') and args.subcommand:
+        parser.subcommand = args.subcommand
     # Apply common arguments as necessary
     if hasattr(args, 'no_symlinks') and args.no_symlinks:
         GLOBALS['no_symlinks'] = True
@@ -307,7 +335,7 @@ common_parser = ArgumentParser(add_help=False)
 common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true', help="Do not use symlinks internally")
 
 # Define console arguments to call the workflow
-parser = ArgumentParser(description="MDDB Workflow", formatter_class=RawTextHelpFormatter)
+parser = CustomArgumentParser(description="MDDB Workflow")
 subparsers = parser.add_subparsers(help='Name of the subcommand to be used', dest="subcommand")
 
 # Set the run subcommand
