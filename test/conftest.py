@@ -1,5 +1,6 @@
 import os
 import pytest
+from model_workflow.mwf import Project, MD
 from model_workflow.utils.constants import *
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
@@ -29,6 +30,11 @@ def test_data_dir(test_accession):
     # Create the directory if it doesn't exist
     os.makedirs(test_data_dir, exist_ok=True)
     return test_data_dir
+
+@pytest.fixture(scope="class")
+def project(test_data_dir):
+    project = Project(directory=test_data_dir, accession='A0001')
+    return project
 
 @pytest.fixture(scope="class")
 def remote_client(test_accession):

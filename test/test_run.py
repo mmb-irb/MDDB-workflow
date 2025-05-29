@@ -8,32 +8,30 @@ from model_workflow.utils.constants import *
 
 @pytest.mark.release
 class TestMWFRun:
-    @classmethod
-    def setup_class(cls, test_data_dir):
-        """Initialize shared resources for all tests in this class"""
-        cls.test_data_dir = test_data_dir
-        cls.project = Project(directory=test_data_dir, accession='A0001')
-        cls.MD : MD = cls.project.mds[0]
-        cls.MD.overwritables = {'tmscore'}
-
-    @classmethod
-    def get_analysis_file(cls, analysis_type: str):
+    @pytest.fixture(scope="class")
+    def test_accession(self):
+        """Override the default accession for this test"""
+        return "A0001.1"
+    
+    def get_analysis_file(self, project: Project, analysis_type: str):
         """Download and provide the standard structure file"""
-        output_path = os.path.join(cls.project.directory, f"mda.{analysis_type}_REF.json")
+        output_path = os.path.join(project.directory, f"mda.{analysis_type}_REF.json")
         file_obj = File(output_path)
         # Only download if file doesn't exist yet
         if not file_obj.exists:
-            cls.project.remote.download_analysis_data(analysis_type,  file_obj)
+            project.remote.download_analysis_data(analysis_type,  file_obj)
         return file_obj
     
-    def test_TMscores_analysis(self):
+    def test_TMscores_analysis(self, project):
         """Test that RMSD analysis runs and produces expected output"""
         # Download the reference file and run the analysis
-        analysis_file = self.get_analysis_file('tmscores')
-        self.MD.run_tmscores_analysis()
+        analysis_file = self.get_analysis_file(project, 'tmscores')
+        md : MD = project.mds[0]
+        md.overwritables = {'tmscore'}
+        md.run_tmscores_analysis()
 
         # Check that the output file was created
-        output_file = f"{self.test_data_dir}/replica_1/{OUTPUT_TMSCORES_FILENAME}"
+        output_file = f"{project.directory}/replica_1/{OUTPUT_TMSCORES_FILENAME}"
         assert os.path.exists(output_file), f"Output file '{output_file}' was not created"
         
         # Load the results
