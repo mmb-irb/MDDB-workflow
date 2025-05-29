@@ -1,5 +1,6 @@
 import os
 import pytest
+from model_workflow.mwf import Project, MD
 from model_workflow.utils.constants import *
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
@@ -14,9 +15,8 @@ DATABASE_URL = "https://irb-dev.mddbr.eu/api/"
 TEST_DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
 
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers", "CI: tests related to continuous integration"
-    )
+    config.addinivalue_line( "markers", "CI: tests related to continuous integration")
+    config.addinivalue_line( "markers", "release: tests related to release processes")
 
 @pytest.fixture(scope="class")
 def test_accession():
@@ -31,6 +31,11 @@ def test_data_dir(test_accession):
     # Create the directory if it doesn't exist
     os.makedirs(test_data_dir, exist_ok=True)
     return test_data_dir
+
+@pytest.fixture(scope="class")
+def project(test_data_dir):
+    project = Project(directory=test_data_dir, accession='A0001')
+    return project
 
 @pytest.fixture(scope="class")
 def remote_client(test_accession):
@@ -101,7 +106,7 @@ def inputs_file(remote_client, test_data_dir):
 @pytest.fixture(scope="class")
 def analysis_file(remote_client, test_data_dir, analysis_type):
     """Download and provide the standard structure file"""
-    output_path = os.path.join(test_data_dir, f"mda.{analysis_type}.json")
+    output_path = os.path.join(test_data_dir, f"mda.{analysis_type}_REF.json")
     file_obj = File(output_path)
     
     # Only download if file doesn't exist yet
