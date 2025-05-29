@@ -44,3 +44,9 @@ html_favicon = '_static/MDDB_favicon.png'
 html_logo = '_static/MDDB_Logo_colour.png'
 html_theme_options = {'style_nav_header_background': "#FFFFFF",}
 html_static_path = ['_static']
+html_context = {
+    'display_github': True,
+    'github_user': 'mmb-irb',
+    'github_repo': 'MDDB-workflow',
+    'github_version': 'master/docs/source/',
+}
