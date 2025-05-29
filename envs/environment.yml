@@ -47,4 +47,4 @@ dependencies:
   # This library is used to calculate TM scores and it is not in conda
   # WARNING: this library is not mantained and it depends in an outdated version of iminuit
   # WARNING: we would have to maintain it ourselves in further python versions
-  - tmscoring
+  - bioconda::tmscoring

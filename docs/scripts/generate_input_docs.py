@@ -68,7 +68,7 @@ def extract_yaml_documentation(yaml_file_path):
 
     # Generate RST content
     rst_content = ".. _input_file_documentation: generated with generate_input_docs.py\n\n"
-    rst_content += "Input Metadata File\n"
+    rst_content += "Input File\n"
     rst_content += "==========================\n\n"
     rst_content += ".. note::\n"
     rst_content += "   This documentation is automatically generated from the YAML template file.\n\n"

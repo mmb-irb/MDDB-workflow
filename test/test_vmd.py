@@ -42,7 +42,6 @@ class TestVMD:
 
     # Test for get_interface_atom_indices and get_covalent_bonds_between
     def test_get_interface(self, analysis_file, structure, structure_file, trajectory_file, inputs_file):
-        print("test_get_interface",analysis_file)
         ref_inter = load_interactions(analysis_file, structure)
 
         inputs_file = load_yaml(inputs_file.path)

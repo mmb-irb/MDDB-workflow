@@ -8,6 +8,7 @@ from model_workflow.utils.constants import *
 
 @pytest.mark.release
 class TestMWFRun:
+    """Test full workflow for A0001: mwf run -proj A0001 -dir test/test_data/A0001.1"""
     @pytest.fixture(scope="class")
     def test_accession(self):
         """Override the default accession for this test"""

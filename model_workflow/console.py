@@ -76,7 +76,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
             # Format with metavar or choices
             metavar = self._format_args(action, action.dest.upper())
             if action.choices:
-                choice_str = '{' + ','.join(sorted(str(c) for c in action.choices)) + '}'
+                choice_str = '{' + ','.join(str(c) for c in action.choices) + '}'
                 # if action.nargs is not None and action.nargs != 1:
                 #     choice_str += ' ...'
                 return f"{opts} [{choice_str}]"
@@ -381,7 +381,7 @@ run_parser_input_group.add_argument(
     default=None,
     help=("Configuration of a specific MD. You may declare as many as you want."
           "Every MD requires a directory name, a structure path and at least one trajectory path."
-          "The structure is -md <directory> <structure> <trajectory 1> <trajectory 2>... "
+          "The structure is -md <directory> <structure> <trajectory_1> <trajectory_2>... "
           "Note that all trajectories from the same MD will be merged.")
 )
 run_parser_input_group.add_argument(
