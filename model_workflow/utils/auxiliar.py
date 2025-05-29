@@ -193,6 +193,10 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
 def list_files (directory : str) -> List[str]:
     return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]
 
+# Check if a directory is empty
+def is_directory_empty (directory : str) -> bool:
+    return listdir(directory) == 0
+
 # Set a function to check if a string has patterns to be parsed by a glob function
 # Note that this is not trivial, but this function should be good enough for our case
 # https://stackoverflow.com/questions/42283009/check-if-string-is-a-glob-pattern

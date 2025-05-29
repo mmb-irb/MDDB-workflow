@@ -11,9 +11,28 @@ import io
 import re
 import numpy
 from glob import glob
+from inspect import getfullargspec
 
 # Constants
 from model_workflow.utils.constants import *
+
+# Import local utils
+# Importing constants first is important
+from model_workflow.utils.constants import *
+#from model_workflow.utils.httpsf import mount
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files, is_directory_empty
+from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
+from model_workflow.utils.register import Register
+from model_workflow.utils.cache import Cache
+from model_workflow.utils.conversions import convert
+from model_workflow.utils.structures import Structure
+from model_workflow.utils.topologies import Topology
+from model_workflow.utils.file import File
+from model_workflow.utils.remote import Remote
+from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
+from model_workflow.utils.selections import Selection
+from model_workflow.utils.type_hints import *
 
 # Import local tools
 from model_workflow.tools.get_first_frame import get_first_frame
@@ -36,22 +55,6 @@ from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector
 from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 from model_workflow.tools.check_inputs import check_inputs
-
-# Import local utils
-#from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
-from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files
-from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
-from model_workflow.utils.register import Register
-from model_workflow.utils.cache import Cache
-from model_workflow.utils.conversions import convert
-from model_workflow.utils.structures import Structure
-from model_workflow.utils.topologies import Topology
-from model_workflow.utils.file import File
-from model_workflow.utils.remote import Remote
-from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
-from model_workflow.utils.selections import Selection
-from model_workflow.utils.type_hints import *
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -88,6 +91,13 @@ sys.stdout = unbuffered
 # Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
+# Set a special exception for missing properties
+# This is used for easy debug when a new functions is added wrongly
+MISSING_PROPERTY_EXCEPTION = Exception('Missing property')
+
+# Name of the argument used by all functions to know where to write output
+OUTPUT_DIRECTORY_ARG = 'output_directory'
+
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
 fix_gromacs_masses()
@@ -95,6 +105,97 @@ fix_gromacs_masses()
 # Set some variables which are defined at the end but may be later ready by previously defined functions
 requestables = {}
 inverted_requestables = {}
+
+# Project requestable tasks
+project_requestables = {}
+# MD requestable tasks
+md_requestables = {}
+
+# Set a class to handle a generic task
+class Task:
+    def __init__ (self,
+        # The task name
+        # This name is to be used by the include/exclude/overwrite arguments
+        # It will also name the folder containing all analysis output
+        name : str,
+        # The task function
+        # Function argument names must correspond with Project/MD property names
+        func : Callable,
+        # The task function "additional" inputs
+        # Project/MD properties are automatically sent to the function as arguments
+        # However some analyses have additional arguments (e.g. frames limit, cutoffs, etc.)
+        args : dict,
+    ):
+        # Save input arguments
+        self.name = name
+        self.func = func
+        self.args = args
+
+    # When a task is called
+    def __call__(self, parent):
+        # Process the task function arguments
+        processed_args = {}
+        # Get the task function expected arguments
+        argument_specification = getfullargspec(self.func)
+        expected_arguments = argument_specification.args
+        n_default_arguments = len(argument_specification.defaults)
+        default_arguments = set(expected_arguments[::-1][:n_default_arguments])
+        # If one of the argument expected outputs is the output_directory then set it here
+        # We will set a new directory with the name of the task, in the correspoding path
+        # Note that while the task is beeing done the output directory has a different name
+        # Thus the directory is hidden and marked as incomplete
+        # The final output directory is the one without the incomplete prefix
+        output_directory = None
+        final_output_directory = None
+        if OUTPUT_DIRECTORY_ARG in expected_arguments:
+            # Set the output directory path
+            output_directory = parent.pathify(INCOMPLETE_PREFIX + self.name)
+            final_output_directory = output_directory.replace(INCOMPLETE_PREFIX, '')
+            # Add it to the processed args
+            processed_args[OUTPUT_DIRECTORY_ARG] = output_directory
+            # Remove the expected argument from the list
+            expected_arguments.remove(OUTPUT_DIRECTORY_ARG)
+        # Check if this dependency is to be overwriten
+        must_overwrite = self.name in parent.overwritables
+        # Update the overwritables so this is not remade further in the same run
+        parent.overwritables.discard(self.name)
+        # If the final directory already exists then we asome the task is done already
+        # We can stop here unless this task is marked for overwrite
+        # If the overwrite argument is passed then we must remove the output directory
+        if final_output_directory and exists(final_output_directory):
+            if must_overwrite: rmtree(final_output_directory)
+            else:
+                print(f'{GREY_HEADER}-> Task {self.name} already completed{COLOR_END}')
+                return
+        # Iterate the reamining expected arguments
+        for arg in expected_arguments:
+            # First find the argument among the parent properties
+            arg_value = getattr(parent, arg, MISSING_PROPERTY_EXCEPTION)
+            # If the property is missing then search among the additional arguments
+            if arg_value == MISSING_PROPERTY_EXCEPTION:
+                arg_value = self.args.get(arg, MISSING_PROPERTY_EXCEPTION)
+                # NEVER FORGET: Function arguments must have the same name that the Project/MD property
+                # If the argument is still missing then you programmed the function wrongly or...
+                # You may have forgotten the additional argument in the task args
+                if arg_value == MISSING_PROPERTY_EXCEPTION:
+                    # One last exception: it may have a default value
+                    # In that case we let it go
+                    if arg in default_arguments: continue
+                    raise RuntimeError(f'Function "{self.func.__name__}" expects argument "{arg}" but {parent} is missing this property')
+            # Add the processed argument
+            processed_args[arg] = arg_value
+        # Create the output directory, if any
+        if output_directory and not exists(output_directory):
+            mkdir(output_directory)
+        # Finally call the function
+        print(f'{GREEN_HEADER}-> Running task {self.name}{COLOR_END}')
+        self.func(**processed_args)
+        # As a brief cleanup, if the output directory is empty, then remove it
+        # Otheriwse, change the incomplete directory name to its final name
+        if output_directory:
+            if is_directory_empty(output_directory): rmtree(output_directory)
+            else: rename(output_directory, final_output_directory)
+
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -184,7 +285,7 @@ class MD:
         self.overwritables = set()
 
     def __repr__ (self):
-        return f'<MD ({len(self.structure.atoms)} atoms)>'
+        return 'MD'
     
     # This function is able to find its caller "self" function
     # Then it finds its associated label in the requestables
@@ -1347,6 +1448,11 @@ class MD:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
+    # Set if MDs are time dependent
+    def check_is_time_dependent (self) -> bool:
+        return self.project.is_time_dependend
+    is_time_dependend = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
+
     # Reference frame
     # Frame to be used when representing the MD
     def get_reference_frame (self) -> dict:
@@ -1669,38 +1775,39 @@ class MD:
         )
 
     # Hydrogen bonds
-    def run_hbonds_analysis (self):
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_HBONDS_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # If the analysis is to be overwritten then delete all previous outputs
-        if must_overwrite:
-            glob_pattern = glob_filename(output_analysis_filepath)
-            existing_outputs = glob(glob_pattern)
-            for existing_output in existing_outputs:
-                if exists(existing_output):
-                    remove(existing_output)
-        # Run the the analysis
-        # WARNING: the output file size depends on the number of hydrogen bonds
-        # WARNING: analyses must be no heavier than 16Mb in BSON format
-        # WARNING: In case of large surface interaction the output analysis may be larger than the limit
-        hydrogen_bonds(
-            input_topology_filepath = self.structure_file.path,
-            input_trajectory_filepath = self.trajectory_file.path,
-            output_analysis_filepath = output_analysis_filepath, # For the new version
-            populations = self.populations,
-            structure = self.structure,
-            interactions = self.interactions,
-            is_time_dependend = self.project.is_time_dependend,
-            time_splits = 100,
-        )
+    run_hbonds_analysis = Task('hbonds', hydrogen_bonds, { 'time_splits': 100 })
+    # def run_hbonds_analysis (self):
+    #     # Get the task name
+    #     task = self._get_task()
+    #     # Check if this dependency is to be overwriten
+    #     must_overwrite = task in self.overwritables
+    #     # Update the overwritables so this is not remade further in the same run
+    #     self.overwritables.discard(task)
+    #     # Do not run the analysis if the output file already exists
+    #     output_analysis_filepath = self.pathify(OUTPUT_HBONDS_FILENAME)
+    #     if exists(output_analysis_filepath) and not must_overwrite:
+    #         return
+    #     # If the analysis is to be overwritten then delete all previous outputs
+    #     if must_overwrite:
+    #         glob_pattern = glob_filename(output_analysis_filepath)
+    #         existing_outputs = glob(glob_pattern)
+    #         for existing_output in existing_outputs:
+    #             if exists(existing_output):
+    #                 remove(existing_output)
+    #     # Run the the analysis
+    #     # WARNING: the output file size depends on the number of hydrogen bonds
+    #     # WARNING: analyses must be no heavier than 16Mb in BSON format
+    #     # WARNING: In case of large surface interaction the output analysis may be larger than the limit
+    #     hydrogen_bonds(
+    #         input_topology_filepath = self.structure_file.path,
+    #         input_trajectory_filepath = self.trajectory_file.path,
+    #         output_analysis_filepath = output_analysis_filepath, # For the new version
+    #         populations = self.populations,
+    #         structure = self.structure,
+    #         interactions = self.interactions,
+    #         is_time_dependend = self.project.is_time_dependend,
+    #         time_splits = 100,
+    #     )
 
     # SASA, solvent accessible surfave analysis
     def run_sas_analysis (self):
@@ -2146,6 +2253,9 @@ class Project:
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
+
+    def __repr__ (self):
+        return 'Project'
 
     # This function is able to find its caller "self" function
     # Then it finds its associated label in the requestables
