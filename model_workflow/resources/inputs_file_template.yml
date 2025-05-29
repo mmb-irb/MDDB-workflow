@@ -386,31 +386,6 @@ cg_selection:
 
 chainnames:
 
-# Set those elements which must be considered membrane
-# These elements will be representated in the web client with a specific pattern:
-# - Licorice
-# - Purple color
-# - Low opacity
-#
-# To define a membrane it is required a name and a selection in VMD selection language: https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
-#
-# LORE:
-# This field is the predecessor of the 'pbc_selection' field.
-# Now it is deprecated but we are still maintaining it.
-# One day this information may be useful and we already have it in the database.
-#
-# DANI: Aunque este campo ya no debería tener efecto en el workflow sigue teniendo uno:
-#
-# DANI: El análisis de pockets no corre si hay membranas.
-#
-# Example:
-#
-# membranes:
-#   - name: Cell membrane
-#     selection: chain M
-
-membranes:
-
 # The web client sets some default representations (molecular viewer configurations)
 # They highlight important features in the structure according to the topology reference or interactions
 # In addition, you may set extra customized representations which are interesting for you
