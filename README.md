@@ -4,6 +4,8 @@
     <img src="https://github.com/mmb-irb/MDDB-workflow/blob/release/model_workflow/resources/mddb.png?raw=true" width="640" height="320">
 </div>
 
+![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)
+
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.
 Both standard files and analysis results are to be uploaded to the database using the [loader](https://github.com/mmb-irb/MDDB-loader).
