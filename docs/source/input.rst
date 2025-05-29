@@ -456,9 +456,9 @@ These residues are excluded in the follwoing analyses:
 
 - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
 
-- Pockets: Residues close to the boundary may be considered to have pockets while they have not <span style="color:red">(
+- Pockets: Residues close to the boundary may be considered to have pockets while they have not. 
 .. tip::
- Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)<span />
+ Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo
 
 - Clusters: Since Clustering is RMSD-based it has the same limitations
 
@@ -571,13 +571,13 @@ Other metadata
 ``multimeric``
 ~~~~~~~~~~~~~~
 
-Set if we have any multimeric form
-e.g. monomer, dimer, trimer
-This field was requested by the referees
-Its only use for now is as a parameter in project queries
+Set if we have any multimeric form:
+monomer, dimer, trimer...
+This field was requested by the referees.
+Its only use for now is as a parameter in project queries.
 
 .. tip::
- Esto es provisional, lo suyo sería automatizarlo
+ Esto es provisional, lo suyo sería automatizarlo.
 
 
 
@@ -697,9 +697,11 @@ If there is not an MD which is more important than others then simply set the fi
 
 Input topology, trajectory and structure files.
 
-LORE
-These files have been passed to the workflow through command line traditionally.
-Now the inputs file also provides this option.
+
+.. note::
+ These files have been passed to the workflow through command line traditionally. Now the inputs file also provides this option.
+
+
 
 ``input_structure_filepath``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

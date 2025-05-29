@@ -47,6 +47,14 @@
     background: #3a29f61f;
 }
 
+.rst-content .tip .admonition-title {
+    background: #30153c;
+}
+
+.rst-content .tip {
+    background: #30153c1f;
+}
+
 /* API Reference */
 html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.citation):not(.glossary):not(.simple)>dt
 {

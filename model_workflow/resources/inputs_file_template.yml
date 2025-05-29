@@ -347,7 +347,7 @@ interactions:
 #    - RMSF: Sudden jumps in PBC residues result in non-sense high peaks
 #    - PCA: Sudden jumps make not sense in PCA and they eclipse non-PBC movements
 #    - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
-#    - Pockets: Residues close to the boundary may be considered to have pockets while they have not (DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo)
+#    - Pockets: Residues close to the boundary may be considered to have pockets while they have not. DANI: Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo
 #    - Clusters: Since Clustering is RMSD-based it has the same limitations
 #
 # If this field is set to 'auto' then PBC residues are set automatically
@@ -441,11 +441,11 @@ orientation:
 #------------------------------------------------------------------------------------------------------------
 # Other metadata 
 
-# Set if we have any multimeric form
-# e.g. monomer, dimer, trimer
-# This field was requested by the referees
-# Its only use for now is as a parameter in project queries
-# DANI: Esto es provisional, lo suyo sería automatizarlo
+# Set if we have any multimeric form:
+# monomer, dimer, trimer...
+# This field was requested by the referees. 
+# Its only use for now is as a parameter in project queries.
+# DANI: Esto es provisional, lo suyo sería automatizarlo.
 #
 # Example:
 #
@@ -522,7 +522,7 @@ cv19_nanobs:
 mds:
 
 # Also the reference MD is to be defined by providing the index of the MDs list.
-# If there is not an MD which is more important than others then simply set the first MD (0) as the reference
+# If there is not an MD which is more important than others then simply set the first MD (0) as the reference.
 #
 # Example:
 #
@@ -532,9 +532,7 @@ mdref:
 
 # Input topology, trajectory and structure files.
 #
-# LORE
-# These files have been passed to the workflow through command line traditionally.
-# Now the inputs file also provides this option.
+# LORE: These files have been passed to the workflow through command line traditionally. Now the inputs file also provides this option.
 
 input_topology_filepath:
 input_structure_filepath:
