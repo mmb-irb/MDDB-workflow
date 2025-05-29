@@ -292,7 +292,7 @@ class CaptureOutput (object):
 def request_pdb_data (pdb_id : str, query : str) -> dict:
     # Make sure the PDB id is valid as we set the correct key to mine the response data
     if len(pdb_id) == 4: data_key = 'entry'
-    elif len(pdb_id) < 4: data_key = 'chem_comp'
+    elif len(pdb_id) < 4 or len(pdb_id) > 4: data_key = 'chem_comp'
     else: raise ValueError(f'Wrong PDB id "{pdb_id}". It must be 4 (entries) or less (ligands) characters long')
     # Set the request URL
     request_url = 'https://data.rcsb.org/graphql'

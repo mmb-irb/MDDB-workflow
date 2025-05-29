@@ -13,6 +13,21 @@ from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_inte
 # This is useful for atomistic simulations
 DEFAULT_DISTANCE_CUTOFF = 5
 
+# Set which fields are to be uploaded to the database only
+# i.e. not vmd selections or residue numbers
+UPLOAD_FIELDS = [
+    'name',
+    'agent_1',
+    'agent_2',
+    'atom_indices_1',
+    'atom_indices_2',
+    'interface_atom_indices_1',
+    'interface_atom_indices_2',
+    'version',
+    'strong_bonds',
+    'has_cg'
+]
+
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'
 
@@ -29,7 +44,6 @@ def process_interactions (
     snapshots : int,
     processed_interactions_file : 'File',
     mercy : List[str],
-    register : 'Register',
     frames_limit : int,
     interactions_auto : str,
     ligand_map : List[dict],
@@ -40,6 +54,9 @@ def process_interactions (
     ) -> list:
 
     print('-> Processing interactions')
+
+    # Set if we are to have mercy when an interaction fails
+    have_mercy = STABLE_INTERACTIONS_FLAG in mercy
 
     # Copy input interactions to avoid input mutation
     interactions = []
@@ -78,7 +95,7 @@ def process_interactions (
                     "selection_2": f"chain {chain2.name}"
                 }
                 interactions.append(interaction)
-            mercy = STABLE_INTERACTIONS_FLAG
+            have_mercy = True
             
         # The humble option is to find the interaction between two chains. If there are more than two chains then it won't work
         elif auto == 'autohumble' or auto == 'humble':
@@ -116,7 +133,7 @@ def process_interactions (
                 interactions.append(interaction)
         
             # In this case, we assume that the user wants to interact the selected chain with all other chains so we force the analysis to be run anyway
-            mercy = STABLE_INTERACTIONS_FLAG
+            have_mercy = True
         
         elif auto == 'ligands':
             # If there are no ligands present or matched in the structure then we skip ligand interactions
@@ -151,7 +168,7 @@ def process_interactions (
                             "selection_2": f"chain {chain.name}"
                         }
                         interactions.append(interaction)
-            mercy = STABLE_INTERACTIONS_FLAG
+            have_mercy = True
 
         else:
             raise InputError(f'Invalid input auto interactions "{auto}"')
@@ -223,9 +240,6 @@ def process_interactions (
         # Otherwise it means this is not a compatible version and we must run interactions again
         warn('Interactions backup is obsolete. Interactions will be calculated again')
 
-    # Reset warnings related to this analysis
-    register.remove_warnings(STABLE_INTERACTIONS_FLAG)
-
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
         structure_file,
@@ -239,6 +253,7 @@ def process_interactions (
 
     # Iterate over each defined interaction
     for interaction in interactions:
+        interaction_name = interaction["name"]
         # Set the distance cutoff
         distance_cutoff = interaction.get('distance_cutoff', DEFAULT_DISTANCE_CUTOFF)
         # Find if this interaction has coarse grain atoms involved
@@ -251,7 +266,7 @@ def process_interactions (
         # If this is the case then warn the user
         if interaction['has_cg'] and distance_cutoff == DEFAULT_DISTANCE_CUTOFF:
             warn(f'Using atomistic default distance cutoff ({distance_cutoff}Å) with coarse grain agent(s)\n'
-            f'  You may need to manually specify the distance cutoff in the inputs file for interaction "{interaction["name"]}"')
+            f'  You may need to manually specify the distance cutoff in the inputs file for interaction "{interaction_name}"')
         # Find out the interaction residues for each frame and save all residues as the overall interface
         interface_results = get_interface_atom_indices(
             structure_file.path,
@@ -262,102 +277,78 @@ def process_interactions (
         )
         # Check if the interaction is respecting the frames percent cutoff and if it fails then kill it
         frames_percent = interface_results['interacting_frames'] / interface_results['total_frames']
-        pretty_frames_percent = str(round(frames_percent * 100) / 100)
+        pretty_frames_percent = str(round(frames_percent * 10000) / 100)
         if frames_percent < interaction_cutoff:
             meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
-            print(f'Interaction "{interaction["name"]}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
+            print(f'Interaction "{interaction_name}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
                 f'This means the interaction {meaning_log}.\n'
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
                 f'   - Agent 1 selection: {interaction["selection_1"]}\n'
                 f'   - Agent 2 selection: {interaction["selection_2"]}')
-            # Check if we must have mercy in case of interaction failure
-            must_be_killed = STABLE_INTERACTIONS_FLAG not in mercy
-            if must_be_killed:
-                raise TestFailure('An interaction failed to be set.\n'
-                    'Use the "--mercy interact" flag for the workflow to continue.\n'
-                    'Failed interactions will be removed from further analyses.')
+            # If we are not to have mercy in case of interaction failure then stop here
+            if not have_mercy: raise TestFailure('An interaction failed to be set.\n'
+                'Use the "--mercy interact" flag for the workflow to continue.\n'
+                'Failed interactions will be ignored and will not appear in further analyses.')
             # If the workflow is not to be killed then just remove this interaction from the interactions list
             # Thus it will not be considered in interaction analyses and it will not appear in the metadata
+            # To not mess the interactions iteration we simply flag the interaction
+            # It will be removed further
+            warn(f'Interaction "{interaction_name}" will be ignored and will not appear in further analyses')
             interaction[FAILED_INTERACTION_FLAG] = True
-             # If this is an automated process then there is no need to warn the user
-            if auto: continue
-            register.add_warning(STABLE_INTERACTIONS_FLAG, 'Some interaction(s) are not stable enough so their analyses are skipped')
             continue
-        # For each agent in the interaction, get the residues in the interface from the previously calculated atom indices
-        for agent in ['1','2']:
-            # First with all atoms/residues
-            atom_indices = interface_results[f'selection_{agent}_atom_indices']
-            residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
-            # Check residue lists to not be empty, which should never happen
-            if len(residue_indices) == 0:
-                agent_name = interaction['agent_' + agent]
-                raise ValueError(f'Empty selection for agent "{agent_name}" in interaction "{interaction["name"]}": {interaction["selection_" + agent]}')
-            interaction[f'residue_indices_{agent}'] = residue_indices
-            interaction[f'residues_{agent}'] = [ structure.residues[residue_index] for residue_index in residue_indices ]
-            # Then with interface atoms/residues
-            interface_atom_indices = interface_results[f'selection_{agent}_interface_atom_indices']
-            interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
-            interaction[f'interface_indices_{agent}'] = interface_residue_indices
-            interaction[f'interface_{agent}'] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
-            # Save atom indices in the interaction object
-            interaction[f'atom_indices_{agent}'] = atom_indices
-            interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
-            interaction['version'] = '1.0.0'
 
+        # Iterate interaction agents
+        for agent in ['1','2']:
+            # Get agent name and selection for logging purposes
+            agent_name = interaction['agent_' + agent]
+            agent_selection = interaction['selection_' + agent]
+            # Save atom indices in the interaction object
+            atom_indices = interface_results[f'selection_{agent}_atom_indices']
+            # This should never happen, but make sure they are not empty
+            if len(atom_indices) == 0:
+                raise ValueError(f'Empty agent "{agent_name}" in interaction "{interaction_name}": {agent_selection}')
+            interaction[f'atom_indices_{agent}'] = atom_indices
+            # Save interface atom indices in the interaction object
+            interface_atom_indices = interface_results[f'selection_{agent}_interface_atom_indices']
+            # This should never happen, but make sure they are not empty
+            if len(interface_atom_indices) == 0:
+                raise ValueError(f'Empty interface for agent "{agent_name}" in interaction "{interaction_name}": {agent_selection}')
+            interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
+        
+        # Add residue notations
+        add_residues(interaction, structure)
+            
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
         strong_bonds = get_covalent_bonds_between(structure_file.path, interaction['selection_1'], interaction['selection_2'])
+        interaction['strong_bonds'] = strong_bonds
 
-        # Translate all residues selections to pytraj notation
-        # These values are used along the workflow but not added to metadata
-        converter = structure.residue_2_pytraj_residue_index
-        interaction.update(
-            {
-                'pt_residues_1': list(map(converter, interaction['residues_1'])),
-                'pt_residues_2': list(map(converter, interaction['residues_2'])),
-                'pt_interface_1': list(map(converter, interaction['interface_1'])),
-                'pt_interface_2': list(map(converter, interaction['interface_2'])),
-                'strong_bonds': strong_bonds
-            }
-        )
+        # Save the interactions version
+        interaction['version'] = '2.0.0'
 
-        print(f'{interaction["name"]} ({pretty_frames_percent}) (type: {interaction["type"]}) -> {sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])}')
+        # Log the final results
+        interface_residue_indices = sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])
+        print(f'{interaction_name} (time: {pretty_frames_percent} %) (type: {interaction["type"]}) -> {interface_residue_indices}')
 
-    # Write the interactions file with the fields to be uploaded to the database only
-    # i.e. not vmd selections
-    file_keys = [
-        'name',
-        'agent_1',
-        'agent_2',
-        'residue_indices_1',
-        'residue_indices_2',
-        'interface_indices_1',
-        'interface_indices_2',
-        'atom_indices_1',
-        'atom_indices_2',
-        'interface_atom_indices_1',
-        'interface_atom_indices_2',
-        'version',
-        'strong_bonds',
-        'has_cg',
-        FAILED_INTERACTION_FLAG
-    ]
+    # Filter away interactions whcih have failed
+    valid_interactions = [ inte for inte in interactions if not inte.get(FAILED_INTERACTION_FLAG, False) ]
 
-    # If automatic interactions are being processed then we must remove failed interactions (this is necessary for futher analyses)
-    # AGUS: en principio esto es temporal 
-    if auto:
-        interactions = [ interaction for interaction in interactions if not interaction.get(FAILED_INTERACTION_FLAG, False) ]
-    
+    # If there are no valid interactions then stop here
+    if len(valid_interactions) == 0: return []
+
+    # Create interaction duplicates to avoid mutating the already processed interactions
+    # Then fill these duplicates only with those fields to be uploaded to the database
     file_interactions = []
-    for interaction in interactions:
-        file_interaction = { key: value for key, value in interaction.items() if key in file_keys }
+    for interaction in valid_interactions:
+        file_interaction = { key: value for key, value in interaction.items() if key in UPLOAD_FIELDS }
         file_interactions.append(file_interaction)
+    
+    # Write them to disk
+    save_json(file_interactions, processed_interactions_file.path, indent = 4)
 
-    # Save the interactions file unless all interactions failed
-    any_valid_interactions = any( (not interaction.get(FAILED_INTERACTION_FLAG, False)) for interaction in interactions )
-    if any_valid_interactions:
-        save_json(file_interactions, processed_interactions_file.path, indent = 4)
-    return interactions
+    # Finally return the processed interactions
+    print(f' There is a total of {len(valid_interactions)} valid interactions')
+    return valid_interactions
 
 # Load interactions from an already existing interactions file
 def load_interactions (processed_interactions_file : 'File', structure : 'Structure') -> list:
@@ -369,21 +360,23 @@ def load_interactions (processed_interactions_file : 'File', structure : 'Struct
         # If the interaction failed then there will be minimal information
         if interaction.get(FAILED_INTERACTION_FLAG, False):
             continue
-        # Get residues from their indices
-        residues = structure.residues
-        interaction['residues_1'] = [ residues[index] for index in interaction['residue_indices_1'] ]
-        interaction['residues_2'] = [ residues[index] for index in interaction['residue_indices_2'] ]
-        # Check residue lists to not be empty, which should never happen
-        if len(interaction['residues_1']) == 0:
-            raise ValueError(f'Empty selection for agent "{interaction["agent_1"]}" in interaction "{interaction["name"]}"')
-        if len(interaction['residues_2']) == 0:
-            raise ValueError(f'Empty selection for agent "{interaction["agent_2"]}" in interaction "{interaction["name"]}"')
-        interaction['interface_1'] = [ residues[index] for index in interaction['interface_indices_1'] ]
-        interaction['interface_2'] = [ residues[index] for index in interaction['interface_indices_2'] ]
-        # Transform to pytraj
-        converter = structure.residue_2_pytraj_residue_index
-        interaction['pt_residues_1'] = list(map(converter, interaction['residues_1']))
-        interaction['pt_residues_2'] = list(map(converter, interaction['residues_2']))
-        interaction['pt_interface_1'] = list(map(converter, interaction['interface_1']))
-        interaction['pt_interface_2'] = list(map(converter, interaction['interface_2']))
+        # Add residue notations, which are not saved to disk
+        add_residues(interaction, structure)
     return interactions
+
+# Set an auxiliar function to add residue indices and parsed residues to an interactions object
+def add_residues (interaction : dict, structure : 'Structure'):
+    # Iterate interaction agents
+    for agent in ['1','2']:
+        # Get interaction atom indices
+        atom_indices = interaction[f'atom_indices_{agent}']
+        # Now parse atom indices to residue indices for those analysis which work with residues
+        residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
+        interaction[f'residue_indices_{agent}'] = residue_indices
+        interaction[f'residues_{agent}'] = [ structure.residues[residue_index] for residue_index in residue_indices ]
+        # Get interaction interface atom indices
+        interface_atom_indices = interaction[f'interface_atom_indices_{agent}']
+        # Then with interface atoms/residues
+        interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
+        interaction[f'interface_indices_{agent}'] = interface_residue_indices
+        interaction[f'interface_{agent}'] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]

@@ -4,7 +4,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import rdFingerprintGenerator
 from mordred import Calculator, descriptors
-from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LIGANDS_DATA
+from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.structures import Structure
@@ -172,6 +172,7 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
                 ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
                 if ligands_pdb == None:
                     raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code: ' + request_url)
+                print(ligands_pdb)
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     
     # Mine de INCHI and INCHIKEY
@@ -284,23 +285,44 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
     mordred_results = calc(mol).drop_missing().asdict()
 
     ######## MORGAN FINGERPRINT ###########
-    morgan_fp_bit_array = list(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024))
     morgan_fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
     ao = rdFingerprintGenerator.AdditionalOutput()
     ao.AllocateAtomCounts()
     ao.AllocateAtomToBits()
     ao.AllocateBitInfoMap()
     fp = morgan_fp_gen.GetFingerprint(mol,additionalOutput=ao)
+    morgan_fp_bit_array = list(fp)
     morgan_highlight_atoms = {}
     for bit, atoms in ao.GetBitInfoMap().items():
         morgan_highlight_atoms[bit] = list(set(atom for atom, radius in atoms))
 
     return mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block
 
+# Check the cache to see if the ligand has already been matched or not, if not the ligand is skipped
+def check_matched_ligand (ligand: dict, ligand_data: dict, cache: 'Cache') -> bool:
+    # The pubchem id could be in the ligands data or the ligand input
+    pubchem_id_1 = ligand.get('pubchem', None)
+    if ligand_data != None:
+        pubchem_id_2 = ligand_data.get('pubchem', None)
+    else:
+        pubchem_id_2 = None
+    # If we have no pubchem id then we cannot check if the ligand matched
+    if not pubchem_id_1 and not pubchem_id_2:
+        return False
+    # If we have a pubchem id then check if it is already in the cache
+    cache_not_matched = cache.retrieve(NOT_MATCHED_LIGANDS, {})
+    
+    for pubchem in cache_not_matched.keys():
+        if pubchem == pubchem_id_1 or pubchem == pubchem_id_2:
+            print(f" Ligand with PubChem id {pubchem} didn't match before, skipping it")
+            return True
+    
+    return False
+    
 # Generate a map of residues associated to ligands
 def generate_ligand_mapping (
     structure : 'Structure',
-    register : 'Register',
+    cache : 'Cache',
     input_ligands : Optional[List[dict]],
     input_pdb_ids : List[str],
     output_ligands_filepath : str,
@@ -314,7 +336,8 @@ def generate_ligand_mapping (
     if input_ligands:
         ligands += input_ligands
     # Check we have cached pdb 2 pubchem values
-    pdb_to_pubchem_cache = register.cache.get(PDB_TO_PUBCHEM, {})
+    pdb_to_pubchem_cache = cache.retrieve(PDB_TO_PUBCHEM, {})
+    new_data_to_cache = False
     # Get input ligands from the pdb ids, if any
     if input_pdb_ids:
         for pdb_id in input_pdb_ids:
@@ -330,13 +353,15 @@ def generate_ligand_mapping (
             # If we had no cached pdb 2 pubchem then ask for them
             if pubchem_ids_from_pdb == None:
                 pubchem_ids_from_pdb = pdb_to_pubchem(pdb_id)
-                # Save the result in the cache
+                # Save the result in the cache object so it is saved to cache later
                 pdb_to_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
-                register.update_cache(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
+                new_data_to_cache = True
             for pubchem_id in pubchem_ids_from_pdb:
                 # Ligands in the structure (PDB) and the 'inputs.json' could be the same so it's not necessary to do it twice
                 if not any('pubchem' in ligand and ligand['pubchem'] == pubchem_id for ligand in ligands):
                     ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
+    # Save all pdb to pubchem results in cache, in case there is anything new
+    if new_data_to_cache: cache.update(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
 
     # If no input ligands are passed then stop here
     if len(ligands) == 0:
@@ -363,8 +388,8 @@ def generate_ligand_mapping (
     ligand_maps = []
     # Get cached ligand data
     # AGUS: esto lo creamos por alguna razón para que funcione sin internet (en el cluster) pero realmente
-    # AGUS: llena todo el archivo .register con datos que no son necesarios porque toda esa info está en el ligand_references.json
-    #ligand_data_cache = register.cache.get(LIGANDS_DATA, {})
+    # AGUS: llena el cache con datos que no son necesarios porque toda esa info está en el ligand_references.json
+    #ligand_data_cache = cache.retrieve(LIGANDS_DATA, {})
     # Iterate input ligands
     for ligand in ligands:
         # Set the pubchem id which may be assigned in different steps
@@ -377,6 +402,8 @@ def generate_ligand_mapping (
             raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
         # Check if we already have this ligand data
         ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
+        # Check if the ligand didn't match before
+        if check_matched_ligand(ligand, ligand_data, cache): continue
         # If we do not have its data try to get from the cache
         # if not ligand_data:
         #     # If this is a ligand not in ligans.json but in cache it means it comes from PDB, never form user inputs
@@ -390,7 +417,7 @@ def generate_ligand_mapping (
         #         # Save data mined from PubChem in the cache
         #         pubchem_id = ligand_data['pubchem']
         #         ligand_data_cache[pubchem_id] = { **ligand_data }
-        #         register.update_cache(LIGANDS_DATA, ligand_data_cache)
+        #         cache.update(LIGANDS_DATA, ligand_data_cache)
         # Add current ligand data to the general list
         if not ligand_data:
             ligand_data = obtain_ligand_data_from_pubchem(ligand)
@@ -445,6 +472,11 @@ def generate_ligand_mapping (
             # Otherwise simply remove it from the final ligand references file and the forwarded maps 
             ligands_data.pop()
             ligand_maps.pop()
+            # Update the cache with the pubchem id of the ligands that didn't match
+            not_matched_pubchems = cache.retrieve(NOT_MATCHED_LIGANDS, {})
+            not_matched_pubchems[ligand_map['name']] = ligand_map['name'] # AGUS: la key y el value son el mismo valor, no sé me ocurre otro 
+            cache.update(NOT_MATCHED_LIGANDS, not_matched_pubchems)
+            # Delete the name
             ligand_name = ligand_names.get(pubchem_id, None)
             if ligand_name != None:
                 del ligand_names[pubchem_id]
@@ -725,8 +757,6 @@ def smiles_to_pubchem_id (smiles : str) -> Optional[str]:
     return str(pubchem_id)
 
 # Given a PDB ligand code, get its pubchem
-# DANI: Me rindo, he perdido demasiado tiempo con esto
-# DANI: La api del pdb solo me devuelve errores 400 que no me dicen cual es el problema
 def pdb_ligand_to_pubchem (pdb_ligand_id : str) -> Optional[str]:
     # Set the request query
     query = '''query molecule($id:String!){
@@ -813,9 +843,19 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
-    # Mine data
+    # Mine data for nonpolymer entities
     nonpolymers = parsed_response['nonpolymer_entities']
-    if nonpolymers == None: return []
+    # If there are no nonpolymer entities, another type of entitie could be used
+    # AGUS: esto es un caso muy concreto que me encontré con el PDB 1N3W
+    # AGUS: el ligando en este caso es una 'Biologically Interesting Molecules' y se muestran como 'PRD_'
+    prd_code = None
+    if nonpolymers == None:
+        # Get the prd ligand code
+        prd_code = get_prd_ligand_code(pdb_id)
+        if prd_code != None:
+            return [prd_code]
+
+    if nonpolymers == None and prd_code == None: return []
     # Iterate nonpolymer entities to mine each PDB code
     ligand_codes = []
     for nonpolymer in nonpolymers:
@@ -823,6 +863,23 @@ def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
         ligand_codes.append(ligand_code)
     print(f' Ligand codes for PDB id {pdb_id}: ' + ', '.join(ligand_codes))
     return ligand_codes
+
+# Given a PDB id, get its PRD ligand code
+def get_prd_ligand_code (pdb_id : str) -> Optional[str]:
+    query = '''query structure($id: String!) {
+        entry(entry_id: $id) {
+            pdbx_molecule_features {
+                prd_id
+            }
+        }
+    }'''
+    parsed_response = request_pdb_data(pdb_id, query)
+    prd_id = parsed_response.get('pdbx_molecule_features', {})[0].get('prd_id', None) # AGUS: podría haber casos donde haya más de uno? 
+    if prd_id is None:
+        print(f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}')
+        return None
+    # If the PRD id is not empty then return it
+    return prd_id
 
 # Given a pdb id, get its pubchem ids
 # DANI: De momento no usamos las SMILES que alguna vez me han dado problemas (e.g. 2I3I)

@@ -15,7 +15,7 @@ from math import ceil
 from os.path import exists
 
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name
+from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, reprint
 from model_workflow.utils.type_hints import *
 
 # Perform an hydrogen bonds analysis for each interaction interface
@@ -43,17 +43,6 @@ def hydrogen_bonds (
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
-        return
-
-    # Get all not failed interactions
-    valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
-    
-    # Make sure we have valid interactions
-    # DANI: Esto es temporal, lo suyo sería que las interacciones válidas si sean analizadas
-    # DANI: Lo que pasa es que pronto cambiaré los análisis de interacciones para que se haga 1 por interacción
-    # DANI: De manera que no merece la pena invertir tiempo en dar soporte a esto ahora
-    if len(valid_interactions) != len(interactions):
-        print('There are no valid interactions -> This analysis will be skipped')
         return
     
     # Set a reference system to handle conversions to pytraj topology
@@ -93,6 +82,7 @@ def hydrogen_bonds (
     output_summary = []
 
     # Iterate interactions
+    print()
     for i, interaction in enumerate(interactions):
 
         # If the interaction has coarse grain atoms then just skip it
@@ -103,6 +93,7 @@ def hydrogen_bonds (
 
         # Get the interaction name
         name = interaction['name']
+        reprint(f' Processing {name} ({i+1}/{len(interactions)})')
         # Set a filename for the current interaction data
         numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
 
@@ -115,8 +106,7 @@ def hydrogen_bonds (
         })
 
         # If the analysis already exists then proceed to the next interaction
-        if exists(numbered_output_analysis_filepath):
-            continue
+        if exists(numbered_output_analysis_filepath): continue
         
         # Get interface atom indices
         interface_atom_indices_1 = interaction['interface_atom_indices_1']

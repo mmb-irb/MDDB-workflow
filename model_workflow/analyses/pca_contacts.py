@@ -79,6 +79,9 @@ def pca_contacts(
 
     output_analysis = []
     for interaction in interactions:
+        # DANI: Estos campos ya no están en interactions
+        # DANI: Se pueden recuperar tal y como se hace en distance_per_residue
+        # DANI: No lo hice en su día porque este análisis nunca se ha llegado a usar
         residue_lists = (interaction["pt_residues_1"],
                          interaction["pt_residues_2"])
         # get list of residue pairs and pairwise minimal distances
