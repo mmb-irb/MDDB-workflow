@@ -4,7 +4,7 @@
     <img src="https://github.com/mmb-irb/MDDB-workflow/blob/release/model_workflow/resources/mddb.png?raw=true" width="640" height="320">
 </div>
 
-![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)
+[![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)](https://mddb-workflow.readthedocs.io/en/latest/)
 
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.
