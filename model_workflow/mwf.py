@@ -16,7 +16,6 @@ from glob import glob
 from model_workflow.utils.constants import *
 
 # Import local tools
-from model_workflow.tools.topology_manager import setup_structure
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
@@ -44,6 +43,7 @@ from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files
 from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
 from model_workflow.utils.register import Register
+from model_workflow.utils.cache import Cache
 from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.topologies import Topology
@@ -165,11 +165,21 @@ class MD:
 
         # Set a new MD specific register
         # In case the directory is the project directory itself, use the project register
-        register_file = File(self.pathify(REGISTER_FILENAME))
+        register_filepath = self.pathify(REGISTER_FILENAME)
+        register_file = File(register_filepath)
         if register_file.path == self.project.register.file.path:
             self.register = self.project.register
         else:
             self.register = Register(register_file)
+
+        # Set a new MD specific cache
+        # In case the directory is the project directory itself, use the project cache
+        cache_filepath = self.pathify(CACHE_FILENAME)
+        cache_file = File(cache_filepath)
+        if cache_file.path == self.project.cache.file.path:
+            self.cache = self.project.cache
+        else:
+            self.cache = Cache(cache_file)
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
@@ -514,13 +524,13 @@ class MD:
         # If the file exists but it is new then we must run the tests as well
         elif self.register.is_file_new(output_trajectory_file):
             required_tests.update(TRAJECTORY_TESTS)
-            self.register.reset_cache()
+            self.cache.reset()
         # If the trajectory was modified since the last time then we must run these tests as well
         elif self.register.is_file_modified(output_trajectory_file):
             message = 'Trajectory was modified since the last processing'
             warn(message)
             required_tests.update(TRAJECTORY_TESTS)
-            self.register.reset_cache()
+            self.cache.reset()
 
         # In case there is a topology to be processed...
         if output_topology_file != MISSING_TOPOLOGY:
@@ -551,11 +561,11 @@ class MD:
             if test_result == True or test_result == 'na': continue
             # If the test result is None then it means it has never been run
             # If the test result is false then it means it failed
-            required_tests.update(checking)
+            required_tests.update([checking])
 
         # Check if the processing parameters (filter, image, etc.) have changed since the last time
         # If so, then we must reset all tests and rerun the processing
-        previous_processed_parameters = self.register.cache.get(PROCESSED, None)
+        previous_processed_parameters = self.cache.retrieve(PROCESSED)
         current_processed_parameters = {
             'filter': self.project.filter_selection,
             'image': self.project.image,
@@ -679,7 +689,7 @@ class MD:
 
         # Check if parameters have changed
         # Note that for this specific step only filtering is important
-        previous_filtered_parameters = self.register.cache.get(FILTERED, None)
+        previous_filtered_parameters = self.cache.retrieve(FILTERED)
         current_filtered_parameters = { 'filter': self.project.filter_selection }
         same_filtered_parameters = previous_filtered_parameters == current_filtered_parameters
         
@@ -699,7 +709,7 @@ class MD:
             # Once filetered, rename the trajectory file as completed
             rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
             # Update the cache
-            self.register.update_cache(FILTERED, current_filtered_parameters)
+            self.cache.update(FILTERED, current_filtered_parameters)
 
         # --- provisional reference structure ---
 
@@ -742,7 +752,7 @@ class MD:
 
         # Check if parameters have changed
         # Note that for this step the filter parameters is also important
-        previous_imaged_parameters = self.register.cache.get(IMAGED, None)
+        previous_imaged_parameters = self.cache.retrieve(IMAGED)
         current_imaged_parameters = {
             'filter': self.project.filter_selection,
             'image': self.project.image,
@@ -770,7 +780,7 @@ class MD:
             # Once imaged, rename the trajectory file as completed
             rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
             # Update the cache
-            self.register.update_cache(IMAGED, current_imaged_parameters)
+            self.cache.update(IMAGED, current_imaged_parameters)
             # Update the provisional strucutre coordinates
             imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
             imaged_structure_coords = [ atom.coords for atom in imaged_structure.atoms ]
@@ -789,15 +799,15 @@ class MD:
         # Snapshots are calculated by default from the already processed structure and trajectory
         # For this reason we can not rely on the public snapshots getter
         # We must calculate snapshots here using last step structure and trajectory
-        # If we already have a value in the register cache then use it
-        cached_snapshots = self.register.cache.get(SNAPSHOTS_FLAG, None)
+        # If we already have a value in the cache then use it
+        cached_snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
         if cached_snapshots != None:
             self._snapshots = cached_snapshots
         # Othwerise count the number of snapshots
         else:
             self._snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
-            # Save the snapshots value in the register cache as well
-            self.register.update_cache(SNAPSHOTS_FLAG, self._snapshots)
+            # Save the snapshots value in the cache as well
+            self.cache.update(SNAPSHOTS_FLAG, self._snapshots)
 
         # WARNING:
         # We may need to resort atoms in the structure corrector function
@@ -813,7 +823,7 @@ class MD:
 
         # Correct the structure
         # This function reads and or modifies the following MD variables:
-        #   snapshots, safe_bonds, register, mercy, trust
+        #   snapshots, safe_bonds, register, cache, mercy, trust
         structure_corrector(
             structure = provisional_structure,
             input_trajectory_file = imaged_trajectory_file,
@@ -887,7 +897,7 @@ class MD:
             self.project.register.update_mtime(output_topology_file)
 
         # Update the parameters used to get the last processed structure and trajectory files
-        self.register.update_cache(PROCESSED, current_processed_parameters)
+        self.cache.update(PROCESSED, current_processed_parameters)
 
         # --- Definitive PBC selection ---
 
@@ -1011,15 +1021,15 @@ class MD:
         # The processing logic is able to set the internal snapshots value as well so this avoid repeating the process
         if self.trajectory_file and self._snapshots != None:
             return self._snapshots
-        # If we already have a value in the register cache then use it
-        cached_value = self.register.cache.get(SNAPSHOTS_FLAG, None)
+        # If we already have a value in the cache then use it
+        cached_value = self.cache.retrieve(SNAPSHOTS_FLAG)
         if cached_value != None:
             return cached_value
         # Otherwise we must find the value
         # This happens when the input files are already porcessed and thus we did not yet count the frames
         self._snapshots = get_frames_count(self.structure_file, self.trajectory_file)
-        # Save the snapshots value in the register cache as well
-        self.register.update_cache(SNAPSHOTS_FLAG, self._snapshots)
+        # Save the snapshots value in the cache as well
+        self.cache.update(SNAPSHOTS_FLAG, self._snapshots)
         return self._snapshots
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
@@ -1040,7 +1050,7 @@ class MD:
                 f'{self.structure_file.path} does not exist yet. Are you trying '
                 'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
-        self._structure = setup_structure(self.structure_file.path)
+        self._structure = Structure.from_pdb_file(self.structure_file.path)
         # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds
@@ -1150,7 +1160,6 @@ class MD:
             snapshots = self.snapshots,
             processed_interactions_file = processed_interactions_file,
             mercy = self.project.mercy,
-            register = self.register,
             frames_limit = 1000,
             interaction_cutoff = self.project.interaction_cutoff,
             interactions_auto = self.project.interactions_auto,
@@ -1159,11 +1168,6 @@ class MD:
         )
         return self._processed_interactions
     processed_interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
-
-    def count_valid_interactions (self) -> int:
-        valid_interactions = [ interaction for interaction in self.processed_interactions if not interaction.get('failed', False) ]
-        return len(valid_interactions)
-    valid_interactions_count = property(count_valid_interactions, None, None, "Count of non-failed processed_interactions (read only)")
 
     # Set a function to get input values which may be MD specific
     # If the MD input is missing then we use the project input
@@ -1651,13 +1655,13 @@ class MD:
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         output_analysis_filepath = self.pathify(OUTPUT_DIST_PERRES_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
+        if must_overwrite: purge_glob(output_analysis_filepath)
         # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
         distance_per_residue(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
+            input_topology_filepath = self.structure_file.path,
+            input_trajectory_filepath = self.trajectory_file.path,
+            output_analysis_filepath = output_analysis_filepath,
+            structure = self.structure,
             interactions = self.processed_interactions,
             snapshots = self.snapshots,
             frames_limit = 200,
@@ -2006,8 +2010,6 @@ class Project:
         if self.database_url and self.accession:
             self.remote = Remote(self.database_url, self.accession)
 
-        # Save inputs for the register, even if they are not used in the class
-
         # Set the inputs file
         # Set the expected default name in case there is no inputs file since it may be downloaded
         self._inputs_file = File(self.pathify(DEFAULT_INPUTS_FILENAME))
@@ -2132,8 +2134,14 @@ class Project:
 
         # Set a new entry for the register
         # This is useful to track previous workflow runs and problems
-        register_file = File(self.pathify(REGISTER_FILENAME))
+        register_filepath = self.pathify(REGISTER_FILENAME)
+        register_file = File(register_filepath)
         self.register = Register(register_file)
+
+        # Set the cache
+        cache_filepath = self.pathify(CACHE_FILENAME)
+        cache_file = File(cache_filepath)
+        self.cache = Cache(cache_file)
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
@@ -2574,8 +2582,8 @@ class Project:
         standard_format = self.input_topology_file.format
         return 'topology.' + standard_format
 
-    # Get the processed topology file path
     def get_topology_filepath (self) -> str:
+        """Get the processed topology file path."""
         # If we have a stored value then return it
         if self._topology_filepath:
             return self._topology_filepath
@@ -2584,8 +2592,8 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    # Get the processed topology file
     def get_topology_file (self) -> str:
+        """Get the processed topology file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._topology_file != None:
@@ -2744,8 +2752,8 @@ class Project:
         return self._pdb_ids
     pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
 
-    # PDB references
     def get_pdb_references (self) -> List[dict]:
+        """Get PDB references."""
         # If we already have a stored value then return it
         if self._pdb_references:
             return self._pdb_references
@@ -2769,8 +2777,8 @@ class Project:
         return self._pdb_references
     pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
 
-    # Define the PDB references output file
     def get_pdb_references_file (self) -> File:
+        """Define the PDB references output file."""
         # Set the PDB references file
         pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
         pdb_references_file = File(pdb_references_filepath)
@@ -2870,7 +2878,7 @@ class Project:
         # Otherwise we must find the value
         self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
             structure = self.structure,
-            register = self.register,
+            cache = self.cache,
             input_ligands = self.input_ligands,
             input_pdb_ids = self.pdb_ids,
             output_ligands_filepath = ligand_references_file.path, 

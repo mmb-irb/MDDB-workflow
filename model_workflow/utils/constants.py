@@ -107,8 +107,9 @@ STANDARD_TOPOLOGY_FILENAME = 'topology.json'
 STRUCTURE_FILENAME = 'structure.pdb'
 TRAJECTORY_FILENAME = 'trajectory.xtc'
 
-# Intermediate filenames
+# Auxiliar files
 REGISTER_FILENAME = '.register.json'
+CACHE_FILENAME = '.mwf_cache.json'
 
 # Files saving resorted bonds and charges when we have to resort atoms
 # Note that these files have priority when loading both bonds and charges
@@ -189,7 +190,7 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 # Set register cache flags
 SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
-LIGANDS_DATA = 'ligandata'
+NOT_MATCHED_LIGANDS = 'notmatchedligands'
 
 # Set the different test flags
 STABLE_BONDS_FLAG = 'stabonds'

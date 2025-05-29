@@ -125,7 +125,7 @@ class Remote:
         if is_json:
             request_url += '?format=json'
         # Send the request
-        print(f'Downloading input files ({output_file.path})\n')
+        print(f'Downloading inputs file ({output_file.path})\n')
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except:

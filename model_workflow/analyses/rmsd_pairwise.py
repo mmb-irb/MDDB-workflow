@@ -80,11 +80,8 @@ def rmsd_pairwise(
             'step': frame_step
         }, overall_output_analysis_filepath)
 
-    # Get all not failed interactions
-    valid_interactions = [ interaction for interaction in interactions if not interaction.get('failed', False) ]
-
     # Repeat the analysis with the interface residues of each interaction
-    for i, interaction in enumerate(valid_interactions, 1):
+    for i, interaction in enumerate(interactions, 1):
         # Get the interaction name
         name = interaction['name']
         # Parse the interaction selection
