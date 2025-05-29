@@ -8,6 +8,7 @@ MDDB Workflow
    Introduction <readme>
    usage
    input
+   tasks
    mwf
    develop
 

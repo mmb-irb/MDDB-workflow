@@ -15,11 +15,12 @@ help:
 .PHONY: help Makefile generate_input_docs
 
 # Generate input file documentation from YAML template
-generate_input_docs:
+generate_docs:
 	@python scripts/generate_input_docs.py
+	@python scripts/generate_task_docs.py
 
 # Override the html target to first generate input docs
-html: generate_input_docs
+html: generate_docs
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 # Catch-all target: route all unknown targets to Sphinx using the new
