@@ -2,10 +2,11 @@
 # In addition, interface residues are listed appart
 
 import itertools
+from os.path import exists
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn, reprint
-from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
+from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
 
@@ -42,7 +43,7 @@ def process_interactions (
     trajectory_file : 'File',
     structure : 'Structure',
     snapshots : int,
-    processed_interactions_file : 'File',
+    output_directory : str,
     mercy : List[str],
     frames_limit : int,
     interactions_auto : str,
@@ -53,7 +54,8 @@ def process_interactions (
     interaction_cutoff : float = 0.1,
     ) -> list:
 
-    print('-> Processing interactions')
+    # Set the output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_INTERACTIONS_FILENAME}'
 
     # Set if we are to have mercy when an interaction fails
     have_mercy = STABLE_INTERACTIONS_FLAG in mercy
@@ -225,8 +227,8 @@ def process_interactions (
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
-    if processed_interactions_file.exists:
-        loaded_interactions = load_interactions(processed_interactions_file, structure)
+    if exists(output_analysis_filepath):
+        loaded_interactions = load_interactions(output_analysis_filepath, structure)
         # Make sure the backup has atom indices
         sample = loaded_interactions[0]
         has_atom_indices = 'atom_indices_1' in sample
@@ -344,17 +346,17 @@ def process_interactions (
         file_interactions.append(file_interaction)
     
     # Write them to disk
-    save_json(file_interactions, processed_interactions_file.path, indent = 4)
+    save_json(file_interactions, output_analysis_filepath, indent = 4)
 
     # Finally return the processed interactions
     print(f' There is a total of {len(valid_interactions)} valid interactions')
     return valid_interactions
 
 # Load interactions from an already existing interactions file
-def load_interactions (processed_interactions_file : 'File', structure : 'Structure') -> list:
-    print(f' Using already calculated interactions in {processed_interactions_file.path}')
+def load_interactions (output_analysis_filepath : str, structure : 'Structure') -> list:
+    print(f' Using already calculated interactions in {output_analysis_filepath}')
     # The stored interactions should carry only residue indices and strong bonds
-    interactions = load_json(processed_interactions_file.path)
+    interactions = load_json(output_analysis_filepath)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
         # If the interaction failed then there will be minimal information

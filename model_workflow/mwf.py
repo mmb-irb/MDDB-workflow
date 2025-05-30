@@ -91,9 +91,12 @@ sys.stdout = unbuffered
 # Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
-# Set a special exception for missing properties
+# Set a special exception for missing task function arguments
 # This is used for easy debug when a new functions is added wrongly
-MISSING_PROPERTY_EXCEPTION = Exception('Missing property')
+MISSING_ARGUMENT_EXCEPTION = Exception('Missing argument')
+
+# Set a special exception for when a value is missing
+MISSING_VALUE_EXCEPTION = Exception('Missing value')
 
 # Name of the argument used by all functions to know where to write output
 OUTPUT_DIRECTORY_ARG = 'output_directory'
@@ -130,72 +133,105 @@ class Task:
         self.name = name
         self.func = func
         self.args = args
+        # Set internal values
+        self._value = MISSING_VALUE_EXCEPTION
 
     # When a task is called
     def __call__(self, parent):
+        # First of all check if this task has been already done in this very run
+        # If so then return the stored vale
+        if self._value != MISSING_VALUE_EXCEPTION: return self._value
         # Process the task function arguments
         processed_args = {}
         # Get the task function expected arguments
-        argument_specification = getfullargspec(self.func)
-        expected_arguments = argument_specification.args
-        n_default_arguments = len(argument_specification.defaults)
+        specification = getfullargspec(self.func)
+        expected_arguments = specification.args
+        n_default_arguments = len(specification.defaults) if specification.defaults else 0
+        # Find out which arguments are optional since they have default values
         default_arguments = set(expected_arguments[::-1][:n_default_arguments])
+        # Find out if the function is to return output
+        returns_output = bool(specification.annotations.get('return', None))
         # If one of the argument expected outputs is the output_directory then set it here
         # We will set a new directory with the name of the task, in the correspoding path
         # Note that while the task is beeing done the output directory has a different name
         # Thus the directory is hidden and marked as incomplete
         # The final output directory is the one without the incomplete prefix
-        output_directory = None
+        writes_output = OUTPUT_DIRECTORY_ARG in expected_arguments
+        incomplete_output_directory = None
         final_output_directory = None
-        if OUTPUT_DIRECTORY_ARG in expected_arguments:
+        if writes_output:
             # Set the output directory path
-            output_directory = parent.pathify(INCOMPLETE_PREFIX + self.name)
-            final_output_directory = output_directory.replace(INCOMPLETE_PREFIX, '')
+            incomplete_output_directory = parent.pathify(INCOMPLETE_PREFIX + self.name)
+            final_output_directory = incomplete_output_directory.replace(INCOMPLETE_PREFIX, '')
             # Add it to the processed args
-            processed_args[OUTPUT_DIRECTORY_ARG] = output_directory
+            processed_args[OUTPUT_DIRECTORY_ARG] = incomplete_output_directory
             # Remove the expected argument from the list
             expected_arguments.remove(OUTPUT_DIRECTORY_ARG)
         # Check if this dependency is to be overwriten
         must_overwrite = self.name in parent.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        parent.overwritables.discard(self.name)
-        # If the final directory already exists then we asome the task is done already
-        # We can stop here unless this task is marked for overwrite
-        # If the overwrite argument is passed then we must remove the output directory
-        if final_output_directory and exists(final_output_directory):
-            if must_overwrite: rmtree(final_output_directory)
-            else:
+        # Check if output already exists
+        # If the final directory already exists then it means the task was started in a previous run
+        existing_incomplete_output = writes_output and exists(incomplete_output_directory)
+        # If the final directory already exists then it means the task was done in a previous run
+        existing_final_output = writes_output and exists(final_output_directory)
+        # It should never happend that both directories exist
+        if existing_incomplete_output and existing_final_output:
+            raise RuntimeError('We have incomplete and finished output directories at the same time')
+        # If we must overwrite then purge previous outputs
+        if must_overwrite:
+            if existing_incomplete_output: rmtree(incomplete_output_directory)
+            if existing_final_output: rmtree(final_output_directory)
+        # If the output already exists and it is not to be overwritten
+        elif existing_final_output:
+            # If we must proceed because the analysis returns output then use the final output directory
+            if returns_output:
+                processed_args[OUTPUT_DIRECTORY_ARG] = final_output_directory
+            # If the task is not to return any output then we can skip the task
+            else: 
                 print(f'{GREY_HEADER}-> Task {self.name} already completed{COLOR_END}')
                 return
         # Iterate the reamining expected arguments
         for arg in expected_arguments:
             # First find the argument among the parent properties
-            arg_value = getattr(parent, arg, MISSING_PROPERTY_EXCEPTION)
-            # If the property is missing then search among the additional arguments
-            if arg_value == MISSING_PROPERTY_EXCEPTION:
-                arg_value = self.args.get(arg, MISSING_PROPERTY_EXCEPTION)
-                # NEVER FORGET: Function arguments must have the same name that the Project/MD property
-                # If the argument is still missing then you programmed the function wrongly or...
-                # You may have forgotten the additional argument in the task args
-                if arg_value == MISSING_PROPERTY_EXCEPTION:
-                    # One last exception: it may have a default value
-                    # In that case we let it go
-                    if arg in default_arguments: continue
-                    raise RuntimeError(f'Function "{self.func.__name__}" expects argument "{arg}" but {parent} is missing this property')
+            arg_value = self.find_arg_value(arg, parent, default_arguments)
+            if arg_value == MISSING_ARGUMENT_EXCEPTION: continue
             # Add the processed argument
             processed_args[arg] = arg_value
-        # Create the output directory, if any
-        if output_directory and not exists(output_directory):
-            mkdir(output_directory)
+        # Create the output directory, if necessary
+        missing_incomplete_output = writes_output and not exists(incomplete_output_directory) and not exists(final_output_directory)
+        if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
         print(f'{GREEN_HEADER}-> Running task {self.name}{COLOR_END}')
-        self.func(**processed_args)
-        # As a brief cleanup, if the output directory is empty, then remove it
+        result = self.func(**processed_args)
+        # Update the overwritables so this is not remade further in the same run
+        parent.overwritables.discard(self.name)
+        # As a brief cleanup, if the output directory is empty at the end, then remove it
         # Otheriwse, change the incomplete directory name to its final name
-        if output_directory:
-            if is_directory_empty(output_directory): rmtree(output_directory)
-            else: rename(output_directory, final_output_directory)
+        if writes_output and exists(incomplete_output_directory):
+            if is_directory_empty(incomplete_output_directory): rmtree(incomplete_output_directory)
+            else: rename(incomplete_output_directory, final_output_directory)
+        # Now return the function result
+        return result
 
+    # Find argument values, thus running any dependency
+    def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
+        # First find the argument among the parent properties
+        arg_value = getattr(parent, arg, MISSING_ARGUMENT_EXCEPTION)
+        if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
+        # If the parent is an MD then it may happen the property is from the Project
+        if isinstance(parent, MD):
+            arg_value = getattr(parent.project, arg, MISSING_ARGUMENT_EXCEPTION)
+            if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
+        # If the property is missing then search among the additional arguments
+        arg_value = self.args.get(arg, MISSING_ARGUMENT_EXCEPTION)
+        if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
+        # It may also happen that the argument has a default value
+        # If this is the case then we can skip it
+        if arg in default_arguments: return MISSING_ARGUMENT_EXCEPTION
+        # NEVER FORGET: Function arguments must have the same name that the Project/MD property
+        # If the argument is still missing then you programmed the function wrongly or...
+        # You may have forgotten the additional argument in the task args
+        raise RuntimeError(f'Function "{self.func.__name__}" expects argument "{arg}" but it is missing')
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -1234,40 +1270,7 @@ class MD:
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
     # The processed interactions
-    # This is a bit exceptional since it is a value to be used and an analysis file to be generated
-    def get_processed_interactions (self) -> List[dict]:
-        # If we already have a stored value then return it
-        if self._processed_interactions != None:
-            return self._processed_interactions
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the processed interactions file
-        processed_interactions_filepath = self.pathify(OUTPUT_PROCESSED_INTERACTIONS_FILENAME)
-        processed_interactions_file = File(processed_interactions_filepath)
-        # If the file already exists then processed interactions will be read from it
-        # If we must overwrite then we must delete it here
-        if processed_interactions_file.exists and must_overwrite:
-            processed_interactions_file.remove()
-        # Otherwise, process interactions
-        self._processed_interactions = process_interactions(
-            input_interactions = self.input_interactions,
-            structure_file = self.structure_file,
-            trajectory_file = self.trajectory_file,
-            structure = self.structure,
-            snapshots = self.snapshots,
-            processed_interactions_file = processed_interactions_file,
-            mercy = self.project.mercy,
-            frames_limit = 1000,
-            interaction_cutoff = self.project.interaction_cutoff,
-            interactions_auto = self.project.interactions_auto,
-            ligand_map = self.project.ligand_map,
-            pbc_selection = self.pbc_selection,
-        )
-        return self._processed_interactions
+    get_processed_interactions = Task('interactions', process_interactions, { 'frames_limit': 1000 })
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     # Set a function to get input values which may be MD specific
@@ -1446,11 +1449,6 @@ class MD:
     def get_protein_map (self) -> dict:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
-
-    # Set if MDs are time dependent
-    def check_is_time_dependent (self) -> bool:
-        return self.project.is_time_dependent
-    is_time_dependent = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
     # Reference frame
     # Frame to be used when representing the MD
@@ -1774,62 +1772,13 @@ class MD:
         )
 
     # Hydrogen bonds
+    # WARNING: the output file size depends on the number of hydrogen bonds
+    # WARNING: analyses must be no heavier than 16Mb in BSON format
+    # WARNING: In case of large surface interaction the output analysis may be larger than the limit
     run_hbonds_analysis = Task('hbonds', hydrogen_bonds, { 'time_splits': 100 })
-    # def run_hbonds_analysis (self):
-    #     # Get the task name
-    #     task = self._get_task()
-    #     # Check if this dependency is to be overwriten
-    #     must_overwrite = task in self.overwritables
-    #     # Update the overwritables so this is not remade further in the same run
-    #     self.overwritables.discard(task)
-    #     # Do not run the analysis if the output file already exists
-    #     output_analysis_filepath = self.pathify(OUTPUT_HBONDS_FILENAME)
-    #     if exists(output_analysis_filepath) and not must_overwrite:
-    #         return
-    #     # If the analysis is to be overwritten then delete all previous outputs
-    #     if must_overwrite:
-    #         glob_pattern = glob_filename(output_analysis_filepath)
-    #         existing_outputs = glob(glob_pattern)
-    #         for existing_output in existing_outputs:
-    #             if exists(existing_output):
-    #                 remove(existing_output)
-    #     # Run the the analysis
-    #     # WARNING: the output file size depends on the number of hydrogen bonds
-    #     # WARNING: analyses must be no heavier than 16Mb in BSON format
-    #     # WARNING: In case of large surface interaction the output analysis may be larger than the limit
-    #     hydrogen_bonds(
-    #         input_topology_filepath = self.structure_file.path,
-    #         input_trajectory_filepath = self.trajectory_file.path,
-    #         output_analysis_filepath = output_analysis_filepath, # For the new version
-    #         populations = self.populations,
-    #         structure = self.structure,
-    #         interactions = self.interactions,
-    #         is_time_dependend = self.project.is_time_dependend,
-    #         time_splits = 100,
-    #     )
 
-    # SASA, solvent accessible surfave analysis
-    def run_sas_analysis (self):
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_SASA_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        sasa(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            pbc_residues = self.pbc_residues,
-            snapshots = self.snapshots,
-            frames_limit = 100,
-        )
+    # SASA, solvent accessible surface analysis
+    run_sas_analysis = Task('sas', sasa, { 'frames_limit': 100 })
 
     # Energies
     def run_energies_analysis (self):

@@ -149,7 +149,7 @@ OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.clusters_*_screenshot_??.jpg'
 
 # Set analyses files to be generated
-OUTPUT_PROCESSED_INTERACTIONS_FILENAME = 'mda.interactions.json'
+OUTPUT_INTERACTIONS_FILENAME = 'mda.interactions.json'
 OUTPUT_RMSDS_FILENAME = 'mda.rmsds.json'
 OUTPUT_TMSCORES_FILENAME = 'mda.tmscores.json'
 OUTPUT_RMSF_FILENAME = 'mda.fluctuation.json'
