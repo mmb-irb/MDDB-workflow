@@ -117,9 +117,12 @@ md_requestables = {}
 # Set a class to handle a generic task
 class Task:
     def __init__ (self,
-        # The task name
+        # The task flag
         # This name is to be used by the include/exclude/overwrite arguments
         # It will also name the folder containing all analysis output
+        flag : str,
+        # The task nice name
+        # This user-firendly name is to be used in the logs
         name : str,
         # The task function
         # Function argument names must correspond with Project/MD property names
@@ -130,6 +133,7 @@ class Task:
         args : dict,
     ):
         # Save input arguments
+        self.flag = flag
         self.name = name
         self.func = func
         self.args = args
@@ -152,7 +156,7 @@ class Task:
         # Find out if the function is to return output
         returns_output = bool(specification.annotations.get('return', None))
         # If one of the argument expected outputs is the output_directory then set it here
-        # We will set a new directory with the name of the task, in the correspoding path
+        # We will set a new directory with the flag name of the task, in the correspoding path
         # Note that while the task is beeing done the output directory has a different name
         # Thus the directory is hidden and marked as incomplete
         # The final output directory is the one without the incomplete prefix
@@ -161,14 +165,14 @@ class Task:
         final_output_directory = None
         if writes_output:
             # Set the output directory path
-            incomplete_output_directory = parent.pathify(INCOMPLETE_PREFIX + self.name)
+            incomplete_output_directory = parent.pathify(INCOMPLETE_PREFIX + self.flag)
             final_output_directory = incomplete_output_directory.replace(INCOMPLETE_PREFIX, '')
             # Add it to the processed args
             processed_args[OUTPUT_DIRECTORY_ARG] = incomplete_output_directory
             # Remove the expected argument from the list
             expected_arguments.remove(OUTPUT_DIRECTORY_ARG)
         # Check if this dependency is to be overwriten
-        must_overwrite = self.name in parent.overwritables
+        must_overwrite = self.flag in parent.overwritables
         # Check if output already exists
         # If the final directory already exists then it means the task was started in a previous run
         existing_incomplete_output = writes_output and exists(incomplete_output_directory)
@@ -188,7 +192,7 @@ class Task:
                 processed_args[OUTPUT_DIRECTORY_ARG] = final_output_directory
             # If the task is not to return any output then we can skip the task
             else: 
-                print(f'{GREY_HEADER}-> Task {self.name} already completed{COLOR_END}')
+                print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
                 return
         # Iterate the reamining expected arguments
         for arg in expected_arguments:
@@ -201,10 +205,10 @@ class Task:
         missing_incomplete_output = writes_output and not exists(incomplete_output_directory) and not exists(final_output_directory)
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
-        print(f'{GREEN_HEADER}-> Running task {self.name}{COLOR_END}')
+        print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
         result = self.func(**processed_args)
         # Update the overwritables so this is not remade further in the same run
-        parent.overwritables.discard(self.name)
+        parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
         # Otheriwse, change the incomplete directory name to its final name
         if writes_output and exists(incomplete_output_directory):
@@ -1270,7 +1274,8 @@ class MD:
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
     # The processed interactions
-    get_processed_interactions = Task('interactions', process_interactions, { 'frames_limit': 1000 })
+    get_processed_interactions = Task('inter', 'Interaccions processing',
+        process_interactions, { 'frames_limit': 1000 })
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     # Set a function to get input values which may be MD specific
@@ -1775,10 +1780,12 @@ class MD:
     # WARNING: the output file size depends on the number of hydrogen bonds
     # WARNING: analyses must be no heavier than 16Mb in BSON format
     # WARNING: In case of large surface interaction the output analysis may be larger than the limit
-    run_hbonds_analysis = Task('hbonds', hydrogen_bonds, { 'time_splits': 100 })
+    run_hbonds_analysis = Task('hbonds', 'Hydrogen bonds analysis',
+        hydrogen_bonds, { 'time_splits': 100 })
 
     # SASA, solvent accessible surface analysis
-    run_sas_analysis = Task('sas', sasa, { 'frames_limit': 100 })
+    run_sas_analysis = Task('sas', 'Solvent accessible surface analysis',
+        sasa, { 'frames_limit': 100 })
 
     # Energies
     def run_energies_analysis (self):
@@ -3212,7 +3219,7 @@ md_requestables = {
     **md_input_files,
     **md_processed_files,
     **analyses,
-    'interactions': MD.get_processed_interactions,
+    'inter': MD.get_processed_interactions,
     'mdmeta': MD.get_metadata_file,
 }
 # Requestables for the console
@@ -3227,7 +3234,7 @@ DEPENDENCY_FLAGS = {
     'setup': list(processed_files.keys()),
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
-    'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
+    'interdeps': [ 'inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
 }
 
 # The actual main function
@@ -3306,7 +3313,7 @@ def workflow (
             'chains',
             # MD tasks
             'mdmeta',
-            'interactions',
+            'inter',
             *default_analyses.keys(),
         ]
         # WARNING: Do not run helical by default, it will fail in the default environment
