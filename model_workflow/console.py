@@ -89,11 +89,12 @@ class CustomArgumentParser(ArgumentParser):
         # Check for subcommand in sys.argv
         import sys
         # Extract subcommand from command line if it exists
-        subcommands = [choice for action in self._subparsers._actions 
-                      if isinstance(action, _SubParsersAction)
-                      for choice in action.choices]
-        if len(sys.argv) > 1 and sys.argv[1] in subcommands:
-            self.subcommand = sys.argv[1]
+        if hasattr(self, '_subparsers') and self._subparsers is not None:
+            subcommands = [choice for action in self._subparsers._actions
+                          if isinstance(action, _SubParsersAction)
+                          for choice in action.choices]
+            if len(sys.argv) > 1 and sys.argv[1] in subcommands:
+                self.subcommand = sys.argv[1]
             
         # Now continue with your existing logic
         if hasattr(self, 'subcommand') and self.subcommand:
