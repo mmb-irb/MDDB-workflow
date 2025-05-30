@@ -23,6 +23,7 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files, is_directory_empty
 from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
+from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
 from model_workflow.utils.conversions import convert
@@ -101,6 +102,9 @@ MISSING_VALUE_EXCEPTION = Exception('Missing value')
 # Name of the argument used by all functions to know where to write output
 OUTPUT_DIRECTORY_ARG = 'output_directory'
 
+# Set the name of the section in the cache where argument value cksums are saved
+CACHE_ARG_CKSUMS = 'arg_cksums'
+
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
 fix_gromacs_masses()
@@ -171,8 +175,20 @@ class Task:
             processed_args[OUTPUT_DIRECTORY_ARG] = incomplete_output_directory
             # Remove the expected argument from the list
             expected_arguments.remove(OUTPUT_DIRECTORY_ARG)
+        # Iterate the reamining expected arguments
+        for arg in expected_arguments:
+            # First find the argument among the parent properties
+            arg_value = self.find_arg_value(arg, parent, default_arguments)
+            if arg_value == MISSING_ARGUMENT_EXCEPTION: continue
+            # Add the processed argument
+            processed_args[arg] = arg_value
         # Check if this dependency is to be overwriten
         must_overwrite = self.flag in parent.overwritables
+        # Check if inputs changed
+        # WARNING: Always check if inputs changed, since this function updates the cache
+        inputs_changed = self.did_inputs_change(parent, processed_args)
+        # If inputs changed then we must overwrite outputs as well
+        if inputs_changed: must_overwrite = True
         # Check if output already exists
         # If the final directory already exists then it means the task was started in a previous run
         existing_incomplete_output = writes_output and exists(incomplete_output_directory)
@@ -194,15 +210,10 @@ class Task:
             else: 
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
                 return
-        # Iterate the reamining expected arguments
-        for arg in expected_arguments:
-            # First find the argument among the parent properties
-            arg_value = self.find_arg_value(arg, parent, default_arguments)
-            if arg_value == MISSING_ARGUMENT_EXCEPTION: continue
-            # Add the processed argument
-            processed_args[arg] = arg_value
         # Create the output directory, if necessary
-        missing_incomplete_output = writes_output and not exists(incomplete_output_directory) and not exists(final_output_directory)
+        missing_incomplete_output = writes_output \
+            and not exists(incomplete_output_directory) \
+            and not exists(final_output_directory)
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
         print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
@@ -236,6 +247,40 @@ class Task:
         # If the argument is still missing then you programmed the function wrongly or...
         # You may have forgotten the additional argument in the task args
         raise RuntimeError(f'Function "{self.func.__name__}" expects argument "{arg}" but it is missing')
+    
+    # Find out if inputs changed regarding the last run
+    def did_inputs_change (self, parent : Union['Project', 'MD'], processed_args : dict) -> bool:
+        # Get cache argument references
+        all_cksums = parent.cache.retrieve(CACHE_ARG_CKSUMS, {})
+        task_cksums = all_cksums.get(self.func.__name__, None)
+        if task_cksums == None:
+            task_cksums = {}
+            all_cksums[self.func.__name__] = task_cksums
+        # Check argument by argument
+        # Keep a list with arguments which have changed
+        unmatched_arguments = []
+        for arg_name, arg_value in processed_args.items():
+            # Skip the output directory argument
+            # Changes in this argument are not actual changes
+            if arg_name == OUTPUT_DIRECTORY_ARG: continue
+            # Get the cksum from the new argument value
+            new_cksum = get_cksum_id(arg_value)
+            # Retrieve the cksum from the old argument value
+            old_cksum = task_cksums.get(arg_name, None)
+            # Compare new and old cksums
+            if new_cksum != old_cksum:
+                # If we found a missmatch then add it to the list
+                unmatched_arguments.append(arg_name)
+                # Update the references
+                task_cksums[arg_name] = new_cksum
+        # If we found no missmatch then stop here
+        if len(unmatched_arguments) == 0: return False
+        # If there were differences then update the cache
+        parent.cache.update(CACHE_ARG_CKSUMS, all_cksums)
+        # Report the differences found
+        changes = ', '.join(unmatched_arguments)
+        #print(f'Task {self.flag} is to be run again since some inputs have changed: {changes}')
+        return True
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible

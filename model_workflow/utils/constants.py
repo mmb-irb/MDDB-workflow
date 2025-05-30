@@ -37,6 +37,9 @@ TEXT_EDITORS = {
 # Keep only those editor which are already installed
 AVAILABLE_TEXT_EDITORS = { name: command for name, command in TEXT_EDITORS.items() if which(command) }
 
+# Set dates format
+DATE_STYLE = '%d-%m-%Y %H:%M:%S'
+
 # Database
 DEFAULT_API_URL = 'https://irb-dev.mddbr.eu/api/'
 

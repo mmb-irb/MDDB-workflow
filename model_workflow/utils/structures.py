@@ -1677,33 +1677,39 @@ class Structure:
         return self._dummy_atom_indices
     dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
 
+    # Generate a pdb file content with the current structure
+    def generate_pdb (self):
+        content = 'REMARK workflow generated pdb file\n'
+        for a, atom in enumerate(self.atoms):
+            residue = atom.residue
+            index = str((a+1) % 100000).rjust(5)
+            name = ' ' + atom.name.ljust(3) if len(atom.name) < 4 else atom.name
+            residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
+            chain = atom.chain
+            chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
+            residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
+            # If residue number is longer than 4 characters then we must parse to hexadecimal
+            if len(residue_number) > 4:
+                residue_number = hex(residue.number)[2:].rjust(4)
+            icode = residue.icode if residue.icode and len(residue.icode) else ' '
+            # Make sure we have atom coordinates
+            if atom.coords == None:
+                raise InputError('Trying to write a PDB file from a structure with atoms without coordinates')
+            x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in atom.coords ]
+            occupancy = '1.00' # Just a placeholder
+            temp_factor = '0.00' # Just a placeholder
+            element = atom.element.rjust(2)
+            atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name
+                + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
+                + '  ' + occupancy + '  ' + temp_factor + '          ' + element).ljust(80) + '\n'
+            content += atom_line
+        return content
+
     # Generate a pdb file with current structure
     def generate_pdb_file (self, pdb_filepath : str):
+        pdb_content = self.generate_pdb()
         with open(pdb_filepath, "w") as file:
-            file.write('REMARK workflow generated pdb file\n')
-            for a, atom in enumerate(self.atoms):
-                residue = atom.residue
-                index = str((a+1) % 100000).rjust(5)
-                name = ' ' + atom.name.ljust(3) if len(atom.name) < 4 else atom.name
-                residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
-                chain = atom.chain
-                chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
-                residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
-                # If residue number is longer than 4 characters then we must parse to hexadecimal
-                if len(residue_number) > 4:
-                    residue_number = hex(residue.number)[2:].rjust(4)
-                icode = residue.icode if residue.icode and len(residue.icode) else ' '
-                # Make sure we have atom coordinates
-                if atom.coords == None:
-                    raise InputError('Trying to write a PDB file from a structure with atoms without coordinates')
-                x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in atom.coords ]
-                occupancy = '1.00' # Just a placeholder
-                temp_factor = '0.00' # Just a placeholder
-                element = atom.element.rjust(2)
-                atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name
-                    + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
-                    + '  ' + occupancy + '  ' + temp_factor + '          ' + element).ljust(80) + '\n'
-                file.write(atom_line)
+            file.write(pdb_content)
 
     # Get the structure equivalent prody topology
     def get_prody_topology (self):

@@ -1,9 +1,11 @@
 from os import remove, symlink, rename, readlink
-from os.path import exists, isabs, abspath, relpath, split, islink, normpath
+from os.path import exists, isabs, abspath, relpath, split, islink, normpath, getmtime, getsize
+from time import strftime, gmtime
 from shutil import copyfile
 from typing import Optional
 
-from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT, GLOBALS
+from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
+from model_workflow.utils.constants import DATE_STYLE, GLOBALS
 from model_workflow.utils.auxiliar import InputError
 
 LOCAL_PATH = '.'
@@ -84,6 +86,17 @@ class File:
             raise InputError(f'Not recognized format extension "{self.extension}" from file "{self.filename}"')
         return extension_format
     format = property(get_format, None, None, "File standard format (read only)")
+
+    # Get the file last modification time
+    def get_mtime (self) -> str:
+        raw_mtime = getmtime(self.path)
+        return strftime(DATE_STYLE, gmtime(raw_mtime))
+    mtime = property(get_mtime, None, None, "File last modification date (read only)")
+
+    # Get the file size in bytes
+    def get_size (self) -> str:
+        return getsize(self.path)
+    size = property(get_size, None, None, "File size in bytes (read only)")
 
     # Set a couple of additional functions according to pytraj format requirements
     def is_pytraj_supported (self) -> bool:

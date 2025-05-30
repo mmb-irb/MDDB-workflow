@@ -1,13 +1,11 @@
 from sys import argv
-from os.path import exists, getmtime
+from os.path import exists
 from datetime import datetime
-from time import strftime, gmtime
 
 from model_workflow.utils.auxiliar import load_json, save_json, warn
+from model_workflow.utils.constants import DATE_STYLE
 from model_workflow.utils.type_hints import *
 
-# Set dates format
-date_style = '%d-%m-%Y %H:%M:%S'
 
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
 # It is also responsible for storing test failure warnings to be written in metadata
@@ -20,7 +18,7 @@ class Register:
         quoted_argv = [ f"'{arg}'" if ' ' in arg else arg for arg in argv ]
         self.call = ' '.join(quoted_argv)
         # Save the current date
-        self.date = datetime.today().strftime(date_style)
+        self.date = datetime.today().strftime(DATE_STYLE)
         # Set record for the modification times of processed input files
         # This allows to know if any of those files have been modified and thus we must reset some register fields
         self.mtimes = {}
@@ -64,8 +62,7 @@ class Register:
 
     # Get new and previous mtimes of a target file
     def get_mtime (self, target_file : 'File') -> tuple:
-        new_raw_mtime = getmtime(target_file.path)
-        new_mtime = strftime(date_style, gmtime(new_raw_mtime))
+        new_mtime = target_file.mtime
         previous_mtime = self.mtimes.get(target_file.filename, None)
         return new_mtime, previous_mtime
 
