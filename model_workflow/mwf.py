@@ -11,6 +11,7 @@ import io
 import re
 import numpy
 from glob import glob
+from MDAnalysis import Universe
 
 # Constants
 from model_workflow.utils.constants import *
@@ -26,6 +27,7 @@ from model_workflow.tools.chains import generate_chain_references
 from model_workflow.tools.generate_pdb_references import generate_pdb_references
 from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
+from model_workflow.tools.generate_lipid_references import generate_lipid_references
 from model_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
@@ -51,6 +53,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
 from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
 from model_workflow.utils.selections import Selection
+from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.utils.type_hints import *
 
 # Import local analyses
@@ -2129,10 +2132,12 @@ class Project:
         self._pdb_references = None
         self._protein_map = None
         self._ligand_map = None
+        self._lipid_map = None
         self._membrane_map = None
         self.pubchem_name_list = None
         self._residue_map = None
         self._mds = None
+        self._universe = None
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
@@ -2907,6 +2912,45 @@ class Project:
         return ligand_references_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
+    def get_lipid_map (self) -> List[dict]:
+        # If we already have a stored value then return it
+        if self._lipid_map:
+            return self._lipid_map
+        # Get the task name
+        task = self._get_task()
+        # Check if this dependency is to be overwriten
+        must_overwrite = task in self.overwritables
+        # Update the overwritables so this is not remade further in the same run
+        self.overwritables.discard(task)
+        # Set the lipid mapping file
+        lipid_map_filepath = self.pathify(LIPID_REFERENCES_FILENAME)
+        lipid_map_file = File(lipid_map_filepath)
+        # If the file already exists then send it
+        if lipid_map_file.exists and not must_overwrite:
+            self._lipid_map =  load_json(lipid_map_file.path)
+        else:
+            self._lipid_map = generate_lipid_references(
+                structure = self.structure,
+                universe = self.universe,
+            )   
+        if self._lipid_map is None or len(self._lipid_map) == 0:
+            print('No lipids available. Related analyses will be skipped.')
+        return self._lipid_map
+    lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
+
+        # Define the output file of the lipid mapping including lipid references
+    def get_lipid_references_file (self) -> File:
+        # Set the lipid references file
+        lipid_references_filepath = self.pathify(LIPID_REFERENCES_FILENAME)
+        lipid_references_file = File(lipid_references_filepath)
+        # Ask for the map thus producing the requested output file
+        # WARNING: We must always run the map, no matter if the file already exists
+        # WARNING: There could be a pending overwrite to run
+        # WARNING: Also note that if it was run already it won't run again
+        self.get_lipid_map()
+        return lipid_references_file
+    lipid_references_file = property(get_lipid_references_file, None, None, "File including lipid references data mined from PubChem (read only)")
+
     def get_membrane_map (self) -> List[dict]:
         """Get mapping of residues in the membrane."""
         # If we already have a stored value then return it
@@ -2926,9 +2970,9 @@ class Project:
             self._membrane_map =  load_json(mem_map_file.path)
         else:
             self._membrane_map = generate_membrane_mapping(
-                structure = self.structure,
-                topology_file=self.standard_topology_file,
+                lipid_map = self.lipid_map,
                 structure_file=self.structure_file,
+                universe = self.universe,
             )   
         if self._membrane_map is None or self._membrane_map['n_mems'] == 0:
             print('No membrane available. Related analyses will be skipped.')
@@ -3040,6 +3084,19 @@ class Project:
         return screenshot_file
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
+    def get_MDAnalysis_Universe (self):
+        if self._universe:
+            return self._universe
+        # Check the topology has charges or the code further will fail
+        topology_data = load_json(self.standard_topology_file.absolute_path)
+
+        assert self.standard_topology_file.extension == 'json', 'Input topology file must be in json format: ' + \
+            self.standard_topology_file.extension
+        
+        mda_top = to_MDAnalysis_topology(self.standard_topology_file.absolute_path)
+        self._universe = Universe(mda_top, self.structure_file.absolute_path)
+        return self._universe
+    universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
 
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
 
@@ -3149,11 +3206,11 @@ project_requestables = {
     'pdbs': Project.get_pdb_references,
     'mapping': Project.get_protein_map,
     'ligands': Project.get_ligand_map,
+    'lipids': Project.get_lipid_map,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
-    'membrane': Project.get_membrane_map, 
     'membranes': Project.get_membrane_map, 
 }
 # MD requestable tasks
