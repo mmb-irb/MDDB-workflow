@@ -1449,8 +1449,8 @@ class MD:
 
     # Set if MDs are time dependent
     def check_is_time_dependent (self) -> bool:
-        return self.project.is_time_dependend
-    is_time_dependend = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
+        return self.project.is_time_dependent
+    is_time_dependent = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
     # Reference frame
     # Frame to be used when representing the MD
