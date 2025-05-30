@@ -55,7 +55,7 @@ def get_connected_residues(
     return list(all_external_bonds)
 
 
-def process_residue(res_atoms: 'MDAnalysis.AtomGroup', 
+def residue_to_inchi(res_atoms: 'MDAnalysis.AtomGroup', 
                     resindex : int) -> Tuple[str, str, int]:
     """
     Process a single residue to get its InChI key and related information.
@@ -88,9 +88,16 @@ def get_inchi_keys (
         structure (Structure): The Structure object containing residues.
 
     Returns:
-        dict: A dictionary where keys are InChI keys and values are dictionaries containing
-            residue information such as associated residues, InChI strings, bond information,
-            and classification.
+        dict: A dictionary where keys are InChI keys and values are dictionaries containing:
+                - 'inchi' (str): The InChI string for the residue
+                - 'resindices' (list): A list of all residue indices with this InChI key
+                - 'resgroups' (list): Lists of residue indices that are connected as a single group
+                - 'resname' (set): Set of residue names associated with this InChI key
+                - 'classification' (set): Set of residue classifications for this InChI key
+    Notes:
+        The function also performs consistency checks, warning if multiple residue names 
+        map to the same InChI key or if multiple InChI keys map to the same residue name,
+        which can indicate mismatched residue definitions or stereoisomers.
     """
     # 1) Prepare residue data for parallel processing (not yet implemented)
     # First group residues that are bonded together
@@ -111,7 +118,7 @@ def get_inchi_keys (
         # Select residues atoms with MDAnalysis
         res_atoms = u.residues[res_grp_idx].atoms
         # Convert to RDKit and get InChI data
-        results.append(process_residue(res_atoms,res_grp_idx))
+        results.append(residue_to_inchi(res_atoms,res_grp_idx))
 
     # 2) Process results and build dictionaries
     key_2_name = {} # To see if different name for same residue
