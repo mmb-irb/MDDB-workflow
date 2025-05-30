@@ -6,21 +6,23 @@ build-backend = "setuptools.build_meta"
 name = "model_workflow"
 version = "0.0.1"
 requires-python = ">=3.9.0"
-dependencies = [
-    'argparse',
-]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
 ]
+docs = [
+    "sphinx",
+    "sphinx_rtd_theme",
+    "myst-parser",
+]
 
 [project.scripts]
 mwf = "model_workflow.console:main"
 
 [tool.setuptools]
-packages = ["model_workflow"]
+packages = ["model_workflow", "model_workflow.analyses", "model_workflow.tools", "model_workflow.utils"]
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -30,4 +32,19 @@ include-package-data = true
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+
+[tool.conda-deny]
+safe-licenses = [
+    "Apache-2.0",
+    "Unlicense",
+    "WTFPL",
+    "MIT",
+    "PSF-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "LGPL-2.1-or-later",
+    "LGPL-2.1-only",
+    "Zlib",
 ]

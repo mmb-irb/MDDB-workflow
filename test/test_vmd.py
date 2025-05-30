@@ -8,13 +8,13 @@ from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 
 class TestVMD:
     @pytest.fixture(scope="class", autouse=True)
-    def test_accession(self):
-        """Override the default accession with a test-specific one"""
-        return "A01JP.1"  # Different accession for this test file
-
-    @pytest.fixture(scope="class", autouse=True)
     def analysis_type(self):
         return "interactions"
+
+    @pytest.fixture(scope="class", autouse=True)
+    def test_accession(self):
+        """Override the default accession with a test-specific one"""
+        return "A01JP.1"  # Different accession for this test fil
 
     # Test for escape_tcl_selection
     def test_escape_tcl_selection(self):
@@ -42,7 +42,6 @@ class TestVMD:
 
     # Test for get_interface_atom_indices and get_covalent_bonds_between
     def test_get_interface(self, analysis_file, structure, structure_file, trajectory_file, inputs_file):
-        print("test_get_interface",analysis_file)
         ref_inter = load_interactions(analysis_file, structure)
 
         inputs_file = load_yaml(inputs_file.path)

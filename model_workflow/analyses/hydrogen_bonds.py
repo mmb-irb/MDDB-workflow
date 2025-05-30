@@ -31,7 +31,7 @@ def hydrogen_bonds (
     populations : Optional[List[float]],
     structure : 'Structure',
     interactions : list,
-    is_time_dependend : bool,
+    is_time_dependent : bool,
     # Number of splits along the trajectory
     time_splits : int,
     # Explicit values for the most populated frames is saved apart
@@ -201,7 +201,7 @@ def hydrogen_bonds (
             overall_percent = sum(hbond_values) / snapshots
             hbond_overall.append(overall_percent)
             # The last part is done only when the simulation is time dependent
-            if not is_time_dependend: continue
+            if not is_time_dependent: continue
             # Now split the whole trajectory in time slots and calculate hbonds percents for every slot
             temporal_percents = []
             for i in range(nsteps):
@@ -219,7 +219,7 @@ def hydrogen_bonds (
             'hbonds': hbond_overall,
             'version': '1.0.0'
         }
-        if is_time_dependend:
+        if is_time_dependent:
             interaction_data['hbonds_timed'] = hbond_timed
         # DANI: Esto el cliente aún no lo soporta y me he quedado sin tiempo
         # DANI: De momento todo lo que sea ensemble que tire de mostar el overall y listo

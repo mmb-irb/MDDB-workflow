@@ -227,11 +227,12 @@ class MD:
         # Save the directory
         # If it is an absolute then make it relative to the project
         if isabs(directory):
-            # This function alreadt removes the final slash
+            # This function already removes the final slash
             self.directory = relpath(directory, self.project.directory)
         # Otherwise save it as is but just removing the final slash (if any)
         else:
             self.directory = remove_final_slash(directory)
+        self.directory = self.project.pathify(self.directory)
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
@@ -301,8 +302,8 @@ class MD:
 
     # Input structure file ------------
 
-    # Set a function to get input structure file path
     def get_input_structure_filepath (self) -> str:
+        """Set a function to get input structure file path"""
         # Set a function to find out if a path is relative to MD directories or to the project directory
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
@@ -379,9 +380,9 @@ class MD:
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')
 
-    # Get the input pdb filename from the inputs
-    # If the file is not found try to download it
     def get_input_structure_file (self) -> str:
+        """Get the input pdb filename from the inputs.
+        If the file is not found try to download it."""
         # If the input structure file is already defined then return it
         if self._input_structure_file:
             return self._input_structure_file
@@ -409,8 +410,8 @@ class MD:
 
     # Input trajectory filename ------------
 
-    # Set a function to get input trajectory file paths
     def get_input_trajectory_filepaths (self) -> str:
+        """Set a function to get input trajectory file paths."""
         # Set a function to check and fix input trajectory filepaths
         # Also relativize paths to the current MD directory and parse glob notation
         def relativize_and_parse_paths (input_paths : List[str]) -> List[str]:
@@ -495,9 +496,9 @@ class MD:
         # If there is no trajectory available then we surrender
         raise InputError('There is not input trajectory at all')
 
-    # Get the input trajectory filename(s) from the inputs
-    # If file(s) are not found try to download it
     def get_input_trajectory_files (self) -> str:
+        """Get the input trajectory filename(s) from the inputs.
+        If file(s) are not found try to download it."""
         # If we already defined input trajectory files then return them
         if self._input_trajectory_files != None:
             return self._input_trajectory_files
@@ -529,8 +530,8 @@ class MD:
         return self._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
-    # MD specific inputs
     def get_md_inputs (self) -> dict:
+        """MD specific inputs."""
         # If we already have a value stored then return it
         if self._md_inputs:
             return self._md_inputs
@@ -562,11 +563,10 @@ class MD:
 
     # ---------------------------------
 
-    # Check if a file exists
-    # If not, try to download it from the database
-    # If the file is not found in the database it is fine, we do not even warn the user
-    # Note that this function is used to get populations and transitions files, which are not common
     def get_file (self, target_file : File) -> bool:
+        """Check if a file exists. If not, try to download it from the database.
+        If the file is not found in the database it is fine, we do not even warn the user.
+        Note that this function is used to get populations and transitions files, which are not common."""
         # If it exists we are done
         if target_file.exists:
             return True
@@ -584,10 +584,9 @@ class MD:
 
     # Processed files ----------------------------------------------------      
 
-    # Process input files to generate the processed files
-    # This process corrects and standarizes the topology, the trajectory and the structure
     def process_input_files (self):
-
+        """Process input files to generate the processed files.
+        This process corrects and standarizes the topology, the trajectory and the structure."""
         # Set the input filepaths
         input_structure_file = self.input_structure_file
         input_trajectory_files = self.input_trajectory_files
@@ -599,7 +598,7 @@ class MD:
         output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         output_trajectory_file = File(output_trajectory_filepath)
         output_topology_filepath = self.project.topology_filepath
-        output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
+        output_topology_file = File(self.pathify(output_topology_filepath)) if output_topology_filepath else MISSING_TOPOLOGY
 
         # If all output files already exist we may skip the processing
         topology_already_processed = output_topology_file == MISSING_TOPOLOGY or output_topology_file.exists
@@ -942,7 +941,7 @@ class MD:
         corrected_structure_file = corrected_structure_file if corrected_structure_file.exists else imaged_structure_file
         corrected_trajectory_file = corrected_trajectory_file if corrected_trajectory_file.exists else imaged_trajectory_file
 
-        # Set for every type of file (structure, trajectory and topology) tte input, the las processed step and the output files
+        # Set for every type of file (structure, trajectory and topology) the input, the last processed step and the output files
         input_and_output_files = [
             (input_structure_file, corrected_structure_file, output_structure_file),
             (input_trajectory_files[0], corrected_trajectory_file, output_trajectory_file),
@@ -2120,7 +2119,7 @@ class Project:
 
         # Set the inputs file
         # Set the expected default name in case there is no inputs file since it may be downloaded
-        self._inputs_file = File(DEFAULT_INPUTS_FILENAME)
+        self._inputs_file = File(self.pathify(DEFAULT_INPUTS_FILENAME))
         # If there is an input filepath then use it
         if inputs_filepath:
             self._inputs_file = File(inputs_filepath)
@@ -2374,9 +2373,9 @@ class Project:
 
     # Inputs filename ------------
 
-    # Set a function to check if inputs file is available
-    # Note that asking for it when it is not available will lead to raising an input error
     def is_inputs_file_available (self) -> bool:
+        """Set a function to check if inputs file is available.
+        Note that asking for it when it is not available will lead to raising an input error."""
         # If name is not declared then it is impossible to reach it
         if not self._inputs_file:
             return False
@@ -2388,8 +2387,8 @@ class Project:
             return True
         return False
 
-    # Set a function to load the inputs file
     def get_inputs_file (self) -> File:
+        """Set a function to load the inputs file"""
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
@@ -2407,9 +2406,10 @@ class Project:
 
     # Topology filename ------------
 
-    # If there is not input topology filepath, we must try to guess it among the files in the project directory
-    # Note that if we can download from the remote then we must check the remote available files as well
+    
     def guess_input_topology_filepath (self) -> Optional[str]:
+        """If there is not input topology filepath, we try to guess it among the files in the project directory.
+        Note that if we can download from the remote then we must check the remote available files as well."""
         # Find the first supported topology file according to its name and format
         def find_first_accepted_topology_filename (available_filenames : List[str]) -> Optional[str]:
             for filename in available_filenames:
@@ -2418,7 +2418,7 @@ class Project:
                 filename_splits = filename.split('.')
                 if len(filename_splits) != 2 or filename_splits[0] != 'topology':
                     continue
-                # Then make sure its format is among the acceoted topology formats
+                # Then make sure its format is among the accepted topology formats
                 extension = filename_splits[1]
                 format = EXTENSION_FORMATS[extension]
                 if format in ACCEPTED_TOPOLOGY_FORMATS:
@@ -2452,14 +2452,15 @@ class Project:
         # If we did not find any valid topology filepath at this point then return None
         return None
 
-    # Get the input topology filepath from the inputs or try to guess it
+    
     def get_input_topology_filepath (self) -> Optional[str]:
-        # If the input topology filepath is a 'no' flag then we consider there is no topology at all
-        # So far we extract atom charcges and atom bonds from the topology file
-        # In this scenario we can keep working but there are some consecuences:
-        # 1 - Analysis using atom charges usch as 'energies' will be skipped
-        # 2 - The standard topology file will not include atom charges
-        # 3 - Bonds will be guessed
+        """Get the input topology filepath from the inputs or try to guess it.
+        If the input topology filepath is a 'no' flag then we consider there is no topology at all
+        So far we extract atom charges and atom bonds from the topology file
+        In this scenario we can keep working but there are some consecuences:
+        1 - Analysis using atom charges such as 'energies' will be skipped
+        2 - The standard topology file will not include atom charges
+        3 - Bonds will be guessed"""
         if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
             return MISSING_TOPOLOGY
         # Set a function to parse possible glob notation
@@ -2497,9 +2498,9 @@ class Project:
             '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
             '  Some analyses such us the interaction energies will be skiped')
 
-    # Get the input topology file
-    # If the file is not found try to download it
     def get_input_topology_file (self) -> Optional[File]:
+        """Get the input topology file.
+        If the file is not found try to download it."""
         # If we already have a value then return it
         if self._input_topology_file != None:
             return self._input_topology_file
@@ -2667,14 +2668,14 @@ class Project:
 
     # Set additional values infered from input values
 
-    # Set if MDs are time dependent
     def check_is_time_dependent (self) -> bool:
+        """Set if MDs are time dependent."""
         if self.input_type == 'trajectory':
             return True
         elif self.input_type == 'ensemble':
             return False
         raise InputError('Not supported input type value: ' + self.input_type)
-    is_time_dependend = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
+    is_time_dependent = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
     # Processed files ----------------------------------------------------
 
@@ -3051,8 +3052,9 @@ class Project:
         return self._residue_map
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
-    # Project metadata filename
+    
     def get_metadata_file (self) -> File:
+        """Project metadata filename"""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -3164,21 +3166,22 @@ def name_2_directory (name : str) -> str:
         directory = directory.replace(character, '')
     return directory
 
-# Set a function to check for problematic characters in a directory path
 def check_directory (directory : str) -> str:
+    """Check for problematic characters in a directory path."""
     # Remove problematic characters
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
         if character in directory:
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
-# Set a function to convert an MD directory into an equivalent MD name
 def directory_2_name (directory : str) -> str:
+    """Convert an MD directory into an equivalent MD name."""
     # Replace white spaces with underscores
     name = directory.replace('_', ' ')
     return name
 
-# Remove the final slash if exists since it may cuse problems when recognizing input directories
 def remove_final_slash (directory : str) -> str:
+    """Remove the final slash if exists since it may cause 
+    problems when recognizing input directories."""
     if directory[-1] == '/':
         return directory[:-1]
     return directory

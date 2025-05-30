@@ -146,7 +146,6 @@ def generate_project_metadata (
         'INTERACTIONS': metadata_interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
         'CHAINNAMES': chainnames,
-        'MEMBRANES': get_input('membranes'),
         'CUSTOMS': get_input('customs'),
         'ORIENTATION': get_input('orientation'),
         'PTM': ptm_names,
