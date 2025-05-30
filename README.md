@@ -1,7 +1,7 @@
 # MDDB Workflow
 
 <div align="center">
-    <img src="https://github.com/mmb-irb/MDDB-workflow/blob/release/model_workflow/resources/mddb.png?raw=true" width="640" height="320">
+    <img src="https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/resources/mddb.png?raw=true" width="640" height="320">
 </div>
 
 [![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)](https://mddb-workflow.readthedocs.io/en/latest/)
