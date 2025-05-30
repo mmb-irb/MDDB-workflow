@@ -3,6 +3,11 @@
     color: #9915E7;
 }
 
+.wy-nav-content a:hover,
+.rst-content .viewcode-link:hover {
+    color: #4f14a7;
+}
+
 /* Change background color of the content area */
 .wy-nav-content {
     background: #f8f9fa;

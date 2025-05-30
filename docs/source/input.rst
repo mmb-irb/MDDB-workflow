@@ -4,7 +4,7 @@ Input File
 ==========================
 
 .. note::
-   This documentation is automatically generated from the YAML template file.
+   This documentation is automatically generated from the `YAML template file <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/resources/inputs_file_template.yml>`_.
 
 This file defines a set of fields which are then read and used by the workflow.
 Every field is explained and example values are provided.
@@ -44,7 +44,7 @@ Write author names.
 Authors are displayed in the overview page.
 
 .. warning::
- Check already existing values for this field to avoid making duplicates
+ Check already existing values for this field to avoid making duplicates.
 
 
 
@@ -105,10 +105,10 @@ Program and version are both displayed in the overview page.
 ~~~~~~~~
 
 Type of molecular dynamics.
-At this moment there are only two options in this field: 'trajectory' and 'ensemble'.
-Note that this field has an effect on the client:
-Some time-dependent analysis will change the labels of their axes in order to make sense.
-For instance RMSD X axis will be labeled as 'frames' instead of 'time'.
+At this moment there are only two options in this field: `trajectory` and `ensemble`.
+
+.. note::
+ This field has an effect on the client: some time-dependent analysis will change the labels of their axes in order to make sense. For instance RMSD X axis will be labeled as `frames` instead of `time`.
 
 
 
@@ -133,7 +133,7 @@ e.g. Classical MD, Targeted MD, Biased MD (Accelerated Weighted Ensemble), Enhan
 
 License and link to the license web page.
 The license is displayed in the overview page.
-Under the license there is a 'More information' button.
+Under the license there is a `More information` button.
 The link is used to redirect the user when this button is clicked.
 
 
@@ -164,7 +164,12 @@ to add superior text type '^' before each character.
 ~~~~~~~~~~
 
 Acknowledgements to be shown in the overview page.
-e.g. I would like to thank my funders...
+
+
+
+::
+
+	thanks: I would like to thank my funders...
 
 ``accession``
 ~~~~~~~~~~~~~
@@ -260,8 +265,8 @@ Optionally, a list of vmd selections may be provided to force the mapping
 
 - vmd_selection: a list of vmd selections (chain D)
 
-Ligands are mapped in the standard topology file
-In addition, an RMSD analysis is run for every defined ligand
+Ligands are mapped in the standard topology file.
+In addition, an RMSD analysis is run for every defined ligand.
 
 
 
@@ -275,7 +280,11 @@ Simulation metadata
 -------------------
 
 Simulation parameters.
-DANI: Algún día esto será minado automáticamente
+
+.. tip::
+ Someday this will be automatically mined.
+
+
 
 ``framestep``
 ~~~~~~~~~~~~~
@@ -321,7 +330,7 @@ Ensemble
 e.g. NVT, NPT, etc.
 
 .. warning::
- Check already existing values for this field to avoid making duplicates
+ Check already existing values for this field to avoid making duplicates.
 
 
 
@@ -332,10 +341,10 @@ e.g. NVT, NPT, etc.
 ``ff``
 ~~~~~~
 
-Force fields
+Force fields.
 
 .. warning::
- Check already existing values for this field to avoid making duplicates
+ Check already existing values for this field to avoid making duplicates.
 
 
 
@@ -351,7 +360,7 @@ Force fields
 Water force fields.
 
 .. warning::
- Check already existing values for this field to avoid making duplicates
+ Check already existing values for this field to avoid making duplicates.
 
 
 
@@ -366,7 +375,7 @@ Boxtype
 e.g. Triclinic, Cubic, Dodecahedron.
 
 .. warning::
- Check already existing values for this field to avoid making duplicates
+ Check already existing values for this field to avoid making duplicates.
 
 
 
@@ -378,18 +387,18 @@ These fields have an impact in the analysis workflow.
 ``interactions``
 ~~~~~~~~~~~~~~~~
 
-Set which are the interesting interactions to be analyzed
-A bunch of interaction-specific analyses will be run for each interaction and displayed in the web client
+Set which are the interesting interactions to be analyzed.
+A bunch of interaction-specific analyses will be run for each interaction and displayed in the web client.
 
-Interactions are defined by the 'agents' which are meant to interact pairwise
-An 'agent' may be anything, even a group of unrelated molecules
-Atoms of different agents which are close enought will be considered as interface atoms
-These atoms will be the ones considered in interface analyses
-If no interface atoms are found then the interaction is considered not valid and the user is warned
+Interactions are defined by the 'agents' which are meant to interact pairwise.
+An 'agent' may be anything, even a group of unrelated molecules.
+Atoms of different agents which are close enought will be considered as interface atoms.
+These atoms will be the ones considered in interface analyses.
+If no interface atoms are found then the interaction is considered not valid and the user is warned.
 
-Interactions are uploaded to the database as part of the project metadata and as an independent analysis
-Project metadata includes the interaction name, agents name and agent atom selections (vmd syntax)
-Analysis data includes also every agent atom indices (both the whole agent and the interface only)
+Interactions are uploaded to the database as part of the project metadata and as an independent analysis.
+Project metadata includes the interaction name, agents name and agent atom selections (`VMD syntax <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_).
+Analysis data includes also every agent atom indices (both the whole agent and the interface only).
 
 Each interaction has the following attributes:
 
@@ -406,10 +415,7 @@ Each interaction has the following attributes:
 - distance_cutoff (optional): the distance used to determine which atoms are in the interface (in Å).
 
 The default value is intended for atomistic simulations.
-Thus coarse grain interactions may need manual input distance cutoff
-
-VMD atom selection language:
-https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
+Thus coarse grain interactions may need manual input distance cutoff.
 
 
 
@@ -436,8 +442,8 @@ https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
 ``pbc_selection``
 ~~~~~~~~~~~~~~~~~
 
-Set those residues which are under periodic boundary conditions (PBC)
-These residues are excluded from the imaging centering and fitting
+Set those residues which are under periodic boundary conditions (PBC).
+These residues are excluded from the imaging centering and fitting.
 These residues are excluded in the follwoing analyses:
 
 - RMSD: Sudden jumps in PBC residues result in non-sense high peaks
@@ -456,21 +462,22 @@ These residues are excluded in the follwoing analyses:
 
 - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
 
-- Pockets: Residues close to the boundary may be considered to have pockets while they have not. 
+- Pockets: Residues close to the boundary may be considered to have pockets while they have not.
+
 .. tip::
- Esto en realidad no se puede hacer porque fpocket no permite "descartar" átomos de manera inteligente. Si quitas átomos para que no encuentre pockets en ellos entonces pueden aparecer pockets en los sitios que están ocupados por estos átomos. De momento descartamos el análisis entero cuando hay algo en PBC y listo
+ This isn't really possible because fpocket doesn't allow you to intelligently "discard" atoms. If you remove atoms so it doesn't find pockets in them, pockets can appear in the sites occupied by those atoms. For now, we discard the entire analysis when there's something in PBC and that's it.
 
 - Clusters: Since Clustering is RMSD-based it has the same limitations
 
-If this field is set to 'auto' then PBC residues are set automatically
-Solvent, counter ions and membrane lipids are selected in this cases
-Note that these are the most tipical residues under periodic boundary conditions
+If this field is set to 'auto' then PBC residues are set automatically.
+Solvent, counter ions and membrane lipids are selected in this cases.
+Note that these are the most tipical residues under periodic boundary conditions.
 
-This field is also useful for those scenarions with several protein or nucleic acid molecules floating around
-In this situation you can not image and fit all molecules
-You must focus in one molecule and let the others stay in periodic boundary conditions
+This field is also useful for those scenarions with several protein or nucleic acid molecules floating around.
+In this situation you can not image and fit all molecules.
+You must focus in one molecule and let the others stay in periodic boundary conditions.
 
-These residues are defined using VMD selection language: https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html
+These residues are defined using `VMD selection language <https://www.ks.uiuc.edu/Research/vmd/vmd-1.3/ug/node132.html>`_.
 
 
 
@@ -512,11 +519,13 @@ This names are used to label chains in the web client.
 ``customs``
 ~~~~~~~~~~~
 
-The web client sets some default representations (molecular viewer configurations)
-They highlight important features in the structure according to the topology reference or interactions
-In addition, you may set extra customized representations which are interesting for you
-These representations will be available in the web client
-WARNING: Make sure whatever you want to represent is not already represented by default or it will be duplicated
+The web client sets some default representations (molecular viewer configurations).
+They highlight important features in the structure according to the topology reference or interactions.
+In addition, you may set extra customized representations which are interesting for you.
+These representations will be available in the web client.
+
+.. warning::
+ Make sure whatever you want to represent is not already represented by default or it will be duplicated.
 
 
 
@@ -537,7 +546,7 @@ WARNING: Make sure whatever you want to represent is not already represented by 
 ``orientation``
 ~~~~~~~~~~~~~~~
 
-Set a specific starting orientation for the web client viewer
+Set a specific starting orientation for the web client viewer.
 Normally this is done once the simulation has been uploaded since there is no easy way to get the orientation before.
 
 
@@ -577,7 +586,7 @@ This field was requested by the referees.
 Its only use for now is as a parameter in project queries.
 
 .. tip::
- Esto es provisional, lo suyo sería automatizarlo.
+ This is temporary, it would be best to automate it.
 
 
 
@@ -638,7 +647,7 @@ Supported units:
 ``cv19_startconf``
 ~~~~~~~~~~~~~~~~~~
 
-Set some additional inputs requested by the referees
+Set some additional inputs requested by the referees.
 
 - Starting conformation of the spike (options: close, 1 open, 2 open, 3 open)
 
@@ -684,7 +693,7 @@ MDs may include additional metadata to overwrite the project metadata for a spec
 ~~~~~~~~~
 
 Also the reference MD is to be defined by providing the index of the MDs list.
-If there is not an MD which is more important than others then simply set the first MD (0) as the reference
+If there is not an MD which is more important than others then simply set the first MD (0) as the reference.
 
 
 
