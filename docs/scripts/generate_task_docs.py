@@ -33,14 +33,6 @@ def clean_docstring(docstring):
 def get_task_docstring(task_name, func):
     """Get a nice docstring for a task function."""
     docstring = clean_docstring(inspect.getdoc(func))
-    
-    # if not docstring:
-    #     # Generate a default docstring based on the function name
-    #     if task_name in project_tasks:
-    #         return f"Get or generate the {task_name} for the project."
-    #     elif task_name in md_tasks:
-    #         return f"Get or generate the {task_name} for an MD."
-    
     return docstring
 
 def generate_task_docs():

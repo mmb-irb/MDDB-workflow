@@ -1106,8 +1106,8 @@ class MD:
         return average_structure_file
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
-    # MD metadata filename
     def get_metadata_file (self) -> File:
+        """Generate the MD metadata file."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1132,9 +1132,9 @@ class MD:
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
-    # The processed interactions
-    # This is a bit exceptional since it is a value to be used and an analysis file to be generated
     def get_processed_interactions (self) -> List[dict]:
+        """The processed interactions.
+        This is a bit exceptional since it is a value to be used and an analysis file to be generated."""
         # If we already have a stored value then return it
         if self._processed_interactions != None:
             return self._processed_interactions
@@ -1409,8 +1409,8 @@ class MD:
     # Analyses
     # ---------------------------------------------------------------------------------
 
-    # RMSDs
     def run_rmsds_analysis (self):
+        """RMSDs analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1436,8 +1436,8 @@ class MD:
             ligand_map = self.project.ligand_map,
         )
 
-    # TM scores
     def run_tmscores_analysis (self):
+        """TM scores analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1460,8 +1460,8 @@ class MD:
             frames_limit = 200,
         )
 
-    # RMSF, atom fluctuation
     def run_rmsf_analysis (self):
+        """RMSF, atom fluctuation analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1481,8 +1481,8 @@ class MD:
             pbc_selection = self.pbc_selection,
         )
 
-    # RGYR, radius of gyration
     def run_rgyr_analysis (self):
+        """Radius of gyration analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1506,8 +1506,8 @@ class MD:
             pbc_selection = self.pbc_selection,
         )
 
-    # PCA, principal component analysis
     def run_pca_analysis (self):
+        """PCA, principal component analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1557,8 +1557,8 @@ class MD:
     #         output_analysis_filename = output_analysis_filepath
     #     )
 
-    # RMSD per residue
     def run_rmsd_perres_analysis (self):
+        """RMSD per residue analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1583,6 +1583,7 @@ class MD:
 
     # RMSD pairwise
     def run_rmsd_pairwise_analysis (self):
+        """Perform an analysis for the overall structure and then one more analysis for each interaction."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1606,8 +1607,8 @@ class MD:
             overall_selection = "name CA or name C5"
         )
 
-    # Clusters
     def run_clusters_analysis (self):
+        """Run the cluster analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1645,8 +1646,8 @@ class MD:
             output_screenshots_filename = output_screenshot_filepath,
         )
 
-    # Distance per residue
     def run_dist_perres_analysis (self):
+        """Calculate the distance mean and standard deviation of each pair of residues*."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1667,8 +1668,8 @@ class MD:
             frames_limit = 200,
         )
 
-    # Hydrogen bonds
     def run_hbonds_analysis (self):
+        """Perform an hydrogen bonds analysis for each interaction interface."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1701,8 +1702,8 @@ class MD:
             time_splits = 100,
         )
 
-    # SASA, solvent accessible surfave analysis
     def run_sas_analysis (self):
+        """Perform the Solvent Accessible Surface Analysis (SASA)."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1724,9 +1725,8 @@ class MD:
             frames_limit = 100,
         )
 
-    # Energies
     def run_energies_analysis (self):
-        # Get the task name
+        """Perform the electrostatic and vdw energies analysis for each pair of interaction agents."""
         task = self._get_task()
         # Check if this dependency is to be overwriten
         must_overwrite = task in self.overwritables
@@ -1752,8 +1752,8 @@ class MD:
             frames_limit = 100,
         )
 
-    # Dihedral energies
     def run_dihedral_energies (self):
+        """Calculate torsions and then dihedral energies for every dihedral along the trajectory."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1774,8 +1774,8 @@ class MD:
             frames_limit = 100,
         )
 
-    # Pockets
     def run_pockets_analysis (self):
+        """Perform the pockets analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1849,9 +1849,10 @@ class MD:
             #transitions = self.transitions,
             rmsd_selection = PROTEIN_AND_NUCLEIC,
         )
+
     # MEMBRANE ANALYSES    
-    # Density
     def run_density_analysis (self):
+        """Membrane density analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1871,8 +1872,9 @@ class MD:
             structure = self.structure,
             snapshots = self.snapshots,
         )
-    # Thickness
+
     def run_thickness_analysis (self):
+        """Membrane thickness analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1891,8 +1893,9 @@ class MD:
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
-    # Area per lipid
+
     def run_apl_analysis (self):
+        """Area per lipid analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1910,8 +1913,9 @@ class MD:
             output_analysis_filepath = output_apl_filepath,
             membrane_map = self.project.membrane_map,
         )
-    # Lipid order
+
     def run_lipid_order_analysis (self):
+        """Calculate lipid order parameters for membranes."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1930,7 +1934,9 @@ class MD:
             membrane_map = self.project.membrane_map,
             snapshots = self.snapshots,
         )
+
     def run_lipid_interactions_analysis (self):
+        """Lipid-protein interactions analysis."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -2426,24 +2432,24 @@ class Project:
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
     # Input structure filename ------------
-
-    # Get the input structure filename
-    # When calling this function make sure all MDs have the file or try to download it
     def get_input_structure_file (self) -> File:
+        """Get the input structure filename."""
+        # When calling this function make sure all MDs have the file or try to download it
         return self.reference_md._input_structure_file
     input_structure_file = property(get_input_structure_file, None, None, "Input structure filename for each MD (read only)")
 
     # Input trajectory filename ------------
 
-    # Get the input trajectory filename(s) from the inputs
-    # If file(s) are not found try to download it
     def get_input_trajectory_files (self) -> List[File]:
+        """Get the input trajectory filename(s) from the inputs.
+        If file(s) are not found try to download it."""
         return self.reference_md._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames for each MD (read only)")
 
     # Populations filename ------------
 
     def get_populations_file (self) -> File:
+        """Get the MSM equilibrium populations filename."""
         if not self.get_file(self._populations_file):
             return None
         return self._populations_file
@@ -2452,6 +2458,7 @@ class Project:
     # Transitions filename ------------
 
     def get_transitions_file (self) -> Optional[str]:
+        """Get the MSM transition probabilities filename."""
         if not self.get_file(self._transitions_file):
             return None
         return self._transitions_file
@@ -2790,8 +2797,8 @@ class Project:
         return pdb_references_file
     pdb_references_file = property(get_pdb_references_file, None, None, "File including PDB refereces data (read only)")
 
-    # Protein residues mapping
     def get_protein_map (self) -> List[dict]:
+        """Map the structure aminoacids sequences against the Uniprot reference sequences."""
         # If we already have a stored value then return it
         if self._protein_map != None:
             return self._protein_map
@@ -2834,8 +2841,8 @@ class Project:
         return protein_references_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
-    # Get chain references
     def get_chain_references (self) -> List[str]:
+        """Get chain references."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -2858,8 +2865,8 @@ class Project:
         return chains
     chains_data = property(get_chain_references, None, None, "Chain (read only)")
 
-    # Ligand residues mapping
     def get_ligand_map (self) -> List[dict]:
+        """Get the ligand residues mapping."""
         # If we already have a stored value then return it
         if self._ligand_map != None:
             return self._ligand_map
@@ -2901,6 +2908,7 @@ class Project:
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
     def get_membrane_map (self) -> List[dict]:
+        """Get mapping of residues in the membrane."""
         # If we already have a stored value then return it
         if self._membrane_map:
             return self._membrane_map
@@ -2944,7 +2952,7 @@ class Project:
 
     
     def get_metadata_file (self) -> File:
-        """Project metadata filename"""
+        """Generate the project metadata file to be upload to the database."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -2977,8 +2985,8 @@ class Project:
         return metadata_file
     metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
 
-    # Standard topology filename
     def get_standard_topology_file (self) -> File:
+        """Generate the standardized topology file."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -3010,8 +3018,8 @@ class Project:
         return self._standard_topology_file
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
-    # Screenshot filename
     def get_screenshot_filename (self) -> str:
+        """Generate a screenshot of the system."""
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
