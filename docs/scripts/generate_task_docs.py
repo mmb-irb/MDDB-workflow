@@ -8,7 +8,7 @@ from pathlib import Path
 from model_workflow.mwf import requestables, DEPENDENCY_FLAGS, Project, MD
 
 # Add the repository root to the Python path so we can import modules
-repo_root = Path('/home/rchaves/repo/workflow')
+repo_root = Path('..').resolve()
 sys.path.insert(0, str(repo_root))
 
 

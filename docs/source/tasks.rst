@@ -14,7 +14,7 @@ These tasks are executed once per project:
 ``chains``
 ~~~~~~~~~~
 
-
+Get chain references.
 
 ``inputs``
 ~~~~~~~~~~
@@ -30,22 +30,22 @@ If the file is not found try to download it.
 ``ligands``
 ~~~~~~~~~~~
 
-
+Get the ligand residues mapping.
 
 ``mapping``
 ~~~~~~~~~~~
 
-
+Map the structure aminoacids sequences against the Uniprot reference sequences.
 
 ``membrane``
 ~~~~~~~~~~~~
 
-
+Get mapping of residues in the membrane.
 
 ``membranes``
 ~~~~~~~~~~~~~
 
-
+Get mapping of residues in the membrane.
 
 ``pdbs``
 ~~~~~~~~
@@ -55,22 +55,22 @@ Get PDB references.
 ``pmeta``
 ~~~~~~~~~
 
-Project metadata filename
+Generate the project metadata file to be upload to the database.
 
 ``populations``
 ~~~~~~~~~~~~~~~
 
-
+Get the MSM equilibrium populations filename.
 
 ``screenshot``
 ~~~~~~~~~~~~~~
 
-
+Generate a screenshot of the system.
 
 ``stopology``
 ~~~~~~~~~~~~~
 
-
+Generate the standardized topology file.
 
 ``topology``
 ~~~~~~~~~~~~
@@ -80,7 +80,7 @@ Get the processed topology file.
 ``transitions``
 ~~~~~~~~~~~~~~~
 
-
+Get the MSM transition probabilities filename.
 
 MD Tasks
 -----------
@@ -93,7 +93,8 @@ Files
 ``interactions``
 ^^^^^^^^^^^^^^^^
 
-
+The processed interactions.
+This is a bit exceptional since it is a value to be used and an analysis file to be generated.
 
 ``istructure``
 ^^^^^^^^^^^^^^
@@ -123,37 +124,37 @@ Analyses
 ``apl``
 ^^^^^^^
 
-
+Area per lipid analysis.
 
 ``clusters``
 ^^^^^^^^^^^^
 
-
+Run the cluster analysis.
 
 ``density``
 ^^^^^^^^^^^
 
-
+Membrane density analysis.
 
 ``dihedrals``
 ^^^^^^^^^^^^^
 
-
+Calculate torsions and then dihedral energies for every dihedral along the trajectory.
 
 ``dist``
 ^^^^^^^^
 
-
+Calculate the distance mean and standard deviation of each pair of residues*.
 
 ``energies``
 ^^^^^^^^^^^^
 
-
+Perform the electrostatic and vdw energies analysis for each pair of interaction agents.
 
 ``hbonds``
 ^^^^^^^^^^
 
-
+Perform an hydrogen bonds analysis for each interaction interface.
 
 ``helical``
 ^^^^^^^^^^^
@@ -163,12 +164,12 @@ Analyses
 ``linter``
 ^^^^^^^^^^
 
-
+Lipid-protein interactions analysis.
 
 ``lorder``
 ^^^^^^^^^^
 
-
+Calculate lipid order parameters for membranes.
 
 ``markov``
 ^^^^^^^^^^
@@ -178,57 +179,57 @@ Analyses
 ``mdmeta``
 ^^^^^^^^^^
 
-
+Generate the MD metadata file.
 
 ``pairwise``
 ^^^^^^^^^^^^
 
-
+Perform an analysis for the overall structure and then one more analysis for each interaction.
 
 ``pca``
 ^^^^^^^
 
-
+PCA, principal component analysis.
 
 ``perres``
 ^^^^^^^^^^
 
-
+RMSD per residue analysis.
 
 ``pockets``
 ^^^^^^^^^^^
 
-
+Perform the pockets analysis.
 
 ``rgyr``
 ^^^^^^^^
 
-
+Radius of gyration analysis.
 
 ``rmsds``
 ^^^^^^^^^
 
-
+RMSDs analysis.
 
 ``rmsf``
 ^^^^^^^^
 
-
+RMSF, atom fluctuation analysis.
 
 ``sas``
 ^^^^^^^
 
-
+Perform the Solvent Accessible Surface Analysis (SASA).
 
 ``thickness``
 ^^^^^^^^^^^^^
 
-
+Membrane thickness analysis.
 
 ``tmscore``
 ^^^^^^^^^^^
 
-
+TM scores analysis.
 
 Task Groups
 -------------
