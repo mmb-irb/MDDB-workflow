@@ -41,9 +41,10 @@ def project(test_data_dir : str, test_accession: str):
     project = Project(directory=test_data_dir, accession=test_accession)
     return project
 
-def get_analysis_file(project: 'Project', analysis_type: str):
+def get_analysis_file(project: 'Project', analysis_type: str, output_filename: str) -> 'File':
     """Download and provide the standard structure file"""
-    output_path = os.path.join(project.directory, f"mda.{analysis_type}_REF.json")
+    os.makedirs(project.directory+'/ref_data', exist_ok=True)
+    output_path = os.path.join(project.directory, 'ref_data', output_filename)
     file_obj = File(output_path)
     # Only download if file doesn't exist yet
     if not file_obj.exists:

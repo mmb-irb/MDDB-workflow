@@ -57,7 +57,8 @@ def energies (
     snapshots : int,
     frames_limit : int,
     verbose : bool = False,
-    debug : bool = False):
+    debug : bool = False,
+    cmip_bin : str = 'cmip'):
 
     print('-> Running energies analysis')
 
@@ -211,7 +212,7 @@ def energies (
         # Run CMIP in 'checkonly' mode and save the grid dimensions output
         # First do it for the agent 1
         cmip_logs_agent1 = run([
-            "cmip",
+            cmip_bin,
             "-i",
             cmip_inputs_checkonly_source.path,
             "-pr",
@@ -233,7 +234,7 @@ def energies (
         # Run CMIP in 'checkonly' mode and save the grid dimensions output
         # Now do it for the agent 2
         cmip_logs_agent2 = run([
-            "cmip",
+            cmip_bin,
             "-i",
             cmip_inputs_checkonly_source.path,
             "-pr",
@@ -324,7 +325,7 @@ def energies (
         cmip_output_file = File(energies_folder + '/cmip_output.pdb')
         # Run cmip
         cmip_logs = run([
-            "cmip",
+            cmip_bin,
             "-i",
             cmip_inputs.path,
             "-pr",

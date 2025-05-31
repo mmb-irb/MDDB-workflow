@@ -20,7 +20,7 @@ First clone the workflow repo and create a new environment using the `environmen
 ``` shell
 git clone https://github.com/mmb-irb/MDDB-workflow mwf
 cd mwf
-conda env create --file envs/environment.yml
+conda env create -f envs/environment.yml
 ```
 
 Activate the new enviornment and then install the workflow module in development mode:
