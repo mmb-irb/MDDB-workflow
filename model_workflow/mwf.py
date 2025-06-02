@@ -109,14 +109,9 @@ CACHE_ARG_CKSUMS = 'arg_cksums'
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
 fix_gromacs_masses()
 
-# Set some variables which are defined at the end but may be later ready by previously defined functions
+# Set some variables which are filled at the end but are referred by previously defined functions
 requestables = {}
 inverted_requestables = {}
-
-# Project requestable tasks
-project_requestables = {}
-# MD requestable tasks
-md_requestables = {}
 
 # Set a class to handle a generic task
 class Task:
@@ -1838,33 +1833,10 @@ class MD:
     # SASA, solvent accessible surface analysis
     run_sas_analysis = Task('sas', 'Solvent accessible surface analysis',
         sasa, { 'frames_limit': 100 })
-
-    def run_energies_analysis (self):
-        """Perform the electrostatic and vdw energies analysis for each pair of interaction agents."""
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        energies_folder = self.pathify(ENERGIES_FOLDER)
-        output_analysis_filepath = f'{energies_folder}/{OUTPUT_ENERGIES_FILENAME}'
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # If we must overwrite then delete the whole energies directory
-        if must_overwrite and exists(energies_folder):
-            rmtree(energies_folder)
-        # Run the analysis
-        energies(
-            input_trajectory_file = self.trajectory_file,
-            output_analysis_filepath = output_analysis_filepath,
-            energies_folder = energies_folder,
-            structure = self.structure,
-            interactions = self.interactions,
-            charges = self.charges,
-            snapshots = self.snapshots,
-            frames_limit = 100,
-        )
+    
+    # Perform the electrostatic and vdw energies analysis for each pair of interaction agents
+    run_energies_analysis = Task('energies', 'Energies analysis',
+        energies, { 'frames_limit': 100 })
 
     def run_dihedral_energies (self):
         """Calculate torsions and then dihedral energies for every dihedral along the trajectory."""
@@ -3232,8 +3204,8 @@ processed_files = { **project_processed_files, **md_processed_files }
 default_analyses = {
     'clusters': MD.run_clusters_analysis,
     'dist': MD.run_dist_perres_analysis,
-    'energies': MD.run_energies_analysis,
-    'hbonds': MD.run_hbonds_analysis,
+    #'energies': MD.run_energies_analysis,
+    #'hbonds': MD.run_hbonds_analysis,
     'helical': MD.run_helical_analysis,
     'markov': MD.run_markov_analysis,
     'pca': MD.run_pca_analysis,
@@ -3244,7 +3216,7 @@ default_analyses = {
     'perres': MD.run_rmsd_perres_analysis,
     'pairwise': MD.run_rmsd_pairwise_analysis,
     'rmsf': MD.run_rmsf_analysis,
-    'sas': MD.run_sas_analysis,
+    #'sas': MD.run_sas_analysis,
     'tmscore': MD.run_tmscores_analysis,
     'density': MD.run_density_analysis,
     'thickness': MD.run_thickness_analysis,
@@ -3273,14 +3245,20 @@ project_requestables = {
     'membrane': Project.get_membrane_map, 
     'membranes': Project.get_membrane_map, 
 }
+# Add available tasks to project requestables
+for callable in vars(Project).values():
+    if isinstance(callable, Task): project_requestables[callable.flag] = callable
 # MD requestable tasks
 md_requestables = {
     **md_input_files,
     **md_processed_files,
     **analyses,
-    'inter': MD.get_processed_interactions,
+    #'inter': MD.get_processed_interactions,
     'mdmeta': MD.get_metadata_file,
 }
+# Add available tasks to project requestables
+for callable in vars(MD).values():
+    if isinstance(callable, Task): md_requestables[callable.flag] = callable
 # Requestables for the console
 # Note that this constant is global
 requestables.update({ **project_requestables, **md_requestables })
