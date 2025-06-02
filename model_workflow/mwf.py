@@ -183,12 +183,14 @@ class Task:
             # Add the processed argument
             processed_args[arg] = arg_value
         # Check if this dependency is to be overwriten
-        must_overwrite = self.flag in parent.overwritables
-        # Check if inputs changed
-        # WARNING: Always check if inputs changed, since this function updates the cache
-        inputs_changed = self.did_inputs_change(parent, processed_args)
-        # If inputs changed then we must overwrite outputs as well
-        if inputs_changed: must_overwrite = True
+        forced_overwrite = self.flag in parent.overwritables
+        # Get the list of inputs which have changed compared to a previous run
+        # WARNING: Always get changed inputs, since this function updates the cache
+        # If had_cache is false then it means this is the first time the task is ever done
+        changed_inputs, had_cache = self.get_changed_inputs(parent, processed_args)
+        any_input_changed = len(changed_inputs) > 0
+        # We must overwrite outputs either if inputs changed or if it was forced by the user
+        must_overwrite = forced_overwrite or any_input_changed
         # Check if output already exists
         # If the final directory already exists then it means the task was started in a previous run
         existing_incomplete_output = writes_output and exists(incomplete_output_directory)
@@ -217,6 +219,10 @@ class Task:
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
         print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
+        # If the task is to be run again because an inputs changed then let the user know
+        if any_input_changed and had_cache and not forced_overwrite:
+            changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
+            print(f'{GREEN_HEADER}   The task is run again since the following inputs changed:{changes}{COLOR_END}')
         self._value = self.func(**processed_args)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
@@ -249,10 +255,13 @@ class Task:
         raise RuntimeError(f'Function "{self.func.__name__}" expects argument "{arg}" but it is missing')
     
     # Find out if inputs changed regarding the last run
-    def did_inputs_change (self, parent : Union['Project', 'MD'], processed_args : dict) -> bool:
+    def get_changed_inputs (self,
+        parent : Union['Project', 'MD'],
+        processed_args : dict) -> Tuple[ List[str], bool ]:
         # Get cache argument references
         all_cksums = parent.cache.retrieve(CACHE_ARG_CKSUMS, {})
         task_cksums = all_cksums.get(self.func.__name__, None)
+        had_cache = False if task_cksums == None else True
         if task_cksums == None:
             task_cksums = {}
             all_cksums[self.func.__name__] = task_cksums
@@ -274,13 +283,10 @@ class Task:
                 # Update the references
                 task_cksums[arg_name] = new_cksum
         # If we found no missmatch then stop here
-        if len(unmatched_arguments) == 0: return False
-        # If there were differences then update the cache
-        parent.cache.update(CACHE_ARG_CKSUMS, all_cksums)
-        # Report the differences found
-        changes = ', '.join(unmatched_arguments)
-        #print(f'Task {self.flag} is to be run again since some inputs have changed: {changes}')
-        return True
+        if len(unmatched_arguments) > 0:
+            # If there were differences then update the cache
+            parent.cache.update(CACHE_ARG_CKSUMS, all_cksums)
+        return unmatched_arguments, had_cache
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible

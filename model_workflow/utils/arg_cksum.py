@@ -24,7 +24,7 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
         stringifyed = json.dumps(value, default=lambda o: '<not serializable>')
         return get_cksum_id(stringifyed)
     # For files use file last modification time and size
-    if isinstance(value, File): return f'{value.mtime}-{value.size}'
+    if isinstance(value, File): return f'{value.mtime} -> {value.size}'
     # For the parsed structure
     if isinstance(value, Structure):
         pdb_content = value.generate_pdb()
