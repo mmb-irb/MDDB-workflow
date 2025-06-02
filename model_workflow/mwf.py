@@ -217,7 +217,7 @@ class Task:
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
         print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
-        result = self.func(**processed_args)
+        self._value = self.func(**processed_args)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
@@ -226,7 +226,7 @@ class Task:
             if is_directory_empty(incomplete_output_directory): rmtree(incomplete_output_directory)
             else: rename(incomplete_output_directory, final_output_directory)
         # Now return the function result
-        return result
+        return self._value
 
     # Find argument values, thus running any dependency
     def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):

@@ -1,6 +1,7 @@
 import json
 
 from model_workflow.utils.file import File
+from model_workflow.utils.selections import Selection
 from model_workflow.utils.structures import Structure
 from typing import Optional, Union
 
@@ -15,12 +16,12 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     # Ge the value type
     value_type = type(value)
     # For numbers simply use the number itself
-    if value_type == int or value_type == float: return value
+    if value_type == int or value_type == float or value_type == bool: return value
     # For strings, sum the ordinal numbers of every letter
     if value_type == str: return sum(map(ord, value))
     # For objects, stringify them and then do the same that with strings
     if value_type in { list, dict }:
-        stringifyed = json.dumps(value)
+        stringifyed = json.dumps(value, default=lambda o: '<not serializable>')
         return get_cksum_id(stringifyed)
     # For files use file last modification time and size
     if isinstance(value, File): return f'{value.mtime}-{value.size}'
@@ -28,5 +29,7 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     if isinstance(value, Structure):
         pdb_content = value.generate_pdb()
         return get_cksum_id(pdb_content)
+    # For the parsed structure
+    if isinstance(value, Selection): return f'{len(value.atom_indices)}-{sum(value.atom_indices)}'
     # If the value has non of previous types then we complain
     raise TypeError(f'Non supported type "{value_type}" for cksum id: {value}')
