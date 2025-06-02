@@ -5,6 +5,21 @@ import os
 from pathlib import Path
 
 
+def replace_special_markers(text):
+    if "IMPORTANT:" in text:
+        text = text.replace(
+            "IMPORTANT:", "\n.. warning::\n").strip() + "\n\n"
+    elif "NOTE:" in text:
+        text = text.replace(
+            "NOTE:", "\n.. note::\n").strip() + "\n\n"
+    elif "LORE:" in text:
+        text = text.replace(
+            "LORE:", "\n.. note::\n").strip() + "\n\n"
+    elif "DANI:" in text:
+        text = text.replace(
+            "DANI:", "\n.. tip::\n").strip() + "\n\n"
+    return text
+        
 def extract_yaml_documentation(yaml_file_path):
     """Extract documentation from YAML file comments."""
     with open(yaml_file_path, 'r') as f:
@@ -71,8 +86,8 @@ def extract_yaml_documentation(yaml_file_path):
     rst_content += "Input File\n"
     rst_content += "==========================\n\n"
     rst_content += ".. note::\n"
-    rst_content += "   This documentation is automatically generated from the YAML template file.\n\n"
-    
+    rst_content += "   This documentation is automatically generated from the `YAML template file <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/resources/inputs_file_template.yml>`_.\n\n"
+
     # Add file description
     if file_description:
         rst_content += "\n".join(file_description) + "\n\n"
@@ -84,7 +99,8 @@ def extract_yaml_documentation(yaml_file_path):
 
         # Add section overview
         if overview:
-            rst_content += "\n".join(overview) + "\n\n"
+            overview = replace_special_markers("\n".join(overview))
+            rst_content += overview + "\n\n"
 
         # Process fields in this section
         i = 0
@@ -128,19 +144,8 @@ def extract_yaml_documentation(yaml_file_path):
                     # Format list items properly in the description text
                     # Insert a newline before list items for proper RST formatting
                     description_text = re.sub(r'([^\n])\n([ \t]*-[ \t]+)', r'\1\n\n\2', description_text)
-                    
-                    if "IMPORTANT:" in description_text:
-                        description_text = description_text.replace(
-                            "IMPORTANT:", "\n.. warning::\n").strip() + "\n\n"
-                    elif "NOTE:" in description_text:
-                        description_text = description_text.replace(
-                            "NOTE:", "\n.. note::\n").strip() + "\n\n"
-                    elif "LORE:" in description_text:
-                        description_text = description_text.replace(
-                            "LORE:", "\n.. note::\n").strip() + "\n\n"
-                    elif "DANI:" in description_text:
-                        description_text = description_text.replace(
-                            "DANI:", "\n.. tip::\n").strip() + "\n\n"
+                    description_text = replace_special_markers(description_text)
+
                     # Check if there's an example in the description
                     if "Example:" in description_text:
                         parts = description_text.split("Example:", 1)
@@ -178,7 +183,7 @@ def extract_yaml_documentation(yaml_file_path):
 def main():
     # Define paths
     print("Generating input file documentation...")
-    repo_root = Path('/home/rchaves/repo/workflow')
+    repo_root = Path('..').resolve()
     yaml_template = repo_root / 'model_workflow' / \
         'resources' / 'inputs_file_template.yml'
     output_rst = repo_root / 'docs' / 'source' / 'input.rst'

@@ -1,32 +1,26 @@
 import os
 import pytest
 import numpy as np
-from model_workflow.mwf import Project, MD
-from model_workflow.utils.file import File
-from model_workflow.utils.auxiliar import load_json
+from conftest import get_analysis_file
+
 from model_workflow.utils.constants import *
+from model_workflow.utils.type_hints import *
+from model_workflow.utils.auxiliar import load_json
+
 
 @pytest.mark.release
 class TestMWFRun:
     """Test full workflow for A0001: mwf run -proj A0001 -dir test/test_data/A0001.1"""
+
     @pytest.fixture(scope="class")
     def test_accession(self):
         """Override the default accession for this test"""
         return "A0001.1"
     
-    def get_analysis_file(self, project: Project, analysis_type: str):
-        """Download and provide the standard structure file"""
-        output_path = os.path.join(project.directory, f"mda.{analysis_type}_REF.json")
-        file_obj = File(output_path)
-        # Only download if file doesn't exist yet
-        if not file_obj.exists:
-            project.remote.download_analysis_data(analysis_type,  file_obj)
-        return file_obj
-    
-    def test_TMscores_analysis(self, project):
+    def test_TMscores_analysis(self, project : 'Project'):
         """Test that RMSD analysis runs and produces expected output"""
         # Download the reference file and run the analysis
-        analysis_file = self.get_analysis_file(project, 'tmscores')
+        analysis_file = get_analysis_file(project, 'tmscores')
         md : MD = project.mds[0]
         md.overwritables = {'tmscore'}
         md.run_tmscores_analysis()

@@ -77,7 +77,16 @@ def linkcode_resolve(domain, info):
 
     # Try to get the file path and line number
     try:
-        filepath = os.path.relpath(inspect.getsourcefile(obj), start=os.path.abspath('../')) # Adjust '..' to your repo root
+        # Get the absolute path to the source file
+        source_file = inspect.getsourcefile(obj)
+        if source_file is None:
+            return None
+            
+        # Get the path relative to the project root
+        # This works both locally and on ReadTheDocs
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+        filepath = os.path.relpath(source_file, start=project_root)
+        
         lineno = inspect.getsourcelines(obj)[1]
     except (TypeError, OSError):
         return None

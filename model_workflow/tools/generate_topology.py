@@ -34,7 +34,6 @@ def generate_topology (
         if atom_indices == MISSING_BONDS:
             atom_bonds.append(JSON_SERIALIZABLE_MISSING_BONDS)
             continue
-        print(atom_indices)
         atom_bonds.append(sorted(atom_indices))
 
     # Residue data
