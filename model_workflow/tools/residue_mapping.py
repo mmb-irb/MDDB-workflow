@@ -6,6 +6,7 @@ from model_workflow.utils.type_hints import *
 def generate_residue_mapping(
     protein_map : List[dict],
     ligand_map : List[dict],
+    lipid_map : List[dict],
     structure : 'Structure',
 ) -> dict:
 
@@ -14,6 +15,8 @@ def generate_residue_mapping(
     # Reformat mapping data to the topology system
 
     # Add the reference type to each reference object
+    for data in lipid_map:
+        data['type'] = 'lipid'
     for data in protein_map:
         data['type'] = 'protein'
     for data in ligand_map:

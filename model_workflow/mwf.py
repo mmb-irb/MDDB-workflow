@@ -2981,6 +2981,7 @@ class Project:
         self._residue_map = generate_residue_mapping(
             protein_map = self.protein_map,
             ligand_map = self.ligand_map,
+            lipid_map = self.lipid_map,
             structure = self.structure,
         )
         return self._residue_map
