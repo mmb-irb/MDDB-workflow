@@ -35,6 +35,5 @@ class Cache:
 
     # Save the cache to disk, as a json file
     def save (self):
-        print(' Saving cache')
         # Write entries to disk
         save_json(self.data, self.file.path, indent = 4)

@@ -8,9 +8,6 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS
 from model_workflow.utils.type_hints import *
 
-# TM scores
-# 
-# Perform the tm score using the tmscoring package
 def tmscores (
     input_trajectory_file : 'File',
     output_analysis_filename : str,
@@ -20,6 +17,7 @@ def tmscores (
     pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int):
+    """Perform the tm score using the tmscoring package."""
 
     print('-> Running TM scores analysis')
 
@@ -131,6 +129,6 @@ def tmscores (
         output_analysis.append(data)
 
         os.remove(grouped_reference)
-
+    os.remove(ndx_filename)
     # Export the analysis in json format
     save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filename)

@@ -13,4 +13,4 @@ if TYPE_CHECKING:
     from model_workflow.utils.cache import Cache
     from model_workflow.utils.file import File
     from model_workflow.utils.selections import Selection
-    from model_workflow.mwf import MD
+    from model_workflow.mwf import MD, Project

@@ -1,34 +1,35 @@
-import pytest
 import os
+import pytest
+from conftest import get_analysis_file
+
+from model_workflow.utils.constants import *
+from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import load_json
-from model_workflow.analyses.density import density
 
 
 class TestDensityAnalysis:
-    @pytest.fixture(scope="class", autouse=True)
-    def analysis_type(self):
-        return "density"
+
+    @pytest.fixture(scope="class")
+    def test_accession(self):
+        """Override the default accession for this test"""
+        return "A01JP.1"
     
     @pytest.fixture(scope="class")
     def output_file(self, test_data_dir):
         """Create an output file path for the density analysis results"""
         return os.path.join(test_data_dir, "density_output.json")
     
-    def test_density_analysis(self, structure_file, trajectory_file, structure, 
-                             output_file, membrane_map, analysis_file):
+    def test_density_analysis(self, project : 'Project'):
         """Test that density analysis runs and produces expected output"""
-        # Run the density analysis
-        density(
-            input_structure_filepath=structure_file.path,
-            input_trajectory_filepath=trajectory_file.path,
-            output_analysis_filepath=output_file,
-            membrane_map=membrane_map,
-            structure=structure,
-            snapshots=10001,
-        )
-        
+        # Download the reference file and run the analysis
+        analysis_file = get_analysis_file(project, 'density')
+        md : MD = project.mds[0]
+        md.overwritables = {'density'}
+        md.run_density_analysis()
+
         # Check that the output file was created
-        assert os.path.exists(output_file), "Output file was not created"
+        output_file = f"{project.directory}/replica_1/{OUTPUT_DENSITY_FILENAME}"
+        assert os.path.exists(output_file), f"Output file '{output_file}' was not created"
         
         # Load the results
         results = load_json(output_file)

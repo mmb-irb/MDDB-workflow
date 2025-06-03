@@ -44,8 +44,7 @@ dependencies:
   # AGUS: tiene que ser forzada porque la 3.5 (la más nueva) da conflictos
   - conda-forge::openssl=3.4.1
   - pip
-  - pip:
-    # This library is used to calculate TM scores and it is not in conda
-    # WARNING: this library is not mantained and it depends in an outdated version of iminuit
-    # WARNING: we would have to maintain it ourselves in further python versions
-    - tmscoring
+  # This library is used to calculate TM scores and it is not in conda
+  # WARNING: this library is not mantained and it depends in an outdated version of iminuit
+  # WARNING: we would have to maintain it ourselves in further python versions
+  - bioconda::tmscoring
