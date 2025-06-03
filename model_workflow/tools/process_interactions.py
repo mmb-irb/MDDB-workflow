@@ -5,7 +5,7 @@ import itertools
 from os.path import exists
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn, reprint
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn
 from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
@@ -184,12 +184,9 @@ def process_interactions (
     interaction_names = [ interaction['name'] for interaction in interactions ]
     if len(set(interaction_names)) < len(interaction_names):
         raise InputError('Interactions must have unique names')
-    # Print an empty line for the next reprint
-    print()
     # Check input interactions to be correct
     for i, interaction in enumerate(interactions, 1):
         name = interaction["name"]
-        reprint(f' Finding interaction type in {name} ({i}/{interaction_count})')
         # Check agents have different names
         if interaction['agent_1'] == interaction['agent_2']:
             raise InputError(f'Interaction agents must have different names at {name}')
@@ -208,22 +205,6 @@ def process_interactions (
         overlap = agent_1_selection & agent_2_selection
         if overlap:
             raise InputError(f'Agents in interaction "{name}" have {len(overlap)} overlapping atoms')
-        # Check if there was a type already assigned to the interaction
-        # This is not supported anymore since the interaction type is set automatically
-        if 'type' in interaction:
-            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{name}".\n'
-                 'Interaction type is now calculated and the input interaction type is no longer supported.\n'
-                 'Note that the input value will be ignored')
-        # Set the interaction type
-        # LORE: The type was a user input back in time but now we find it automatically
-        # WARNING: Do not calculate the type from the interface residue instead of the whole agent
-        # WARNING: This seems more coherent BUT the type will be written in the PROJECT metadata
-        # WARNING: Interaction type is a valuable search parameter and thus it must remain in project metadata
-        # WARNING: However we could have different types in different MDs, if the interaction is different
-        agent_1_classification = structure.get_selection_classification(agent_1_selection)
-        agent_2_classification = structure.get_selection_classification(agent_2_selection)
-        alphabetically_sorted = sorted([agent_1_classification, agent_2_classification])
-        interaction['type'] = f'{alphabetically_sorted[0]}-{alphabetically_sorted[1]}'
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
@@ -330,7 +311,7 @@ def process_interactions (
 
         # Log the final results
         interface_residue_indices = sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])
-        print(f'{interaction_name} (time: {pretty_frames_percent} %) (type: {interaction["type"]}) -> {interface_residue_indices}')
+        print(f'{interaction_name} (time: {pretty_frames_percent} %) -> {interface_residue_indices}')
 
     # Filter away interactions whcih have failed
     valid_interactions = [ inte for inte in interactions if not inte.get(FAILED_INTERACTION_FLAG, False) ]

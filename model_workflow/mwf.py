@@ -40,7 +40,8 @@ from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
 from model_workflow.tools.process_interactions import process_interactions
-from model_workflow.tools.generate_metadata import generate_project_metadata, generate_md_metadata
+from model_workflow.tools.find_interaction_types import find_interaction_types
+from model_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from model_workflow.tools.chains import generate_chain_references
 from model_workflow.tools.generate_pdb_references import generate_pdb_references
@@ -100,10 +101,13 @@ MISSING_ARGUMENT_EXCEPTION = Exception('Missing argument')
 MISSING_VALUE_EXCEPTION = Exception('Missing value')
 
 # Name of the argument used by all functions to know where to write output
+OUTPUT_FILEPATH_ARG = 'output_filepath'
 OUTPUT_DIRECTORY_ARG = 'output_directory'
 
 # Set the name of the section in the cache where argument value cksums are saved
 CACHE_ARG_CKSUMS = 'arg_cksums'
+# Set the name of the section in the cache where taks output values are saved
+CACHE_TASK_OUTPUT_TAIL = '_task_output'
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -129,15 +133,23 @@ class Task:
         # The task function "additional" inputs
         # Project/MD properties are automatically sent to the function as arguments
         # However some analyses have additional arguments (e.g. frames limit, cutoffs, etc.)
-        args : dict,
+        args : dict = {},
+        # In case this task is to produce an output file, set here its name
+        # The actual path relative to its project/MD will be set automatically
+        # For those tasks which generate a directory with multiple outputs this is not necessary
+        # However this may come in handy by tasks with a single file output
+        # Specillay when this output file is used later in this workflow
+        output_filename : Optional[str] = None
     ):
         # Save input arguments
         self.flag = flag
         self.name = name
         self.func = func
         self.args = args
+        self.output_filename = output_filename
         # Set internal values
         self._value = MISSING_VALUE_EXCEPTION
+        self._output_filepath = None
 
     # When a task is called
     def __call__(self, parent):
@@ -154,15 +166,31 @@ class Task:
         default_arguments = set(expected_arguments[::-1][:n_default_arguments])
         # Find out if the function is to return output
         returns_output = bool(specification.annotations.get('return', None))
-        # If one of the argument expected outputs is the output_directory then set it here
+        # If so, then find if we have cached output
+        if returns_output:
+            cache_output_key = self.flag + CACHE_TASK_OUTPUT_TAIL
+            self._value = parent.cache.retrieve(cache_output_key, MISSING_VALUE_EXCEPTION)
+        # If one of the expected arguments is the output_filename then set it here
+        writes_output_file = OUTPUT_FILEPATH_ARG in expected_arguments
+        if writes_output_file:
+            # The task should have a defined output file
+            if not self.output_filename:
+                raise RuntimeError(f'Task {self.flag} must have an "output_filename"')
+            # Set the output file path
+            self._output_filepath = parent.pathify(self.output_filename)
+            # Add it to the processed args
+            processed_args[OUTPUT_FILEPATH_ARG] = self._output_filepath
+            # Remove the expected argument from the list
+            expected_arguments.remove(OUTPUT_FILEPATH_ARG)
+        # If one of the expected arguments is the output_directory then set it here
         # We will set a new directory with the flag name of the task, in the correspoding path
         # Note that while the task is beeing done the output directory has a different name
         # Thus the directory is hidden and marked as incomplete
         # The final output directory is the one without the incomplete prefix
-        writes_output = OUTPUT_DIRECTORY_ARG in expected_arguments
+        writes_output_dir = OUTPUT_DIRECTORY_ARG in expected_arguments
         incomplete_output_directory = None
         final_output_directory = None
-        if writes_output:
+        if writes_output_dir:
             # Set the output directory path
             incomplete_output_directory = parent.pathify(INCOMPLETE_PREFIX + self.flag)
             final_output_directory = incomplete_output_directory.replace(INCOMPLETE_PREFIX, '')
@@ -188,27 +216,36 @@ class Task:
         must_overwrite = forced_overwrite or any_input_changed
         # Check if output already exists
         # If the final directory already exists then it means the task was started in a previous run
-        existing_incomplete_output = writes_output and exists(incomplete_output_directory)
+        existing_incomplete_output = writes_output_dir and exists(incomplete_output_directory)
         # If the final directory already exists then it means the task was done in a previous run
-        existing_final_output = writes_output and exists(final_output_directory)
-        # It should never happend that both directories exist
-        if existing_incomplete_output and existing_final_output:
-            raise RuntimeError('We have incomplete and finished output directories at the same time')
+        existing_final_output = writes_output_dir and exists(final_output_directory)
+        # If the output file already exists then it also means the task was done in a previous run
+        existing_output_file = writes_output_file and exists(self._output_filepath)
+        # If we already have a cached output result
+        existing_output_data = returns_output and self._value != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
         if must_overwrite:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
             if existing_final_output: rmtree(final_output_directory)
-        # If the output already exists and it is not to be overwritten
-        elif existing_final_output:
-            # If we must proceed because the analysis returns output then use the final output directory
-            if returns_output:
-                processed_args[OUTPUT_DIRECTORY_ARG] = final_output_directory
-            # If the task is not to return any output then we can skip the task
-            else: 
+            if existing_output_file: remove(self._output_filepath)
+            if existing_output_data: parent.cache.delete(cache_output_key)
+        # If already existing output is not to be overwritten then check if it is already what we need
+        else:
+            # If output files/directories are expected then they must exist
+            # If output data is expected then it must be cached
+            satisfied_output = (not writes_output_dir or exists(final_output_directory)) \
+                and (not writes_output_file or exists(self._output_filepath)) \
+                and (not returns_output or self._value != MISSING_VALUE_EXCEPTION)
+            # If we already have the expected output then we can skip the task at all
+            if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
-                return
-        # Create the output directory, if necessary
-        missing_incomplete_output = writes_output \
+                return self._value if returns_output else None
+        # If we are at this point then we are missing some output sp we must proceed to run the task
+        # Use the final output directory instead of the incomplete one if exists
+        if existing_final_output:
+            processed_args[OUTPUT_DIRECTORY_ARG] = final_output_directory
+        # Create the incomplete output directory, if necessary
+        missing_incomplete_output = writes_output_dir \
             and not exists(incomplete_output_directory) \
             and not exists(final_output_directory)
         if missing_incomplete_output: mkdir(incomplete_output_directory)
@@ -218,12 +255,15 @@ class Task:
         if any_input_changed and had_cache and not forced_overwrite:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
             print(f'{GREEN_HEADER}   The task is run again since the following inputs changed:{changes}{COLOR_END}')
+        # Run the actual task
         self._value = self.func(**processed_args)
+        # Update the cache
+        if returns_output: parent.cache.update(cache_output_key, self._value)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
         # Otheriwse, change the incomplete directory name to its final name
-        if writes_output and exists(incomplete_output_directory):
+        if writes_output_dir and exists(incomplete_output_directory):
             if is_directory_empty(incomplete_output_directory): rmtree(incomplete_output_directory)
             else: rename(incomplete_output_directory, final_output_directory)
         # Now return the function result
@@ -255,9 +295,9 @@ class Task:
         processed_args : dict) -> Tuple[ List[str], bool ]:
         # Get cache argument references
         all_cksums = parent.cache.retrieve(CACHE_ARG_CKSUMS, {})
-        task_cksums = all_cksums.get(self.func.__name__, None)
-        had_cache = False if task_cksums == None else True
-        if task_cksums == None:
+        task_cksums = all_cksums.get(self.func.__name__, MISSING_VALUE_EXCEPTION)
+        had_cache = False if task_cksums == MISSING_VALUE_EXCEPTION else True
+        if not had_cache:
             task_cksums = {}
             all_cksums[self.func.__name__] = task_cksums
         # Check argument by argument
@@ -282,6 +322,17 @@ class Task:
             # If there were differences then update the cache
             parent.cache.update(CACHE_ARG_CKSUMS, all_cksums)
         return unmatched_arguments, had_cache
+    
+    # Asking for the output file or filepath implies running the Task, then returning the file/filepath
+    def get_output_filepath (self, caller) -> str:
+        if self._output_filepath != None: return self._output_filepath
+        self(caller)
+        return self._output_filepath
+    output_filepath = property(get_output_filepath, None, None, "Output filepath once the file is produced (read only)")
+    def get_output_file (self, caller) -> str:
+        filepath = self.get_output_filepath(caller)
+        return File(filepath)
+    output_file = property(get_output_file, None, None, "Output file once the file is produced (read only)")
 
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -358,6 +409,8 @@ class MD:
             self.register = self.project.register
         else:
             self.register = Register(register_file)
+        # Save also warnings apart since they are to be used as an input for metadata tasks
+        self.warnings = self.register.warnings
 
         # Set a new MD specific cache
         # In case the directory is the project directory itself, use the project cache
@@ -1293,31 +1346,9 @@ class MD:
         return average_structure_file
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
-    def get_metadata_file (self) -> File:
-        """Generate the MD metadata file."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the metadata file
-        metadata_filepath = self.pathify(OUTPUT_METADATA_FILENAME)
-        metadata_file = File(metadata_filepath)
-        # If the file already exists
-        if metadata_file.exists and not must_overwrite:
-            return metadata_file
-        # Otherwise, generate it
-        generate_md_metadata(
-            md_inputs = self.md_inputs, # DANI: No sería mejor pasarle los inputs?
-            structure = self.structure,
-            snapshots = self.snapshots,
-            reference_frame = self.reference_frame,
-            register = self.register,
-            output_metadata_filename = metadata_file.path,
-        )
-        return metadata_file
-    metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
+    # Produce the MD metadata file to be uploaded to the database
+    prepare_metadata = Task('mdmeta', 'Prepare MD metadata',
+        generate_md_metadata, output_filename=OUTPUT_METADATA_FILENAME)
 
     # The processed interactions
     get_processed_interactions = Task('inter', 'Interaccions processing',
@@ -2229,6 +2260,8 @@ class Project:
         register_filepath = self.pathify(REGISTER_FILENAME)
         register_file = File(register_filepath)
         self.register = Register(register_file)
+        # Save also warnings apart since they are to be used as an input for metadata tasks
+        self.warnings = self.register.warnings
 
         # Set the cache
         cache_filepath = self.pathify(CACHE_FILENAME)
@@ -2914,7 +2947,10 @@ class Project:
             pdb_ids = self.pdb_ids,
         )
         return self._protein_map
-    protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
+    # Map the structure aminoacids sequences against the Uniprot reference sequences
+    get_protein_map = Task('protmap', 'Protein residues mapping',
+        generate_protein_mapping, output_filename=PROTEIN_REFERENCES_FILENAME)
+    protein_map = property(get_protein_map, None, None, "Protein residues mapping (read only)")
 
     # Define the output file of the protein mapping including protein references
     def get_protein_references_file (self) -> File:
@@ -2928,6 +2964,7 @@ class Project:
         self.get_protein_map()
         # Return the file
         return protein_references_file
+    get_protein_references_file = get_protein_map.get_output_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
     def get_chain_references (self) -> List[str]:
@@ -3039,40 +3076,13 @@ class Project:
         return self._residue_map
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
-    
-    def get_metadata_file (self) -> File:
-        """Generate the project metadata file to be upload to the database."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the metadata file
-        metadata_filepath = self.pathify(OUTPUT_METADATA_FILENAME)
-        metadata_file = File(metadata_filepath)
-        # If the file already exists then send it
-        if metadata_file.exists and not must_overwrite:
-            return metadata_file
-        # Set an input getter that gets the input as soon as called
-        def get_input (name : str):
-            return Project.input_getter(name)(self)
-        # Otherwise, generate it
-        generate_project_metadata(
-            input_structure_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            get_input = get_input,
-            structure = self.structure,
-            residue_map = self.residue_map,
-            protein_references_file = self.protein_references_file,
-            pdb_ids = self.pdb_ids,
-            register = self.register,
-            output_metadata_filename = metadata_file.path,
-            ligand_customized_names = self.pubchem_name_list,
-            interactions = self.reference_md.interactions
-        )
-        return metadata_file
-    metadata_file = property(get_metadata_file, None, None, "Project metadata filename (read only)")
+    # Get interaction types
+    get_interaction_types = Task('intertypes', 'Finding interaction types', find_interaction_types)
+    interaction_types = property(get_interaction_types, None, None, "Interaction types (read only)")
+
+    # Prepare the project metadata file to be upload to the database
+    prepare_metadata = Task('pmeta', 'Prepare project metadata',
+        prepare_project_metadata, output_filename=OUTPUT_METADATA_FILENAME)
 
     def get_standard_topology_file (self) -> File:
         """Generate the standardized topology file."""
@@ -3240,7 +3250,7 @@ project_requestables = {
     'ligands': Project.get_ligand_map,
     'screenshot': Project.get_screenshot_filename,
     'stopology': Project.get_standard_topology_file,
-    'pmeta': Project.get_metadata_file,
+    #'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
     'membrane': Project.get_membrane_map, 
     'membranes': Project.get_membrane_map, 
@@ -3254,7 +3264,7 @@ md_requestables = {
     **md_processed_files,
     **analyses,
     #'inter': MD.get_processed_interactions,
-    'mdmeta': MD.get_metadata_file,
+    #'mdmeta': MD.get_metadata_file,
 }
 # Add available tasks to project requestables
 for callable in vars(MD).values():

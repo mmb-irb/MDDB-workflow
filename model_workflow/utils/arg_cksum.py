@@ -3,6 +3,7 @@ import json
 from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.structures import Structure
+from model_workflow.utils.register import Register
 from typing import Optional, Union
 
 # Note that it is more convinient not to have this function among auxiliar functions
@@ -18,11 +19,13 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     # For numbers simply use the number itself
     if value_type == int or value_type == float or value_type == bool: return value
     # For strings, sum the ordinal numbers of every letter
-    if value_type == str: return sum(map(ord, value))
+    if value_type == str: return f'{sum(map(ord, value))} -> {len(value)}'
     # For objects, stringify them and then do the same that with strings
     if value_type in { list, dict }:
-        stringifyed = json.dumps(value, default=lambda o: '<not serializable>')
+        stringifyed = json.dumps(value, default = lambda o: '<not serializable>')
         return get_cksum_id(stringifyed)
+    # For functions simply store the name
+    if callable(value): return value.__name__
     # For files use file last modification time and size
     if isinstance(value, File): return f'{value.mtime} -> {value.size}'
     # For the parsed structure
@@ -31,5 +34,10 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
         return get_cksum_id(pdb_content)
     # For the parsed structure
     if isinstance(value, Selection): return f'{len(value.atom_indices)}-{sum(value.atom_indices)}'
+    # For the register it makes not sense making a comparision
+    # WARNING: If the register is an input make sense it is only being "used" and not "read"
+    # Otherwise, the register content (e.g. warnings) will be not compared between runs
+    # If you want this to be compared then pass the register subsection as an input
+    if isinstance(value, Register): return True
     # If the value has non of previous types then we complain
     raise TypeError(f'Non supported type "{value_type}" for cksum id: {value}')

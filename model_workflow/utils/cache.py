@@ -27,6 +27,11 @@ class Cache:
         self.data[key] = value
         self.save()
 
+    # Delete a value in the cache
+    def delete (self, key : str):
+        del self.data[key]
+        self.save()
+
     # Reset the cache
     # This is called when some input files are modified
     def reset (self):
