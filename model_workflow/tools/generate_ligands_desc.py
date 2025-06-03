@@ -309,9 +309,8 @@ def check_matched_ligand (ligand: dict, ligand_data: dict, cache: 'Cache') -> bo
     if not pubchem_id_1 and not pubchem_id_2:
         return False
     # If we have a pubchem id then check if it is already in the cache
-    cache_not_matched = cache.retrieve(NOT_MATCHED_LIGANDS, {})
-    
-    for pubchem in cache_not_matched.keys():
+    cache_not_matched = cache.retrieve(NOT_MATCHED_LIGANDS, [])
+    for pubchem in cache_not_matched:
         if pubchem == pubchem_id_1 or pubchem == pubchem_id_2:
             print(f" Ligand with PubChem id {pubchem} didn't match before, skipping it")
             return True
@@ -472,8 +471,8 @@ def generate_ligand_mapping (
             ligands_data.pop()
             ligand_maps.pop()
             # Update the cache with the pubchem id of the ligands that didn't match
-            not_matched_pubchems = cache.retrieve(NOT_MATCHED_LIGANDS, {})
-            not_matched_pubchems[ligand_map['name']] = ligand_map['name'] # AGUS: la key y el value son el mismo valor, no sé me ocurre otro 
+            not_matched_pubchems = cache.retrieve(NOT_MATCHED_LIGANDS, [])
+            not_matched_pubchems.append(ligand_map['name'])
             cache.update(NOT_MATCHED_LIGANDS, not_matched_pubchems)
             # Delete the name
             ligand_name = ligand_names.get(pubchem_id, None)
