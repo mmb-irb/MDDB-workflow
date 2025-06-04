@@ -1,5 +1,6 @@
 from os import environ
 from shutil import which
+import sys
 
 # CONSTANTS ---------------------------------------------------------------------------
 
@@ -214,13 +215,20 @@ TOPOLOGY_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
 
 # Terminal colors
 # https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
-GREEN_HEADER = '\033[92m'
-CYAN_HEADER = '\033[96m'
-BLUE_HEADER = '\033[94m'
-YELLOW_HEADER = '\033[93m'
-RED_HEADER = '\033[91m'
-GREY_HEADER = '\033[90m'
-COLOR_END = '\033[0m'
+if 'pytest' in sys.modules:
+    # If we are running tests then disable colors
+    # This is useful to avoid colored output in CI logs
+    GREEN_HEADER = CYAN_HEADER = BLUE_HEADER = YELLOW_HEADER \
+        = RED_HEADER = GREY_HEADER = COLOR_END = ''
+else:
+    # Otherwise, set the colors
+    GREEN_HEADER = '\033[92m'
+    CYAN_HEADER = '\033[96m'
+    BLUE_HEADER = '\033[94m'
+    YELLOW_HEADER = '\033[93m'
+    RED_HEADER = '\033[91m'
+    GREY_HEADER = '\033[90m'
+    COLOR_END = '\033[0m'
 
 # Set a dictionary to parse an internal raw name to a pretty human firendly name
 NICE_NAMES = {

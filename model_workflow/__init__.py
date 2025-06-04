@@ -1,5 +1,13 @@
 import os
 import subprocess
+from model_workflow.utils.logger import init_logger
+
+logger = None
+def initialize():
+    global logger
+    if logger is None:
+        logger = init_logger()
+    return logger
 
 name = "model_workflow"
 __all__ = ["resources", "tools", "utils"]

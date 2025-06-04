@@ -125,7 +125,14 @@ def reprint (text : str):
 
 # Set a function to print a messahe with a colored warning header
 def warn (message : str):
-    print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
+    # Check if stdout is attached to a terminal (interactive)
+    if 'pytest' in sys.modules:
+        # Redirected output (e.g. to log file) - no color codes
+        print('⚠  WARNING: ' + message)
+    else:
+        # Terminal output - include color codes
+        print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
+    
 
 # Get the mean/average of a list of values
 def mean(values : List[float]) -> float:
