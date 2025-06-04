@@ -42,8 +42,8 @@ def distance_per_residue (
     pytraj_topology = structure.get_pytraj_topology()
     pytraj_residues = list(pytraj_topology.residues)
     # Transform a structure residue to the pytraj residue numeration (1, 2, ... n)
-    def residue_2_pytraj_residue_index (residue : 'Residue') -> int:
-        residue_index = residue.index
+    def residue_2_pytraj_residue_index (residue_index : int) -> int:
+        residue = structure.residues[residue_index]
         residue_number = residue.number
         residue_name = residue.name[0:3]
         # And check that this residue data matches the pytraj residues data
@@ -81,7 +81,8 @@ def distance_per_residue (
         if exists(numbered_output_analysis_filepath): continue
         reprint(f' Analyzing {name} ({n+1}/{len(interactions)})')
         # Get the residues to be used for this interaction
-        residues_1, residues_2 = interaction['residues_1'], interaction['residues_2']
+        residues_1 = interaction['residue_indices_1']
+        residues_2 = interaction['residue_indices_2']
         # First of all, calculate the number of values for this interaction
         # If the interaction has more values than we can store then it will be reduced
         # Reduced interactions will store only residues in the interface in order to fit
@@ -91,7 +92,8 @@ def distance_per_residue (
         # Create 2 lists filled with 0s with the length of the residue number arrays respectively
         if reduced:
             warn('The analysis has been reduced to interface residues only for this interaction')
-            residues_1, residues_2 = interaction['interface_1'], interaction['interface_2']
+            residues_1 = interaction['interface_residue_indices_1']
+            residues_2 = interaction['interface_residue_indices_2']
             n_values = len(residues_1) * len(residues_2)
             if n_values > N_VALUES_LIMIT: raise ValueError('Too many values, even after reducing')
         # Show the size of the matrix

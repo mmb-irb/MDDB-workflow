@@ -299,7 +299,7 @@ def process_interactions (
             interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
         
         # Add residue notations
-        add_residues(interaction, structure)
+        add_residues_indices(interaction, structure)
             
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
@@ -310,7 +310,8 @@ def process_interactions (
         interaction['version'] = '2.0.0'
 
         # Log the final results
-        interface_residue_indices = sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])
+        interface_residue_indices = sorted(interaction["interface_residue_indices_1"]
+            + interaction["interface_residue_indices_2"])
         print(f'{interaction_name} (time: {pretty_frames_percent} %) -> {interface_residue_indices}')
 
     # Filter away interactions whcih have failed
@@ -344,11 +345,11 @@ def load_interactions (output_analysis_filepath : str, structure : 'Structure') 
         if interaction.get(FAILED_INTERACTION_FLAG, False):
             continue
         # Add residue notations, which are not saved to disk
-        add_residues(interaction, structure)
+        add_residues_indices(interaction, structure)
     return interactions
 
-# Set an auxiliar function to add residue indices and parsed residues to an interactions object
-def add_residues (interaction : dict, structure : 'Structure'):
+# Set an auxiliar function to add residue indices to an interactions object
+def add_residues_indices (interaction : dict, structure : 'Structure'):
     # Iterate interaction agents
     for agent in ['1','2']:
         # Get interaction atom indices
@@ -356,10 +357,8 @@ def add_residues (interaction : dict, structure : 'Structure'):
         # Now parse atom indices to residue indices for those analysis which work with residues
         residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
         interaction[f'residue_indices_{agent}'] = residue_indices
-        interaction[f'residues_{agent}'] = [ structure.residues[residue_index] for residue_index in residue_indices ]
         # Get interaction interface atom indices
         interface_atom_indices = interaction[f'interface_atom_indices_{agent}']
         # Then with interface atoms/residues
         interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
-        interaction[f'interface_indices_{agent}'] = interface_residue_indices
-        interaction[f'interface_{agent}'] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
+        interaction[f'interface_residue_indices_{agent}'] = interface_residue_indices
