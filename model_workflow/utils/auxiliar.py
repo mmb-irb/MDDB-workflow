@@ -195,7 +195,7 @@ def list_files (directory : str) -> List[str]:
 
 # Check if a directory is empty
 def is_directory_empty (directory : str) -> bool:
-    return listdir(directory) == 0
+    return len(listdir(directory)) == 0
 
 # Set a function to check if a string has patterns to be parsed by a glob function
 # Note that this is not trivial, but this function should be good enough for our case
