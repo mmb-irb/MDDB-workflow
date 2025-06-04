@@ -2973,6 +2973,7 @@ class Project:
                 lipid_map = self.lipid_map,
                 structure_file=self.structure_file,
                 universe = self.universe,
+                output_membrane_filepath = mem_map_file.path,
             )   
         if self._membrane_map is None or self._membrane_map['n_mems'] == 0:
             print('No membrane available. Related analyses will be skipped.')

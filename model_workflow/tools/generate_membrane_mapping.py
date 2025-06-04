@@ -1,7 +1,6 @@
 import os
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
-from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
@@ -9,6 +8,7 @@ from contextlib import redirect_stdout
 def generate_membrane_mapping(lipid_map : List[dict],
                               structure_file : 'File',
                               universe: 'Universe',
+                              output_membrane_filepath: str,
                               ) -> List[dict]:
     """
     Generates a list of residue numbers of membrane components from a given structure and topology file.
@@ -36,8 +36,9 @@ def generate_membrane_mapping(lipid_map : List[dict],
     # Prepare the membrane mapping OBJ/JSON
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     # if no lipids are found, we save the empty mapping and return
-    if len(lipid_map) == 0:
-        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+    if len(lipid_ridx) == 0:
+        # no lipids found in the structure.
+        save_json(mem_map_js, output_membrane_filepath)
         return mem_map_js
     
     # Select only the lipids and potential membrane members
@@ -117,6 +118,6 @@ def generate_membrane_mapping(lipid_map : List[dict],
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
     print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
-    save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+    save_json(mem_map_js, output_membrane_filepath)
     return mem_map_js
 
