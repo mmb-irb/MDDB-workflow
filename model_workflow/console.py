@@ -483,7 +483,7 @@ run_parser_selection_group.add_argument(
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
     help="Atom selection for the pca fitting in vmd syntax")
 run_parser_selection_group.add_argument(
-    "-pcasel", "--pca_selection",
+    "-pcana", "--pca_analysis_selection",
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
     help="Atom selection for pca analysis in vmd syntax")
 

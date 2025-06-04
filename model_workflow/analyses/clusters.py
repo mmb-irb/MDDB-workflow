@@ -7,20 +7,20 @@ import mdtraj as mdt
 from model_workflow.utils.auxiliar import round_to_thousandths, save_json, otherwise
 from model_workflow.utils.auxiliar import numerate_filename, get_analysis_name
 from model_workflow.utils.auxiliar import reprint, delete_previous_log
+from model_workflow.utils.constants import OUTPUT_CLUSTERS_FILENAME, OUTPUT_CLUSTER_SCREENSHOT_FILENAMES
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
 
 # Run the cluster analysis
 def clusters_analysis (
-    input_structure_file : 'File',
-    input_trajectory_file : 'File',
+    structure_file : 'File',
+    trajectory_file : 'File',
     interactions : list,
     structure : 'Structure',
     snapshots : int,
     pbc_selection : 'Selection',
-    output_analysis_filepath : str,
-    output_screenshots_filename : str,
+    output_directory : str,
     # Set the maximum number of frames
     frames_limit : int = 1000,
     # Set the number of steps between the maximum and minimum RMSD so set how many cutoff are tried and how far they are
@@ -30,8 +30,6 @@ def clusters_analysis (
     # Set the atom selection for the overall clustering
     overall_selection : str = "name CA or name C5'",
 ):
-
-    print('-> Running clusters analysis')
 
     # The cluster analysis is run for the overall structure and then once more for every interaction
     # We must set the atom selection of every run in atom indices, for MDtraj
@@ -54,7 +52,8 @@ def clusters_analysis (
     # Now setup the interaction runs
     for interaction in interactions:
         # Get the interface selection
-        interface_residue_indices = interaction['interface_indices_1'] + interaction['interface_indices_2']
+        interface_residue_indices = interaction['interface_residue_indices_1'] \
+            + interaction['interface_residue_indices_2']
         interface_selection = structure.select_residue_indices(interface_residue_indices)
         heavy_atoms_selection = structure.select_heavy_atoms()
         # Keep only heavy atoms for the distance calculation
@@ -75,14 +74,18 @@ def clusters_analysis (
     
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        input_structure_file,
-        input_trajectory_file,
+        structure_file,
+        trajectory_file,
         snapshots,
         frames_limit,
     )
 
+    # Set output filepaths
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_CLUSTERS_FILENAME}'
+    output_screenshot_filepath = f'{output_directory}/{OUTPUT_CLUSTER_SCREENSHOT_FILENAMES}'
+
     # Load the whole trajectory
-    traj = mdt.load(reduced_trajectory_filepath, top=input_structure_file.path)
+    traj = mdt.load(reduced_trajectory_filepath, top=structure_file.path)
 
     # Set the target number of clusters
     # This should be the desired number of clusters unless there are less frames than that
@@ -221,11 +224,11 @@ def clusters_analysis (
             # coordinates.save(AUXILIAR_PDB_FILENAME)
             auxiliar_structure.set_new_coordinates(coordinates)
             # Set the screenshot filename from the input template
-            screenshot_filename = output_screenshots_filename.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
+            screenshot_filename = output_screenshot_filepath.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
             # Generate the screenshot
             reprint(f' Generating cluster screenshot {c+1}/{n_clusters}')
             screenshot_parameters = get_screenshot(auxiliar_structure, screenshot_filename,
-                parameters=screenshot_parameters, message=None)
+                parameters=screenshot_parameters)
 
         # Set the output clusters which include all frames in the cluster and the main or more representative frame
         output_clusters = []

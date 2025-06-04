@@ -1,15 +1,16 @@
 from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME
 from model_workflow.utils.type_hints import *
 import numpy as np
 import MDAnalysis
 
 
 def lipid_order (
-    input_trajectory_filepath : str,
-    topology_file : 'File',
-    output_analysis_filepath : str,
+    trajectory_file : 'File',
+    standard_topology_file : 'File',
+    output_directory : str,
     membrane_map: dict,
     snapshots : int,
     frames_limit: int = 100):
@@ -28,10 +29,12 @@ def lipid_order (
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping lipid order analysis')
         return
-    print('-> Running lipid order analysis')
     
-    mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
-    u = MDAnalysis.Universe(mda_top, input_trajectory_filepath)
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
+    
+    mda_top = to_MDAnalysis_topology(standard_topology_file.absolute_path)
+    u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     for ref, ref_data in membrane_map['references'].items():

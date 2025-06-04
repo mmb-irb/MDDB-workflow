@@ -2,7 +2,6 @@ import os
 import MDAnalysis
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
-from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
@@ -11,14 +10,15 @@ from model_workflow.utils.warnings import warn
 from contextlib import redirect_stdout
 
 def generate_membrane_mapping(structure : 'Structure',
-                              topology_file : 'File',
+                              standard_topology_file : 'File',
                               structure_file : 'File',
+                              output_filepath : str
                               ) -> List[dict]:
     """
     Generates a list of residue numbers of membrane components from a given structure and topology file.
     Args:
         structure (Structure): The molecular structure to analyze.
-        topology_file (File): The topology file in JSON format.
+        standard_topology_file (File): The topology file in JSON format.
         structure_file (File): The structure file.
         debug (bool, optional): If True, additional debug information is returned. Defaults to False.
     
@@ -42,18 +42,19 @@ def generate_membrane_mapping(structure : 'Structure',
     except:
         # Then we map the lipids/membrane
         warn('There was a problem connecting to the SwissLipids database.')
+        print('No membrane available. Related analyses will be skipped.')
         return None
     # Prepare the membrane mapping OBJ/JSON
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}, 'references': None}
-    print('-> Generating membrane mapping')
-    assert topology_file.extension == 'json', 'Input topology file must be in json format: '+ topology_file.extension
+    assert standard_topology_file.extension == 'json', 'Input topology file must be in json format: '+ standard_topology_file.extension
     # Check the topology has charges or the code further will fail
-    topology_data = load_json(topology_file.absolute_path)
+    topology_data = load_json(standard_topology_file.absolute_path)
     topology_charges = topology_data.get('atom_charges', None)
     if not topology_charges:
-        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+        save_json(mem_map_js, output_filepath)
+        print('No membrane available. Related analyses will be skipped.')
         return mem_map_js
-    mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
+    mda_top = to_MDAnalysis_topology(standard_topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
     # Get InChI keys of non-proteic/non-nucleic residues
     inchi_keys = get_inchi_keys(u, structure)
@@ -90,7 +91,8 @@ def generate_membrane_mapping(structure : 'Structure',
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
-        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+        save_json(mem_map_js, output_filepath)
+        print('No membrane available. Related analyses will be skipped.')
         return mem_map_js
     
     # Select only the lipids and potential membrane members
@@ -165,6 +167,8 @@ def generate_membrane_mapping(structure : 'Structure',
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
     print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
-    save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+    save_json(mem_map_js, output_filepath)
+    if mem_map_js is None or mem_map_js['n_mems'] == 0:
+        print('No membrane available. Related analyses will be skipped.')
     return mem_map_js
 

@@ -15,10 +15,10 @@ def prepare_project_metadata (
     residue_map : dict,
     protein_references_file : 'File',
     pdb_ids : List[str],
-    warnings : dict,
-    pubchem_name_list : dict,
+    ligand_map : dict,
     input_interactions : list,
     interaction_types : dict,
+    warnings : dict,
     ):
 
     # Find out the box size (x, y and z)
@@ -45,8 +45,10 @@ def prepare_project_metadata (
 
     # Get ligand names if any
     input_ligands = get_input('ligands')
-    if len(pubchem_name_list) == 0:
-        pubchem_name_list = None
+    forced_ligand_names = {
+        lig['name']: lig['forced_name'] for lig in ligand_map if lig.get('forced_name', False) }
+    if len(forced_ligand_names) == 0:
+        forced_ligand_names = None
 
     # Make the forcefields a list in case it is a single string
     forcefields = get_input('ff')
@@ -111,7 +113,7 @@ def prepare_project_metadata (
         'REFERENCES': protein_references,
         'INPUT_LIGANDS': input_ligands,
         'LIGANDS': ligand_references,
-        'LIGANDNAMES': pubchem_name_list,
+        'LIGANDNAMES': forced_ligand_names,
         'PROTSEQ': sequence_metadata['protein_sequences'],
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],

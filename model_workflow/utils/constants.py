@@ -178,10 +178,6 @@ OUTPUT_APL_FILENAME = 'mda.apl.json'
 OUTPUT_LIPID_ORDER_FILENAME = 'mda.lipid_order.json'
 OUTPUT_LIPID_INTERACTIONS_FILENAME  = 'mda.lipid_inter.json'
 
-# Set folder names for some analyses which generate a lot of intermediate step files
-ENERGIES_FOLDER = 'energies'
-POCKETS_FOLDER = 'mdpocket'
-
 # Set problematic signs for directory/folder names
 # º is forbidden since paths including this characters are not readable by MDtraj
 FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º']

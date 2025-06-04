@@ -9,10 +9,8 @@ def generate_topology (
     residue_map : dict,
     pbc_residues : List[int],
     cg_residues : List[int],
-    output_topology_filepath : str
+    output_filepath : str
 ):
-
-    print('-> Generating topology')
 
     # The structure will be a bunch of arrays
     # Atom data
@@ -88,4 +86,4 @@ def generate_topology (
         'pbc_residues': pbc_residues,
         'cg_residues': cg_residues,
     }
-    save_json(topology, output_topology_filepath)
+    save_json(topology, output_filepath)

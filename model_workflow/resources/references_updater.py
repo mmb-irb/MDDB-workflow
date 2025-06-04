@@ -3,7 +3,7 @@ import json
 from os.path import exists
 from model_workflow.utils.constants import *
 from model_workflow.utils.file import File
-from model_workflow.tools.generate_pdb_references import generate_pdb_references 
+from model_workflow.tools.generate_pdb_references import prepare_pdb_references 
 from model_workflow.tools.generate_map import get_uniprot_reference
 from model_workflow.tools.chains import request_interpsocan, get_interproscan_results
 from model_workflow.utils.auxiliar import save_json
@@ -88,7 +88,7 @@ def updater(ref_type = 'proteins'):
         # Remove pdb id duplicates on lower case
         project_ids = {pid.upper() for pid in project_ids}
         print(n-len(project_ids), 'duplicates removed by using upper case')
-        generate_pdb_references(project_ids,File(references_filename))
+        prepare_pdb_references(project_ids,File(references_filename))
     elif ref_type == 'chains':
         # References from interproscan with existing projects (non orphan)
         update_sequence = reference_ids.difference(orphan_references)

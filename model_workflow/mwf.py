@@ -43,8 +43,8 @@ from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.find_interaction_types import find_interaction_types
 from model_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
-from model_workflow.tools.chains import generate_chain_references
-from model_workflow.tools.generate_pdb_references import generate_pdb_references
+from model_workflow.tools.chains import prepare_chain_references
+from model_workflow.tools.generate_pdb_references import prepare_pdb_references
 from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
 from model_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
@@ -139,7 +139,10 @@ class Task:
         # For those tasks which generate a directory with multiple outputs this is not necessary
         # However this may come in handy by tasks with a single file output
         # Specillay when this output file is used later in this workflow
-        output_filename : Optional[str] = None
+        output_filename : Optional[str] = None,
+        # Set if the returned output is to be cached
+        # Note that argument values are always cached, this is not optional
+        use_cache : bool = True
     ):
         # Save input arguments
         self.flag = flag
@@ -147,6 +150,7 @@ class Task:
         self.func = func
         self.args = args
         self.output_filename = output_filename
+        self.use_cache = use_cache
         # Set internal values
         self._value = MISSING_VALUE_EXCEPTION
         self._output_filepath = None
@@ -167,7 +171,7 @@ class Task:
         # Find out if the function is to return output
         returns_output = bool(specification.annotations.get('return', None))
         # If so, then find if we have cached output
-        if returns_output:
+        if returns_output and self.use_cache:
             cache_output_key = self.flag + CACHE_TASK_OUTPUT_TAIL
             self._value = parent.cache.retrieve(cache_output_key, MISSING_VALUE_EXCEPTION)
         # If one of the expected arguments is the output_filename then set it here
@@ -240,9 +244,10 @@ class Task:
             if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
                 return self._value if returns_output else None
-        # If we are at this point then we are missing some output sp we must proceed to run the task
+        # If we are at this point then we are missing some output so we must proceed to run the task
         # Use the final output directory instead of the incomplete one if exists
-        if existing_final_output:
+        # Note that we must check if it exists again since it may have been deleted since the last check
+        if writes_output_dir and exists(final_output_directory):
             processed_args[OUTPUT_DIRECTORY_ARG] = final_output_directory
         # Create the incomplete output directory, if necessary
         missing_incomplete_output = writes_output_dir \
@@ -258,7 +263,7 @@ class Task:
         # Run the actual task
         self._value = self.func(**processed_args)
         # Update the cache
-        if returns_output: parent.cache.update(cache_output_key, self._value)
+        if returns_output and self.use_cache: parent.cache.update(cache_output_key, self._value)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
@@ -1564,6 +1569,7 @@ class MD:
             excluded_atoms_selection = excluded_atoms_selection
         )
         return self._reference_frame
+    # get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
     # ---------------------------------------------------------------------------------
@@ -1595,264 +1601,49 @@ class MD:
     # Analyses
     # ---------------------------------------------------------------------------------
 
-    def run_rmsds_analysis (self):
-        """RMSDs analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_RMSDS_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # WARNING: This analysis is fast enought to use the full trajectory
-        # WARNING: However, the output file size depends on the trajectory size
-        # WARNING: In very long trajectories the number of points may make the client go slow when loading data
-        rmsds(
-            trajectory_file = self.trajectory_file,
-            first_frame_file = self.first_frame_file,
-            average_structure_file = self.average_structure_file,
-            output_analysis_filepath = output_analysis_filepath,
-            frames_limit = 5000,
-            snapshots = self.snapshots,
-            structure = self.structure,
-            pbc_selection = self.pbc_selection,
-            ligand_map = self.project.ligand_map,
-        )
+    # RMSDs analysis
+    run_rmsds_analysis = Task('rmsds', 'RMSDs analysis',
+        rmsds, { 'frames_limit': 5000 })
 
-    def run_tmscores_analysis (self):
-        """TM scores analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_TMSCORES_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # Here we set a small frames limit since this anlaysis is a bit slow
-        tmscores(
-            input_trajectory_file = self.trajectory_file,
-            output_analysis_filename = output_analysis_filepath,
-            first_frame_file = self.first_frame_file,
-            average_structure_file = self.average_structure_file,
-            structure = self.structure,
-            pbc_selection = self.pbc_selection,
-            snapshots = self.snapshots,
-            frames_limit = 200,
-        )
+    # TM scores analysis
+    run_tmscores_analysis = Task('tmscore', 'TM scores analysis',
+        tmscores, { 'frames_limit': 200 })
 
-    def run_rmsf_analysis (self):
-        """RMSF, atom fluctuation analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_RMSF_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # This analysis is fast and the output size depends on the number of atoms only
-        # For this reason here it is used the whole trajectory with no frames limit
-        rmsf(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            pbc_selection = self.pbc_selection,
-        )
+    # RMSF, atom fluctuation analysis
+    run_rmsf_analysis = Task('rmsf', 'Fluctuation analysis', rmsf)
 
-    def run_rgyr_analysis (self):
-        """Radius of gyration analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_RGYR_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
-        # WARNING: However, the output file size depends on the trajectory size
-        # WARNING: In very long trajectories the number of points may make the client go slow when loading data
-        rgyr(
-            input_topology_file = self.structure_file,
-            input_trajectory_file = self.trajectory_file,
-            output_analysis_filepath = output_analysis_filepath,
-            snapshots = self.snapshots,
-            frames_limit = 5000,
-            structure = self.structure,
-            pbc_selection = self.pbc_selection,
-        )
+    # Radius of gyration analysis
+    run_rgyr_analysis = Task('rgyr', 'Radius of gyration analysis',
+        rgyr, { 'frames_limit': 5000 })
 
-    def run_pca_analysis (self):
-        """PCA, principal component analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_PCA_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # WARNING: This analysis will generate several output files
-        # File 'pca.average.pdb' is generated by the PCA and it was used by the client but not anymore
-        # File 'covar.log' is generated by the PCA but never used
-        pca(
-            input_topology_file = self.structure_file,
-            input_trajectory_file = self.trajectory_file,
-            output_analysis_filepath = output_analysis_filepath,
-            output_trajectory_projections_prefix = self.pathify(OUTPUT_PCA_PROJECTION_PREFIX),
-            snapshots = self.snapshots,
-            frames_limit = 2000,
-            structure = self.structure,
-            fit_selection = self.project.pca_fit_selection,
-            analysis_selection = self.project.pca_selection,
-            pbc_selection = self.pbc_selection,
-        )
+    # PCA, principal component analysis
+    run_pca_analysis = Task('pca', 'Principal component analysis',
+        pca, { 'frames_limit': 2000, 'projection_frames': 20 })
 
     # PCA contacts
     # DANI: Intenta usar mucha memoria, hay que revisar
     # DANI: Puede saltar un error de imposible alojar tanta memoria
     # DANI: Puede comerse toda la ram y que al final salte un error de 'Terminado (killed)'
     # DANI: De momento me lo salto
-    # def run_pca_contacts (self):
-    #     # Get the task name
-    #     task = self._get_task()
-    #     # Check if this dependency is to be overwriten
-    #     must_overwrite = task in self.overwritables
-    #     # Update the overwritables so this is not remade further in the same run
-    #     self.overwritables.discard(task)
-    #     # Do not run the analysis if the output file already exists
-    #     output_analysis_filepath = self.pathify(OUTPUT_PCA_CONTACTS_FILENAME)
-    #     if exists(output_analysis_filepath) and not must_overwrite:
-    #         return
-    #     pca_contacts(
-    #         trajectory = self.trajectory_file.path,
-    #         topology = self.pdb_filename,
-    #         interactions = self.interactions,
-    #         output_analysis_filename = output_analysis_filepath
-    #     )
+    # DANI: Lleva mucho tiempo sin mantenerse, habrá que cambiar varias cosas al recuperarlo
+    # run_pca_contacts('pcacons', 'PCA contacts', pca_contacts)
 
-    def run_rmsd_perres_analysis (self):
-        """RMSD per residue analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_RMSD_PERRES_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
-        # WARNING: However, the output file size depends on the trajectory size. It may be pretty big
-        rmsd_per_residue(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            pbc_selection = self.pbc_selection,
-            snapshots = self.snapshots,
-            frames_limit = 100,
-        )
+    # RMSD per residue analysis
+    run_rmsd_perres_analysis = Task('perres', 'RMSD per residue analysis',
+        rmsd_per_residue, { 'frames_limit': 100 })
 
     # RMSD pairwise
-    def run_rmsd_pairwise_analysis (self):
-        """Perform an analysis for the overall structure and then one more analysis for each interaction."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_RMSD_PAIRWISE_FILENAME)
-        if must_overwrite: purge_glob(output_analysis_filepath)
-        # WARNING: This analysis is fast enought to use the full trajectory instead of the reduced one
-        # WARNING: However, the output file size depends on the trajectory size exponentially. It may be huge
-        rmsd_pairwise(
-            input_topology_filepath = self.structure_file.path,
-            input_trajectory_filepath = self.trajectory_file.path,
-            output_analysis_filepath = output_analysis_filepath,
-            interactions = self.interactions,
-            structure = self.structure,
-            pbc_selection = self.pbc_selection,
-            snapshots = self.snapshots,
-            frames_limit = 200,
-            overall_selection = "name CA or name C5"
-        )
+    # Perform an analysis for the overall structure and then one more analysis for each interaction
+    run_rmsd_pairwise_analysis = Task('pairwise', 'RMSD pairwise',
+        rmsd_pairwise, { 'frames_limit': 200, 'overall_selection': "name CA or name C5'" })
 
-    def run_clusters_analysis (self):
-        """Run the cluster analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_CLUSTERS_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # Set the output filepaths for additional images generated in this analysis
-        output_screenshot_filepath = self.pathify(OUTPUT_CLUSTER_SCREENSHOT_FILENAMES)
-        # In case the overwirte argument is passed delete all already existing outputs
-        if must_overwrite:
-            # Delete the summary if it exists
-            if exists(output_analysis_filepath):
-                remove(output_analysis_filepath)
-            # Get the glob-patterned path of the output analyses
-            output_analysis_glob_pattern = glob_filename(output_analysis_filepath)
-            # Iterate glob matches
-            for outputs in [ output_analysis_glob_pattern, output_screenshot_filepath ]:
-                existing_outputs = glob(outputs)
-                for existing_output in existing_outputs:
-                    if exists(existing_output):
-                        remove(existing_output)
-        # Run the analysis
-        clusters_analysis(
-            input_structure_file = self.structure_file,
-            input_trajectory_file = self.trajectory_file,
-            interactions = self.interactions,
-            structure = self.structure,
-            snapshots = self.snapshots,
-            pbc_selection = self.pbc_selection,
-            output_analysis_filepath = output_analysis_filepath,
-            output_screenshots_filename = output_screenshot_filepath,
-        )
+    # Run the cluster analysis
+    run_clusters_analysis = Task('clusters', 'Clusters analysis',
+        clusters_analysis, { 'frames_limit': 1000, 'desired_n_clusters': 20 })
 
-    def run_dist_perres_analysis (self):
-        """Calculate the distance mean and standard deviation of each pair of residues*."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_DIST_PERRES_FILENAME)
-        if must_overwrite: purge_glob(output_analysis_filepath)
-        # WARNING: This analysis is not fast enought to use the full trajectory. It would take a while
-        distance_per_residue(
-            input_topology_filepath = self.structure_file.path,
-            input_trajectory_filepath = self.trajectory_file.path,
-            output_analysis_filepath = output_analysis_filepath,
-            structure = self.structure,
-            interactions = self.interactions,
-            snapshots = self.snapshots,
-            frames_limit = 200,
-        )
+    # Calculate the distance mean and standard deviation of each pair of residues
+    run_dist_perres_analysis = Task('dist', 'Distance per residue',
+        distance_per_residue, { 'frames_limit': 200 })
 
     # Hydrogen bonds
     # WARNING: the output file size depends on the number of hydrogen bonds
@@ -1869,209 +1660,38 @@ class MD:
     run_energies_analysis = Task('energies', 'Energies analysis',
         energies, { 'frames_limit': 100 })
 
-    def run_dihedral_energies (self):
-        """Calculate torsions and then dihedral energies for every dihedral along the trajectory."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_DIHEDRAL_ENERGIES_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        compute_dihedral_energies(
-            input_structure_file = self.structure_file,
-            input_trajectory_file = self.trajectory_file,
-            output_analysis_filepath = output_analysis_filepath,
-            dihedrals_data = self.project.dihedrals,
-            snapshots = self.snapshots,
-            frames_limit = 100,
-        )
+    # Calculate torsions and then dihedral energies for every dihedral along the trajectory
+    run_dihedral_energies = Task('dihedrals', 'Dihedral energies analysis',
+        compute_dihedral_energies, { 'frames_limit': 100 })
 
-    def run_pockets_analysis (self):
-        """Perform the pockets analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_POCKETS_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # If we must overwritte pockets then delete the pockets folder and everything inside
-        mdpocket_folder = self.pathify(POCKETS_FOLDER)
-        if must_overwrite and exists(mdpocket_folder):
-            rmtree(mdpocket_folder)
-        # Run the analysis
-        pockets(
-            structure_file = self.structure_file,
-            trajectory_file = self.trajectory_file,
-            pockets_prefix = self.pathify(OUTPUT_POCKET_STRUCTURES_PREFIX),
-            output_analysis_filepath = output_analysis_filepath,
-            mdpocket_folder = mdpocket_folder,
-            pbc_selection = self.pbc_selection,
-            snapshots = self.snapshots,
-            frames_limit = 100,
-        )
+    # Perform the pockets analysis
+    run_pockets_analysis = Task('pockets', 'Pockets analysis',
+        pockets, { 'frames_limit': 100, 'maximum_pockets_number': 10 })
 
     # Helical parameters
-    def run_helical_analysis (self):
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_HELICAL_PARAMETERS_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        helical_parameters(
-            input_topology_filename = self.topology_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            structure_filename= self.structure_file.path,
-            frames_limit = None,
-        )
+    run_helical_analysis = Task('helical', 'Helical parameters', helical_parameters)
         
     # Markov
-    def run_markov_analysis (self):
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_MARKOV_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # If there are no populations file then stop here to avoid the log and calculating dependencies
-        if not self.populations:
-            return
-        # Run the analysis
-        markov(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            output_analysis_filename = output_analysis_filepath,
-            structure = self.structure,
-            populations = self.populations,
-            #transitions = self.transitions,
-            rmsd_selection = PROTEIN_AND_NUCLEIC,
-        )
+    run_markov_analysis = Task('markov', 'Markov', markov, { 'rmsd_selection': PROTEIN_AND_NUCLEIC })
 
-    # MEMBRANE ANALYSES    
-    def run_density_analysis (self):
-        """Membrane density analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_analysis_filepath = self.pathify(OUTPUT_DENSITY_FILENAME)
-        if exists(output_analysis_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        density(
-            input_structure_filepath = self.structure_file.path,
-            input_trajectory_filepath = self.trajectory_file.path,
-            output_analysis_filepath = output_analysis_filepath,
-            membrane_map = self.project.membrane_map,
-            structure = self.structure,
-            snapshots = self.snapshots,
-        )
+    # Membrane density analysis
+    run_density_analysis = Task('density', 'Membrane density analysis',
+        density, { 'frames_limit': 1000 })
 
-    def run_thickness_analysis (self):
-        """Membrane thickness analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_thickness_filepath = self.pathify(OUTPUT_THICKNESS_FILENAME)
-        if exists(output_thickness_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        thickness(
-            input_structure_filepath = self.structure_file.path,
-            input_trajectory_filepath = self.trajectory_file.path,
-            output_analysis_filepath = output_thickness_filepath,
-            membrane_map = self.project.membrane_map,
-            snapshots = self.snapshots,
-        )
+    # Membrane thickness analysis
+    run_thickness_analysis = Task('thickness', 'Membrane thickness analysis',
+        thickness, { 'frames_limit': 100 })
 
-    def run_apl_analysis (self):
-        """Area per lipid analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_apl_filepath = self.pathify(OUTPUT_APL_FILENAME)
-        if exists(output_apl_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        area_per_lipid(
-            input_structure_filepath = self.structure_file.path,
-            input_trajectory_filepath = self.trajectory_file.path,
-            output_analysis_filepath = output_apl_filepath,
-            membrane_map = self.project.membrane_map,
-        )
+    # Area per lipid analysis
+    run_apl_analysis = Task('apl', 'Membrane area per lipid analysis', area_per_lipid)
 
-    def run_lipid_order_analysis (self):
-        """Calculate lipid order parameters for membranes."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_lipid_order_filepath = self.pathify(OUTPUT_LIPID_ORDER_FILENAME)
-        if exists(output_lipid_order_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        lipid_order(
-            input_trajectory_filepath = self.trajectory_file.path,
-            topology_file=self.project.standard_topology_file,
-            output_analysis_filepath = output_lipid_order_filepath,
-            membrane_map = self.project.membrane_map,
-            snapshots = self.snapshots,
-        )
+    # Calculate lipid order parameters for membranes
+    run_lipid_order_analysis = Task('lorder', 'Membrane lipid order analysis',
+        lipid_order, { 'frames_limit': 100 })
 
-    def run_lipid_interactions_analysis (self):
-        """Lipid-protein interactions analysis."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Do not run the analysis if the output file already exists
-        output_lipid_interactions_filepath = self.pathify(OUTPUT_LIPID_INTERACTIONS_FILENAME)
-        if exists(output_lipid_interactions_filepath) and not must_overwrite:
-            return
-        # Run the analysis
-        lipid_interactions(
-            input_trajectory_filepath = self.trajectory_file.path,
-            topology_file=self.project.standard_topology_file,
-            output_analysis_filepath = output_lipid_interactions_filepath,
-            membrane_map = self.project.membrane_map,
-            snapshots = self.snapshots,
-        )
+    # Lipid-protein interactions analysis
+    run_lipid_interactions_analysis = Task('linter', 'Membrane lipid-protein interactions analysis',
+        lipid_interactions, { 'frames_limit': 100 })
         
 # The project is the main project
 # A project is a set of related MDs
@@ -2116,7 +1736,7 @@ class Project:
         translation : List[float] = [0, 0, 0],
         mercy : Union[ List[str], bool ] = [],
         trust : Union[ List[str], bool ] = [],
-        pca_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
+        pca_analysis_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
@@ -2222,7 +1842,7 @@ class Project:
                 self.trust = AVAILABLE_CHECKINGS
             else:
                 self.trust = []
-        self.pca_selection = pca_selection
+        self.pca_analysis_selection = pca_analysis_selection
         self.pca_fit_selection = pca_fit_selection
         self.rmsd_cutoff = rmsd_cutoff
         self.interaction_cutoff = interaction_cutoff
@@ -2247,7 +1867,6 @@ class Project:
         self._protein_map = None
         self._ligand_map = None
         self._membrane_map = None
-        self.pubchem_name_list = None
         self._residue_map = None
         self._mds = None
 
@@ -2881,199 +2500,41 @@ class Project:
         return self._pdb_ids
     pdb_ids = property(get_pdb_ids, None, None, "Tested and standarized PDB ids (read only)")
 
-    def get_pdb_references (self) -> List[dict]:
-        """Get PDB references."""
-        # If we already have a stored value then return it
-        if self._pdb_references:
-            return self._pdb_references
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the PDB references file
-        pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
-        pdb_references_file = File(pdb_references_filepath)
-        # If the file already exists and we must overwrite it then delete it here
-        if pdb_references_file.exists and must_overwrite:
-            pdb_references_file.remove()
-        # Otherwise we must find the value
-        self._pdb_references = generate_pdb_references(
-            pdb_ids = self.pdb_ids,
-            pdb_references_file = pdb_references_file
-        )
-        return self._pdb_references
-    pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
+    # Prepare the PDB references file to be uploaded to the database
+    get_pdb_references = Task('pdbs', 'Prepare PDB references',
+        prepare_pdb_references, output_filename = PDB_REFERENCES_FILENAME)
+    pdb_references_file = get_pdb_references.get_output_file
 
-    def get_pdb_references_file (self) -> File:
-        """Define the PDB references output file."""
-        # Set the PDB references file
-        pdb_references_filepath = self.pathify(PDB_REFERENCES_FILENAME)
-        pdb_references_file = File(pdb_references_filepath)
-        # Ask for the references thus producing the requested output file
-        # WARNING: We must always run the references, no matter if the file already exists
-        # WARNING: There could be a pending overwrite to run
-        # WARNING: Also note that if it was run already it won't run again
-        self.get_pdb_references()
-        return pdb_references_file
-    pdb_references_file = property(get_pdb_references_file, None, None, "File including PDB refereces data (read only)")
-
-    def get_protein_map (self) -> List[dict]:
-        """Map the structure aminoacids sequences against the Uniprot reference sequences."""
-        # If we already have a stored value then return it
-        if self._protein_map != None:
-            return self._protein_map
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the protein references file
-        protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
-        protein_references_file = File(protein_references_filepath)
-        # If the file already exists and we must overwrite it then delete it here
-        if protein_references_file.exists and must_overwrite:
-            protein_references_file.remove()
-        # Otherwise we must find the value
-        self._protein_map = generate_protein_mapping(
-            structure = self.structure,
-            protein_references_file = protein_references_file,
-            database_url = self.database_url,
-            register = self.register,
-            mercy = self.mercy,
-            forced_references = self.forced_references,
-            pdb_ids = self.pdb_ids,
-        )
-        return self._protein_map
     # Map the structure aminoacids sequences against the Uniprot reference sequences
     get_protein_map = Task('protmap', 'Protein residues mapping',
         generate_protein_mapping, output_filename=PROTEIN_REFERENCES_FILENAME)
     protein_map = property(get_protein_map, None, None, "Protein residues mapping (read only)")
 
     # Define the output file of the protein mapping including protein references
-    def get_protein_references_file (self) -> File:
-        # Set the protein references file
-        protein_references_filepath = self.pathify(PROTEIN_REFERENCES_FILENAME)
-        protein_references_file = File(protein_references_filepath)
-        # Ask for the map thus producing the requested output file
-        # WARNING: We must always run the map, no matter if the file already exists
-        # WARNING: There could be a pending overwrite to run
-        # WARNING: Also note that if it was run already it won't run again
-        self.get_protein_map()
-        # Return the file
-        return protein_references_file
     get_protein_references_file = get_protein_map.get_output_file
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
-    def get_chain_references (self) -> List[str]:
-        """Get chain references."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the chains references file
-        chains_references_filepath = self.pathify(OUTPUT_CHAINS_FILENAME)
-        chains_references_file = File(chains_references_filepath)
-        # If the file already exists and we must overwrite then remove it
-        if chains_references_file.exists and must_overwrite:
-            chains_references_file.remove()
-        # Call the function to generate the chain references
-        chains = generate_chain_references(
-            structure = self.structure,
-            chains_references_file = chains_references_file,
-            database_url=self.database_url
-            #chain_name=self.structure.chain_name,
-        )
-        return chains
-    chains_data = property(get_chain_references, None, None, "Chain (read only)")
+    # Get chain references
+    get_chain_references = Task('chains', 'Chain references',
+        prepare_chain_references, output_filename = OUTPUT_CHAINS_FILENAME)
 
-    def get_ligand_map (self) -> List[dict]:
-        """Get the ligand residues mapping."""
-        # If we already have a stored value then return it
-        if self._ligand_map != None:
-            return self._ligand_map
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the ligand references file
-        ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
-        ligand_references_file = File(ligand_references_filepath)
-        # If the file already exists and we must overwrite it then delete it here
-        if ligand_references_file.exists and must_overwrite:
-            ligand_references_file.remove()
-        # Otherwise we must find the value
-        self._ligand_map, self.pubchem_name_list = generate_ligand_mapping(
-            structure = self.structure,
-            cache = self.cache,
-            input_ligands = self.input_ligands,
-            input_pdb_ids = self.pdb_ids,
-            output_ligands_filepath = ligand_references_file.path, 
-            mercy = self.mercy,
-        )
-        return self._ligand_map
+    # Get the ligand residues mapping
+    get_ligand_map = Task('ligmap', 'Ligand residues mapping',
+        generate_ligand_mapping, output_filename = LIGAND_REFERENCES_FILENAME)
     ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
 
     # Define the output file of the ligand mapping including ligand references
-    def get_ligand_references_file (self) -> File:
-        # Set the ligand references file
-        ligand_references_filepath = self.pathify(LIGAND_REFERENCES_FILENAME)
-        ligand_references_file = File(ligand_references_filepath)
-        # Ask for the map thus producing the requested output file
-        # WARNING: We must always run the map, no matter if the file already exists
-        # WARNING: There could be a pending overwrite to run
-        # WARNING: Also note that if it was run already it won't run again
-        self.get_ligand_map()
-        return ligand_references_file
+    get_ligand_references_file = get_ligand_map.get_output_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
-    def get_membrane_map (self) -> List[dict]:
-        """Get mapping of residues in the membrane."""
-        # If we already have a stored value then return it
-        if self._membrane_map:
-            return self._membrane_map
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the membrane mapping file
-        mem_map_filepath = self.pathify(MEMBRANE_MAPPING_FILENAME)
-        mem_map_file = File(mem_map_filepath)
-        # If the file already exists then send it
-        if mem_map_file.exists and not must_overwrite:
-            self._membrane_map =  load_json(mem_map_file.path)
-        else:
-            self._membrane_map = generate_membrane_mapping(
-                structure = self.structure,
-                topology_file=self.standard_topology_file,
-                structure_file=self.structure_file,
-            )   
-        if self._membrane_map is None or self._membrane_map['n_mems'] == 0:
-            print('No membrane available. Related analyses will be skipped.')
-        return self._membrane_map
+    # Get mapping of residues in the membrane
+    get_membrane_map = Task('membranes', 'Membrane mapping',
+        generate_membrane_mapping, output_filename=MEMBRANE_MAPPING_FILENAME) 
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
     # Build the residue map from both proteins and ligands maps
-    # This is formatted as both the standard topology and metadata generators expect them
-    def get_residue_map (self) -> List[dict]:
-        # If we already have a stored value then return it
-        if self._residue_map:
-            return self._residue_map
-        # Otherwise we must find the value
-        self._residue_map = generate_residue_mapping(
-            protein_map = self.protein_map,
-            ligand_map = self.ligand_map,
-            structure = self.structure,
-        )
-        return self._residue_map
+    # This is formatted as both the standard topology and metadata producers expect them
+    get_residue_map = Task('resmap', 'Residue mapping', generate_residue_mapping)
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
     # Get interaction types
@@ -3084,59 +2545,17 @@ class Project:
     prepare_metadata = Task('pmeta', 'Prepare project metadata',
         prepare_project_metadata, output_filename=OUTPUT_METADATA_FILENAME)
 
-    def get_standard_topology_file (self) -> File:
-        """Generate the standardized topology file."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # If we have a stored value then return it
-        # This means we already found or generated this file
-        if self._standard_topology_file:
-            return self._standard_topology_file
-        # Set the standard topology file
-        standard_topology_filepath = self.pathify(STANDARD_TOPOLOGY_FILENAME)
-        self._standard_topology_file = File(standard_topology_filepath)
-        # If the file already exists and it is not to be overwirtten then send it
-        if self._standard_topology_file.exists and not must_overwrite:
-            return self._standard_topology_file
-        # Otherwise, generate it
-        generate_topology(
-            structure = self.structure,
-            charges = self.charges,
-            residue_map = self.residue_map,
-            pbc_residues = self.pbc_residues,
-            cg_residues = self.cg_residues,
-            output_topology_filepath = self._standard_topology_file.path
-        )
-        # Register the last modification times of the new generated standard topology file
-        # Note that this may be already the topology file, but it may be not
-        self.register.update_mtime(self._standard_topology_file)
-        return self._standard_topology_file
+    # Prepare the standard topology file to be uploaded to the database
+    prepare_standard_topology = Task('stopology', 'Standard topology file',
+        generate_topology, output_filename = STANDARD_TOPOLOGY_FILENAME)
+    get_standard_topology_file = prepare_standard_topology.get_output_file
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
-    def get_screenshot_filename (self) -> str:
-        """Generate a screenshot of the system."""
-        # Get the task name
-        task = self._get_task()
-        # Check if this dependency is to be overwriten
-        must_overwrite = task in self.overwritables
-        # Update the overwritables so this is not remade further in the same run
-        self.overwritables.discard(task)
-        # Set the screenshot file
-        screenshot_filepath = self.pathify(OUTPUT_SCREENSHOT_FILENAME)
-        screenshot_file = File(screenshot_filepath)
-        # If the file already exists then send it
-        if screenshot_file.exists and not must_overwrite:
-            return screenshot_file
-        # Otherwise, generate it
-        get_screenshot(
-            structure = self.structure,
-            output_screenshot_filename = screenshot_file.path,
-        )
-        return screenshot_file
+    # Prepare a screenshot of the system to be uploaded to the database
+    # Note that the get_screenshot function returns output but this output is not used here
+    # This outputs is used by other functions which use the get_screenshot function as well
+    get_screenshot_filename = Task('screenshot', 'Screenshot file',
+        get_screenshot, output_filename = OUTPUT_SCREENSHOT_FILENAME)
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
 
@@ -3210,50 +2629,10 @@ md_processed_files = {
 # Both project and MD processed files
 processed_files = { **project_processed_files, **md_processed_files }
 
-# List of available analyses
-default_analyses = {
-    'clusters': MD.run_clusters_analysis,
-    'dist': MD.run_dist_perres_analysis,
-    #'energies': MD.run_energies_analysis,
-    #'hbonds': MD.run_hbonds_analysis,
-    'helical': MD.run_helical_analysis,
-    'markov': MD.run_markov_analysis,
-    'pca': MD.run_pca_analysis,
-    #'pcacons': MD.run_pca_contacts,
-    'pockets': MD.run_pockets_analysis,
-    'rgyr': MD.run_rgyr_analysis,
-    'rmsds': MD.run_rmsds_analysis,
-    'perres': MD.run_rmsd_perres_analysis,
-    'pairwise': MD.run_rmsd_pairwise_analysis,
-    'rmsf': MD.run_rmsf_analysis,
-    #'sas': MD.run_sas_analysis,
-    'tmscore': MD.run_tmscores_analysis,
-    'density': MD.run_density_analysis,
-    'thickness': MD.run_thickness_analysis,
-    'apl': MD.run_apl_analysis,
-    'lorder': MD.run_lipid_order_analysis,
-    'linter': MD.run_lipid_interactions_analysis,
-}
-
-extra_analyses = {
-    'dihedrals': MD.run_dihedral_energies,
-}
-
-analyses = { **default_analyses, **extra_analyses }
-
 # Project requestable tasks
 project_requestables = {
     **project_input_files,
     **project_processed_files,
-    'pdbs': Project.get_pdb_references,
-    'mapping': Project.get_protein_map,
-    'ligands': Project.get_ligand_map,
-    'screenshot': Project.get_screenshot_filename,
-    'stopology': Project.get_standard_topology_file,
-    #'pmeta': Project.get_metadata_file,
-    'chains': Project.get_chain_references,
-    'membrane': Project.get_membrane_map, 
-    'membranes': Project.get_membrane_map, 
 }
 # Add available tasks to project requestables
 for callable in vars(Project).values():
@@ -3262,9 +2641,6 @@ for callable in vars(Project).values():
 md_requestables = {
     **md_input_files,
     **md_processed_files,
-    **analyses,
-    #'inter': MD.get_processed_interactions,
-    #'mdmeta': MD.get_metadata_file,
 }
 # Add available tasks to project requestables
 for callable in vars(MD).values():
@@ -3283,6 +2659,11 @@ DEPENDENCY_FLAGS = {
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
     'interdeps': [ 'inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
 }
+
+# Set the default analyses to be run when no task is specified
+DEFAULT_ANALYSES = ['clusters', 'dist', 'energies', 'hbonds', 'pca', 'pockets',
+    'rgyr', 'rmsds', 'perres', 'pairwise', 'rmsf', 'sas', 'tmscore', 'density',
+    'thickness', 'apl', 'lorder', 'linter']
 
 # The actual main function
 def workflow (
@@ -3361,11 +2742,8 @@ def workflow (
             # MD tasks
             'mdmeta',
             'inter',
-            *default_analyses.keys(),
+            *DEFAULT_ANALYSES,
         ]
-        # WARNING: Do not run helical by default, it will fail in the default environment
-        # There is a separated enviornment to run this analysis
-        tasks.remove('helical')
         # If the exclude parameter was passed then remove excluded tasks from the default tasks
         if exclude and len(exclude) > 0:
             tasks = [ name for name in tasks if name not in exclude ]
