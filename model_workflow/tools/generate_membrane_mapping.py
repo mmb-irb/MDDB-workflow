@@ -2,7 +2,6 @@ import os
 import MDAnalysis
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
-from model_workflow.utils.constants import MEMBRANE_MAPPING_FILENAME
 from model_workflow.utils.auxiliar import load_json, save_json
 from model_workflow.utils.topology_converter import to_MDAnalysis_topology
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
@@ -13,6 +12,7 @@ from contextlib import redirect_stdout
 def generate_membrane_mapping(structure : 'Structure',
                               topology_file : 'File',
                               structure_file : 'File',
+                              output_membrane_filepath : str,
                               ) -> List[dict]:
     """
     Generates a list of residue numbers of membrane components from a given structure and topology file.
@@ -51,7 +51,7 @@ def generate_membrane_mapping(structure : 'Structure',
     topology_data = load_json(topology_file.absolute_path)
     topology_charges = topology_data.get('atom_charges', None)
     if not topology_charges:
-        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+        save_json(mem_map_js, output_membrane_filepath)
         return mem_map_js
     mda_top = to_MDAnalysis_topology(topology_file.absolute_path)
     u = MDAnalysis.Universe(mda_top, structure_file.absolute_path)
@@ -90,7 +90,7 @@ def generate_membrane_mapping(structure : 'Structure',
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
-        save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+        save_json(mem_map_js, output_membrane_filepath)
         return mem_map_js
     
     # Select only the lipids and potential membrane members
@@ -165,6 +165,6 @@ def generate_membrane_mapping(structure : 'Structure',
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
     print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
-    save_json(mem_map_js, MEMBRANE_MAPPING_FILENAME)
+    save_json(mem_map_js, output_membrane_filepath)
     return mem_map_js
 
