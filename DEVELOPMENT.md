@@ -83,8 +83,12 @@ git push origin master
 ``` 
 
 ## Testing
-
-`pytest --cov-report term --cov=model_workflow test`
+```shell
+# To run a test by its name:
+pytest test/test_run.py -k test_analysis_execution
+# To run all tests and generate a coverage report:
+pytest --cov-report term --cov=model_workflow test
+```
 
 ## Build wheel
 

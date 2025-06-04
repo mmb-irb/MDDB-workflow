@@ -33,6 +33,8 @@ include-package-data = true
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+testpaths = ["test"]
+addopts = "-rsx -v --durations=0"
 
 [tool.conda-deny]
 safe-licenses = [

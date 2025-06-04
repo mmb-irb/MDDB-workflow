@@ -2,6 +2,7 @@
 .gitignore
 .vscode
 __pycache__
+**.log
 
 # Test
 .coverage
