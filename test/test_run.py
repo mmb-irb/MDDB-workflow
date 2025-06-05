@@ -15,14 +15,14 @@ class TestMWFRun:
     @pytest.fixture(scope="class")
     def test_accession(self):
         """Override the default accession for this test"""
-        return "A0001.1"
+        return "A0001"
     
     
     @pytest.mark.parametrize("analysis_name", default_analyses.keys())
     def test_analysis_execution(self, project: 'Project', analysis_name: str, capsys):
         """Test that each analysis runs without errors"""
-        if analysis_name in ['energies', 'pockets','clusters','tmscores']:
-            pytest.skip(f"Skipping analysis '{analysis_name}' for now.")
+        # if analysis_name in ['energies', 'pockets','clusters','tmscores']:
+        #     pytest.skip(f"Skipping analysis '{analysis_name}' for now.")
         
         md: MD = project.mds[0]
         md.overwritables = {analysis_name}
@@ -46,16 +46,14 @@ class TestMWFRun:
         """Test that RMSD analysis runs and produces expected output"""
         # Run the analysis
         analysis = 'tmscores'
-        md : MD = project.mds[0]
-        md.overwritables = {analysis}
-        requestables[analysis](md)
+        self.test_analysis_execution(project, analysis)
 
         # Check that the output file was created
         output_file = f"{project.directory}/replica_1/{OUTPUT_TMSCORES_FILENAME}"
         assert os.path.exists(output_file), f"Output file '{output_file}' was not created"
         
         # Get the reference analysis file
-        analysis_file = get_analysis_file(project, 'analysis')
+        analysis_file = get_analysis_file(project, analysis)
         # Load the results
         results = load_json(output_file)
         reference = load_json(analysis_file.absolute_path)

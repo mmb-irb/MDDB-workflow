@@ -38,7 +38,7 @@ def test_data_dir(test_accession: str):
 
 @pytest.fixture(scope="class")
 def project(test_data_dir : str, test_accession: str):
-    project = Project(directory=test_data_dir, accession=test_accession)
+    project = Project(directory=test_data_dir, accession=test_accession, sample_trajectory=10)
     return project
 
 def get_analysis_file(project: 'Project', analysis_type: str):
