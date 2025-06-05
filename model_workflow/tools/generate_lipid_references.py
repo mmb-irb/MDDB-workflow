@@ -1,5 +1,4 @@
-from model_workflow.utils.constants import LIPID_REFERENCES_FILENAME
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import save_json
 
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
@@ -8,6 +7,7 @@ from model_workflow.utils.warnings import warn
 
 def generate_lipid_references(structure: 'Structure',
                               universe: 'Universe',
+                              lipid_map_filepath: str
                               ) -> List[dict]:
     # Patch case where there no internet
     try:
@@ -18,9 +18,9 @@ def generate_lipid_references(structure: 'Structure',
         warn('There was a problem connecting to the SwissLipids database.')
         return None
 
-    if not universe.universe.atoms.charges:
+    if universe.universe.atoms.charges is None:
         print('Topology file does not have charges, cannot generate lipid references.')
-        return save_json([], LIPID_REFERENCES_FILENAME)
+        return save_json([], lipid_map_filepath)
     
     print('-> Getting lipid references')
 
@@ -58,5 +58,5 @@ def generate_lipid_references(structure: 'Structure',
                      f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}')
 
-    save_json(lipid_references, LIPID_REFERENCES_FILENAME)
+    save_json(lipid_references, lipid_map_filepath)
     return lipid_references

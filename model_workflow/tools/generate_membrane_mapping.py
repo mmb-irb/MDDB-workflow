@@ -34,16 +34,17 @@ def generate_membrane_mapping(lipid_map : List[dict],
     print('-> Generating membrane mapping')
     # Prepare the membrane mapping OBJ/JSON
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
-    # if no lipids are found, we save the empty mapping and return
-    if len(lipid_ridx) == 0:
-        # no lipids found in the structure.
-        save_json(mem_map_js, output_membrane_filepath)
-        return mem_map_js
     
     # Select only the lipids and potential membrane members
     lipid_ridx = []
     for ref in lipid_map:
         lipid_ridx.extend(ref['resindices'])
+    # if no lipids are found, we save the empty mapping and return
+    if len(lipid_ridx) == 0:
+        # No lipids found in the structure.
+        save_json(mem_map_js, output_membrane_filepath)
+        return mem_map_js
+        
     glclipid_ridx = [grp for ref in lipid_map for grp in ref.get('resgroups', []) if len(grp) > 1]
     mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str,(lipid_ridx)))})')
 

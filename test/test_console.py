@@ -5,6 +5,7 @@ from unittest.mock import patch
 from model_workflow.console import parser, main
 
 @pytest.mark.CI
+@pytest.mark.release
 class TestConsoleArgumentParsing:
     """Test the console argument parsing functionality"""
     

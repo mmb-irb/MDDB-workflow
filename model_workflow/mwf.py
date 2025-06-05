@@ -1610,7 +1610,7 @@ class MD:
             overall_selection = "name CA or name C5"
         )
 
-    def run_clusters_analysis (self):
+    def run_clusters_analysis (self, desired_n_clusters : int = 10):
         """Run the cluster analysis."""
         # Get the task name
         task = self._get_task()
@@ -1647,6 +1647,7 @@ class MD:
             pbc_selection = self.pbc_selection,
             output_analysis_filepath = output_analysis_filepath,
             output_screenshots_filename = output_screenshot_filepath,
+            desired_n_clusters = desired_n_clusters,
         )
 
     def run_dist_perres_analysis (self):
@@ -1777,7 +1778,7 @@ class MD:
             frames_limit = 100,
         )
 
-    def run_pockets_analysis (self):
+    def run_pockets_analysis (self, maximum_pockets_number : int = 10):
         """Perform the pockets analysis."""
         # Get the task name
         task = self._get_task()
@@ -1803,6 +1804,7 @@ class MD:
             pbc_selection = self.pbc_selection,
             snapshots = self.snapshots,
             frames_limit = 100,
+            maximum_pockets_number = maximum_pockets_number,
         )
 
     # Helical parameters
@@ -2932,6 +2934,7 @@ class Project:
             self._lipid_map = generate_lipid_references(
                 structure = self.structure,
                 universe = self.universe,
+                lipid_map_filepath=lipid_map_filepath,
             )   
         if self._lipid_map is None or len(self._lipid_map) == 0:
             print('No lipids available. Related analyses will be skipped.')

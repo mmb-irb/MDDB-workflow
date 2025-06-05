@@ -84,10 +84,12 @@ git push origin master
 
 ## Testing
 ```shell
-# To run a test by its name:
-pytest test/test_run.py -k test_analysis_execution
+# To run a test by its name and optionally a parameter:
+pytest test/test_run.py -k test_analysis_execution[pockets]
+# To run on a subset of tests use the markers with -m {CI,release}:
+pytest -m CI
 # To run all tests and generate a coverage report:
-pytest --cov-report term --cov=model_workflow test
+pytest --cov-report term --cov=model_workflow -m release
 ```
 
 ## Build wheel

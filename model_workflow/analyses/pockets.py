@@ -87,10 +87,7 @@ def pockets (
 
     # Save the MD path
     md_path, mdpocket_folder_name = split(mdpocket_folder)
-    # Count the number of directory deep we are now
-    # Thus we can know how many directories back we need to jump to get back to the original directory
-    if md_path[0] == '/': raise ValueError('This path should not be absolute, the fix below will not work')
-    if md_path[-1] == '/': md_path = md_path[0:-1]
+    # Save the current working directory so we can recover it later
     recovery_path = getcwd()
 
     # Move to the MD path so all relative paths become shorter

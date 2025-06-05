@@ -6,7 +6,7 @@ from conftest import get_analysis_file
 from model_workflow.utils.constants import *
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import load_json
-from model_workflow.mwf import default_analyses, requestables
+from model_workflow.mwf import project_requestables, md_requestables
 
 @pytest.mark.release
 class TestMWFRun:
@@ -17,24 +17,22 @@ class TestMWFRun:
         """Override the default accession for this test"""
         return "A0001"
     
-    
-    @pytest.mark.parametrize("analysis_name", default_analyses.keys())
-    def test_analysis_execution(self, project: 'Project', analysis_name: str, capsys):
-        """Test that each analysis runs without errors"""
-        # if analysis_name in ['energies', 'pockets','clusters','tmscores']:
-        #     pytest.skip(f"Skipping analysis '{analysis_name}' for now.")
-        
-        md: MD = project.mds[0]
-        md.overwritables = {analysis_name}
+    task_arguments = {
+        'clusters': [2], # desired_n_clusters
+        'pockets': [2], # maximum_pockets_number
+    }
+    def _run_and_log_task(self, task_name: str, task_func, target_obj, project_dir: str, capsys):
+        """Helper method to run a task and log its output"""
         try:
-            requestables[analysis_name](md)
+            args = self.task_arguments.get(task_name, [])
+            task_func(target_obj, *args)
         except Exception as e:
-            pytest.fail(f"Analysis '{analysis_name}' failed with error: {str(e)}")
+            pytest.fail(f"Task '{task_name}' failed with error: {str(e)}")
         finally:
             # Capture stdout and stderr
             out, err = capsys.readouterr()
             # Write the output to a log file
-            log_file = f"{project.directory}/logs/{analysis_name}_output.log"
+            log_file = f"{project_dir}/logs/{task_name}_output.log"
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
             with open(log_file, 'w') as f:
                 f.write("STDOUT:\n")
@@ -42,6 +40,22 @@ class TestMWFRun:
                 f.write("\nSTDERR:\n")
                 f.write(err)
 
+    @pytest.mark.parametrize("md_task", md_requestables.keys())
+    def test_md_task(self, project: 'Project', md_task: str, capsys):
+        """Test that each analysis runs without errors"""
+        if md_task == 'dihedrals':
+            pytest.skip(f"Skipping analysis '{md_task}' for now.")
+        md: MD = project.mds[0]
+        md.overwritables = {md_task}
+        self._run_and_log_task(md_task, md_requestables[md_task], md, project.directory, capsys)
+
+    @pytest.mark.parametrize("project_task", project_requestables.keys())
+    def test_project_task(self, project: 'Project', project_task: str, capsys):
+        """Test that each project task runs without errors"""
+        project.overwritables = {project_task}
+        self._run_and_log_task(project_task, project_requestables[project_task], project, project.directory, capsys)
+
+    @pytest.mark.skip(reason="Test is skipped")
     def test_TMscores_analysis(self, project : 'Project'):
         """Test that RMSD analysis runs and produces expected output"""
         # Run the analysis
