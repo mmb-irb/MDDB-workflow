@@ -1380,7 +1380,7 @@ class MD:
 
     # Internal function to set PBC selection
     # It may parse the inputs file selection string if it is available or guess it otherwise
-    def _set_pbc_selection (self, reference_structure : 'Structure', verbose : bool = True) -> 'Selection':
+    def _set_pbc_selection (self, reference_structure : 'Structure', verbose : bool = False) -> 'Selection':
         # Otherwise we must set the PBC selection
         if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
         selection_string = None
@@ -1452,7 +1452,7 @@ class MD:
 
     # Set the coare grain selection
     # DANI: Esto algún día habría que tratar de automatizarlo
-    def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = True) -> 'Selection':
+    def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = False) -> 'Selection':
         if verbose: print('Setting Coarse Grained (CG) atoms selection')
         # If there is no inputs file then asum there is no CG selection
         if not self.project.is_inputs_file_available():
@@ -1463,7 +1463,7 @@ class MD:
         selection_string = self.input_cg_selection
         # If the selection is empty, again, assume there is no CG selection
         if not selection_string:
-            print(' Empty selection -> There is no CG at all')
+            if verbose: print(' Empty selection -> There is no CG at all')
             return Selection()
         # Otherwise, process it
         # If we have a valid input value then use it
