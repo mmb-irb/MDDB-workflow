@@ -106,8 +106,6 @@ OUTPUT_DIRECTORY_ARG = 'output_directory'
 
 # Set the name of the section in the cache where argument value cksums are saved
 CACHE_ARG_CKSUMS = 'arg_cksums'
-# Set the name of the section in the cache where taks output values are saved
-CACHE_TASK_OUTPUT_TAIL = '_task_output'
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -118,6 +116,10 @@ requestables = {}
 inverted_requestables = {}
 
 # Set a class to handle a generic task
+# WARNING: Note that a task is static in relation to its Project/MD
+# This means that all MDs share the same task and thus it can not store internal values
+# Instead all its internal vallues are stored in the parent using a key name
+# This is not easy to change with the curent implementation
 class Task:
     def __init__ (self,
         # The task flag
@@ -151,15 +153,35 @@ class Task:
         self.args = args
         self.output_filename = output_filename
         self.use_cache = use_cache
-        # Set internal values
-        self._value = MISSING_VALUE_EXCEPTION
-        self._output_filepath = None
+        # Set the key used to store and retireve data in the parent and cache
+        self.parent_output_key = f'_{self.flag}_task_output'
+        self.cache_output_key = f'{self.flag}_task_output'
+    
+    # Get the taks stored output
+    # This output is not saved in the task itself, but in the parent
+    def get_output (self, parent):
+        return getattr(parent, self.parent_output_key, MISSING_VALUE_EXCEPTION)
+    def set_output (self, parent, new_output):
+        return setattr(parent, self.parent_output_key, new_output)
+    output = property(get_output, set_output, None, "Task saved output")
+    # Asking for the output file or filepath implies running the Task, then returning the file/filepath
+    def get_output_filepath (self, caller) -> str:
+        if self._output_filepath != None: return self._output_filepath
+        self(caller)
+        return self._output_filepath
+    output_filepath = property(get_output_filepath, None, None, "Output filepath once the file is produced (read only)")
+    def get_output_file (self, caller) -> str:
+        filepath = self.get_output_filepath(caller)
+        return File(filepath)
+    output_file = property(get_output_file, None, None, "Output file once the file is produced (read only)")
+
 
     # When a task is called
     def __call__(self, parent):
         # First of all check if this task has been already done in this very run
         # If so then return the stored vale
-        if self._value != MISSING_VALUE_EXCEPTION: return self._value
+        output = self.get_output(parent)
+        if output != MISSING_VALUE_EXCEPTION: return output
         # Process the task function arguments
         processed_args = {}
         # Get the task function expected arguments
@@ -172,8 +194,8 @@ class Task:
         returns_output = bool(specification.annotations.get('return', None))
         # If so, then find if we have cached output
         if returns_output and self.use_cache:
-            cache_output_key = self.flag + CACHE_TASK_OUTPUT_TAIL
-            self._value = parent.cache.retrieve(cache_output_key, MISSING_VALUE_EXCEPTION)
+            output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
+            self.set_output(parent, output)
         # If one of the expected arguments is the output_filename then set it here
         writes_output_file = OUTPUT_FILEPATH_ARG in expected_arguments
         if writes_output_file:
@@ -226,24 +248,24 @@ class Task:
         # If the output file already exists then it also means the task was done in a previous run
         existing_output_file = writes_output_file and exists(self._output_filepath)
         # If we already have a cached output result
-        existing_output_data = returns_output and self._value != MISSING_VALUE_EXCEPTION
+        existing_output_data = returns_output and output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
         if must_overwrite:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
             if existing_final_output: rmtree(final_output_directory)
             if existing_output_file: remove(self._output_filepath)
-            if existing_output_data: parent.cache.delete(cache_output_key)
+            if existing_output_data: parent.cache.delete(self.cache_output_key)
         # If already existing output is not to be overwritten then check if it is already what we need
         else:
             # If output files/directories are expected then they must exist
             # If output data is expected then it must be cached
             satisfied_output = (not writes_output_dir or exists(final_output_directory)) \
                 and (not writes_output_file or exists(self._output_filepath)) \
-                and (not returns_output or self._value != MISSING_VALUE_EXCEPTION)
+                and (not returns_output or output != MISSING_VALUE_EXCEPTION)
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
-                return self._value if returns_output else None
+                return output if returns_output else None
         # If we are at this point then we are missing some output so we must proceed to run the task
         # Use the final output directory instead of the incomplete one if exists
         # Note that we must check if it exists again since it may have been deleted since the last check
@@ -261,9 +283,10 @@ class Task:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
             print(f'{GREEN_HEADER}   The task is run again since the following inputs changed:{changes}{COLOR_END}')
         # Run the actual task
-        self._value = self.func(**processed_args)
+        output = self.func(**processed_args)
+        self.set_output(parent, output)
         # Update the cache
-        if returns_output and self.use_cache: parent.cache.update(cache_output_key, self._value)
+        if returns_output and self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
@@ -272,7 +295,7 @@ class Task:
             if is_directory_empty(incomplete_output_directory): rmtree(incomplete_output_directory)
             else: rename(incomplete_output_directory, final_output_directory)
         # Now return the function result
-        return self._value
+        return output
 
     # Find argument values, thus running any dependency
     def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
@@ -328,17 +351,6 @@ class Task:
             parent.cache.update(CACHE_ARG_CKSUMS, all_cksums)
         return unmatched_arguments, had_cache
     
-    # Asking for the output file or filepath implies running the Task, then returning the file/filepath
-    def get_output_filepath (self, caller) -> str:
-        if self._output_filepath != None: return self._output_filepath
-        self(caller)
-        return self._output_filepath
-    output_filepath = property(get_output_filepath, None, None, "Output filepath once the file is produced (read only)")
-    def get_output_file (self, caller) -> str:
-        filepath = self.get_output_filepath(caller)
-        return File(filepath)
-    output_file = property(get_output_file, None, None, "Output file once the file is produced (read only)")
-
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
 # Note that an MD is always defined inside of a Project and thus it has additional topology and metadata
