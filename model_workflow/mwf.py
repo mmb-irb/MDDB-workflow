@@ -78,6 +78,13 @@ from model_workflow.analyses.rmsd_check import check_trajectory_integrity
 from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
 
+# Make the system output stream to not be buffered
+# This is useful to make prints work on time in Slurm
+# Otherwise, output logs are written after the script has fully run
+# Note that this fix affects all modules and built-ins
+unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
+sys.stdout = unbuffered
+
 # Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
 
@@ -3114,7 +3121,7 @@ default_analyses = {
     'pairwise': MD.run_rmsd_pairwise_analysis,
     'rmsf': MD.run_rmsf_analysis,
     'sas': MD.run_sas_analysis,
-    'tmscores': MD.run_tmscores_analysis,
+    'tmscore': MD.run_tmscores_analysis,
     'density': MD.run_density_analysis,
     'thickness': MD.run_thickness_analysis,
     'apl': MD.run_apl_analysis,
