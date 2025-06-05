@@ -6,7 +6,7 @@
 from os.path import exists
 
 import pytraj as pt
-import numpy
+import numpy as np
 
 from model_workflow.utils.auxiliar import save_json, get_analysis_name, numerate_filename, reprint, warn
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
@@ -97,25 +97,37 @@ def distance_per_residue (
         # Show the size of the matrix
         h,w = len(residues_2), len(residues_1)
         print(f'     {h}x{w} residues')
-        means_matrix = [[0 for x in range(w)] for y in range(h)]
-        stdvs_matrix = [[0 for x in range(w)] for y in range(h)]
         # Convert residues to pytraj residue numbers
         pt_residues_1 = list(map(residue_2_pytraj_residue_index, residues_1))
         pt_residues_2 = list(map(residue_2_pytraj_residue_index, residues_2))
-        # Contact Matrix -- Calculation
-        for i, r2 in enumerate(pt_residues_2):
-            for j, r1 in enumerate(pt_residues_1):
-                txt = ":" + str(r2) + " " + ":" + str(r1)
-                ptdist = pt.distance(pt_trajectory, txt)
-                mean = numpy.mean(ptdist)
-                stdv = numpy.std(ptdist)
-                means_matrix[i][j] = mean
-                stdvs_matrix[i][j] = stdv
+        
+        # Contact Matrix -- Calculation (Vectorized)
+        # Create all mask pairs at once
+        mask_pairs = []
+        for r2 in pt_residues_2:
+            for r1 in pt_residues_1:
+                mask_pairs.append(f":{r2} :{r1}")
+        
+        # Calculate all distances in one call
+        all_distances = pt.distance(pt_trajectory, mask_pairs)
+        
+        # Reshape the results into matrices
+        # all_distances shape: (n_pairs, n_frames)
+        means_matrix = np.zeros((h, w))
+        stdvs_matrix = np.zeros((h, w))
+
+        pair_idx = 0
+        for i in range(h):
+            for j in range(w):
+                distances = all_distances[pair_idx]
+                means_matrix[i][j] = np.mean(distances)
+                stdvs_matrix[i][j] = np.std(distances)
+                pair_idx += 1
         # Set the output data for this interaction
         save_json({
             'name': name,
-            'means': means_matrix,
-            'stdvs': stdvs_matrix,
+            'means': means_matrix.tolist(),
+            'stdvs': stdvs_matrix.tolist(),
         }, numbered_output_analysis_filepath)
     # Export the analysis in json format
     save_json(output_summary, output_analysis_filepath)
