@@ -2591,8 +2591,9 @@ def check_directory (directory : str) -> str:
 
 def directory_2_name (directory : str) -> str:
     """Convert an MD directory into an equivalent MD name."""
+    # Remove a possible starting './'
     # Replace white spaces with underscores
-    name = directory.replace('_', ' ')
+    name = directory.split('/')[-1].replace('_', ' ')
     return name
 
 def remove_final_slash (directory : str) -> str:
