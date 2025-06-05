@@ -183,7 +183,7 @@ def extract_yaml_documentation(yaml_file_path):
 def main():
     # Define paths
     print("Generating input file documentation...")
-    repo_root = Path('/home/rchaves/repo/workflow')
+    repo_root = Path('..').resolve()
     yaml_template = repo_root / 'model_workflow' / \
         'resources' / 'inputs_file_template.yml'
     output_rst = repo_root / 'docs' / 'source' / 'input.rst'
