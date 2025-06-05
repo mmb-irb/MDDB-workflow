@@ -155,32 +155,49 @@ class Task:
         self.use_cache = use_cache
         # Set the key used to store and retireve data in the parent and cache
         self.parent_output_key = f'_{self.flag}_task_output'
+        self.parent_output_filepath_key = f'{self.flag}_task_output_filepath'
         self.cache_output_key = f'{self.flag}_task_output'
     
-    # Get the taks stored output
-    # This output is not saved in the task itself, but in the parent
-    def get_output (self, parent):
+    # Set internal functions to handle parent saved output
+    # This output is not saved in the task itself, but in the parent, because the task is static
+    def _get_parent_output (self, parent):
         return getattr(parent, self.parent_output_key, MISSING_VALUE_EXCEPTION)
-    def set_output (self, parent, new_output):
+    def _set_parent_output (self, parent, new_output):
         return setattr(parent, self.parent_output_key, new_output)
-    output = property(get_output, set_output, None, "Task saved output")
+    def _get_parent_output_filepath (self, parent):
+        return getattr(parent, self.parent_output_filepath_key, MISSING_VALUE_EXCEPTION)
+    def _set_parent_output_filepath (self, parent, new_filepath):
+        return setattr(parent, self.parent_output_filepath_key, new_filepath)
+    # Get the task output, running the task if necessary
+    def get_output (self, parent):
+        # If we already have a value stored from this run then return it
+        output = self._get_parent_output(parent)
+        if output != MISSING_VALUE_EXCEPTION: return output
+        # Otherwise run the task and return the output
+        return self(parent)
+    output = property(get_output, None, None, "Task output (read only)")
     # Asking for the output file or filepath implies running the Task, then returning the file/filepath
-    def get_output_filepath (self, caller) -> str:
-        if self._output_filepath != None: return self._output_filepath
-        self(caller)
-        return self._output_filepath
-    output_filepath = property(get_output_filepath, None, None, "Output filepath once the file is produced (read only)")
-    def get_output_file (self, caller) -> str:
-        filepath = self.get_output_filepath(caller)
+    def get_output_filepath (self, parent) -> str:
+        # If we already have a filepath stored from this run then return it
+        filepath = self._get_parent_output_filepath(parent)
+        if filepath != MISSING_VALUE_EXCEPTION: return filepath
+        # Otherwise run the task and return the filepath
+        self(parent)
+        filepath = self._get_parent_output_filepath(parent)
+        if filepath != MISSING_VALUE_EXCEPTION: return filepath
+        raise ValueError(f'Task {self.flag} has no output filepath after running')
+    output_filepath = property(get_output_filepath, None, None, "Task output filepath (read only)")
+    def get_output_file (self, parent) -> str:
+        filepath = self.get_output_filepath(parent)
         return File(filepath)
-    output_file = property(get_output_file, None, None, "Output file once the file is produced (read only)")
+    output_file = property(get_output_file, None, None, "Task output file (read only)")
 
 
     # When a task is called
     def __call__(self, parent):
         # First of all check if this task has been already done in this very run
         # If so then return the stored vale
-        output = self.get_output(parent)
+        output = self._get_parent_output(parent)
         if output != MISSING_VALUE_EXCEPTION: return output
         # Process the task function arguments
         processed_args = {}
@@ -195,17 +212,19 @@ class Task:
         # If so, then find if we have cached output
         if returns_output and self.use_cache:
             output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
-            self.set_output(parent, output)
+            self._set_parent_output(parent, output)
         # If one of the expected arguments is the output_filename then set it here
+        output_filepath = None
         writes_output_file = OUTPUT_FILEPATH_ARG in expected_arguments
         if writes_output_file:
             # The task should have a defined output file
             if not self.output_filename:
                 raise RuntimeError(f'Task {self.flag} must have an "output_filename"')
             # Set the output file path
-            self._output_filepath = parent.pathify(self.output_filename)
+            output_filepath = parent.pathify(self.output_filename)
+            self._set_parent_output_filepath(parent, output_filepath)
             # Add it to the processed args
-            processed_args[OUTPUT_FILEPATH_ARG] = self._output_filepath
+            processed_args[OUTPUT_FILEPATH_ARG] = output_filepath
             # Remove the expected argument from the list
             expected_arguments.remove(OUTPUT_FILEPATH_ARG)
         # If one of the expected arguments is the output_directory then set it here
@@ -246,21 +265,21 @@ class Task:
         # If the final directory already exists then it means the task was done in a previous run
         existing_final_output = writes_output_dir and exists(final_output_directory)
         # If the output file already exists then it also means the task was done in a previous run
-        existing_output_file = writes_output_file and exists(self._output_filepath)
+        existing_output_file = writes_output_file and exists(output_filepath)
         # If we already have a cached output result
         existing_output_data = returns_output and output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
         if must_overwrite:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
             if existing_final_output: rmtree(final_output_directory)
-            if existing_output_file: remove(self._output_filepath)
+            if existing_output_file: remove(output_filepath)
             if existing_output_data: parent.cache.delete(self.cache_output_key)
         # If already existing output is not to be overwritten then check if it is already what we need
         else:
             # If output files/directories are expected then they must exist
             # If output data is expected then it must be cached
             satisfied_output = (not writes_output_dir or exists(final_output_directory)) \
-                and (not writes_output_file or exists(self._output_filepath)) \
+                and (not writes_output_file or exists(output_filepath)) \
                 and (not returns_output or output != MISSING_VALUE_EXCEPTION)
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
@@ -284,7 +303,7 @@ class Task:
             print(f'{GREEN_HEADER}   The task is run again since the following inputs changed:{changes}{COLOR_END}')
         # Run the actual task
         output = self.func(**processed_args)
-        self.set_output(parent, output)
+        self._set_parent_output(parent, output)
         # Update the cache
         if returns_output and self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
