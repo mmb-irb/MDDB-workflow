@@ -33,6 +33,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
 from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
 from model_workflow.utils.selections import Selection
+from model_workflow.utils.mda_spells import get_mda_universe
 from model_workflow.utils.type_hints import *
 
 # Import local tools
@@ -47,6 +48,7 @@ from model_workflow.tools.chains import prepare_chain_references
 from model_workflow.tools.generate_pdb_references import prepare_pdb_references
 from model_workflow.tools.residue_mapping import generate_residue_mapping
 from model_workflow.tools.generate_map import generate_protein_mapping
+from model_workflow.tools.generate_lipid_references import generate_lipid_references
 from model_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
@@ -192,6 +194,8 @@ class Task:
         return File(filepath)
     output_file = property(get_output_file, None, None, "Task output file (read only)")
 
+    # When the task is printed, show the flag
+    def __repr__ (self): return f'<Task ({self.flag})>'
 
     # When a task is called
     def __call__(self, parent):
@@ -431,7 +435,6 @@ class MD:
         self._snapshots = None
         self._structure = None
         self._pytraj_topology = None
-        self._processed_interactions = None
         self._reference_frame = None
 
         # Tests
@@ -1894,11 +1897,6 @@ class Project:
         self._populations = None
         self._transitions = None
         self._pdb_ids = None
-        self._pdb_references = None
-        self._protein_map = None
-        self._ligand_map = None
-        self._membrane_map = None
-        self._residue_map = None
         self._mds = None
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
@@ -2558,9 +2556,23 @@ class Project:
     get_ligand_references_file = get_ligand_map.get_output_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
+    # MDAnalysis Universe object
+    get_MDAnalysis_Universe = Task('mda_univ', 'MDAnalysis Universe object',
+        get_mda_universe, use_cache = False)
+    universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
+
+    # Lipid mapping
+    get_lipid_map = Task('lipmap', 'Lipid mapping',
+        generate_lipid_references, output_filename = LIPID_REFERENCES_FILENAME)
+    lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
+
+    # Define the output file of the lipid mapping including lipid references
+    get_lipid_references_file = get_lipid_map.get_output_file
+    lipid_references_file = property(get_lipid_references_file, None, None, "File including lipid references data mined from PubChem (read only)")
+
     # Get mapping of residues in the membrane
     get_membrane_map = Task('membranes', 'Membrane mapping',
-        generate_membrane_mapping, output_filename=MEMBRANE_MAPPING_FILENAME) 
+        generate_membrane_mapping, output_filename = MEMBRANE_MAPPING_FILENAME) 
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
     # Build the residue map from both proteins and ligands maps
@@ -2588,7 +2600,6 @@ class Project:
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
         get_screenshot, output_filename = OUTPUT_SCREENSHOT_FILENAME)
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
-
 
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
 
@@ -2689,7 +2700,7 @@ DEPENDENCY_FLAGS = {
     'setup': list(processed_files.keys()),
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
-    'interdeps': [ 'inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters' ]
+    'interdeps': [ 'inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ]
 }
 
 # Set the default analyses to be run when no task is specified

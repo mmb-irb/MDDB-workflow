@@ -5,7 +5,10 @@ from model_workflow.utils.selections import Selection
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
+from model_workflow.utils.mda_spells import get_mda_universe_cksum
 from typing import Optional, Union
+
+from MDAnalysis.core.universe import Universe
 
 # Note that it is more convinient not to have this function among auxiliar functions
 # We depend on class types which depend on the auxiliar module
@@ -35,6 +38,8 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     if isinstance(value, Structure):
         pdb_content = value.generate_pdb()
         return get_cksum_id(pdb_content)
+    # For a MDAnalysis universe
+    if isinstance(value, Universe): return get_mda_universe_cksum(value)
     # For the parsed structure
     if isinstance(value, Selection): return f'{len(value.atom_indices)}-{sum(value.atom_indices)}'
     # For the register or the cache it makes not sense making a comparision
