@@ -31,6 +31,9 @@ def generate_membrane_mapping(lipid_map : List[dict],
         - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
+
+    if not universe: raise RuntimeError('Missing universe')
+
     # Prepare the membrane mapping OBJ/JSON
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     

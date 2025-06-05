@@ -18,6 +18,8 @@ def generate_lipid_references(structure: 'Structure',
         warn('There was a problem connecting to the SwissLipids database.')
         return None
 
+    if not universe: raise RuntimeError('Missing universe')
+
     if universe.universe.atoms.charges is None:
         print('Topology file does not have charges, cannot generate lipid references.')
         return save_json([], LIPID_REFERENCES_FILENAME)
