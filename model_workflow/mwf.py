@@ -211,10 +211,8 @@ class Task:
         n_default_arguments = len(specification.defaults) if specification.defaults else 0
         # Find out which arguments are optional since they have default values
         default_arguments = set(expected_arguments[::-1][:n_default_arguments])
-        # Find out if the function is to return output
-        returns_output = bool(specification.annotations.get('return', None))
         # If so, then find if we have cached output
-        if returns_output and self.use_cache:
+        if self.use_cache:
             output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
             self._set_parent_output(parent, output)
         # If one of the expected arguments is the output_filename then set it here
@@ -271,7 +269,7 @@ class Task:
         # If the output file already exists then it also means the task was done in a previous run
         existing_output_file = writes_output_file and exists(output_filepath)
         # If we already have a cached output result
-        existing_output_data = returns_output and output != MISSING_VALUE_EXCEPTION
+        existing_output_data = output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
         if must_overwrite:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
@@ -284,11 +282,11 @@ class Task:
             # If output data is expected then it must be cached
             satisfied_output = (not writes_output_dir or exists(final_output_directory)) \
                 and (not writes_output_file or exists(output_filepath)) \
-                and (not returns_output or output != MISSING_VALUE_EXCEPTION)
+                and (output != MISSING_VALUE_EXCEPTION)
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
-                return output if returns_output else None
+                return output
         # If we are at this point then we are missing some output so we must proceed to run the task
         # Use the final output directory instead of the incomplete one if exists
         # Note that we must check if it exists again since it may have been deleted since the last check
@@ -309,7 +307,7 @@ class Task:
         output = self.func(**processed_args)
         self._set_parent_output(parent, output)
         # Update the cache
-        if returns_output and self.use_cache: parent.cache.update(self.cache_output_key, output)
+        if self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
