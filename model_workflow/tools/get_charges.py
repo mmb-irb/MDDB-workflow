@@ -2,7 +2,7 @@ import pytraj as pt
 
 from json import load
 
-from model_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_CHARGES
+from model_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_CHARGES, load_json
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 from model_workflow.utils.gmx_spells import get_tpr_charges as get_tpr_charges_gromacs
 from model_workflow.utils.type_hints import *
@@ -10,7 +10,8 @@ from model_workflow.utils.type_hints import *
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
 
-def get_charges (charges_source_file : Union['File', Exception]) -> List[float]:
+def get_charges (topology_file : Union['File', Exception],
+    resorted_charges_file : Optional['File'] = None) -> List[float]:
     """
     Extract charges from a source file.
 
@@ -19,28 +20,33 @@ def get_charges (charges_source_file : Union['File', Exception]) -> List[float]:
                  otherwise None if the file does not exist.
 
     """
+    # If we have a resorted file then use it
+    # Note that this is very excepcional
+    if resorted_charges_file and resorted_charges_file.exists:
+        print('Using resorted atom charges')
+        return load_json(resorted_charges_file.path)
     # If there is no topology at all
-    if charges_source_file == MISSING_TOPOLOGY or not charges_source_file.exists:
+    if topology_file == MISSING_TOPOLOGY or not topology_file.exists:
         return MISSING_CHARGES
-    print(f'Charges in the "{charges_source_file.path}" file will be used')
+    print(f'Charges in the "{topology_file.path}" file will be used')
     charges = None
     # If we have the standard topology then get charges from it
-    if charges_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
-        with open(charges_source_file.path, 'r') as file:
+    if topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+        with open(topology_file.path, 'r') as file:
             standard_topology = load(file)
             charges = standard_topology['atom_charges']
     # In some ocasions, charges may come inside a raw charges file
-    elif charges_source_file.filename == RAW_CHARGES_FILENAME:
-        charges = get_raw_charges(charges_source_file.path)
+    elif topology_file.filename == RAW_CHARGES_FILENAME:
+        charges = get_raw_charges(topology_file.path)
     # In some ocasions, charges may come inside a topology which can be parsed through pytraj
-    elif charges_source_file.is_pytraj_supported():
-        charges = get_topology_charges(charges_source_file.path)
+    elif topology_file.is_pytraj_supported():
+        charges = get_topology_charges(topology_file.path)
         # DANI: De momento ya no generaré más charges.txt ahora que las cargas estan en la topologia json
         #generate_raw_energies_file(charges)
-    elif charges_source_file.format == 'tpr':
-        charges = get_tpr_charges(charges_source_file.path)
+    elif topology_file.format == 'tpr':
+        charges = get_tpr_charges(topology_file.path)
     else:
-        raise ValueError(f'Charges file ({charges_source_file.path}) is in a non supported format')
+        raise ValueError(f'Charges source file ({topology_file.path}) is in a non supported format')
     return charges
 
 # Given a topology which includes charges

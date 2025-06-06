@@ -1089,7 +1089,8 @@ class MD:
         # We may need to resort atoms in the structure corrector function
         # In such case, bonds and charges must be resorted as well and saved apart to keep values coherent
         # Bonds are calculated during the structure corrector but atom charges must be extracted no
-        self.project._charges = get_charges(filtered_topology_file)
+        charges = get_charges(filtered_topology_file)
+        self.project.get_charges._set_parent_output(self.project, charges)
 
         print(' * Correcting structure')
 
@@ -1544,12 +1545,6 @@ class MD:
         return self.project._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-    # Atom charges
-    # Inherited from project
-    def get_charges (self) -> List[float]:
-        return self.project.charges
-    charges = property(get_charges, None, None, "Atom charges (read only)")
-
     # Equilibrium populations from a MSM
     # Inherited from project
     def get_populations (self) -> List[float]:
@@ -1888,7 +1883,6 @@ class Project:
         self._cg_selection = None
         self._cg_residues = None
         self._safe_bonds = None
-        self._charges = None
         self._topology_reader = None
         self._dihedrals = None
         self._populations = None
@@ -2444,23 +2438,7 @@ class Project:
     safe_bonds = property(get_safe_bonds, None, None, "Atom bonds to be trusted (read only)")
 
     # Atom charges
-    def get_charges (self) -> List[float]:
-        # If we already have a stored value then return it
-        # WARNING: Do not remove the self.topology_file checking
-        # Note that checking if the topology file exists triggers all the processing logic
-        # The processing logic is able to set the internal atom charges value as well so this avoids repeating the process
-        # Besides it generates the resorted files, if needed
-        if self.topology_file and self._charges:
-            return self._charges
-        # If we have a resorted file then use it
-        # Note that this is very excepcional
-        if self.resorted_charges_file.exists:
-            print('Using resorted atom charges')
-            self._charges = load_json(self.resorted_charges_file.path)
-            return self._charges
-        # Otherwise we must find the value
-        self._charges = get_charges(self.topology_file)
-        return self._charges
+    get_charges = Task('charges', 'Getting atom charges', get_charges)
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
     # Topolody data reader
