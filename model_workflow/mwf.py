@@ -82,11 +82,14 @@ from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
 
 # Make the system output stream to not be buffered
-# This is useful to make prints work on time in Slurm
-# Otherwise, output logs are written after the script has fully run
-# Note that this fix affects all modules and built-ins
-unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
-sys.stdout = unbuffered
+# Only when not in a Jupyter notebook or using pytest
+# Check if we're in an interactive Python shell like Jupyter
+if not hasattr(sys, 'ps1') and not 'pytest' in sys.modules:  
+    # This is useful to make prints work on time in Slurm
+    # Otherwise, output logs are written after the script has fully run
+    # Note that this fix affects all modules and built-ins
+    unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
+    sys.stdout = unbuffered
 
 # Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
@@ -1650,7 +1653,7 @@ class MD:
             desired_n_clusters = desired_n_clusters,
         )
 
-    def run_dist_perres_analysis (self):
+    def run_dist_perres_analysis (self, frames_limit : int = 200):
         """Calculate the distance mean and standard deviation of each pair of residues*."""
         # Get the task name
         task = self._get_task()
@@ -1669,7 +1672,7 @@ class MD:
             structure = self.structure,
             interactions = self.processed_interactions,
             snapshots = self.snapshots,
-            frames_limit = 200,
+            frames_limit = frames_limit,
         )
 
     def run_hbonds_analysis (self):
@@ -3091,14 +3094,8 @@ class Project:
     def get_MDAnalysis_Universe (self):
         if self._universe:
             return self._universe
-        # Check the topology has charges or the code further will fail
-        topology_data = load_json(self.standard_topology_file.absolute_path)
-
-        assert self.standard_topology_file.extension == 'json', 'Input topology file must be in json format: ' + \
-            self.standard_topology_file.extension
-        
-        mda_top = to_MDAnalysis_topology(self.standard_topology_file.absolute_path)
-        self._universe = Universe(mda_top, self.structure_file.absolute_path)
+        mda_top = to_MDAnalysis_topology(self.standard_topology_file.path)
+        self._universe = Universe(mda_top, self.structure_file.path)
         return self._universe
     universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
 
@@ -3207,12 +3204,12 @@ analyses = { **default_analyses, **extra_analyses }
 project_requestables = {
     **project_input_files,
     **project_processed_files,
+    'stopology': Project.get_standard_topology_file,
     'pdbs': Project.get_pdb_references,
     'mapping': Project.get_protein_map,
     'ligands': Project.get_ligand_map,
     'lipids': Project.get_lipid_map,
     'screenshot': Project.get_screenshot_filename,
-    'stopology': Project.get_standard_topology_file,
     'pmeta': Project.get_metadata_file,
     'chains': Project.get_chain_references,
     'membranes': Project.get_membrane_map, 
@@ -3235,7 +3232,7 @@ inverted_requestables.update({ v: k for k, v in requestables.items() })
 DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
-    'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
+    'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membranes' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
     'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ]
 }

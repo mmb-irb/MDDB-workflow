@@ -7,7 +7,7 @@ __pycache__
 # Test
 .coverage
 .pytest_cache/
-test/test_data/
+**/test_data/
 
 # Build
 build/

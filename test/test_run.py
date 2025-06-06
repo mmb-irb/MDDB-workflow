@@ -9,17 +9,15 @@ from model_workflow.utils.auxiliar import load_json
 from model_workflow.mwf import project_requestables, md_requestables
 
 @pytest.mark.release
+@pytest.mark.parametrize("test_accession", ["A0001", "A01IP" ], scope="class")
 class TestMWFRun:
-    """Test full workflow for A0001: mwf run -proj A0001 -dir test/test_data/A0001.1"""
-
-    @pytest.fixture(scope="class")
-    def test_accession(self):
-        """Override the default accession for this test"""
-        return "A0001"
+    """Test full workflow for different accessions"""
     
+    # Argument to reduce long test execution time
     task_arguments = {
-        'clusters': [2], # desired_n_clusters
-        'pockets': [2], # maximum_pockets_number
+        'clusters': [2],  # desired_n_clusters
+        'pockets': [2],   # maximum_pockets_number
+        'dist': [2],      # frames_limit
     }
     def _run_and_log_task(self, task_name: str, task_func, target_obj, project_dir: str, capsys):
         """Helper method to run a task and log its output"""
@@ -40,20 +38,22 @@ class TestMWFRun:
                 f.write("\nSTDERR:\n")
                 f.write(err)
 
-    @pytest.mark.parametrize("md_task", md_requestables.keys())
-    def test_md_task(self, project: 'Project', md_task: str, capsys):
-        """Test that each analysis runs without errors"""
-        if md_task == 'dihedrals':
-            pytest.skip(f"Skipping analysis '{md_task}' for now.")
-        md: MD = project.mds[0]
-        md.overwritables = {md_task}
-        self._run_and_log_task(md_task, md_requestables[md_task], md, project.directory, capsys)
-
     @pytest.mark.parametrize("project_task", project_requestables.keys())
     def test_project_task(self, project: 'Project', project_task: str, capsys):
         """Test that each project task runs without errors"""
         project.overwritables = {project_task}
         self._run_and_log_task(project_task, project_requestables[project_task], project, project.directory, capsys)
+
+    @pytest.mark.parametrize("md_task", md_requestables.keys())
+    def test_md_task(self, project: 'Project', md_task: str, capsys):
+        """Test that each analysis runs without errors"""
+        if md_task == 'dihedrals' or \
+            (md_task == 'pockets' and project.accession == 'A01IP'):
+            pytest.skip(f"Skipping analysis '{md_task}' for now.")
+            
+        md: MD = project.mds[0]
+        md.overwritables = {md_task}
+        self._run_and_log_task(md_task, md_requestables[md_task], md, project.directory, capsys)
 
     @pytest.mark.skip(reason="Test is skipped")
     def test_TMscores_analysis(self, project : 'Project'):

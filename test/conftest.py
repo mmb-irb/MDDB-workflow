@@ -23,9 +23,11 @@ def capture_stdout():
 
 # Fixtures for analysis type and test accession
 @pytest.fixture(scope="class")
-def test_accession():
-    """Default accession ID for tests"""
-    return "A01M9.1"  # Default value
+def test_accession(request):
+    """Get accession ID from parametrization or use default"""
+    if hasattr(request, 'param'):
+        return request.param
+    return "A0001"
 
 @pytest.fixture(scope="class")
 def test_data_dir(test_accession: str):

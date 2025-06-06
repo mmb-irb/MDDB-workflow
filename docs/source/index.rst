@@ -11,6 +11,7 @@ MDDB Workflow
    tasks
    mwf
    develop
+   coverage
 
 Indices and tables
 ==================

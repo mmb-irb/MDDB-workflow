@@ -86,10 +86,13 @@ git push origin master
 ```shell
 # To run a test by its name and optionally a parameter:
 pytest test/test_run.py -k test_analysis_execution[pockets]
+pytest test/test_run.py -k "TestMWFRun and A01IP and dist"
 # To run on a subset of tests use the markers with -m {CI,release}:
 pytest -m CI
 # To run all tests and generate a coverage report:
-pytest --cov-report term --cov=model_workflow -m release
+pytest --cov-report term --cov=model_workflow -m CI
+# Generate the html report and save the console output to report.log while removing color codes
+pytest --cov-report html:docs/source/_static/htmlcov --cov=model_workflow -m release --color=yes | tee >(sed 's/\x1b\[[0-9;]*m//g' > docs/source/_static/htmlcov/report.log)
 ```
 
 ## Build wheel

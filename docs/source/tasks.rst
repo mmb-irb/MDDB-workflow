@@ -32,15 +32,15 @@ If the file is not found try to download it.
 
 Get the ligand residues mapping.
 
+``lipids``
+~~~~~~~~~~
+
+
+
 ``mapping``
 ~~~~~~~~~~~
 
 Map the structure aminoacids sequences against the Uniprot reference sequences.
-
-``membrane``
-~~~~~~~~~~~~
-
-Get mapping of residues in the membrane.
 
 ``membranes``
 ~~~~~~~~~~~~~
@@ -249,7 +249,7 @@ Includes the following tasks: ``topology``, ``structure``, ``trajectory``
 ``network``
 ~~~~~~~~~~~
 
-Includes the following tasks: ``mapping``, ``ligands``, ``chains``, ``pdbs``, ``membrane``
+Includes the following tasks: ``mapping``, ``ligands``, ``chains``, ``pdbs``, ``membranes``
 
 ``minimal``
 ~~~~~~~~~~~
@@ -259,5 +259,5 @@ Includes the following tasks: ``pmeta``, ``mdmeta``, ``stopology``
 ``interdeps``
 ~~~~~~~~~~~~~
 
-Includes the following tasks: ``interactions``, ``pairwise``, ``hbonds``, ``energies``, ``perres``, ``clusters``
+Includes the following tasks: ``interactions``, ``pairwise``, ``hbonds``, ``energies``, ``perres``, ``clusters``, ``dist``
 
