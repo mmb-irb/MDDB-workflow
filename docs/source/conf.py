@@ -31,6 +31,7 @@ extensions = [
     'sphinx_rtd_theme',         # ReadTheDocs theme
     'myst_parser',              # For Markdown support
     'sphinx.ext.linkcode',      # For linking to source code
+    'nbsphinx',                 # For Jupyter Notebook support
 ]
 
 # Napoleon settings
@@ -56,7 +57,7 @@ html_context = {
     'github_version': 'master/docs/source/',
 }
 
-
+# Use to get links to source code in the documentation
 def linkcode_resolve(domain, info):
     if domain != 'py':
         return None
