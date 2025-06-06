@@ -102,10 +102,8 @@ def hydrogen_bonds (
         # Add the root of the output analysis filename to the run data
         analysis_name = get_analysis_name(numbered_output_analysis_filepath)
         # Append current interaction to the summary
-        output_summary.append({
-            'name': name,
-            'analysis': analysis_name
-        })
+        analysis_entry = { 'name': name, 'analysis': analysis_name }
+        output_summary.append(analysis_entry)
 
         # If the analysis already exists then proceed to the next interaction
         if exists(numbered_output_analysis_filepath): continue
@@ -209,6 +207,11 @@ def hydrogen_bonds (
                 temporal_percent = sum(slot_hbond_values) / step
                 temporal_percents.append(temporal_percent)
             hbond_timed.append(temporal_percents)
+
+        # If no hydrogen bonds were found then do not append the analysis
+        if len(acceptor_atom_index_list) == 0:
+            output_summary.pop()
+            continue
 
         # Set the interaction output
         interaction_data = {
