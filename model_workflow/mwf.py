@@ -22,7 +22,7 @@ from model_workflow.utils.constants import *
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files, is_directory_empty
-from model_workflow.utils.auxiliar import is_glob, parse_glob, glob_filename, purge_glob
+from model_workflow.utils.auxiliar import is_glob, parse_glob, safe_getattr
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
@@ -163,11 +163,11 @@ class Task:
     # Set internal functions to handle parent saved output
     # This output is not saved in the task itself, but in the parent, because the task is static
     def _get_parent_output (self, parent):
-        return getattr(parent, self.parent_output_key, MISSING_VALUE_EXCEPTION)
+        return safe_getattr(parent, self.parent_output_key, MISSING_VALUE_EXCEPTION)
     def _set_parent_output (self, parent, new_output):
         return setattr(parent, self.parent_output_key, new_output)
     def _get_parent_output_filepath (self, parent):
-        return getattr(parent, self.parent_output_filepath_key, MISSING_VALUE_EXCEPTION)
+        return safe_getattr(parent, self.parent_output_filepath_key, MISSING_VALUE_EXCEPTION)
     def _set_parent_output_filepath (self, parent, new_filepath):
         return setattr(parent, self.parent_output_filepath_key, new_filepath)
     # Get the task output, running the task if necessary
@@ -320,12 +320,11 @@ class Task:
 
     # Find argument values, thus running any dependency
     def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
-        # First find the argument among the parent properties
-        arg_value = getattr(parent, arg, MISSING_ARGUMENT_EXCEPTION)
+        arg_value = safe_getattr(parent, arg, MISSING_ARGUMENT_EXCEPTION)
         if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
         # If the parent is an MD then it may happen the property is from the Project
         if isinstance(parent, MD):
-            arg_value = getattr(parent.project, arg, MISSING_ARGUMENT_EXCEPTION)
+            arg_value = safe_getattr(parent.project, arg, MISSING_ARGUMENT_EXCEPTION)
             if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
         # If the property is missing then search among the additional arguments
         arg_value = self.args.get(arg, MISSING_ARGUMENT_EXCEPTION)
@@ -336,7 +335,7 @@ class Task:
         # NEVER FORGET: Function arguments must have the same name that the Project/MD property
         # If the argument is still missing then you programmed the function wrongly or...
         # You may have forgotten the additional argument in the task args
-        raise RuntimeError(f'Function "{self.func.__name__}" expects argument "{arg}" but it is missing')
+        raise RuntimeError(f'Function "{self.func.__name__}" from task "{self.flag}" expects argument "{arg}" but it is missing')
     
     # Find out if inputs changed regarding the last run
     def get_changed_inputs (self,
