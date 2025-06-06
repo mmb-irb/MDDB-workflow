@@ -22,7 +22,7 @@ N_VALUES_LIMIT = 400000
 # * Where each residue is from a different agent
 # Note that the distances are calculated for all residues in the agent, not only the interface residues
 def distance_per_residue (
-    topology_file : 'File',
+    structure_file : 'File',
     trajectory_file : 'File',
     output_directory : str,
     structure : 'Structure',
@@ -61,7 +61,8 @@ def distance_per_residue (
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(topology_file.path, trajectory_file.path, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(
+        structure_file.path, trajectory_file.path, snapshots, frames_limit)
     # Save each analysis to a dict which will be parsed to json
     # Here we keep track of the summary, which will also be parsed to json at the end
     output_summary = []
