@@ -233,6 +233,7 @@ def energies (
 
         # Run CMIP in 'checkonly' mode and save the grid dimensions output
         # Now do it for the agent 2
+        print(f'Running command: {cmip_bin} -i {cmip_inputs_checkonly_source.path} -pr {agent2_cmip_pdb.path} -vdw {vdw_source.path} -hs {agent1_cmip_pdb.path} -byat {cmip_checkonly_output.path} -rst {restart_file.path}\n')
         cmip_logs_agent2 = run([
             cmip_bin,
             "-i",
@@ -454,9 +455,9 @@ def energies (
                     file.write(
                         '# Energies debug\n\n'
                         '# Run CMIP\n'
-                        f'cmip -i {CMIP_INPUTS_FILE} -pr {agent1_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent2_cmip_host.filename} -byat {debug_output_1}\n\n'
+                        f'{cmip_bin} -i {CMIP_INPUTS_FILE} -pr {agent1_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent2_cmip_host.filename} -byat {debug_output_1}\n\n'
                         '# Run CMIP inverting host and guest\n'
-                        f'cmip -i {CMIP_INPUTS_FILE} -pr {agent2_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent1_cmip_host.filename} -byat {debug_output_2}\n\n'
+                        f'{cmip_bin} -i {CMIP_INPUTS_FILE} -pr {agent2_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent1_cmip_host.filename} -byat {debug_output_2}\n\n'
                         '# Sum both energies and compare\n'
                         f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_1} {debug_output_2}\n'
                     )

@@ -1727,7 +1727,7 @@ class MD:
         )
 
     # Energies
-    def run_energies_analysis (self):
+    def run_energies_analysis (self, cmip_bin: str = 'cmip', frames_limit : int = 2, fl : str = OUTPUT_ENERGIES_FILENAME):
         # Get the task name
         task = self._get_task()
         # Check if this dependency is to be overwriten
@@ -1736,7 +1736,7 @@ class MD:
         self.overwritables.discard(task)
         # Do not run the analysis if the output file already exists
         energies_folder = self.pathify(ENERGIES_FOLDER)
-        output_analysis_filepath = f'{energies_folder}/{OUTPUT_ENERGIES_FILENAME}'
+        output_analysis_filepath = f'{energies_folder}/{fl}'
         if exists(output_analysis_filepath) and not must_overwrite:
             return
         # If we must overwrite then delete the whole energies directory
@@ -1751,7 +1751,8 @@ class MD:
             interactions = self.processed_interactions,
             charges = self.charges,
             snapshots = self.snapshots,
-            frames_limit = 100,
+            frames_limit = frames_limit,
+            cmip_bin = cmip_bin,
         )
 
     # Dihedral energies
@@ -2347,12 +2348,12 @@ class Project:
     
     def get_input_topology_filepath (self) -> Optional[str]:
         """Get the input topology filepath from the inputs or try to guess it.
-        If the input topology filepath is a 'no' flag then we consider there is no topology at all
-        So far we extract atom charges and atom bonds from the topology file
+        If the input topology filepath is a 'no' flag then we consider there is no topology at all.
+        So far we extract atom charges and atom bonds from the topology file.
         In this scenario we can keep working but there are some consecuences:
-        1 - Analysis using atom charges such as 'energies' will be skipped
-        2 - The standard topology file will not include atom charges
-        3 - Bonds will be guessed"""
+          1 - Analysis using atom charges such as 'energies' will be skipped
+          2 - The standard topology file will not include atom charges
+          3 - Bonds will be guessed"""
         if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
             return MISSING_TOPOLOGY
         # Set a function to parse possible glob notation
@@ -2571,9 +2572,9 @@ class Project:
 
     # Processed files ----------------------------------------------------
 
-    # Set the expected output topology filename given the input topology filename
-    # Note that topology formats are conserved
     def inherit_topology_filename (self) -> Optional[str]:
+        """Set the expected output topology filename given the input topology filename.
+        Note that topology formats are conserved."""
         if self.input_topology_file == MISSING_TOPOLOGY:
             return None
         filename = self.input_topology_file.filename
