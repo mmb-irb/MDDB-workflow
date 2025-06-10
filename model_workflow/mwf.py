@@ -2332,7 +2332,7 @@ class Project:
             return True
         elif self.input_type == 'ensemble':
             return False
-        raise InputError('Not supported input type value: ' + self.input_type)
+        raise InputError(f'Not supported input "type" value: {self.input_type}. It must be "trajectory" or "ensemble"')
     is_time_dependent = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
     # Processed files ----------------------------------------------------
