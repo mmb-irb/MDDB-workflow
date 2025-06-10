@@ -251,6 +251,12 @@ class Task:
             if arg_value == MISSING_ARGUMENT_EXCEPTION: continue
             # Add the processed argument
             processed_args[arg] = arg_value
+        # Check again if the task has output already
+        # It may happend that some dependencies assign output on their own
+        # e.g. charges, bonds
+        # If so then return the stored vale
+        output = self._get_parent_output(parent)
+        if output != MISSING_VALUE_EXCEPTION: return output
         # Check if this dependency is to be overwriten
         forced_overwrite = self.flag in parent.overwritables
         # Get the list of inputs which have changed compared to a previous run
@@ -430,8 +436,6 @@ class MD:
         self._md_inputs = None
         self._snapshots = None
         self._structure = None
-        self._pytraj_topology = None
-        self._reference_frame = None
 
         # Tests
         self._trajectory_integrity = None
@@ -1091,7 +1095,7 @@ class MD:
 
         # Correct the structure
         # This function reads and or modifies the following MD variables:
-        #   snapshots, safe_bonds, register, cache, mercy, trust
+        #   snapshots, reference_bonds, register, cache, mercy, trust
         structure_corrector(
             structure = provisional_structure,
             input_trajectory_file = imaged_trajectory_file,
@@ -1302,9 +1306,9 @@ class MD:
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
     # Safe bonds
-    def get_safe_bonds (self) -> List[List[int]]:
-        return self.project.safe_bonds
-    safe_bonds = property(get_safe_bonds, None, None, "Atom bonds to be trusted (read only)")
+    def get_reference_bonds (self) -> List[List[int]]:
+        return self.project.reference_bonds
+    reference_bonds = property(get_reference_bonds, None, None, "Atom bonds to be trusted (read only)")
 
     # Parsed structure
     def get_structure (self) -> 'Structure':
@@ -1323,10 +1327,10 @@ class MD:
         # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
         # If we fail to get bonds from topology then just go along with the default structure bonds
         if not self.register.tests.get(STABLE_BONDS_FLAG, None):
-            self._structure.bonds = self.safe_bonds
+            self._structure.bonds = self.reference_bonds
         # Same procedure if we have coarse grain atoms
         elif self.cg_selection:
-            self._structure.bonds = self.safe_bonds
+            self._structure.bonds = self.reference_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 
@@ -1524,37 +1528,7 @@ class MD:
 
     # Reference frame
     # Frame to be used when representing the MD
-    def get_reference_frame (self) -> dict:
-        # If we already have a stored value then return it
-        # Note that this value is usually assigned at the structure_corrector
-        if self._reference_frame:
-            return self._reference_frame
-        # Otherwise we must find the value
-        # Get some input values
-        structure_filepath = self.structure_file.path
-        trajectory_filepath = self.trajectory_file.path
-        # If the reference frame was not found because input files were not yet processed then now it should be available
-        if self._reference_frame:
-            return self._reference_frame
-        # Otherwise it means we have input files which are not to be processed
-        # So we must calculate from here the reference frame
-        # Get the rest of inputs
-        non_pbc_ions_selection = self.structure.select_ions() - self.pbc_selection
-        excluded_atoms_selection = non_pbc_ions_selection + self.structure.select_cg()
-        # If all atoms are to be excluded then set the first frame as the reference frame and stop here
-        if len(excluded_atoms_selection) == len(self.structure.atoms):
-            self._reference_frame = 0
-            return self._reference_frame
-        # Find the first frame in the whole trajectory where safe bonds are respected
-        self._reference_frame = get_bonds_canonical_frame(
-            structure_filepath = structure_filepath,
-            trajectory_filepath = trajectory_filepath,
-            snapshots = self.snapshots,
-            reference_bonds = self.safe_bonds,
-            excluded_atoms_selection = excluded_atoms_selection
-        )
-        return self._reference_frame
-    # get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
+    get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
     # ---------------------------------------------------------------------------------
@@ -1841,7 +1815,7 @@ class Project:
         self._pbc_residues = None
         self._cg_selection = None
         self._cg_residues = None
-        self._safe_bonds = None
+        self._reference_bonds = None
         self._topology_reader = None
         self._dihedrals = None
         self._populations = None
@@ -2354,39 +2328,25 @@ class Project:
         return self.reference_md.cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-
-     # Safe bonds
-    def get_safe_bonds (self) -> List[List[int]]:
-        # If we already have a stored value then return it
-        # WARNING: Do not remove the self.topology_file checking
-        # Note that checking if the topology file exists triggers all the processing logic
-        # The processing logic is able to set the internal safe bonds value as well so this avoids repeating the process
-        # Besides it generates the resorted files, if needed
-        if self.topology_file and self._safe_bonds:
-            return self._safe_bonds
-        # If we have a resorted file then use it
-        # Note that this is very excepcional
-        if self.resorted_bonds_file.exists:
-            print('Using resorted safe bonds')
-            self._safe_bonds = load_json(self.resorted_bonds_file.path)
-            return self._safe_bonds
+    # Reference MD spanshots
+    # Used next to the reference MD trajectory data
+    def get_snaphsots (self) -> int:
+        return self.reference_md.snapshots
+    snapshots = property(get_snaphsots, None, None, "Reference MD snapshots (read only)")
+    
+    # Check if we must check stable bonds
+    def get_check_stable_bonds (self) -> bool:
         # Set if stable bonds have to be checked
-        must_check_stable_bonds = STABLE_BONDS_FLAG not in self.trust
+        must_check = STABLE_BONDS_FLAG not in self.trust
         # If this analysis has been already passed then we can trust structure bonds
         if self.register.tests.get(STABLE_BONDS_FLAG, None) == True:
-            must_check_stable_bonds = False
-        # Otherwise we must find safe bonds value
-        # This should only happen if we are working with already processed files
-        self._safe_bonds = find_safe_bonds(
-            input_topology_file=self.topology_file,
-            input_structure_file=self.structure_file,
-            input_trajectory_file=self.trajectory_file,
-            must_check_stable_bonds=must_check_stable_bonds,
-            snapshots=self.reference_md.snapshots,
-            structure=self.structure,
-        )
-        return self._safe_bonds
-    safe_bonds = property(get_safe_bonds, None, None, "Atom bonds to be trusted (read only)")
+            must_check = False
+        return must_check
+    must_check_stable_bonds = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
+    # Reference bonds
+    get_reference_bonds = Task('refbonds', 'Reference bonds', find_safe_bonds)
+    reference_bonds = property(get_reference_bonds, None, None, "Atom bonds to be trusted (read only)")
 
     # Atom charges
     get_charges = Task('charges', 'Getting atom charges', get_charges)

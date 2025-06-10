@@ -2,6 +2,7 @@ from os import remove
 
 # Import local tools
 from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import get_excluded_atoms_selection
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from model_workflow.utils.auxiliar import get_new_letter, save_json, warn
@@ -39,7 +40,7 @@ def structure_corrector (
     output_trajectory_file : Optional['File'],
     MD : 'MD',
     # Note that this is an early provisional atom selection
-    pbc_selection : str,
+    pbc_selection : 'Selection',
 ) -> dict:
 
     # Extract some MD features
@@ -96,12 +97,7 @@ def structure_corrector (
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
         # Set some atoms which are to be skipped from these test given their "fake" nature
-        # Get a selection of ion atoms which are not in PBC
-        # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
-        # They are not taken in count when testing coherent bonds or looking for the reference frame
-        non_pbc_ions_selection = structure.select_ions() - pbc_selection
-        # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
-        excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg()
+        excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
         # If bonds match from the begining we are done as well
         print('Checking default structure bonds')
         if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):
@@ -115,9 +111,10 @@ def structure_corrector (
             trajectory_filepath = input_trajectory_file.path,
             snapshots = snapshots,
             reference_bonds = safe_bonds,
-            # Atoms whose bonds are not taken in count
-            excluded_atoms_selection = excluded_atoms_selection
+            structure = structure,
+            pbc_selection = pbc_selection
         )
+        MD.get_reference_frame._set_parent_output(MD, safe_bonds_frame)
         # If there is no canonical frame then stop here since there must be a problem
         if safe_bonds_frame == None:
             print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
@@ -128,9 +125,6 @@ def structure_corrector (
             register.add_warning(STABLE_BONDS_FLAG, ('Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.\n'
                 'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
             return
-        # If we found a canonical frame then we are good
-        # Save this frame as the reference frame for the current MD
-        MD._reference_frame = safe_bonds_frame
         # Set also the safe bonds frame structure to mine its coordinates
         safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, safe_bonds_frame)
         safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
@@ -148,8 +142,7 @@ def structure_corrector (
     check_stable_bonds()
 
     # Write safe bonds back to the MD
-    MD.project._safe_bonds = safe_bonds
-    MD.project._safe_bonds_frame = safe_bonds_frame
+    MD.project.get_reference_bonds._set_parent_output(MD.project, safe_bonds)
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
