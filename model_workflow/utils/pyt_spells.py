@@ -1,10 +1,10 @@
 import pytraj as pyt
 import math
 from packaging.version import Version
-from typing import Optional
 
 from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.selections import Selection
+from model_workflow.utils.type_hints import *
 
 # Set pytraj supported formats
 pytraj_supported_structure_formats = {'prmtop', 'pdb', 'mol2', 'psf', 'cif', 'sdf'}
@@ -174,3 +174,20 @@ def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepa
             return f
     return None
     
+# Get an avaerage structure from a trajectory
+# This process is carried by pytraj, since the Gromacs average may be displaced
+def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_filepath : str):
+
+    # Iterload the trajectory to pytraj
+    pytraj_trajectory = get_pytraj_trajectory(structure_file.path, trajectory_file.path)
+
+    # Create a new frame with the average positions
+    # WARNING: Do not pass the argument 'autoimage=True'
+    # WARNING: Autoimage makes some trajectories get displaced the same as in Gromacs
+    average_frame = pyt.mean_structure(pytraj_trajectory())
+
+    # In order to export it, first create an empty trajectory only with the topology
+    # Then add the average frame and write it to 'xtc' format
+    average = pyt.Trajectory(top=pytraj_trajectory.top)
+    average.append(average_frame)
+    pyt.write_traj(output_filepath, average, overwrite=True)

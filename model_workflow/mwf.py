@@ -31,14 +31,13 @@ from model_workflow.utils.structures import Structure
 from model_workflow.utils.topologies import Topology
 from model_workflow.utils.file import File
 from model_workflow.utils.remote import Remote
-from model_workflow.utils.pyt_spells import get_frames_count, get_pytraj_trajectory
+from model_workflow.utils.pyt_spells import get_frames_count, get_average_structure
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.mda_spells import get_mda_universe
 from model_workflow.utils.type_hints import *
 
 # Import local tools
 from model_workflow.tools.get_first_frame import get_first_frame
-from model_workflow.tools.get_average import get_average
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.find_interaction_types import find_interaction_types
@@ -1339,48 +1338,16 @@ class MD:
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 
-    # Pytraj trajectory
-    def get_pytraj_trajectory (self) -> 'TrajectoryIterator':
-        # If we already have a stored value then return it
-        if self._pytraj_topology:
-            return self._pytraj_topology
-        # Otherwise we must set the pytarj trajectory
-        self._pytraj_topology = get_pytraj_trajectory(
-            input_topology_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path
-        )
-        return self._pytraj_topology
-    pytraj_trajectory = property(get_pytraj_trajectory, None, None, "Pytraj trajectory (read only)")
-
-    # First frame filename
-    def get_first_frame_file (self) -> str:
-        # If the file already exists then send it
-        first_frame_filepath = self.pathify(FIRST_FRAME_FILENAME)
-        first_frame_file = File(first_frame_filepath)
-        if first_frame_file.exists:
-            return first_frame_file
-        # Otherwise, generate it
-        get_first_frame(
-            input_structure_filename = self.structure_file.path,
-            input_trajectory_filename = self.trajectory_file.path,
-            first_frame_filename = first_frame_file.path
-        )
-        return first_frame_file
+    # First frame PDB file
+    get_first_frame = Task('firstframe', 'Get first frame structure',
+        get_first_frame, output_filename = FIRST_FRAME_FILENAME)
+    get_first_frame_file = get_first_frame.get_output_file
     first_frame_file = property(get_first_frame_file, None, None, "First frame (read only)")
 
     # Average structure filename
-    def get_average_structure_file (self) -> str:
-        # If the file already exists then send it
-        average_structure_filepath = self.pathify(AVERAGE_STRUCTURE_FILENAME)
-        average_structure_file = File(average_structure_filepath)
-        if average_structure_file.exists:
-            return average_structure_file
-        # Otherwise, generate it
-        get_average(
-            pytraj_trajectory = self.pytraj_trajectory,
-            output_average_filename = average_structure_file.path
-        )
-        return average_structure_file
+    get_average_structure = Task('average', 'Get average structure',
+        get_average_structure, output_filename = AVERAGE_STRUCTURE_FILENAME)
+    get_average_structure_file = get_average_structure.get_output_file
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
     # Produce the MD metadata file to be uploaded to the database
