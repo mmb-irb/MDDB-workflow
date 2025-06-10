@@ -23,12 +23,13 @@ def get_charges (topology_file : Union['File', Exception],
     # If we have a resorted file then use it
     # Note that this is very excepcional
     if resorted_charges_file and resorted_charges_file.exists:
-        print('Using resorted atom charges')
+        print(' Using resorted atom charges')
         return load_json(resorted_charges_file.path)
     # If there is no topology at all
     if topology_file == MISSING_TOPOLOGY or not topology_file.exists:
+        print(' No charges source file available')
         return MISSING_CHARGES
-    print(f'Charges in the "{topology_file.path}" file will be used')
+    print(f' Charges in the "{topology_file.path}" file will be used')
     charges = None
     # If we have the standard topology then get charges from it
     if topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
