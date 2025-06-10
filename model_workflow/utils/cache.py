@@ -29,6 +29,7 @@ class Cache:
 
     # Delete a value in the cache
     def delete (self, key : str):
+        if key not in self.data: return
         del self.data[key]
         self.save()
 
