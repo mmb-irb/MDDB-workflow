@@ -461,14 +461,6 @@ class MD:
 
     def __repr__ (self):
         return 'MD'
-    
-    # This function is able to find its caller "self" function
-    # Then it finds its associated label in the requestables
-    def _get_task (self) -> str:
-        caller_data = sys._getframe().f_back
-        caller_name = caller_data.f_code.co_name
-        caller_func = getattr(self, caller_name).__func__
-        return inverted_requestables[caller_func]
 
     # Given a filename or relative path, add the MD directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
@@ -1879,14 +1871,6 @@ class Project:
 
     def __repr__ (self):
         return 'Project'
-
-    # This function is able to find its caller "self" function
-    # Then it finds its associated label in the requestables
-    def _get_task (self) -> str:
-        caller_data = sys._getframe().f_back
-        caller_name = caller_data.f_code.co_name
-        caller_func = getattr(self, caller_name).__func__
-        return inverted_requestables[caller_func]
 
     # Given a filename or relative path, add the project directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
