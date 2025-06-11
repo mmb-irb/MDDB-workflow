@@ -26,7 +26,6 @@ from model_workflow.utils.auxiliar import is_glob, parse_glob, safe_getattr
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
-from model_workflow.utils.conversions import convert
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.topologies import Topology
 from model_workflow.utils.file import File
@@ -53,6 +52,7 @@ from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
+from model_workflow.tools.conversions import convert
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
 from model_workflow.tools.structure_corrector import structure_corrector

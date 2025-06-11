@@ -9,12 +9,12 @@ from textwrap import wrap
 from model_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
-from model_workflow.utils.conversions import convert
 from model_workflow.utils.filters import filter_atoms
 from model_workflow.utils.subsets import get_trajectory_subset
 from model_workflow.utils.constants import *
 from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.nassa_file import generate_nassa_config
+from model_workflow.tools.conversions import convert
 from model_workflow.analyses.nassa import workflow_nassa
 
 # Set the path to the input setter jupyter notebook
