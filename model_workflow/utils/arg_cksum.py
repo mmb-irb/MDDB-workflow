@@ -1,12 +1,13 @@
 import json
 
+from model_workflow.utils.auxiliar import safe_hasattr
 from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
 from model_workflow.utils.mda_spells import get_mda_universe_cksum
-from typing import Optional, Union
+from model_workflow.utils.type_hints import *
 
 from MDAnalysis.core.universe import Universe
 
@@ -26,14 +27,17 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     if value_type == str: return f'{sum(map(ord, value))} -> {len(value)}'
     # For objects, stringify them and then do the same that with strings
     if value_type in { list, dict }:
-        stringifyed = json.dumps(value, default = lambda o: '<not serializable>')
+        stringifyed = json.dumps(value, default = lambda o: o.__repr__())
         return get_cksum_id(stringifyed)
+    # If we have a set then make a list and sort it alphabetically
+    # Thus we make sure the order is coherent between different
+    if value_type == set:
+        standard = list(value).sort()
+        return get_cksum_id(standard)
     # For functions simply store the name
     if callable(value): return value.__name__
     # For files use file last modification time and size
-    if isinstance(value, File):
-        if not value.exists: return f'missing {value.path}'
-        return f'{value.path} -> {value.mtime} {value.size}'
+    if isinstance(value, File): return value.get_cksum()
     # For the parsed structure
     if isinstance(value, Structure):
         pdb_content = value.generate_pdb()
@@ -42,11 +46,13 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     if isinstance(value, Universe): return get_mda_universe_cksum(value)
     # For the parsed structure
     if isinstance(value, Selection): return f'{len(value.atom_indices)}-{sum(value.atom_indices)}'
-    # For the register or the cache it makes not sense making a comparision
-    # WARNING: If the register/cache is an input then make sure it is only being "used" and not "read"
-    # Otherwise, the register/cache content (e.g. warnings) will be not compared between runs
-    # If you want this to be compared then pass the register/cache sub-value as an input
+    # For handler class instances it makes not sense making a comparision
+    # WARNING: If they are used as input then make sure it is only being "used" and not "read"
+    # Otherwise, the content will be not compared between runs (e.g. warnings in the register)
     if isinstance(value, Register): return True
     if isinstance(value, Cache): return True
+    if safe_hasattr(value, '__class__'):
+        if value.__class__.__name__ == 'Project': return True
+        if value.__class__.__name__ == 'MD': return True
     # If the value has non of previous types then we complain
     raise TypeError(f'Non supported type "{value_type}" for cksum id: {value}')

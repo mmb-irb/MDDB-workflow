@@ -51,11 +51,16 @@ class File:
         if self.extension:
             extension_size = len(self.extension) + 1 # We include here the dot
             self.extensionless_filename = self.filename[-extension_size:]
+        # Set internal values
+        self._cksum = None
 
+    # We must display the cksum here
+    # Note that this is critical for the task args cksum when we handle lists of files
+    # e.g. input_trajectory_files in process_input_files
     def __repr__ (self) -> str:
         if not self.filename:
             return '< No file >'
-        return '< File ' + self.path + ' >'
+        return f'< File {self.cksum} >'
 
     def __str__ (self) -> str:
         return self.__repr__()
@@ -97,6 +102,17 @@ class File:
     def get_size (self) -> str:
         return getsize(self.path)
     size = property(get_size, None, None, "File size in bytes (read only)")
+
+    # Get a cksum code used to compare identical file content
+    # DANI: This is provisional and it is not yet based in a cksum neither the file content
+    def get_cksum (self) -> str:
+        # If we already have an internal value then use it
+        if self._cksum != None: return self._cksum
+        # Calculate it otherwise
+        if not self.exists: self._cksum = f'missing {self.path}'
+        else: self._cksum = f'{self.path} -> {self.mtime} {self.size}'
+        return self._cksum
+    cksum = property(get_cksum, None, None, "Cksum code used to compare identical file content (read only)")
 
     # Set a couple of additional functions according to pytraj format requirements
     def is_pytraj_supported (self) -> bool:
