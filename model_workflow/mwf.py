@@ -768,7 +768,7 @@ class MD:
         output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         output_trajectory_file = File(output_trajectory_filepath)
         output_topology_filepath = self.project.topology_filepath
-        output_topology_file = File(self.pathify(output_topology_filepath)) if output_topology_filepath else MISSING_TOPOLOGY
+        output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
 
         # If all output files already exist we may skip the processing
         topology_already_processed = output_topology_file == MISSING_TOPOLOGY or output_topology_file.exists
