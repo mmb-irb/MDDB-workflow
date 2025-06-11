@@ -52,12 +52,8 @@ from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
-from model_workflow.tools.conversions import convert
-from model_workflow.tools.filter_atoms import filter_atoms
-from model_workflow.tools.image_and_fit import image_and_fit
-from model_workflow.tools.structure_corrector import structure_corrector
 from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
-from model_workflow.tools.check_inputs import check_inputs
+from model_workflow.tools.process_input_files import process_input_files
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -104,9 +100,6 @@ MISSING_VALUE_EXCEPTION = Exception('Missing value')
 # Name of the argument used by all functions to know where to write output
 OUTPUT_FILEPATH_ARG = 'output_filepath'
 OUTPUT_DIRECTORY_ARG = 'output_directory'
-
-# Set the name of the section in the cache where argument value cksums are saved
-CACHE_ARG_CKSUMS = 'arg_cksums'
 
 # Run a fix in gromacs if not done before
 # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -158,7 +151,10 @@ class Task:
         self.parent_output_key = f'_{self.flag}_task_output'
         self.parent_output_filepath_key = f'{self.flag}_task_output_filepath'
         self.cache_output_key = f'{self.flag}_task_output'
-    
+        self.cache_arg_cksums = f'{self.flag}_task_arg_cksums'
+        # Para el arg_cksum
+        self.__name__ = self.flag
+
     # Set internal functions to handle parent saved output
     # This output is not saved in the task itself, but in the parent, because the task is static
     def _get_parent_output (self, parent):
@@ -262,7 +258,7 @@ class Task:
         # Get the list of inputs which have changed compared to a previous run
         # WARNING: Always get changed inputs, since this function updates the cache
         # If had_cache is false then it means this is the first time the task is ever done
-        changed_inputs, had_cache = self.get_changed_inputs(parent, processed_args)
+        changed_inputs, had_cache, cache_cksums = self.get_changed_inputs(parent, processed_args)
         any_input_changed = len(changed_inputs) > 0
         # We must overwrite outputs either if inputs changed or if it was forced by the user
         must_overwrite = forced_overwrite or any_input_changed
@@ -308,10 +304,17 @@ class Task:
         if any_input_changed and had_cache and not forced_overwrite:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
             print(f'{GREEN_HEADER}   The task is run again since the following inputs changed:{changes}{COLOR_END}')
+        # Save a few internal values the task although the task is static
+        # We save it right before calling the function in case the function uses this task as input
+        self.changed_inputs = changed_inputs
+        self.cache_cksums = cache_cksums
         # Run the actual task
         output = self.func(**processed_args)
         self._set_parent_output(parent, output)
         # Update the cache
+        # Always update cache arg cksums
+        parent.cache.update(self.cache_arg_cksums, cache_cksums)
+        # Update cache output unless it is marked to not save it
         if self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
@@ -325,6 +328,11 @@ class Task:
 
     # Find argument values, thus running any dependency
     def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
+        # Word 'task' is reserved for getting the task itself
+        if arg == 'task': return self
+        # Word 'self' is reserved for getting the caller Project/MD
+        if arg == 'self': return parent
+        # Check if the argument is an MD property
         arg_value = safe_getattr(parent, arg, MISSING_ARGUMENT_EXCEPTION)
         if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
         # If the parent is an MD then it may happen the property is from the Project
@@ -347,12 +355,9 @@ class Task:
         parent : Union['Project', 'MD'],
         processed_args : dict) -> Tuple[ List[str], bool ]:
         # Get cache argument references
-        all_cksums = parent.cache.retrieve(CACHE_ARG_CKSUMS, {})
-        task_cksums = all_cksums.get(self.func.__name__, MISSING_VALUE_EXCEPTION)
-        had_cache = False if task_cksums == MISSING_VALUE_EXCEPTION else True
-        if not had_cache:
-            task_cksums = {}
-            all_cksums[self.func.__name__] = task_cksums
+        cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
+        had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
+        if cache_cksums == MISSING_VALUE_EXCEPTION: cache_cksums = {}
         # Check argument by argument
         # Keep a list with arguments which have changed
         unmatched_arguments = []
@@ -363,18 +368,14 @@ class Task:
             # Get the cksum from the new argument value
             new_cksum = get_cksum_id(arg_value)
             # Retrieve the cksum from the old argument value
-            old_cksum = task_cksums.get(arg_name, None)
+            old_cksum = cache_cksums.get(arg_name, None)
             # Compare new and old cksums
             if new_cksum != old_cksum:
                 # If we found a missmatch then add it to the list
                 unmatched_arguments.append(arg_name)
                 # Update the references
-                task_cksums[arg_name] = new_cksum
-        # If we found no missmatch then stop here
-        if len(unmatched_arguments) > 0:
-            # If there were differences then update the cache
-            parent.cache.update(CACHE_ARG_CKSUMS, all_cksums)
-        return unmatched_arguments, had_cache
+                cache_cksums[arg_name] = new_cksum
+        return unmatched_arguments, had_cache, cache_cksums
     
 # A Molecular Dynamics (MD) is the union of a structure and a trajectory
 # Having this data several analyses are possible
@@ -434,7 +435,6 @@ class MD:
 
         # Other values which may be found/calculated on demand
         self._md_inputs = None
-        self._snapshots = None
         self._structure = None
 
         # Tests
@@ -751,446 +751,9 @@ class MD:
         # Download the file
         self.remote.download_file(target_file)
         return True
-
-    # Processed files ----------------------------------------------------      
-
-    def process_input_files (self):
-        """Process input files to generate the processed files.
-        This process corrects and standarizes the topology, the trajectory and the structure."""
-        # Set the input filepaths
-        input_structure_file = self.input_structure_file
-        input_trajectory_files = self.input_trajectory_files
-        input_topology_file = self.project.input_topology_file
-
-        # Set the output filepaths
-        output_structure_filepath = self.pathify(STRUCTURE_FILENAME)
-        output_structure_file = File(output_structure_filepath)
-        output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
-        output_trajectory_file = File(output_trajectory_filepath)
-        output_topology_filepath = self.project.topology_filepath
-        output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
-
-        # If all output files already exist we may skip the processing
-        topology_already_processed = output_topology_file == MISSING_TOPOLOGY or output_topology_file.exists
-        outputs_exist = output_structure_file.exists and output_trajectory_file.exists and topology_already_processed
-
-        # Check which tests are to be run
-        required_tests = set()
-
-        # If there is no structure then we must run some tests
-        if not output_structure_file.exists:
-            required_tests.update(STRUCTURE_TESTS)
-        # If the file exists but it is new then we must run the tests as well
-        elif self.register.is_file_new(output_structure_file):
-            required_tests.update(STRUCTURE_TESTS)
-        # If the structure exists and it is not new but it was modified since the last time then we also run the tests
-        elif self.register.is_file_modified(output_structure_file):
-            message = 'Structure was modified since the last processing'
-            warn(message)
-            required_tests.update(STRUCTURE_TESTS)
-
-        # If there is no trajectory then we must run some tests
-        if not output_trajectory_file.exists:
-            required_tests.update(TRAJECTORY_TESTS)
-        # If the file exists but it is new then we must run the tests as well
-        elif self.register.is_file_new(output_trajectory_file):
-            required_tests.update(TRAJECTORY_TESTS)
-            self.cache.reset()
-        # If the trajectory was modified since the last time then we must run these tests as well
-        elif self.register.is_file_modified(output_trajectory_file):
-            message = 'Trajectory was modified since the last processing'
-            warn(message)
-            required_tests.update(TRAJECTORY_TESTS)
-            self.cache.reset()
-
-        # In case there is a topology to be processed...
-        if output_topology_file != MISSING_TOPOLOGY:
-            # If there is no topology then we must run some tests
-            if not output_topology_file.exists:
-                required_tests.update(TOPOLOGY_TESTS)
-            # If the file exists but it is new then we must run the tests as well
-            elif self.project.register.is_file_new(output_topology_file):
-                required_tests.update(TOPOLOGY_TESTS)
-            # If the topology was modified since the last time then we must run these tests as well
-            elif self.project.register.is_file_modified(output_topology_file):
-                message = 'Topology was modified since the last processing or is new'
-                warn(message)
-                required_tests.update(TOPOLOGY_TESTS)
-
-        # If any of the required tests was already passed then reset its value and warn the user
-        repeated_tests = [ test for test in required_tests if self.register.tests.get(test, None) == True ]
-        if len(repeated_tests) > 0:
-            print('  The following tests will be run again: ' + ', '.join(repeated_tests))
-            for test in repeated_tests:
-                self.register.update_test(test, None)
-
-        # Extend the required tests list with the base tests which are to be run by default and are not already passed
-        for checking in AVAILABLE_CHECKINGS:
-            test_result = self.register.tests.get(checking, None)
-            # If the test result is true then it menas ir has already passed
-            # If the test result is 'na' then it means it is not aplicable
-            if test_result == True or test_result == 'na': continue
-            # If the test result is None then it means it has never been run
-            # If the test result is false then it means it failed
-            required_tests.update([checking])
-
-        # Check if the processing parameters (filter, image, etc.) have changed since the last time
-        # If so, then we must reset all tests and rerun the processing
-        previous_processed_parameters = self.cache.retrieve(PROCESSED)
-        current_processed_parameters = {
-            'filter': self.project.filter_selection,
-            'image': self.project.image,
-            'fit': self.project.fit,
-        }
-        # Note that not passing any of these parameters is condiered as 'leave it as it is'
-        # This means if we already filtered and now there is no filter parameter then we consider there is no change
-        for key, value in current_processed_parameters.items():
-            if not value and previous_processed_parameters != None:
-                current_processed_parameters[key] = previous_processed_parameters[key]
-        # Compare current and previous values parameter by parameters
-        same_processed_paramaters = previous_processed_parameters == current_processed_parameters
-        if previous_processed_parameters and not same_processed_paramaters:
-            # Warn the user that there has been a change in input parameters
-            message = 'There is a change in the processing parameters'
-            print(YELLOW_HEADER + 'WARNING: ' + COLOR_END + message)
-            print(' Processed files will be remade')
-
-        # If output files already exist and not test is to be run then we skip the processing
-        # Check also if all availables tests were actually passed in the last run
-        # They may be skipped or allowed to fail
-        # Also make sure processing parameters are the same that the last time
-        if outputs_exist and len(required_tests) == 0 and same_processed_paramaters:
-            return
-
-        # Make sure we do not enter in a loop
-        # This may happen when we read/call an output value/file by mistake
-        if hasattr(self, '_processed'): raise RuntimeError('Looped processing')
-        self._processed = True
-
-        print('-> Processing input files')
-
-        # --- FIRST CHECK -----------------------------------------------------------------------
-
-        check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
-
-        # --- CONVERTING AND MERGING ------------------------------------------------------------
-
-        # Set the output format for the already converted structure
-        input_structure_format = self.input_structure_file.format
-        output_structure_format = output_structure_file.format
-        converted_structure_filepath = self.pathify(CONVERTED_STRUCTURE)
-        # If input structure already matches the output format then avoid the renaming
-        if input_structure_format == output_structure_format:
-            converted_structure_filepath = input_structure_file.path
-        # Set the output file for the already converted structure
-        converted_structure_file = File(converted_structure_filepath)
-        # Input trajectories should have all the same format
-        input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
-        if len(input_trajectory_formats) > 1:
-            raise InputError('All input trajectory files must have the same format')
-        # Set the output format for the already converted trajectory
-        input_trajectories_format = list(input_trajectory_formats)[0]
-        output_trajectory_format = output_trajectory_file.format
-        # Set the output file for the already converted trajectory
-        converted_trajectory_filepath = self.pathify(CONVERTED_TRAJECTORY)
-        # If input trajectory already matches the output format and is unique then avoid the renaming
-        if input_trajectories_format == output_trajectory_format and len(input_trajectory_files) == 1:
-            converted_trajectory_filepath = input_trajectory_files[0].path
-        converted_trajectory_file = File(converted_trajectory_filepath)
-        # Join all input trajectory paths
-        input_trajectory_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
-
-        # Set an intermeidate file for the trajectory while it is being converted
-        # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
-        incompleted_converted_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY)
-        incompleted_converted_trajectory_file = File(incompleted_converted_trajectory_filepath)
-        # If there is an incomplete trajectory then remove it
-        if incompleted_converted_trajectory_file.exists:
-            incompleted_converted_trajectory_file.remove()
-
-        # Convert input structure and trajectories to output structure and trajectory
-        if not converted_structure_file.exists or not converted_trajectory_file.exists:
-            print(' * Converting and merging')
-            convert(
-                input_structure_filepath = input_structure_file.path,
-                output_structure_filepath = converted_structure_file.path,
-                input_trajectory_filepaths = input_trajectory_paths,
-                output_trajectory_filepath = incompleted_converted_trajectory_file.path,
-            )
-            # Once converted, rename the trajectory file as completed
-            rename(incompleted_converted_trajectory_file.path, converted_trajectory_file.path)
-
-        # Topologies are never converted, but they are kept in their original format
-
-        # --- provisional reference structure ---
-
-        # Now that we MUST have a PDB file we can set a provisional structure instance
-        # Note that this structure is not yet corrected so it must be used with care
-        # Otherwise we could have silent errors
-        provisional_structure = Structure.from_pdb_file(converted_structure_file.path)
-        # Now we can set a provisional coarse grain selection
-        # This selection is useful to avoid problems with CG atom elements
-        # Since this is proviosonal we will make it silent
-        provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
-        for atom_index in provisional_cg_selection.atom_indices:
-            provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
-
-        # --- FILTERING ATOMS ------------------------------------------------------------
-
-        # Find out if we need to filter
-        # i.e. check if there is a selection filter and it matches some atoms
-        must_filter = bool(self.project.filter_selection)
-
-        # Set output filenames for the already filtered structure and trajectory
-        # Note that this is the only step affecting topology and thus here we output the definitive topology
-        filtered_structure_file = File(self.pathify(FILTERED_STRUCTURE)) if must_filter else converted_structure_file
-        filtered_trajectory_file = File(self.pathify(FILTERED_TRAJECTORY)) if must_filter else converted_trajectory_file
-        filtered_topology_file = output_topology_file if must_filter else input_topology_file
-
-        # Set an intermeidate file for the trajectory while it is being filtered
-        # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while filtering
-        incompleted_filtered_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + FILTERED_TRAJECTORY)
-        incompleted_filtered_trajectory_file = File(incompleted_filtered_trajectory_filepath)
-        # If there is an incomplete trajectory then remove it
-        if incompleted_filtered_trajectory_file.exists:
-            incompleted_filtered_trajectory_file.remove()
-
-        # Check if any output file is missing
-        missing_filter_output = not filtered_structure_file.exists or not filtered_trajectory_file.exists
-
-        # Check if parameters have changed
-        # Note that for this specific step only filtering is important
-        previous_filtered_parameters = self.cache.retrieve(FILTERED)
-        current_filtered_parameters = { 'filter': self.project.filter_selection }
-        same_filtered_parameters = previous_filtered_parameters == current_filtered_parameters
-        
-        # Filter atoms in structure, trajectory and topology if required and not done yet
-        if must_filter and (missing_filter_output or not same_filtered_parameters):
-            print(' * Filtering atoms')
-            filter_atoms(
-                input_structure_file = converted_structure_file,
-                input_trajectory_file = converted_trajectory_file,
-                input_topology_file = input_topology_file, # We use input topology
-                output_structure_file = filtered_structure_file,
-                output_trajectory_file = incompleted_filtered_trajectory_file,
-                output_topology_file = filtered_topology_file, # We genereate the definitive topology
-                reference_structure = provisional_structure,
-                filter_selection = self.project.filter_selection,
-            )
-            # Once filetered, rename the trajectory file as completed
-            rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
-            # Update the cache
-            self.cache.update(FILTERED, current_filtered_parameters)
-
-        # --- provisional reference structure ---
-
-        # Now that we have a filtered PDB file we have to update provisional structure instance
-        # Note that this structure is not yet corrected so it must be used with care
-        # Otherwise we could have silent errors
-        provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
-        # Again, set the coarse grain atoms
-        # Since elements may be needed to guess PBC selection we must solve them right before
-        # Since this is proviosonal we will make it silent
-        provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
-        for atom_index in provisional_cg_selection.atom_indices:
-            provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
-        # Also we can set a provisional PBC selection
-        # This selection is useful both for imaging/fitting and for the correction
-        # We will make sure that the provisonal and the final PBC selections match
-        # Since this is proviosonal we will make it silent
-        provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
-
-        # --- IMAGING AND FITTING ------------------------------------------------------------
-
-        # There is no logical way to know if the trajectory is already imaged or it must be imaged
-        # We rely exclusively in input flags
-        must_image = self.project.image or self.project.fit
-
-        # Set output filenames for the already filtered structure and trajectory
-        imaged_structure_file = File(self.pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
-        imaged_trajectory_file = File(self.pathify(IMAGED_TRAJECTORY)) if must_image else filtered_trajectory_file
-
-        # Set an intermeidate file for the trajectory while it is being imaged
-        # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while imaging
-        incompleted_imaged_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + IMAGED_TRAJECTORY)
-        incompleted_imaged_trajectory_file = File(incompleted_imaged_trajectory_filepath)
-        # If there is an incomplete trajectory then remove it
-        if incompleted_imaged_trajectory_file.exists:
-            incompleted_imaged_trajectory_file.remove()
-
-        # Check if any output file is missing
-        missing_imaged_output = not imaged_structure_file.exists or not imaged_trajectory_file.exists
-
-        # Check if parameters have changed
-        # Note that for this step the filter parameters is also important
-        previous_imaged_parameters = self.cache.retrieve(IMAGED)
-        current_imaged_parameters = {
-            'filter': self.project.filter_selection,
-            'image': self.project.image,
-            'fit': self.project.fit,
-        }
-        same_imaged_parameters = previous_imaged_parameters == current_imaged_parameters
-
-        # Image the trajectory if it is required
-        # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
-        # Fit the trajectory by removing the translation and rotation if it is required
-        if must_image and (missing_imaged_output or not same_imaged_parameters):
-            print(' * Imaging and fitting')
-            image_and_fit(
-                input_structure_file = filtered_structure_file,
-                input_trajectory_file = filtered_trajectory_file,
-                input_topology_file = filtered_topology_file, # This is optional if there are no PBC residues
-                output_structure_file = imaged_structure_file,
-                output_trajectory_file = incompleted_imaged_trajectory_file,
-                image = self.project.image,
-                fit = self.project.fit,
-                translation = self.project.translation,
-                structure = provisional_structure,
-                pbc_selection = provisional_pbc_selection
-            )
-            # Once imaged, rename the trajectory file as completed
-            rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
-            # Update the cache
-            self.cache.update(IMAGED, current_imaged_parameters)
-            # Update the provisional strucutre coordinates
-            imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
-            imaged_structure_coords = [ atom.coords for atom in imaged_structure.atoms ]
-            provisional_structure.set_new_coordinates(imaged_structure_coords)
-
-        # --- CORRECTING STRUCTURE ------------------------------------------------------------
-
-        # Note that this step, although it is foucsed in the structure, requires also the trajectory
-        # Also the trajectory may be altered in very rare cases where coordinates must be resorted
-
-        # There is no possible reason to not correct the structure
-        # This is the last step so the output files will be named as the output files of the whole processing
-
-        # WARNING:
-        # For the correcting function we need the number of snapshots and at this point it should not be defined
-        # Snapshots are calculated by default from the already processed structure and trajectory
-        # For this reason we can not rely on the public snapshots getter
-        # We must calculate snapshots here using last step structure and trajectory
-        # If we already have a value in the cache then use it
-        cached_snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
-        if cached_snapshots != None:
-            self._snapshots = cached_snapshots
-        # Othwerise count the number of snapshots
-        else:
-            self._snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
-            # Save the snapshots value in the cache as well
-            self.cache.update(SNAPSHOTS_FLAG, self._snapshots)
-
-        # WARNING:
-        # We may need to resort atoms in the structure corrector function
-        # In such case, bonds and charges must be resorted as well and saved apart to keep values coherent
-        # Bonds are calculated during the structure corrector but atom charges must be extracted no
-        charges = get_charges(filtered_topology_file)
-        self.project.get_charges._set_parent_output(self.project, charges)
-
-        print(' * Correcting structure')
-
-        # Set output filenames for the already filtered structure and trajectory
-        corrected_structure_file = File(self.pathify(CORRECTED_STRUCTURE))
-        corrected_trajectory_file = File(self.pathify(CORRECTED_TRAJECTORY))
-
-        # Correct the structure
-        # This function reads and or modifies the following MD variables:
-        #   snapshots, reference_bonds, register, cache, mercy, trust
-        structure_corrector(
-            structure = provisional_structure,
-            input_trajectory_file = imaged_trajectory_file,
-            input_topology_file = filtered_topology_file,
-            output_structure_file = corrected_structure_file,
-            output_trajectory_file = corrected_trajectory_file,
-            MD = self,
-            pbc_selection = provisional_pbc_selection
-        )
-
-        # If the corrected output exists then use it
-        # Otherwise use the previous step files
-        # Corrected files are generated only when changes are made in these files
-        corrected_structure_file = corrected_structure_file if corrected_structure_file.exists else imaged_structure_file
-        corrected_trajectory_file = corrected_trajectory_file if corrected_trajectory_file.exists else imaged_trajectory_file
-
-        # Set for every type of file (structure, trajectory and topology) the input, the last processed step and the output files
-        input_and_output_files = [
-            (input_structure_file, corrected_structure_file, output_structure_file),
-            (input_trajectory_files[0], corrected_trajectory_file, output_trajectory_file),
-            (input_topology_file, filtered_topology_file, output_topology_file)
-        ]
-        # Set a list of intermediate files
-        intermediate_files = set([
-            converted_structure_file, converted_trajectory_file,
-            filtered_structure_file, filtered_trajectory_file,
-            imaged_structure_file, imaged_trajectory_file,
-        ])
-        # Now we must rename files to match the output file
-        # Processed files remain with some intermediate filename
-        for input_file, processed_file, output_file in input_and_output_files:
-            # If the processed file is already the output file then there is nothing to do here
-            # This means it was already the input file and no changes were made
-            if processed_file == output_file:
-                continue
-            # There is a chance that the input files have not been modified
-            # This means the input format has already the output format and it is not to be imaged, fitted or corrected
-            # However we need the output files to exist and we dont want to rename the original ones to conserve them
-            # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
-            if processed_file == input_file:
-                # If output file exists and its the same as the input file, we can not create a symlink from a file to the same file
-                if output_file.exists:
-                    output_file.remove()
-                output_file.set_symlink_to(input_file)
-            # Otherwise rename the last intermediate file as the output file
-            else:
-                
-                # In case the processed file is a symlink we must make sure the symlink is not made to a intermediate step
-                # Intermediate steps will be removed further and thus the symlink would break
-                # If the symlinks points to the input file there is no problem though
-                if processed_file.is_symlink():
-                    target_file = processed_file.get_symlink()
-                    if target_file in intermediate_files:
-                        target_file.rename_to(output_file)
-                    else:
-                        processed_file.rename_to(output_file)
-                # If the files is not a symlink then simply rename it
-                else:
-                    processed_file.rename_to(output_file)
-
-        # Save the internal variables
-        self._structure_file = output_structure_file
-        self._trajectory_file = output_trajectory_file
-        self.project._topology_file = output_topology_file
-
-        # Register the last modification times of the recently processed files
-        # This way we know if they have been modifed in the future and checkings need to be rerun
-        self.register.update_mtime(output_structure_file)
-        self.register.update_mtime(output_trajectory_file)
-        if output_topology_file != MISSING_TOPOLOGY:
-            self.project.register.update_mtime(output_topology_file)
-
-        # Update the parameters used to get the last processed structure and trajectory files
-        self.cache.update(PROCESSED, current_processed_parameters)
-
-        # --- Definitive PBC selection ---
-
-        # Now that we have the corrected structure we can set the definitive PBC atoms
-        # Make sure the selection is identical to the provisional selection
-        if self.pbc_selection != provisional_pbc_selection:
-            raise InputError('PBC selection is not consistent after correcting the structure. '
-                'Please consider using a different PBC selection. '
-                'Avoid relying in atom distances or elements to avoid this problem.')
-
-        # --- RUNNING FINAL TESTS ------------------------------------------------------------
-
-        # Note that some tests have been run already
-        # e.g. stable bonds is run in the structure corrector function
-
-        # Note that tests here do not modify any file
-
-        # Check the trajectory has not sudden jumps
-        self.is_trajectory_integral()
-
-        # Make a final summary
+    
+    # Make a summary of tests and their status
+    def print_tests_summary (self):
         print('Tests summary:')
         for test_name in AVAILABLE_CHECKINGS:
             test_result = self.register.tests.get(test_name, None)
@@ -1210,44 +773,37 @@ class MD:
             
             print(f' - {test_nice_name} -> {test_nice_result}')
 
-        # Issue some warnings if failed or never run tests are skipped
+    # Issue some warnings if failed or never run tests are skipped
+    # This is run after processing input files
+    def _issue_required_test_warnings (self):
         for test_name in AVAILABLE_CHECKINGS:
             # If test was not skipped then proceed
-            if test_name not in self.project.trust:
-                continue
+            if test_name not in self.project.trust: continue
             # If test passed in a previous run the proceed
             test_result = self.register.tests.get(test_name)
-            if test_result == True:
-                continue
+            if test_result == True: continue
             # If test failed in a previous run we can also proceed
             # The failing warning must be among the inherited warnings, so there is no need to add more warnings here
-            elif test_result == False:
-                continue
+            if test_result == False: continue
             # If the test has been always skipped then issue a warning
-            elif test_result == None:
+            if test_result == None:
                 # Remove previous warnings
                 self.register.remove_warnings(test_name)
                 # Get test pretty name
                 test_nice_name = NICE_NAMES[test_name]
                 # Issue the corresponding warning            
                 self.register.add_warning(test_name, test_nice_name + ' was skipped and never run before')
-            else:
-                raise ValueError('Test value is not supported')
-            
-        # --- Cleanup intermediate files
+                continue
+            raise ValueError('Test value is not supported')
 
-        # Set also a list of input files
-        inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
-        # We must make sure an intermediate file is not actually an input file before deleting it
-        removable_files = intermediate_files - inputs_files
-        # Now delete every removable file
-        for removable_file in removable_files:
-            # Note that a broken symlink does not 'exists'
-            if removable_file.exists or removable_file.is_symlink():
-                removable_file.remove()
+    # Processed files ----------------------------------------------------
+
+    # Run the actual processing to generate output processed files out of input raw files
+    # And by "files" I mean structure, trajectory and topology
+    process_input_files = Task('inpro', 'Process input files', process_input_files)
 
     # Get the processed structure
-    def get_structure_file (self) -> str:
+    def get_structure_file (self, early_access : bool = False) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -1256,13 +812,13 @@ class MD:
         structure_filepath = self.pathify(STRUCTURE_FILENAME)
         self._structure_file = File(structure_filepath)
         # Run the processing logic
-        self.process_input_files()
+        if not early_access: self.process_input_files(self)
         # Now that the file is sure to exist we return it
         return self._structure_file
-    structure_file = property(get_structure_file, None, None, "Structure filename (read only)")
+    structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
     # Get the processed trajectory
-    def get_trajectory_file (self) -> str:
+    def get_trajectory_file (self, early_access : bool = False) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -1271,14 +827,14 @@ class MD:
         trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         self._trajectory_file = File(trajectory_filepath)
         # Run the processing logic
-        self.process_input_files()
+        if not early_access: self.process_input_files(self)
         # Now that the file is sure to exist we return it
         return self._trajectory_file
-    trajectory_file = property(get_trajectory_file, None, None, "Trajectory filename (read only)")
+    trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
     # Get the processed topology from the project
-    def get_topology_file (self) -> str:
-        return self.project.topology_file
+    def get_topology_file (self, early_access : bool = False) -> str:
+        return self.project.get_topology_file(early_access)
     topology_file = property(get_topology_file, None, None, "Topology filename from the project (read only)")
 
     # ---------------------------------------------------------------------------------
@@ -1286,23 +842,7 @@ class MD:
     # ---------------------------------------------------------------------------------
 
     # Trajectory snapshots
-    def get_snapshots (self) -> str:
-        # If we already have a stored value then return it
-        # WARNING: Do not remove the self.trajectory_file checking
-        # Note that checking if the trajectory file exists triggers all the processing logic
-        # The processing logic is able to set the internal snapshots value as well so this avoid repeating the process
-        if self.trajectory_file and self._snapshots != None:
-            return self._snapshots
-        # If we already have a value in the cache then use it
-        cached_value = self.cache.retrieve(SNAPSHOTS_FLAG)
-        if cached_value != None:
-            return cached_value
-        # Otherwise we must find the value
-        # This happens when the input files are already porcessed and thus we did not yet count the frames
-        self._snapshots = get_frames_count(self.structure_file, self.trajectory_file)
-        # Save the snapshots value in the cache as well
-        self.cache.update(SNAPSHOTS_FLAG, self._snapshots)
-        return self._snapshots
+    get_snapshots = Task('frames', 'Count trajectory frames', get_frames_count)
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
     # Safe bonds
@@ -2285,7 +1825,7 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    def get_topology_file (self) -> str:
+    def get_topology_file (self, early_access : bool = False) -> str:
         """Get the processed topology file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
@@ -2294,7 +1834,7 @@ class Project:
         # If the file already exists then we are done
         self._topology_file = File(self.topology_filepath) if self.topology_filepath != None else MISSING_TOPOLOGY
         # Run the processing logic
-        self.reference_md.process_input_files()
+        if not early_access: self.reference_md.process_input_files(self.reference_md)
         # Now that the file is sure to exist we return it
         return self._topology_file
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")

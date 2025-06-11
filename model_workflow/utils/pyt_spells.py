@@ -3,6 +3,7 @@ import math
 from packaging.version import Version
 
 from model_workflow.utils.auxiliar import InputError
+from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.type_hints import *
 
@@ -86,25 +87,25 @@ def get_reduced_pytraj_trajectory (
 # Get the trajectory frames number
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 def get_frames_count (
-    input_topology_file : 'File',
-    input_trajectory_file : 'File') -> int:
+    structure_file : 'File',
+    trajectory_file : 'File') -> int:
     
     print('-> Counting number of frames')
 
-    if not input_trajectory_file.exists:
-        raise InputError('Missing trajectroy file when counting frames: ' + input_trajectory_file.path)
+    if not trajectory_file.exists:
+        raise InputError('Missing trajectroy file when counting frames: ' + trajectory_file.path)
     
-    if not input_topology_file.exists:
-        raise InputError('Missing topology file when counting frames: ' + input_topology_file.path)
+    if not structure_file.exists:
+        raise InputError('Missing topology file when counting frames: ' + structure_file.path)
 
     # Load the trajectory from pytraj
     pyt_trajectory = pyt.iterload(
-        input_trajectory_file.path,
-        input_topology_file.path)
+        trajectory_file.path,
+        structure_file.path)
 
     # Return the frames number
     frames = pyt_trajectory.n_frames
-    print(' Frames: ' + str(frames))
+    print(f' Frames: {frames}')
 
     # If 0 frames were counted then there is something wrong with the file
     if frames == 0:

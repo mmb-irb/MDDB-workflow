@@ -41,14 +41,12 @@ def structure_corrector (
     MD : 'MD',
     # Note that this is an early provisional atom selection
     pbc_selection : 'Selection',
+    snapshots : int,
+    register : 'Register',
+    mercy,
+    trust
 ) -> dict:
-
-    # Extract some MD features
-    snapshots = MD._snapshots
-    register = MD.register
-    mercy = MD.project.mercy
-    trust = MD.project.trust
-
+    
     # Write the inital output structure file which will be overwritten several times further
     structure.generate_pdb_file(output_structure_file.path)
 
@@ -84,7 +82,6 @@ def structure_corrector (
         structure
     )
     # If safe bonds do not match structure bonds then we have to fix it
-    safe_bonds_frame = None
     def check_stable_bonds ():
         # Save the current structure bonds to further compare with the safe bonds
         current_bonds = structure.bonds
