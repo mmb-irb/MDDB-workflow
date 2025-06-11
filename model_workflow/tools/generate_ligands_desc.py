@@ -872,7 +872,11 @@ def get_prd_ligand_code (pdb_id : str) -> Optional[str]:
         }
     }'''
     parsed_response = request_pdb_data(pdb_id, query)
-    prd_id = parsed_response.get('pdbx_molecule_features', {})[0].get('prd_id', None) # AGUS: podría haber casos donde haya más de uno? 
+    pdbx_id = parsed_response.get('pdbx_molecule_features', None)
+    if pdbx_id is None:
+        print(f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}')
+        return None
+    prd_id = pdbx_id[0].get('prd_id', None) # AGUS: podría haber casos donde haya más de uno? 
     if prd_id is None:
         print(f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}')
         return None
