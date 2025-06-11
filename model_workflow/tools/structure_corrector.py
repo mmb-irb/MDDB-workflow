@@ -107,8 +107,8 @@ def structure_corrector (
         print(' They are wrong')
         # Find the first frame in the whole trajectory where safe bonds are respected
         safe_bonds_frame = get_bonds_canonical_frame(
-            structure_filepath = output_structure_file.path,
-            trajectory_filepath = input_trajectory_file.path,
+            structure_file = output_structure_file,
+            trajectory_file = input_trajectory_file,
             snapshots = snapshots,
             reference_bonds = safe_bonds,
             structure = structure,
