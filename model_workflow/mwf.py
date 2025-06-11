@@ -210,10 +210,6 @@ class Task:
         n_default_arguments = len(specification.defaults) if specification.defaults else 0
         # Find out which arguments are optional since they have default values
         default_arguments = set(expected_arguments[::-1][:n_default_arguments])
-        # If so, then find if we have cached output
-        if self.use_cache:
-            output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
-            self._set_parent_output(parent, output)
         # If one of the expected arguments is the output_filename then set it here
         output_filepath = None
         writes_output_file = OUTPUT_FILEPATH_ARG in expected_arguments
@@ -257,6 +253,10 @@ class Task:
         # If so then return the stored vale
         output = self._get_parent_output(parent)
         if output != MISSING_VALUE_EXCEPTION: return output
+        # Find if we have cached output
+        if self.use_cache:
+            output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
+            self._set_parent_output(parent, output)
         # Check if this dependency is to be overwriten
         forced_overwrite = self.flag in parent.overwritables
         # Get the list of inputs which have changed compared to a previous run
