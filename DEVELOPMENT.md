@@ -92,7 +92,7 @@ pytest -m CI
 # To run all tests and generate a coverage report:
 pytest --cov-report term --cov=model_workflow -m CI
 # Generate the html report and save the console output to report.log while removing color codes
-pytest --cov-report=xml --junit-xml=./reports/junit.xml --cov-report html:docs/source/_static/htmlcov --cov=model_workflow -m release --color=yes | tee >(sed 's/\x1b\[[0-9;]*m//g' > docs/source/_static/htmlcov/report.log)
+pytest --cov-report xml:docs/source/_static/coverage.xml --cov-report html:docs/source/_static/htmlcov --cov=model_workflow -m release --color=yes | tee >(sed 's/\x1b\[[0-9;]*m//g' > docs/source/_static/htmlcov/report.log)
 ```
 ```shell
 coverage xml -o docs/source/_static/coverage.xml

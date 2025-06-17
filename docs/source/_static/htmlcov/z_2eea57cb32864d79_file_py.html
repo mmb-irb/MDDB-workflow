@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for model_workflow/utils/file.py: 63%</title>
+    <title>Coverage for model_workflow/utils/file.py: 73%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
     <link rel="stylesheet" href="style_cb_8e611ae1.css" type="text/css">
     <script src="coverage_html_cb_6fb7b396.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>model_workflow/utils/file.py</b>:
-            <span class="pc_cov">63%</span>
+            <span class="pc_cov">73%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">94 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">59<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">35<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">69<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">25<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_2eea57cb32864d79_filters_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.8.0">coverage.py v7.8.0</a>,
-            created at 2025-06-06 12:36 +0200
+            created at 2025-06-17 12:46 +0200
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -141,14 +141,14 @@
     <p class="mis show_mis"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">__repr__</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t61" href="#t61">61</a></span><span class="t">    <span class="key">def</span> <span class="nam">__hash__</span> <span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t62" href="#t62">62</a></span><span class="t">        <span class="key">return</span> <span class="nam">hash</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span> <span class="com"># Path is already normalized</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t62" href="#t62">62</a></span><span class="t">        <span class="key">return</span> <span class="nam">hash</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span> <span class="com"># Path is already normalized</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t63" href="#t63">63</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t64" href="#t64">64</a></span><span class="t">    <span class="key">def</span> <span class="nam">__bool__</span> <span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t65" href="#t65">65</a></span><span class="t">        <span class="key">return</span> <span class="nam">bool</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">filename</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t66" href="#t66">66</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t">    <span class="key">def</span> <span class="nam">__eq__</span> <span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">other</span> <span class="op">:</span> <span class="str">'File'</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t">        <span class="key">if</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">other</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">__class__</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">            <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">path</span> <span class="op">==</span> <span class="nam">other</span><span class="op">.</span><span class="nam">path</span> <span class="com"># Paths are already normalized</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">            <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">path</span> <span class="op">==</span> <span class="nam">other</span><span class="op">.</span><span class="nam">path</span> <span class="com"># Paths are already normalized</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">        <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">    <span class="com"># Check if file exists</span>&nbsp;</span><span class="r"></span></p>
@@ -169,7 +169,7 @@
     <p class="pln"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">    <span class="com"># Set a couple of additional functions according to pytraj format requirements</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">    <span class="key">def</span> <span class="nam">is_pytraj_supported</span> <span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">format</span> <span class="key">in</span> <span class="nam">PYTRAJ_SUPPORTED_FORMATS</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">format</span> <span class="key">in</span> <span class="nam">PYTRAJ_SUPPORTED_FORMATS</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">    <span class="key">def</span> <span class="nam">get_pytraj_parm_format</span> <span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">Optional</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">        <span class="key">return</span> <span class="nam">PYTRAJ_PARM_FORMAT</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">format</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -208,22 +208,22 @@
     <p class="pln"><span class="n"><a id="t126" href="#t126">126</a></span><span class="t">    <span class="com"># Set this file a symlink to another file</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t127" href="#t127">127</a></span><span class="t">    <span class="key">def</span> <span class="nam">set_symlink_to</span> <span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">other_file</span> <span class="op">:</span> <span class="str">'File'</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t128" href="#t128">128</a></span><span class="t">        <span class="com"># Check if symlinks are allowed</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">        <span class="nam">no_symlinks</span> <span class="op">=</span> <span class="nam">GLOBALS</span><span class="op">[</span><span class="str">'no_symlinks'</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">        <span class="nam">no_symlinks</span> <span class="op">=</span> <span class="nam">GLOBALS</span><span class="op">[</span><span class="str">'no_symlinks'</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t130" href="#t130">130</a></span><span class="t">        <span class="com"># If symlinks are now allowed then copy the file instead</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t131" href="#t131">131</a></span><span class="t">        <span class="key">if</span> <span class="nam">no_symlinks</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t131" href="#t131">131</a></span><span class="t">        <span class="key">if</span> <span class="nam">no_symlinks</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t132" href="#t132">132</a></span><span class="t">            <span class="nam">other_file</span><span class="op">.</span><span class="nam">copy_to</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t133" href="#t133">133</a></span><span class="t">            <span class="key">return</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t134" href="#t134">134</a></span><span class="t">        <span class="com"># Self file must not exist</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">        <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">exists</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">        <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">exists</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t136" href="#t136">136</a></span><span class="t">            <span class="key">raise</span> <span class="nam">Exception</span><span class="op">(</span><span class="str">'Cannot set a symlink from an already existing file: '</span> <span class="op">+</span> <span class="nam">str</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">        <span class="com"># Note that symlink path must be relative to this file</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">        <span class="nam">relative_path</span> <span class="op">=</span> <span class="nam">relpath</span><span class="op">(</span><span class="nam">other_file</span><span class="op">.</span><span class="nam">path</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">basepath</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">        <span class="nam">relative_path</span> <span class="op">=</span> <span class="nam">relpath</span><span class="op">(</span><span class="nam">other_file</span><span class="op">.</span><span class="nam">path</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">basepath</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">        <span class="com"># Set the symlink</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">        <span class="nam">symlink</span><span class="op">(</span><span class="nam">relative_path</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">        <span class="nam">symlink</span><span class="op">(</span><span class="nam">relative_path</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t">    <span class="com"># Check if a file is already a symlink</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t143" href="#t143">143</a></span><span class="t">    <span class="key">def</span> <span class="nam">is_symlink</span> <span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">        <span class="key">return</span> <span class="nam">islink</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">        <span class="key">return</span> <span class="nam">islink</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t145" href="#t145">145</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t146" href="#t146">146</a></span><span class="t">    <span class="com"># Copy a file to another</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t">    <span class="key">def</span> <span class="nam">copy_to</span> <span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">other_file</span> <span class="op">:</span> <span class="str">'File'</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -231,7 +231,7 @@
     <p class="pln"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">    <span class="com"># Rename a file to another</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">    <span class="key">def</span> <span class="nam">rename_to</span> <span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">other_file</span> <span class="op">:</span> <span class="str">'File'</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">        <span class="nam">rename</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">,</span> <span class="nam">other_file</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">        <span class="nam">rename</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">path</span><span class="op">,</span> <span class="nam">other_file</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -241,7 +241,7 @@
             <a class="nav" href="z_2eea57cb32864d79_filters_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.8.0">coverage.py v7.8.0</a>,
-            created at 2025-06-06 12:36 +0200
+            created at 2025-06-17 12:46 +0200
         </p>
     </div>
 </footer>
