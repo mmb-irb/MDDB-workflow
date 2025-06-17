@@ -1,12 +1,14 @@
 import os
 import pytest
+import shutil
 import numpy as np
 from conftest import get_analysis_file
 
 from model_workflow.utils.constants import *
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import load_json
-from model_workflow.mwf import project_requestables, md_requestables
+from model_workflow.mwf import project_requestables, md_requestables, workflow
+from model_workflow.console import run_parser
 
 @pytest.mark.release
 @pytest.mark.parametrize("test_accession", ["A0001", "A01IP" ], scope="class")
@@ -76,3 +78,68 @@ class TestMWFRun:
         ref_mn = np.array(reference['data'][0]['values']).mean()
 
         assert np.isclose(now, ref_mn, atol=0.1), f"Output values do not match expected values. Now: {now}, Ref: {ref_mn}"
+
+@pytest.mark.CI
+@pytest.mark.release
+class TestWorkflow:
+    """Test the workflow execution"""
+
+    def test_workflow_execution(self, test_data_dir: str):
+        """Test that the workflow runs without errors, simulating console execution"""
+        
+        cwd = os.getcwd()
+        working_directory = os.path.join(test_data_dir, 'output/test_workflow')
+        # Ensure the working directory doesn't exist and it is empty
+        if os.path.exists(working_directory):
+            # Remove the directory if it exists
+            shutil.rmtree(working_directory)
+        # Copy the inputs from raw_project
+        shutil.copytree(
+            os.path.join(test_data_dir, 'input/raw_project'),
+            working_directory,
+            dirs_exist_ok=True
+        )
+
+        # Use argparse to get default values for all arguments
+        # Parse an empty argument list to get the default values
+        args = run_parser.parse_args([])
+        args_dict = vars(args)
+        
+        # Modify only the specific arguments we want to change
+        args_dict.update({
+            #'input_structure_filepath': '5ggr-rs1-310k-0ns.pdb',
+            #'input_trajectory_filepaths': 'dynamic-nopbc-2',
+            'working_directory': working_directory,
+            'setup': True,
+        })
+
+        # Create a copy without common arguments for splitting
+        run_specific_args = args_dict.copy()
+        # Remove common arguments that should not be passed to workflow or project
+        del run_specific_args['no_symlinks']
+        
+        # Split arguments between project_parameters and workflow_args
+        # as done in console.py's main function
+        project_parameters = {}
+        workflow_kwargs = {}
+        
+        # Arguments that are direct named parameters of the workflow function
+        workflow_direct_arg_names = {
+            'working_directory', 
+            'download', 
+            'setup', 
+            'include', 
+            'exclude', 
+            'overwrite'
+        }
+        
+        for k, v in run_specific_args.items():
+            if k in workflow_direct_arg_names:
+                workflow_kwargs[k] = v
+            else:
+                # All other arguments go to project_parameters
+                project_parameters[k] = v
+        
+        # Call workflow in a way that mimics console.py's main function
+        workflow(project_parameters=project_parameters, **workflow_kwargs)
+        os.chdir(cwd)
