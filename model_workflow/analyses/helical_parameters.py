@@ -159,15 +159,15 @@ def helical_parameters (
         folder_path = input_trajectory_filename.split('/')[-2]
 
     # Run the hydrogen bond analysis to generate .dat file
-    # hydrogen_bonds(
-    #     input_topology_filename,
-    #     input_trajectory_filename,
-    #     output_analysis_filename,
-    #     folder_path,
-    #     structure_filename,
-    # )
+    hydrogen_bonds(
+        input_topology_filename,
+        input_trajectory_filename,
+        output_analysis_filename,
+        folder_path,
+        structure_filename,
+    )
 
-    # terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
+    terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit, folder_path)
     # Set the path into the original directory outside the folder helicalparameters
