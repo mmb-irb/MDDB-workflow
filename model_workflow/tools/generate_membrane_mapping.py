@@ -36,7 +36,7 @@ def generate_membrane_mapping(lipid_map : List[dict],
     # Prepare the membrane mapping OBJ/JSON
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     # if no lipids are found, we save the empty mapping and return
-    if len(lipid_ridx) == 0:
+    if len(lipid_map) == 0:
         # no lipids found in the structure.
         save_json(mem_map_js, output_membrane_filepath)
         return mem_map_js
