@@ -3232,9 +3232,11 @@ inverted_requestables.update({ v: k for k, v in requestables.items() })
 DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
+    'meta': ['pmeta', 'mdmeta'],
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
-    'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ]
+    'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ],
+    'membs': ['membranes', 'density',  'thickness', 'apl', 'lorder', 'linter']
 }
 
 # The actual main function
