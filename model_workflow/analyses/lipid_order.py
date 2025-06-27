@@ -33,10 +33,11 @@ def lipid_order (
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     
-    mda_top = to_MDAnalysis_topology(standard_topology_file.absolute_path)
+    mda_top = to_MDAnalysis_topology(standard_topology_file)
     u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
+    # DANI: Esto falla :)
     for ref, ref_data in membrane_map['references'].items():
         # Take the first residue of the reference
         res = u.residues[ref_data["resindices"][0]]

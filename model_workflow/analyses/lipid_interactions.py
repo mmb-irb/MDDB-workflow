@@ -24,9 +24,10 @@ def lipid_interactions (
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
     
-    mda_top = to_MDAnalysis_topology(standard_topology_file.absolute_path)
+    mda_top = to_MDAnalysis_topology(standard_topology_file)
     u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
+    # DANI: Esto falla :)
     lipids = set([ data['resname'] for data in membrane_map['references'].values()])
     lipids_str = " ".join(lipids)
     resids = np.unique(u.select_atoms('protein').resindices)
