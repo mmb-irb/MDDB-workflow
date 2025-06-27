@@ -534,6 +534,14 @@ run_parser_checks_group.add_argument(
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow. "
         "Note that all checkings are allowed to fail if the argument is passed alone. " + pretty_list(AVAILABLE_FAILURES))
 )
+run_parser_checks_group.add_argument(
+    "-f", "--faith",
+    action='store_true',
+    default=False,
+    help=("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
+        "WARNING: Do not use this flag if you don't know what you are doing.\n"
+        "This may lead to several silent errors.")
+)
 
 # Set a list with the alias of all requestable dependencies
 choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))

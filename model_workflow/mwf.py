@@ -803,7 +803,7 @@ class MD:
     process_input_files = Task('inpro', 'Process input files', process_input_files)
 
     # Get the processed structure
-    def get_structure_file (self, early_access : bool = False) -> str:
+    def get_structure_file (self) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -811,14 +811,23 @@ class MD:
         # Set the file
         structure_filepath = self.pathify(STRUCTURE_FILENAME)
         self._structure_file = File(structure_filepath)
+        # If the faith flag was passed then simply make sure the input file makes sense
+        if self.project.faith:
+            if self.input_structure_file != self._structure_file:
+                raise InputError('Input structure file is not equal to output structure file but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            if not self.input_structure_file.exists:
+                raise InputError('Input structure file does not exist but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            return self._structure_file
         # Run the processing logic
-        if not early_access: self.process_input_files(self)
+        self.process_input_files(self)
         # Now that the file is sure to exist we return it
         return self._structure_file
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
     # Get the processed trajectory
-    def get_trajectory_file (self, early_access : bool = False) -> str:
+    def get_trajectory_file (self) -> str:
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -826,15 +835,28 @@ class MD:
         # If the file already exists then we are done
         trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
         self._trajectory_file = File(trajectory_filepath)
+        # If the faith flag was passed then simply make sure the input file makes sense
+        if self.project.faith:
+            if len(self.input_trajectory_files) > 1:
+                raise InputError('Several input trajectory files but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            sample = self.input_trajectory_files[0]
+            if sample != self._trajectory_file:
+                raise InputError('Input trajectory file is not equal to output trajectory file but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            if not self._trajectory_file.exists:
+                raise InputError('Input trajectory file does not exist but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            return self._trajectory_file
         # Run the processing logic
-        if not early_access: self.process_input_files(self)
+        self.process_input_files(self)
         # Now that the file is sure to exist we return it
         return self._trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
     # Get the processed topology from the project
-    def get_topology_file (self, early_access : bool = False) -> str:
-        return self.project.get_topology_file(early_access)
+    def get_topology_file (self) -> str:
+        return self.project.get_topology_file()
     topology_file = property(get_topology_file, None, None, "Topology filename from the project (read only)")
 
     # ---------------------------------------------------------------------------------
@@ -1235,6 +1257,7 @@ class Project:
         translation : List[float] = [0, 0, 0],
         mercy : Union[ List[str], bool ] = [],
         trust : Union[ List[str], bool ] = [],
+        faith : bool = False,
         pca_analysis_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
@@ -1341,6 +1364,7 @@ class Project:
                 self.trust = AVAILABLE_CHECKINGS
             else:
                 self.trust = []
+        self.faith = faith
         self.pca_analysis_selection = pca_analysis_selection
         self.pca_fit_selection = pca_fit_selection
         self.rmsd_cutoff = rmsd_cutoff
@@ -1825,7 +1849,7 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    def get_topology_file (self, early_access : bool = False) -> str:
+    def get_topology_file (self) -> str:
         """Get the processed topology file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
@@ -1833,8 +1857,17 @@ class Project:
             return self._topology_file
         # If the file already exists then we are done
         self._topology_file = File(self.topology_filepath) if self.topology_filepath != None else MISSING_TOPOLOGY
+        # If the faith flag was passed then simply make sure the input file makes sense
+        if self.faith:
+            if self.input_topology_file != self._topology_file:
+                raise InputError('Input topology file is not equal to output topology file but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            if not self.input_topology_file.exists:
+                raise InputError('Input topology file does not exist but the "faith" flag was used.\n'
+                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
+            return self._topology_file
         # Run the processing logic
-        if not early_access: self.reference_md.process_input_files(self.reference_md)
+        self.reference_md.process_input_files(self.reference_md)
         # Now that the file is sure to exist we return it
         return self._topology_file
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
