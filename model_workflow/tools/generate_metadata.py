@@ -145,6 +145,7 @@ def generate_project_metadata (
         'COUNION': counter_ions,
         'INTERACTIONS': interactions,
         'PBC_SELECTION': get_input('pbc_selection'),
+        'CG_SELECTION': get_input('cg_selection'),
         'CHAINNAMES': chainnames,
         'CUSTOMS': get_input('customs'),
         'ORIENTATION': get_input('orientation'),
