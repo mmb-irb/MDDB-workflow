@@ -225,7 +225,11 @@ def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
         bonds = get_tpr_bonds_gromacs(tpr_filepath)
     except:
         print(' Our tool failed to extract bonds. Using MDAnalysis extraction...')
-        bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
+        try:
+            bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
+        except:
+            print(' MDAnalysis failed to extract bonds. Relying on guess...')
+            bonds = []
     return bonds
 
 # Get TPR bonds using MDAnalysis
