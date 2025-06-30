@@ -1,5 +1,6 @@
 from biobb_mem.fatslim.fatslim_apl import fatslim_apl
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import OUTPUT_APL_FILENAME
 from model_workflow.utils.type_hints import *
 from scipy.interpolate import griddata
 from contextlib import redirect_stdout
@@ -9,15 +10,17 @@ import os
 
 
 def area_per_lipid (
-    input_structure_filepath : str,
-    input_trajectory_filepath : str,
-    output_analysis_filepath : str,
-    membrane_map: dict,):
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
+    membrane_map: dict):
 
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping area per lipid analysis')
         return
-    print('-> Running area per lipid analysis')
+    
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_APL_FILENAME}'
 
     head_sel = []
     for n in range(membrane_map['n_mems']):
@@ -33,8 +36,8 @@ def area_per_lipid (
     apl_tmp = '.apl.csv'
     print(' Running BioBB FATSLiM APL')
     with redirect_stdout(None):
-        fatslim_apl(input_top_path=input_structure_filepath,
-                    input_traj_path=input_trajectory_filepath,
+        fatslim_apl(input_top_path=structure_file.path,
+                    input_traj_path=trajectory_file.path,
                     output_csv_path=apl_tmp,
                     properties=prop)
     grids, grid_x, grid_y, m, s = process_apl(apl_tmp)

@@ -9,6 +9,7 @@ import pytraj as pt
 import numpy
 
 from model_workflow.utils.auxiliar import save_json, get_analysis_name, numerate_filename, reprint, warn
+from model_workflow.utils.constants import OUTPUT_DIST_PERRES_FILENAME
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from model_workflow.utils.type_hints import *
 
@@ -21,29 +22,30 @@ N_VALUES_LIMIT = 400000
 # * Where each residue is from a different agent
 # Note that the distances are calculated for all residues in the agent, not only the interface residues
 def distance_per_residue (
-    input_topology_filepath : str,
-    input_trajectory_filepath : str,
-    output_analysis_filepath : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
     structure : 'Structure',
     interactions : list,
     snapshots : int,
     frames_limit : int
 ):
 
-    print('-> Running distance per residue analysis')
-
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
+    
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_DIST_PERRES_FILENAME}'
     
     # Set a reference system to handle conversions to pytraj residue numeration
     # First set the pytraj topology
     pytraj_topology = structure.get_pytraj_topology()
     pytraj_residues = list(pytraj_topology.residues)
     # Transform a structure residue to the pytraj residue numeration (1, 2, ... n)
-    def residue_2_pytraj_residue_index (residue : 'Residue') -> int:
-        residue_index = residue.index
+    def residue_2_pytraj_residue_index (residue_index : int) -> int:
+        residue = structure.residues[residue_index]
         residue_number = residue.number
         residue_name = residue.name[0:3]
         # And check that this residue data matches the pytraj residues data
@@ -59,7 +61,8 @@ def distance_per_residue (
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(
+        structure_file.path, trajectory_file.path, snapshots, frames_limit)
     # Save each analysis to a dict which will be parsed to json
     # Here we keep track of the summary, which will also be parsed to json at the end
     output_summary = []
@@ -81,7 +84,8 @@ def distance_per_residue (
         if exists(numbered_output_analysis_filepath): continue
         reprint(f' Analyzing {name} ({n+1}/{len(interactions)})')
         # Get the residues to be used for this interaction
-        residues_1, residues_2 = interaction['residues_1'], interaction['residues_2']
+        residues_1 = interaction['residue_indices_1']
+        residues_2 = interaction['residue_indices_2']
         # First of all, calculate the number of values for this interaction
         # If the interaction has more values than we can store then it will be reduced
         # Reduced interactions will store only residues in the interface in order to fit
@@ -91,7 +95,8 @@ def distance_per_residue (
         # Create 2 lists filled with 0s with the length of the residue number arrays respectively
         if reduced:
             warn('The analysis has been reduced to interface residues only for this interaction')
-            residues_1, residues_2 = interaction['interface_1'], interaction['interface_2']
+            residues_1 = interaction['interface_residue_indices_1']
+            residues_2 = interaction['interface_residue_indices_2']
             n_values = len(residues_1) * len(residues_2)
             if n_values > N_VALUES_LIMIT: raise ValueError('Too many values, even after reducing')
         # Show the size of the matrix
@@ -105,7 +110,7 @@ def distance_per_residue (
         # Contact Matrix -- Calculation
         for i, r2 in enumerate(pt_residues_2):
             for j, r1 in enumerate(pt_residues_1):
-                txt = ":" + str(r2) + " " + ":" + str(r1)
+                txt = f':{r2} :{r1}'
                 ptdist = pt.distance(pt_trajectory, txt)
                 mean = numpy.mean(ptdist)
                 stdv = numpy.std(ptdist)

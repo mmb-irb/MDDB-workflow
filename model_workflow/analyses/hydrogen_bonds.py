@@ -16,6 +16,7 @@ from os.path import exists
 
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, reprint
+from model_workflow.utils.constants import OUTPUT_HBONDS_FILENAME
 from model_workflow.utils.type_hints import *
 
 # Perform an hydrogen bonds analysis for each interaction interface
@@ -24,9 +25,9 @@ from model_workflow.utils.type_hints import *
 # Note that this analysis find hydrogen bonds in a subset of frames along the trajectory
 # Storing the results for the whole trajectory is not possible due to storage limits
 def hydrogen_bonds (
-    input_topology_filepath : str,
-    input_trajectory_filepath : str,
-    output_analysis_filepath : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
     populations : Optional[List[float]],
     structure : 'Structure',
     interactions : list,
@@ -38,12 +39,13 @@ def hydrogen_bonds (
     most_populated_frames_number : int = 5,
     ):
 
-    print('-> Running hydrogen bonds analysis')
-
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
+    
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_HBONDS_FILENAME}'
     
     # Set a reference system to handle conversions to pytraj topology
     # First set the pytraj topology
@@ -76,7 +78,7 @@ def hydrogen_bonds (
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory = get_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath)
+    pt_trajectory = get_pytraj_trajectory(structure_file.path, trajectory_file.path)
 
     # Save each analysis to a dict which will be parsed to json
     output_summary = []
@@ -100,10 +102,8 @@ def hydrogen_bonds (
         # Add the root of the output analysis filename to the run data
         analysis_name = get_analysis_name(numbered_output_analysis_filepath)
         # Append current interaction to the summary
-        output_summary.append({
-            'name': name,
-            'analysis': analysis_name
-        })
+        analysis_entry = { 'name': name, 'analysis': analysis_name }
+        output_summary.append(analysis_entry)
 
         # If the analysis already exists then proceed to the next interaction
         if exists(numbered_output_analysis_filepath): continue
@@ -207,6 +207,11 @@ def hydrogen_bonds (
                 temporal_percent = sum(slot_hbond_values) / step
                 temporal_percents.append(temporal_percent)
             hbond_timed.append(temporal_percents)
+
+        # If no hydrogen bonds were found then do not append the analysis
+        if len(acceptor_atom_index_list) == 0:
+            output_summary.pop()
+            continue
 
         # Set the interaction output
         interaction_data = {

@@ -1,7 +1,7 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS, OUTPUT_RMSDS_FILENAME
 from model_workflow.utils.type_hints import *
 
 import os
@@ -18,7 +18,7 @@ def rmsds(
     trajectory_file : 'File',
     first_frame_file : 'File',
     average_structure_file : 'File',
-    output_analysis_filepath : str,
+    output_directory : str,
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
@@ -26,7 +26,8 @@ def rmsds(
     ligand_map : List[dict],
     ):
 
-    print('-> Running RMSDs analysis')
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSDS_FILENAME}'
 
     # Set the default selections to be analyzed
     default_selections = {

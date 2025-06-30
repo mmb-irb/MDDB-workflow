@@ -25,24 +25,16 @@ debug = False
 # Return the rotation values used to take the photo so they can be saved and reused
 def get_screenshot (
     structure : 'Structure',
-    output_screenshot_filename : str,
+    output_filepath : str,
     # You may pass the camera rotation, translation and zoom parameters so they are not calculated again
     # This is useful to keep screenshots coherent between different clusters/markov states
     # Note that a slight movement in the molecule may make the rotation logic here use a different angle
     # Thus the image could be radically different and misleading, since the change could be minimal
     parameters : Optional[dict] = None,
-    # Edit the message displayed when starting to generate the screenshot
-    # Note that we pass it through here instead of just printing before calling the function for a reason
-    # The input structure argument may be a smart dependency thus calling more code before this function
-    # Also this function is used by other tools which may want to change the log or supress it
-    message : Optional[str] = '-> Generating screenshot',
 ) -> dict:
 
-    # Log the starting message in case it was passed
-    if message: print(message)
-
     # Check the output screenshot file extension is JPG
-    if output_screenshot_filename.split('.')[-1] != 'jpg':
+    if output_filepath.split('.')[-1] != 'jpg':
         raise SystemExit('You must provide a .jpg file name!')
     
     # Produce a PDB file to feed VMD
@@ -426,7 +418,7 @@ def get_screenshot (
     # converting to jpg
     rgb_im = im.convert("RGB")
     # exporting the image
-    rgb_im.save(output_screenshot_filename)
+    rgb_im.save(output_filepath)
 
     # Remove trash files
     trash_files = [ AUXILIAR_PDB_FILENAME, commands_filename_1, commands_filename_2, AUXILIAR_TGA_FILENAME, center_filename ]
