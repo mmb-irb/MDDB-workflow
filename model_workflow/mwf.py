@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath
+from os.path import exists, isdir, isabs, relpath, normpath
 from shutil import rmtree
 import sys
 import io
@@ -410,6 +410,9 @@ class MD:
         else:
             self.directory = remove_final_slash(directory)
         self.directory = self.project.pathify(self.directory)
+        # Make sure the MD directory does not equal the project directory
+        if normpath(self.directory) == normpath(self.project.directory):
+            raise InputError(f'MD {self.number} has the same directory as the project: {self.directory}')
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
