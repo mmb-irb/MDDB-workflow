@@ -1,13 +1,14 @@
 import json
 import urllib.request
-import urllib.parse
-from model_workflow.utils.type_hints import *
 
 from model_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, request_pdb_data
+from model_workflow.utils.file import File
+from model_workflow.utils.type_hints import *
 
 # Generate a json file including all PDB references and return these references to the workflow for further usage
-def generate_pdb_references (pdb_ids : List, pdb_references_file : 'File') -> List[dict]:
-    print('-> Generating PDB references file')
+def prepare_pdb_references (pdb_ids : List[str], output_filepath : str):
+    # Set the output file
+    pdb_references_file = File(output_filepath)
     # If we already have PDB references then load them
     previous_pdb_references = {}
     if pdb_references_file.exists:
@@ -28,8 +29,8 @@ def generate_pdb_references (pdb_ids : List, pdb_references_file : 'File') -> Li
         pdb_references.append(pdb_reference)
     # Write references to a json file
     save_json(pdb_references, pdb_references_file.path, indent = 4)
-    # Return the PDB references
-    return pdb_references
+    # DANI: There is no need to return PDB references since it is not used in the workflow
+    #return pdb_references
 
 # Download PDB data from the PDB API
 def get_pdb_reference (pdb_id : str) -> dict:

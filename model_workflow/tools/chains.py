@@ -6,7 +6,8 @@ from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 
-from model_workflow.utils.auxiliar import warn,load_json, save_json, protein_residue_name_to_letter
+from model_workflow.utils.auxiliar import warn, load_json, save_json, protein_residue_name_to_letter
+from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
 # Set analysis version
@@ -132,13 +133,14 @@ def import_chains (chains_references_file : 'File') -> dict:
 # Define the main function that will be called from the main script
 # This function will get the parsed chains from the structure and request the InterProScan service
 # to obtain the data for each chain
-def generate_chain_references (
+def prepare_chain_references (
     structure : 'Structure',
-    chains_references_file : 'File',
+    output_filepath : 'File',
     database_url : str,
-) -> dict:
+):
     
-    print('-> Getting protein chains data')
+    # Set the chain references output file
+    chains_references_file = File(output_filepath)
 
     # Obtain the protein parsed chains from the structure
     protein_parsed_chains = get_protein_parsed_chains(structure)
@@ -191,7 +193,8 @@ def generate_chain_references (
     # If we already have the results of all the chains then we can skip the next steps
     if len(pending_jobids) == 0:
         print(' All reference chains are already in the backup file')
-        return chains_data
+        # DANI: No es necesario devolver los datos, no se usa en el workflow
+        # return chains_data
     # RUBEN: Separated functions so can be used in the references updater
     get_interproscan_results(pending_jobids, interproscan_jobids, chains_data, chains_references_file)
 

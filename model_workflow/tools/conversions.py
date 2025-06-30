@@ -1,4 +1,3 @@
-import os
 from shutil import copyfile
 from typing import List, Optional
 from inspect import getfullargspec

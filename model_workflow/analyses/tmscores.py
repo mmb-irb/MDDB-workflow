@@ -5,12 +5,12 @@ import os
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME
 from model_workflow.utils.type_hints import *
 
 def tmscores (
-    input_trajectory_file : 'File',
-    output_analysis_filename : str,
+    trajectory_file : 'File',
+    output_directory : str,
     first_frame_file : 'File',
     average_structure_file : 'File',
     structure : 'Structure',
@@ -19,7 +19,8 @@ def tmscores (
     frames_limit : int):
     """Perform the tm score using the tmscoring package."""
 
-    print('-> Running TM scores analysis')
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_TMSCORES_FILENAME}'
 
     tmscore_references  = [first_frame_file, average_structure_file]
 
@@ -82,7 +83,7 @@ def tmscores (
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
-        frames, step, count = get_pdb_frames(reference.path, input_trajectory_file.path, snapshots, frames_limit)
+        frames, step, count = get_pdb_frames(reference.path, trajectory_file.path, snapshots, frames_limit)
         for current_frame in frames:
 
             # Filter atoms in the current frame
@@ -131,4 +132,4 @@ def tmscores (
         os.remove(grouped_reference)
     os.remove(ndx_filename)
     # Export the analysis in json format
-    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filename)
+    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)

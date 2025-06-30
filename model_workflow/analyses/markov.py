@@ -3,29 +3,30 @@
 # Set the data needed to represent a Markov State Model grpah in the client
 # This is finding the most populated frames and calculating an RMSD matrix between these frames
 
-from os import remove
 import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import OUTPUT_MARKOV_FILENAME
 from model_workflow.utils.type_hints import *
 
 def markov (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
     structure : 'Structure',
     populations : List[float],
     rmsd_selection : str,
     nodes_number : int = 20,
 ):
 
-    print('-> Running Markov analysis')
-
     # If there is no populations then we stop here
     if not populations or len(populations) == 0:
         print(' There are no populations')
         return
+    
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_MARKOV_FILENAME}'
 
     # Parse the RMSD selection in VMD selection syntax
     parsed_selection = structure.select(rmsd_selection, syntax='vmd')
@@ -42,7 +43,7 @@ def markov (
         highest_population_frames.append(frame)
     print(' Reading most populated frames in trajectory')
     # Read the trajectory frame by frame looking for the specified frames
-    trajectory = mdt.iterload(input_trajectory_filename, top=input_topology_filename, chunk=1)
+    trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
     # Set a generator for the frames to be selected once sorted
     selected_frames = iter(sorted(highest_population_frames))
     next_frame = next(selected_frames)
@@ -102,4 +103,4 @@ def markov (
         'populations': highest_populations,
         'rmsd_matrix': rmsd_matrix
     }
-    save_json(data, output_analysis_filename)
+    save_json(data, output_analysis_filepath)

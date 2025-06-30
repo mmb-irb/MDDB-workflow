@@ -8,13 +8,13 @@ from contextlib import redirect_stdout
 def generate_membrane_mapping(lipid_map : List[dict],
                               structure_file : 'File',
                               universe: 'Universe',
-                              output_membrane_filepath: str,
+                              output_filepath: str,
                               ) -> List[dict]:
     """
     Generates a list of residue numbers of membrane components from a given structure and topology file.
     Args:
         structure (Structure): The molecular structure to analyze.
-        topology_file (File): The topology file in JSON format.
+        standard_topology_file (File): The topology file in JSON format.
         structure_file (File): The structure file.
         debug (bool, optional): If True, additional debug information is returned. Defaults to False.
     
@@ -31,20 +31,26 @@ def generate_membrane_mapping(lipid_map : List[dict],
         - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
-    print('-> Generating membrane mapping')
+
+    if not universe: raise RuntimeError('Missing universe')
 
     # Prepare the membrane mapping OBJ/JSON
     mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_map) == 0:
         # no lipids found in the structure.
-        save_json(mem_map_js, output_membrane_filepath)
+        save_json(mem_map_js, output_filepath)
         return mem_map_js
     
     # Select only the lipids and potential membrane members
     lipid_ridx = []
     for ref in lipid_map:
         lipid_ridx.extend(ref['resindices'])
+    # if no lipids are found, we save the empty mapping and return
+    if len(lipid_ridx) == 0:
+        # no lipids found in the structure.
+        save_json(mem_map_js, output_filepath)
+        return mem_map_js
     glclipid_ridx = [grp for ref in lipid_map for grp in ref.get('resgroups', []) if len(grp) > 1]
     mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str,(lipid_ridx)))})')
 
@@ -118,6 +124,6 @@ def generate_membrane_mapping(lipid_map : List[dict],
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
     print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
-    save_json(mem_map_js, output_membrane_filepath)
+    save_json(mem_map_js, output_filepath)
     return mem_map_js
 

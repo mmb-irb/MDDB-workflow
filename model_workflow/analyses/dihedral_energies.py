@@ -4,22 +4,24 @@ import numpy as np
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import save_json, mean
+from model_workflow.utils.constants import OUTPUT_DIHEDRAL_ENERGIES_FILENAME
 
 # Calculate torsions and then dihedral energies for every dihedral along the trajectory
 def compute_dihedral_energies (
-    input_structure_file : 'File',
-    input_trajectory_file : 'File',
-    output_analysis_filepath : str,
-    dihedrals_data : List[dict],
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
+    dihedrals : List[dict],
     snapshots : int,
     frames_limit : int,
 ):
-    print('-> Running dihedral energies analysis')
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_DIHEDRAL_ENERGIES_FILENAME}'
 
     # Set a dict with the results of energies calculations
     # Atom indices are used as keys
     dihedral_energies = {}
-    for dihedral_data in dihedrals_data:
+    for dihedral_data in dihedrals:
         atom_indices = dihedral_data['atom_indices']
         dihedral_energies[atom_indices] = {
             'atom_indices': list(atom_indices),
@@ -30,18 +32,14 @@ def compute_dihedral_energies (
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        input_structure_file,
-        input_trajectory_file,
-        snapshots,
-        frames_limit,
-    )
+        structure_file, trajectory_file, snapshots, frames_limit)
 
     # Load the reduced trajectory
-    traj = mdt.load(reduced_trajectory_filepath, top=input_structure_file.path)
+    traj = mdt.load(reduced_trajectory_filepath, top=structure_file.path)
 
     # MDtraj is prepared to analyze all dihedrals at once
     # To do so, prepare a list with every group of atoms conforming a dihedral
-    dihedral_atom_indices = [ data['atom_indices'] for data in dihedrals_data ]
+    dihedral_atom_indices = [ data['atom_indices'] for data in dihedrals ]
 
     # Compute dihedral torsions using MDtraj
     trajectory_torsions = mdt.compute_dihedrals(traj, dihedral_atom_indices)
@@ -52,7 +50,7 @@ def compute_dihedral_energies (
     for frame_torsions in trajectory_torsions:
 
         # Iterate every dihedral with its torsion
-        for dihedral_data, torsion in zip(dihedrals_data, frame_torsions):
+        for dihedral_data, torsion in zip(dihedrals, frame_torsions):
             atom_indices = dihedral_data['atom_indices']
             # Dihedral torsion energy is the sum of the torsion energy of its terms
             torsion_energy = 0
@@ -73,7 +71,7 @@ def compute_dihedral_energies (
     # Now calculate non covalent energies
     # These energies are always computed between atoms 1-4 in the dihedral
     # i.e. atoms in both ends
-    dihedral_1_4_indices = [ [ data['atom_indices'][0], data['atom_indices'][3] ] for data in dihedrals_data ]
+    dihedral_1_4_indices = [ [ data['atom_indices'][0], data['atom_indices'][3] ] for data in dihedrals ]
 
     # Compute atom distance along the trajectory using MDtraj
     trajectory_distances = mdt.compute_distances(traj, dihedral_1_4_indices)
@@ -83,7 +81,7 @@ def compute_dihedral_energies (
     for frame_distances in trajectory_distances:
 
         # Iterate every dihedral with its 1-4 distance
-        for dihedral_data, distance in zip(dihedrals_data, frame_distances):
+        for dihedral_data, distance in zip(dihedrals, frame_distances):
             # Get scaling factors for both electrostatic and Van Der Waals parameters
             # Note that these may be missing for some dihedrals since all its terms are to be ignored
             # SANTI: Cuando esto pasa hay que caluclar la energía igualmente, pero sin escalarla

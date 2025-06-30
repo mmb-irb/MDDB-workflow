@@ -1,5 +1,5 @@
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
-from model_workflow.utils.auxiliar import load_json, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import load_json, warn, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
@@ -9,7 +9,16 @@ from model_workflow.utils.type_hints import *
 import pytraj as pt
 from MDAnalysis.topology.TPRParser import TPRParser
 from collections import Counter
-from math import isnan
+
+# Set some atoms which are to be skipped from bonding tests given their "fake" nature
+def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Selection') -> 'Selection':
+    # Get a selection of ion atoms which are not in PBC
+    # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
+    # They are not taken in count when testing coherent bonds or looking for the reference frame
+    non_pbc_ions_selection = structure.select_ions() - pbc_selection
+    # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
+    excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg()
+    return excluded_atoms_selection
 
 # Check if two sets of bonds match perfectly
 def do_bonds_match (
@@ -109,18 +118,25 @@ def get_most_stable_bonds (
 
 # Return a canonical frame number where all bonds are exactly as they should
 def get_bonds_canonical_frame (
-    structure_filepath : str,
-    trajectory_filepath : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
     snapshots : int,
     reference_bonds : List[ List[int] ],
-    excluded_atoms_selection : 'Selection',
+    structure : 'Structure',
+    pbc_selection : 'Selection',
     patience : int = 100, # Limit of frames to check before we surrender
     verbose : bool = False,
 ) -> Optional[int]:
+    
+    # Set some atoms which are to be skipped from these test given their "fake" nature
+    excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
+
+    # If all atoms are to be excluded then set the first frame as the reference frame and stop here
+    if len(excluded_atoms_selection) == len(structure.atoms): return 0
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
     # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, snapshots,patience=patience)
+    frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots,patience=patience)
     if step != 1: raise ValueError('If we are skipping frames then the code below will silently return a wrong reference frame')
     print(f'Searching reference bonds canonical frame. Only first {min(patience, count)} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
@@ -239,15 +255,22 @@ def sort_bonds (source_bonds : List[ Tuple[int, int] ], atom_count : int) -> Lis
 # If the mining fails then search for the most stable bonds
 # If we turst in stable bonds then simply return the structure bonds
 def find_safe_bonds (
-    input_topology_file : Union['File', Exception],
-    input_structure_file : 'File',
-    input_trajectory_file : 'File',
+    topology_file : Union['File', Exception],
+    structure_file : 'File',
+    trajectory_file : 'File',
     must_check_stable_bonds : bool,
     snapshots : int,
-    structure : 'Structure'
+    structure : 'Structure',
+    # Optional file with bonds sorted according a new atom order
+    resorted_bonds_file : Optional['File'] = None
 ) -> List[List[int]]:
+    # If we have a resorted file then use it
+    # Note that this is very excepcional
+    if resorted_bonds_file != None and resorted_bonds_file.exists:
+        warn('Using resorted safe bonds')
+        return load_json(resorted_bonds_file.path)
     # Try to get bonds from the topology before guessing
-    safe_bonds = mine_topology_bonds(input_topology_file)
+    safe_bonds = mine_topology_bonds(topology_file)
     if safe_bonds:
         return safe_bonds
     # Get a selection including coarse grain atoms in the structure
@@ -262,7 +285,7 @@ def find_safe_bonds (
     if must_check_stable_bonds:
         # Using the trajectory, find the most stable bonds
         print('Checking bonds along trajectory to determine which are stable')
-        safe_bonds = get_most_stable_bonds(input_structure_file.path, input_trajectory_file.path, snapshots)
+        safe_bonds = get_most_stable_bonds(structure_file.path, trajectory_file.path, snapshots)
         discard_coarse_grain_bonds(safe_bonds, cg_selection)
         return safe_bonds
     # If we trust stable bonds then simply use structure bonds

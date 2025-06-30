@@ -1,9 +1,11 @@
 from os import remove, symlink, rename, readlink
-from os.path import exists, isabs, abspath, relpath, split, islink, normpath
+from os.path import exists, isabs, abspath, relpath, split, islink, normpath, getmtime, getsize
+from time import strftime, gmtime
 from shutil import copyfile
 from typing import Optional
 
-from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT, GLOBALS
+from model_workflow.utils.constants import EXTENSION_FORMATS, PYTRAJ_SUPPORTED_FORMATS, PYTRAJ_PARM_FORMAT
+from model_workflow.utils.constants import DATE_STYLE, GLOBALS
 from model_workflow.utils.auxiliar import InputError
 
 LOCAL_PATH = '.'
@@ -49,11 +51,16 @@ class File:
         if self.extension:
             extension_size = len(self.extension) + 1 # We include here the dot
             self.extensionless_filename = self.filename[-extension_size:]
+        # Set internal values
+        self._cksum = None
 
+    # We must display the cksum here
+    # Note that this is critical for the task args cksum when we handle lists of files
+    # e.g. input_trajectory_files in process_input_files
     def __repr__ (self) -> str:
         if not self.filename:
             return '< No file >'
-        return '< File ' + self.path + ' >'
+        return f'< File {self.cksum} >'
 
     def __str__ (self) -> str:
         return self.__repr__()
@@ -84,6 +91,28 @@ class File:
             raise InputError(f'Not recognized format extension "{self.extension}" from file "{self.filename}"')
         return extension_format
     format = property(get_format, None, None, "File standard format (read only)")
+
+    # Get the file last modification time
+    def get_mtime (self) -> str:
+        raw_mtime = getmtime(self.path)
+        return strftime(DATE_STYLE, gmtime(raw_mtime))
+    mtime = property(get_mtime, None, None, "File last modification date (read only)")
+
+    # Get the file size in bytes
+    def get_size (self) -> str:
+        return getsize(self.path)
+    size = property(get_size, None, None, "File size in bytes (read only)")
+
+    # Get a cksum code used to compare identical file content
+    # DANI: This is provisional and it is not yet based in a cksum neither the file content
+    def get_cksum (self) -> str:
+        # If we already have an internal value then use it
+        if self._cksum != None: return self._cksum
+        # Calculate it otherwise
+        if not self.exists: self._cksum = f'missing {self.path}'
+        else: self._cksum = f'{self.path} -> {self.mtime} {self.size}'
+        return self._cksum
+    cksum = property(get_cksum, None, None, "Cksum code used to compare identical file content (read only)")
 
     # Set a couple of additional functions according to pytraj format requirements
     def is_pytraj_supported (self) -> bool:

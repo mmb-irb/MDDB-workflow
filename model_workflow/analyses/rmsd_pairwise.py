@@ -9,15 +9,16 @@ import pytraj as pt
 
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, warn
+from model_workflow.utils.constants import OUTPUT_RMSD_PAIRWISE_FILENAME
 from model_workflow.utils.type_hints import *
 
 # Perform an analysis for the overall structure and then one more analysis for each interaction
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
 # Take a minimal subset of atoms representing both proteins and nucleic acids
 def rmsd_pairwise(
-    input_topology_filepath : str,
-    input_trajectory_filepath : str,
-    output_analysis_filepath : str,
+    structure_file : str,
+    trajectory_file : str,
+    output_directory : str,
     interactions : list,
     snapshots : int,
     frames_limit : int,
@@ -26,11 +27,13 @@ def rmsd_pairwise(
     overall_selection : str = "name CA or name C5'", # equivalent to "@CA,C5'" in pytraj
     ):
 
-    print('-> Running RMSD pairwise analysis')
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSD_PAIRWISE_FILENAME}'
 
     # Parse the trajectory intro ptraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(
+        structure_file.path, trajectory_file.path, snapshots, frames_limit)
 
     # Parse the overall selection
     parsed_overall_selection = structure.select(overall_selection, syntax='vmd')

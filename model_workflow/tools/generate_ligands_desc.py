@@ -323,11 +323,9 @@ def generate_ligand_mapping (
     cache : 'Cache',
     input_ligands : Optional[List[dict]],
     input_pdb_ids : List[str],
-    output_ligands_filepath : str,
+    output_filepath : str,
     mercy : List[str] = [],
     ) -> dict:
-
-    print('-> Getting ligand references')
 
     # Merge input ligands and pdb ligands
     ligands = []
@@ -370,16 +368,14 @@ def generate_ligand_mapping (
     ligands_data = []
 
     # Load the ligands file if exists already
-    if os.path.exists(output_ligands_filepath):
-        json_ligands_data += import_ligands(output_ligands_filepath)
+    if os.path.exists(output_filepath):
+        json_ligands_data += import_ligands(output_filepath)
         # If json ligands exists and it is empty means that ligands analysis has been already done but no ligands were matched
         # so the file will contain an empty list []
         if len(json_ligands_data) == 0:
             print('No ligands have been matched yet.\nIf you want to force a ligand to be matched, please provide the field "residues" in the inputs.json file.')
             return [], {}
-        
-    # Save apart ligand names forced by the user
-    ligand_names = {}
+
     # Visited formulas
     visited_formulas = []
     # Save the maps of every ligand
@@ -442,8 +438,6 @@ def generate_ligand_mapping (
         # If the user defined a ligand name, it will be respectedand added to the metadata
         # if there isn't a defined name, it will be mined from PubChem
         user_forced_ligand_name = ligand.get('name', None)
-        if user_forced_ligand_name:
-            ligand_names[pubchem_id] = user_forced_ligand_name
         # Map structure residues with the current ligand
         # If the user forced the residues then use them
         forced_selection = ligand.get('selection', None)
@@ -452,6 +446,7 @@ def generate_ligand_mapping (
             selection_atoms = structure.select(forced_selection)
             residue_indices = structure.get_selection_residue_indices(selection_atoms)
             ligand_map = { 'name': pubchem_id, 'residue_indices': residue_indices, 'match': { 'ref': { 'pubchem': pubchem_id } } }
+            if user_forced_ligand_name: ligand_map['forced_name'] = user_forced_ligand_name
         # If the user did not force the residues then map them
         else:
             ligand_map = map_ligand_residues(structure, ligand_data)
@@ -474,10 +469,6 @@ def generate_ligand_mapping (
             not_matched_pubchems = cache.retrieve(NOT_MATCHED_LIGANDS, [])
             not_matched_pubchems.append(ligand_map['name'])
             cache.update(NOT_MATCHED_LIGANDS, not_matched_pubchems)
-            # Delete the name
-            ligand_name = ligand_names.get(pubchem_id, None)
-            if ligand_name != None:
-                del ligand_names[pubchem_id]
         # If the ligand matched then calculate some additional data
         # Get morgan and mordred descriptors, the SMILES is needed for this part
         smiles = ligand_data['smiles']
@@ -487,7 +478,7 @@ def generate_ligand_mapping (
         ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
         ligand_data['mol_block'] = mol_block
     # Export ligands to a file
-    save_json(ligands_data, output_ligands_filepath)
+    save_json(ligands_data, output_filepath)
 
     # Log matched ligands
     if not ligand_maps:
@@ -495,21 +486,20 @@ def generate_ligand_mapping (
     else:
         print('Matched ligands:')
         for ligand_map in ligand_maps:
-            residue_selections = ligand_map["chain_residue_selection"]
-            residue_count = len(residue_selections)
+            residue_indices = ligand_map["residue_indices"]
+            residue_count = len(residue_indices)
             plural_suffix = '' if residue_count == 1 else 's'
-
             print(f' - {ligand_map["name"]}: {residue_count} residue{plural_suffix}')
 
-    return ligand_maps, ligand_names
+    return ligand_maps
     
 # Set the expected ligand data fields
 LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid'])
 
 # Import ligands json file so we do not have to rerun this process
-def import_ligands (output_ligands_filepath : str) -> dict:
+def import_ligands (output_filepath : str) -> dict:
     # Read the file
-    imported_ligands = load_json(output_ligands_filepath)
+    imported_ligands = load_json(output_filepath)
     # Format data as the process expects to find it
     for imported_ligand in imported_ligands:
         for expected_field in LIGAND_DATA_FIELDS:
@@ -698,20 +688,13 @@ def map_ligand_residues (structure : 'Structure', ligand_data : dict) -> dict:
     # From pubchem mine the atoms of the ligands and save it in a dict
     ligand_atom_element_count = count_atom_elements(ligand_data['formula'])
     matched_residues = []
-    chain_residue_selection = []
     # Get ligand pubchem id
     pubchem_id = ligand_data['pubchem']
     for residue, residue_atom_element_count in atom_elements_per_residue.items():
         if match_ligandsID_to_res(ligand_atom_element_count, residue_atom_element_count):
-            #matched_residues.append(residue.index)
-            for chain in structure.chains:
-                if chain.index == residue.chain.index:
-                    chain_name = chain.name
-                    break
             matched_residues.append(residue.index)
-            chain_residue_selection.append((chain_name, residue.index))
     # Format the output as we expect it
-    ligand_map = { 'name': pubchem_id, 'residue_indices': matched_residues, 'chain_residue_selection': chain_residue_selection, 'match': { 'ref': { 'pubchem': pubchem_id } } }
+    ligand_map = { 'name': pubchem_id, 'residue_indices': matched_residues, 'match': { 'ref': { 'pubchem': pubchem_id } } }
     return ligand_map
 
 # Given a smiles, get the pubchem id

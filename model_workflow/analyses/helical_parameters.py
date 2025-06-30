@@ -8,6 +8,7 @@ from shutil import move
 import glob
 
 from model_workflow.utils.auxiliar import save_json, store_binary_data
+from model_workflow.utils.constants import OUTPUT_HELICAL_PARAMETERS_FILENAME
 from model_workflow.utils.type_hints import *
 
 from model_workflow.tools.nassa_loaders import load_sequence2
@@ -110,16 +111,19 @@ baselen = 0
 hp_unit = ""
 
 def helical_parameters (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    topology_file : 'File',
+    trajectory_file : 'File',
+    structure_file : 'File',
+    output_directory : str,
     structure : 'Structure',
-    structure_filename : str,
-    frames_limit : int,
-    dna_selection : str = None
+    frames_limit : Optional[int] = None,
+    dna_selection : Optional[str] = None
 ):
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_HELICAL_PARAMETERS_FILENAME}'
+
+    # Save the original path
     actual_path = os.getcwd()
-    print('-> Running helical analysis')
 
     # Get a selection from both chains in the B-DNA
     selection = None
@@ -155,34 +159,34 @@ def helical_parameters (
     
     # Call function to execute Curves+ and Canals software to generate the desired output in order to do different calculations
     folder_path = False
-    if '/' in input_trajectory_filename:
-        folder_path = input_trajectory_filename.split('/')[-2]
+    if '/' in trajectory_file.path:
+        folder_path = trajectory_file.path.split('/')[-2]
 
     # Run the hydrogen bond analysis to generate .dat file
     hydrogen_bonds(
-        input_topology_filename,
-        input_trajectory_filename,
-        output_analysis_filename,
+        topology_file,
+        trajectory_file,
+        output_analysis_filepath,
         folder_path,
-        structure_filename,
+        structure_file,
     )
 
-    terminal_execution(input_trajectory_filename, structure_filename, residue_index_ranges, sequences[0],folder_path)
+    terminal_execution(trajectory_file.path, structure_file.path, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit, folder_path)
     # Set the path into the original directory outside the folder helicalparameters
     os.chdir(actual_path)
     # Convert the dictionary into a json file
     # DANI: Estamos teniendo NaNs que no son soportados más adelante, hay que eliminarlos
-    save_json(dictionary_information, output_analysis_filename)
+    save_json(dictionary_information, output_analysis_filepath)
     
 # Function to execute cpptraj and calculate .dat file (Hydrogen Bonds)
 def hydrogen_bonds(
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    topology_file : 'File',
+    trajectory_file : 'File',
+    structure_file : 'File',
+    output_analysis_filepath : str,
     folder_path : str,
-    input_structure_filename : str,
 ):
     # This analysis is done using cpptraj and its done by two steps
     # 1. Crate the cpptraj.in file to generate the dry trajectory (cpptraj_dry.inpcrd)
@@ -215,13 +219,13 @@ def hydrogen_bonds(
     # Crear el contenido del input de cpptraj usando las variables
     cpptraj_script = f"""
     # Load the topology file
-    parm {input_topology_filename}
+    parm {topology_file.path}
 
     # Load the initial reference structure
-    trajin {input_structure_filename}
+    trajin {structure_file.path}
 
     # Load the trajectory
-    trajin {input_trajectory_filename}
+    trajin {trajectory_file.path}
 
     # Run the NA structure analysis
     nastruct NA

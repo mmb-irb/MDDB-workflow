@@ -4,8 +4,8 @@ from model_workflow.utils.gmx_spells import filter_structure, filter_trajectory,
 from model_workflow.utils.pyt_spells import filter_topology
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
-from model_workflow.utils.conversions import convert
 from model_workflow.utils.file import File
+from model_workflow.tools.conversions import convert
 from inspect import getfullargspec
 
 # Set functions to performe structure conversions

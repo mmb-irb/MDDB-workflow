@@ -37,6 +37,9 @@ TEXT_EDITORS = {
 # Keep only those editor which are already installed
 AVAILABLE_TEXT_EDITORS = { name: command for name, command in TEXT_EDITORS.items() if which(command) }
 
+# Set dates format
+DATE_STYLE = '%d-%m-%Y %H:%M:%S'
+
 # Database
 DEFAULT_API_URL = 'https://irb-dev.mddbr.eu/api/'
 
@@ -100,8 +103,6 @@ CORRECTED = 'corrected'
 CORRECTED_STRUCTURE = 'corrected.pdb'
 CORRECTED_TRAJECTORY = 'corrected.xtc'
 
-PROCESSED = 'processed'
-
 # Input and output core files
 STANDARD_TOPOLOGY_FILENAME = 'topology.json'
 STRUCTURE_FILENAME = 'structure.pdb'
@@ -150,7 +151,7 @@ OUTPUT_SCREENSHOT_FILENAME = 'mdf.screenshot.jpg'
 OUTPUT_CLUSTER_SCREENSHOT_FILENAMES = 'mdf.clusters_*_screenshot_??.jpg'
 
 # Set analyses files to be generated
-OUTPUT_PROCESSED_INTERACTIONS_FILENAME = 'mda.interactions.json'
+OUTPUT_INTERACTIONS_FILENAME = 'mda.interactions.json'
 OUTPUT_RMSDS_FILENAME = 'mda.rmsds.json'
 OUTPUT_TMSCORES_FILENAME = 'mda.tmscores.json'
 OUTPUT_RMSF_FILENAME = 'mda.fluctuation.json'
@@ -176,10 +177,6 @@ OUTPUT_THICKNESS_FILENAME = 'mda.thickness.json'
 OUTPUT_APL_FILENAME = 'mda.apl.json'
 OUTPUT_LIPID_ORDER_FILENAME = 'mda.lipid_order.json'
 OUTPUT_LIPID_INTERACTIONS_FILENAME  = 'mda.lipid_inter.json'
-
-# Set folder names for some analyses which generate a lot of intermediate step files
-ENERGIES_FOLDER = 'energies'
-POCKETS_FOLDER = 'mdpocket'
 
 # Set problematic signs for directory/folder names
 # º is forbidden since paths including this characters are not readable by MDtraj

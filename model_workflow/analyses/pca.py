@@ -7,43 +7,45 @@ import mdtraj as mdt
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import warn, save_json
+from model_workflow.utils.constants import OUTPUT_PCA_FILENAME, OUTPUT_PCA_PROJECTION_PREFIX
 from model_workflow.utils.type_hints import *
 
 # Perform the PCA analysis
 def pca (
-    input_topology_file : 'File',
-    input_trajectory_file : 'File',
-    output_analysis_filepath : str,
-    output_trajectory_projections_prefix : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
-    fit_selection : str,
-    analysis_selection : str,
+    pca_fit_selection : str,
+    pca_analysis_selection : str,
     pbc_selection : 'Selection',
     projection_frames : int = 20
 ) -> dict:
 
-    print('-> Running PCA analysis')
+    # Set output filepaths
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_PCA_FILENAME}'
+    output_trajectory_projections_prefix = f'{output_directory}/{OUTPUT_PCA_PROJECTION_PREFIX}'
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     pca_trajectory_filepath, step, frames = get_reduced_trajectory(
-        input_topology_file,
-        input_trajectory_file,
+        structure_file,
+        trajectory_file,
         snapshots,
         frames_limit,
     )
 
     # Parse the string selections
     # VMD selection syntax
-    parsed_fit_selection = structure.select(fit_selection, syntax='vmd')
+    parsed_fit_selection = structure.select(pca_fit_selection, syntax='vmd')
     if not parsed_fit_selection:
-        print(f' PCA fit selection: {fit_selection}')
+        print(f' PCA fit selection: {pca_fit_selection}')
         warn('PCA fit selection is empty -> Using all heavy atoms in the structure instead')
         parsed_fit_selection = structure.select_heavy_atoms()
-    parsed_analysis_selection = structure.select(analysis_selection, syntax='vmd')
+    parsed_analysis_selection = structure.select(pca_analysis_selection, syntax='vmd')
     if not parsed_analysis_selection:
-        print(f' PCA analysis selection: {analysis_selection}')
+        print(f' PCA analysis selection: {pca_analysis_selection}')
         warn('PCA analysis selection is empty -> Using all heavy atoms in the structure instead')
         parsed_analysis_selection = structure.select_heavy_atoms()
 
@@ -58,7 +60,7 @@ def pca (
         return
 
     # Load the trajectory
-    mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=input_topology_file.path)
+    mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=structure_file.path)
     # Fit the trajectory according to the specified fit selection
     mdtraj_trajectory.superpose(mdtraj_trajectory, frame=0, atom_indices=parsed_fit_selection.atom_indices)
     # Filter the atoms to be analized
