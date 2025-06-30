@@ -5,7 +5,8 @@ from model_workflow.utils.type_hints import *
 def find_interaction_types (
     input_interactions : Optional[list],
     structure : 'Structure',) -> dict:
-    # If there are no interactions return an empty list
+    # If there are no interactions return an empty dict
+    if not input_interactions: return {}
     interaction_count = len(input_interactions)
     if interaction_count == 0: return {}
     # Save in a dict the results
