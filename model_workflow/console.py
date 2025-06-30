@@ -788,3 +788,9 @@ nassa_parser.add_argument(
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
         "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
 )
+nassa_parser.add_argument(
+    "-dup", "--duplicates",
+    default=False,
+    action='store_true',
+    help="If passed, merge duplicate subunits if there is more than one, in the sequences. if not only the last will be selected"
+)

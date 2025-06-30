@@ -10,9 +10,9 @@ import glob
 from model_workflow.utils.auxiliar import save_json, store_binary_data
 from model_workflow.utils.type_hints import *
 
-from model_workflow.utils.nucleicacid import NucleicAcid
 from model_workflow.tools.nassa_loaders import load_sequence2
 from model_workflow.tools.nassa_loaders import load_serfile
+
 conda_prefix = os.environ['CONDA_PREFIX']
 # If this path does not exist then it means curves is not installed
 curves_path = conda_prefix + '/.curvesplus'
