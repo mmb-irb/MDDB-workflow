@@ -85,11 +85,12 @@ def prepare_project_metadata (
 
     # Metadata interactions are input interactions and the interaction types combined
     metadata_interactions = []
-    for interaction in input_interactions:
-        metadata_interaction = { k: v for k, v in interaction.items() }
-        interaction_name = metadata_interaction['name']
-        metadata_interaction['type'] = interaction_types[interaction_name]
-        metadata_interactions.append(metadata_interaction)
+    if input_interactions is not None:
+        for interaction in input_interactions:
+            metadata_interaction = { k: v for k, v in interaction.items() }
+            interaction_name = metadata_interaction['name']
+            metadata_interaction['type'] = interaction_types[interaction_name]
+            metadata_interactions.append(metadata_interaction)
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client

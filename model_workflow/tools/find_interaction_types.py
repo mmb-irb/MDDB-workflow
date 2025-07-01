@@ -6,6 +6,8 @@ def find_interaction_types (
     input_interactions : Optional[list],
     structure : 'Structure',) -> dict:
     # If there are no interactions return an empty list
+    # The interactions could be a null value
+    if input_interactions is None: return {}
     interaction_count = len(input_interactions)
     if interaction_count == 0: return {}
     # Save in a dict the results
