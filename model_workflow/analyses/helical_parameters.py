@@ -184,9 +184,9 @@ def helical_parameters (
 def hydrogen_bonds(
     topology_file : 'File',
     trajectory_file : 'File',
-    structure_file : 'File',
     output_analysis_filepath : str,
     folder_path : str,
+    structure_file : 'File',
 ):
     # This analysis is done using cpptraj and its done by two steps
     # 1. Crate the cpptraj.in file to generate the dry trajectory (cpptraj_dry.inpcrd)
