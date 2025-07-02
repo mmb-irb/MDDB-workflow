@@ -2,7 +2,7 @@ import sys
 import json
 import urllib.request
 import numpy as np
-from model_workflow.utils.auxiliar import protein_residue_name_to_letter
+from model_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from model_workflow.utils.file import File
@@ -89,7 +89,8 @@ def generate_protein_mapping (
     strict_references = type(forced_references) == dict
     # Check the "no referable" flag not to be passed when references are not strict
     if not strict_references and NO_REFERABLE_FLAG in forced_references:
-        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
+        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list.' \
+            ' You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
@@ -191,6 +192,11 @@ def generate_protein_mapping (
                 current_reference = chain_data['match']
                 if current_reference['score'] > align_score:
                     continue
+                # If the match is a 'no referable' exception then set a no referable flag
+                if type(uniprot_id) == NoReferableException:
+                    chain_data['match'] = { 'ref': NO_REFERABLE_FLAG }
+                    continue
+                # Proceed to set the corresponding reference toherwise
                 reference = references[uniprot_id]
                 # If the alignment is better then we impose the new reference
                 chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
@@ -287,9 +293,12 @@ def generate_protein_mapping (
         for pdb_id in pdb_ids:
             # Ask PDB
             uniprot_ids = pdb_to_uniprot(pdb_id)
-            if uniprot_ids == None:
-                continue 
             for uniprot_id in uniprot_ids:
+                # If this is not an actual UniProt, but a no referable exception, then handle it
+                # We must find the matching sequence and set the corresponding chain as no referable
+                if type(uniprot_id) == NoReferableException:
+                    reference_sequences[uniprot_id] = uniprot_id.sequence
+                    continue
                 # Build a new reference from the resulting uniprot
                 reference, already_loaded = get_reference(uniprot_id)
                 if reference == None:
@@ -430,7 +439,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
     # This 1 has been found experimentally
     # Non maching sequence may return a 0.1-0.3 normalized score
     # Matching sequence may return >4 normalized score
-    if normalized_score < 1:
+    if normalized_score < 2:
         print('    Not valid alignment')
         return None
 
@@ -631,11 +640,14 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 
 # Given a pdb Id, get its uniprot id
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
-def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
+def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
     # Set the request query
     query = '''query ($id: String!) {
         entry(entry_id: $id) {
-            polymer_entities { rcsb_polymer_entity_container_identifiers { uniprot_ids } }
+            polymer_entities {
+                rcsb_polymer_entity_container_identifiers { uniprot_ids }
+                entity_poly { pdbx_seq_one_letter_code }
+            }
         }
     }'''
     # Request PDB data
@@ -647,10 +659,24 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
         # Get the uniprot
         uniprots = identifier.get('uniprot_ids', None)
         if not uniprots: continue
-        if len(uniprots) > 1: raise ValueError('Multiple PDB ids in the same chain?')
+        # If we have multiple uniprots in a single entity then we skip them
+        # Note tha they belong to an entity which is no referable (e.g. a chimeric entity)
+        # See 5GY2 and 7E2Z labeled as chimeric entities and 6e67, which is not labeled likewise
+        if len(uniprots) > 1:
+            warn(f'Multiple UniProt ids in the same entity in {pdb_id} -> Is this a chimeric entity?')
+            entity = polymer.get('entity_poly', None)
+            if not entity: raise ValueError(f'Missing entity in {pdb_id}')
+            sequence = entity.get('pdbx_seq_one_letter_code', None)
+            if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
+            uniprot_ids.append( NoReferableException(sequence) )
+            continue
         uniprot_id = uniprots[0]
         uniprot_ids.append(uniprot_id)
-    print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(uniprot_ids))
+    actual_uniprot_ids = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == str ]
+    print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(actual_uniprot_ids))
+    no_refs = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == NoReferableException ]
+    no_refs_count = len(no_refs)
+    if no_refs_count > 0: print(f' Also encountered {no_refs_count} no refereable sequences')
     return uniprot_ids
 
 # This function is used by the generate_metadata script
