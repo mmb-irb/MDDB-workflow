@@ -1,10 +1,11 @@
 import pytraj as pyt
 import math
 from packaging.version import Version
-from typing import Optional
 
 from model_workflow.utils.auxiliar import InputError
+from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
+from model_workflow.utils.type_hints import *
 
 # Set pytraj supported formats
 pytraj_supported_structure_formats = {'prmtop', 'pdb', 'mol2', 'psf', 'cif', 'sdf'}
@@ -86,25 +87,25 @@ def get_reduced_pytraj_trajectory (
 # Get the trajectory frames number
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 def get_frames_count (
-    input_topology_file : 'File',
-    input_trajectory_file : 'File') -> int:
+    structure_file : 'File',
+    trajectory_file : 'File') -> int:
     
     print('-> Counting number of frames')
 
-    if not input_trajectory_file.exists:
-        raise InputError('Missing trajectroy file when counting frames: ' + input_trajectory_file.path)
+    if not trajectory_file.exists:
+        raise InputError('Missing trajectroy file when counting frames: ' + trajectory_file.path)
     
-    if not input_topology_file.exists:
-        raise InputError('Missing topology file when counting frames: ' + input_topology_file.path)
+    if not structure_file.exists:
+        raise InputError('Missing topology file when counting frames: ' + structure_file.path)
 
     # Load the trajectory from pytraj
     pyt_trajectory = pyt.iterload(
-        input_trajectory_file.path,
-        input_topology_file.path)
+        trajectory_file.path,
+        structure_file.path)
 
     # Return the frames number
     frames = pyt_trajectory.n_frames
-    print(' Frames: ' + str(frames))
+    print(f' Frames: {frames}')
 
     # If 0 frames were counted then there is something wrong with the file
     if frames == 0:
@@ -174,3 +175,20 @@ def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepa
             return f
     return None
     
+# Get an avaerage structure from a trajectory
+# This process is carried by pytraj, since the Gromacs average may be displaced
+def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_filepath : str):
+
+    # Iterload the trajectory to pytraj
+    pytraj_trajectory = get_pytraj_trajectory(structure_file.path, trajectory_file.path)
+
+    # Create a new frame with the average positions
+    # WARNING: Do not pass the argument 'autoimage=True'
+    # WARNING: Autoimage makes some trajectories get displaced the same as in Gromacs
+    average_frame = pyt.mean_structure(pytraj_trajectory())
+
+    # In order to export it, first create an empty trajectory only with the topology
+    # Then add the average frame and write it to 'xtc' format
+    average = pyt.Trajectory(top=pytraj_trajectory.top)
+    average.append(average_frame)
+    pyt.write_traj(output_filepath, average, overwrite=True)

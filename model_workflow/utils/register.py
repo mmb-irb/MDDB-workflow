@@ -1,13 +1,11 @@
 from sys import argv
-from os.path import exists, getmtime
+from os.path import exists
 from datetime import datetime
-from time import strftime, gmtime
 
 from model_workflow.utils.auxiliar import load_json, save_json, warn
+from model_workflow.utils.constants import DATE_STYLE
 from model_workflow.utils.type_hints import *
 
-# Set dates format
-date_style = '%d-%m-%Y %H:%M:%S'
 
 # The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
 # It is also responsible for storing test failure warnings to be written in metadata
@@ -20,10 +18,7 @@ class Register:
         quoted_argv = [ f"'{arg}'" if ' ' in arg else arg for arg in argv ]
         self.call = ' '.join(quoted_argv)
         # Save the current date
-        self.date = datetime.today().strftime(date_style)
-        # Set record for the modification times of processed input files
-        # This allows to know if any of those files have been modified and thus we must reset some register fields
-        self.mtimes = {}
+        self.date = datetime.today().strftime(DATE_STYLE)
         # Set the tests tracker
         self.tests = {}
         # Set the warnings list, which will be filled by failing tests
@@ -34,8 +29,6 @@ class Register:
             # Read the register in disk
             self.entries = load_json(self.file.path)
             last_entry = self.entries[-1]
-            # Inherit modification times
-            self.mtimes = last_entry.get('mtimes', {})
             # Inherit test results
             for test_name, test_result in last_entry['tests'].items():
                 self.tests[test_name] = test_result
@@ -56,45 +49,10 @@ class Register:
         dictionary = {
             'call': self.call,
             'date': self.date,
-            'mtimes': self.mtimes,
             'tests': self.tests,
             'warnings': self.warnings,
         }
         return dictionary
-
-    # Get new and previous mtimes of a target file
-    def get_mtime (self, target_file : 'File') -> tuple:
-        new_raw_mtime = getmtime(target_file.path)
-        new_mtime = strftime(date_style, gmtime(new_raw_mtime))
-        previous_mtime = self.mtimes.get(target_file.filename, None)
-        return new_mtime, previous_mtime
-
-    # Update a modification time
-    def update_mtime (self, target_file : 'File'):
-        # Get the new and the previous value
-        new_mtime, previous_mtime = self.get_mtime(target_file)
-        # If the new value is already the previous value then do nothing
-        if new_mtime == previous_mtime:
-            return
-        # Overwrite previous value and save the register
-        self.mtimes[target_file.filename] = new_mtime
-        self.save()
-
-    # Check if a file is new
-    def is_file_new (self, target_file : 'File') -> bool:
-        # Get the new and the previous value
-        new_mtime, previous_mtime = self.get_mtime(target_file)
-        # If the previous value is None then it is new
-        return previous_mtime == None
-
-    # Check if a file does not match the already registered modification time or it is new
-    def is_file_modified (self, target_file : 'File') -> bool:
-        # Get the new and the previous value
-        new_mtime, previous_mtime = self.get_mtime(target_file)
-        # If the new value is already the previous value then it has not been modified
-        if new_mtime == previous_mtime:
-            return False
-        return True
 
     # Update a test result and save the register
     def update_test (self, key : str, value : Optional[bool]):

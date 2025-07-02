@@ -426,7 +426,7 @@ def get_tpr_charges (tpr_filepath : str) -> List[float]:
     raise RuntimeError(f'Charges extraction from tpr file "{tpr_filepath}" has failed')
 
 # Regular expresion to mine atom bonds
-GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*[0-9]* type=[0-9]* \((BONDS|CONSTR|CONNBONDS)\)\s*([0-9]*)\s*([0-9]*)$"
+GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*([0-9]*) type=[0-9]* \((BONDS|CONSTR|CONNBONDS)\)\s*([0-9]*)\s*([0-9]*)$"
 
 # Get tpr atom bonds
 def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
@@ -434,14 +434,32 @@ def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
     tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
     # Mine the atomic bonds
     bonds = []
+    # Save the moment we already processed a bond of each class (e.g. bonds, constr, connbonds, etc.)
+    processed_bond_classes = set()
+    # Save already processed bond classes which have an index restart
+    # This is a coomon problem in TPR bonding, we do not know the meaning but bonds after the index restart are always wrong
+    restarted_bond_classes = set()
     # Iterate tpr content lines
     for line in tpr_content.split('\n'):
         # Parse the line to get only atomic bonds
         match = search(GROMACS_TPR_ATOM_BONDS_REGEX, line)
         # If this is not a line with bonding data then skip it
         if not match: continue
+        # Mine bond index and class
+        bond_index = int(match[1])
+        bond_class = match[2]
+        # If this class has a restart then skip it
+        if bond_class in restarted_bond_classes: continue
+        # If the index of the bond is 0 but we already processed bonds from this classes then this is a restart
+        if bond_index == 0 and bond_class in processed_bond_classes:
+            # If not, then add the class to the restarted classes
+            restarted_bond_classes.add(bond_class)
+            # And skip it
+            continue
+        # Add the class to the list
+        processed_bond_classes.add(bond_class)
         # Get atom indices of bonded atoms
-        bond = ( int(match[2]), int(match[3]) )
+        bond = ( int(match[3]), int(match[4]) )
         bonds.append(bond)
     # If we successfully got atom bonds then return them
     if len(bonds) > 0: return bonds

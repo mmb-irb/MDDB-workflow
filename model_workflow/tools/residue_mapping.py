@@ -9,8 +9,6 @@ def generate_residue_mapping(
     structure : 'Structure',
 ) -> dict:
 
-    print('-> Getting residue references')
-
     # Reformat mapping data to the topology system
 
     # Add the reference type to each reference object

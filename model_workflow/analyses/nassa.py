@@ -540,17 +540,65 @@ class CoordinateDistributions(Base):
             coordinate,
             coord_dataset):
         coordinate_df = []
-        for seq, dataseries in zip(sequences, coord_dataset):
-            trajectory_df = self.trajectory_iteration(
-                dataseries,
-                seq,
+        if self.duplicates:
+            trajectory_df = self.duplicate_trajectory_iteration(
+                coord_dataset,
+                sequences,
                 coordinate)
             coordinate_df.append(trajectory_df)
+        else:
+            for seq, dataseries in zip(sequences, coord_dataset):
+                    trajectory_df = self.trajectory_iteration(
+                        dataseries,
+                        seq,
+                        coordinate)
+                    coordinate_df.append(trajectory_df)
         # concatenate all dataframes
         coordinate_df = pd.concat(
             coordinate_df,
             axis=0)
         return coordinate_df
+    
+    def duplicate_trajectory_iteration(
+                self,
+                coord_dataset,
+                sequences,
+                coordinate):
+            trajectory_info = []
+            dict_all_subunits_ser = {}
+            # iterate over datasets and sequences
+            for dataseries, sequence in zip(coord_dataset, sequences):
+            # iterate over subunits
+                start = 2 + sequence.flanksize
+                end = sequence.size - (2 + sequence.baselen + sequence.flanksize - 1)
+                
+                for idx in range(start, end):
+                    subunit = sequence.get_subunit(idx)
+                    ic_subunit = sequence.inverse_complement(subunit)
+                    ser = dataseries[idx + 1]
+                    ser = ser[~np.isnan(ser)].to_numpy()
+                    
+                    if subunit in dict_all_subunits_ser:
+                        dict_all_subunits_ser[subunit] = np.concatenate((dict_all_subunits_ser[subunit], ser))
+                    else:
+                        dict_all_subunits_ser[subunit] = ser
+                    
+                    if ic_subunit not in dict_all_subunits_ser:
+                        dict_all_subunits_ser[ic_subunit] = ser
+                    
+            for subunit, ser in dict_all_subunits_ser.items():
+                ser = ser.reshape(-1, 1)
+                subunit_information = self.subunit_iteration(
+                    ser,
+                    subunit,
+                    coordinate)
+                if not self.bimod:
+                    subunit_information["unimodal"] = True
+                trajectory_info.append(subunit_information)
+                
+            # create dataframe from list of dictionaries
+            trajectory_df = pd.DataFrame.from_dict(trajectory_info)
+            return trajectory_df
 
     def trajectory_iteration(
             self,

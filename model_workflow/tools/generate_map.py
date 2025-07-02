@@ -5,6 +5,7 @@ import numpy as np
 from model_workflow.utils.auxiliar import protein_residue_name_to_letter
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
+from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
 import xmltodict
@@ -62,7 +63,7 @@ def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
 def generate_protein_mapping (
     structure : 'Structure',
-    protein_references_file : 'File',
+    output_filepath : str,
     database_url : str,
     register : dict,
     mercy : List[str] = [],
@@ -70,7 +71,8 @@ def generate_protein_mapping (
     pdb_ids : List[str] = [],
 ) -> dict:
 
-    print('-> Getting protein references')
+    # Set the output file
+    protein_references_file = File(output_filepath)
 
     # Remove previous warnings, if any
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
@@ -159,11 +161,11 @@ def generate_protein_mapping (
                         continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
                     reference_sequence = reference_sequences[forced_reference]
-                    print(' Aligning chain ' + chain + ' with ' + forced_reference + ' reference sequence')
+                    print(f' Aligning chain {chain} with {forced_reference} reference sequence')
                     align_results = align(reference_sequence, chain_data['sequence'])
                     # The align must match or we stop here and warn the user
                     if not align_results:
-                        raise SystemExit('Forced reference ' + chain + ' -> ' + forced_reference + ' does not match in sequence')
+                        raise SystemExit(f'Forced reference {chain} -> {forced_reference} does not match in sequence')
                     sequence_map, align_score = align_results
                     reference = references[forced_reference]
                     chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
@@ -179,7 +181,7 @@ def generate_protein_mapping (
                     continue
                 # Align the structure sequence with the reference sequence
                 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
-                print(' Aligning chain ' + chain + ' with ' + uniprot_id + ' reference sequence')
+                print(f' Aligning chain {chain} with {uniprot_id} reference sequence')
                 align_results = align(reference_sequence, chain_data['sequence'])
                 tried_alignments[chain].append(uniprot_id) # Save the alignment try, no matter if it works or not
                 if not align_results:
@@ -198,20 +200,20 @@ def generate_protein_mapping (
             name = chain_data['name']
             match = chain_data.get('match', None)
             if not match:
-                print('   ' + name + ' -> Not protein')
+                print(f'   {name} -> Not protein')
                 continue
             reference = chain_data['match'].get('ref', None)
             if not reference:
-                print('   ' + name + ' -> ¿?')
+                print(f'   {name} -> ¿?')
                 continue
             if reference == NO_REFERABLE_FLAG:
-                print('   ' + name + ' -> No referable')
+                print(f'   {name} -> No referable')
                 continue
             if reference == NOT_FOUND_FLAG:
-                print('   ' + name + ' -> Not found')
+                print(f'   {name} -> Not found')
                 continue
             uniprot_id = reference['uniprot']
-            print('   ' + name + ' -> ' + uniprot_id)
+            print(f'   {name} -> {uniprot_id}')
         # Export already matched references
         export_references(protein_parsed_chains, protein_references_file)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
@@ -325,7 +327,7 @@ def generate_protein_mapping (
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
-    print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
+    warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
     register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
     return protein_parsed_chains
 
@@ -434,7 +436,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
 
     # Tell the user about the success
     beautiful_normalized_score = round(normalized_score * 100) / 100
-    print('    Valid alignment -> Normalized score = ' + str(beautiful_normalized_score))
+    print(f'    Valid alignment -> Normalized score = {beautiful_normalized_score}')
 
     # Match each residue
     aligned_mapping = []
@@ -527,7 +529,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
             print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
             return None
         print('Error when requesting ' + request_url)
-        raise ValueError('Something went wrong with the Uniprot request (error ' + str(error.code) + ')')
+        raise ValueError(f'Something went wrong with the Uniprot request (error {error.code})')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
     if parsed_response == None:
         print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
@@ -537,7 +539,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     protein_name_data = protein_data.get('recommendedName', None)
     # DANI: It is possible that the 'recommendedName' is missing if it is not a reviewed UniProt entry
     if not protein_name_data:
-        print('WARNING: The UniProt accession ' + uniprot_accession + ' is missing the recommended name. You should consider changing the reference.')
+        warn(f'The UniProt accession {uniprot_accession} is missing the recommended name. You should consider changing the reference.')
         protein_name_data = protein_data.get('submittedName', None)[0]
     if not protein_name_data:
         raise ValueError('Unexpected structure in UniProt response for accession ' + uniprot_accession)
