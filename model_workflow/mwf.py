@@ -1977,8 +1977,12 @@ class Project:
         # If there is no input pdb ids (may be None) then stop here
         if not self.input_pdb_ids:
             return []
+        # If input PDB ids is a string instead of a list then fix it
+        input_pdb_ids = self.input_pdb_ids
+        if type(input_pdb_ids) == str:
+            input_pdb_ids = [ input_pdb_ids ]
         # Iterate input PDB ids
-        for input_pdb_id in self.input_pdb_ids:
+        for input_pdb_id in input_pdb_ids:
             # First make sure this is a PDB id
             if not re.match(PDB_ID_FORMAT, input_pdb_id):
                 raise InputError(f'Input PDB id "{input_pdb_id}" does not look like a PDB id')

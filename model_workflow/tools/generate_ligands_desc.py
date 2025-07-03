@@ -322,7 +322,7 @@ def generate_ligand_mapping (
     structure : 'Structure',
     cache : 'Cache',
     input_ligands : Optional[List[dict]],
-    input_pdb_ids : List[str],
+    pdb_ids : List[str],
     output_filepath : str,
     mercy : List[str] = [],
     ) -> dict:
@@ -335,27 +335,26 @@ def generate_ligand_mapping (
     pdb_to_pubchem_cache = cache.retrieve(PDB_TO_PUBCHEM, {})
     new_data_to_cache = False
     # Get input ligands from the pdb ids, if any
-    if input_pdb_ids:
-        for pdb_id in input_pdb_ids:
-            # Check we have cached this specific pdb
-            pubchem_ids_from_pdb = pdb_to_pubchem_cache.get(pdb_id, None)
-            if pubchem_ids_from_pdb != None:
-                print(f' Retriving from cache PubChem ids for PDB id {pdb_id}: ')
-                if len(pubchem_ids_from_pdb) > 0:
-                    print('  PubChem ids: ' + ', '.join(pubchem_ids_from_pdb))
-                else:
-                    print('  This PDB id has no PubChem ids')
+    for pdb_id in pdb_ids:
+        # Check we have cached this specific pdb
+        pubchem_ids_from_pdb = pdb_to_pubchem_cache.get(pdb_id, None)
+        if pubchem_ids_from_pdb != None:
+            print(f' Retriving from cache PubChem ids for PDB id {pdb_id}: ')
+            if len(pubchem_ids_from_pdb) > 0:
+                print('  PubChem ids: ' + ', '.join(pubchem_ids_from_pdb))
+            else:
+                print('  This PDB id has no PubChem ids')
 
-            # If we had no cached pdb 2 pubchem then ask for them
-            if pubchem_ids_from_pdb == None:
-                pubchem_ids_from_pdb = pdb_to_pubchem(pdb_id)
-                # Save the result in the cache object so it is saved to cache later
-                pdb_to_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
-                new_data_to_cache = True
-            for pubchem_id in pubchem_ids_from_pdb:
-                # Ligands in the structure (PDB) and the 'inputs.json' could be the same so it's not necessary to do it twice
-                if not any('pubchem' in ligand and ligand['pubchem'] == pubchem_id for ligand in ligands):
-                    ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
+        # If we had no cached pdb 2 pubchem then ask for them
+        if pubchem_ids_from_pdb == None:
+            pubchem_ids_from_pdb = pdb_to_pubchem(pdb_id)
+            # Save the result in the cache object so it is saved to cache later
+            pdb_to_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
+            new_data_to_cache = True
+        for pubchem_id in pubchem_ids_from_pdb:
+            # Ligands in the structure (PDB) and the 'inputs.json' could be the same so it's not necessary to do it twice
+            if not any('pubchem' in ligand and ligand['pubchem'] == pubchem_id for ligand in ligands):
+                ligands.append({ 'pubchem': pubchem_id, 'pdb': True })
     # Save all pdb to pubchem results in cache, in case there is anything new
     if new_data_to_cache: cache.update(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
 
