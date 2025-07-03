@@ -646,6 +646,7 @@ def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
         entry(entry_id: $id) {
             polymer_entities {
                 rcsb_polymer_entity_container_identifiers { uniprot_ids }
+                rcsb_entity_source_organism { scientific_name }
                 entity_poly { pdbx_seq_one_letter_code }
             }
         }
@@ -658,7 +659,22 @@ def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
         # Get the uniprot
         uniprots = identifier.get('uniprot_ids', None)
-        if not uniprots: continue
+        # If there are not UniProts at all in this entity skip to the next
+        if not uniprots:
+            # However, it may happen the the polymer organism is set as synthetic construct
+            # In this case we keep the sequence and return a no referable exception
+            organisms = polymer.get('rcsb_entity_source_organism', None)
+            if not organisms: raise ValueError('Missing organism')
+            # Get scientific names in lower caps since sometimes they are all upper caps
+            scientific_names = set(
+                [ organism.get('scientific_name', '').lower() for organism in organisms ])
+            if 'synthetic construct' in scientific_names:
+                entity = polymer.get('entity_poly', None)
+                if not entity: raise ValueError(f'Missing entity in {pdb_id}')
+                sequence = entity.get('pdbx_seq_one_letter_code', None)
+                if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
+                uniprot_ids.append( NoReferableException(sequence) )
+            continue
         # If we have multiple uniprots in a single entity then we skip them
         # Note tha they belong to an entity which is no referable (e.g. a chimeric entity)
         # See 5GY2 and 7E2Z labeled as chimeric entities and 6e67, which is not labeled likewise
@@ -673,10 +689,13 @@ def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
         uniprot_id = uniprots[0]
         uniprot_ids.append(uniprot_id)
     actual_uniprot_ids = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == str ]
-    print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(actual_uniprot_ids))
+    if len(actual_uniprot_ids) > 0:
+        print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(actual_uniprot_ids))
+    else: print(f' No UniProt ids were found for PDB id {pdb_id}')
     no_refs = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == NoReferableException ]
     no_refs_count = len(no_refs)
-    if no_refs_count > 0: print(f' Also encountered {no_refs_count} no refereable sequences')
+    if no_refs_count > 0:
+        print(f' Also encountered {no_refs_count} no refereable sequences for PDB id {pdb_id}')
     return uniprot_ids
 
 # This function is used by the generate_metadata script
