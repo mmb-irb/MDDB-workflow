@@ -6,6 +6,8 @@ import math
 import subprocess
 from shutil import move
 import glob
+from struct import pack
+import re
 
 from model_workflow.utils.auxiliar import save_json, store_binary_data
 from model_workflow.utils.constants import OUTPUT_HELICAL_PARAMETERS_FILENAME
@@ -120,6 +122,7 @@ def helical_parameters (
     dna_selection : Optional[str] = None
 ):
     # Set the main output filepath
+
     output_analysis_filepath = f'{output_directory}/{OUTPUT_HELICAL_PARAMETERS_FILENAME}'
 
     # Save the original path
@@ -170,7 +173,7 @@ def helical_parameters (
         folder_path,
         structure_file,
     )
-
+    raise
     terminal_execution(trajectory_file.path, structure_file.path, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit, folder_path)
@@ -278,51 +281,56 @@ def hydrogen_bonds(
     def compress_dat_to_bin(output_dat_file):
         data = []
         with open(output_dat_file, 'r') as file:
-            # Skip the first line since it is only the headers
-            next(file)
+            # Identify which columns we must mine using the headers
+            headers = next(file).strip().split()
+            column_order = []
+            n_from = 1
+            n_to = 40
+            for h, header in enumerate(headers):
+                target = re.compile(f'{n_from}[ACGT]{n_to}[ACGT]')
+                if not target.match(header): continue
+                column_order.append(h)
+                n_from += 1
+                n_to -= 1
+            # Now iterate the rest of lines which include the actual values
+            # Initialize the number of frames to count all of them
+            n_frames = 0
             for line in file:
-                # Skip the first line since it is only the row number
-                numbers = [ int(s) for s in line.strip().split()[1:] ]
-                data += numbers
+                values = line.strip().split()
+                for c in column_order: data.append(int(values[c]))
+                n_frames += 1
 
-        # Data is a list of numeric values
-        # Bit size is the number of bits for each value in data to be occupied
-        def store_bits_dat (data : list, bit_size : int, filepath : str):
-            from struct import pack
-            # Check bit size to make sense
-            if bit_size <= 0:
-                raise ValueError('Bit size must a number greater than 0')
-            if bit_size % 8 == 0:
-                raise ValueError('Bit size is multiple of 8 so bytes must be used instead of bits')
-            # Start writting the output file
-            with open(filepath, 'wb') as file:
-                bit_count = 0
-                current_byte = ''
-                # Iterate over data list values
-                for value in data:
-                    # Parse the value to binary and make sure the binary is as long as the bit size
-                    bits = format(value, 'b').zfill(bit_size)
-                    if len(bits) != bit_size:
-                        raise ValueError(f'Value {value} cannot be stored in {bit_size} bits')
-                    # Add bits one by one to the current byte to be written
-                    for bit in bits:
-                        current_byte += bit
-                        bit_count += 1
-                        # If the current byte is full then write it to the output file
-                        if bit_count == 8:
-                            #print(current_byte + ' -> ' + str(int(current_byte, 2)))
-                            file.write(pack('<B', int(current_byte, 2)))
-                            current_byte = ''
-                            bit_count = 0
-                # If last byte is truncated then fill it with 0s and write it
-                if bit_count != 0:
-                    last_byte = current_byte.ljust(8, '0')
-                    file.write(pack('<B', int(last_byte, 2)))
-        
         # Set the name of the binary dat file
         bin_file_path = output_dat_file.replace('.dat', '.bin')
-        # Call the function to store the bits in the binary file
-        store_bits_dat(data, 2, bin_file_path)
+
+        # In this case we store a hydrogen bond value every 2 bits
+        bit_size = 2
+
+        # Start writting the output file
+        with open(bin_file_path, 'wb') as file:
+            bit_count = 0
+            current_byte = ''
+            # Iterate over data list values
+            for value in data:
+                # Parse the value to binary and make sure the binary is as long as the bit size
+                bits = format(value, 'b').zfill(bit_size)
+                if len(bits) != bit_size:
+                    raise ValueError(f'Value {value} cannot be stored in {bit_size} bits')
+                # Add bits one by one to the current byte to be written
+                for bit in bits:
+                    current_byte += bit
+                    bit_count += 1
+                    # If the current byte is full then write it to the output file
+                    if bit_count == 8:
+                        #print(current_byte + ' -> ' + str(int(current_byte, 2)))
+                        file.write(pack('<B', int(current_byte, 2)))
+                        current_byte = ''
+                        bit_count = 0
+            # If last byte is truncated then fill it with 0s and write it
+            if bit_count != 0:
+                last_byte = current_byte.ljust(8, '0')
+                file.write(pack('<B', int(last_byte, 2)))
+        
         # Set the name of the meta file and create the meta data corresponding to the binary dat file
         meta_file_path = bin_file_path + '.meta.json'
         meta_data = {
@@ -332,7 +340,7 @@ def hydrogen_bonds(
             },
             'y': {
                 'name': 'frames',
-                'length': 500000
+                'length': n_frames
             },
             'bitsize': 2,
         }
@@ -342,7 +350,7 @@ def hydrogen_bonds(
     compress_dat_to_bin(output_dat_file)
     print("Dat file compressed to bin file, removing original dat file...")
     # Remove the original dat file
-    os.remove(output_dat_file)
+    #os.remove(output_dat_file)
 
 
 # Function to execute Curves+ and Canals software to generate the output needed
