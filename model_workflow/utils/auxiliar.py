@@ -43,6 +43,14 @@ class ToolError (QuietException):
 class RemoteServiceError (QuietException):
     pass
 
+# Set a no referable exception for PDB synthetic constructs or chimeric entities
+class NoReferableException (Exception):
+    def __str__ (self): return f'No referable sequence {self.sequence}'
+    def __repr__ (self): return self.__str__()
+    def get_sequence (self) -> str:
+        return self.args[0]
+    sequence = property(get_sequence, None, None, 'Aminoacids sequence')
+
 # Set a custom exception handler where our input error exception has a quiet behaviour
 def custom_excepthook (exception_class, message, traceback):
     # Quite behaviour if it is our input error exception

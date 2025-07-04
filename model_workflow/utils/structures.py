@@ -1329,7 +1329,12 @@ class Structure:
             # Add the parsed atom to the list and update the current atom index
             parsed_atoms.append(parsed_atom)
             # Get the parsed chain
+            # DANI: If we always check for an already existing chain there will never be repeated chains
+            # DANI: However we may create chains with unconnected atoms silently (they were separated in the PDB)
+            # DANI: For this reason we must only consider the last processed chain
             parsed_chain = name_chains.get(chain_name, None)
+            if parsed_chain and parsed_chain != parsed_chains[-1]:
+                parsed_chain = None
             # If the parsed chain was not yet instantiated then do it now
             if not parsed_chain:
                 parsed_chain = Chain(name=chain_name)
@@ -1337,7 +1342,12 @@ class Structure:
                 name_chains[chain_name] = parsed_chain
             # Get the parsed residue
             residue_label = (chain_name, residue_number, icode)
+            # DANI: If we always check for an already existing residue there will never be repeated residues
+            # DANI: However we may create residues with unconnected atoms silently (they were separated in the PDB)
+            # DANI: For this reason we must only consider the last processed residue
             parsed_residue = label_residues.get(residue_label, None)
+            if parsed_residue and parsed_residue != parsed_residues[-1]:
+                parsed_residue = None
             # If the parsed residue was not yet instantiated then do it now
             if not parsed_residue:
                 # Parse the residue number if it is to be parsed
