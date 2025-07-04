@@ -1775,12 +1775,45 @@ class Project:
 
     # Assign the getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
-    forced_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
+    input_protein_references = property(input_getter('forced_references'), None, None, "Uniprot IDs to be used first when aligning protein sequences (read only)")
     input_pdb_ids = property(input_getter('pdb_ids'), None, None, "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = property(input_getter('type'), None, None, "Set if its a trajectory or an ensemble (read only)")
     input_mds = property(input_getter('mds'), None, None, "Input MDs configuration (read only)")
     input_ligands = property(input_getter('ligands'), None, None, "Input ligand references (read only)")
-    
+    input_force_fields = property(input_getter('ff'), None, None, "Input force fields (read only)")
+    input_collections = property(input_getter('collections'), None, None, "Input collections (read only)")
+    input_chain_names = property(input_getter('chainnames'), None, None, "Input chain names (read only)")
+    input_type = property(input_getter('type'), None, None, "Input type (read only)")
+    input_framestep = property(input_getter('framestep'), None, None, "Input framestep (read only)")
+    input_name = property(input_getter('name'), None, None, "Input name (read only)")
+    input_description = property(input_getter('description'), None, None, "Input description (read only)")
+    input_authors = property(input_getter('authors'), None, None, "Input authors (read only)")
+    input_groups = property(input_getter('groups'), None, None, "Input groups (read only)")
+    input_contact = property(input_getter('contact'), None, None, "Input contact (read only)")
+    input_program = property(input_getter('program'), None, None, "Input program (read only)")
+    input_version = property(input_getter('version'), None, None, "Input version (read only)")
+    input_method = property(input_getter('method'), None, None, "Input method (read only)")
+    input_license = property(input_getter('license'), None, None, "Input license (read only)")
+    input_linkcense = property(input_getter('linkcense'), None, None, "Input license link (read only)")
+    input_citation = property(input_getter('citation'), None, None, "Input citation (read only)")
+    input_thanks = property(input_getter('thanks'), None, None, "Input acknowledgements (read only)")
+    input_links = property(input_getter('links'), None, None, "Input links (read only)")
+    input_timestep = property(input_getter('timestep'), None, None, "Input timestep (read only)")
+    input_temperature = property(input_getter('temp'), None, None, "Input temperature (read only)")
+    input_ensemble = property(input_getter('ensemble'), None, None, "Input ensemble (read only)")
+    input_water = property(input_getter('wat'), None, None, "Input water force field (read only)")
+    input_boxtype = property(input_getter('boxtype'), None, None, "Input boxtype (read only)")
+    input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Input Periodic Boundary Conditions (PBC) selection (read only)")
+    input_cg_selection = property(input_getter('cg_selection'), None, None, "Input Coarse Grained (CG) selection (read only)")
+    input_customs = property(input_getter('customs'), None, None, "Input custom representations (read only)")
+    input_orientation = property(input_getter('orientation'), None, None, "Input orientation (read only)")
+    input_multimeric = property(input_getter('multimeric'), None, None, "Input multimeric labels (read only)")
+    # Additional topic-specific inputs
+    input_cv19_unit = property(input_getter('cv19_unit'), None, None, "Input Covid-19 Unit (read only)")
+    input_cv19_startconf = property(input_getter('cv19_startconf'), None, None, "Input Covid-19 starting conformation (read only)")
+    input_cv19_abs = property(input_getter('cv19_abs'), None, None, "Input Covid-19 antibodies (read only)")
+    input_cv19_nanobs = property(input_getter('cv19_nanobs'), None, None, "Input Covid-19 nanobodies (read only)")
+
     # PBC selection may come from the console or from the inputs file
     # Console has priority over the inputs file
     def get_input_pbc_selection (self) -> Optional[str]:
