@@ -19,7 +19,7 @@
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 from os.path import exists, getsize, split
-from os import mkdir, remove, chdir, getcwd
+from os import remove, chdir, getcwd
 import re
 import collections
 
@@ -65,7 +65,6 @@ def pockets (
     
     # Set output filepaths
     output_analysis_filepath = f'{output_directory}/{OUTPUT_POCKETS_FILENAME}'
-    pockets_prefix = f'{output_directory}/{OUTPUT_POCKET_STRUCTURES_PREFIX}'
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
@@ -77,11 +76,6 @@ def pockets (
     )
     # Save the pockets trajectory as a file
     pockets_trajectory_file = File(pockets_trajectory)    
-
-    # This anlaysis produces many useless output files
-    # Create a new folder to store all ouput files so they do not overcrowd the main directory
-    if not exists(output_directory):
-        mkdir(output_directory)
 
     # WARNING: There is a silent sharp limit of characters here
     # https://github.com/Discngine/fpocket/issues/130
@@ -355,6 +349,9 @@ def pockets (
     # Set the dict where all output data will be stored
     output_analysis = []
 
+    # Set the output pocket structure files prefix
+    output_pocket_structure_prefix = f'{output_directory_name}/{OUTPUT_POCKET_STRUCTURES_PREFIX}_'
+
     # Next, we analyze each selected pocket independently. The steps for each pocket are:
     # 1 - Create a new grid file
     # 2 - Conver the grid to pdb
@@ -409,9 +406,7 @@ def pockets (
             # Convert the grid coordinates to pdb
             new_pdb_lines = []
             lines_count = 0
-            # HARDCODE: Since we are cding to the current file we must remove the MD path from the prefix
-            fixed_pockets_prefix = pockets_prefix.split('/')[-1]
-            new_pdb_filename = fixed_pockets_prefix + '_' + str(p).zfill(2) + '.pdb'
+            new_pdb_filename = f'{output_pocket_structure_prefix}{str(p).zfill(2)}.pdb'
             for j, pocket in enumerate(pockets):
                 if pocket != pocket_value:
                     continue
