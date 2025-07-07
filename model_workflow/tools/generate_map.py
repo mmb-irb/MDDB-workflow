@@ -707,8 +707,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Mine sequences from the structure
     sequences = []
     # Classify sequences according to if they belong to protein or nucleic sequences
-    protein_sequences = set()
-    nucleic_sequences = set()
+    # WARNING: We are interested in unique sequence BUT we also want to keep the order
+    # WARNING: Do NOT use sets here to the order of appearance in the structure is respected
+    protein_sequences = []
+    nucleic_sequences = []
     # Iterate structure chains
     for chain in structure.chains:
         # Get the current chain sequence and add it to the list
@@ -717,10 +719,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # Get the chain classification
         classification = chain.get_classification()
         # Depending on what it is, add the sequence also in the corresponding list
-        if classification == 'protein':
-            protein_sequences.add(sequence)
-        elif classification == 'dna' or classification == 'rna':
-            nucleic_sequences.add(sequence)
+        if classification == 'protein' and sequence not in protein_sequences:
+            protein_sequences.append(sequence)
+        elif (classification == 'dna' or classification == 'rna') and sequence not in nucleic_sequences:
+            nucleic_sequences.append(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -800,8 +802,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
-        'protein_sequences': list(protein_sequences),
-        'nucleic_sequences': list(nucleic_sequences),
+        'protein_sequences': protein_sequences,
+        'nucleic_sequences': nucleic_sequences,
         'domains': domains,
         'cv19_variant': variant
     }
