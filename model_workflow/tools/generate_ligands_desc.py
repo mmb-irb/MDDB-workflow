@@ -325,7 +325,7 @@ def generate_ligand_mapping (
     pdb_ids : List[str],
     output_filepath : str,
     mercy : List[str] = [],
-    ) -> dict:
+    ) -> List[dict]:
 
     # Merge input ligands and pdb ligands
     ligands = []
@@ -360,7 +360,7 @@ def generate_ligand_mapping (
 
     # If no input ligands are passed then stop here
     if len(ligands) == 0:
-        return [], {}
+        return []
     
     # Save data from all ligands to be saved in a file
     json_ligands_data = []
@@ -373,7 +373,7 @@ def generate_ligand_mapping (
         # so the file will contain an empty list []
         if len(json_ligands_data) == 0:
             print('No ligands have been matched yet.\nIf you want to force a ligand to be matched, please provide the field "residues" in the inputs.json file.')
-            return [], {}
+            return []
 
     # Visited formulas
     visited_formulas = []
