@@ -260,6 +260,8 @@ class Task:
         # If had_cache is false then it means this is the first time the task is ever done
         changed_inputs, had_cache, cache_cksums = self.get_changed_inputs(parent, processed_args)
         any_input_changed = len(changed_inputs) > 0
+        # Update the cache inputs
+        parent.cache.update(self.cache_arg_cksums, cache_cksums)
         # We must overwrite outputs either if inputs changed or if it was forced by the user
         must_overwrite = forced_overwrite or any_input_changed
         # Check if output already exists
@@ -311,9 +313,6 @@ class Task:
         # Run the actual task
         output = self.func(**processed_args)
         self._set_parent_output(parent, output)
-        # Update the cache
-        # Always update cache arg cksums
-        parent.cache.update(self.cache_arg_cksums, cache_cksums)
         # Update cache output unless it is marked to not save it
         if self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
