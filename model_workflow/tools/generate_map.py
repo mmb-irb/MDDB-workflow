@@ -67,7 +67,7 @@ def generate_protein_mapping (
     database_url : str,
     register : dict,
     mercy : List[str] = [],
-    forced_references : Union[list,dict] = [],
+    input_protein_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
 
@@ -78,17 +78,17 @@ def generate_protein_mapping (
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict
     # If it is none then we set it as an empty list
-    if forced_references == None:
-        forced_references = []
+    if input_protein_references == None:
+        input_protein_references = []
     # If forced references is a list of dictionaries then it means the input is wrongly formatted
     # This may happen since the inputs file is in YAML format, and a simple hyphen makes the difference
     # We can fix it from here anyway
-    if type(forced_references) == list and len(forced_references) > 0 and type(forced_references[0]) == dict:
-        forced_references = { k: v for fr in forced_references for k, v in fr.items() }
+    if type(input_protein_references) == list and len(input_protein_references) > 0 and type(input_protein_references[0]) == dict:
+        input_protein_references = { k: v for fr in input_protein_references for k, v in fr.items() }
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
-    strict_references = type(forced_references) == dict
+    strict_references = type(input_protein_references) == dict
     # Check the "no referable" flag not to be passed when references are not strict
-    if not strict_references and NO_REFERABLE_FLAG in forced_references:
+    if not strict_references and NO_REFERABLE_FLAG in input_protein_references:
         raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list.' \
             ' You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
     # Store all the references which are got through this process
@@ -143,7 +143,7 @@ def generate_protein_mapping (
             # In case references are forced per chain check if there is a reference for this chain and match according to this
             if strict_references:
                 # Get the forced specific chain for this sequence, if any
-                forced_reference = forced_references.get(chain, None)
+                forced_reference = input_protein_references.get(chain, None)
                 if forced_reference:
                     # If the chain has a specific forced reference then we must align it just once
                     # Skip this process in further matches
@@ -173,7 +173,7 @@ def generate_protein_mapping (
                     continue
             # If the chain has already a match and this match is among the forced references then stop here
             # Forced references have priority and this avoids having a match with a not forced reference further
-            if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in forced_references:
+            if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in input_protein_references:
                 continue
             # Iterate over the different available reference sequences
             for uniprot_id, reference_sequence in reference_sequences.items():
@@ -227,9 +227,9 @@ def generate_protein_mapping (
         # If we match all chains then make sure there is no forced reference missing which did not match
         # Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file
         # WARNING: Although we could move on it is better to stop here and warn the user to prevent a future silent problem
-        if allright and forced_references:
+        if allright and input_protein_references:
             # Get forced uniprot ids
-            forced_uniprot_ids = set(list(forced_references.values()) if strict_references else forced_references)
+            forced_uniprot_ids = set(list(input_protein_references.values()) if strict_references else input_protein_references)
             forced_uniprot_ids -= { NOT_FOUND_FLAG, NO_REFERABLE_FLAG }
             #forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
             #forced_uniprot_ids.remove(NOT_FOUND_FLAG)
@@ -245,8 +245,8 @@ def generate_protein_mapping (
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
-    if forced_references:
-        forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
+    if input_protein_references:
+        forced_uniprot_ids = list(input_protein_references.values()) if strict_references else input_protein_references
         for uniprot_id in forced_uniprot_ids:
             # If instead of a uniprot id there is a 'no referable' flag then we skip this process
             if uniprot_id == NO_REFERABLE_FLAG:
@@ -707,8 +707,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Mine sequences from the structure
     sequences = []
     # Classify sequences according to if they belong to protein or nucleic sequences
-    protein_sequences = set()
-    nucleic_sequences = set()
+    # WARNING: We are interested in unique sequence BUT we also want to keep the order
+    # WARNING: Do NOT use sets here to the order of appearance in the structure is respected
+    protein_sequences = []
+    nucleic_sequences = []
     # Iterate structure chains
     for chain in structure.chains:
         # Get the current chain sequence and add it to the list
@@ -717,10 +719,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # Get the chain classification
         classification = chain.get_classification()
         # Depending on what it is, add the sequence also in the corresponding list
-        if classification == 'protein':
-            protein_sequences.add(sequence)
-        elif classification == 'dna' or classification == 'rna':
-            nucleic_sequences.add(sequence)
+        if classification == 'protein' and sequence not in protein_sequences:
+            protein_sequences.append(sequence)
+        elif (classification == 'dna' or classification == 'rna') and sequence not in nucleic_sequences:
+            nucleic_sequences.append(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -800,8 +802,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
-        'protein_sequences': list(protein_sequences),
-        'nucleic_sequences': list(nucleic_sequences),
+        'protein_sequences': protein_sequences,
+        'nucleic_sequences': nucleic_sequences,
         'domains': domains,
         'cv19_variant': variant
     }

@@ -85,7 +85,7 @@ ACCEPTED_TOPOLOGY_FORMATS = ['tpr', 'top', 'psf', 'prmtop', 'prm7']
 # This allows us to know where we were in case the process was interrupted and not repeat steps on reset
 # Intermediate files are removed at the end of the process if it was successful
 
-INCOMPLETE_PREFIX = '.incomplete_'
+INCOMPLETE_PREFIX = 'incomplete_'
 
 CONVERTED = 'converted'
 CONVERTED_STRUCTURE = 'converted.pdb'
