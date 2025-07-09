@@ -716,7 +716,8 @@ class MD:
                     check_directory(directory)
                 # If no directory is specified in the inputs then guess it from the MD name
                 else:
-                    name = md['name']
+                    name = md.get('name', None)
+                    if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
                     directory = name_2_directory(name)
                 # If the directory matches then this is our MD inputs
                 if directory == self.directory:
