@@ -1782,7 +1782,6 @@ class Project:
     input_force_fields = property(input_getter('ff'), None, None, "Input force fields (read only)")
     input_collections = property(input_getter('collections'), None, None, "Input collections (read only)")
     input_chain_names = property(input_getter('chainnames'), None, None, "Input chain names (read only)")
-    input_type = property(input_getter('type'), None, None, "Input type (read only)")
     input_framestep = property(input_getter('framestep'), None, None, "Input framestep (read only)")
     input_name = property(input_getter('name'), None, None, "Input name (read only)")
     input_description = property(input_getter('description'), None, None, "Input description (read only)")
