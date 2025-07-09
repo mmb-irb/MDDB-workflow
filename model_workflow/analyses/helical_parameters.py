@@ -8,7 +8,7 @@ from shutil import move
 import glob
 from struct import pack
 import re
-
+from warnings import warn
 from model_workflow.utils.auxiliar import save_json, store_binary_data
 from model_workflow.utils.constants import OUTPUT_HELICAL_PARAMETERS_FILENAME
 from model_workflow.utils.type_hints import *
@@ -219,13 +219,22 @@ def hydrogen_bonds(
 
     print(f"Saving .dat file to: {output_dat_file}")
 
+    # Select reference structure
+    # AGUS: para el proyecto ABCix utilizamos los inpcrd de la simulación como referencia porque al utilizar nuestro pdb daba muchos errores
+    inpcrd_file = glob.glob(os.path.join(helical_parameters_folder, "*.inpcrd"))
+    if len(inpcrd_file) == 0:
+        warn("No inpcrd file found in the helical_parameters folder, executing cpptraj with structure PDB.")
+        structure_reference = structure_file.path
+    else:
+        structure_reference = inpcrd_file[0]  # Select the first matching file
+    
     # Crear el contenido del input de cpptraj usando las variables
     cpptraj_script = f"""
     # Load the topology file
     parm {topology_file.path}
 
     # Load the initial reference structure
-    trajin {structure_file.path}
+    trajin {structure_reference}
 
     # Load the trajectory
     trajin {trajectory_file.path}
