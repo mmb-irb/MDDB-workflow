@@ -237,6 +237,65 @@ def structure_corrector (
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
+    # Coherent chains --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Makes sure polymers with sequence are all bonded
+    # In other words, make sure there are not multiple proteins/nucleics labeled with the same chain
+    # Note that their sequences otherwise will be merged silently, thus not reflecting reality
+    # This would make protein mapping impossible for instance
+    sequence_polymers_selection = structure.select_protein() + structure.select_nucleic()
+
+    # We also want to support having a solution of free aminoacids/nucleotides
+    # So if residues in the chain are not bonded or bonded in very small fragments we accept it
+    N_RESIDUES_CUTOFF = 3
+
+    # Save if we splitted chains
+    had_to_split_chains = False
+
+    # Iterate sequence polymer chains
+    for chain in structure.get_selection_chains(sequence_polymers_selection):
+        # If there is only one fragment we are good
+        chain_selection = chain.get_selection()
+        fragments = list(structure.find_fragments(chain_selection))
+        if len(fragments) == 0: raise ValueError(f'No fragments found in chain {chain.name}')
+        if len(fragments) == 1: continue
+        # We also want to support having a solution of free aminoacids/nucleotides
+        # So if residues in the chain are not bonded or bonded in very small fragments we accept it
+        # Make a single fragments out of all small fragments
+        independent_fragments = []
+        merged_fragment = None
+        for fragment in fragments:
+            # If the fragments reaches the size cutoff then send it to the independent fragments list
+            residues = structure.get_selection_residues(fragment)
+            if len(residues) > N_RESIDUES_CUTOFF:
+                independent_fragments.append(fragment)
+                continue
+            # Otherwise merge it with other small fragments
+            if merged_fragment: merged_fragment += fragment
+            else: merged_fragment = fragment
+        # Add the merged fragment to the list as well
+        if merged_fragment:
+            independent_fragments.append(merged_fragment)
+        # If we have only one fragment after the merging then we are good
+        if len(independent_fragments) == 1: continue
+        # Otherwise rename fragments
+        warn(f'Chain {chain.name} has sequence polymer(s) but not all atoms are bonded.')
+        # We can skip the first fragment, so it can keep the original chain name
+        for independent_fragment in independent_fragments[1:]:
+            print(f' A fragment of this chain including {len(independent_fragment)} atoms will be splitted appart.')
+            had_to_split_chains = True
+            # Make a new chain for the current fragment
+            new_chain_name = structure.get_next_available_chain_name(chain.name)
+            print(f' This fragment will be renamed as chain "{new_chain_name}"')
+            structure.set_selection_chain_name(independent_fragment, new_chain_name)
+
+    # If we did any change then save the structure
+    if had_to_split_chains:
+        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        structure.generate_pdb_file(output_structure_file.path)
+
+    # ------------------------------------------------------------------------------------------
     # Splitted residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
