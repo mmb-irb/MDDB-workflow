@@ -2,9 +2,10 @@ import sys
 import json
 import urllib.request
 import numpy as np
-from model_workflow.utils.auxiliar import protein_residue_name_to_letter
+from model_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
+from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
 import xmltodict
@@ -62,32 +63,34 @@ def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
 def generate_protein_mapping (
     structure : 'Structure',
-    protein_references_file : 'File',
+    output_filepath : str,
     database_url : str,
     register : dict,
     mercy : List[str] = [],
-    forced_references : Union[list,dict] = [],
+    input_protein_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
 
-    print('-> Getting protein references')
+    # Set the output file
+    protein_references_file = File(output_filepath)
 
     # Remove previous warnings, if any
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict
     # If it is none then we set it as an empty list
-    if forced_references == None:
-        forced_references = []
+    if input_protein_references == None:
+        input_protein_references = []
     # If forced references is a list of dictionaries then it means the input is wrongly formatted
     # This may happen since the inputs file is in YAML format, and a simple hyphen makes the difference
     # We can fix it from here anyway
-    if type(forced_references) == list and len(forced_references) > 0 and type(forced_references[0]) == dict:
-        forced_references = { k: v for fr in forced_references for k, v in fr.items() }
+    if type(input_protein_references) == list and len(input_protein_references) > 0 and type(input_protein_references[0]) == dict:
+        input_protein_references = { k: v for fr in input_protein_references for k, v in fr.items() }
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
-    strict_references = type(forced_references) == dict
+    strict_references = type(input_protein_references) == dict
     # Check the "no referable" flag not to be passed when references are not strict
-    if not strict_references and NO_REFERABLE_FLAG in forced_references:
-        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list. You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
+    if not strict_references and NO_REFERABLE_FLAG in input_protein_references:
+        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list.' \
+            ' You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
@@ -140,7 +143,7 @@ def generate_protein_mapping (
             # In case references are forced per chain check if there is a reference for this chain and match according to this
             if strict_references:
                 # Get the forced specific chain for this sequence, if any
-                forced_reference = forced_references.get(chain, None)
+                forced_reference = input_protein_references.get(chain, None)
                 if forced_reference:
                     # If the chain has a specific forced reference then we must align it just once
                     # Skip this process in further matches
@@ -159,18 +162,18 @@ def generate_protein_mapping (
                         continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
                     reference_sequence = reference_sequences[forced_reference]
-                    print(' Aligning chain ' + chain + ' with ' + forced_reference + ' reference sequence')
+                    print(f' Aligning chain {chain} with {forced_reference} reference sequence')
                     align_results = align(reference_sequence, chain_data['sequence'])
                     # The align must match or we stop here and warn the user
                     if not align_results:
-                        raise SystemExit('Forced reference ' + chain + ' -> ' + forced_reference + ' does not match in sequence')
+                        raise SystemExit(f'Forced reference {chain} -> {forced_reference} does not match in sequence')
                     sequence_map, align_score = align_results
                     reference = references[forced_reference]
                     chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
                     continue
             # If the chain has already a match and this match is among the forced references then stop here
             # Forced references have priority and this avoids having a match with a not forced reference further
-            if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in forced_references:
+            if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in input_protein_references:
                 continue
             # Iterate over the different available reference sequences
             for uniprot_id, reference_sequence in reference_sequences.items():
@@ -179,7 +182,7 @@ def generate_protein_mapping (
                     continue
                 # Align the structure sequence with the reference sequence
                 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
-                print(' Aligning chain ' + chain + ' with ' + uniprot_id + ' reference sequence')
+                print(f' Aligning chain {chain} with {uniprot_id} reference sequence')
                 align_results = align(reference_sequence, chain_data['sequence'])
                 tried_alignments[chain].append(uniprot_id) # Save the alignment try, no matter if it works or not
                 if not align_results:
@@ -189,6 +192,11 @@ def generate_protein_mapping (
                 current_reference = chain_data['match']
                 if current_reference['score'] > align_score:
                     continue
+                # If the match is a 'no referable' exception then set a no referable flag
+                if type(uniprot_id) == NoReferableException:
+                    chain_data['match'] = { 'ref': NO_REFERABLE_FLAG }
+                    continue
+                # Proceed to set the corresponding reference toherwise
                 reference = references[uniprot_id]
                 # If the alignment is better then we impose the new reference
                 chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
@@ -198,20 +206,20 @@ def generate_protein_mapping (
             name = chain_data['name']
             match = chain_data.get('match', None)
             if not match:
-                print('   ' + name + ' -> Not protein')
+                print(f'   {name} -> Not protein')
                 continue
             reference = chain_data['match'].get('ref', None)
             if not reference:
-                print('   ' + name + ' -> ¿?')
+                print(f'   {name} -> ¿?')
                 continue
             if reference == NO_REFERABLE_FLAG:
-                print('   ' + name + ' -> No referable')
+                print(f'   {name} -> No referable')
                 continue
             if reference == NOT_FOUND_FLAG:
-                print('   ' + name + ' -> Not found')
+                print(f'   {name} -> Not found')
                 continue
             uniprot_id = reference['uniprot']
-            print('   ' + name + ' -> ' + uniprot_id)
+            print(f'   {name} -> {uniprot_id}')
         # Export already matched references
         export_references(protein_parsed_chains, protein_references_file)
         # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
@@ -219,9 +227,9 @@ def generate_protein_mapping (
         # If we match all chains then make sure there is no forced reference missing which did not match
         # Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file
         # WARNING: Although we could move on it is better to stop here and warn the user to prevent a future silent problem
-        if allright and forced_references:
+        if allright and input_protein_references:
             # Get forced uniprot ids
-            forced_uniprot_ids = set(list(forced_references.values()) if strict_references else forced_references)
+            forced_uniprot_ids = set(list(input_protein_references.values()) if strict_references else input_protein_references)
             forced_uniprot_ids -= { NOT_FOUND_FLAG, NO_REFERABLE_FLAG }
             #forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
             #forced_uniprot_ids.remove(NOT_FOUND_FLAG)
@@ -237,8 +245,8 @@ def generate_protein_mapping (
         return allright
     # --- End of match_sequences function --------------------------------------------------------------------------------
     # First use the forced references for the matching
-    if forced_references:
-        forced_uniprot_ids = list(forced_references.values()) if strict_references else forced_references
+    if input_protein_references:
+        forced_uniprot_ids = list(input_protein_references.values()) if strict_references else input_protein_references
         for uniprot_id in forced_uniprot_ids:
             # If instead of a uniprot id there is a 'no referable' flag then we skip this process
             if uniprot_id == NO_REFERABLE_FLAG:
@@ -285,9 +293,12 @@ def generate_protein_mapping (
         for pdb_id in pdb_ids:
             # Ask PDB
             uniprot_ids = pdb_to_uniprot(pdb_id)
-            if uniprot_ids == None:
-                continue 
             for uniprot_id in uniprot_ids:
+                # If this is not an actual UniProt, but a no referable exception, then handle it
+                # We must find the matching sequence and set the corresponding chain as no referable
+                if type(uniprot_id) == NoReferableException:
+                    reference_sequences[uniprot_id] = uniprot_id.sequence
+                    continue
                 # Build a new reference from the resulting uniprot
                 reference, already_loaded = get_reference(uniprot_id)
                 if reference == None:
@@ -325,7 +336,7 @@ def generate_protein_mapping (
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
         raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
-    print('WARNING: BLAST failed to find a matching reference sequence for at least one protein sequence')
+    warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
     register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
     return protein_parsed_chains
 
@@ -428,13 +439,13 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
     # This 1 has been found experimentally
     # Non maching sequence may return a 0.1-0.3 normalized score
     # Matching sequence may return >4 normalized score
-    if normalized_score < 1:
+    if normalized_score < 2:
         print('    Not valid alignment')
         return None
 
     # Tell the user about the success
     beautiful_normalized_score = round(normalized_score * 100) / 100
-    print('    Valid alignment -> Normalized score = ' + str(beautiful_normalized_score))
+    print(f'    Valid alignment -> Normalized score = {beautiful_normalized_score}')
 
     # Match each residue
     aligned_mapping = []
@@ -527,7 +538,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
             print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
             return None
         print('Error when requesting ' + request_url)
-        raise ValueError('Something went wrong with the Uniprot request (error ' + str(error.code) + ')')
+        raise ValueError(f'Something went wrong with the Uniprot request (error {error.code})')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
     if parsed_response == None:
         print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
@@ -537,7 +548,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     protein_name_data = protein_data.get('recommendedName', None)
     # DANI: It is possible that the 'recommendedName' is missing if it is not a reviewed UniProt entry
     if not protein_name_data:
-        print('WARNING: The UniProt accession ' + uniprot_accession + ' is missing the recommended name. You should consider changing the reference.')
+        warn(f'The UniProt accession {uniprot_accession} is missing the recommended name. You should consider changing the reference.')
         protein_name_data = protein_data.get('submittedName', None)[0]
     if not protein_name_data:
         raise ValueError('Unexpected structure in UniProt response for accession ' + uniprot_accession)
@@ -629,11 +640,15 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 
 # Given a pdb Id, get its uniprot id
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
-def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
+def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
     # Set the request query
     query = '''query ($id: String!) {
         entry(entry_id: $id) {
-            polymer_entities { rcsb_polymer_entity_container_identifiers { uniprot_ids } }
+            polymer_entities {
+                rcsb_polymer_entity_container_identifiers { uniprot_ids }
+                rcsb_entity_source_organism { scientific_name }
+                entity_poly { pdbx_seq_one_letter_code }
+            }
         }
     }'''
     # Request PDB data
@@ -644,11 +659,43 @@ def pdb_to_uniprot (pdb_id : str) -> Optional[ List[str] ]:
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
         # Get the uniprot
         uniprots = identifier.get('uniprot_ids', None)
-        if not uniprots: continue
-        if len(uniprots) > 1: raise ValueError('Multiple PDB ids in the same chain?')
+        # If there are not UniProts at all in this entity skip to the next
+        if not uniprots:
+            # However, it may happen the the polymer organism is set as synthetic construct
+            # In this case we keep the sequence and return a no referable exception
+            organisms = polymer.get('rcsb_entity_source_organism', None)
+            if not organisms: raise ValueError('Missing organism')
+            # Get scientific names in lower caps since sometimes they are all upper caps
+            scientific_names = set(
+                [ organism.get('scientific_name', '').lower() for organism in organisms ])
+            if 'synthetic construct' in scientific_names:
+                entity = polymer.get('entity_poly', None)
+                if not entity: raise ValueError(f'Missing entity in {pdb_id}')
+                sequence = entity.get('pdbx_seq_one_letter_code', None)
+                if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
+                uniprot_ids.append( NoReferableException(sequence) )
+            continue
+        # If we have multiple uniprots in a single entity then we skip them
+        # Note tha they belong to an entity which is no referable (e.g. a chimeric entity)
+        # See 5GY2 and 7E2Z labeled as chimeric entities and 6e67, which is not labeled likewise
+        if len(uniprots) > 1:
+            warn(f'Multiple UniProt ids in the same entity in {pdb_id} -> Is this a chimeric entity?')
+            entity = polymer.get('entity_poly', None)
+            if not entity: raise ValueError(f'Missing entity in {pdb_id}')
+            sequence = entity.get('pdbx_seq_one_letter_code', None)
+            if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
+            uniprot_ids.append( NoReferableException(sequence) )
+            continue
         uniprot_id = uniprots[0]
         uniprot_ids.append(uniprot_id)
-    print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(uniprot_ids))
+    actual_uniprot_ids = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == str ]
+    if len(actual_uniprot_ids) > 0:
+        print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(actual_uniprot_ids))
+    else: print(f' No UniProt ids were found for PDB id {pdb_id}')
+    no_refs = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == NoReferableException ]
+    no_refs_count = len(no_refs)
+    if no_refs_count > 0:
+        print(f' Also encountered {no_refs_count} no refereable sequences for PDB id {pdb_id}')
     return uniprot_ids
 
 # This function is used by the generate_metadata script
@@ -660,8 +707,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Mine sequences from the structure
     sequences = []
     # Classify sequences according to if they belong to protein or nucleic sequences
-    protein_sequences = set()
-    nucleic_sequences = set()
+    # WARNING: We are interested in unique sequence BUT we also want to keep the order
+    # WARNING: Do NOT use sets here to the order of appearance in the structure is respected
+    protein_sequences = []
+    nucleic_sequences = []
     # Iterate structure chains
     for chain in structure.chains:
         # Get the current chain sequence and add it to the list
@@ -670,10 +719,10 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # Get the chain classification
         classification = chain.get_classification()
         # Depending on what it is, add the sequence also in the corresponding list
-        if classification == 'protein':
-            protein_sequences.add(sequence)
-        elif classification == 'dna' or classification == 'rna':
-            nucleic_sequences.add(sequence)
+        if classification == 'protein' and sequence not in protein_sequences:
+            protein_sequences.append(sequence)
+        elif (classification == 'dna' or classification == 'rna') and sequence not in nucleic_sequences:
+            nucleic_sequences.append(sequence)
     # Get values from the residue map
     # Get protein references from the residues map
     reference_ids = []
@@ -753,8 +802,8 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
     # Return the sequence matadata
     return {
         'sequences': sequences,
-        'protein_sequences': list(protein_sequences),
-        'nucleic_sequences': list(nucleic_sequences),
+        'protein_sequences': protein_sequences,
+        'nucleic_sequences': nucleic_sequences,
         'domains': domains,
         'cv19_variant': variant
     }

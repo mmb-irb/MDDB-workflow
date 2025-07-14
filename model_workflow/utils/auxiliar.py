@@ -43,6 +43,14 @@ class ToolError (QuietException):
 class RemoteServiceError (QuietException):
     pass
 
+# Set a no referable exception for PDB synthetic constructs or chimeric entities
+class NoReferableException (Exception):
+    def __str__ (self): return f'No referable sequence {self.sequence}'
+    def __repr__ (self): return self.__str__()
+    def get_sequence (self) -> str:
+        return self.args[0]
+    sequence = property(get_sequence, None, None, 'Aminoacids sequence')
+
 # Set a custom exception handler where our input error exception has a quiet behaviour
 def custom_excepthook (exception_class, message, traceback):
     # Quite behaviour if it is our input error exception
@@ -192,6 +200,10 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
 # List files in a directory
 def list_files (directory : str) -> List[str]:
     return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]
+
+# Check if a directory is empty
+def is_directory_empty (directory : str) -> bool:
+    return len(listdir(directory)) == 0
 
 # Set a function to check if a string has patterns to be parsed by a glob function
 # Note that this is not trivial, but this function should be good enough for our case
@@ -360,3 +372,15 @@ def get_analysis_name (filename : str) -> str:
     # To make it coherent with the rest of analyses, the analysis name become parsed when loaded in the database
     # Every '_' is replaced by '-' so we must keep the analysis name coherent or the web client will not find it
     return name_search[1].replace('_', '-')
+
+# Use a safe alternative to hasattr/getattr
+# DANI: Do not use getattr with a default argument or hasattr
+# DANI: If you do, you will loose any further AtributeError(s)
+# DANI: Thus you will have very silent errors every time you have a silly typo
+# DANI: This is a python itself unresolved error https://bugs.python.org/issue39865
+def safe_hasattr (instance, attribute_name : str) -> bool:
+    return attribute_name in set(dir(instance))
+def safe_getattr (instance, attribute_name : str, defualt):
+    if not safe_hasattr(instance, attribute_name): return defualt
+    return getattr(instance, attribute_name)
+    

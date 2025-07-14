@@ -2,10 +2,11 @@
 # In addition, interface residues are listed appart
 
 import itertools
+from os.path import exists
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn, reprint
-from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG
+from model_workflow.utils.auxiliar import InputError, TestFailure, load_json, save_json, warn
+from model_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
 
@@ -42,7 +43,7 @@ def process_interactions (
     trajectory_file : 'File',
     structure : 'Structure',
     snapshots : int,
-    processed_interactions_file : 'File',
+    output_directory : str,
     mercy : List[str],
     frames_limit : int,
     interactions_auto : str,
@@ -53,7 +54,8 @@ def process_interactions (
     interaction_cutoff : float = 0.1,
     ) -> list:
 
-    print('-> Processing interactions')
+    # Set the output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_INTERACTIONS_FILENAME}'
 
     # Set if we are to have mercy when an interaction fails
     have_mercy = STABLE_INTERACTIONS_FLAG in mercy
@@ -182,12 +184,9 @@ def process_interactions (
     interaction_names = [ interaction['name'] for interaction in interactions ]
     if len(set(interaction_names)) < len(interaction_names):
         raise InputError('Interactions must have unique names')
-    # Print an empty line for the next reprint
-    print()
     # Check input interactions to be correct
     for i, interaction in enumerate(interactions, 1):
         name = interaction["name"]
-        reprint(f' Finding interaction type in {name} ({i}/{interaction_count})')
         # Check agents have different names
         if interaction['agent_1'] == interaction['agent_2']:
             raise InputError(f'Interaction agents must have different names at {name}')
@@ -206,27 +205,11 @@ def process_interactions (
         overlap = agent_1_selection & agent_2_selection
         if overlap:
             raise InputError(f'Agents in interaction "{name}" have {len(overlap)} overlapping atoms')
-        # Check if there was a type already assigned to the interaction
-        # This is not supported anymore since the interaction type is set automatically
-        if 'type' in interaction:
-            warn(f'Interaction type "{interaction["type"]}" is set for interaction "{name}".\n'
-                 'Interaction type is now calculated and the input interaction type is no longer supported.\n'
-                 'Note that the input value will be ignored')
-        # Set the interaction type
-        # LORE: The type was a user input back in time but now we find it automatically
-        # WARNING: Do not calculate the type from the interface residue instead of the whole agent
-        # WARNING: This seems more coherent BUT the type will be written in the PROJECT metadata
-        # WARNING: Interaction type is a valuable search parameter and thus it must remain in project metadata
-        # WARNING: However we could have different types in different MDs, if the interaction is different
-        agent_1_classification = structure.get_selection_classification(agent_1_selection)
-        agent_2_classification = structure.get_selection_classification(agent_2_selection)
-        alphabetically_sorted = sorted([agent_1_classification, agent_2_classification])
-        interaction['type'] = f'{alphabetically_sorted[0]}-{alphabetically_sorted[1]}'
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
-    if processed_interactions_file.exists:
-        loaded_interactions = load_interactions(processed_interactions_file, structure)
+    if exists(output_analysis_filepath):
+        loaded_interactions = load_interactions(output_analysis_filepath, structure)
         # Make sure the backup has atom indices
         sample = loaded_interactions[0]
         has_atom_indices = 'atom_indices_1' in sample
@@ -316,7 +299,7 @@ def process_interactions (
             interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
         
         # Add residue notations
-        add_residues(interaction, structure)
+        add_residues_indices(interaction, structure)
             
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
@@ -327,8 +310,9 @@ def process_interactions (
         interaction['version'] = '2.0.0'
 
         # Log the final results
-        interface_residue_indices = sorted(interaction["interface_indices_1"] + interaction["interface_indices_2"])
-        print(f'{interaction_name} (time: {pretty_frames_percent} %) (type: {interaction["type"]}) -> {interface_residue_indices}')
+        interface_residue_indices = sorted(interaction["interface_residue_indices_1"]
+            + interaction["interface_residue_indices_2"])
+        print(f'{interaction_name} (time: {pretty_frames_percent} %) -> {interface_residue_indices}')
 
     # Filter away interactions whcih have failed
     valid_interactions = [ inte for inte in interactions if not inte.get(FAILED_INTERACTION_FLAG, False) ]
@@ -344,28 +328,28 @@ def process_interactions (
         file_interactions.append(file_interaction)
     
     # Write them to disk
-    save_json(file_interactions, processed_interactions_file.path, indent = 4)
+    save_json(file_interactions, output_analysis_filepath, indent = 4)
 
     # Finally return the processed interactions
     print(f' There is a total of {len(valid_interactions)} valid interactions')
     return valid_interactions
 
 # Load interactions from an already existing interactions file
-def load_interactions (processed_interactions_file : 'File', structure : 'Structure') -> list:
-    print(f' Using already calculated interactions in {processed_interactions_file.path}')
+def load_interactions (output_analysis_filepath : str, structure : 'Structure') -> list:
+    print(f' Using already calculated interactions in {output_analysis_filepath}')
     # The stored interactions should carry only residue indices and strong bonds
-    interactions = load_json(processed_interactions_file.path)
+    interactions = load_json(output_analysis_filepath)
     # Now we must complete every interactions dict by adding residues in source format and pytraj format
     for interaction in interactions:
         # If the interaction failed then there will be minimal information
         if interaction.get(FAILED_INTERACTION_FLAG, False):
             continue
         # Add residue notations, which are not saved to disk
-        add_residues(interaction, structure)
+        add_residues_indices(interaction, structure)
     return interactions
 
-# Set an auxiliar function to add residue indices and parsed residues to an interactions object
-def add_residues (interaction : dict, structure : 'Structure'):
+# Set an auxiliar function to add residue indices to an interactions object
+def add_residues_indices (interaction : dict, structure : 'Structure'):
     # Iterate interaction agents
     for agent in ['1','2']:
         # Get interaction atom indices
@@ -373,10 +357,8 @@ def add_residues (interaction : dict, structure : 'Structure'):
         # Now parse atom indices to residue indices for those analysis which work with residues
         residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
         interaction[f'residue_indices_{agent}'] = residue_indices
-        interaction[f'residues_{agent}'] = [ structure.residues[residue_index] for residue_index in residue_indices ]
         # Get interaction interface atom indices
         interface_atom_indices = interaction[f'interface_atom_indices_{agent}']
         # Then with interface atoms/residues
         interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
-        interaction[f'interface_indices_{agent}'] = interface_residue_indices
-        interaction[f'interface_{agent}'] = [ structure.residues[residue_index] for residue_index in interface_residue_indices ]
+        interaction[f'interface_residue_indices_{agent}'] = interface_residue_indices

@@ -1,13 +1,14 @@
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import OUTPUT_DENSITY_FILENAME
 from model_workflow.utils.type_hints import *
 
 import pytraj as pt
 
 def density (
-    input_structure_filepath : str,
-    input_trajectory_filepath : str,
-    output_analysis_filepath : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
     membrane_map: dict,
     structure : 'Structure',
     snapshots : int,
@@ -17,10 +18,13 @@ def density (
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping density analysis')
         return
-    print('-> Running density analysis')
+    
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_DENSITY_FILENAME}'
 
     # Load
-    tj, frame_step, frames_count = get_reduced_pytraj_trajectory(input_structure_filepath, input_trajectory_filepath, snapshots, frames_limit)
+    tj, frame_step, frames_count = get_reduced_pytraj_trajectory(
+        structure_file.path, trajectory_file.path, snapshots, frames_limit)
     
     # Set every selections to be analyzed separately
     components = []

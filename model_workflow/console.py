@@ -9,12 +9,12 @@ from textwrap import wrap
 from model_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
-from model_workflow.utils.conversions import convert
 from model_workflow.utils.filters import filter_atoms
 from model_workflow.utils.subsets import get_trajectory_subset
 from model_workflow.utils.constants import *
 from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.nassa_file import generate_nassa_config
+from model_workflow.tools.conversions import convert
 from model_workflow.analyses.nassa import workflow_nassa
 
 # Set the path to the input setter jupyter notebook
@@ -483,7 +483,7 @@ run_parser_selection_group.add_argument(
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
     help="Atom selection for the pca fitting in vmd syntax")
 run_parser_selection_group.add_argument(
-    "-pcasel", "--pca_selection",
+    "-pcana", "--pca_analysis_selection",
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
     help="Atom selection for pca analysis in vmd syntax")
 
@@ -533,6 +533,14 @@ run_parser_checks_group.add_argument(
     choices=AVAILABLE_FAILURES,
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow. "
         "Note that all checkings are allowed to fail if the argument is passed alone. " + pretty_list(AVAILABLE_FAILURES))
+)
+run_parser_checks_group.add_argument(
+    "-f", "--faith",
+    action='store_true',
+    default=False,
+    help=("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
+        "WARNING: Do not use this flag if you don't know what you are doing.\n"
+        "This may lead to several silent errors.")
 )
 
 # Set a list with the alias of all requestable dependencies
@@ -787,4 +795,10 @@ nassa_parser.add_argument(
     choices=AVAILABLE_FAILURES,
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
         "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
+)
+nassa_parser.add_argument(
+    "-dup", "--duplicates",
+    default=False,
+    action='store_true',
+    help="If passed, merge duplicate subunits if there is more than one, in the sequences. if not only the last will be selected"
 )

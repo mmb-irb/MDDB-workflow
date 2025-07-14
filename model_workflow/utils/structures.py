@@ -36,15 +36,15 @@ except:
     pass
 
 # Set all available chains according to pdb standards
-available_caps = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+AVAILABLE_CAPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
     'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
-available_lows = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
+AVAILABLE_LOWS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
     'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-available_chains = available_caps + available_lows
+AVAILABLE_LETTERS = AVAILABLE_CAPS + AVAILABLE_LOWS
 
 # Set letters to be found in alphanumerical bases
-hexadecimal_letters = set(available_caps[0:6] + available_lows[0:6])
-alphanumerical_letters = set(available_caps[6:] + available_lows[6:])
+hexadecimal_letters = set(AVAILABLE_CAPS[0:6] + AVAILABLE_LOWS[0:6])
+alphanumerical_letters = set(AVAILABLE_CAPS[6:] + AVAILABLE_LOWS[6:])
 
 # Set the expected number of bonds for each atom according to its element
 coherent_bonds_with_hydrogen = {
@@ -1329,7 +1329,12 @@ class Structure:
             # Add the parsed atom to the list and update the current atom index
             parsed_atoms.append(parsed_atom)
             # Get the parsed chain
+            # DANI: If we always check for an already existing chain there will never be repeated chains
+            # DANI: However we may create chains with unconnected atoms silently (they were separated in the PDB)
+            # DANI: For this reason we must only consider the last processed chain
             parsed_chain = name_chains.get(chain_name, None)
+            if parsed_chain and parsed_chain != parsed_chains[-1]:
+                parsed_chain = None
             # If the parsed chain was not yet instantiated then do it now
             if not parsed_chain:
                 parsed_chain = Chain(name=chain_name)
@@ -1337,7 +1342,12 @@ class Structure:
                 name_chains[chain_name] = parsed_chain
             # Get the parsed residue
             residue_label = (chain_name, residue_number, icode)
+            # DANI: If we always check for an already existing residue there will never be repeated residues
+            # DANI: However we may create residues with unconnected atoms silently (they were separated in the PDB)
+            # DANI: For this reason we must only consider the last processed residue
             parsed_residue = label_residues.get(residue_label, None)
+            if parsed_residue and parsed_residue != parsed_residues[-1]:
+                parsed_residue = None
             # If the parsed residue was not yet instantiated then do it now
             if not parsed_residue:
                 # Parse the residue number if it is to be parsed
@@ -1677,33 +1687,39 @@ class Structure:
         return self._dummy_atom_indices
     dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
 
+    # Generate a pdb file content with the current structure
+    def generate_pdb (self):
+        content = 'REMARK workflow generated pdb file\n'
+        for a, atom in enumerate(self.atoms):
+            residue = atom.residue
+            index = str((a+1) % 100000).rjust(5)
+            name = ' ' + atom.name.ljust(3) if len(atom.name) < 4 else atom.name
+            residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
+            chain = atom.chain
+            chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
+            residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
+            # If residue number is longer than 4 characters then we must parse to hexadecimal
+            if len(residue_number) > 4:
+                residue_number = hex(residue.number)[2:].rjust(4)
+            icode = residue.icode if residue.icode and len(residue.icode) else ' '
+            # Make sure we have atom coordinates
+            if atom.coords == None:
+                raise InputError('Trying to write a PDB file from a structure with atoms without coordinates')
+            x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in atom.coords ]
+            occupancy = '1.00' # Just a placeholder
+            temp_factor = '0.00' # Just a placeholder
+            element = atom.element.rjust(2)
+            atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name
+                + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
+                + '  ' + occupancy + '  ' + temp_factor + '          ' + element).ljust(80) + '\n'
+            content += atom_line
+        return content
+
     # Generate a pdb file with current structure
     def generate_pdb_file (self, pdb_filepath : str):
+        pdb_content = self.generate_pdb()
         with open(pdb_filepath, "w") as file:
-            file.write('REMARK workflow generated pdb file\n')
-            for a, atom in enumerate(self.atoms):
-                residue = atom.residue
-                index = str((a+1) % 100000).rjust(5)
-                name = ' ' + atom.name.ljust(3) if len(atom.name) < 4 else atom.name
-                residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
-                chain = atom.chain
-                chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
-                residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
-                # If residue number is longer than 4 characters then we must parse to hexadecimal
-                if len(residue_number) > 4:
-                    residue_number = hex(residue.number)[2:].rjust(4)
-                icode = residue.icode if residue.icode and len(residue.icode) else ' '
-                # Make sure we have atom coordinates
-                if atom.coords == None:
-                    raise InputError('Trying to write a PDB file from a structure with atoms without coordinates')
-                x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in atom.coords ]
-                occupancy = '1.00' # Just a placeholder
-                temp_factor = '0.00' # Just a placeholder
-                element = atom.element.rjust(2)
-                atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name
-                    + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
-                    + '  ' + occupancy + '  ' + temp_factor + '          ' + element).ljust(80) + '\n'
-                file.write(atom_line)
+            file.write(pdb_content)
 
     # Get the structure equivalent prody topology
     def get_prody_topology (self):
@@ -2086,7 +2102,7 @@ class Structure:
         # If a letter is not specified we run the "fragments" logic
         fragment_getter = self.find_whole_fragments if whole_fragments else self.find_fragments
         for fragment in fragment_getter(selection):
-            chain_name = self.get_next_available_chain_name()
+            chain_name = self.get_available_chain_name()
             self.set_selection_chain_name(fragment, chain_name)
 
     # Smart function to set chains automatically
@@ -2126,7 +2142,7 @@ class Structure:
     # This system does not depend on VMD
     # It totally overrides previous chains since it is expected to be used only when chains are missing
     def raw_protein_chainer (self):
-        current_chain = self.get_next_available_chain_name()
+        current_chain = self.get_available_chain_name()
         previous_alpha_carbon = None
         for residue in self.residues:
             alpha_carbon = next((atom for atom in residue.atoms if atom.name == 'CA'), None)
@@ -2136,7 +2152,7 @@ class Structure:
             # Connected aminoacids have their alpha carbons at a distance of around 3.8 Ångstroms
             residues_are_connected = previous_alpha_carbon and calculate_distance(previous_alpha_carbon, alpha_carbon) < 4
             if not residues_are_connected:
-                current_chain = self.get_next_available_chain_name()
+                current_chain = self.get_available_chain_name()
             residue.set_chain(current_chain)
             previous_alpha_carbon = alpha_carbon
 
@@ -2155,15 +2171,37 @@ class Structure:
             atom = self.atoms[atom_index]
             atom.set_chain_index(chain.index)
 
-    # Get the next available chain name
+    # Get an available chain name
     # Find alphabetically the first letter which is not yet used as a chain name
-    # If all letters in the alphabet are used already then return None
-    def get_next_available_chain_name (self) -> Optional[str]:
+    # If all letters in the alphabet are used already then raise an error
+    def get_available_chain_name (self) -> str:
         current_chain_names = [ chain.name for chain in self.chains ]
-        next_available_chain_name = next((name for name in available_chains if name not in current_chain_names), None)
+        next_available_chain_name = next((name for name in AVAILABLE_LETTERS if name not in current_chain_names), None)
         if next_available_chain_name == None:
-            raise InputError(f'There are more chains than available chain letters ({len(available_chains)})')
+            raise InputError(f'There are more chains than available chain letters ({len(AVAILABLE_LETTERS)})')
         return next_available_chain_name
+    
+    # Get the next available chain name
+    # Given an anterior chain name, find the next available chain name in alphabetical order
+    # If all letters in the alphabet are used already then raise an error
+    def get_next_available_chain_name (self, anterior : str) -> str:
+        current_chain_names = set([ chain.name for chain in self.chains ])
+        # If anterior is cap then try caps first, if anterior is lower then try lowers first
+        if anterior.isupper():
+            first_group, second_group = AVAILABLE_CAPS, AVAILABLE_LOWS
+        elif anterior.islower():
+            first_group, second_group = AVAILABLE_LOWS, AVAILABLE_CAPS
+        else: raise ValueError(f'Is "{anterior}" even a letter?')
+        # Reorder letters in the first group, so the anterior is the last letter
+        anterior_position = first_group.index(anterior)
+        next_position = anterior_position + 1
+        reordered_group = first_group[next_position:] + first_group[0:next_position]
+        next_letter = next((letter for letter in reordered_group if letter not in current_chain_names), None)
+        if next_letter: return next_letter
+        # If there is not available letters is the first group then return the first available in the second
+        next_letter = next((letter for letter in second_group if letter not in current_chain_names), None)
+        if next_letter: return next_letter
+        raise ValueError(f'There are more chains than available chain letters ({len(AVAILABLE_LETTERS)})')
 
     # Get a chain by its name
     def get_chain_by_name (self, name : str) -> Optional['Chain']:
@@ -2225,11 +2263,11 @@ class Structure:
         # Rename repeated chains if requested
         if len(repeated_chains) > 0 and fix_chains:
             n_chains = len(self.chains)
-            n_available_chains = len(available_chains)
-            if n_chains > n_available_chains:
+            n_available_letters = len(AVAILABLE_LETTERS)
+            if n_chains > n_available_letters:
                 # for chain in self.chains:
                 #     print(str(chain) + ': ' + str(chain.atom_indices[0]) + ' to ' + str(chain.atom_indices[-1]))
-                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_chains})')
+                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_letters})')
             current_letters = list(name_chains.keys())
             for repeated_chain in repeated_chains:
                 last_chain_letter = repeated_chain.name
@@ -2263,7 +2301,7 @@ class Structure:
             # Now create new chains and reasign residues
             # Skip the first set of consecutive residues since they will stay in the original chain
             for residues_indices in overall_consecutive_residues[1:]:
-                chain_name = self.get_next_available_chain_name()
+                chain_name = self.get_available_chain_name()
                 residues_selection = self.select_residue_indices(residues_indices)
                 self.set_selection_chain_name(residues_selection, chain_name)
 
@@ -2326,7 +2364,7 @@ class Structure:
                 for residue in non_icoded_residues:
                     repeated_residues_group = grouped_residues[residue]
                     current_icodes = [ residue.icode for residue in repeated_residues_group if residue.icode ]
-                    next_icode = next((cap for cap in available_caps if cap not in current_icodes), None)
+                    next_icode = next((cap for cap in AVAILABLE_CAPS if cap not in current_icodes), None)
                     if not next_icode:
                         raise ValueError('There are no more icodes available')
                     # print('Setting icode ' + next_icode + ' to residue ' + str(residue))

@@ -1,7 +1,7 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, OUTPUT_SASA_FILENAME
 from model_workflow.utils.type_hints import *
 
 import os
@@ -14,21 +14,22 @@ area_filename = 'area.xvg'
 
 # Perform the Solvent Accessible Surface Analysis
 def sasa(
-    input_topology_filename: str,
-    input_trajectory_filename: str,
-    output_analysis_filename: str,
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
     structure : 'Structure',
     pbc_residues : List[int],
     snapshots : int,
     frames_limit : int,
 ):
 
-    print('-> Running SAS analysis')
-
     # If all residues are to be excluded since the whole system is in PCB then stop here
     if len(pbc_residues) == len(structure.residues):
         print(' No residues to run the analysis')
         return
+    
+    # Set the output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_SASA_FILENAME}'
 
     # For this analysis me must filter out hydrogens
     heavy_atoms_selection = '( not name "H.*" )'
@@ -59,7 +60,7 @@ def sasa(
 
     # Calculate the sasa for each frame
     sasa_per_frame = []
-    frames, step, count = get_pdb_frames(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots, frames_limit)
     for f, current_frame in enumerate(frames):
 
         # Run the sasa analysis over the current frame
@@ -149,4 +150,4 @@ def sasa(
     }
 
     # Export the analysis in json format
-    save_json(output, output_analysis_filename)
+    save_json(output, output_analysis_filepath)

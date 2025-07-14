@@ -5,28 +5,60 @@ from model_workflow.utils.auxiliar import InputError, save_json
 from model_workflow.utils.constants import MD_DIRECTORY
 from model_workflow.utils.type_hints import *
 
-from pathlib import Path
-
-# Generate a JSON file with all project metadata
-def generate_project_metadata (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    get_input : Callable,
+# Prepare a JSON file with all project metadata
+def prepare_project_metadata (
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_filepath : str,
     structure : 'Structure',
     residue_map : dict,
     protein_references_file : 'File',
     pdb_ids : List[str],
-    register : dict,
-    output_metadata_filename : str,
-    ligand_customized_names : str,
-    processed_interactions : list,
+    ligand_map : dict,
+    input_protein_references : Union[ List[str], dict ],
+    input_ligands : List[dict],
+    input_interactions : list,
+    interaction_types : dict,
+    warnings : dict,
+    # Set all inputs to be loaded as they are
+    input_force_fields : List[str],
+    input_collections : List[str],
+    input_chain_names : List[str],
+    input_type : str,
+    input_framestep : float,
+    input_name : str,
+    input_description : str,
+    input_authors : List[str],
+    input_groups : List[str],
+    input_contact : str,
+    input_program : str,
+    input_version : str,
+    input_method : str,
+    input_license : str,
+    input_linkcense : str,
+    input_citation : str,
+    input_thanks : str,
+    input_links : List[dict],
+    input_timestep : float,
+    input_temperature : float,
+    input_ensemble : str,
+    input_water : str,
+    input_boxtype : str,
+    input_pbc_selection : str,
+    input_cg_selection : str,
+    input_customs : List[dict],
+    input_orientation : List[float],
+    input_multimeric : List[str],
+    # Additional topic-specific inputs
+    input_cv19_unit : str,
+    input_cv19_startconf : str,
+    input_cv19_abs : bool,
+    input_cv19_nanobs : bool,
     ):
-
-    print('-> Generating project metadata')
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
-        input_structure_filename, input_trajectory_filename)
+        structure_file.path, trajectory_file.path)
 
     # Count different types of atoms and residues
     (system_atoms, system_residues, protein_atoms, protein_residues,
@@ -47,17 +79,18 @@ def generate_project_metadata (
                 ligand_references.append(ref)
 
     # Get ligand names if any
-    input_ligands = get_input('ligands')
-    if len(ligand_customized_names) == 0:
-        ligand_customized_names = None
+    forced_ligand_names = {
+        lig['name']: lig['forced_name'] for lig in ligand_map if lig.get('forced_name', False) }
+    if len(forced_ligand_names) == 0:
+        forced_ligand_names = None
 
     # Make the forcefields a list in case it is a single string
-    forcefields = get_input('ff')
+    forcefields = input_force_fields
     if type(forcefields) == str:
         forcefields = [forcefields]
 
     # Collections must be null in case there are not collections
-    collections = get_input('collections')
+    collections = input_collections
     if not collections:
         collections = []
 
@@ -73,61 +106,68 @@ def generate_project_metadata (
 
     # Check chainnames to actually exist in the structure
     structure_chains = set([ chain.name for chain in structure.chains ])
-    chainnames = get_input('chainnames')
+    chainnames = input_chain_names
     if chainnames:
         for chain in chainnames.keys():
             if chain not in structure_chains:
                 raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
 
     # Get the MD type
-    md_type = get_input('type')
+    md_type = input_type
     # In case this is an ensemble and not a time related trajectory and not an ensemble, the framestep may be missing
-    framestep = None if md_type == 'ensemble' else get_input('framestep')
+    framestep = None if md_type == 'ensemble' else input_framestep
 
-    # Set which part of processed interactions is to be kept in metadata
-    # Note that we exclude residues and atom indices to avoid overcrowding metadata
-    # The 'type' field is kept although it is not an input but something calculated
-    # This is because the 'type' field is valuable as a search field
-    kept_fields = { 'name', 'agent_1', 'agent_2', 'selection_1',
-        'selection_2', 'distance_cutoff', 'type' }
-    interactions = []
-    for processed_interaction in processed_interactions:
-        interaction = { k: v for k, v in processed_interaction.items() if k in kept_fields }
-        interactions.append(interaction)
+    # Metadata interactions are input interactions and the interaction types combined
+    metadata_interactions = []
+    if input_interactions is not None:
+        for interaction in input_interactions:
+            metadata_interaction = { k: v for k, v in interaction.items() }
+            interaction_name = metadata_interaction['name']
+            metadata_interaction['type'] = interaction_types[interaction_name]
+            metadata_interactions.append(metadata_interaction)
+
+    # Make sure links are correct
+    links = input_links
+    if links != None:
+        if type(links) != list: links = [ links ]
+        for link in input_links:
+            if type(link) != dict: raise InputError('Links must be a list of objects')
+            if link.get('name', None) == None: raise InputError('Links must have a name')
+            if link.get('url', None) == None: raise InputError('Links must have a URL')
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
-        'NAME': get_input('name'),
-        'DESCRIPTION': get_input('description'),
-        'AUTHORS': get_input('authors'),
-        'GROUPS': get_input('groups'),
-        'CONTACT': get_input('contact'),
-        'PROGRAM': get_input('program'),
-        'VERSION': get_input('version'),
+        'NAME': input_name,
+        'DESCRIPTION': input_description,
+        'AUTHORS': input_authors,
+        'GROUPS': input_groups,
+        'CONTACT': input_contact,
+        'PROGRAM': input_program,
+        'VERSION': input_version,
         'TYPE': md_type,
-        'METHOD': get_input('method'),
-        'LICENSE': get_input('license'),
-        'LINKCENSE': get_input('linkcense'),
-        'CITATION': get_input('citation'),
-        'THANKS': get_input('thanks'),
-        'LINKS': get_input('links'),
+        'METHOD': input_method,
+        'LICENSE': input_license,
+        'LINKCENSE': input_linkcense,
+        'CITATION': input_citation,
+        'THANKS': input_thanks,
+        'LINKS': input_links,
         'PDBIDS': pdb_ids,
-        'FORCED_REFERENCES': get_input('forced_references'),
+        'FORCED_REFERENCES': input_protein_references,
         'REFERENCES': protein_references,
         'INPUT_LIGANDS': input_ligands,
         'LIGANDS': ligand_references,
-        'LIGANDNAMES': ligand_customized_names,
+        'LIGANDNAMES': forced_ligand_names,
         'PROTSEQ': sequence_metadata['protein_sequences'],
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],
         'FRAMESTEP': framestep,
-        'TIMESTEP': get_input('timestep'),
-        'TEMP': get_input('temp'),
-        'ENSEMBLE': get_input('ensemble'),
+        'TIMESTEP': input_timestep,
+        'TEMP': input_temperature,
+        'ENSEMBLE': input_ensemble,
         'FF': forcefields,
-        'WAT': get_input('wat'),
-        'BOXTYPE': get_input('boxtype'),
+        'WAT': input_water,
+        'BOXTYPE': input_boxtype,
         'SYSTATS': system_atoms,
         'SYSTRES': system_residues,
         'PROTATS': protein_atoms,
@@ -143,15 +183,16 @@ def generate_project_metadata (
         'COUNCAT': counter_cations,
         'COUNANI': counter_anions,
         'COUNION': counter_ions,
-        'INTERACTIONS': interactions,
-        'PBC_SELECTION': get_input('pbc_selection'),
+        'INTERACTIONS': metadata_interactions,
+        'PBC_SELECTION': input_pbc_selection,
+        'CG_SELECTION': input_cg_selection,
         'CHAINNAMES': chainnames,
-        'CUSTOMS': get_input('customs'),
-        'ORIENTATION': get_input('orientation'),
+        'CUSTOMS': input_customs,
+        'ORIENTATION': input_orientation,
         'PTM': ptm_names,
-        'MULTIMERIC' : get_input('multimeric'),
+        'MULTIMERIC' : input_multimeric,
         'COLLECTIONS': collections,
-        'WARNINGS': register.warnings,
+        'WARNINGS': warnings,
     }
     # Add boxsizes only if any of them is 0
     if boxsizex > 0 and boxsizey > 0 and boxsizez > 0:
@@ -160,10 +201,10 @@ def generate_project_metadata (
         metadata['BOXSIZEZ'] = boxsizez
     # Add collection specific fields
     if 'cv19' in collections:
-        cv19_unit = get_input('cv19_unit')
-        cv19_startconf = get_input('cv19_startconf')
-        cv19_abs = get_input('cv19_abs')
-        cv19_nanobs = get_input('cv19_nanobs')
+        cv19_unit = input_cv19_unit
+        cv19_startconf = input_cv19_startconf
+        cv19_abs = input_cv19_abs
+        cv19_nanobs = input_cv19_nanobs
         cv19_variant = sequence_metadata['cv19_variant']
 
         if cv19_unit is not None:
@@ -182,7 +223,7 @@ def generate_project_metadata (
             metadata['CV19_VARIANT'] = cv19_variant
     
     # Write metadata to a file
-    save_json(metadata, output_metadata_filename)
+    save_json(metadata, output_filepath)
 
 metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
     'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES', 
@@ -199,11 +240,9 @@ def generate_md_metadata (
     structure : 'Structure',
     snapshots : int,
     reference_frame : int,
-    register : dict,
-    output_metadata_filename : str
+    warnings : dict,
+    output_filepath : str
     ):
-
-    print('-> Generating MD metadata')
 
     # Mine name and directory from MD inputs
     name = md_inputs.get('name', None)
@@ -215,7 +254,7 @@ def generate_md_metadata (
         'frames': snapshots,
         'atoms': len(structure.atoms), # Should be always the same but we better have explicit confirmation
         'refframe': reference_frame,
-        'warnings': register.warnings,
+        'warnings': warnings,
     }
 
     # Get other MD inputs than the name and the directory
@@ -240,4 +279,4 @@ def generate_md_metadata (
         md_metadata['metadata'] = metadata
 
     # Write metadata to a file
-    save_json(md_metadata, output_metadata_filename)
+    save_json(md_metadata, output_filepath)

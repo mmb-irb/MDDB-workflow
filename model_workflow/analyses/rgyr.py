@@ -6,7 +6,7 @@ from numpy import mean, std
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE
+from model_workflow.utils.constants import GROMACS_EXECUTABLE, OUTPUT_RGYR_FILENAME
 from model_workflow.utils.type_hints import *
 
 # Set an auxiliar data filename
@@ -17,20 +17,21 @@ rgyr_data_filename = '.rgyr_data.xvg'
 # Perform the RMSd analysis 
 # Use the first trajectory frame in .pdb format as a reference
 def rgyr (
-    input_topology_file : 'File',
-    input_trajectory_file : 'File',
-    output_analysis_filepath : str,
+    structure_file : 'File',
+    trajectory_file : 'File',
+    output_directory : str,
     snapshots : int,
     frames_limit : int,
     structure : 'Structure',
-    pbc_selection : 'Selection',):
+    pbc_selection : 'Selection'):
 
-    print('-> Running RGYR analysis')
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_RGYR_FILENAME}'
 
     # Use a reduced trajectory in case the original trajectory has many frames
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        input_topology_file,
-        input_trajectory_file,
+        structure_file,
+        trajectory_file,
         snapshots,
         frames_limit,
     )
@@ -55,7 +56,7 @@ def rgyr (
         GROMACS_EXECUTABLE,
         "gyrate",
         "-s",
-        input_topology_file.path,
+        structure_file.path,
         "-f",
         reduced_trajectory_filepath,
         '-o',

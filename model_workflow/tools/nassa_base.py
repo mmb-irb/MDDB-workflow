@@ -33,7 +33,8 @@ class Base(ABC):
             bimod=True,
             save_tables=True,
             save_plots=True,
-            verbose=True):
+            verbose=True,
+            duplicates=False):
 
         # sequence and coordinate paths and files from config file
         for coordinate_files in coordinate_info.values():
@@ -60,6 +61,7 @@ class Base(ABC):
         # flags
         self.save_tables = save_tables
         self.save_plots = save_plots
+        self.duplicates = duplicates
 
         # log information
         self.logger.info(

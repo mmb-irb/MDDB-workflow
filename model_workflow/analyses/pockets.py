@@ -19,7 +19,7 @@
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 from os.path import exists, getsize, split
-from os import mkdir, remove, chdir, getcwd
+from os import remove, chdir, getcwd
 import re
 import collections
 
@@ -29,6 +29,8 @@ from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import warn, ToolError, save_json
 from model_workflow.utils.file import File
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
+from model_workflow.utils.constants import OUTPUT_POCKETS_FILENAME, OUTPUT_POCKET_STRUCTURES_PREFIX
+from model_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
@@ -44,17 +46,13 @@ KNOWN_MDPOCKET_ERRORS = set([
 def pockets (
     structure_file : 'File',
     trajectory_file : 'File',
-    output_analysis_filepath : str,
-    pockets_prefix : str,
-    mdpocket_folder : str,
+    output_directory : str,
     pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int = 100,
     # Get only the 10 first pockets since the analysis is quite slow by now
     # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
     maximum_pockets_number : int = 10):
-
-    print('-> Running pockets analysis')
 
     # DANI: De momento, no se hacen pockets para simulaciones con residuos en PBC (e.g. membrana)
     # DANI: Esto es debido a que los átomos donde NO queremos que encuentre pockets no se pueden descartar
@@ -64,6 +62,9 @@ def pockets (
     if pbc_selection:
         print(' Pockets analysis will be skipped since we have PBC atoms')
         return
+    
+    # Set output filepaths
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_POCKETS_FILENAME}'
 
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
@@ -75,11 +76,6 @@ def pockets (
     )
     # Save the pockets trajectory as a file
     pockets_trajectory_file = File(pockets_trajectory)    
-
-    # This anlaysis produces many useless output files
-    # Create a new folder to store all ouput files so they do not overcrowd the main directory
-    if not exists(mdpocket_folder):
-        mkdir(mdpocket_folder)
 
     # WARNING: There is a silent sharp limit of characters here
     # https://github.com/Discngine/fpocket/issues/130
@@ -100,7 +96,7 @@ def pockets (
     auxiliar_structure_filepath = f'./{structure_file.filename}'
 
     # Run the mdpocket analysis to find new pockets
-    mdpocket_output = mdpocket_folder_name + '/mdpout'
+    mdpocket_output = output_directory_name + '/mdpout'
     # Set the filename of the fpocket output we are intereseted in
     grid_filename = mdpocket_output + '_freq.dx'
     # Skip this step if the output file already exists and is not empty
@@ -350,6 +346,9 @@ def pockets (
     # Set the dict where all output data will be stored
     output_analysis = []
 
+    # Set the output pocket structure files prefix
+    output_pocket_structure_prefix = f'{output_directory_name}/{OUTPUT_POCKET_STRUCTURES_PREFIX}_'
+
     # Next, we analyze each selected pocket independently. The steps for each pocket are:
     # 1 - Create a new grid file
     # 2 - Conver the grid to pdb
@@ -358,7 +357,7 @@ def pockets (
     for p, pock in enumerate(biggest_pockets, 1):
         # WARNING: This name must match the final name of the pocket file once loaded in the database
         pocket_name = 'pocket_' + str(p).zfill(2)
-        pocket_output = mdpocket_folder_name + '/' + pocket_name
+        pocket_output = output_directory_name + '/' + pocket_name
         # Check if current pocket files already exist and are complete. If so, skip this pocket
         # Output files:
         # - pX.dx: it is created and completed at the begining by this workflow
@@ -375,7 +374,7 @@ def pockets (
             # Create the new grid for this pocket, where all values from other pockets are set to 0
             pocket_value = pock[0]
             new_grid_values = [str(value).ljust(5,'0') if pockets[v] == pocket_value else '0.000' for v, value in enumerate(grid_values)]
-            new_grid_filename = mdpocket_folder_name + '/' + pocket_name + '.dx'
+            new_grid_filename = output_directory_name + '/' + pocket_name + '.dx'
             with open(new_grid_filename,'w') as file:
                 # Write the header lines
                 for line in header_lines:
@@ -404,9 +403,7 @@ def pockets (
             # Convert the grid coordinates to pdb
             new_pdb_lines = []
             lines_count = 0
-            # HARDCODE: Since we are cding to the current file we must remove the MD path from the prefix
-            fixed_pockets_prefix = pockets_prefix.split('/')[-1]
-            new_pdb_filename = fixed_pockets_prefix + '_' + str(p).zfill(2) + '.pdb'
+            new_pdb_filename = f'{output_pocket_structure_prefix}{str(p).zfill(2)}.pdb'
             for j, pocket in enumerate(pockets):
                 if pocket != pocket_value:
                     continue

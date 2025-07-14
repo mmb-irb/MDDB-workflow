@@ -18,11 +18,9 @@ def generate_lipid_references(structure: 'Structure',
         warn('There was a problem connecting to the SwissLipids database.')
         return None
 
-    if universe.atoms.charges is None:
+    if not universe.universe.atoms.charges.any(): # AGUS: he añadido .any() porque el error me lo indicaba, pero también me sugería .all() , no sé cuál encaja mejor
         print('Topology file does not have charges, cannot generate lipid references.')
         return save_json([], lipid_map_filepath)
-    
-    print('-> Getting lipid references')
 
     # Get InChI keys of non-proteic/non-nucleic residues
     inchi_keys = get_inchi_keys(universe, structure)

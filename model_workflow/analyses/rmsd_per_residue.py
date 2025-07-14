@@ -9,23 +9,26 @@ from distutils.version import StrictVersion
 
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.constants import OUTPUT_RMSD_PERRES_FILENAME
 from model_workflow.utils.type_hints import *
 
 # The pytraj trajectory may be reduced
 def rmsd_per_residue (
-    input_topology_filename : str,
-    input_trajectory_filename : str,
-    output_analysis_filename : str,
+    structure_file : str,
+    trajectory_file : 'File',
+    output_directory : str,
     structure : 'Structure',
     pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int):
 
-    print('-> Running RMSD per residue analysis')
+    # Set the main output filepath
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSD_PERRES_FILENAME}'
 
     # Parse the trajectory intro pytraj
     # Reduce it in case it exceeds the frames limit
-    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(input_topology_filename, input_trajectory_filename, snapshots, frames_limit)
+    pt_trajectory, frame_step, frames_count = get_reduced_pytraj_trajectory(
+        structure_file.path, trajectory_file.path, snapshots, frames_limit)
 
     # We must exclude here PBC residues from the analysis
     # PBC residues may jump through boundaries thus having non-sense high RMSD values
@@ -86,4 +89,4 @@ def rmsd_per_residue (
 
     # Export the analysis in json format
     output_analysis = { 'step': frame_step, 'rmsdpr': rmsd_per_residue }
-    save_json(output_analysis, output_analysis_filename)
+    save_json(output_analysis, output_analysis_filepath)

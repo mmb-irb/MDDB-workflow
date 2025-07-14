@@ -6,6 +6,8 @@ class Cache:
     def __init__ (self, cache_file : 'File'):
         # Save the previous cache file
         self.file = cache_file
+        # Set an auxiliar file which is used to not overwrite directly the previous cache
+        self._aux_file = cache_file.get_prefixed_file('.aux')
         # Set a dict to store the actual cached data
         self.data = {}
         # Load data from the cache file, if it already exists
@@ -27,6 +29,12 @@ class Cache:
         self.data[key] = value
         self.save()
 
+    # Delete a value in the cache
+    def delete (self, key : str):
+        if key not in self.data: return
+        del self.data[key]
+        self.save()
+
     # Reset the cache
     # This is called when some input files are modified
     def reset (self):
@@ -36,4 +44,7 @@ class Cache:
     # Save the cache to disk, as a json file
     def save (self):
         # Write entries to disk
-        save_json(self.data, self.file.path, indent = 4)
+        # Write to the auxiliar file, thus not overwritting the original cache yet
+        save_json(self.data, self._aux_file.path, indent = 4)
+        # If the new cache is successfully written then replace the old one
+        self._aux_file.rename_to(self.file)
