@@ -49,6 +49,19 @@ def clean_docstring(docstring):
     return s
 
 
+def get_github_link(func):
+    """Get GitHub link for a function."""
+    try:
+        # Get the source file path
+        source_file = inspect.getfile(func)
+        # Get the line number
+        lineno = inspect.getsourcelines(func)[1]
+        # Convert to relative path from repo root
+        rel_path = Path(source_file).relative_to(repo_root)
+        return f"https://github.com/mmb-irb/MDDB-workflow/blob/master/{rel_path}#L{lineno}"
+    except (OSError, ValueError):
+        return None
+
 def generate_task_docs():
     """Generate documentation for all tasks in requestables."""
     # Start building the RST content
@@ -68,9 +81,10 @@ def generate_task_docs():
         # Get the actual function if it's a Task object
         if isinstance(func, Task):
             func = func.func  
-        rst_content += f"* ``{task_name}``: "
-        docstring = clean_docstring(func.__doc__)
-        rst_content += f"{docstring}\n\n"
+        rst_content += f"* ``{task_name}``"
+        rst_content += f" `[source] <{get_github_link(func)}>`__"
+        rst_content += f": {clean_docstring(func.__doc__)}"        
+        rst_content += "\n\n"
     
     # Document MD-level tasks
     rst_content += "MD Tasks\n"
@@ -98,9 +112,10 @@ def generate_task_docs():
             func = md_requestables[task_name]
             if isinstance(func, Task):
                 func = func.func  
-            rst_content += f"* ``{task_name}``: "
-            docstring = clean_docstring(func.__doc__)
-            rst_content += f"{docstring}\n\n"
+            rst_content += f"* ``{task_name}``"
+            rst_content += f" `[source] <{get_github_link(func)}>`__"
+            rst_content += f": {clean_docstring(func.__doc__)}"
+            rst_content += "\n\n"
     
     # Then document analyses
     if md_analysis_tasks:
@@ -111,9 +126,10 @@ def generate_task_docs():
             func = md_requestables[task_name]
             if isinstance(func, Task):
                 func = func.func    
-            rst_content += f"* ``{task_name}``: "
-            docstring = clean_docstring(func.__doc__)
-            rst_content += f"{docstring}\n\n"
+            rst_content += f"* ``{task_name}``"
+            rst_content += f" `[source] <{get_github_link(func)}>`__"
+            rst_content += f": {clean_docstring(func.__doc__)}"
+            rst_content += "\n\n"
     
     # Document dependency flag groups
     rst_content += "Task Groups\n"

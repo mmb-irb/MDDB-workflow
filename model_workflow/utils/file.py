@@ -120,12 +120,12 @@ class File:
     def get_pytraj_parm_format (self) -> Optional[str]:
         return PYTRAJ_PARM_FORMAT.get(self.format, None)
 
-    # Remove the file
     def remove (self):
+        """Remove the file."""
         remove(self.path)
 
-    # Given a file who has non-standard extension of a supported format we set a symlink with the standard extension
     def get_standard_file (self) -> 'File':
+        """Given a file who has non-standard extension of a supported format we set a symlink with the standard extension."""
         # If current file already has the extension then there is nothing to return
         if self.extension == self.format:
             return self

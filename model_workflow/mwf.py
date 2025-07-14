@@ -1533,7 +1533,7 @@ class Project:
         return False
 
     def get_inputs_file (self) -> File:
-        """Set a function to load the inputs file"""
+        """Set a function to load the inputs file."""
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
