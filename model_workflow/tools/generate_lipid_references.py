@@ -7,7 +7,7 @@ from model_workflow.utils.warnings import warn
 
 def generate_lipid_references(structure: 'Structure',
                               universe: 'Universe',
-                              lipid_map_filepath: str
+                              output_filepath : str,
                               ) -> List[dict]:
     # Patch case where there no internet
     try:
@@ -20,7 +20,7 @@ def generate_lipid_references(structure: 'Structure',
 
     if not universe.universe.atoms.charges.any(): # AGUS: he añadido .any() porque el error me lo indicaba, pero también me sugería .all() , no sé cuál encaja mejor
         print('Topology file does not have charges, cannot generate lipid references.')
-        return save_json([], lipid_map_filepath)
+        return save_json([], output_filepath)
 
     # Get InChI keys of non-proteic/non-nucleic residues
     inchi_keys = get_inchi_keys(universe, structure)
@@ -56,5 +56,5 @@ def generate_lipid_references(structure: 'Structure',
                      f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}')
 
-    save_json(lipid_references, lipid_map_filepath)
+    save_json(lipid_references, output_filepath)
     return lipid_references

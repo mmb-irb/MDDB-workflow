@@ -12,6 +12,7 @@ def lipid_order (
     standard_topology_file : 'File',
     output_directory : str,
     membrane_map: dict,
+    lipid_map: dict,
     snapshots : int,
     frames_limit: int = 100):
     """
@@ -37,22 +38,21 @@ def lipid_order (
     u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
-    # DANI: Esto falla :)
-    for ref, ref_data in membrane_map['references'].items():
+    for ref in lipid_map:
         # Take the first residue of the reference
-        res = u.residues[ref_data["resindices"][0]]
-        if ref_data['lipidmaps']['name'] != 'Cholesterol':
+        res = u.residues[ref["resindices"][0]]
+        if ref['lipidmaps']['name'] != 'Cholesterol':
             carbon_groups = get_all_acyl_chains(res)
         else:
             carbon_groups = [res.atoms.select_atoms('element C and bonded element H').indices]
 
-        order_parameters_dict[ref] = {}
+        order_parameters_dict[ref["resname"]] = {}
         # For every 'tail'
         for chain_idx, group in enumerate(carbon_groups):
             atoms = res.universe.atoms[group]
             C_names = sorted([atom.name for atom in atoms],key=natural_sort_key)
             # Find all C-H bonds indices
-            ch_pairs = find_CH_bonds(u, ref_data["resindices"], C_names)
+            ch_pairs = find_CH_bonds(u, ref["resindices"], C_names)
             # Initialize the order parameters to sum over the trajectory
             order_parameters = []
             costheta_sums = {C_name: np.zeros(len(ch_pairs[C_name]['C'])) for C_name in C_names}
@@ -65,7 +65,7 @@ def lipid_order (
                 n += 1
             order_parameters = 1.5 * np.array([costheta_sums[C_name].mean() for C_name in C_names])/n - 0.5
             serrors = 1.5 * np.array([costheta_sums[C_name].std() for C_name in C_names])/n
-            order_parameters_dict[ref][str(chain_idx)] = {
+            order_parameters_dict[ref["resname"]][str(chain_idx)] = {
                 'atoms': C_names,
                 'avg': order_parameters.tolist(),
                 'std': serrors.tolist()}

@@ -82,7 +82,7 @@ def pockets (
     # To avoid the problem we must change the directory where we run pockets so all the paths are as short as possible
 
     # Save the MD path
-    md_path, mdpocket_folder_name = split(mdpocket_folder)
+    md_path, output_directory_name = split(output_directory)
     # Save the current working directory so we can recover it later
     recovery_path = getcwd()
 
