@@ -14,7 +14,8 @@ def area_per_lipid (
     trajectory_file : 'File',
     output_directory : str,
     membrane_map: dict):
-
+    """Area per lipid analysis."""
+    
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping area per lipid analysis')
         return

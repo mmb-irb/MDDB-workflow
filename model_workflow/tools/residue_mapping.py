@@ -1,14 +1,14 @@
 from model_workflow.utils.constants import NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from model_workflow.utils.type_hints import *
 
-# Build the residue map from both proteins and ligands maps
-# This is formatted as both the standard topology and metadata generators expect them
 def generate_residue_mapping(
     protein_map : List[dict],
     ligand_map : List[dict],
     structure : 'Structure',
 ) -> dict:
-
+    """Build the residue map from both proteins and ligands maps
+    This is formatted as both the standard topology and metadata generators expect them."""
+    
     # Reformat mapping data to the topology system
 
     # Add the reference type to each reference object

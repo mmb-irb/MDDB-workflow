@@ -5,7 +5,6 @@ from model_workflow.utils.auxiliar import InputError, save_json
 from model_workflow.utils.constants import MD_DIRECTORY
 from model_workflow.utils.type_hints import *
 
-# Prepare a JSON file with all project metadata
 def prepare_project_metadata (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -55,6 +54,7 @@ def prepare_project_metadata (
     input_cv19_abs : bool,
     input_cv19_nanobs : bool,
     ):
+    """Prepare a JSON file with all project metadata."""
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
@@ -234,7 +234,6 @@ metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', '
     'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
 ])
 
-# Generate a JSON file with MD metadata
 def generate_md_metadata (
     md_inputs : dict,
     structure : 'Structure',
@@ -243,6 +242,7 @@ def generate_md_metadata (
     warnings : dict,
     output_filepath : str
     ):
+    """Produce the MD metadata file to be uploaded to the database."""
 
     # Mine name and directory from MD inputs
     name = md_inputs.get('name', None)

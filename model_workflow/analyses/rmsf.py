@@ -10,9 +10,7 @@ from model_workflow.utils.type_hints import *
 from MDAnalysis import Universe
 from MDAnalysis.analysis import rms
 
-# Fluctuation
-# 
-# Perform the fluctuation analysis
+
 # LORE: Fluctuation analysis was done with Gromacs before
 # LORE: However Gromacs required masses and atom radii, which was a problem in coarse grain
 def rmsf (
@@ -20,7 +18,7 @@ def rmsf (
     trajectory_file : 'File',
     output_directory : str,
     pbc_selection : 'Selection'):
-
+    """Perform the fluctuation analysis."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSF_FILENAME}'
 

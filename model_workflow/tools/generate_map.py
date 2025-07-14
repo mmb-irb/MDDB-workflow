@@ -70,7 +70,7 @@ def generate_protein_mapping (
     input_protein_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
-
+    """Map the structure aminoacids sequences against the Uniprot reference sequences."""
     # Set the output file
     protein_references_file = File(output_filepath)
 

@@ -805,8 +805,8 @@ class MD:
     # And by "files" I mean structure, trajectory and topology
     process_input_files = Task('inpro', 'Process input files', process_input_files)
 
-    # Get the processed structure
     def get_structure_file (self) -> str:
+        """Get the processed structure."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -829,8 +829,8 @@ class MD:
         return self._structure_file
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
-    # Get the processed trajectory
     def get_trajectory_file (self) -> str:
+        """Get the processed trajectory."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -1092,7 +1092,6 @@ class MD:
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
     # Reference frame
-    # Frame to be used when representing the MD
     get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
@@ -1170,9 +1169,6 @@ class MD:
         distance_per_residue, { 'frames_limit': 200 })
 
     # Hydrogen bonds
-    # WARNING: the output file size depends on the number of hydrogen bonds
-    # WARNING: analyses must be no heavier than 16Mb in BSON format
-    # WARNING: In case of large surface interaction the output analysis may be larger than the limit
     run_hbonds_analysis = Task('hbonds', 'Hydrogen bonds analysis',
         hydrogen_bonds, { 'time_splits': 100 })
 
@@ -1969,8 +1965,8 @@ class Project:
         return self._topology_reader
     topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
 
-    # Dihedrals data
     def get_dihedrals (self) -> List[dict]:
+        """Get the topology dihedrals."""
         # If we already have a stored value then return it
         if self._dihedrals: return self._dihedrals
         # Calculate the dihedrals otherwise
@@ -2059,7 +2055,7 @@ class Project:
         get_mda_universe, use_cache = False)
     universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
 
-    # Lipid mapping
+    # Get the lipid references
     get_lipid_map = Task('lipmap', 'Lipid mapping',
         generate_lipid_references, output_filename = LIPID_REFERENCES_FILENAME)
     lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
@@ -2092,9 +2088,7 @@ class Project:
     get_standard_topology_file = prepare_standard_topology.get_output_file
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
-    # Prepare a screenshot of the system to be uploaded to the database
-    # Note that the get_screenshot function returns output but this output is not used here
-    # This outputs is used by other functions which use the get_screenshot function as well
+    # Get a screenshot of the system
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
         get_screenshot, output_filename = OUTPUT_SCREENSHOT_FILENAME)
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")

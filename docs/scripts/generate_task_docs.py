@@ -5,7 +5,7 @@ import sys
 import os
 import inspect
 from pathlib import Path
-from model_workflow.mwf import requestables, DEPENDENCY_FLAGS, Project, MD
+from model_workflow.mwf import project_requestables, md_requestables, DEPENDENCY_FLAGS, Task
 
 # Add the repository root to the Python path so we can import modules
 repo_root = Path('..').resolve()
@@ -13,7 +13,10 @@ sys.path.insert(0, str(repo_root))
 
 
 def clean_docstring(docstring):
-    """Clean up a docstring for documentation."""
+    """Clean up a docstring for documentation.
+
+    Removes any "Args:", "Returns:", "Raises:" or "Notes:" sections from the docstring.
+    """
     if not docstring:
         return ""
     
@@ -28,50 +31,31 @@ def clean_docstring(docstring):
             if lines[i]:
                 lines[i] = lines[i][leading_spaces:] if leading_spaces <= len(lines[i]) else lines[i]
     
-    return '\n'.join(lines)
+    # Remove Args, Returns, Raises sections
+    new_lines = []
+    skip_section = False
+    for line in lines:
+        if line.strip().startswith(('Args:', 'Returns:', 'Raises:', 'Notes:')):
+            skip_section = True
+            continue
+        if not line.strip() and skip_section:
+            skip_section = False
+            continue
+        if not skip_section:
+            new_lines.append(line)
 
-def get_task_docstring(task_name, func):
-    """Get a nice docstring for a task function."""
-    docstring = clean_docstring(inspect.getdoc(func))
-    return docstring
+    s = ' '.join(new_lines)
+    s = s[0].lower() + s[1:]
+    return s
+
 
 def generate_task_docs():
     """Generate documentation for all tasks in requestables."""
-    
-    # Separate project and MD tasks for better organization
-    global project_tasks, md_tasks
-    
-    # Use inspection to determine which class a function belongs to
-    project_tasks = []
-    md_tasks = []
-    
-    for task_name, func in requestables.items():
-        # Check if the function is a method
-        if inspect.ismethod(func):
-            if func.__self__ is Project:
-                project_tasks.append(task_name)
-            elif func.__self__ is MD:
-                md_tasks.append(task_name)
-        else:
-            # For functions, inspect the first parameter to determine where it belongs
-            try:
-                signature = inspect.signature(func)
-                params = list(signature.parameters.values())
-                if params and params[0].name == 'self':
-                    # Check the function's qualname to determine its class
-                    if 'Project' in func.__qualname__:
-                        project_tasks.append(task_name)
-                    elif 'MD' in func.__qualname__:
-                        md_tasks.append(task_name)
-            except (ValueError, TypeError):
-                # If we can't determine, put it in project tasks as a fallback
-                project_tasks.append(task_name)
-    
     # Start building the RST content
     rst_content = ".. _task_documentation: generated with generate_task_docs.py\n\n"
     rst_content += "Workflow Tasks\n"
     rst_content += "==================\n\n"
-    rst_content += "This page documents the available tasks in the Model Workflow system.\n"
+    rst_content += "This page documents the available tasks in the MDDB Workflow system.\n"
     rst_content += "These tasks can be specified with the ``-i`` (include) or ``-e`` (exclude) flags.\n\n"
     
 
@@ -79,13 +63,13 @@ def generate_task_docs():
     rst_content += "Project Tasks\n"
     rst_content += "---------------\n\n"
     rst_content += "These tasks are executed once per project:\n\n"
-    
-    for task_name in sorted(project_tasks):
-        func = requestables[task_name]
-        rst_content += f"``{task_name}``\n"
-        rst_content += "~" * (len(task_name) + 4) + "\n\n"
-        
-        docstring = get_task_docstring(task_name, func)
+    for task_name in sorted(project_requestables):
+        func = project_requestables[task_name]
+        # Get the actual function if it's a Task object
+        if isinstance(func, Task):
+            func = func.func  
+        rst_content += f"* ``{task_name}``: "
+        docstring = clean_docstring(func.__doc__)
         rst_content += f"{docstring}\n\n"
     
     # Document MD-level tasks
@@ -97,10 +81,10 @@ def generate_task_docs():
     md_file_tasks = []
     md_analysis_tasks = []
     
-    for task_name in md_tasks:
-        func = requestables[task_name]
+    for task_name in md_requestables:
+        func = md_requestables[task_name]
         # Heuristic: file tasks are usually in input_files or processed_files
-        if task_name.startswith('i') or task_name in ['structure', 'trajectory']:
+        if task_name in ['inpro', 'istructure', 'itrajectory', 'structure', 'trajectory']:
             md_file_tasks.append(task_name)
         else:
             md_analysis_tasks.append(task_name)
@@ -111,11 +95,11 @@ def generate_task_docs():
         rst_content += "~~~~~~~~\n\n"
         
         for task_name in sorted(md_file_tasks):
-            func = requestables[task_name]
-            rst_content += f"``{task_name}``\n"
-            rst_content += "^" * (len(task_name) + 4) + "\n\n"
-            
-            docstring = get_task_docstring(task_name, func)
+            func = md_requestables[task_name]
+            if isinstance(func, Task):
+                func = func.func  
+            rst_content += f"* ``{task_name}``: "
+            docstring = clean_docstring(func.__doc__)
             rst_content += f"{docstring}\n\n"
     
     # Then document analyses
@@ -124,11 +108,11 @@ def generate_task_docs():
         rst_content += "~~~~~~~~~~~~~~\n\n"
         
         for task_name in sorted(md_analysis_tasks):
-            func = requestables[task_name]
-            rst_content += f"``{task_name}``\n"
-            rst_content += "^" * (len(task_name) + 4) + "\n\n"
-            
-            docstring = get_task_docstring(task_name, func)
+            func = md_requestables[task_name]
+            if isinstance(func, Task):
+                func = func.func    
+            rst_content += f"* ``{task_name}``: "
+            docstring = clean_docstring(func.__doc__)
             rst_content += f"{docstring}\n\n"
     
     # Document dependency flag groups
@@ -137,9 +121,7 @@ def generate_task_docs():
     rst_content += "These are predefined groups of tasks that can be specified with a single flag.\n\n"
     
     for flag, tasks in DEPENDENCY_FLAGS.items():
-        rst_content += f"``{flag}``\n"
-        rst_content += "~" * (len(flag) + 4) + "\n\n"
-        rst_content += f"Includes the following tasks: {', '.join([f'``{t}``' for t in tasks])}\n\n"
+        rst_content += f"* ``{flag}``: {', '.join([f'``{t}``' for t in tasks])}.\n\n"
     
     return rst_content
 

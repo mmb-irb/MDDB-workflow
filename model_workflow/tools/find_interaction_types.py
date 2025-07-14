@@ -1,10 +1,10 @@
 from model_workflow.utils.auxiliar import warn, reprint
 from model_workflow.utils.type_hints import *
 
-# Given a list of interactions, find their types
 def find_interaction_types (
     input_interactions : Optional[list],
     structure : 'Structure',) -> dict:
+    """Given a list of interactions, find their types."""
     # If there are no interactions return an empty list
     # The interactions could be a null value
     if input_interactions is None: return {}

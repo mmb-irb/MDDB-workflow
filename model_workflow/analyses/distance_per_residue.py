@@ -18,9 +18,6 @@ from model_workflow.utils.type_hints import *
 # This is an aproximation below the limit which has been observed experimentally
 N_VALUES_LIMIT = 400000
 
-# Calculate the distance mean and standard deviation of each pair of residues*
-# * Where each residue is from a different agent
-# Note that the distances are calculated for all residues in the agent, not only the interface residues
 def distance_per_residue (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -30,7 +27,9 @@ def distance_per_residue (
     snapshots : int,
     frames_limit : int
 ):
-
+    """Calculate the distance mean and standard deviation of each pair of residues of different agents.
+    Note that the distances are calculated for all residues in the agent, not only the interface residues."""
+    
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')

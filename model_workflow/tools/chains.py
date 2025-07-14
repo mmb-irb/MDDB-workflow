@@ -130,15 +130,14 @@ def import_chains (chains_references_file : 'File') -> dict:
                 imported_chain[expected_field] = None
     return imported_chains
 
-# Define the main function that will be called from the main script
-# This function will get the parsed chains from the structure and request the InterProScan service
-# to obtain the data for each chain
 def prepare_chain_references (
     structure : 'Structure',
     output_filepath : 'File',
     database_url : str,
 ):
-    
+    """Define the main function that will be called from the main script.
+    This function will get the parsed chains from the structure and request the InterProScan service
+    to obtain the data for each chain."""
     # Set the chain references output file
     chains_references_file = File(output_filepath)
 

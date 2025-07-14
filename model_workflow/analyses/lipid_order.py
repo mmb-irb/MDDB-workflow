@@ -21,8 +21,7 @@ def lipid_order (
     S = 0.5*(3*<cos²θ> - 1)
     where θ is the angle between the C-H bond and the membrane normal (z-axis).
 
-    Notes
-    -----
+    Notes:
     - For non-cholesterol lipids, analyzes all acyl chains separately.
     - For cholesterol, uses carbon atoms bonded to hydrogen.
     - The order parameter is calculated for each carbon atom in the chain.

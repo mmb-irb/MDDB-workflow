@@ -1,8 +1,3 @@
-# Markov
-
-# Set the data needed to represent a Markov State Model grpah in the client
-# This is finding the most populated frames and calculating an RMSD matrix between these frames
-
 import mdtraj as mdt
 
 from model_workflow.tools.get_screenshot import get_screenshot
@@ -19,6 +14,8 @@ def markov (
     rmsd_selection : str,
     nodes_number : int = 20,
 ):
+    """Set the data needed to represent a Markov State Model graph in the client.
+    This is finding the most populated frames and calculating an RMSD matrix between these frames."""
 
     # If there is no populations then we stop here
     if not populations or len(populations) == 0:

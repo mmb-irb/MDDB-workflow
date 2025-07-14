@@ -9,6 +9,7 @@ def generate_lipid_references(structure: 'Structure',
                               universe: 'Universe',
                               output_filepath : str,
                               ) -> List[dict]:
+    """Generate the lipid references."""
     # Patch case where there no internet
     try:
         # This would return a ConnectionError

@@ -116,7 +116,7 @@ def get_most_stable_bonds (
 
     return most_stable_bonds
 
-# Return a canonical frame number where all bonds are exactly as they should
+
 def get_bonds_canonical_frame (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -127,7 +127,8 @@ def get_bonds_canonical_frame (
     patience : int = 100, # Limit of frames to check before we surrender
     verbose : bool = False,
 ) -> Optional[int]:
-    
+    """Return a canonical frame number where all bonds are exactly as they should.
+    This is the frame used when representing the MD."""
     # Set some atoms which are to be skipped from these test given their "fake" nature
     excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
 
@@ -264,6 +265,7 @@ def find_safe_bonds (
     # Optional file with bonds sorted according a new atom order
     resorted_bonds_file : Optional['File'] = None
 ) -> List[List[int]]:
+    """Find reference safe bonds in the system."""
     # If we have a resorted file then use it
     # Note that this is very excepcional
     if resorted_bonds_file != None and resorted_bonds_file.exists:

@@ -21,8 +21,8 @@ AUXILIAR_TGA_FILENAME = '.transition_screenshot.tga'
 # This is useful for debugging purposes only
 debug = False
 
-# Python function to obtain a screenshot from the pdb file using VMD a molecular modelling and visualization computer program
-# Return the rotation values used to take the photo so they can be saved and reused
+
+# 
 def get_screenshot (
     structure : 'Structure',
     output_filepath : str,
@@ -32,7 +32,12 @@ def get_screenshot (
     # Thus the image could be radically different and misleading, since the change could be minimal
     parameters : Optional[dict] = None,
 ) -> dict:
-
+    """ Obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database.
+    Returns the rotation values used to take the photo so they can be saved and reused.
+    
+    Notes: 
+        - get_screenshot function returns output but this output is not used here
+        - This outputs is used by other functions which use the get_screenshot function as well"""
     # Check the output screenshot file extension is JPG
     if output_filepath.split('.')[-1] != 'jpg':
         raise SystemExit('You must provide a .jpg file name!')

@@ -12,10 +12,7 @@ from model_workflow.utils.type_hints import *
 # Set an auxiliar data filename
 rgyr_data_filename = '.rgyr_data.xvg'
 
-# Radius of gyration (Rgyr)
-# 
-# Perform the RMSd analysis 
-# Use the first trajectory frame in .pdb format as a reference
+
 def rgyr (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -24,6 +21,7 @@ def rgyr (
     frames_limit : int,
     structure : 'Structure',
     pbc_selection : 'Selection'):
+    """Perform the RMSd analysis. Use the first trajectory frame in .pdb format as a reference."""
 
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RGYR_FILENAME}'

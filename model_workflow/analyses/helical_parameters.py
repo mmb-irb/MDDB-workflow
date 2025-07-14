@@ -121,6 +121,7 @@ def helical_parameters (
     frames_limit : Optional[int] = None,
     dna_selection : Optional[str] = None
 ):
+    """Helical parameters analysis."""
     # Set the main output filepath
 
     output_analysis_filepath = f'{output_directory}/{OUTPUT_HELICAL_PARAMETERS_FILENAME}'
