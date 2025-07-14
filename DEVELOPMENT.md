@@ -110,4 +110,14 @@ Open `docs/_build/html/index.html` to see the results.
 
 ## Build conda
 
-Test the build with [bioconda-utils](https://bioconda.github.io/contributor/building-locally.html).
+Test the build with [bioconda-utils](https://bioconda.github.io/contributor/building-locally.html):
+
+```shell
+conda mambabuild /home/rchaves/repo/biobb/bioconda-recipes/recipes/mddb_workflow -c bioconda
+```
+
+Linting:
+```shell
+cd ~/repo/biobb/bioconda-recipes
+bioconda-utils lint  --packages mddb_workflow
+```
