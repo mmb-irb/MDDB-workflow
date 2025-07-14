@@ -3,7 +3,7 @@
 Workflow Tasks
 ==================
 
-This page documents the available tasks in the Model Workflow system.
+This page documents the available tasks in the MDDB Workflow system.
 These tasks can be specified with the ``-i`` (include) or ``-e`` (exclude) flags.
 
 Project Tasks
@@ -11,76 +11,43 @@ Project Tasks
 
 These tasks are executed once per project:
 
-``chains``
-~~~~~~~~~~
+* ``chains``: define the main function that will be called from the main script. This function will get the parsed chains from the structure and request the InterProScan service to obtain the data for each chain.
 
-Get chain references.
+* ``charges``: extract charges from a source file. 
 
-``inputs``
-~~~~~~~~~~
+* ``inputs``: set a function to load the inputs file
 
-Set a function to load the inputs file
+* ``intertypes``: given a list of interactions, find their types.
 
-``itopology``
-~~~~~~~~~~~~~
+* ``itopology``: get the input topology file. If the file is not found try to download it.
 
-Get the input topology file.
-If the file is not found try to download it.
+* ``ligmap``: generate a map of residues associated to ligands.
 
-``ligands``
-~~~~~~~~~~~
+* ``lipmap``: generate the lipid references.
 
-Get the ligand residues mapping.
+* ``mda_univ``: create a MDAnalysis universe using data in the workflow.
 
-``lipids``
-~~~~~~~~~~
+* ``membranes``: generates a list of residue numbers of membrane components from a given structure and topology file.
 
+* ``pdbs``: prepare the PDB references json file to be uploaded to the database.
 
+* ``pmeta``: prepare a JSON file with all project metadata.
 
-``mapping``
-~~~~~~~~~~~
+* ``populations``: get the MSM equilibrium populations filename.
 
-Map the structure aminoacids sequences against the Uniprot reference sequences.
+* ``protmap``: map the structure aminoacids sequences against the Uniprot reference sequences.
 
-``membranes``
-~~~~~~~~~~~~~
+* ``refbonds``: find reference safe bonds in the system.
 
-Get mapping of residues in the membrane.
+* ``resmap``: build the residue map from both proteins and ligands maps This is formatted as both the standard topology and metadata generators expect them.
 
-``pdbs``
-~~~~~~~~
+* ``screenshot``: obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database. Returns the rotation values used to take the photo so they can be saved and reused. 
 
-Get PDB references.
+* ``stopology``: prepare the standard topology file to be uploaded to the database.
 
-``pmeta``
-~~~~~~~~~
+* ``topology``: get the processed topology file.
 
-Generate the project metadata file to be upload to the database.
-
-``populations``
-~~~~~~~~~~~~~~~
-
-Get the MSM equilibrium populations filename.
-
-``screenshot``
-~~~~~~~~~~~~~~
-
-Generate a screenshot of the system.
-
-``stopology``
-~~~~~~~~~~~~~
-
-Generate the standardized topology file.
-
-``topology``
-~~~~~~~~~~~~
-
-Get the processed topology file.
-
-``transitions``
-~~~~~~~~~~~~~~~
-
-Get the MSM transition probabilities filename.
+* ``transitions``: get the MSM transition probabilities filename.
 
 MD Tasks
 -----------
@@ -90,174 +57,89 @@ These tasks are executed for each MD in the project:
 Files
 ~~~~~~~~
 
-``interactions``
-^^^^^^^^^^^^^^^^
+* ``inpro``: process input files to generate the processed files. This process corrects and standarizes the topology, the trajectory and the structure.
 
-The processed interactions.
-This is a bit exceptional since it is a value to be used and an analysis file to be generated.
+* ``istructure``: get the input pdb filename from the inputs. If the file is not found try to download it.
 
-``istructure``
-^^^^^^^^^^^^^^
+* ``itrajectory``: get the input trajectory filename(s) from the inputs. If file(s) are not found try to download it.
 
-Get the input pdb filename from the inputs.
-If the file is not found try to download it.
+* ``structure``: get the processed structure.
 
-``itrajectory``
-^^^^^^^^^^^^^^^
-
-Get the input trajectory filename(s) from the inputs.
-If file(s) are not found try to download it.
-
-``structure``
-^^^^^^^^^^^^^
-
-
-
-``trajectory``
-^^^^^^^^^^^^^^
-
-
+* ``trajectory``: get the processed trajectory.
 
 Analyses
 ~~~~~~~~~~~~~~
 
-``apl``
-^^^^^^^
+* ``apl``: area per lipid analysis.
 
-Area per lipid analysis.
+* ``average``: get an average structure from a trajectory.
 
-``clusters``
-^^^^^^^^^^^^
+* ``clusters``: run the cluster analysis.
 
-Run the cluster analysis.
+* ``density``: membrane density analysis.
 
-``density``
-^^^^^^^^^^^
+* ``dihedrals``: calculate torsions and then dihedral energies for every dihedral along the trajectory.
 
-Membrane density analysis.
+* ``dist``: calculate the distance mean and standard deviation of each pair of residues of different agents. Note that the distances are calculated for all residues in the agent, not only the interface residues.
 
-``dihedrals``
-^^^^^^^^^^^^^
+* ``energies``: perform the electrostatic and vdw energies analysis for each pair of interaction agents.
 
-Calculate torsions and then dihedral energies for every dihedral along the trajectory.
+* ``firstframe``: get the trajectory first frame in PDB format using Gromacs.
 
-``dist``
-^^^^^^^^
+* ``frames``: get the trajectory frames count.
 
-Calculate the distance mean and standard deviation of each pair of residues*.
+* ``hbonds``: perform an hydrogen bonds analysis for each interaction interface. The 'interactions' input may be an empty list (i.e. there are no interactions). In case there are no interactions the analysis stops. Note that this analysis find hydrogen bonds in a subset of frames along the trajectory. Storing the results for the whole trajectory is not possible due to storage limits.
 
-``energies``
-^^^^^^^^^^^^
+* ``helical``: helical parameters analysis.
 
-Perform the electrostatic and vdw energies analysis for each pair of interaction agents.
+* ``inter``: find the residues of each interacting agent. It can automatically detect interactions based on chain names or ligand information, or use a predefined list of interactions.
 
-``hbonds``
-^^^^^^^^^^
+* ``linter``: lipid-protein interactions analysis.
 
-Perform an hydrogen bonds analysis for each interaction interface.
+* ``lorder``: calculate lipid order parameters for membranes. This function computes the order parameter (S) for lipid acyl chains, defined as: S = 0.5*(3*<cos²θ> - 1) where θ is the angle between the C-H bond and the membrane normal (z-axis). 
 
-``helical``
-^^^^^^^^^^^
+* ``markov``: set the data needed to represent a Markov State Model graph in the client. This is finding the most populated frames and calculating an RMSD matrix between these frames.
 
+* ``mdmeta``: produce the MD metadata file to be uploaded to the database.
 
+* ``pairwise``: perform an analysis for the overall structure and then one more analysis for each interaction.
 
-``linter``
-^^^^^^^^^^
+* ``pca``: perform a PCA analysis on the trajectory.
 
-Lipid-protein interactions analysis.
+* ``perres``: perform the RMSD analysis for each residue.
 
-``lorder``
-^^^^^^^^^^
+* ``pockets``: perform the pockets analysis.
 
-Calculate lipid order parameters for membranes.
+* ``reframe``: return a canonical frame number where all bonds are exactly as they should. This is the frame used when representing the MD.
 
-``markov``
-^^^^^^^^^^
+* ``rgyr``: perform the RMSd analysis. Use the first trajectory frame in .pdb format as a reference.
 
+* ``rmsds``: run multiple RMSD analyses. One with each reference (first frame, average structure)  and each selection (default: protein, nucleic).
 
+* ``rmsf``: perform the fluctuation analysis.
 
-``mdmeta``
-^^^^^^^^^^
+* ``sas``: perform the Solvent Accessible Surface Analysis.
 
-Generate the MD metadata file.
+* ``thickness``: membrane thickness analysis.
 
-``pairwise``
-^^^^^^^^^^^^
-
-Perform an analysis for the overall structure and then one more analysis for each interaction.
-
-``pca``
-^^^^^^^
-
-PCA, principal component analysis.
-
-``perres``
-^^^^^^^^^^
-
-RMSD per residue analysis.
-
-``pockets``
-^^^^^^^^^^^
-
-Perform the pockets analysis.
-
-``rgyr``
-^^^^^^^^
-
-Radius of gyration analysis.
-
-``rmsds``
-^^^^^^^^^
-
-RMSDs analysis.
-
-``rmsf``
-^^^^^^^^
-
-RMSF, atom fluctuation analysis.
-
-``sas``
-^^^^^^^
-
-Perform the Solvent Accessible Surface Analysis (SASA).
-
-``thickness``
-^^^^^^^^^^^^^
-
-Membrane thickness analysis.
-
-``tmscore``
-^^^^^^^^^^^
-
-TM scores analysis.
+* ``tmscore``: perform the tm score using the tmscoring package.
 
 Task Groups
 -------------
 
 These are predefined groups of tasks that can be specified with a single flag.
 
-``download``
-~~~~~~~~~~~~
+* ``download``: ``itopology``, ``inputs``, ``populations``, ``transitions``, ``istructure``, ``itrajectory``.
 
-Includes the following tasks: ``itopology``, ``inputs``, ``populations``, ``transitions``, ``istructure``, ``itrajectory``
+* ``setup``: ``topology``, ``structure``, ``trajectory``.
 
-``setup``
-~~~~~~~~~
+* ``meta``: ``pmeta``, ``mdmeta``.
 
-Includes the following tasks: ``topology``, ``structure``, ``trajectory``
+* ``network``: ``mapping``, ``ligands``, ``chains``, ``pdbs``, ``membrane``.
 
-``network``
-~~~~~~~~~~~
+* ``minimal``: ``pmeta``, ``mdmeta``, ``stopology``.
 
-Includes the following tasks: ``mapping``, ``ligands``, ``chains``, ``pdbs``, ``membranes``
+* ``interdeps``: ``interactions``, ``pairwise``, ``hbonds``, ``energies``, ``perres``, ``clusters``, ``dist``.
 
-``minimal``
-~~~~~~~~~~~
-
-Includes the following tasks: ``pmeta``, ``mdmeta``, ``stopology``
-
-``interdeps``
-~~~~~~~~~~~~~
-
-Includes the following tasks: ``interactions``, ``pairwise``, ``hbonds``, ``energies``, ``perres``, ``clusters``, ``dist``
+* ``membs``: ``membranes``, ``density``, ``thickness``, ``apl``, ``lorder``, ``linter``.
 
