@@ -1876,7 +1876,7 @@ class Project:
         if self._topology_filepath:
             return self._topology_filepath
         # Otherwise we must find it
-        self._topology_filepath = self.inherit_topology_filename()
+        self._topology_filepath = self.pathify(self.inherit_topology_filename())
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
