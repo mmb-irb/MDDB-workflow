@@ -33,11 +33,7 @@ def get_screenshot (
     parameters : Optional[dict] = None,
 ) -> dict:
     """ Obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database.
-    Returns the rotation values used to take the photo so they can be saved and reused.
-    
-    Notes: 
-        - get_screenshot function returns output but this output is not used here
-        - This outputs is used by other functions which use the get_screenshot function as well"""
+    Returns the rotation values used to take the photo so they can be saved and reused."""
     # Check the output screenshot file extension is JPG
     if output_filepath.split('.')[-1] != 'jpg':
         raise SystemExit('You must provide a .jpg file name!')
