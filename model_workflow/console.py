@@ -410,11 +410,11 @@ run_parser_workflow_group = run_parser.add_argument_group('WORKFLOW CONTROL OPTI
 run_parser_workflow_group.add_argument(
     "-img", "--image",
     action='store_true',
-    help="Set if the trajectory is to be imaged")
+    help="Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.")
 run_parser_workflow_group.add_argument(
     "-fit", "--fit",
     action='store_true',
-    help="Set if the trajectory is to be fitted (both rotation and translation)")
+    help="Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.")
 run_parser_workflow_group.add_argument(
     "-trans", "--translation",
     nargs='*',
@@ -435,7 +435,8 @@ run_parser_workflow_group.add_argument(
     nargs='?',
     default=None,
     const=10,
-    help="If passed, download just a few frames (10 by default) from the trajectory instead of it all")
+    metavar='N_FRAMES',
+    help="If passed, download the first 10 (by default) frames from the trajectory. You can specify a different number by providing an integer value.")
 run_parser_workflow_group.add_argument(
     "-rcut", "--rmsd_cutoff",
     type=float,
@@ -473,7 +474,7 @@ run_parser_selection_group.add_argument(
     "-pbc", "--pbc_selection",
     default=None,
     help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory. "
-        "e.g. remaining solvent and counter ion molecules, membrane lipids, etc."))
+        "e.g. remaining solvent, ions, membrane lipids, etc."))
 run_parser_selection_group.add_argument(
     "-cg", "--cg_selection",
     default=None,
