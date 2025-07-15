@@ -52,7 +52,7 @@ def process_input_files (
     output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
     output_trajectory_file = File(output_trajectory_filepath)
     output_topology_filepath = topology_filepath
-    output_topology_file = File(self.pathify(output_topology_filepath)) if output_topology_filepath else MISSING_TOPOLOGY
+    output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
 
     # --- FIRST CHECK -----------------------------------------------------------------------
 
