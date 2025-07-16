@@ -10,10 +10,12 @@ from model_workflow.utils.auxiliar import InputError
 
 LOCAL_PATH = '.'
 
-# A file handler
-# Absolute paths are used in runtime
-# Relative paths are used to store paths
+
 class File:
+    """File handler class.
+    Absolute paths are used in runtime.
+    Relative paths are used to store paths.
+    """
     def __init__ (self, relative_or_basolute_path : Optional[str]):
         # Declare all attributes as none by default
         self.absolute_path = self.relative_path = self.path = None
@@ -76,14 +78,14 @@ class File:
             return self.path == other.path # Paths are already normalized
         return False
 
-    # Check if file exists
     def check_existence (self) -> bool:
+        """Check if file exists."""
         return exists(self.path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
 
-    # Get file format based on the extension
-    # If the extension is not recognized then raise an error
     def get_format (self) -> Optional[str]:
+        """Get file format based on the extension.
+        If the extension is not recognized then raise an error."""
         if not self.extension:
             return None
         extension_format = EXTENSION_FORMATS.get(self.extension, None)
@@ -92,20 +94,20 @@ class File:
         return extension_format
     format = property(get_format, None, None, "File standard format (read only)")
 
-    # Get the file last modification time
     def get_mtime (self) -> str:
+        """Get the file last modification time."""
         raw_mtime = getmtime(self.path)
         return strftime(DATE_STYLE, gmtime(raw_mtime))
     mtime = property(get_mtime, None, None, "File last modification date (read only)")
 
-    # Get the file size in bytes
     def get_size (self) -> str:
+        """Get the file size in bytes."""
         return getsize(self.path)
     size = property(get_size, None, None, "File size in bytes (read only)")
 
-    # Get a cksum code used to compare identical file content
     # DANI: This is provisional and it is not yet based in a cksum neither the file content
     def get_cksum (self) -> str:
+        """Get a cksum code used to compare identical file content."""
         # If we already have an internal value then use it
         if self._cksum != None: return self._cksum
         # Calculate it otherwise
@@ -137,23 +139,23 @@ class File:
             symlink(self.relative_path, standard_file.path)
         return standard_file
 
-    # Get a prefixed file using this file name as the name base
     def get_prefixed_file (self, prefix : str) -> 'File':
+        """Get a prefixed file using this file name as the name base."""
         return File(f'{self.basepath}/{prefix}{self.filename}')
     
-    # Get a file in the same path but whith a different name
     def get_neighbour_file (self, filename : str) -> 'File':
+        """Get a file in the same path but with a different name."""
         return File(f'{self.basepath}/{filename}')
 
-    # Get the symlink target of this file
     def get_symlink (self) -> Optional['File']:
+        """Get the symlink target of this file."""
         target_filepath = readlink(self.path)
         if not target_filepath:
             return None
         return File(self.basepath + '/' + target_filepath)
 
-    # Set this file a symlink to another file
     def set_symlink_to (self, other_file : 'File'):
+        """Set this file a symlink to another file."""
         # Check if symlinks are allowed
         no_symlinks = GLOBALS['no_symlinks']
         # If symlinks are now allowed then copy the file instead
@@ -168,14 +170,14 @@ class File:
         # Set the symlink
         symlink(relative_path, self.path)
 
-    # Check if a file is already a symlink
     def is_symlink (self) -> bool:
+        """Check if a file is already a symlink."""
         return islink(self.path)
 
-    # Copy a file to another
     def copy_to (self, other_file : 'File'):
+        """Copy a file to another."""
         copyfile(self.path, other_file.path)
 
-    # Rename a file to another
     def rename_to (self, other_file : 'File'):
+        """Rename a file to another."""
         rename(self.path, other_file.path)

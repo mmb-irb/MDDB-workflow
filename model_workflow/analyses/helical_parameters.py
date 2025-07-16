@@ -123,7 +123,6 @@ def helical_parameters (
 ):
     """Helical parameters analysis."""
     # Set the main output filepath
-
     output_analysis_filepath = f'{output_directory}/{OUTPUT_HELICAL_PARAMETERS_FILENAME}'
 
     # Save the original path
@@ -360,9 +359,14 @@ def hydrogen_bonds(
     # Remove the original dat file
     #os.remove(output_dat_file)
 
-
-# Function to execute Curves+ and Canals software to generate the output needed
-def terminal_execution(trajectory_input, topology_input, strand_indexes, sequence, output_directory):
+def terminal_execution(
+        trajectory_filepath: 'str', 
+        topology_filepath: 'str', 
+        strand_indexes: 'list', 
+        sequence: 'str', 
+        output_directory: 'str'):
+    """Function to execute Curves+ and Canals software to generate the output needed."""
+    
     # Purge residual files from previous runs
     possible_residual_filenames = glob.glob(output_directory+'/*.cda') \
         + glob.glob(output_directory+'/*.lis') \
@@ -374,8 +378,8 @@ def terminal_execution(trajectory_input, topology_input, strand_indexes, sequenc
     instructions = [
         "Cur+ <<!",
         " &inp",
-        f"file={trajectory_input}",
-        f"ftop={topology_input}",
+        f"file={trajectory_filepath}",
+        f"ftop={topology_filepath}",
         f"lis={output_directory}/test",
         f"lib={standard_prefix}",
         " &end",
@@ -433,13 +437,12 @@ def terminal_execution(trajectory_input, topology_input, strand_indexes, sequenc
     if not os.path.exists('canal_output_phaseC.ser'):
         raise SystemExit('Something went wrong with Canals software')
 
-
-def send_files(sequence, frames_limit, output_directory):
+def send_files(sequence: str, frames_limit: int, output_directory: str):
     files_averages = []
     files_backbones = []
     files_allbackbones = []
+
     # Iterate over all files in the directory
-    # os.chdir(output_directory)
     for file in os.listdir():
         if not file.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
             continue
@@ -586,6 +589,7 @@ def transform(data, unit_name='hexamer'):
         elif hasattr(value, "tolist"):
             results["stiffness"][key] = value.tolist()
     return results
+
 def get_stiffness_seq(
         sequence,
         series_dict):
@@ -622,6 +626,7 @@ def get_stiffness_seq(
         orient="index").reset_index()
     results["stiffness"].columns = columns
     return results
+
 def get_subunit_stiffness(
         cols_dict,
         coordinates,
