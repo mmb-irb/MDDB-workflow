@@ -10,8 +10,54 @@ on:
       - '.github/workflows/release.yml'
 
 jobs:
-  # Name of the Job
-  install_and_test:
+  install_mac:
+    strategy:
+      matrix:
+        os: [macos-latest]
+        python-version: ["3.9"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - run: echo "Repository -> ${{ github.repository }}"
+      - run: echo "Branch -> ${{ github.ref }}"
+      - run: echo "Trigger event -> ${{ github.event_name }}"
+      - run: echo "Runner OS -> ${{ runner.os }}"
+
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+
+      - name: Setup-micromamba
+        uses: mamba-org/setup-micromamba@v2.0.4
+        with:
+          generate-run-shell: true
+          micromamba-version: '2.0.2-2'
+          post-cleanup: 'all'
+          init-shell: bash
+          environment-file: envs/environment.yml
+          create-args: >-
+            python=${{ matrix.python-version }}
+            pytest
+            pytest-cov
+            pip
+          cache-environment: true
+          cache-downloads: true
+
+      - name: List installed package versions
+        shell: bash -l {0}
+        run: micromamba list
+      
+      - name: Install model_workflow
+        shell: bash -l {0}
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run release tests
+        shell: bash -l {0}
+        run: pytest -m CI
+
+  install_and_coverage:
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -63,13 +109,13 @@ jobs:
         shell: bash -l {0}
         run: pytest -m release --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow
 
-      # - name: Generate Coverage badge
-      #   shell: bash -l {0}
-      #   run: |
-      #       coverage xml -o coverage/coverage.xml
-      #       genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
+      - name: Generate Coverage badge
+        shell: bash -l {0}
+        run: |
+            coverage xml -o coverage/coverage.xml
+            genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
 
-      # - name: Publish coverage report to GitHub Pages
-      #   uses: JamesIves/github-pages-deploy-action@v4
-      #   with:
-      #     folder: ./coverage
+      - name: Publish coverage report to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: ./coverage
