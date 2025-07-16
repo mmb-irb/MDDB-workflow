@@ -11,7 +11,7 @@ from model_workflow.mwf import project_requestables, md_requestables, workflow
 from model_workflow.console import run_parser
 
 @pytest.mark.release
-@pytest.mark.parametrize("test_accession", ["A01IP" ], scope="class")
+@pytest.mark.parametrize("test_accession", ["A0001", "A01IP" ], scope="class")
 class TestMWFRun:
     """Test full workflow for different accessions"""
     
@@ -63,7 +63,8 @@ class TestMWFRun:
     def test_md_task(self, project: 'Project', md_task: str, capsys):
         """Test that each analysis runs without errors"""
         if md_task == 'dihedrals' or \
-            (md_task == 'pockets' and project.accession == 'A01IP'):
+            (md_task == 'pockets' and project.accession == 'A01IP') or \
+            (md_task == 'dist' and project.accession == 'A01IP'):
             pytest.skip(f"Skipping analysis '{md_task}' for now.")
             
         md: MD = project.mds[0]

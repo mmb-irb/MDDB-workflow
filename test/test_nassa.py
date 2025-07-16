@@ -4,7 +4,7 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.type_hints import *
 
 
-@pytest.mark.nassa
+@pytest.mark.release
 class TestNassa:
     @pytest.fixture(scope="class")
     def test_accession(self):
