@@ -19,7 +19,7 @@ All you need to start processing your files is a topology file (prmtop, tpr, psf
     ├── raw_topology.prmtop
     ├── raw_trajectory_01.nc
     ├── raw_trajectory_02_part01.nc
-    ├── raw_trajectory_02_part02.nc
+    └── raw_trajectory_02_part02.nc
 
 Note that here we have 2 independent replicas sharing common topology. The second replica is actually splitted in 2 consecutive parts but this is not a problem.
 
