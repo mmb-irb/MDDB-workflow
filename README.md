@@ -5,7 +5,7 @@
 </div>
 
 [![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)](https://mddb-workflow.readthedocs.io/en/latest/)
-[![Coverage)](https://raw.githubusercontent.com/mmb-irb/MDDB-workflow/refs/heads/test/docs/source/_static/coveragebadge.svg)](https://mddb-workflow.readthedocs.io/en/latest/_static/htmlcov/index.html)
+[![Coverage)](https://raw.githubusercontent.com/mmb-irb/MDDB-workflow/refs/heads/gh-pages/coverage/coveragebadge.svg)](https://mddb-workflow.readthedocs.io/en/latest/_static/htmlcov/index.html)
 
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.

@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   install_mac:
+    # Skip until there is vmd for macOS
     if: false
     strategy:
       matrix:
@@ -111,7 +112,7 @@ jobs:
 
       - name: Run release tests
         shell: bash -l {0}
-        run: pytest -m CI --cov-report xml:./reports/coverage/coverage.xml --cov-report html:./reports/coverage/ --cov=model_workflow
+        run: pytest -m release --cov-report xml:./reports/coverage/coverage.xml --cov-report html:./reports/coverage/ --cov=model_workflow
           
       - name: Generate Coverage badge
         shell: bash -l {0}
