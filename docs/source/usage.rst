@@ -102,8 +102,7 @@ In order to generate this file, a template to build the file explaining every fi
 
    mwf inputs
 
-Fill every field and then run the whole notebook to generate the inputs file.
-Now we are ready to run the analyses by just running the following command:
+Fill every field and then run the whole workflow to run all the analyses by just using the following command:
 
 .. code-block:: bash
 
