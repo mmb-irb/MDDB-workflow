@@ -11,11 +11,13 @@ requires-python = ">=3.9.0"
 dev = [
     "pytest",
     "pytest-cov",
+    "genbadge[all]",
 ]
 docs = [
     "sphinx",
     "sphinx_rtd_theme",
     "myst-parser",
+    "nbsphinx",
 ]
 
 [project.scripts]
@@ -33,6 +35,8 @@ include-package-data = true
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+testpaths = ["test"]
+addopts = "-rsx -v --durations=0"
 
 [tool.conda-deny]
 safe-licenses = [
@@ -43,8 +47,19 @@ safe-licenses = [
     "PSF-2.0",
     "BSD-3-Clause",
     "BSD-2-Clause",
+    "BSL-1.0",
+    "OFL-1.1", # Open Font License
     "ISC",
-    "LGPL-2.1-or-later",
+    #"GPL-1.0-or-later",
+    #"GPL-2.0-only",
+    #"GPL-2.0-or-later",
+    "LGPL-2.0-or-later",
     "LGPL-2.1-only",
-    "Zlib",
+    "LGPL-2.1-or-later",
+    #"GPL-3.0-only",
+    #"GPL-3.0-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "Python-2.0",
+    "Zlib"
 ]

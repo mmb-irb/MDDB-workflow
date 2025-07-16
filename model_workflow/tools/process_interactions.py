@@ -1,6 +1,3 @@
-# Processing the interactions means finding the residues of each interacting agent
-# In addition, interface residues are listed appart
-
 import itertools
 from os.path import exists
 
@@ -34,6 +31,7 @@ FAILED_INTERACTION_FLAG = 'failed'
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
+# Interface residues are listed apart
 # The heavy results of interactions are stored in a json file which is uploaded to the database independently
 # This file is also used as a backup here, since calculating interactions is a heavy calculation
 # In addition, this file may be used to force interactions with custom interface residues manually
@@ -53,7 +51,9 @@ def process_interactions (
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,
     ) -> list:
-
+    """Find the residues of each interacting agent.
+    It can automatically detect interactions based on chain names or ligand information, or use a predefined list of interactions.
+    """
     # Set the output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_INTERACTIONS_FILENAME}'
 

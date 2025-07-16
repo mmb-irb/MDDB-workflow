@@ -10,7 +10,6 @@ from model_workflow.utils.auxiliar import warn, save_json
 from model_workflow.utils.constants import OUTPUT_PCA_FILENAME, OUTPUT_PCA_PROJECTION_PREFIX
 from model_workflow.utils.type_hints import *
 
-# Perform the PCA analysis
 def pca (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -23,7 +22,7 @@ def pca (
     pbc_selection : 'Selection',
     projection_frames : int = 20
 ) -> dict:
-
+    """Perform a PCA analysis on the trajectory."""
     # Set output filepaths
     output_analysis_filepath = f'{output_directory}/{OUTPUT_PCA_FILENAME}'
     output_trajectory_projections_prefix = f'{output_directory}/{OUTPUT_PCA_PROJECTION_PREFIX}'

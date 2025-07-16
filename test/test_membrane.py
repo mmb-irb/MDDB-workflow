@@ -15,9 +15,9 @@ class TestDensityAnalysis:
         return "A01JP.1"
     
     @pytest.fixture(scope="class")
-    def output_file(self, test_data_dir):
+    def output_file(self, test_proj_dir):
         """Create an output file path for the density analysis results"""
-        return os.path.join(test_data_dir, "density_output.json")
+        return os.path.join(test_proj_dir, "density_output.json")
     
     def test_density_analysis(self, project : 'Project'):
         """Test that density analysis runs and produces expected output"""

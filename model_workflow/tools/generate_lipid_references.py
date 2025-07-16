@@ -1,5 +1,4 @@
-from model_workflow.utils.constants import LIPID_REFERENCES_FILENAME
-from model_workflow.utils.auxiliar import load_json, save_json
+from model_workflow.utils.auxiliar import save_json
 
 from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
 from model_workflow.utils.type_hints import *
@@ -8,7 +7,9 @@ from model_workflow.utils.warnings import warn
 
 def generate_lipid_references(structure: 'Structure',
                               universe: 'Universe',
+                              output_filepath : str,
                               ) -> List[dict]:
+    """Generate the lipid references."""
     # Patch case where there no internet
     try:
         # This would return a ConnectionError
@@ -20,7 +21,7 @@ def generate_lipid_references(structure: 'Structure',
 
     if not universe.universe.atoms.charges.any(): # AGUS: he añadido .any() porque el error me lo indicaba, pero también me sugería .all() , no sé cuál encaja mejor
         print('Topology file does not have charges, cannot generate lipid references.')
-        return save_json([], LIPID_REFERENCES_FILENAME)
+        return save_json([], output_filepath)
 
     # Get InChI keys of non-proteic/non-nucleic residues
     inchi_keys = get_inchi_keys(universe, structure)
@@ -56,5 +57,5 @@ def generate_lipid_references(structure: 'Structure',
                      f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(res_data["resindices"])}')
 
-    save_json(lipid_references, LIPID_REFERENCES_FILENAME)
+    save_json(lipid_references, output_filepath)
     return lipid_references

@@ -12,7 +12,6 @@ from subprocess import run, PIPE, Popen
 # It must be deleted after each
 area_filename = 'area.xvg'
 
-# Perform the Solvent Accessible Surface Analysis
 def sasa(
     structure_file: 'File',
     trajectory_file: 'File',
@@ -22,7 +21,8 @@ def sasa(
     snapshots : int,
     frames_limit : int,
 ):
-
+    """Perform the Solvent Accessible Surface Analysis."""
+    
     # If all residues are to be excluded since the whole system is in PCB then stop here
     if len(pbc_residues) == len(structure.residues):
         print(' No residues to run the analysis')

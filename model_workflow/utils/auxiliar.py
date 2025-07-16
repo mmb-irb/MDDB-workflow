@@ -88,18 +88,18 @@ def load_json (filepath : str) -> dict:
         with open(filepath, 'r') as file:
             content = json.load(file)
         return content
-    except:
-        raise Exception('Something went wrong when loading JSON file ' + filepath)
-    
+    except Exception as error:
+        raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
+
 # Set a JSON saver with additional logic to better handle problems
 def save_json (content, filepath : str, indent : Optional[int] = None):
     try:
         with open(filepath, 'w') as file:
             json.dump(content, file, indent=indent)
-    except:
+    except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         rename(filepath, filepath + '.wrong')
-        raise Exception('Something went wrong when saving JSON file ' + filepath)
+        raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 # Set a YAML loader with additional logic to better handle problems
 # DANI: Por algún motivo yaml.load también funciona con archivos en formato JSON

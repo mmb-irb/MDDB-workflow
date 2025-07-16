@@ -84,12 +84,12 @@ def get_reduced_pytraj_trajectory (
     reduced_frame_count = math.ceil(snapshots / frame_step)
     return reduced_pt_trajectory, frame_step, reduced_frame_count
 
-# Get the trajectory frames number
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 def get_frames_count (
     structure_file : 'File',
     trajectory_file : 'File') -> int:
-    
+    """Get the trajectory frames count."""
+
     print('-> Counting number of frames')
 
     if not trajectory_file.exists:
@@ -175,10 +175,9 @@ def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepa
             return f
     return None
     
-# Get an avaerage structure from a trajectory
 # This process is carried by pytraj, since the Gromacs average may be displaced
 def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_filepath : str):
-
+    """Get an average structure from a trajectory."""
     # Iterload the trajectory to pytraj
     pytraj_trajectory = get_pytraj_trajectory(structure_file.path, trajectory_file.path)
 

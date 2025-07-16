@@ -7,13 +7,7 @@ from model_workflow.utils.type_hints import *
 import os
 from subprocess import run, PIPE, Popen
 
-# Run multiple RMSD analyses
-# A RMSD analysis is run with each reference:
-# - First frame
-# - Average structure
-# A RMSD analysis is run over each rmsd target:
-# - Protein
-# - Nucleic acid
+
 def rmsds(
     trajectory_file : 'File',
     first_frame_file : 'File',
@@ -25,7 +19,8 @@ def rmsds(
     pbc_selection : 'Selection',
     ligand_map : List[dict],
     ):
-
+    """Run multiple RMSD analyses. One with each reference (first frame, average structure) 
+    and each selection (default: protein, nucleic)."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSDS_FILENAME}'
 

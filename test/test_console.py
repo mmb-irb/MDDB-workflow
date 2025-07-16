@@ -5,6 +5,7 @@ from unittest.mock import patch
 from model_workflow.console import parser, main
 
 @pytest.mark.CI
+@pytest.mark.release
 class TestConsoleArgumentParsing:
     """Test the console argument parsing functionality"""
     
@@ -34,6 +35,8 @@ class TestConsoleArgumentParsing:
         assert actual_output.strip() == expected_output.strip(), \
             f"Expected:\n{expected_output}\n\nActual:\n{actual_output}"
 
+@pytest.mark.CI
+@pytest.mark.release
 class TestConsoleIntegration:
     """Integration tests for console functionality"""
     

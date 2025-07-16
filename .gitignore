@@ -2,11 +2,12 @@
 .gitignore
 .vscode
 __pycache__
+**.log
 
 # Test
 .coverage
 .pytest_cache/
-test/test_data/
+test/data/output/
 
 # Build
 build/

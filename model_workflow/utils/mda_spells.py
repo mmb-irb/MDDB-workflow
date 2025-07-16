@@ -71,8 +71,8 @@ def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
     )
     return mda_top
 
-# Create a MDAnalysis universe using data in the workflow
 def get_mda_universe (standard_topology_file : 'File', structure_file : 'File') -> 'Universe':
+    """Create a MDAnalysis universe using data in the workflow."""
     mda_topology = to_MDAnalysis_topology(standard_topology_file)
     # Create a MDAnalysis topology from the standard topology file
     return Universe(mda_topology, structure_file.path)

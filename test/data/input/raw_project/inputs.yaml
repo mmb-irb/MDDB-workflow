@@ -1,0 +1,69 @@
+accession: null
+authors:
+- Puneet K Singh
+- Razvan C Stan
+boxtype:
+- Triclinic
+chainnames:
+  A: Antibody
+  B: Antibody
+  C: Protein
+citation: "Puneet K Singh, Razvan C Stan, ThermoPCD: a database of molecular dynamics\
+  \ trajectories of antibody\u2013antigen complexes at physiologic and fever-range\
+  \ temperatures, Database, Volume 2024, 2024, baae015, https://doi.org/10.1093/database/baae015"
+collections: null
+contact: strazvan@jnu.ac.kr
+customs: null
+cv19_abs: null
+cv19_nanobs: null
+cv19_startconf: null
+cv19_unit: null
+description: Test for workflow. 100 first frame taken with 
+  gmx trjconv -f dynamic-nopbc-2.xtc -o trajectory.xtc -e 1000
+ensemble: null
+ff:
+- CHARMM27
+forced_references:
+  A: noref
+  B: noref
+  C: Q15116
+framestep: 0.01
+groups:
+- Department of Basic Medical Science, Chonnam National University
+input_structure_filepath: 5ggr-rs1-310k-0ns.pdb
+input_topology_filepath: topology.tpr
+input_trajectory_filepaths: trajectory.xtc
+interactions:
+- agent_1: Protein
+  agent_2: Antibody
+  name: Protein-antibody interaction
+  selection_1: chain C
+  selection_2: chain A or chain B
+license: This trajectory dataset is released under a Creative Commons Attribution
+  4.0 International Public License
+ligands: null
+linkcense: https://creativecommons.org/licenses/by/4.0/
+links:
+- name: Data source
+  url: https://sites.google.com/view/thermopcd/cancers/pd-1-7x
+mdref: 0
+mds:
+- mdir: replica_1
+  name: "310 K 37\xBAC seed 1"
+  temp: 310
+membranes: null
+method: Classical MD
+multimeric: null
+name: PD-1 in complex with nivolumab
+orientation: null
+pbc_selection: null
+pdbIds:
+- 5GGR
+program: GROMACS
+temp: null
+thanks: We appreciate the technical support from Dr Lei Li and Dr Harinda Rajapaksha
+  (Oracle for Research)
+timestep: 2
+type: trajectory
+version: 2019.6
+wat: null

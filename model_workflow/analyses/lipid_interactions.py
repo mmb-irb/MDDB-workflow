@@ -12,6 +12,7 @@ def lipid_interactions (
     standard_topology_file : 'File',
     output_directory : str,
     membrane_map: dict,
+    lipid_map: dict,
     snapshots : int,
     frames_limit: int = 100):
     """
@@ -27,8 +28,7 @@ def lipid_interactions (
     mda_top = to_MDAnalysis_topology(standard_topology_file)
     u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-    # DANI: Esto falla :)
-    lipids = set([ data['resname'] for data in membrane_map['references'].values()])
+    lipids = set([ lipid['resname'] for lipid in lipid_map])
     lipids_str = " ".join(lipids)
     resids = np.unique(u.select_atoms('protein').resindices)
     ocupancy = {resid: Counter() for resid in resids}

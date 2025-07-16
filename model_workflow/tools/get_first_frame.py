@@ -1,19 +1,16 @@
-# This script is used to get the first trajectory frame
-# This process is carried by Gromacs
-
 from os.path import exists
 from subprocess import run, PIPE, Popen
 
 from model_workflow.utils.constants import GROMACS_EXECUTABLE
 from model_workflow.utils.type_hints import *
 
-# Get the trajectory first frame in PDB format
 # DANI: No lo muevo a gmx spells porque allí ya hay un get_first_frame con otra finalidad
 def get_first_frame (
     structure_file : 'File',
     trajectory_file : 'File',
     output_filepath : str
     ):
+    """Get the trajectory first frame in PDB format using Gromacs."""
 
     # Run Gromacs
     p = Popen([

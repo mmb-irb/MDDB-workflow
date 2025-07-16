@@ -46,7 +46,6 @@ DEBUG_ENERGIES_SUM_SCRIPT = 'get_energies_sum.py'
 # Set the path to the resources folder where we store auxiliar files required for this analysis
 resources = str(Path(__file__).parent.parent / "resources")
 
-# Perform the electrostatic and vdw energies analysis for each pair of interaction agents
 def energies (
     trajectory_file : File,
     # Set a folder to be created in order to store residual output files from this analysis
@@ -58,6 +57,7 @@ def energies (
     frames_limit : int,
     verbose : bool = False,
     debug : bool = False):
+    """Perform the electrostatic and vdw energies analysis for each pair of interaction agents."""
 
     # Make sure we have interactions
     if not interactions or len(interactions) == 0:

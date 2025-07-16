@@ -1,8 +1,3 @@
-# RMSD per resiude analysis
-# 
-# Perform the RMSD analysis for each residue
-# The analysis is carried by pytraj
-
 import pytraj as pt
 
 from distutils.version import StrictVersion
@@ -12,7 +7,7 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.constants import OUTPUT_RMSD_PERRES_FILENAME
 from model_workflow.utils.type_hints import *
 
-# The pytraj trajectory may be reduced
+
 def rmsd_per_residue (
     structure_file : str,
     trajectory_file : 'File',
@@ -21,6 +16,7 @@ def rmsd_per_residue (
     pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int):
+    """Perform the RMSD analysis for each residue."""
 
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSD_PERRES_FILENAME}'
