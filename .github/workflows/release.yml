@@ -1,6 +1,7 @@
 name: release
 
 on:
+  workflow_dispatch: ~
   push:
     # Only run on pushes to the release branch
     branches: [ release ]
