@@ -22,6 +22,7 @@ class File:
         self.basepath = self.filename = None
         self.extension = None
         self.extensionless_filename = None
+        self.extensionless_filepath = None
         # If there is no path then leave everything as none
         if not relative_or_basolute_path:
             return
@@ -50,9 +51,11 @@ class File:
             self.extension = None
         # Set the extensionless filename
         self.extensionless_filename = self.filename
+        self.extensionless_filepath = self.path
         if self.extension:
             extension_size = len(self.extension) + 1 # We include here the dot
-            self.extensionless_filename = self.filename[-extension_size:]
+            self.extensionless_filename = self.filename[:-extension_size]
+            self.extensionless_filepath = self.path[:-extension_size]
         # Set internal values
         self._cksum = None
 
@@ -131,13 +134,17 @@ class File:
         # If current file already has the extension then there is nothing to return
         if self.extension == self.format:
             return self
+        return self.reformat(self.format)
+    
+    def reformat (self, new_extension : str) -> 'File':
+        """Given a file and a new extension we set a symlink from a new file with that extension."""
         # Set the filename with the standard extension and initiate the file
-        standard_filename = self.extensionless_filename + '.' + self.format
-        standard_file = File(standard_filename)
+        reformatted_filename = f'{self.extensionless_filepath}.{new_extension}'
+        reformatted_file = File(reformatted_filename)
         # If standard file does not exist then set a symlink
-        if not standard_file.exists:
-            symlink(self.relative_path, standard_file.path)
-        return standard_file
+        if not reformatted_file.exists:
+            reformatted_file.set_symlink_to(self)
+        return reformatted_file
 
     def get_prefixed_file (self, prefix : str) -> 'File':
         """Get a prefixed file using this file name as the name base."""
