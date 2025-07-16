@@ -180,7 +180,7 @@ OUTPUT_LIPID_INTERACTIONS_FILENAME  = 'mda.lipid_inter.json'
 
 # Set problematic signs for directory/folder names
 # º is forbidden since paths including this characters are not readable by MDtraj
-FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º']
+FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
