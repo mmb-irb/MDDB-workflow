@@ -1,6 +1,6 @@
 from os import rename
 
-from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, warn
 from model_workflow.utils.constants import STRUCTURE_FILENAME, TRAJECTORY_FILENAME
 from model_workflow.utils.constants import CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY
 from model_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED_TRAJECTORY
@@ -46,6 +46,11 @@ def process_input_files (
     if hasattr(self, '_processed'): raise RuntimeError('Looped processing')
     self._processed = True
 
+    # Input trajectories should have all the same format
+    input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
+    if len(input_trajectory_formats) > 1:
+        raise InputError('All input trajectory files must have the same format')
+
     # Set the output filepaths
     output_structure_filepath = self.pathify(STRUCTURE_FILENAME)
     output_structure_file = File(output_structure_filepath)
@@ -54,8 +59,25 @@ def process_input_files (
     output_topology_filepath = topology_filepath
     output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
 
+    # --- TOPOLOGY FORMAT ASSUMTION ---------------------------------------------------------
+
+    # Make a super fast check and an assumption
+    # Topologies with the .top extension for us are considered Gromacs topology format
+    # However it is usual than Amber topologies (ideally .prmtop) are also '.top'
+    # So if the trajectory is Amber and the topology is .top then assume it is Amber
+    input_trajectories_format = list(input_trajectory_formats)[0]
+    if input_topology_file.extension == 'top' and input_trajectories_format == 'nc':
+        # Creating a topology symlink/copy with the correct extension
+        warn(f'Topology is .top but the trajectory is from Amber. I assume the topology is .prmtop')
+        reformatted_topology_file = input_topology_file.reformat('prmtop')
+        if input_structure_file == input_topology_file:
+            input_structure_file = reformatted_topology_file
+        input_topology_file = reformatted_topology_file
+
     # --- FIRST CHECK -----------------------------------------------------------------------
 
+    # Check input files match in number of atoms
+    # Here we have not standarized the format so we must check differently with every format
     check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
@@ -69,10 +91,6 @@ def process_input_files (
         converted_structure_filepath = input_structure_file.path
     # Set the output file for the already converted structure
     converted_structure_file = File(converted_structure_filepath)
-    # Input trajectories should have all the same format
-    input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
-    if len(input_trajectory_formats) > 1:
-        raise InputError('All input trajectory files must have the same format')
     # Set the output format for the already converted trajectory
     input_trajectories_format = list(input_trajectory_formats)[0]
     output_trajectory_format = output_trajectory_file.format
