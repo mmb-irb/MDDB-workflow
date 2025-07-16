@@ -6,6 +6,8 @@ on:
     branches: [ release ]
     paths:
       - 'model_workflow/**'
+      - 'test/**'
+      - '.github/workflows/release.yml'
 
 jobs:
   # Name of the Job
