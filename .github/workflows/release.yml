@@ -112,12 +112,14 @@ jobs:
       - name: Run release tests
         shell: bash -l {0}
         run: pytest -m CI --cov-report xml:./reports/coverage/coverage.xml --cov-report html:./reports/coverage/ --cov=model_workflow
-
+          
       - name: Generate Coverage badge
         shell: bash -l {0}
         run: |
             coverage xml -o ./reports/coverage/coverage.xml
             genbadge coverage --name "Coverage" --input-file ./reports/coverage/coverage.xml  --output-file ./reports/coverage/coveragebadge.svg
+            # Remove the .gitignore from coverage.py generated when the folder is empty
+            rm -rf ./reports/coverage/.gitignore
 
       - name: Publish coverage report to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4.7.3
