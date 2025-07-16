@@ -385,10 +385,12 @@ run_parser_input_group.add_argument(
     action='append',
     nargs='*',
     default=None,
-    help=("Configuration of a specific MD. You may declare as many as you want."
-          "Every MD requires a directory name, a structure path and at least one trajectory path."
-          "The structure is -md <directory> <structure> <trajectory_1> <trajectory_2>... "
-          "Note that all trajectories from the same MD will be merged.")
+    help=("Configuration of a specific MD. You may declare as many as you want.\n"
+          "Every MD requires a directory name and at least one trajectory path.\n"
+          "The structure is -md <directory> <trajectory_1> <trajectory_2> ...\n"
+          "Note that all trajectories from the same MD will be merged.\n"
+          "For legacy reasons, you may also provide a specific structure for an MD.\n"
+          "e.g. -md <directory> <structure> <trajectory_1> <trajectory_2> ...")
 )
 run_parser_input_group.add_argument(
     "-proj", "--accession",

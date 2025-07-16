@@ -1298,16 +1298,16 @@ class Project:
         self.input_trajectory_filepaths = input_trajectory_filepaths
 
         # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -stru, -traj)
-        if md_config and (md_directories or input_structure_filepath or input_trajectory_filepaths):
-            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -stru, -traj)')
+        if md_config and (md_directories or input_trajectory_filepaths):
+            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
         # Save the MD configurations
         self.md_config = md_config
         # Make sure MD configuration has the correct format
         if self.md_config:
             # Make sure all MD configurations have at least 3 values each
             for mdc in self.md_config:
-                if len(mdc) < 3:
-                    raise InputError('Wrong MD configuration: the patter is -md <directory> <structure> <trajectory> <trajectory 2> ...')
+                if len(mdc) < 2:
+                    raise InputError('Wrong MD configuration: the patter is -md <directory> <trajectory> <trajectory 2> ...')
             # Make sure there are no duplictaed MD directories
             md_directories = [ mdc[0] for mdc in self.md_config ]
             if len(md_directories) > len(set(md_directories)):
@@ -1494,10 +1494,26 @@ class Project:
         # New system with MD configurations (-md)
         if self.md_config:
             for n, config in enumerate(self.md_config, 1):
+                directory = config[0]
+                # LEGACY 
+                # In a previous version, the md config argument also holded the structure
+                # This was the second argument, so we check if we have more than 2 arguments
+                # If this is the case, then check if the second argument has different format
+                # Note that PDB format is also a trajectory supported format
+                has_structure = False
+                if len(config) > 2:
+                    first_sample = File(config[1])
+                    second_sample = File(config[2])
+                    if first_sample.format != second_sample.format:
+                        has_structure = True
+                # Finally set the input structure and trajectories
+                input_structure_filepath = config[1] if has_structure else None
+                input_trajectory_filepaths = config[2:] if has_structure else config[1:]
+                # Define the MD
                 md = MD(
-                    project = self, number = n, directory = config[0],
-                    input_structure_filepath = config[1],
-                    input_trajectory_filepaths = config[2:],
+                    project = self, number = n, directory = directory,
+                    input_structure_filepath = input_structure_filepath,
+                    input_trajectory_filepaths = input_trajectory_filepaths,
                 )
                 self._mds.append(md)
         # Old system (-mdir, -stru -traj)
