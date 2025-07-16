@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    # Only run on pushes to the release branch
+    branches: [ release ]
+    paths:
+      - 'model_workflow/**'
+
+jobs:
+  # Name of the Job
+  install_and_test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.9"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - run: echo "Repository -> ${{ github.repository }}"
+      - run: echo "Branch -> ${{ github.ref }}"
+      - run: echo "Trigger event -> ${{ github.event_name }}"
+      - run: echo "Runner OS -> ${{ runner.os }}"
+
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+
+      # - name: Remove all micromamba installations
+      #   run: |
+      #     rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
+      #     touch $HOME/.bash_profile
+
+      - name: Setup-micromamba
+        uses: mamba-org/setup-micromamba@v2.0.4
+        with:
+          generate-run-shell: true
+          micromamba-version: '2.0.2-2'
+          post-cleanup: 'all'
+          init-shell: bash
+          environment-file: envs/environment.yml
+          create-args: >-
+            python=${{ matrix.python-version }}
+            pytest
+            pytest-cov
+            pip
+          cache-environment: true
+          cache-downloads: true
+
+      - name: List installed package versions
+        shell: bash -l {0}
+        run: micromamba list
+      
+      - name: Install model_workflow
+        shell: bash -l {0}
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run release tests
+        shell: bash -l {0}
+        run: pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow -m release
+
+      - name: Generate Coverage badge
+        shell: bash -l {0}
+        run: |
+            coverage xml -o coverage/coverage.xml
+            genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
+
+      - name: Publish coverage report to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: ./coverage

@@ -96,7 +96,7 @@ pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=
 ```
 ```shell
 coverage xml -o coverage/coverage.xml
-genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file docs/source/_static/coveragebadge.svg
+genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
 ```
 ## Build wheel
 

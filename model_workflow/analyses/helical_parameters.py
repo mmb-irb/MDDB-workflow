@@ -164,7 +164,7 @@ def helical_parameters (
     # Call function to execute Curves+ and Canals software to generate the desired output in order to do different calculations
     folder_path = False
     if '/' in trajectory_file.path:
-        folder_path = trajectory_file.path.split('/')[-2]
+        folder_path = '/'.join(trajectory_file.path.split('/')[:-1])
 
     # Run the hydrogen bond analysis to generate .dat file
     hydrogen_bonds(
@@ -174,7 +174,7 @@ def helical_parameters (
         folder_path,
         structure_file,
     )
-    raise
+
     terminal_execution(trajectory_file.path, structure_file.path, residue_index_ranges, sequences[0],folder_path)
     # Save in a dictionary all the computations done by the different functions called by send_files function
     dictionary_information = send_files(sequences[0], frames_limit, folder_path)
@@ -224,7 +224,7 @@ def hydrogen_bonds(
     # AGUS: para el proyecto ABCix utilizamos los inpcrd de la simulación como referencia porque al utilizar nuestro pdb daba muchos errores
     inpcrd_file = glob.glob(os.path.join(helical_parameters_folder, "*.inpcrd"))
     if len(inpcrd_file) == 0:
-        warn("No inpcrd file found in the helical_parameters folder, executing cpptraj with structure PDB.")
+        warn(f"No inpcrd file found in the helical_parameters folder '{helical_parameters_folder}', executing cpptraj with structure PDB.")
         structure_reference = structure_file.path
     else:
         structure_reference = inpcrd_file[0]  # Select the first matching file
@@ -378,7 +378,10 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,f
     instructions = [
         "Cur+ <<!",
         " &inp",
-        f"  file={trajectory_input},ftop={topology_input},lis={helical_parameters_folder}/test,lib={standard_prefix}",
+        f"file={trajectory_input}",
+        f"ftop={topology_input}",
+        f"lis={helical_parameters_folder}/test",
+        f"lib={standard_prefix}",
         " &end",
         "2 1 -1 0 0",
         f"{strand_indexes[0][0]}:{strand_indexes[0][1]}",
@@ -440,8 +443,8 @@ def send_files(sequence,frames_limit, folder_path):
     files_backbones = []
     files_allbackbones = []
     # Iterate over all files in the directory
-    helical_parameters_folder = f"{folder_path}/helical_parameters"
-    os.chdir(helical_parameters_folder)
+    # helical_parameters_folder = f"{folder_path}/helical_parameters"
+    # os.chdir(helical_parameters_folder)
     for file in os.listdir():
         if not file.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
             continue
