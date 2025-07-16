@@ -59,15 +59,15 @@ jobs:
 
       - name: Run release tests
         shell: bash -l {0}
-        run: pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow -m release
+        run: pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow -m nassa
 
-      - name: Generate Coverage badge
-        shell: bash -l {0}
-        run: |
-            coverage xml -o coverage/coverage.xml
-            genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
+      # - name: Generate Coverage badge
+      #   shell: bash -l {0}
+      #   run: |
+      #       coverage xml -o coverage/coverage.xml
+      #       genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
 
-      - name: Publish coverage report to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: ./coverage
+      # - name: Publish coverage report to GitHub Pages
+      #   uses: JamesIves/github-pages-deploy-action@v4
+      #   with:
+      #     folder: ./coverage
