@@ -62,7 +62,7 @@ jobs:
 
       - name: Run release tests
         shell: bash -l {0}
-        run: pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow -m nassa
+        run: pytest -m release --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow
 
       # - name: Generate Coverage badge
       #   shell: bash -l {0}

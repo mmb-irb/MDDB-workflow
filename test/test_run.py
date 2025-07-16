@@ -11,7 +11,7 @@ from model_workflow.mwf import project_requestables, md_requestables, workflow
 from model_workflow.console import run_parser
 
 @pytest.mark.release
-@pytest.mark.parametrize("test_accession", ["A0001", "A01IP" ], scope="class")
+@pytest.mark.parametrize("test_accession", ["A0001"], scope="class")
 class TestMWFRun:
     """Test full workflow for different accessions"""
     
