@@ -160,24 +160,25 @@ def helical_parameters (
         last_residue_index = chain.residue_indices[-1] +1
         residue_index_range = (first_residue_index, last_residue_index) if c == 0 else (last_residue_index, first_residue_index)
         residue_index_ranges.append(residue_index_range)
-    
-    # Call function to execute Curves+ and Canals software to generate the desired output in order to do different calculations
-    folder_path = False
-    if '/' in trajectory_file.path:
-        folder_path = '/'.join(trajectory_file.path.split('/')[:-1])
 
     # Run the hydrogen bond analysis to generate .dat file
     hydrogen_bonds(
         topology_file,
         trajectory_file,
         output_analysis_filepath,
-        folder_path,
+        output_directory,
         structure_file,
     )
 
-    terminal_execution(trajectory_file.path, structure_file.path, residue_index_ranges, sequences[0],folder_path)
+    terminal_execution(
+        trajectory_file.path,
+        structure_file.path,
+        residue_index_ranges,
+        sequences[0],
+        output_directory
+    )
     # Save in a dictionary all the computations done by the different functions called by send_files function
-    dictionary_information = send_files(sequences[0], frames_limit, folder_path)
+    dictionary_information = send_files(sequences[0], frames_limit, output_directory)
     # Set the path into the original directory outside the folder helicalparameters
     os.chdir(actual_path)
     # Convert the dictionary into a json file
@@ -189,7 +190,7 @@ def hydrogen_bonds(
     topology_file : 'File',
     trajectory_file : 'File',
     output_analysis_filepath : str,
-    folder_path : str,
+    output_directory : str,
     structure_file : 'File',
 ):
     # This analysis is done using cpptraj and its done by two steps
@@ -198,8 +199,8 @@ def hydrogen_bonds(
     # setup_path = f"/orozco/projects/ABCix/ProductionFiles/SETUP" 
 
     # # Config cpptraj
-    # cpptraj_in_file = f"{folder_path}/cpptraj.in"
-    # cpptraj_out_file = f"{folder_path}/cpptraj_dry.inpcrd"
+    # cpptraj_in_file = f"{output_directory}/cpptraj.in"
+    # cpptraj_out_file = f"{output_directory}/cpptraj_dry.inpcrd"
 
     # if not os.path.exists(cpptraj_out_file):
 
@@ -212,19 +213,16 @@ def hydrogen_bonds(
     ################
     # 2. From the dry.inpcrd file we will generate the .dat file
     # Create the helical parameters folder
-    helical_parameters_folder = f"{folder_path}/helical_parameters"
     # If the folder already exists dont create it again
-    if not os.path.exists(helical_parameters_folder):
-        os.mkdir(helical_parameters_folder)
-    output_dat_file = os.path.join(helical_parameters_folder, "mdf.nahbonds.dat")
+    output_dat_file = os.path.join(output_directory, "mdf.nahbonds.dat")
 
     print(f"Saving .dat file to: {output_dat_file}")
 
     # Select reference structure
     # AGUS: para el proyecto ABCix utilizamos los inpcrd de la simulación como referencia porque al utilizar nuestro pdb daba muchos errores
-    inpcrd_file = glob.glob(os.path.join(helical_parameters_folder, "*.inpcrd"))
+    inpcrd_file = glob.glob(os.path.join(output_directory, "*.inpcrd"))
     if len(inpcrd_file) == 0:
-        warn(f"No inpcrd file found in the helical_parameters folder '{helical_parameters_folder}', executing cpptraj with structure PDB.")
+        warn(f"No inpcrd file found in the helical_parameters folder '{output_directory}', executing cpptraj with structure PDB.")
         structure_reference = structure_file.path
     else:
         structure_reference = inpcrd_file[0]  # Select the first matching file
@@ -364,13 +362,11 @@ def hydrogen_bonds(
 
 
 # Function to execute Curves+ and Canals software to generate the output needed
-def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,folder_path):
-    helical_parameters_folder = f"{folder_path}/helical_parameters"
-    # If the folder already exists dont create it again
-    if not os.path.exists(helical_parameters_folder):
-        os.mkdir(helical_parameters_folder)
+def terminal_execution(trajectory_input, topology_input, strand_indexes, sequence, output_directory):
     # Purge residual files from previous runs
-    possible_residual_filenames = glob.glob(helical_parameters_folder+'/*.cda') + glob.glob(helical_parameters_folder+'/*.lis') + glob.glob(helical_parameters_folder+'/*.ser')
+    possible_residual_filenames = glob.glob(output_directory+'/*.cda') \
+        + glob.glob(output_directory+'/*.lis') \
+        + glob.glob(output_directory+'/*.ser')
     for filename in possible_residual_filenames:
         os.remove(filename)
         
@@ -380,7 +376,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,f
         " &inp",
         f"file={trajectory_input}",
         f"ftop={topology_input}",
-        f"lis={helical_parameters_folder}/test",
+        f"lis={output_directory}/test",
         f"lib={standard_prefix}",
         " &end",
         "2 1 -1 0 0",
@@ -399,7 +395,7 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,f
     out.decode("utf-8")
 
     # Enter inside helicalparameters folder to execute Canals software as it needs the Curves+ output as input
-    os.chdir(helical_parameters_folder)
+    os.chdir(output_directory)
     
     # If output has not been generated then warn the user
     if not os.path.exists('test.cda'):
@@ -438,13 +434,12 @@ def terminal_execution(trajectory_input,topology_input,strand_indexes,sequence,f
         raise SystemExit('Something went wrong with Canals software')
 
 
-def send_files(sequence,frames_limit, folder_path):
+def send_files(sequence, frames_limit, output_directory):
     files_averages = []
     files_backbones = []
     files_allbackbones = []
     # Iterate over all files in the directory
-    # helical_parameters_folder = f"{folder_path}/helical_parameters"
-    # os.chdir(helical_parameters_folder)
+    # os.chdir(output_directory)
     for file in os.listdir():
         if not file.endswith(".ser"): # Check that we are going to analyze the correct files, that have .ser extension
             continue
