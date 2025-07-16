@@ -17,18 +17,15 @@ All you need to start processing your files is a topology file (prmtop, tpr, psf
 
     project/
     ├── raw_topology.prmtop
-    ├── replica_1/
-    │   └── raw_trajectory.nc
-    └── replica_2/
-        ├── raw_trajectory_part01.nc
-        ├── raw_trajectory_part02.nc
-        └── raw_trajectory_part03.nc
+    ├── raw_trajectory_01.nc
+    ├── raw_trajectory_02_part01.nc
+    ├── raw_trajectory_02_part02.nc
 
-Note that here we have 2 independent replicas sharing common topology. The second replica is actually splitted in 3 consecutive parts but this is not a problem.
+Note that here we have 2 independent replicas sharing common topology. The second replica is actually splitted in 2 consecutive parts but this is not a problem.
 
 .. warning::
-   Keeping data organized like in the example is important for the workflow to work. In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. ``ln -s ~/my_data/my_trajectory.nc replica_1/raw_trajectory.nc``.
-   Note that the workflow will generate output files where your input trajectories are.
+   In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. ``ln -s ~/my_data/my_trajectory.nc raw_trajectory.nc``.
+   Note that the workflow may generate output files where it is run. Thus it may overwrite a file already present in a directory if its name matches an output file name.
 
 Processing input files
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -37,31 +34,32 @@ The command to start the processing would be as follows:
 
 .. code-block:: bash
 
-   mwf run -top raw_topology.prmtop -stru raw_topology.prmtop -mdir replica_* -traj *.nc -s
+   mwf run -top raw_topology.prmtop -md replica_1 raw_trajectory_01.nc -md replica_2 raw_trajectory_02_part01.nc raw_trajectory_02_part02.nc
 
 The ``mwf`` command is the main handler of the workflow and its letters stand for 'MDDB-WorkFlow'. The ``run`` subcommand is the one which triggers the main logic and thus run the workflow. Now lets explain every argument in this command:
 
 * ``-top``: points to the input topology. No big surprises here.
-* ``-stru``: points to the input structure. Here we do not have any 'pdb' or 'gro' file however. For this reason we also point to the raw topology. We are telling the workflow to get the structure from the topology. To do so it will use some coordinates from the trajectory as well.
-* ``-mdir``: tells the workflow which MD directories are to be considered. In this case we want to check all replicas.
-* ``-traj``: points the workflow towards the input trajectroy files. Note that the path is not relative to our current directory, but to every MD directory.
-* ``-s``: stops the workflow after doing the basic processing steps. Otherwise it would continute running analyses and so on, but we are lacking one last input file to keep going. This is explained further.
+* ``-md``: defines a new "MD" to be processed. You may use this argument multiple times. Then this argument is followed by:
 
+  * MD directory: Directory to be created and filled with all the corresponding MD processed files and outputs.
+  * Trajectories: Any number of trajectory files to be merged and then processed.
+
+This command should process all input files and then stop because it is missing the "inputs file".
 If everything is fine after the processing, some *new files* may have been generated and now the directory should look like this:
 
 .. code-block:: text
-    :emphasize-lines: 5,6,11,12
+    :emphasize-lines: 6,7,8,9,10,11,12
 
     project/
     ├── raw_topology.prmtop
+    ├── raw_trajectory.nc
+    ├── raw_trajectory_part01.nc
+    ├── raw_trajectory_part02.nc
+    ├── topology.prmtop
     ├── replica_1/
-    │   ├── raw_trajectory.nc
     │   ├── structure.pdb
     │   └── trajectory.xtc
     └── replica_2/
-        ├── raw_trajectory_part01.nc
-        ├── raw_trajectory_part02.nc
-        ├── raw_trajectory_part03.nc
         ├── structure.pdb
         └── trajectory.xtc
 
@@ -77,7 +75,7 @@ Note also that the not-raw (or just 'processed') topology is still in amber form
 
 In this example we run the most basic processing, but there are a couple of additional features we may require.
 
-* Filtering: Argument ``-filt`` is used to filter atoms you want to keep in all files (topology, structure and trajectory). The ``-filt`` argument alone applies the default filtering: water and counter ions. However the ``-filt`` argument may be followed by some text to apply a custom filtering selection according to |VMD syntax|. Here is an example on how to filter away everything which is not protein or nucleic acids: ``mwf run (...) -filt 'protein or nucleic'``
+* Filtering: Argument ``-filt`` is used to filter atoms away in all files (topology, structure and trajectory). The ``-filt`` argument alone applies the default filtering: water and counter ions. However the ``-filt`` argument may be followed by some text to apply a custom filtering selection according to |VMD syntax|. Here is an example on how to filter away everything which is not protein or nucleic acids: ``mwf run (...) -filt 'not protein or nucleic'``
 
 .. |VMD syntax| raw:: html
 
@@ -111,10 +109,10 @@ Now we are ready to run the analyses by just running the following command:
 
    mwf run
 
-Note that no input files pointers are provided now.
-The workflow will guess which are the processed files since they have standard names.
-The workflow will also remember which are the MD directories.
+Note that no arguments for input files are provided now.
+The workflow will remember which are the MD directories and processed files.
 In addition, the workflow has some cache in these directories thus remembering some precalculated values and not having to repeat all the process.
+Also, the workflow should me smart enough to recalculate any output if any of its implicated inputs change.
 
 Note that this process will also generate some additional files such as 'metadata.json' and 'topology.json' by default. These files are also to be uploaded to the database.
 
@@ -179,7 +177,7 @@ These are the available tests:
   Make sure there are no sudden jumps in the middle of the trajectory due to imaging problems.
   Compute the RMSD between every pair of consecuitve frames in the trajectory.
   Then calculate the standard deviation among all RMSD differences.
-  If there is at least one jump which is greater than 9 times the standard deviation then the test fails.
+  If there is at least one jump which is greater than 10 times the standard deviation then the test fails.
   First frames are excepcionally allowed to reach this limit since they may be part of the equilibration proccess.
 
 - **elements** - Correct elements (skip only)
@@ -202,11 +200,11 @@ These are the available tests:
 - **interact** - Stable interactions (mercy only)
 
   Make sure defined interactions are actually happening and stable enough to be computed.
-  In order to find interface residues, interactions are checked to happend 100 frames along the trajectory.
-  Two residues are considered to be in the interface when they are close enough at least in one of these frames.
-  If no interface residues are found then the process is killed and this can not be allowed.
+  In order to find interface atoms, interactions are checked to happend 100 frames along the trajectory.
+  Two atoms are considered to be in the interface when they are close enough at least in one of these frames.
+  If no interface atoms are found then the process is killed and this can not be allowed.
   This means you defined an interaction which does not exist and thus it must be removed from the inputs file.
-  However, it may happen that an interaction has interface residues but it is almost not happening.
+  However, it may happen that an interaction has interface atoms but it is almost not happening.
   For example, a ligand which is fitted in a protein pocket but it leaves its place as soon as the trajectroy starts playing.
   For this reason, it is computed the number of frames that the interaction actually happens.
   If the interaction takes place less than the 10% of the total trajectory then the process fails.
