@@ -1,15 +1,13 @@
 Usage
 =====
+To see arguments and how to use them, you can request help by running:
 
-How to use
-----------
+.. code-block:: bash
 
-.. contents::
-   :local:
-
+   mwf run -h
 
 Folder structure
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 All you need to start processing your files is a topology file (prmtop, tpr, psf, etc.) and any number of trajectory files (nc, xtc, dcd, etc.). Every independent trajectory must be in a different directory, where several output files will be generated for every trajectory. Here is an example of a directory we are about to analyze:
 
@@ -21,14 +19,14 @@ All you need to start processing your files is a topology file (prmtop, tpr, psf
     ├── raw_trajectory_02_part01.nc
     └── raw_trajectory_02_part02.nc
 
-Note that here we have 2 independent replicas sharing common topology. The second replica is actually splitted in 2 consecutive parts but this is not a problem.
+Note that here we have 2 independent replicas sharing common topology. The second replica is actually split in 2 consecutive parts but this is not a problem.
 
 .. warning::
    In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. ``ln -s ~/my_data/my_trajectory.nc raw_trajectory.nc``.
    Note that the workflow may generate output files where it is run. Thus it may overwrite a file already present in a directory if its name matches an output file name.
 
 Processing input files
-~~~~~~~~~~~~~~~~~~~~~~
+-----------------------
 
 The command to start the processing would be as follows:
 
@@ -87,10 +85,10 @@ Once this process is over some tests are run.
 If they all pass then we can continue with the analyses.
 
 Running the analyses
-~~~~~~~~~~~~~~~~~~~~
+-----------------------
 
-Before we start, we need the **inputs file**.
-This file contains burocratic data, MD parameters and some additional metadata which is used by the workflow to adapt the analyses.
+Before we start, we need the :doc:`input file </input>`.
+This file contains bureaucratic data, MD parameters and some additional metadata which is used by the workflow to adapt the analyses.
 
 In order to generate this file, a template to build the file explaining every field in detail is provided. You can find it in the workflow repository, at |inputs_file_template.yml| or open it by simply running the following command:
 
@@ -111,13 +109,14 @@ Fill every field and then run the whole workflow to run all the analyses by just
 Note that no arguments for input files are provided now.
 The workflow will remember which are the MD directories and processed files.
 In addition, the workflow has some cache in these directories thus remembering some precalculated values and not having to repeat all the process.
-Also, the workflow should me smart enough to recalculate any output if any of its implicated inputs change.
+Also, the workflow should be smart enough to recalculate any output if any of its implicated inputs change.
 
-Note that this process will also generate some additional files such as 'metadata.json' and 'topology.json' by default. These files are also to be uploaded to the database.
+Note that this process will also generate some additional files such as '`metadata.json`' and '`topology.json`' by default. These files are also to be uploaded to the database.
 
 If you want to run only a few specific analyses or exclude some analyses you can use the include (``-i``) and exclude (``-e``) arguments.
-To see additional arguments and how to use them you can request help by just running ``mwf run -h``
+To see all available tasks and what they do, go to :doc:`tasks page </tasks>`.
 
+After running them, one folder is generated for each task, generating `mda.*.json` files for analyses and `mdf.*` for binaries.
 Once you are done with this process is time to load your files to the database.
 To do so, you must head to the |loader|.
 
@@ -127,10 +126,10 @@ To do so, you must head to the |loader|.
 
 
 Tests and other checking processes
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------------
 
 Some tests and checkings are run along the workflow to ensure data quality.
-By default, a falied test will kill the workflow in the spot.
+By default, a failed test will kill the workflow in the spot.
 Tests may be skipped with the ``-t`` or ``--trust`` argument.
 Tests may be allowed to fail with the ``-m`` or ``--mercy`` argument.
 Either if a test is skipped or failed it will write a warning log in the metadata.
@@ -174,10 +173,10 @@ These are the available tests:
 - **intrajrity** - Trajectory integrity
 
   Make sure there are no sudden jumps in the middle of the trajectory due to imaging problems.
-  Compute the RMSD between every pair of consecuitve frames in the trajectory.
+  Compute the RMSD between every pair of consecutive frames in the trajectory.
   Then calculate the standard deviation among all RMSD differences.
   If there is at least one jump which is greater than 10 times the standard deviation then the test fails.
-  First frames are excepcionally allowed to reach this limit since they may be part of the equilibration proccess.
+  First frames are exceptionally allowed to reach this limit since they may be part of the equilibration process.
 
 - **elements** - Correct elements (skip only)
 
@@ -199,12 +198,12 @@ These are the available tests:
 - **interact** - Stable interactions (mercy only)
 
   Make sure defined interactions are actually happening and stable enough to be computed.
-  In order to find interface atoms, interactions are checked to happend 100 frames along the trajectory.
+  In order to find interface atoms, interactions are checked to happen 100 frames along the trajectory.
   Two atoms are considered to be in the interface when they are close enough at least in one of these frames.
   If no interface atoms are found then the process is killed and this can not be allowed.
   This means you defined an interaction which does not exist and thus it must be removed from the inputs file.
   However, it may happen that an interaction has interface atoms but it is almost not happening.
-  For example, a ligand which is fitted in a protein pocket but it leaves its place as soon as the trajectroy starts playing.
+  For example, a ligand which is fitted in a protein pocket but it leaves its place as soon as the trajectory starts playing.
   For this reason, it is computed the number of frames that the interaction actually happens.
   If the interaction takes place less than the 10% of the total trajectory then the process fails.
   If it is allowed to fail then the wrong interaction is removed from metadata anyway and interaction analyses are not run for this specific interaction.

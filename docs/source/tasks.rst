@@ -15,11 +15,11 @@ These tasks are executed once per project:
 
 * ``charges`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/get_charges.py#L13>`__: extract charges from a source file. 
 
-* ``inputs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1535>`__: set a function to load the inputs file.
+* ``inputs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1551>`__: set a function to load the inputs file.
 
 * ``intertypes`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/find_interaction_types.py#L4>`__: given a list of interactions, find their types.
 
-* ``itopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1646>`__: get the input topology file. If the file is not found try to download it.
+* ``itopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1662>`__: get the input topology file. If the file is not found try to download it.
 
 * ``ligmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/generate_ligands_desc.py#L320>`__: generate a map of residues associated to ligands.
 
@@ -33,7 +33,7 @@ These tasks are executed once per project:
 
 * ``pmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/generate_metadata.py#L8>`__: prepare a JSON file with all project metadata.
 
-* ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1700>`__: get the MSM equilibrium populations filename.
+* ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1716>`__: get the MSM equilibrium populations filename.
 
 * ``protmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/generate_map.py#L64>`__: map the structure aminoacids sequences against the Uniprot reference sequences.
 
@@ -41,13 +41,13 @@ These tasks are executed once per project:
 
 * ``resmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/residue_mapping.py#L4>`__: build the residue map from both proteins and ligands maps This is formatted as both the standard topology and metadata generators expect them.
 
-* ``screenshot`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/get_screenshot.py#L26>`__: obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database. Returns the rotation values used to take the photo so they can be saved and reused. 
+* ``screenshot`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/get_screenshot.py#L26>`__: obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database. Returns the rotation values used to take the photo so they can be saved and reused.
 
 * ``stopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/tools/generate_topology.py#L5>`__: prepare the standard topology file to be uploaded to the database.
 
-* ``topology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1883>`__: get the processed topology file.
+* ``topology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1899>`__: get the processed topology file.
 
-* ``transitions`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1709>`__: get the MSM transition probabilities filename.
+* ``transitions`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/mwf.py#L1725>`__: get the MSM transition probabilities filename.
 
 MD Tasks
 -----------

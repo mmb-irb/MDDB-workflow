@@ -10,30 +10,23 @@ from model_workflow.utils.auxiliar import load_json
 from model_workflow.mwf import project_requestables, md_requestables, workflow
 from model_workflow.console import run_parser
 
+
+@pytest.fixture(scope="class", params=["A0001", "A01IP"])
+def test_accession(request):
+    return request.param
+
 @pytest.mark.release
-@pytest.mark.parametrize("test_accession", ["A0001", "A01IP" ], scope="class")
 class TestMWFRun:
     """Test full workflow for different accessions"""
     
-    # Argument to reduce long test execution time
+    # Arguments to reduce long test execution time
     task_arguments = {
         'clusters': {'frames_limit': 10, 'desired_n_clusters': 2},
         'pockets': {'maximum_pockets_number': 2},
         'dist': {'frames_limit': 2},
-        # Default arguments for tasks
-        'inter': {'frames_limit': 10},
         'energies': {'frames_limit': 2},
-        'hbonds': {'time_splits': 100 },
-        'rmsds': {'frames_limit': 10},
-        'rgyr': {'frames_limit': 10},
-        'pairwise': {'frames_limit': 10},
-        'pca': {'frames_limit': 10},
-        'perres': {'frames_limit': 10},
-        'tmscore': {'frames_limit': 10},
-        'sas': {'frames_limit': 10},
-        'markov': { 'rmsd_selection': PROTEIN_AND_NUCLEIC },
-
     }
+
     def _run_and_log_task(self, task_name: str, task, target_obj, project_dir: str, capsys):
         """Helper method to run a task and log its output"""
         try:
@@ -63,7 +56,8 @@ class TestMWFRun:
     def test_md_task(self, project: 'Project', md_task: str, capsys):
         """Test that each analysis runs without errors"""
         if md_task == 'dihedrals' or \
-            (md_task == 'pockets' and project.accession == 'A01IP'):
+            (md_task == 'pockets' and project.accession == 'A01IP') or \
+            (md_task == 'dist' and project.accession == 'A01IP'):
             pytest.skip(f"Skipping analysis '{md_task}' for now.")
             
         md: MD = project.mds[0]

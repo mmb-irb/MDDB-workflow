@@ -15,7 +15,7 @@ def rmsd_per_residue (
     structure : 'Structure',
     pbc_selection : 'Selection',
     snapshots : int,
-    frames_limit : int):
+    frames_limit : int = 100):
     """Perform the RMSD analysis for each residue."""
 
     # Set the main output filepath

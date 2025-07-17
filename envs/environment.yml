@@ -48,3 +48,5 @@ dependencies:
   # WARNING: this library is not mantained and it depends in an outdated version of iminuit
   # WARNING: we would have to maintain it ourselves in further python versions
   - bioconda::tmscoring
+  # For helical parameters. Can break the environment?
+  #- curves
