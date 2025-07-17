@@ -47,7 +47,7 @@ class TestConsoleIntegration:
         "chainer",
         "nassa"
     ])
-    def test_subcommand_help(self, capture_stdout, subcommand):
+    def test_subcommand_help(self, subcommand):
         """Test that help text is printed for each subcommand"""
         sys.argv = ['model_workflow', subcommand, '-h']
         

@@ -31,7 +31,7 @@ def hydrogen_bonds (
     interactions : list,
     is_time_dependent : bool,
     # Number of splits along the trajectory
-    time_splits : int,
+    time_splits : int = 100,
     # Explicit values for the most populated frames is saved apart
     # Set how many frames (in order of population) are saved
     most_populated_frames_number : int = 5,

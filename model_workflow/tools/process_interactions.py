@@ -43,10 +43,10 @@ def process_interactions (
     snapshots : int,
     output_directory : str,
     mercy : List[str],
-    frames_limit : int,
     interactions_auto : str,
     ligand_map : List[dict],
     pbc_selection : 'Selection',
+    frames_limit : int = 1000,
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,

@@ -20,9 +20,9 @@ def rmsd_pairwise(
     output_directory : str,
     interactions : list,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
+    frames_limit : int = 200,
     overall_selection : str = "name CA or name C5'", # equivalent to "@CA,C5'" in pytraj
     ):
     """Perform an analysis for the overall structure and then one more analysis for each interaction."""

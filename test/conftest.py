@@ -4,24 +4,16 @@ from model_workflow.mwf import Project
 from model_workflow.utils.constants import *
 from model_workflow.utils.file import File
 from unittest.mock import patch
-from io import StringIO
 
-# Constants
-DATABASE_URL = "https://irb-dev.mddbr.eu/api/"
-TEST_DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 def pytest_configure(config):
     config.addinivalue_line( "markers", "CI: tests related to continuous integration")
     config.addinivalue_line( "markers", "release: tests related to release processes")
 
-@pytest.fixture
-def capture_stdout():
-    """Capture stdout for testing console output"""
-    buffer = StringIO()
-    with patch('sys.stdout', buffer):
-        yield buffer
+@pytest.fixture(scope="session")
+def test_data_dir():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-# Fixtures for analysis type and test accession
 @pytest.fixture(scope="class")
 def test_accession(request):
     """Get accession ID from parametrization or use default"""
@@ -30,14 +22,10 @@ def test_accession(request):
     return "A0001"
 
 @pytest.fixture(scope="class")
-def test_data_dir():
-    return TEST_DATA_ROOT
-
-@pytest.fixture(scope="class")
-def test_proj_dir(test_accession: str):
+def test_proj_dir(test_accession: str, test_data_dir: str):
     """Create a persistent directory for test data that remains across test runs"""
     # Create a project-specific test data directory
-    test_proj_dir = os.path.join(TEST_DATA_ROOT, 'output', test_accession)
+    test_proj_dir = os.path.join(test_data_dir, 'output', test_accession)
     # Create the directory if it doesn't exist
     os.makedirs(test_proj_dir, exist_ok=True)
     return test_proj_dir

@@ -15,11 +15,11 @@ def pca (
     trajectory_file : 'File',
     output_directory : str,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
     pca_fit_selection : str,
     pca_analysis_selection : str,
     pbc_selection : 'Selection',
+    frames_limit : int = 2000,
     projection_frames : int = 20
 ) -> dict:
     """Perform a PCA analysis on the trajectory."""
