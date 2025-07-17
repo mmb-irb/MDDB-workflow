@@ -14,10 +14,10 @@ def rmsds(
     average_structure_file : 'File',
     output_directory : str,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
     ligand_map : List[dict],
+    frames_limit : int = 5000,
     ):
     """Run multiple RMSD analyses. One with each reference (first frame, average structure) 
     and each selection (default: protein, nucleic)."""

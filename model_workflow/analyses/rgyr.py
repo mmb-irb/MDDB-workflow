@@ -18,9 +18,10 @@ def rgyr (
     trajectory_file : 'File',
     output_directory : str,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
-    pbc_selection : 'Selection'):
+    pbc_selection : 'Selection',
+    frames_limit : int = 5000
+):
     """Perform the RMSd analysis. Use the first trajectory frame in .pdb format as a reference."""
 
     # Set the main output filepath

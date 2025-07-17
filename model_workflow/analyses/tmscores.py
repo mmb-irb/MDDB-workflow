@@ -16,7 +16,7 @@ def tmscores (
     structure : 'Structure',
     pbc_selection : 'Selection',
     snapshots : int,
-    frames_limit : int):
+    frames_limit : int = 200):
     """Perform the tm score using the tmscoring package."""
 
     # Set the main output filepath

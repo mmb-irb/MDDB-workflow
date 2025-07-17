@@ -54,7 +54,7 @@ def energies (
     interactions : list,
     charges : list,
     snapshots : int,
-    frames_limit : int,
+    frames_limit : int = 100,
     verbose : bool = False,
     debug : bool = False):
     """Perform the electrostatic and vdw energies analysis for each pair of interaction agents."""

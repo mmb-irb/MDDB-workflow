@@ -19,7 +19,7 @@ def sasa(
     structure : 'Structure',
     pbc_residues : List[int],
     snapshots : int,
-    frames_limit : int,
+    frames_limit : int = 100,
 ):
     """Perform the Solvent Accessible Surface Analysis."""
     
