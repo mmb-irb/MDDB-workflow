@@ -10,8 +10,12 @@ from model_workflow.utils.auxiliar import load_json
 from model_workflow.mwf import project_requestables, md_requestables, workflow
 from model_workflow.console import run_parser
 
+
+@pytest.fixture(scope="class", params=["A0001", "A01IP"])
+def test_accession(request):
+    return request.param
+
 @pytest.mark.release
-@pytest.mark.parametrize("test_accession", ["A0001", "A01IP" ], scope="class")
 class TestMWFRun:
     """Test full workflow for different accessions"""
     
