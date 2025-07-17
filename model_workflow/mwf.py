@@ -1507,7 +1507,7 @@ class Project:
                     if first_sample.format != second_sample.format:
                         has_structure = True
                 # Finally set the input structure and trajectories
-                input_structure_filepath = config[1] if has_structure else None
+                input_structure_filepath = config[1] if has_structure else self.input_structure_filepath
                 input_trajectory_filepaths = config[2:] if has_structure else config[1:]
                 # Define the MD
                 md = MD(
