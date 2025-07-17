@@ -145,7 +145,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
                 error_match = search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
                 if error_match:
                     # Get the trajectory atom count
-                    trajectory_atom_count = error_match[1]
+                    trajectory_atom_count = int(error_match[1])
                     return topology_atom_count, trajectory_atom_count
                 # Otherwise just print the whole error logs and stop here anyway
                 print(logs)
@@ -167,8 +167,8 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             logs = output.captured_text
             error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
             if error_match:
-                topology_atom_count = error_match[3]
-                trajectory_atom_count = error_match[1]
+                topology_atom_count = int(error_match[3])
+                trajectory_atom_count = int(error_match[1])
             # Now obtain the number of atoms from the frame we just read
             else:
                 topology_atom_count = trajectory_atom_count = trajectory.n_atoms
@@ -202,8 +202,8 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
             error_message = str(error)
             error_match = match(MDTRAJ_ATOM_MISMATCH_ERROR, error_message)
             if error_match:
-                topology_atom_count = error_match[1]
-                trajectory_atom_count = error_match[2]
+                topology_atom_count = int(error_match[1])
+                trajectory_atom_count = int(error_match[2])
                 return topology_atom_count, trajectory_atom_count
             # If we do not know the error then raise it as is
             else:
