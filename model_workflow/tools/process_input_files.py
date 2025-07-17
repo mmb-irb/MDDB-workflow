@@ -13,7 +13,7 @@ from model_workflow.utils.pyt_spells import get_frames_count
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.type_hints import *
 
-from model_workflow.tools.check_inputs import check_inputs
+from model_workflow.tools.check_inputs import check_inputs, PREFILTERED_TOPOLOGY_EXCEPTION
 from model_workflow.tools.conversions import convert
 from model_workflow.tools.filter_atoms import filter_atoms
 from model_workflow.tools.image_and_fit import image_and_fit
@@ -78,7 +78,15 @@ def process_input_files (
 
     # Check input files match in number of atoms
     # Here we have not standarized the format so we must check differently with every format
-    check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
+    exceptions = check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
+
+    # There is a chance theat the inputs checker has prefiltered the topology to match trajectory
+    # If this is the case then use the prefiltered topology from now on
+    prefiltered_topology = exceptions.get(PREFILTERED_TOPOLOGY_EXCEPTION, None)
+    if prefiltered_topology:
+        if input_structure_file == input_topology_file:
+            input_structure_file = prefiltered_topology
+        input_topology_file = prefiltered_topology
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
 

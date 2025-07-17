@@ -6,6 +6,8 @@ from model_workflow.utils.vmd_spells import vmd_to_pdb
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
 
+from model_workflow.tools.guess_and_filter import guess_and_filter_topology
+
 from re import match, search
 from typing import *
 from subprocess import run, PIPE, Popen
@@ -28,9 +30,20 @@ GROMACS_TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr'}
 # Auxiliar PDB file which may be generated to load non supported restart files
 AUXILIAR_PDB_BILE = '.auxiliar.pdb'
 
+# Set excpetions for fixes applied from here
+PREFILTERED_TOPOLOGY_EXCEPTION = Exception('Prefiltered topology')
+
 # Check input files coherence and intergrity
 # If there is any problem then raise an input error
-def check_inputs (input_structure_file : 'File', input_trajectory_files : List['File'], input_topology_file : Union['File', Exception]):
+# Some exceptional problems may be fixed from here
+# In this cases both the exception and the modified file are return in a final dict
+def check_inputs (
+    input_structure_file : 'File',
+    input_trajectory_files : List['File'],
+    input_topology_file : Union['File', Exception]) -> dict:
+
+    # Set the exceptions dict to be returned at the end
+    exceptions = {}
     
     # Get a sample trajectory file and then check its format
     # All input trajectory files must have the same format
@@ -217,14 +230,27 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
 
         # Make sure their atom counts match
         if topology_atom_count != trajectory_atom_count:
-            raise InputError('Mismatch in the number of atoms between input files:\n' +
+            warn('Mismatch in the number of atoms between input files:\n' +
                 f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms\n' +
                 f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
+            if topology_atom_count < trajectory_atom_count:
+                raise InputError('Trajectory has more atoms than topology, there is no way to fix this.')
+            # If the topology has more atoms than the trajectory however we may attempt to guess
+            # If we guess which atoms are the ones in the trajectory then we can filter the topology
+            else:
+                prefiltered_topology_filepath = f'{input_topology_file.basepath}/prefiltered.{input_topology_file.format}'
+                prefiltered_topology_file = File(prefiltered_topology_filepath)
+                guessed = guess_and_filter_topology(
+                    input_topology_file,
+                    prefiltered_topology_file,
+                    trajectory_atom_count)
+                if guessed: exceptions[PREFILTERED_TOPOLOGY_EXCEPTION] = prefiltered_topology_file
+                else: raise InputError('Could not guess topology atom selection to match trajectory atoms count')
         
         # If the topology file is already the structure file then there is no need to check it
         if input_structure_file == input_topology_file:
             print(f'Topology and trajectory files match in number of atoms: {trajectory_atom_count}')
-            return
+            return exceptions
 
         # If the counts match then also get the structure atom count and compare
         structure_atom_count = get_structure_atoms(input_structure_file)
@@ -237,7 +263,7 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         
         # If we reached this point then it means everything is matching
         print(f'All input files match in number of atoms: {trajectory_atom_count}')
-        return
+        return exceptions
         
     # Otherwise it means we had not a valid topology file
     # We must use the structure to find trajectory atoms
@@ -258,3 +284,4 @@ def check_inputs (input_structure_file : 'File', input_trajectory_files : List['
         
     # If we made it this far it means all checkings are good
     print(f'Input files match in number of atoms: {trajectory_atom_count}')
+    return exceptions

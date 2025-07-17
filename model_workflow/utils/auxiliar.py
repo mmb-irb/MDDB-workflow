@@ -11,7 +11,7 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, List, Generator
+from typing import Optional, List, Set, Generator, Union
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
@@ -73,6 +73,19 @@ letters = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' }
 def get_new_letter(current_letters : set) -> Optional[str]:
     return next((letter for letter in letters if letter not in current_letters), None)
+
+# Given a list or set of names, return a set with all case-posibilites:
+# All upper case
+# All lower case
+# First upper case and the rest lower case
+def all_cases (names : Union[List[str], Set[str]]) -> Set[str]:
+    all_names = []
+    for name in names:
+        all_upper = name.upper()
+        all_lower = name.lower()
+        one_upper = name[0].upper() + name[1:].lower()
+        all_names += [ all_upper, all_lower, one_upper ]
+    return set(all_names)
 
 # Given a residue name, return its single letter
 def residue_name_to_letter (residue_name : str) -> str:
