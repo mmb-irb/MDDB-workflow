@@ -616,3 +616,141 @@ def parse_xpm (filename : str) -> List[ List[float] ]:
             raise ValueError('Different number of columns than expected')
         # Return the output
         return { 'entities': entities, 'x_axis': x_axis, 'y_axis': y_axis, 'matrix': matrix }
+
+# Filter atoms in a pdb file
+# This method conserves maximum resolution and chains
+def pdb_filter (
+    input_pdb_filepath : str,
+    output_pdb_filepath : str,
+    index_filepath : str,
+    filter_group_name : str
+):
+    # Filter the trajectory
+    p = Popen([
+        "echo",
+        filter_group_name,
+    ], stdout=PIPE)
+    process = run([
+        GROMACS_EXECUTABLE,
+        "editconf",
+        "-f",
+        input_pdb_filepath,
+        '-o',
+        output_pdb_filepath,
+        '-n',
+        index_filepath,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
+    p.stdout.close()
+    # If output has not been generated then warn the user
+    if not exists(output_pdb_filepath):
+        print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
+        raise SystemExit('Something went wrong with Gromacs while filtering PDB')
+
+# Filter atoms in a xtc file
+# Note that here we do not hide the stderr
+# This is because it shows the progress
+# Instead we color the output grey
+def xtc_filter(
+    structure_filepath : str,
+    input_trajectory_filepath : str,
+    output_trajectory_filepath : str,
+    index_filepath : str,
+    filter_group_name : str
+):
+    print(GREY_HEADER)
+    # Filter the trajectory
+    p = Popen([
+        "echo",
+        filter_group_name,
+    ], stdout=PIPE)
+    process = run([
+        GROMACS_EXECUTABLE,
+        "trjconv",
+        "-s",
+        structure_filepath,
+        "-f",
+        input_trajectory_filepath,
+        '-o',
+        output_trajectory_filepath,
+        '-n',
+        index_filepath,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE)
+    logs = process.stdout.decode()
+    p.stdout.close()
+    print(COLOR_END)
+    # If output has not been generated then warn the user
+    if not exists(output_trajectory_filepath):
+        print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
+        raise SystemExit('Something went wrong with Gromacs while filtering XTC')
+
+# Filter atoms in both a pdb and a xtc file
+def tpr_filter(
+    input_tpr_filepath : str,
+    output_tpr_filepath : str,
+    index_filepath : str,
+    filter_group_name : str
+):
+    # Filter the topology
+    p = Popen([
+        "echo",
+        filter_group_name,
+    ], stdout=PIPE)
+    process = run([
+        GROMACS_EXECUTABLE,
+        "convert-tpr",
+        "-s",
+        input_tpr_filepath,
+        '-o',
+        output_tpr_filepath,
+        '-n',
+        index_filepath,
+        '-quiet'
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
+    p.stdout.close()
+    # If output has not been generated then warn the user
+    if not exists(output_tpr_filepath):
+        print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
+        raise SystemExit('Something went wrong with Gromacs while filtering TPR')
+
+# Create a .ndx file from a complex mask
+# e.g. no water and no ions -> !"Water"&!"Ion"
+# This will return the group name to be further used
+def make_index (input_structure_file : 'File', output_index_file : 'File', mask : str) -> str:
+    # Run Gromacs
+    p = Popen([
+        "echo",
+        "-e", # Allows the interpretation of '\'
+        mask,
+        '\nq' # Breakline + Save
+    ], stdout=PIPE)
+    process = run([
+        GROMACS_EXECUTABLE,
+        "make_ndx",
+        "-f",
+        input_structure_file.path,
+        '-o',
+        output_index_file.path
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
+    p.stdout.close()
+    # Check the output file exists at this point
+    # If not then it means something went wrong with gromacs
+    if not output_index_file.exists:
+        print(logs)
+        error_logs = process.stderr.decode()
+        print(error_logs)
+        raise SystemExit('Something went wrong with Gromacs when creating index file')
+    # The group name is automatically assigned by gromacs
+    # It equals the mask but removing andy " symbol
+    group_name = mask.replace('"','')
+    return group_name
