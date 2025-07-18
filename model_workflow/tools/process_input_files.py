@@ -66,7 +66,8 @@ def process_input_files (
     # However it is usual than Amber topologies (ideally .prmtop) are also '.top'
     # So if the trajectory is Amber and the topology is .top then assume it is Amber
     input_trajectories_format = list(input_trajectory_formats)[0]
-    if input_topology_file.extension == 'top' and input_trajectories_format == 'nc':
+    if input_topology_file != MISSING_TOPOLOGY and \
+        input_topology_file.extension == 'top' and input_trajectories_format == 'nc':
         # Creating a topology symlink/copy with the correct extension
         warn(f'Topology is .top but the trajectory is from Amber. I assume the topology is .prmtop')
         reformatted_topology_file = input_topology_file.reformat('prmtop')
@@ -379,7 +380,7 @@ def process_input_files (
     if len(input_trajectory_files) == 1 and input_trajectory_files[0] == output_trajectory_file:
         task.cache_cksums['input_trajectory_files'] = get_cksum_id([ output_trajectory_file ])
     if input_topology_file == output_topology_file:
-        task.cache_cksums['input_topology_file'] = output_topology_file.get_cksum()
+        task.cache_cksums['input_topology_file'] = str(MISSING_TOPOLOGY) if output_topology_file == MISSING_TOPOLOGY else output_topology_file.get_cksum()
 
     # --- Definitive PBC selection ---
 

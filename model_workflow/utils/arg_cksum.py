@@ -25,6 +25,8 @@ def get_cksum_id (value) -> Optional[Union[int, float, str]]:
     if value_type == int or value_type == float or value_type == bool: return value
     # For strings, sum the ordinal numbers of every letter
     if value_type == str: return f'{sum(map(ord, value))} -> {len(value)}'
+    # For exceptions simply keep the excepction message
+    if value_type == Exception: return str(value)
     # For objects, stringify them and then do the same that with strings
     if value_type in { list, dict, tuple }:
         stringifyed = json.dumps(value, default = lambda o: o.__repr__())
