@@ -427,11 +427,23 @@ def get_tpr_charges (tpr_filepath : str) -> List[float]:
 
 # Regular expresion to mine atom bonds
 GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*([0-9]*) type=[0-9]* \((BONDS|CONSTR|CONNBONDS)\)\s*([0-9]*)\s*([0-9]*)$"
+# Set a regular expression for SETTLE bonds, used for rigid waters
+# ---- From the paper ------------------------------------------------------------------------------------
+# The SETTLE can be applied to a four-point water model like TIP4P5 which has the fourth point with
+# a certain charge and no mass if the force acting on the fourth point is distributed onto the other three
+# points with masses in a reasonable manner.
+# S. Miyamoto and P.A. Kollman, “SETTLE: An analytical version of the SHAKE and RATTLE algorithms for rigid
+# water models,” J. Comp. Chem., 13 952–962 (1992)
+# --------------------------------------------------------------------------------------------------------
+# So it may happen that we encounter SETTLE with 4 atoms
+# This is not yet supported, but at least we check if this is happening to raise an error when found
+GROMACS_TPR_SETTLE_REGEX = r"^\s*([0-9]*) type=[0-9]* \(SETTLE\)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)$"
 
 # Get tpr atom bonds
 def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
     # Read the TPR
     tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
+    lines = tpr_content.split('\n')
     # Mine the atomic bonds
     bonds = []
     # Save the moment we already processed a bond of each class (e.g. bonds, constr, connbonds, etc.)
@@ -439,8 +451,8 @@ def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
     # Save already processed bond classes which have an index restart
     # This is a coomon problem in TPR bonding, we do not know the meaning but bonds after the index restart are always wrong
     restarted_bond_classes = set()
-    # Iterate tpr content lines
-    for line in tpr_content.split('\n'):
+    # Iterate tpr content lines to find bonds
+    for line in lines:
         # Parse the line to get only atomic bonds
         match = search(GROMACS_TPR_ATOM_BONDS_REGEX, line)
         # If this is not a line with bonding data then skip it
@@ -461,6 +473,21 @@ def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
         # Get atom indices of bonded atoms
         bond = ( int(match[3]), int(match[4]) )
         bonds.append(bond)
+    # Iterate bonds again to find water bonds with the SETTLE algorithm
+    for line in lines:
+        # Parse the line to get only atomic bonds
+        match = search(GROMACS_TPR_SETTLE_REGEX, line)
+        # If this is not a line with bonding data then skip it
+        if not match: continue
+        # If there is a 4rth atom we stop here
+        if match[5]: raise ValueError('Found SETTLE bonds with 4 atoms. This is not yet supported')
+        # Mine the settle
+        settle = ( int(match[2]), int(match[3]), int(match[4]) )
+        # Set actual bonds from the settles
+        # The oxygen is always declared first
+        # DANI: De esto no estoy 100% seguro, pero Miłosz me dijo que probablemente es así
+        # DANI: Si no se cumple, el test de coherent bonds enconrará un hidrógeno con 2 enlaces
+        bonds += [ (settle[0], settle[1]), (settle[0], settle[2]) ]
     # If we successfully got atom bonds then return them
     if len(bonds) > 0: return bonds
     # If there are no bonds at the end then something went wrong
