@@ -10,7 +10,7 @@ class TestStructure:
 
     @pytest.mark.parametrize(
             "structure_file",
-            ["A0001.pdb", "A0001.prmtop", "A0224.tpr", "3rbn.cif"]) # TO-DO add from prody
+            ["A0001.pdb", "A0001.prmtop", "A0224.tpr", "3rbn.cif"])
     
     def test_load_structure(self, structure_file: str, test_data_dir: str):
         """Test loading a structure from a file"""

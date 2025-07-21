@@ -5,7 +5,7 @@
 # DANI: e.g. intentas importar structures, quien a su vez intenta importar los type hints
 
 from pytraj import TrajectoryIterator
-from typing import TYPE_CHECKING, Callable, List, Set, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, List, Set, Optional, Tuple, Union, Generator
 
 if TYPE_CHECKING:
     from model_workflow.utils.structures import Structure, Residue, Atom

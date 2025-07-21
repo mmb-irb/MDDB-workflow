@@ -43,11 +43,6 @@ class Selection:
     def __or__ (self, other):
         return self.merge(other)
 
-    @classmethod
-    def from_prody (cls, prody_selection):
-        indexes = [ atom.getIndex() for atom in prody_selection.iterAtoms() ]
-        return cls(indexes)
-
     # Return a new selection made of self and other selection atom indices
     def merge (self, other : Optional['Selection']) -> 'Selection':
         if not other:
@@ -71,15 +66,10 @@ class Selection:
         intersection_atom_indices = list(self_atom_indices.intersection(other_atom_indices))
         return Selection(intersection_atom_indices)
 
-    def to_prody (self) -> str:
-        # Make sure it is not an empty selection
-        if not self: raise ValueError('Trying to get ProDy selection from an empty selection')
-        return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
-
     def to_mdanalysis (self) -> str:
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get MDAnalysis selection from an empty selection')
-        return self.to_prody() # Same notation than prody for atom indices
+        return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
 
     def to_pytraj (self) -> str:
         # Make sure it is not an empty selection

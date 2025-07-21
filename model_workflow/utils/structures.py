@@ -1,12 +1,12 @@
 # Main handler of the toolbelt
 import os
-import math
-import numpy as np
 import re
+import math
+import pytraj
+import MDAnalysis
+import numpy as np
 from scipy.special import comb # DANI: Substituye al math.comb porque fué añadido en python 3.8 y nosotros seguimos en 3.7
 from bisect import bisect
-from typing import Optional, Union, Tuple, List, Generator, Set
-Coords = Tuple[float, float, float]
 
 from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
@@ -21,19 +21,9 @@ from model_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM
 from model_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from model_workflow.utils.constants import DNA_RESIDUE_NAME_LETTERS, RNA_RESIDUE_NAME_LETTERS
 from model_workflow.utils.constants import FATTY_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
+from model_workflow.utils.type_hints import *
+Coords = Tuple[float, float, float]
 
-import pytraj
-# Import these libraries if they are available
-# Otherwise proceed without them
-# The error is not raised until a function using the missing module is called
-try:
-    import prody # type: ignore
-except:
-    pass
-try:
-    import MDAnalysis
-except:
-    pass
 
 # Set all available chains according to pdb standards
 AVAILABLE_CAPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
@@ -1223,40 +1213,6 @@ class Structure:
         # Finally, remove the current chain from the list of chains in the structure
         del self.chains[purged_index]
 
-    # Set the structure from a ProDy topology
-    @classmethod
-    def from_prody (cls, prody_topology):
-        parsed_atoms = []
-        parsed_residues = []
-        parsed_chains = []
-        prody_atoms = list(prody_topology.iterAtoms())
-        prody_residues = list(prody_topology.iterResidues())
-        prody_chains = list(prody_topology.iterChains())
-        # Parse atoms
-        for prody_atom in prody_atoms:
-            name = prody_atom.getName()
-            element = prody_atom.getElement()
-            coords = tuple(prody_atom.getCoords())
-            parsed_atom = Atom(name=name, element=element, coords=coords)
-            parsed_atoms.append(parsed_atom)
-        # Parse residues
-        for prody_residue in prody_residues:
-            name = prody_residue.getResname()
-            number = int(prody_residue.getResnum())
-            icode = prody_residue.getIcode()
-            parsed_residue = Residue(name=name, number=number, icode=icode)
-            atom_indices = [ int(index) for index in prody_residue.getIndices() ]
-            parsed_residue.atom_indices = atom_indices
-            parsed_residues.append(parsed_residue)
-        # Parse chains
-        for prody_chain in prody_chains:
-            name = prody_chain.getChid()
-            parsed_chain = Chain(name=name)
-            residue_indices = [ int(residue.getResindex()) for residue in prody_chain.iterResidues() ]
-            parsed_chain.residue_indices = residue_indices
-            parsed_chains.append(parsed_chain)
-        return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
-
     # Set the structure from a pdb file
     # You may filter the PDB content for a specific model
     # Some weird numeration systems are not supported and, when encountered, they are ignored
@@ -1721,18 +1677,6 @@ class Structure:
         with open(pdb_filepath, "w") as file:
             file.write(pdb_content)
 
-    # Get the structure equivalent prody topology
-    def get_prody_topology (self):
-        # In we do not have prody in our environment then we cannot proceed
-        if not is_imported('prody'):
-            raise InputError('Missing dependency error: prody')
-        # Generate the prody topology
-        pdb_filepath = '.structure.pdb'
-        self.generate_pdb_file(pdb_filepath)
-        prody_topology = prody.parsePDB(pdb_filepath)
-        os.remove(pdb_filepath)
-        return prody_topology
-
     # Get the structure equivalent pytraj topology
     def get_pytraj_topology (self):
         # In we do not have pytraj in our environment then we cannot proceed
@@ -1748,9 +1692,8 @@ class Structure:
     # Select atoms from the structure thus generating an atom indices list
     # Different tools may be used to make the selection:
     # - vmd (default)
-    # - prody
     # - pytraj
-    SUPPORTED_SELECTION_SYNTAXES = { 'vmd', 'prody', 'pytraj' }
+    SUPPORTED_SELECTION_SYNTAXES = { 'vmd', 'pytraj' }
     def select (self, selection_string : str, syntax : str = 'vmd') -> Optional['Selection']:
         if syntax == 'vmd':
             # Generate a pdb for vmd to read it
@@ -1762,15 +1705,6 @@ class Structure:
             if len(atom_indices) == 0:
                 return Selection()
             return Selection(atom_indices)
-        if syntax == 'prody':
-            # In we do not have prody in our environment then we cannot proceed
-            if not is_imported('prody'):
-                raise InputError('Missing dependency error: prody')
-            prody_topology = self.get_prody_topology()
-            prody_selection = prody_topology.select(selection_string)
-            if not prody_selection:
-                return Selection()
-            return Selection.from_prody(prody_selection)
         if syntax == 'pytraj':
             # In we do not have pytraj in our environment then we cannot proceed
             if not is_imported('pytraj'):
