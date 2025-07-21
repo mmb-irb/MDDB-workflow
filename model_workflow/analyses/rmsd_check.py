@@ -103,7 +103,7 @@ def check_trajectory_integrity (
     outliers_count = 0
     max_z_score = 0
     max_z_score_frame = 0
-    for i, rmsd_jump in enumerate(rmsd_jumps):
+    for i, rmsd_jump in enumerate(rmsd_jumps, 1):
         z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
         # Keep track of the maixmum z score
         if z_score > max_z_score:
@@ -112,7 +112,7 @@ def check_trajectory_integrity (
         # If z score bypassed the limit then report it
         if z_score > standard_deviations_cutoff:
             # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-            if i == bypassed_frames:
+            if i - 1 == bypassed_frames:
                 bypassed_frames += 1
                 continue
             if outliers_count >= 4:
@@ -257,7 +257,7 @@ def check_trajectory_integrity_per_fragment (
         fragment_max_z_score = 0
         fragment_max_z_score_frame = 0
 
-        for i, rmsd_jump in enumerate(rmsd_jumps):
+        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
             # Keep track of the maixmum z score for this fragment
             if z_score > fragment_max_z_score:
@@ -270,7 +270,7 @@ def check_trajectory_integrity_per_fragment (
             # If z score bypassed the limit then report it
             if z_score > standard_deviations_cutoff:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i == bypassed_frames:
+                if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
                 if outliers_count >= 4:
@@ -421,7 +421,7 @@ def check_trajectory_integrity_per_fragment_2 (
         max_z_score = 0
         max_z_score_frame = 0
 
-        for i, rmsd_jump in enumerate(rmsd_jumps):
+        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
             # Keep track of the maixmum z score
             if z_score > max_z_score:
@@ -430,7 +430,7 @@ def check_trajectory_integrity_per_fragment_2 (
             # If z score bypassed the limit then report it
             if z_score > standard_deviations_cutoff:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i == bypassed_frames:
+                if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
                 if outliers_count >= 4:
@@ -640,7 +640,7 @@ def check_trajectory_integrity_per_residue (
         outliers_count = 0
         max_z_score = 0
         max_z_score_frame = 0
-        for i, rmsd_jump in enumerate(rmsd_jumps):
+        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
             # Keep track of the maixmum z score
             if z_score > max_z_score:
@@ -649,7 +649,7 @@ def check_trajectory_integrity_per_residue (
             # If z score bypassed the limit then report it
             if z_score > standard_deviations_cutoff:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i == bypassed_frames:
+                if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
                 # Otherwise we consider this as an outlier and thus the test has failed
