@@ -82,20 +82,27 @@ jobs:
       - name: Get version from pyproject.toml
         id: get_version
         run: |
-          VERSION=$(grep 'version = ' pyproject.toml | awk '{print $3}')
-          echo "Extracted version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+            VERSION=$(grep 'version = ' pyproject.toml | awk '{print $3}' | tr -d '"')
+            echo "Extracted version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            TAG_NAME="v$VERSION"
+            
+            # Check if the tag exists
+            if git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
+                echo "Tag v$VERSION already exists, update the version in the pyproject.toml file."
+                exit 1
+            fi
 
-      - name: Check if tag already exists
-        id: check_tag
-        run: |
-          TAG_NAME="v${{ steps.get_version.outputs.version }}"
-          if git rev-parse $TAG_NAME >/dev/null 2>&1; then
-            echo "Tag $TAG_NAME already exists, update the version in the pyproject.toml file."
-            exit 1
-          else
-            echo "Tag $TAG_NAME does not exist. Proceeding with the workflow."
-          fi
+            # Get version from the latest tag
+            LATEST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+
+            # Compare the versions
+            if [[ $(printf '%s\n' "$VERSION" "$LATEST_VERSION" | sort -V | head -n 1) == "$VERSION" ]]; then
+                echo "The new version ($VERSION) is not greater than the latest version ($LATEST_VERSION). Please update the version in pyproject.toml"
+                exit 1
+            else
+                echo "The new version ($VERSION) is greater than the latest version ($LATEST_VERSION). Proceeding with the workflow."
+            fi
           
       - name: List files in the repository
         run: |
@@ -150,6 +157,7 @@ jobs:
         run: pytest -m release --cov-report xml:./reports/coverage/coverage.xml --cov-report html:./reports/coverage/ --cov=model_workflow
           
       - name: Generate Coverage badge
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
         shell: bash -l {0}
         run: |
             coverage xml -o ./reports/coverage/coverage.xml
@@ -158,6 +166,7 @@ jobs:
             rm -rf ./reports/coverage/.gitignore
 
       - name: Publish coverage report to GitHub Pages
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
         uses: JamesIves/github-pages-deploy-action@v4.7.3
         with:
           folder: ./reports
