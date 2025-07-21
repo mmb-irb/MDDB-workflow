@@ -142,7 +142,7 @@ jobs:
         id: check_skip_flag
         run: |
           COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
-          if [[ "$COMMIT_MESSAGE" == *"[skip ci]"* || "$COMMIT_MESSAGE" == *"[skip tests]"* ]]; then
+          if [[ "$COMMIT_MESSAGE" == *"[skip tests]"* ]]; then
             echo "Commit message contains skip flag. Skipping tests."
             echo "skip_tests=true" >> $GITHUB_OUTPUT
           else
