@@ -1126,7 +1126,7 @@ def workflow_nassa(
         print(f'  Using config file {config_file_path}')
         # Load the configuration file
         try:
-            with Path(config_file_path.absolute_path).open("r") as ymlfile:
+            with Path(config_file_path).open("r") as ymlfile:
                 config_archive = yaml.load(
                     ymlfile, Loader=yaml.FullLoader)
         except FileNotFoundError:

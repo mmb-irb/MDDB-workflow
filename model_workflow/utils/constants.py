@@ -489,7 +489,7 @@ NASSA_ANALYSES_LIST = [ 'bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff' ]
 
 # Set the correponding canals archives (.ser) for each NASSA analysis
 NASSA_ANALYSES_CANALS = {
-    'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
+    #'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
     'coordist': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist','chiW', 'chiC'],
     'bpcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
     #'crdcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],

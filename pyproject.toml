@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "model_workflow"
-version = "0.0.1"
+version = "0.0.2"
 requires-python = ">=3.9.0"
 
 [project.optional-dependencies]
@@ -41,6 +41,7 @@ addopts = "-rsx -v --durations=0"
 [tool.conda-deny]
 safe-licenses = [
     "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception", # Apache License 2.0 with LLVM exception
     "Unlicense",
     "WTFPL",
     "MIT",
@@ -60,6 +61,7 @@ safe-licenses = [
     #"GPL-3.0-or-later",
     "LGPL-3.0-only",
     "LGPL-3.0-or-later",
+    "GPL-3.0-only WITH GCC-exception-3.1", # GPL with GCC Runtime Library Exception
     "Python-2.0",
     "Zlib"
 ]

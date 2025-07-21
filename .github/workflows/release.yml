@@ -62,7 +62,7 @@ jobs:
         shell: bash -l {0}
         run: pytest -m CI
 
-  install_and_coverage:
+  install_coverage_and_tag:
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -71,12 +71,39 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Important for tag pushing later
 
       - run: echo "Repository -> ${{ github.repository }}"
       - run: echo "Branch -> ${{ github.ref }}"
       - run: echo "Trigger event -> ${{ github.event_name }}"
       - run: echo "Runner OS -> ${{ runner.os }}"
 
+      - name: Get version from pyproject.toml
+        id: get_version
+        run: |
+            VERSION=$(grep 'version = ' pyproject.toml | awk '{print $3}' | tr -d '"')
+            echo "Extracted version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            TAG_NAME="v$VERSION"
+            
+            # Check if the tag exists
+            if git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
+                echo "Tag v$VERSION already exists, update the version in the pyproject.toml file."
+                exit 1
+            fi
+
+            # Get version from the latest tag
+            LATEST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+
+            # Compare the versions
+            if [[ $(printf '%s\n' "$VERSION" "$LATEST_VERSION" | sort -V | head -n 1) == "$VERSION" ]]; then
+                echo "The new version ($VERSION) is not greater than the latest version ($LATEST_VERSION). Please update the version in pyproject.toml"
+                exit 1
+            else
+                echo "The new version ($VERSION) is greater than the latest version ($LATEST_VERSION). Proceeding with the workflow."
+            fi
+          
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
@@ -110,11 +137,27 @@ jobs:
         shell: bash -l {0}
         run: python -m pip install -e ".[dev]"
 
+      # If [skip ci] or [skip tests] is present in the commit message, skip the tests
+      - name: Check commit message for skip flag
+        id: check_skip_flag
+        run: |
+          COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+          if [[ "$COMMIT_MESSAGE" == *"[skip tests]"* ]]; then
+            echo "Commit message contains skip flag. Skipping tests."
+            echo "skip_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "Commit message does not contain skip flag. Running tests."
+            echo "skip_tests=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run release tests
+        # Only run this step if the skip_tests flag is not set to true
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
         shell: bash -l {0}
         run: pytest -m release --cov-report xml:./reports/coverage/coverage.xml --cov-report html:./reports/coverage/ --cov=model_workflow
           
       - name: Generate Coverage badge
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
         shell: bash -l {0}
         run: |
             coverage xml -o ./reports/coverage/coverage.xml
@@ -123,6 +166,16 @@ jobs:
             rm -rf ./reports/coverage/.gitignore
 
       - name: Publish coverage report to GitHub Pages
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
         uses: JamesIves/github-pages-deploy-action@v4.7.3
         with:
           folder: ./reports
+
+      - name: Create and push tag
+        if: success()
+        run: |
+          TAG_NAME="v${{ steps.get_version.outputs.version }}"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub Actions

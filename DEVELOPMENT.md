@@ -53,28 +53,20 @@ Once you're done with your changes, you can create a [pull request (PR)](https:/
 
 When ready to make a new release, follow these steps:
 
-1. Merge the master branch into the release branch:
+0. Update the version number in `pyproject.toml`.
+
+1. Merge the master branch into the release branch. Add [skip tests] to the commit message to skip the CI tests:
 
 ```shell
 git checkout release
-git merge master
+git merge master # -m "Merge master into release [skip tests]"
 ```
 
-2. Wait for the comprehensive test suite to complete. These tests verify workflow integrity and may take a considerable amount of time.
+2. Wait for the comprehensive test suite to complete. These tests verify workflow integrity and may take a considerable amount of time. If any tests fail, you can fix them in the release branch.
 
-3. Once all tests pass successfully, create and push a new version tag:
+3. Once all tests pass successfully, a new tag is generated automatically based on the `pyproject.toml` version number. This is done by the GitHub Actions workflow defined in [release.yml](.github/workflows/release.yml).
 
-```shell
-# Create an annotated tag with a version number and message
-git tag -a v1.2.3 -m "Release version 1.2.3"
-
-# Push the tag to the remote repository
-git push origin v1.2.3
-```
-
-4. Create a GitHub release based on this tag through the GitHub web interface, including release notes that detail the changes and improvements.
-
-5. After the release is published, merge the release branch back to master if you made any changes to fix the tests:
+4. After the release is published, merge the release branch back to master if you made any changes to fix the tests:
 
 ```shell
 git checkout master
@@ -103,10 +95,12 @@ genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output
 `python -m build --wheel`
 
 ## Build docs
+Docs are generated automatically for the `master` branch using [Sphinx](https://www.sphinx-doc.org/en/master/). If you have installed the workflow with `python -m pip install -e ".[dev,docs]"`, you can use the following command to build the documentation locally:
+```shell
+make -C docs/ html
+```
 
-`make -C docs/ html`
-
-Open `docs/_build/html/index.html` to see the results.
+Then, you can open `docs/_build/html/index.html` to see the results. This way you can preview the documentation before pushing changes to the repository and without having to wait for the Read the Docs build.
 
 ## Build conda
 
