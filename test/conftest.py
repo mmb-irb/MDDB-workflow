@@ -14,8 +14,8 @@ def pytest_configure(config):
 def test_data_dir():
     test_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     output_dir = os.path.join(test_data_dir, 'output')
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
+    # if os.path.exists(output_dir):
+    #     shutil.rmtree(output_dir)
     return test_data_dir
 
 @pytest.fixture(scope="class")

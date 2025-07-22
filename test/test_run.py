@@ -9,13 +9,13 @@ from model_workflow.utils.auxiliar import load_json
 from model_workflow.mwf import project_requestables, md_requestables
 
 
-@pytest.fixture(scope="class", params=["A0001", "A01IP"])
-def test_accession(request):
-    return request.param
-
 @pytest.mark.release
 class TestMWFRun:
     """Test full workflow for different accessions"""
+
+    @pytest.fixture(scope="class", params=["A0001", "A01IP"])
+    def test_accession(self, request):
+        return request.param
     
     # Arguments to reduce long test execution time
     task_arguments = {
@@ -61,6 +61,20 @@ class TestMWFRun:
         md: MD = project.mds[0]
         md.overwritables = {md_task}
         self._run_and_log_task(md_task, md_requestables[md_task], md, project.directory, capsys)
+
+@pytest.mark.release
+class TestMWFSpecial:
+
+    @pytest.mark.parametrize("test_accession", ["cg_test"], scope="class")
+    def test_CG(self, project: 'Project'):
+        # Only two tasks. In the future "all" should be supported 
+        md = project.mds[0]
+        md.get_processed_interactions(md)
+        md.run_rmsds_analysis(md)
+
+    @pytest.mark.parametrize("test_accession", ["test_020"], scope="class")
+    def test_dihedrals(self, project: 'Project'):
+        project.get_dihedrals()
 
 class TestAnalysisOutput:
     def test_TMscores_analysis(self, project : 'Project'):
