@@ -8,6 +8,12 @@ from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLO
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
+from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
+
+# Run a fix for gromacs if not done before
+# Note that this is run always at the moment the code is read, no matter the command or calling origin
+fix_gromacs_masses()
+
 # Get the first frame from a trajectory
 def get_first_frame (input_structure_filename : str, input_trajectory_filename : str, output_frame_filename : str):
     # Run Gromacs

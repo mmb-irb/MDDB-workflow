@@ -3,8 +3,8 @@ from pathlib import Path
 
 from model_workflow.utils.file import File
 
-# Replace the gromacs masses file (atommass.dat) by our custom file
-# This file includes all atoms also in all caps letters
+# Replace the default gromacs masses file (atommass.dat) by our custom masses file
+# This file includes relevant atoms also in all caps letters
 # e.g. Zn and ZN
 # This way we avoid gormacs not finding atoms because names are in caps
 
@@ -17,24 +17,25 @@ from model_workflow.utils.file import File
 # I spent half a day trying to get __file__ values using the /home/username root and I did not succeed
 # Then we decided to just write the masses file in the conda enviornment every time
 
-# Set the path to our custom masses file
+# LORE: This was done by modifying the conda enviornment before
+# However this lead to problems when containerizing the environment
+# In one hand, there was no CONDA_PREFIX environmental variable
+# But the real problem was that writting in the enviornment was not allowed
+# Otherwise the container could not be shared between different user in a cluster
+
+# Set the path to the workflow custom masses file
 resources = str(Path(__file__).parent.parent / "resources")
-custom_masses_file = File(resources + '/atommass.dat')
+source_custom_masses_file = File(resources + '/atommass.dat')
 
-# Set the path to the gromacs masses file
-gromacs_masses_directory = environ['CONDA_PREFIX'] + '/share/gromacs/top'
-gromacs_masses_file = File(gromacs_masses_directory + '/atommass.dat')
-
-# Set the backup filename
-# We keep the original atom masses file just in case
-backup_file = File(gromacs_masses_directory + '/backup_atommass.dat')
+# Set the path to a local copy of the workflow custom masses file
+# According to Justin Lemkul:
+# "All GROMACS programs will read relevant database files from the working directory 
+# before referencing them from $GMXLIB."
+local_custom_masses_file = File('atommass.dat')
 
 # Replace the original file by a symlink to our custom file if it is not done yet
 def fix_gromacs_masses ():
 
     # Check if the backup file exists and, if not, then rename the current masses file as the backup
-    if not backup_file.exists:
-        gromacs_masses_file.rename_to(backup_file)
-
-    # Always copy our custom masses file to the enviornment just in case it was modified since last time
-    custom_masses_file.copy_to(gromacs_masses_file)
+    if not local_custom_masses_file.exists:
+        local_custom_masses_file.set_symlink_to(source_custom_masses_file)

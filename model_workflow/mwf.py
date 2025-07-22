@@ -52,7 +52,6 @@ from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
-from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 from model_workflow.tools.process_input_files import process_input_files
 
 # Import local analyses
@@ -103,10 +102,6 @@ MISSING_VALUE_EXCEPTION = Exception('Missing value')
 # Name of the argument used by all functions to know where to write output
 OUTPUT_FILEPATH_ARG = 'output_filepath'
 OUTPUT_DIRECTORY_ARG = 'output_directory'
-
-# Run a fix in gromacs if not done before
-# Note that this is run always at the moment the code is read, no matter the command or calling origin
-fix_gromacs_masses()
 
 # Set some variables which are filled at the end but are referred by previously defined functions
 requestables = {}
