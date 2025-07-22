@@ -139,19 +139,22 @@ def check_trajectory_integrity (
     if outliers_count > 0:
         error = 'RMSD check has failed: there may be sudden jumps along the trajectory'
     # The message changes if the outliers are at the begining only
-    if bypassed_frames > 0:
+    elif bypassed_frames > 0:
         error = f'First {bypassed_frames} frames may be not equilibrated'
 
     # In case there was a problem,
     if error:
         # Display a graph to show the distribution of sudden jumps along the trajectory
         if is_terminal:
-            plt.scatter(rmsd_jumps) 
+            data = rmsd_jumps
+            if outliers_count == 0 and bypassed_frames > 0:
+                data = rmsd_jumps[0:bypassed_frames+100]
+            plt.scatter(data) 
             plt.title("RMSD jumps along the trajectory")
             plt.xlabel('Frame')
             plt.ylabel('RMSD jump')
             n_ticks = 5
-            n_jumps = len(rmsd_jumps)
+            n_jumps = len(data)
             tickstep = math.ceil(n_jumps / n_ticks)
             xticks = [ t+1 for t in range(0, n_jumps, tickstep) ]
             xlabels = [ str(t) for t in xticks ]
