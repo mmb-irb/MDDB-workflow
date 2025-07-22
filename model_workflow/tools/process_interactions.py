@@ -179,32 +179,6 @@ def process_interactions (
     interaction_count = len(interactions)
     if not interactions or interaction_count == 0:
         return []
-    
-    # Make sure there are no interactions with the same name
-    interaction_names = [ interaction['name'] for interaction in interactions ]
-    if len(set(interaction_names)) < len(interaction_names):
-        raise InputError('Interactions must have unique names')
-    # Check input interactions to be correct
-    for i, interaction in enumerate(interactions, 1):
-        name = interaction["name"]
-        # Check agents have different names
-        if interaction['agent_1'] == interaction['agent_2']:
-            raise InputError(f'Interaction agents must have different names at {name}')
-        # Check agents have different selections
-        if interaction['selection_1'] == interaction['selection_2']:
-            raise InputError(f'Interaction agents must have different selections at {name}')
-        # Make sure both agents have valid selections
-        agent_1_selection = structure.select(interaction['selection_1'])
-        if not agent_1_selection:
-            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
-        agent_2_selection = structure.select(interaction['selection_2'])
-        if not agent_2_selection:
-            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
-        # Make sure selections do not overlap at all
-        # This makes not sense as interactions are implemented in this workflow
-        overlap = agent_1_selection & agent_2_selection
-        if overlap:
-            raise InputError(f'Agents in interaction "{name}" have {len(overlap)} overlapping atoms')
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
