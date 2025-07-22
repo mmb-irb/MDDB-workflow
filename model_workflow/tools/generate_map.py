@@ -592,6 +592,9 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
                 if not comment.get('text', False): continue
                 text = comment.get('text', None)
                 if text == None: raise ValueError('Unexpected UniProt response format: no text in comment')
+                # DANI: el comment 'text' casi siempre es una lista
+                # DANI: solo tengo constancia de una vez en que era un string directamente
+                # DANI: en uno de los comentarios de https://www.ebi.ac.uk/proteins/api/proteins/Q15465
                 if type(text) == str: comment_text.append(text)
                 elif type(text) == list: comment_text.append(text[0]['value'])
                 else: raise ValueError('Unexpected UniProt response format: text in comment is neither str or list')
