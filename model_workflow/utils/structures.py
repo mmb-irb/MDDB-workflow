@@ -58,8 +58,9 @@ coherent_bonds_without_hydrogen = {
 # This means the last number is 9999 and it is equivalent to index 9998
 pdb_last_decimal_residue_index = 9998
 
-# An atom
 class Atom:
+    """An atom class."""
+
     def __init__ (self,
         name : Optional[str] = None,
         element : Optional[str] = None,
@@ -138,15 +139,16 @@ class Atom:
         self.set_residue_index(new_residue_index)
     residue = property(get_residue, set_residue, None, "The atom residue")
 
-    # The atom chain index according to parent structure chains
     def get_chain_index (self) -> Optional[int]:
+        """Get the atom chain index according to parent structure chains."""
         # The residue may be missing if the atom has been set rawly
         if not self.residue:
             return None
         return self.residue.chain_index
-    # Set a new chain index
-    # WARNING: You may create a new residue in this process
+    
     def set_chain_index (self, new_chain_index : int):
+        """Set a new chain index.
+        WARNING: You may create a new residue in this process."""
         # If the new chain index is the current chain index do nothing
         # WARNING: It is important to stop this here or it could delete a chain which is not to be deleted
         if new_chain_index == self.chain_index:
@@ -187,8 +189,8 @@ class Atom:
         return self.structure.chains[self.chain_index]
     chain = property(get_chain, None, None, "The atom chain (read only)")
 
-    # Get indices of other atoms in the structure which are covalently bonded to this atom
     def get_bonds (self, skip_ions : bool = False, skip_dummies : bool = False) -> Optional[ List[int] ]:
+        """Get indices of other atoms in the structure which are covalently bonded to this atom."""
         if not self.structure:
             raise ValueError('The atom has not a structure defined')
         if self.index == None:
@@ -204,27 +206,29 @@ class Atom:
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
     bonds = property(get_bonds, None, None, 'Atoms indices of atoms in the structure which are covalently bonded to this atom')
 
-    # Get bonded atoms
     def get_bonded_atoms (self) -> List['Atom']:
+        """Get bonded atoms."""
         return [ self.structure.atoms[atom_index] for atom_index in self.bonds ]
 
-    # Generate a selection for this atom
     def get_selection (self) -> 'Selection':
+        """Generate a selection for this atom."""
         return Selection([self.index])
 
-    # Make a copy of the current atom
     def copy (self) -> 'Atom':
+        """Make a copy of the current atom."""
         atom_copy = Atom(self.name, self.element, self.coords)
         atom_copy._structure = self._structure
         atom_copy._index = self._index
         atom_copy._residue_index = self._residue_index
         return atom_copy
 
-    # Check if this atom meets specific criteria:
-    # 1 - it is a carbon
-    # 2 - it is connected only to other carbons and hydrogens
-    # 3 - it is connected to 1 or 2 carbons
     def is_fatty_candidate (self) -> bool:
+        """
+        Check if this atom meets specific criteria:
+        1. It is a carbon
+        2. It is connected only to other carbons and hydrogens
+        3. It is connected to 1 or 2 carbons
+        """
         # Ignore non carbon atoms
         if self.element != 'C':
             return False
@@ -239,12 +243,14 @@ class Atom:
             return False
         return True
 
-    # Check if this atom meets specific criteria:
-    # 1 - it is a carbon
-    # 2 - it is connected only to other carbons, hydrogens or oxygens
-    # 3 - it is connected to 1 or 2 carbons
-    # 4 - It is connected to 1 oxygen
     def is_carbohydrate_candidate (self) -> bool:
+        """
+        Check if this atom meets specific criteria:
+        1. It is a carbon
+        2. It is connected only to other carbons, hydrogens or oxygens
+        3. It is connected to 1 or 2 carbons
+        4. It is connected to 1 oxygen
+        """
         # Ignore non carbon atoms
         if self.element != 'C':
             return False
@@ -263,12 +269,12 @@ class Atom:
             return False
         return True
 
-    # Check if it is an ion by checking if it has no bonds with other atoms
     def is_ion (self) -> bool:
+        """Check if it is an ion by checking if it has no bonds with other atoms."""
         return len(self.bonds) == 0
 
-    # Guess an atom element from its name and number of bonds
     def guess_element (self) -> str:
+        """Guess an atom element from its name and number of bonds."""
         # If the atom name is among the known dummy atoms then return a standard element for dummy atoms
         if self.name.upper() in STANDARD_DUMMY_ATOM_NAMES:
             return DUMMY_ATOM_ELEMENT
@@ -289,8 +295,8 @@ class Atom:
             return 'N'
         return element
 
-    # Guess an atom element from its name only
     def get_name_suggested_element (self) -> str:
+        """Guess an atom element from its name only."""
         # Get the atom name and its characters length
         name = self.name
         length = len(name)
@@ -523,39 +529,43 @@ class Residue:
         external_bonds = set(all_bonds) - set(self.atom_indices)
         return list(external_bonds)
 
-    # Get atoms bonded to this residue
     def get_bonded_atoms (self) -> List['Atom']:
+        """Get atoms bonded to this residue."""
         return [ self.structure.atoms[atom_index] for atom_index in self.get_bonded_atom_indices() ]
 
-    # Get residue indices from residues bonded to this residue
     def get_bonded_residue_indices (self) -> List[int]:
+        """Get residue indices from residues bonded to this residue."""
         return list(set([ atom.residue_index for atom in self.get_bonded_atoms() ]))
 
-    # Get residues bonded to this residue
     def get_bonded_residues (self) -> List['Residue']:
+        """Get residues bonded to this residue."""
         return [ self.structure.residues[residue_index] for residue_index in self.get_bonded_residue_indices() ]
 
-    # Geiven another residue, check if it is bonded with this resiude
     def is_bonded_with_residue (self, other : 'Residue') -> bool:
+        """Given another residue, check if it is bonded with this residue."""
         bonded_atom_indices = set(self.get_bonded_atom_indices())
         if next((index for index in other.atom_indices if index in bonded_atom_indices), None) != None: return True
         return False
 
-    # Get the residue biochemistry classification
-    # WARNING: Note that this logic will not work in a structure without hydrogens
-    # Available classifications:
-    # - protein
-    # - dna
-    # - rna
-    # - carbohydrate
-    # - fatty
-    # - steroid
-    # - ion
-    # - solvent
-    # - acetyl
-    # - amide
-    # - other
     def get_classification (self) -> str:
+        """
+        Get the residue biochemistry classification.
+
+        WARNING: Note that this logic will not work in a structure without hydrogens.
+
+        Available classifications:
+        - protein
+        - dna
+        - rna
+        - carbohydrate
+        - fatty
+        - steroid
+        - ion
+        - solvent
+        - acetyl
+        - amide
+        - other
+        """
         # Return the internal value, if any
         if self._classification:
             return self._classification
@@ -755,9 +765,7 @@ class Residue:
     def find_rings (self) -> Generator[ List[Atom], None, None ]:
         return self.structure.find_rings(selection=self.get_selection())
 
-    # Split this residue in 2 residues and return them in a tuple
-    # Keep things coherent in the structure (renumerate all residues below this one)
-    # Note that all residue atoms must be covered by the splits
+    
     def split (self,
         first_residue_atom_indices : List[int],
         second_residue_atom_indices : List[int],
@@ -768,6 +776,11 @@ class Residue:
         first_residue_icode : Optional[str] = None,
         second_residue_icode : Optional[str] = None,
     ) -> Tuple['Residue', 'Residue']:
+        """
+        Split this residue in 2 residues and return them in a tuple.
+        Keep things coherent in the structure (renumerate all residues below this one).
+        Note that all residue atoms must be covered by the splits.
+        """
         # This function is expected to be called in a residue with an already set structure
         if not self.structure:
             raise InputError('The split function should be called when the residue has an already defined structure')
@@ -921,9 +934,10 @@ class Chain:
         # Get residues in the structure according to residue indices
         residues = self.structure.residues
         return [ residues[residue_index] for residue_index in self.residue_indices ]
+    
     def set_residues (self, new_residues : List['Residue']):
-        # Find indices for new residues and set their indices as the new residue indices
-        # Note that residues must be set in the structure already
+        """Find indices for new residues and set their indices as the new residue indices.
+        Note that residues must be set in the structure already."""
         new_residue_indices = []
         for new_residue in new_residues:
             new_residue_index = new_residue.index
@@ -1121,9 +1135,8 @@ class Structure:
             if selection & fragment:
                 yield fragment
 
-    # Name an atom selection depending on the chains it contains
-    # This is used for debug purpouses
     def name_selection (self, selection : 'Selection') -> str:
+        """Name an atom selection depending on the chains it contains. This is used for debug purpouses."""
         atoms = [ self.atoms[index] for index in selection.atom_indices ]
         # Count atoms per chain
         atom_count_per_chain = { chain: 0 for chain in self.chains }
@@ -1819,19 +1832,21 @@ class Structure:
     def select_pbc_guess (self) -> 'Selection':
         return self.select_water() + self.select_counter_ions() + self.select_lipids()
     
-    # Select coarse grain atoms
     def select_cg (self) -> 'Selection':
+        """Select coarse grain atoms."""
         return Selection([ atom.index for atom in self.atoms if atom.element == CG_ATOM_ELEMENT ])
 
-    # Select cartoon representable regions for VMD
-    # Rules are:
-    # 1. Residues must be protein (i.e. must contain C, CA, N and O atoms) or nucleic (P, OP1, OP2, O3', C3', C4', C5', O5')
-    # 2. There must be at least 3 covalently bonded residues
-    # It does not matter their chain, numeration or even index order as long as they are bonded
-    # * Note that we can represent cartoon while we display one residue alone, but it must be connected anyway
-    # Also, we have the option to include terminals in the cartoon selection although they are not representable
-    # This is helpful for the screenshot: terminals are better hidden than represented as ligands
     def select_cartoon (self, include_terminals : bool = False) -> 'Selection':
+        """Select cartoon representable regions for VMD.
+
+        Rules are:
+          1. Residues must be protein (i.e. must contain C, CA, N and O atoms) or nucleic (P, OP1, OP2, O3', C3', C4', C5', O5')
+          2. There must be at least 3 covalently bonded residues
+    
+        It does not matter their chain, numeration or even index order as long as they are bonded.
+        * Note that we can represent cartoon while we display one residue alone, but it must be connected anyway.
+        Also, we have the option to include terminals in the cartoon selection although they are not representable.
+        This is helpful for the screenshot: terminals are better hidden than represented as ligands."""
         # Set fragments which are candidate to be cartoon representable
         fragments = []
         # Get protein fragments according to VMD
@@ -2020,10 +2035,11 @@ class Structure:
             chain.residue_indices = residue_indices
         return Structure(atoms=new_atoms, residues=new_residues, chains=new_chains)
 
-    # Set chains on demand
-    # If no selection is passed then the whole structure will be affected
-    # If no chain is passed then a "chain by fragment" logic will be applied
+    
     def chainer (self, selection : Optional['Selection'] = None, letter : Optional[str] = None, whole_fragments : bool = True):
+        """Set chains on demand.
+        If no selection is passed then the whole structure will be affected.
+        If no chain is passed then a "chain by fragment" logic will be applied."""
         # If there is no selection we consider all atoms
         if selection == None:
             selection = self.select_all()
@@ -2115,10 +2131,16 @@ class Structure:
             raise InputError(f'There are more chains than available chain letters ({len(AVAILABLE_LETTERS)})')
         return next_available_chain_name
     
-    # Get the next available chain name
-    # Given an anterior chain name, find the next available chain name in alphabetical order
-    # If all letters in the alphabet are used already then raise an error
     def get_next_available_chain_name (self, anterior : str) -> str:
+        """
+        Get the next available chain name.
+
+        Args:
+            anterior (str): The last chain name used, which is expected to be a single letter
+        
+        Raises:
+            ValueError: If the anterior is not a letter or if there are more chains than available
+        """
         current_chain_names = set([ chain.name for chain in self.chains ])
         # If anterior is cap then try caps first, if anterior is lower then try lowers first
         if anterior.isupper():
@@ -2158,22 +2180,26 @@ class Structure:
             print(f'Chain {chain.name} ({len(chain.residue_indices)} residues)')
             print(' -> ' + chain.get_sequence())
 
-    # There may be chains which are equal in the structure (i.e. same chain name)
-    # This means we have a duplicated/splitted chain
-    # Repeated chains are usual and they are usually supported but with some problems
-    # Also, repeated chains ususally come with repeated residues, which means more problems (see explanation below)
-
-    # In the conext of this structure class we may have 2 different problems with a different solution each:
-    # 1 - There is more than one chain with the same letter (repeated chain) -> rename the duplicated chains
-    # 2 - There is a chain with atom indices which are not consecutive (splitted chain) -> create new chains
-
-    # Rename repeated chains or create new chains if the fix_chains argument is True
-    # WARNING: These fixes are possible only if there are less chains than the number of letters in the alphabet
-    # Although there is no limitation in this code for chain names, setting long chain names is not compatible with pdb format
     
-    # Check repeated chains (two chains with the same name) and return True if there were any repeats
-    # Check splitted chains (a chains with non consecuitve residues) and try to fix them if requested
     def check_repeated_chains (self, fix_chains : bool = False, display_summary : bool = False) -> bool:
+        """
+        There may be chains which are equal in the structure (i.e. same chain name).
+        This means we have a duplicated/splitted chain.
+        Repeated chains are usual and they are usually supported but with some problems.
+        Also, repeated chains usually come with repeated residues, which means more problems (see explanation below).
+
+        In the context of this structure class we may have 2 different problems with a different solution each:
+          1. There is more than one chain with the same letter (repeated chain) -> rename the duplicated chains
+          2. There is a chain with atom indices which are not consecutive (splitted chain) -> create new chains
+
+        Rename repeated chains or create new chains if the fix_chains argument is True.
+
+        WARNING: These fixes are possible only if there are less chains than the number of letters in the alphabet.
+        Although there is no limitation in this code for chain names, setting long chain names is not compatible with pdb format.
+
+        Check splitted chains (a chains with non consecutive residues) and try to fix them if requested.
+        Check repeated chains (two chains with the same name) and return True if there were any repeats.
+        """
         # Order chains according to their names
         # Save also those chains which have a previous duplicate
         name_chains = {}
@@ -2242,29 +2268,32 @@ class Structure:
         # Fix repeated chains if requested
         return len(repeated_chains) > 0
 
-    # There may be residues which are equal in the structure (i.e. same chain, name, number and icode)
-    # In case 2 residues in the structure are equal we must check distance between their atoms
-    # If atoms are far it means they are different residues with the same notation (duplicated residues)
-    # If atoms are close it means they are indeed the same residue (splitted residue)
-
-    # Splitted residues are found in some pdbs and they are supported by some tools
-    # These tools consider all atoms with the same 'record' as the same residue
-    # However, there are other tools which would consider the splitted residue as two different residues
-    # This causes inconsistency along different tools besides a long list of problems
-    # The only possible is fix is changing the order of atoms in the topology
-    # Note that this is a breaking change for associated trajectories, which must change the order of coordinates
-    # However here we provide tools to fix associates trajectories as well
-
-    # Duplicated residues are usual and they are usually supported but with some problems
-    # For example, pytraj analysis outputs use to sort results by residues and each residue is tagged
-    # If there are duplicated residues with the same tag it may be not possible to know which result belongs to each residue
-    # Another example are NGL selections once in the web client
-    # If you select residue ':A and 1' and there are multiple residues 1 in chain A all of them will be displayed
-
-    # Check residues to search for duplicated and splitted residues
-    # Renumerate repeated residues if the fix_residues argument is True
-    # Return True if there were any repeats
+    
     def check_repeated_residues (self, fix_residues : bool = False, display_summary : bool = False) -> bool:
+        """
+        There may be residues which are equal in the structure (i.e. same chain, name, number and icode).
+        In case 2 residues in the structure are equal we must check distance between their atoms.
+        If atoms are far it means they are different residues with the same notation (duplicated residues).
+        If atoms are close it means they are indeed the same residue (splitted residue).
+
+        Splitted residues are found in some pdbs and they are supported by some tools.
+        These tools consider all atoms with the same 'record' as the same residue.
+        However, there are other tools which would consider the splitted residue as two different residues.
+        This causes inconsistency along different tools besides a long list of problems.
+        The only possible is fix is changing the order of atoms in the topology.
+        Note that this is a breaking change for associated trajectories, which must change the order of coordinates.
+        However here we provide tools to fix associates trajectories as well.
+
+        Duplicated residues are usual and they are usually supported but with some problems.
+        For example, pytraj analysis outputs use to sort results by residues and each residue is tagged.
+        If there are duplicated residues with the same tag it may be not possible to know which result belongs to each residue.
+        Another example are NGL selections once in the web client.
+        If you select residue ':A and 1' and there are multiple residues 1 in chain A all of them will be displayed.
+
+        Check residues to search for duplicated and splitted residues.
+        Renumerate repeated residues if the fix_residues argument is True.
+        Return True if there were any repeats.
+        """
         # Track if residues have to be changed or not
         modified = False
         # Group all residues in the structure according to their chain, number and icode
@@ -2566,9 +2595,9 @@ class Structure:
         structure_copy.bonds = self.copy_bonds()
         return structure_copy
 
-    # Merge currnet structure with another structure
     # DANI: No lo he testeado en profundidad
     def merge (self, other : 'Structure') -> 'Structure':
+        """Merge current structure with another structure."""
         # Copy self atoms, residues and chains
         self_atom_copies = [ atom.copy() for atom in self.atoms ]
         self_residue_copies = [ residue.copy() for residue in self.residues ]
