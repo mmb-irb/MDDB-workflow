@@ -95,6 +95,7 @@ def image_and_fit (
     # Imaging --------------------------------------------------------------------------------------
 
     if image:
+        print(' Running first imaging step')
 
         # Check if coordinates are to be translated 
         must_translate = translation != [0, 0, 0]
@@ -178,13 +179,14 @@ def image_and_fit (
         # Check the output exists
         if not output_trajectory_file.exists:
             print(logs)
-            raise Exception('Something went wrong with Gromacs')
+            raise Exception('Something went wrong with Gromacs during first imaging step')
 
         # Select the first frame of the recently imaged trayectory as the new topology
         reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
 
         # If there are PBC residues then run a '-pbc mol' to make all residues stay inside the box anytime
         if has_pbc_atoms:
+            print(' Fencing PBC molecules back to the box')
             print(GREY_HEADER)
             # Run Gromacs
             p = Popen([
@@ -217,6 +219,7 @@ def image_and_fit (
 
         # If there are no PBC residues then run a '-pbc nojump' to avoid non-sense jumping of any molecule
         else:
+            print(' Running no-jump')
             print(GREY_HEADER)
             # Run Gromacs
             p = Popen([
@@ -250,6 +253,7 @@ def image_and_fit (
     # Remove translation and rotation in the trajectory using the custom selection as reference
     # WARNING: Sometimes, simulations with membranes do not require this step and they may get worse when fitted
     if fit:
+        print(' Running fitting step')
 
         # The trajectory to fit is the already imaged trajectory
         # However, if there was no imaging, the trajectory to fit is the input trajectory
@@ -306,11 +310,12 @@ def reset_structure (
     input_trajectory_filename : str,
     output_structure_filename : str,
 ):
+    print(' Reseting structure after imaging step')
     p = Popen([
         "echo",
         "System",
     ], stdout=PIPE)
-    logs = run([
+    process = run([
         GROMACS_EXECUTABLE,
         "trjconv",
         "-s",
@@ -322,5 +327,6 @@ def reset_structure (
         '-dump',
         '0',
         '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
+    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
+    logs = process.stdout.decode()
     p.stdout.close()
