@@ -50,3 +50,5 @@ dependencies:
   - bioconda::tmscoring
   # For helical parameters. Can break the environment?
   - curves
+  # Visual tool to display graphs in terminal and even text logs
+  - plotext
