@@ -46,11 +46,7 @@ class TestConsoleIntegration:
     """Integration tests for console functionality"""
     
     @pytest.mark.parametrize("subcommand", [
-        "convert", 
-        "filter",
-        "subset",
-        "chainer",
-        "nassa"
+        "convert", "filter", "subset", "chainer", "nassa",
     ])
     def test_subcommand_help(self, subcommand):
         """Test that help text is printed for each subcommand"""
@@ -67,12 +63,24 @@ class TestConsoleIntegration:
         # Check that help text is printed
         assert f"usage: pytest {subcommand}" in output
 
+    @pytest.mark.parametrize("subcommand", [ "error", "run error"])
+    def test_errors(self, subcommand):
+        """Test that errors are raised for invalid commands"""
+        sys.argv = ['model_workflow', *subcommand.split()]
+
+        # Run the main function, which should raise SystemExit
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        
+        # Check that the exit code is non-zero
+        assert exc_info.value.code != 0 
+
 @pytest.mark.CI
 @pytest.mark.release
 class TestSubcommands:
     """Test the subcommands of the console interface"""
 
-    def test_subcommand_run(self, test_data_dir: str):
+    def test_run(self, test_data_dir: str):
         """Test that the workflow runs without errors, simulating console execution"""
 
         working_directory = os.path.join(test_data_dir, 'output/test_workflow')
@@ -94,23 +102,23 @@ class TestSubcommands:
         main()
         os.chdir(test_data_dir)
 
-    @pytest.mark.skip(reason="Test not implemented yet")
-    def test_subcommand_inputs(self, test_data_dir: str):
-        pass
+    # This subcommand is just copying the input.yaml so we dont need it
+    # def test_subcommand_inputs(self, test_data_dir: str):
+    #     pass
     
-    def test_subcommand_convert(self, test_data_dir: str):
+    def test_convert(self, test_data_dir: str):
         """Test that the convert subcommand can be executed without errors"""
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         sys.argv = ['model_workflow', 'convert', 
-                    '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb',
-                    '-os', f'{test_data_dir}/output/subcommand/converted.pdb',
-                    '-it', f'{test_data_dir}/input/raw_project/replica_1/trajectory.xtc',
-                    '-ot', f'{test_data_dir}/output/subcommand/converted.dcd']
+                    '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb', #mdcrd xtc
+                    '-os', f'{test_data_dir}/output/subcommand/converted.gro',
+                    '-it', f'{test_data_dir}/input/raw_project/2_frames.mdcrd',
+                    '-ot', f'{test_data_dir}/output/subcommand/converted.xtc']
         main()
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/converted.pdb')
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/converted.dcd')
+        assert os.path.exists(f'{test_data_dir}/output/subcommand/converted.gro')
+        assert os.path.exists(f'{test_data_dir}/output/subcommand/converted.xtc')
 
-    def test_subcommand_filter(self, test_data_dir: str):
+    def test_filter(self, test_data_dir: str):
         """Test that the filter subcommand can be executed without errors"""
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         sys.argv = ['model_workflow', 'filter', 
@@ -123,13 +131,28 @@ class TestSubcommands:
         assert os.path.exists(f'{test_data_dir}/output/subcommand/filtered.pdb')
         assert os.path.exists(f'{test_data_dir}/output/subcommand/filtered.xtc')
 
-    @pytest.mark.skip(reason="Test not implemented yet")
-    def test_subcommand_subset(self, test_data_dir: str):
-        pass
+    def test_subset(self, test_data_dir: str):
+        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
+        sys.argv = ['model_workflow', 'subset', 
+                '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb',
+                '-it', f'{test_data_dir}/input/raw_project/replica_1/trajectory.xtc',
+                '-ot', f'{test_data_dir}/output/subcommand/subset.xtc',
+                '-start', '1',
+                '-end', '8',
+                '-step', '2']
+        main()
+        assert os.path.exists(f'{test_data_dir}/output/subcommand/subset.xtc')
 
-    @pytest.mark.skip(reason="Test not implemented yet")
-    def test_subcommand_chainer(self, test_data_dir: str):
-        pass
+    def test_chainer(self, test_data_dir: str):
+        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
+        sys.argv = ['model_workflow', 'chainer', 
+                '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb',
+                '-os', f'{test_data_dir}/output/subcommand/chained.pdb',
+                '-sel', '::A',
+                '-let', 'Z',
+                '-syn', 'pytraj']
+        main()
+        assert os.path.exists(f'{test_data_dir}/output/subcommand/chained.pdb')
 
 @pytest.mark.release
 class TestNassa:
@@ -138,7 +161,7 @@ class TestNassa:
         """Override the default accession for this test"""
         return "seq001-1"
     
-    def test_helical(self, test_data_dir, project: 'Project'):
+    def test_helical(self, project: 'Project'):
         project.mds[0].run_helical_analysis(project)
 
     def test_nassa_helical(self, test_data_dir: str):

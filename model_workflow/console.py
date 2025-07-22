@@ -45,7 +45,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
     def _format_usage(self, usage, actions, groups, prefix):
         essential_usage = super()._format_usage(usage, actions, groups, prefix)
         # Only for mwf run
-        if essential_usage.startswith('usage: mwf run'):
+        if 'run' in self._prog:
             # Combine the aguments for -i, -e, -ow
             lines = essential_usage.split('\n')
             filtered_lines = []
@@ -608,7 +608,7 @@ convert_parser.add_argument(
     help="Path to output structure file")
 convert_parser.add_argument(
     "-it", "--input_trajectories", nargs='*',
-    help="Path to input trajectory file(s)")
+    help="Path to input trajectory file or same format files.")
 convert_parser.add_argument(
     "-ot", "--output_trajectory",
     help="Path to output trajectory file")

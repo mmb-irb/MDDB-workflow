@@ -1,9 +1,9 @@
 import os
+import shutil
 import pytest
 from model_workflow.mwf import Project
 from model_workflow.utils.constants import *
 from model_workflow.utils.file import File
-from unittest.mock import patch
 
 
 def pytest_configure(config):
@@ -12,7 +12,11 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def test_data_dir():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    test_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    output_dir = os.path.join(test_data_dir, 'output')
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    return test_data_dir
 
 @pytest.fixture(scope="class")
 def test_accession(request):
