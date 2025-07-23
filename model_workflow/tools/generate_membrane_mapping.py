@@ -5,6 +5,7 @@ from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
 
+
 def generate_membrane_mapping(lipid_map : List[dict],
                               structure_file : 'File',
                               universe: 'Universe',
@@ -70,14 +71,15 @@ def generate_membrane_mapping(lipid_map : List[dict],
         'cutoff': 2.2,
         'ignore_no_box': True,
         'disable_logs': True,
-        'return_hydrogen': True
+        'return_hydrogen': True,
+        'disable_sandbox': True, # Do not copy the input file to the sandbox
     }
     output_ndx_path = "tmp_mem_map.ndx"
     print(' Running BioBB FATSLiM Membranes')
     with redirect_stdout(None):
         fatslim_membranes(input_top_path=structure_file.absolute_path,
-                        output_ndx_path=output_ndx_path,
-                        properties=prop)
+                          output_ndx_path=output_ndx_path,
+                          properties=prop)
     # Parse the output to get the membrane mapping
     mem_map = parse_index(output_ndx_path)
     os.remove(output_ndx_path)
