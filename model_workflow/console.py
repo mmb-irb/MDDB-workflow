@@ -653,19 +653,19 @@ subset_parser.add_argument(
     help="Path to output trajectory file")
 subset_parser.add_argument(
     "-start", "--start", type=int, default=0,
-    help="Start frame")
+    help="Start frame (0-based)")
 subset_parser.add_argument(
     "-end", "--end", type=int, default=None,
-    help="End frame")
+    help="End frame (0-based)")
 subset_parser.add_argument(
     "-step", "--step", type=int, default=1,
     help="Frame step")
 subset_parser.add_argument(
     "-skip", "--skip", nargs='*', type=int, default=[],
-    help="Frames to be skipped")
+    help="Frames to be skipped (0-based)")
 subset_parser.add_argument(
     "-fr", "--frames", nargs='*', type=int, default=[],
-    help="Frames to be returned. Input frame order is ignored as original frame order is conserved.")
+    help="Frames to be returned (0-based). Input frame order is ignored as original frame order is conserved.")
 
 # The chainer command
 chainer_parser = subparsers.add_parser("chainer",
