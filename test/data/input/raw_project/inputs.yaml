@@ -30,9 +30,9 @@ forced_references:
 framestep: 0.01
 groups:
 - Department of Basic Medical Science, Chonnam National University
-input_structure_filepath: 5ggr-rs1-310k-0ns.pdb
-input_topology_filepath: topology.tpr
-input_trajectory_filepaths: trajectory.xtc
+input_structure_filepath: 
+input_topology_filepath: 
+input_trajectory_filepaths: 
 interactions:
 - agent_1: Protein
   agent_2: Antibody

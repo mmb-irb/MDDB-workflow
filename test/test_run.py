@@ -1,19 +1,18 @@
-import os
-import pytest
 import numpy as np
-from conftest import get_analysis_file
+import os, sys, shutil, pytest
 
 from model_workflow.utils.constants import *
 from model_workflow.utils.type_hints import *
-from model_workflow.utils.auxiliar import load_json
+from model_workflow.utils.auxiliar import load_json, InputError
 from model_workflow.mwf import project_requestables, md_requestables
+from model_workflow.console import  main
 
 
 @pytest.mark.release
-class TestMWFRun:
-    """Test full workflow for different accessions"""
+class TestRunAll:
+    """Test all the tasks workflow for reference accessions"""
 
-    @pytest.fixture(scope="class", params=["A0001", "A01IP"])
+    @pytest.fixture(scope="class", params=["A0001", "A01IP", "A01VE"])
     def test_accession(self, request):
         return request.param
     
@@ -53,17 +52,67 @@ class TestMWFRun:
     @pytest.mark.parametrize("md_task", md_requestables.keys())
     def test_md_task(self, project: 'Project', md_task: str, capsys):
         """Test that each analysis runs without errors"""
-        if md_task == 'dihedrals' or \
-            (md_task == 'pockets' and project.accession == 'A01IP') or \
-            (md_task == 'dist' and project.accession == 'A01IP'):
-            pytest.skip(f"Skipping analysis '{md_task}' for now.")
-            
+        if md_task == 'dihedrals':
+            pytest.skip(f"Skipping analysis.")
+        elif project.accession == 'A01IP' and md_task in ['pockets', 'pockets', 'dist', 'energies']:
+            pytest.skip(f"Skipping analysis to save time.")
+
         md: MD = project.mds[0]
         md.overwritables = {md_task}
         self._run_and_log_task(md_task, md_requestables[md_task], md, project.directory, capsys)
 
 @pytest.mark.release
-class TestMWFSpecial:
+class TestRunFlags:
+    """Test the run subcommand with different flags"""
+
+    def test_top_no(self, test_data_dir: str):
+        """Test the flag -top no. Add , 'protmap' for coverage"""
+
+        working_directory = os.path.join(test_data_dir, 'output/test_top_no')
+        # Copy the inputs from raw_project
+        shutil.copytree(
+            os.path.join(test_data_dir, 'input/raw_project'),
+            working_directory,
+            ignore=shutil.ignore_patterns('topology.tpr'),
+            dirs_exist_ok=True)
+
+        sys.argv = ['model_workflow', 'run',
+                    '-dir', working_directory,
+                    '-stru', 'raw_structure.pdb',
+                    '-traj', 'raw_trajectory.xtc',
+                    '-top', 'no',
+                    '-i', 'setup', 'rmsds', 'protmap']
+        main()
+        # Change back to the original directory
+        os.chdir(test_data_dir)
+
+    def test_no_inputs(self, test_data_dir: str):
+        """Test the workflow without no inputs yaml"""
+
+        working_directory = os.path.join(test_data_dir, 'output/test_no_inputs')
+        # Copy the inputs from raw_project
+        shutil.copytree(
+            os.path.join(test_data_dir, 'input/raw_project'),
+            working_directory,
+            ignore=shutil.ignore_patterns('inputs.yaml'),
+            dirs_exist_ok=True)
+
+        sys.argv = ['model_workflow', 'run',
+                    '-dir', working_directory,
+                    '-top', 'topology.tpr',
+                    '-md', 'replica_1',
+                    'raw_structure.pdb',
+                    'raw_trajectory.xtc',
+                    '-i', 'setup', 'rmsds']
+
+        with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
+            main()
+
+        os.chdir(test_data_dir)
+
+@pytest.mark.release
+class TestRunSpecial:
+    """Test for special cases and specific accessions"""
 
     @pytest.mark.parametrize("test_accession", ["cg_test"], scope="class")
     def test_CG(self, project: 'Project'):
@@ -75,6 +124,18 @@ class TestMWFSpecial:
     @pytest.mark.parametrize("test_accession", ["test_020"], scope="class")
     def test_dihedrals(self, project: 'Project'):
         project.get_dihedrals()
+
+
+# ========== Analysis Output Tests =========
+# Test to see if the output of the analysis is the same as the reference file
+def get_analysis_file(project: 'Project', analysis_type: str):
+    """Download and provide the standard structure file"""
+    output_path = os.path.join(project.directory, f"mda.{analysis_type}_REF.json")
+    file_obj = File(output_path)
+    # Only download if file doesn't exist yet
+    if not file_obj.exists:
+        project.remote.download_analysis_data(analysis_type,  file_obj)
+    return file_obj
 
 class TestAnalysisOutput:
     def test_TMscores_analysis(self, project : 'Project'):

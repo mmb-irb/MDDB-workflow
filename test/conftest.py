@@ -3,7 +3,6 @@ import shutil
 import pytest
 from model_workflow.mwf import Project
 from model_workflow.utils.constants import *
-from model_workflow.utils.file import File
 
 
 def pytest_configure(config):
@@ -14,9 +13,10 @@ def pytest_configure(config):
 def test_data_dir():
     test_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     output_dir = os.path.join(test_data_dir, 'output')
+    os.makedirs(output_dir, exist_ok=True)
+    yield test_data_dir
     # if os.path.exists(output_dir):
     #     shutil.rmtree(output_dir)
-    return test_data_dir
 
 @pytest.fixture(scope="class")
 def test_accession(request):
@@ -28,6 +28,8 @@ def test_accession(request):
 @pytest.fixture(scope="class")
 def test_proj_dir(test_accession: str, test_data_dir: str):
     """Create a persistent directory for test data that remains across test runs"""
+    # Reset the current working to avoid issues with workflow changes
+    os.chdir(test_data_dir)
     # Create a project-specific test data directory
     test_proj_dir = os.path.join(test_data_dir, 'output', test_accession)
     # Create the directory if it doesn't exist
@@ -38,12 +40,3 @@ def test_proj_dir(test_accession: str, test_data_dir: str):
 def project(test_proj_dir : str, test_accession: str):
     project = Project(directory=test_proj_dir, accession=test_accession, sample_trajectory=10)
     return project
-
-def get_analysis_file(project: 'Project', analysis_type: str):
-    """Download and provide the standard structure file"""
-    output_path = os.path.join(project.directory, f"mda.{analysis_type}_REF.json")
-    file_obj = File(output_path)
-    # Only download if file doesn't exist yet
-    if not file_obj.exists:
-        project.remote.download_analysis_data(analysis_type,  file_obj)
-    return file_obj

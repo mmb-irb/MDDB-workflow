@@ -1,8 +1,5 @@
-import os
-import sys
-import shutil
-import pytest
 import subprocess
+import os, sys, shutil, pytest
 from io import StringIO
 from unittest.mock import patch
 from model_workflow.console import parser, main
@@ -83,11 +80,7 @@ class TestSubcommands:
     def test_run(self, test_data_dir: str):
         """Test that the workflow runs without errors, simulating console execution"""
 
-        working_directory = os.path.join(test_data_dir, 'output/test_workflow')
-        # Ensure the working directory doesn't exist and it is empty
-        if os.path.exists(working_directory):
-            # Remove the directory if it exists
-            shutil.rmtree(working_directory)
+        working_directory = os.path.join(test_data_dir, 'output/test_run')
         # Copy the inputs from raw_project
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
@@ -97,20 +90,29 @@ class TestSubcommands:
 
         sys.argv = ['model_workflow', 'run',
                     '-dir', working_directory,
-                    '-i', 'setup',
+                    '-stru', 'raw_structure.pdb',
+                    '-traj', 'raw_trajectory.xtc',
+                    '-top', 'topology.tpr',
+                    '-i', 'setup', 'rmsds',
                     '-filt', 'chain A']
         main()
         os.chdir(test_data_dir)
 
-    # This subcommand is just copying the input.yaml so we dont need it
-    # def test_subcommand_inputs(self, test_data_dir: str):
-    #     pass
-    
+    def test_inputs(self, test_data_dir: str):
+        # We change the directpry because the inputs command expects to be run in the output directory
+        # TODO add a flag to specify the input directory
+        cwd = os.getcwd()
+        os.chdir(test_data_dir + '/output')
+        sys.argv = ['model_workflow', 'inputs', '-ed', 'none']
+        main()
+        os.chdir(cwd)
+        assert os.path.exists(f'{test_data_dir}/output/inputs.yaml')
+
     def test_convert(self, test_data_dir: str):
         """Test that the convert subcommand can be executed without errors"""
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         sys.argv = ['model_workflow', 'convert', 
-                    '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb', #mdcrd xtc
+                    '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb', #mdcrd xtc
                     '-os', f'{test_data_dir}/output/subcommand/converted.gro',
                     '-it', f'{test_data_dir}/input/raw_project/2_frames.mdcrd',
                     '-ot', f'{test_data_dir}/output/subcommand/converted.xtc']
@@ -122,9 +124,9 @@ class TestSubcommands:
         """Test that the filter subcommand can be executed without errors"""
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         sys.argv = ['model_workflow', 'filter', 
-                    '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb',
+                    '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                     '-os', f'{test_data_dir}/output/subcommand/filtered.pdb',
-                    '-it', f'{test_data_dir}/input/raw_project/replica_1/trajectory.xtc',
+                    '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
                     '-ot', f'{test_data_dir}/output/subcommand/filtered.xtc',
                     '-sel', 'chain A']
         main()
@@ -134,8 +136,8 @@ class TestSubcommands:
     def test_subset(self, test_data_dir: str):
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         sys.argv = ['model_workflow', 'subset', 
-                '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb',
-                '-it', f'{test_data_dir}/input/raw_project/replica_1/trajectory.xtc',
+                '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
+                '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
                 '-ot', f'{test_data_dir}/output/subcommand/subset.xtc',
                 '-start', '1',
                 '-end', '8',
@@ -146,7 +148,7 @@ class TestSubcommands:
     def test_chainer(self, test_data_dir: str):
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         sys.argv = ['model_workflow', 'chainer', 
-                '-is', f'{test_data_dir}/input/raw_project/5ggr-rs1-310k-0ns.pdb',
+                '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-os', f'{test_data_dir}/output/subcommand/chained.pdb',
                 '-sel', '::A',
                 '-let', 'Z',
@@ -181,3 +183,4 @@ class TestNassa:
         command = "mwf nassa -c nassa.yml -all"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         assert result.returncode == 0
+        
