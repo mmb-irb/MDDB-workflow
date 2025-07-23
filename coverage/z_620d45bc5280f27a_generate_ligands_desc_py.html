@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for model_workflow/tools/generate_ligands_desc.py: 60%</title>
+    <title>Coverage for model_workflow/tools/generate_ligands_desc.py: 62%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
     <link rel="stylesheet" href="style_cb_81f8c14c.css" type="text/css">
     <script src="coverage_html_cb_6fb7b396.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>model_workflow/tools/generate_ligands_desc.py</b>:
-            <span class="pc_cov">60%</span>
+            <span class="pc_cov">62%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">547 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">329<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">218<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">341<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">206<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_620d45bc5280f27a_generate_lipid_references_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.9.2">coverage.py v7.9.2</a>,
-            created at 2025-07-21 09:52 +0000
+            created at 2025-07-23 10:54 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -442,7 +442,7 @@
     <p class="pln"><span class="n"><a id="t360" href="#t360">360</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t361" href="#t361">361</a></span><span class="t">    <span class="com"># If no input ligands are passed then stop here</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t362" href="#t362">362</a></span><span class="t">    <span class="key">if</span> <span class="nam">len</span><span class="op">(</span><span class="nam">ligands</span><span class="op">)</span> <span class="op">==</span> <span class="num">0</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t363" href="#t363">363</a></span><span class="t">        <span class="key">return</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t363" href="#t363">363</a></span><span class="t">        <span class="key">return</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t364" href="#t364">364</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t365" href="#t365">365</a></span><span class="t">    <span class="com"># Save data from all ligands to be saved in a file</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t366" href="#t366">366</a></span><span class="t">    <span class="nam">json_ligands_data</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -830,9 +830,9 @@
     <p class="pln"><span class="n"><a id="t748" href="#t748">748</a></span><span class="t">    <span class="com"># It may happend that a ligand code has no related resources at all</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t749" href="#t749">749</a></span><span class="t">    <span class="com"># e.g. ZN</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t750" href="#t750">750</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">related_resources</span><span class="op">:</span> <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t751" href="#t751">751</a></span><span class="t">    <span class="nam">pubchem_resource</span> <span class="op">=</span> <span class="nam">next</span><span class="op">(</span><span class="op">(</span><span class="nam">resource</span> <span class="key">for</span> <span class="nam">resource</span> <span class="key">in</span> <span class="nam">related_resources</span> <span class="key">if</span> <span class="nam">resource</span><span class="op">[</span><span class="str">'resource_name'</span><span class="op">]</span> <span class="op">==</span> <span class="str">'PubChem'</span><span class="op">)</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t752" href="#t752">752</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">pubchem_resource</span><span class="op">:</span> <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t753" href="#t753">753</a></span><span class="t">    <span class="key">return</span> <span class="nam">pubchem_resource</span><span class="op">[</span><span class="str">'resource_accession_code'</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t751" href="#t751">751</a></span><span class="t">    <span class="nam">pubchem_resource</span> <span class="op">=</span> <span class="nam">next</span><span class="op">(</span><span class="op">(</span><span class="nam">resource</span> <span class="key">for</span> <span class="nam">resource</span> <span class="key">in</span> <span class="nam">related_resources</span> <span class="key">if</span> <span class="nam">resource</span><span class="op">[</span><span class="str">'resource_name'</span><span class="op">]</span> <span class="op">==</span> <span class="str">'PubChem'</span><span class="op">)</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t752" href="#t752">752</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">pubchem_resource</span><span class="op">:</span> <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t753" href="#t753">753</a></span><span class="t">    <span class="key">return</span> <span class="nam">pubchem_resource</span><span class="op">[</span><span class="str">'resource_accession_code'</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t754" href="#t754">754</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t755" href="#t755">755</a></span><span class="t"><span class="com"># Given a PDB ligand code, get its pubchem</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t756" href="#t756">756</a></span><span class="t"><span class="com"># Use a web crawler to avoid having to use the PDB API</span>&nbsp;</span><span class="r"></span></p>
@@ -913,8 +913,8 @@
     <p class="run"><span class="n"><a id="t831" href="#t831">831</a></span><span class="t">    <span class="nam">prd_code</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t832" href="#t832">832</a></span><span class="t">    <span class="key">if</span> <span class="nam">nonpolymers</span> <span class="op">==</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t833" href="#t833">833</a></span><span class="t">        <span class="com"># Get the prd ligand code</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t834" href="#t834">834</a></span><span class="t">        <span class="nam">prd_code</span> <span class="op">=</span> <span class="nam">get_prd_ligand_code</span><span class="op">(</span><span class="nam">pdb_id</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t835" href="#t835">835</a></span><span class="t">        <span class="key">if</span> <span class="nam">prd_code</span> <span class="op">!=</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t834" href="#t834">834</a></span><span class="t">        <span class="nam">prd_code</span> <span class="op">=</span> <span class="nam">get_prd_ligand_code</span><span class="op">(</span><span class="nam">pdb_id</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t835" href="#t835">835</a></span><span class="t">        <span class="key">if</span> <span class="nam">prd_code</span> <span class="op">!=</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t836" href="#t836">836</a></span><span class="t">            <span class="key">return</span> <span class="op">[</span><span class="nam">prd_code</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t837" href="#t837">837</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t838" href="#t838">838</a></span><span class="t">    <span class="key">if</span> <span class="nam">nonpolymers</span> <span class="op">==</span> <span class="key">None</span> <span class="key">and</span> <span class="nam">prd_code</span> <span class="op">==</span> <span class="key">None</span><span class="op">:</span> <span class="key">return</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -928,18 +928,18 @@
     <p class="pln"><span class="n"><a id="t846" href="#t846">846</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t847" href="#t847">847</a></span><span class="t"><span class="com"># Given a PDB id, get its PRD ligand code</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t848" href="#t848">848</a></span><span class="t"><span class="key">def</span> <span class="nam">get_prd_ligand_code</span> <span class="op">(</span><span class="nam">pdb_id</span> <span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="nam">Optional</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t849" href="#t849">849</a></span><span class="t">    <span class="nam">query</span> <span class="op">=</span> <span class="str">'''query structure($id: String!) {</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t849" href="#t849">849</a></span><span class="t">    <span class="nam">query</span> <span class="op">=</span> <span class="str">'''query structure($id: String!) {</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t850" href="#t850">850</a></span><span class="t"><span class="str">        entry(entry_id: $id) {</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t851" href="#t851">851</a></span><span class="t"><span class="str">            pdbx_molecule_features {</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t852" href="#t852">852</a></span><span class="t"><span class="str">                prd_id</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t853" href="#t853">853</a></span><span class="t"><span class="str">            }</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t854" href="#t854">854</a></span><span class="t"><span class="str">        }</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t855" href="#t855">855</a></span><span class="t"><span class="str">    }'''</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t856" href="#t856">856</a></span><span class="t">    <span class="nam">parsed_response</span> <span class="op">=</span> <span class="nam">request_pdb_data</span><span class="op">(</span><span class="nam">pdb_id</span><span class="op">,</span> <span class="nam">query</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t857" href="#t857">857</a></span><span class="t">    <span class="nam">pdbx_id</span> <span class="op">=</span> <span class="nam">parsed_response</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">'pdbx_molecule_features'</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t858" href="#t858">858</a></span><span class="t">    <span class="key">if</span> <span class="nam">pdbx_id</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t859" href="#t859">859</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="str">f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t860" href="#t860">860</a></span><span class="t">        <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t856" href="#t856">856</a></span><span class="t">    <span class="nam">parsed_response</span> <span class="op">=</span> <span class="nam">request_pdb_data</span><span class="op">(</span><span class="nam">pdb_id</span><span class="op">,</span> <span class="nam">query</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t857" href="#t857">857</a></span><span class="t">    <span class="nam">pdbx_id</span> <span class="op">=</span> <span class="nam">parsed_response</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">'pdbx_molecule_features'</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t858" href="#t858">858</a></span><span class="t">    <span class="key">if</span> <span class="nam">pdbx_id</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t859" href="#t859">859</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="str">f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t860" href="#t860">860</a></span><span class="t">        <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t861" href="#t861">861</a></span><span class="t">    <span class="nam">prd_id</span> <span class="op">=</span> <span class="nam">pdbx_id</span><span class="op">[</span><span class="num">0</span><span class="op">]</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">'prd_id'</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span> <span class="com">#&#160;AGUS: podr&#237;a haber casos donde haya m&#225;s de uno? </span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t862" href="#t862">862</a></span><span class="t">    <span class="key">if</span> <span class="nam">prd_id</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t863" href="#t863">863</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="str">f'WARNING: Cannot find PRD ligand code for PDB id {pdb_id}'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -981,7 +981,7 @@
             <a class="nav" href="z_620d45bc5280f27a_generate_lipid_references_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.9.2">coverage.py v7.9.2</a>,
-            created at 2025-07-21 09:52 +0000
+            created at 2025-07-23 10:54 +0000
         </p>
     </div>
 </footer>
