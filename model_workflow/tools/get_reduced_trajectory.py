@@ -1,8 +1,7 @@
-from subprocess import run, PIPE, Popen
-
 from math import ceil
 
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, INCOMPLETE_PREFIX, GREY_HEADER, COLOR_END
+from model_workflow.utils.constants import INCOMPLETE_PREFIX
+from model_workflow.utils.gmx_spells import run_gromacs
 from model_workflow.utils.type_hints import *
 
 def calculate_frame_step(snapshots, reduced_trajectory_frames_limit):
@@ -63,31 +62,10 @@ def get_reduced_trajectory (
     # Create the reduced trajectory if it does not exist yet
     if not output_trajectory_file.exists:
         print(f'Reducing trajectory from {snapshots} to less than {reduced_trajectory_frames_limit} frames')
-        print(GREY_HEADER)
         # Run Gromacs
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-s",
-            input_topology_file.path,
-            "-f",
-            input_trajectory_file.path,
-            '-o',
-            incomplete_trajectory_file.path,
-            '-skip',
-            str(step),
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-        print(COLOR_END)
-        # Check the output file exists at the end
-        if not incomplete_trajectory_file.exists:
-            print(logs)
-            raise SystemExit('Something went wrong with GROMACS while reducing the trajectory')
+        run_gromacs(f'trjconv -s {input_topology_file.path} -f {input_trajectory_file.path} \
+                -o {incomplete_trajectory_file.path} -skip {step}',
+                user_input = 'System')
         # Once the trajectory is complete we rename it as complete
         incomplete_trajectory_file.rename_to(output_trajectory_file)
 

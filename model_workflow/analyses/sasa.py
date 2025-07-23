@@ -1,16 +1,16 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, OUTPUT_SASA_FILENAME
+from model_workflow.utils.constants import OUTPUT_SASA_FILENAME
+from model_workflow.utils.gmx_spells import run_gromacs
 from model_workflow.utils.type_hints import *
 
 import os
 import numpy
-from subprocess import run, PIPE, Popen
 
 # This is a residual file produced by the sasa analysis
 # It must be deleted after each
-area_filename = 'area.xvg'
+AREA_FILENAME = 'area.xvg'
 
 def sasa(
     structure_file: 'File',
@@ -67,25 +67,9 @@ def sasa(
         # WARNING: We want the SASA per residue, and this could be obtained replacing '-oa' per -'or'
         # WARNING: However, residues are not enumerated the same in Gromacs and other tools (e.g. pytraj)
         # For this reason we must always rely on atom numeration, which is the same along different tools
-        current_frame_sasa = 'sasa' + str(f) + '.xvg'
-        logs = run([
-            GROMACS_EXECUTABLE,
-            "sasa",
-            "-s",
-            current_frame,
-            '-oa',
-            current_frame_sasa,
-            "-n",
-            ndx_filename,
-            "-surface",
-            "0",
-            '-quiet'
-        ], stdout=PIPE, stderr=PIPE).stdout.decode()
-
-        # In case the output file does not exist at this point it means something went wrong with Gromacs
-        if not os.path.exists(current_frame_sasa):
-            print(logs)
-            raise SystemExit('Something went wrong with Gromacs')
+        current_frame_sasa = f'sasa{f}.xvg'
+        run_gromacs(f'sasa -s {current_frame} -oa {current_frame_sasa} \
+            -n {ndx_filename} -surface 0', expected_output_filepath = current_frame_sasa)
 
         # Mine the sasa results (.xvg file)
         # Hydrogen areas are not recorded in the xvg file
@@ -101,11 +85,8 @@ def sasa(
             sas_per_residues[residue_index] += atom_area
         sasa_per_frame.append(sas_per_residues)
         # Delete current frame files before going for the next frame
-        run([
-            "rm",
-            current_frame_sasa,
-            area_filename,
-        ], stdout=PIPE).stdout.decode()
+        os.remove(current_frame_sasa)
+        os.remove(AREA_FILENAME)
 
     # Remove the indices file since it is not required anymore
     os.remove(ndx_filename)

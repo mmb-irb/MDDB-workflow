@@ -23,19 +23,24 @@ from model_workflow.utils.file import File
 # But the real problem was that writting in the enviornment was not allowed
 # Otherwise the container could not be shared between different user in a cluster
 
-# Set the path to the workflow custom masses file
+# Set the absolute path to the workflow resources directory
 resources = str(Path(__file__).parent.parent / "resources")
-source_custom_masses_file = File(resources + '/atommass.dat')
-
-# Set the path to a local copy of the workflow custom masses file
-# According to Justin Lemkul:
-# "All GROMACS programs will read relevant database files from the working directory 
-# before referencing them from $GMXLIB."
-local_custom_masses_file = File('atommass.dat')
 
 # Replace the original file by a symlink to our custom file if it is not done yet
 def fix_gromacs_masses ():
 
+    # Set the source file
+    # WARNING: Note that this must be done here, not outside the function
+    # Otherwise a workflow called with a '-dir' parameter would have a wrong relative path
+    source_custom_masses_file = File(resources + '/atommass.dat')
+
+    # Set the path to a local copy of the workflow custom masses file
+    # According to Justin Lemkul:
+    # "All GROMACS programs will read relevant database files from the working directory 
+    # before referencing them from $GMXLIB."
+    local_custom_masses_file = File('atommass.dat')
+
     # Check if the backup file exists and, if not, then rename the current masses file as the backup
     if not local_custom_masses_file.exists:
+        print("aaaaaaaaaaaa")
         local_custom_masses_file.set_symlink_to(source_custom_masses_file)

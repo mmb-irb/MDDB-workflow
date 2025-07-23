@@ -1,11 +1,9 @@
 # This script is used to fit a trajectory (i.e. eliminate translation and rotation)
 # This process is carried by Gromacs
 
-from subprocess import run, PIPE, Popen
-
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.gmx_spells import run_gromacs
 from model_workflow.utils.type_hints import *
 
 # Set a pair of independent auxiliar functions to save and recover chains from a pdb file
@@ -100,86 +98,24 @@ def image_and_fit (
         # Check if coordinates are to be translated 
         must_translate = translation != [0, 0, 0]
 
-        # Set logs grey
-        print(GREY_HEADER)
-
         # If so run the imaging process without the '-center' flag
         if must_translate:
-            p = Popen([
-                "echo",
-                "System",
-            ], stdout=PIPE)
-            process = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                input_structure_file.path,
-                "-f",
-                input_trajectory_file.path,
-                '-o',
-                output_trajectory_file.path,
-                '-trans',
-                str(translation[0]),
-                str(translation[1]),
-                str(translation[2]),
-                '-pbc',
-                'atom',
-                #'-ur', # WARNING: This makes everything stay the same
-                #'compact', # WARNING: This makes everything stay the same
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE)
+            # WARNING: Adding '-ur compact' makes everything stay the same
+            run_gromacs(f'trjconv -s {input_structure_file.path} \
+                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
+                -trans {translation[0]} {translation[1]} {translation[2]} \
+                -pbc atom', user_input = 'System', show_error_logs = True)
         # If no translation is required and we have a tpr then use it to make molecules whole
         elif is_tpr_available:
-            p = Popen([
-                "echo",
-                CENTER_SELECTION_NAME,
-                "System",
-            ], stdout=PIPE)
-            process = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                input_topology_file.path,
-                "-f",
-                input_trajectory_file.path,
-                '-o',
-                output_trajectory_file.path,
-                '-pbc',
-                'whole',
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE)
+            run_gromacs(f'trjconv -s {input_topology_file.path} \
+                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
+                -pbc whole', user_input = 'System', show_error_logs = True)
         # Otherwise, center the custom selection
         else:
-            p = Popen([
-                "echo",
-                CENTER_SELECTION_NAME,
-                "System",
-            ], stdout=PIPE)
-            process = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                input_structure_file.path,
-                "-f",
-                input_trajectory_file.path,
-                '-o',
-                output_trajectory_file.path,
-                '-pbc',
-                'atom',
-                '-center',
-                '-n',
-                CENTER_INDEX_FILEPATH,
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE)
-        # Run the defined process
-        logs = process.stdout.decode()
-        p.stdout.close()
-        print(COLOR_END)
-
-        # Check the output exists
-        if not output_trajectory_file.exists:
-            print(logs)
-            raise Exception('Something went wrong with Gromacs during first imaging step')
+            run_gromacs(f'trjconv -s {input_structure_file.path} \
+                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
+                -pbc atom -center -n {CENTER_INDEX_FILEPATH}',
+                user_input = f'{CENTER_SELECTION_NAME} System', show_error_logs = True)
 
         # Select the first frame of the recently imaged trayectory as the new topology
         reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
@@ -187,29 +123,11 @@ def image_and_fit (
         # If there are PBC residues then run a '-pbc mol' to make all residues stay inside the box anytime
         if has_pbc_atoms:
             print(' Fencing PBC molecules back to the box')
-            print(GREY_HEADER)
             # Run Gromacs
-            p = Popen([
-                "echo",
-                "System",
-            ], stdout=PIPE)
-            logs = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                input_topology_file.path,
-                "-f",
-                output_trajectory_file.path,
-                '-o',
-                output_trajectory_file.path,
-                '-pbc',
-                'mol', # Note that the 'mol' option requires a tpr to be passed
-                '-n',
-                CENTER_INDEX_FILEPATH,
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-            p.stdout.close()
-            print(COLOR_END)
+            run_gromacs(f'trjconv -s {input_topology_file.path} \
+                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
+                -pbc mol -n {CENTER_INDEX_FILEPATH}',
+                user_input = 'System', show_error_logs = True)
 
             # Select the first frame of the recently translated and imaged trayectory as the new topology
             reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
@@ -220,33 +138,13 @@ def image_and_fit (
         # If there are no PBC residues then run a '-pbc nojump' to avoid non-sense jumping of any molecule
         else:
             print(' Running no-jump')
-            print(GREY_HEADER)
             # Run Gromacs
-            p = Popen([
-                "echo",
-                "System",
-            ], stdout=PIPE)
-            logs = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                output_structure_file.path,
-                "-f",
-                output_trajectory_file.path,
-                '-o',
-                output_trajectory_file.path,
-                # Expanding the box may help in some situations
-                # However there are secondary effects for the trajectory
-                #'-box',
-                #'999',
-                #'999',
-                #'999',
-                '-pbc',
-                'nojump',
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-            p.stdout.close()
-            print(COLOR_END)
+            # Expanding the box may help in some situations but there are secondary effects
+            # i.e. -box 999 999 999
+            run_gromacs(f'trjconv -s {output_structure_file.path} \
+                -f {output_trajectory_file.path} -o {output_trajectory_file.path} \
+                -pbc nojump',
+                user_input = 'System', show_error_logs = True)
 
     # Fitting --------------------------------------------------------------------------------------
 
@@ -265,30 +163,11 @@ def image_and_fit (
         # DANI: Esto siempre lo he hecho usando la estructura de la primera frame ya imageada
         if is_tpr_available: structure_to_fit = input_topology_file
 
-        print(GREY_HEADER)
         # Run Gromacs
-        p = Popen([
-            "echo",
-            CENTER_SELECTION_NAME,
-            "System",
-        ], stdout=PIPE)
-        logs = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-s",
-            structure_to_fit.path,
-            "-f",
-            trajectroy_to_fit.path,
-            '-o',
-            output_trajectory_file.path,
-            '-fit',
-            'rot+trans',
-            '-n',
-            CENTER_INDEX_FILEPATH,
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-        p.stdout.close()
-        print(COLOR_END)
+        run_gromacs(f'trjconv -s {structure_to_fit.path} \
+            -f {trajectroy_to_fit.path} -o {output_trajectory_file.path} \
+            -fit rot+trans', user_input = f'{CENTER_SELECTION_NAME} System',
+            show_error_logs = True)
         
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
         # Note that the input structure is not necessarily the output structure in this scenario
@@ -306,27 +185,11 @@ def image_and_fit (
 
 # Get the first frame of a trajectory
 def reset_structure (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    output_structure_filename : str,
+    input_structure_filepath : str,
+    input_trajectory_filepath : str,
+    output_structure_filepath : str,
 ):
     print(' Reseting structure after imaging step')
-    p = Popen([
-        "echo",
-        "System",
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "trjconv",
-        "-s",
-        input_structure_filename,
-        "-f",
-        input_trajectory_filename,
-        '-o',
-        output_structure_filename,
-        '-dump',
-        '0',
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
+    run_gromacs(f'trjconv -s {input_structure_filepath} \
+        -f {input_trajectory_filepath} -o {output_structure_filepath} \
+        -dump 0', user_input = 'System')

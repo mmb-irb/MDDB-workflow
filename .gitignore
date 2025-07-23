@@ -8,6 +8,7 @@ __pycache__
 .coverage*
 .pytest_cache/
 test/data/output/
+atommass.dat
 
 # Build
 build/
