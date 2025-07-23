@@ -49,6 +49,25 @@ git stash apply
 
 Once you're done with your changes, you can create a [pull request (PR)](https://github.com/mmb-irb/MDDB-workflow/pulls) to merge your branch into the main repository. This will trigger the continuous development (CI) tests for some quick check quality checks. It is advised to resolve the PR  with a code review from a peer as a way to check for possible problems, sharing knowledge about the workflow and getting ideas for improvements.
 
+## Testing
+```shell
+# To run a test by its name and optionally a parameter:
+pytest test/test_run.py -k test_analysis_execution[pockets]
+pytest test/test_run.py -k "TestMWFRun and A01IP and dist"
+# To run on a subset of tests use the markers with -m {CI,release}:
+pytest -m CI
+# To run all tests and generate a coverage report:
+pytest --cov-report term --cov=model_workflow -m CI
+# Generate the html report and save the console output to report.log while removing color codes
+pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow -m release --color=yes | tee >(sed 's/\x1b\[[0-9;]*m//g' > report.log)
+# Add to an existing coverage report
+pytest --cov-report html:coverage/ --cov=model_workflow --cov-append test/test_console.py
+```
+```shell
+coverage xml -o coverage/coverage.xml
+genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
+```
+
 ## Making a release
 
 When ready to make a new release, follow these steps:
@@ -74,24 +93,6 @@ git merge release
 git push origin master
 ``` 
 
-## Testing
-```shell
-# To run a test by its name and optionally a parameter:
-pytest test/test_run.py -k test_analysis_execution[pockets]
-pytest test/test_run.py -k "TestMWFRun and A01IP and dist"
-# To run on a subset of tests use the markers with -m {CI,release}:
-pytest -m CI
-# To run all tests and generate a coverage report:
-pytest --cov-report term --cov=model_workflow -m CI
-# Generate the html report and save the console output to report.log while removing color codes
-pytest --cov-report xml:coverage/coverage.xml --cov-report html:coverage/ --cov=model_workflow -m release --color=yes | tee >(sed 's/\x1b\[[0-9;]*m//g' > report.log)
-# Add to an existing coverage report
-pytest --cov-report html:coverage/ --cov=model_workflow --cov-append test/test_console.py
-```
-```shell
-coverage xml -o coverage/coverage.xml
-genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output-file coverage/coveragebadge.svg
-```
 ## Build wheel
 
 `python -m build --wheel`
