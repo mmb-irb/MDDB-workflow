@@ -69,6 +69,9 @@ class TestRunFlags:
         """Test the flag -top no. Add , 'protmap' for coverage"""
 
         working_directory = os.path.join(test_data_dir, 'output/test_top_no')
+        # Remove the directory if it already exists to ensure a clean state
+        if os.path.exists(working_directory):
+            shutil.rmtree(working_directory)
         # Copy the inputs from raw_project
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
@@ -90,6 +93,9 @@ class TestRunFlags:
         """Test the workflow without no inputs yaml"""
 
         working_directory = os.path.join(test_data_dir, 'output/test_no_inputs')
+        # Remove the directory if it already exists to ensure a clean state
+        if os.path.exists(working_directory):
+            shutil.rmtree(working_directory)
         # Copy the inputs from raw_project
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),

@@ -108,53 +108,57 @@ class TestSubcommands:
         os.chdir(cwd)
         assert os.path.exists(f'{test_data_dir}/output/inputs.yaml')
 
+    def clean_run_assert(self, test_data_dir: str, outputs: list = [], args: list = []):
+        """Wrapper for subcommand tests"""
+        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
+        # Ensure the outputs are removed before running the command
+        for output in outputs:
+            if os.path.exists(output):
+                os.remove(output)
+        # Set the arguments for the command
+        sys.argv = args
+        main()
+        # Check that the outputs are created
+        for output in outputs:
+            assert os.path.exists(output)
+        
     def test_convert(self, test_data_dir: str):
         """Test that the convert subcommand can be executed without errors"""
-        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
-        sys.argv = ['model_workflow', 'convert', 
-                    '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb', #mdcrd xtc
-                    '-os', f'{test_data_dir}/output/subcommand/converted.gro',
-                    '-it', f'{test_data_dir}/input/raw_project/2_frames.mdcrd',
-                    '-ot', f'{test_data_dir}/output/subcommand/converted.xtc']
-        main()
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/converted.gro')
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/converted.xtc')
+        outputs = [f'{test_data_dir}/output/subcommand/converted.gro',
+                   f'{test_data_dir}/output/subcommand/converted.xtc']
+        args = ['model_workflow', 'convert', 
+                '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
+                '-it', f'{test_data_dir}/input/raw_project/2_frames.mdcrd',
+                '-os', outputs[0], '-ot', outputs[1]]
+        self.clean_run_assert(test_data_dir, outputs, args)
 
     def test_filter(self, test_data_dir: str):
         """Test that the filter subcommand can be executed without errors"""
-        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
-        sys.argv = ['model_workflow', 'filter', 
-                    '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
-                    '-os', f'{test_data_dir}/output/subcommand/filtered.pdb',
-                    '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
-                    '-ot', f'{test_data_dir}/output/subcommand/filtered.xtc',
-                    '-sel', 'chain A']
-        main()
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/filtered.pdb')
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/filtered.xtc')
-
-    def test_subset(self, test_data_dir: str):
-        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
-        sys.argv = ['model_workflow', 'subset', 
+        outputs = [f'{test_data_dir}/output/subcommand/filtered.pdb',
+                   f'{test_data_dir}/output/subcommand/filtered.xtc']
+        args = ['model_workflow', 'filter', 
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
-                '-ot', f'{test_data_dir}/output/subcommand/subset.xtc',
-                '-start', '1',
-                '-end', '8',
-                '-step', '2']
-        main()
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/subset.xtc')
+                '-os', outputs[0], '-ot', outputs[1], '-sel', 'chain A']
+        self.clean_run_assert(test_data_dir, outputs, args)
+
+    def test_subset(self, test_data_dir: str):
+        outputs = [f'{test_data_dir}/output/subcommand/subset.xtc']
+        args = ['model_workflow', 'subset', 
+                '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
+                '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
+                '-ot', outputs[0], '-start', '1', '-end', '8', '-step', '2']
+        self.clean_run_assert(test_data_dir, outputs, args)
 
     def test_chainer(self, test_data_dir: str):
-        os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
-        sys.argv = ['model_workflow', 'chainer', 
+        outputs = [f'{test_data_dir}/output/subcommand/chained.pdb']
+        args = ['model_workflow', 'chainer', 
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-os', f'{test_data_dir}/output/subcommand/chained.pdb',
                 '-sel', '::A',
                 '-let', 'Z',
                 '-syn', 'pytraj']
-        main()
-        assert os.path.exists(f'{test_data_dir}/output/subcommand/chained.pdb')
+        self.clean_run_assert(test_data_dir, outputs, args)
 
 @pytest.mark.release
 class TestNassa:
@@ -173,14 +177,16 @@ class TestNassa:
         assert result.returncode == 0
 
     def test_nassa_create_config(self, test_data_dir: str):
+        """Creates a nassa.yml configuration file"""
         os.chdir(os.path.join(test_data_dir, 'output'))
         command = f"mwf nassa -w seq001-1/replica_1 -seq {test_data_dir}/input"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         assert result.returncode == 0
+        shutil.move("nassa.yml", "seq001-1")
 
     def test_nassa_all(self, test_data_dir: str):
+        """Creates nassa_analysis folder with all results."""
         os.chdir(os.path.join(test_data_dir, 'output'))
-        command = "mwf nassa -c nassa.yml -all"
+        command = "mwf nassa -c seq001-1/nassa.yml -all -o seq001-1/nassa_analysis"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         assert result.returncode == 0
-        
