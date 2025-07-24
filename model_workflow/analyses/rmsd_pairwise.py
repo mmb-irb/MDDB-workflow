@@ -12,7 +12,6 @@ from model_workflow.utils.auxiliar import save_json, numerate_filename, get_anal
 from model_workflow.utils.constants import OUTPUT_RMSD_PAIRWISE_FILENAME
 from model_workflow.utils.type_hints import *
 
-# Perform an analysis for the overall structure and then one more analysis for each interaction
 # The 'interactions' input is mandatory but it may be an empty list (i.e. there are no interactions)
 # Take a minimal subset of atoms representing both proteins and nucleic acids
 def rmsd_pairwise(
@@ -21,11 +20,12 @@ def rmsd_pairwise(
     output_directory : str,
     interactions : list,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
+    frames_limit : int = 200,
     overall_selection : str = "name CA or name C5'", # equivalent to "@CA,C5'" in pytraj
     ):
+    """Perform an analysis for the overall structure and then one more analysis for each interaction."""
 
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSD_PAIRWISE_FILENAME}'

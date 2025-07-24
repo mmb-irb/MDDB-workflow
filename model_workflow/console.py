@@ -36,23 +36,28 @@ class CustomHelpFormatter(RawTextHelpFormatter):
         lines = []
         for line in text.splitlines():
             if line.strip() != '':
-                lines.extend(wrap(line, width, break_long_words=False, replace_whitespace=False))
+                if line.startswith('https'):
+                    lines.append(line)
+                else:
+                    lines.extend(wrap(line, width, break_long_words=False, replace_whitespace=False))
         return lines
 
     def _format_usage(self, usage, actions, groups, prefix):
         essential_usage = super()._format_usage(usage, actions, groups, prefix)
-        # Remove lines about arguments -i, -e, -ow from usage
-        lines = essential_usage.split('\n')
-        filtered_lines = []
-        for line in lines:
-            if line.strip().startswith("[-i "):
-                line = line.replace("[-i", "[-i/-e/-ow")
-                filtered_lines.append(line)
-            elif line.strip().startswith("[-e") or line.strip().startswith("[-ow"):
-                continue
-            else:
-                filtered_lines.append(line)
-        essential_usage = '\n'.join(filtered_lines)
+        # Only for mwf run
+        if 'run' in self._prog:
+            # Combine the aguments for -i, -e, -ow
+            lines = essential_usage.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if line.strip().startswith("[-i "):
+                    line = line.replace("[-i", "[-i/-e/-ow")
+                    filtered_lines.append(line)
+                elif line.strip().startswith("[-e") or line.strip().startswith("[-ow"):
+                    continue
+                else:
+                    filtered_lines.append(line)
+            essential_usage = '\n'.join(filtered_lines)
         return essential_usage
     
     def _format_action_invocation(self, action):
@@ -274,14 +279,14 @@ def main ():
             # Also, it is necesary to provide the project directories. Each of the project directories must contain an independent MD
             if args.proj_directories == None:
                 nassa_parser.print_help()
-                print('Please provide a project directory to run the helical parameters analysis')
+                print('Please provide a project directory to run the helical parameters analysis with the -pdirs flag')
                 return
             if args.input_structure_filepath == None:
-                raise InputError('Please provide a structure file to run the helical parameters analysis')
+                raise InputError('Please provide a structure file to run the helical parameters analysis with the -stru flag')
             elif args.input_trajectory_filepath == None:
-                raise InputError('Please provide a trajectory file to run the helical parameters analysis')
+                raise InputError('Please provide a trajectory file to run the helical parameters analysis with the -traj flag')
             elif args.input_topology_filepath == None:
-                raise InputError('Please provide a topology file to run the helical parameters analysis')
+                raise InputError('Please provide a topology file to run the helical parameters analysis with the -top flag')
             # If the all flag is set, the user must provide the path to the sequences because it is necessary to create the nassa.yml and run the NASSA analysis
             if args.all:
                 if not args.seq_path:
@@ -380,10 +385,12 @@ run_parser_input_group.add_argument(
     action='append',
     nargs='*',
     default=None,
-    help=("Configuration of a specific MD. You may declare as many as you want."
-          "Every MD requires a directory name, a structure path and at least one trajectory path."
-          "The structure is -md <directory> <structure> <trajectory_1> <trajectory_2>... "
-          "Note that all trajectories from the same MD will be merged.")
+    help=("Configuration of a specific MD. You may declare as many as you want.\n"
+          "Every MD requires a directory name and at least one trajectory path.\n"
+          "The structure is -md <directory> <trajectory_1> <trajectory_2> ...\n"
+          "Note that all trajectories from the same MD will be merged.\n"
+          "For legacy reasons, you may also provide a specific structure for an MD.\n"
+          "e.g. -md <directory> <structure> <trajectory_1> <trajectory_2> ...")
 )
 run_parser_input_group.add_argument(
     "-proj", "--accession",
@@ -410,11 +417,11 @@ run_parser_workflow_group = run_parser.add_argument_group('WORKFLOW CONTROL OPTI
 run_parser_workflow_group.add_argument(
     "-img", "--image",
     action='store_true',
-    help="Set if the trajectory is to be imaged")
+    help="Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.")
 run_parser_workflow_group.add_argument(
     "-fit", "--fit",
     action='store_true',
-    help="Set if the trajectory is to be fitted (both rotation and translation)")
+    help="Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.")
 run_parser_workflow_group.add_argument(
     "-trans", "--translation",
     nargs='*',
@@ -435,7 +442,8 @@ run_parser_workflow_group.add_argument(
     nargs='?',
     default=None,
     const=10,
-    help="If passed, download just a few frames (10 by default) from the trajectory instead of it all")
+    metavar='N_FRAMES',
+    help="If passed, download the first 10 (by default) frames from the trajectory. You can specify a different number by providing an integer value.")
 run_parser_workflow_group.add_argument(
     "-rcut", "--rmsd_cutoff",
     type=float,
@@ -473,7 +481,7 @@ run_parser_selection_group.add_argument(
     "-pbc", "--pbc_selection",
     default=None,
     help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory. "
-        "e.g. remaining solvent and counter ion molecules, membrane lipids, etc."))
+        "e.g. remaining solvent, ions, membrane lipids, etc."))
 run_parser_selection_group.add_argument(
     "-cg", "--cg_selection",
     default=None,
@@ -576,7 +584,7 @@ run_parser_analysis_group.add_argument(
 # Add a new to command to aid in the inputs file setup
 inputs_parser = subparsers.add_parser("inputs",
     help="Set the inputs file",
-    formatter_class=RawTextHelpFormatter,
+    formatter_class=CustomHelpFormatter,
     parents=[common_parser]
 )
 
@@ -589,7 +597,8 @@ inputs_parser.add_argument(
 # The convert command
 convert_parser = subparsers.add_parser("convert",
     help="Convert a structure and/or several trajectories to other formats\n" +
-        "If several input trajectories are passed they will be merged previously.",
+        "If several input trajectories are passed they will be merged previously",
+    formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 convert_parser.add_argument(
     "-is", "--input_structure",
@@ -599,7 +608,7 @@ convert_parser.add_argument(
     help="Path to output structure file")
 convert_parser.add_argument(
     "-it", "--input_trajectories", nargs='*',
-    help="Path to input trajectory file(s)")
+    help="Path to input trajectory file or same format files.")
 convert_parser.add_argument(
     "-ot", "--output_trajectory",
     help="Path to output trajectory file")
@@ -607,6 +616,7 @@ convert_parser.add_argument(
 # The filter command
 filter_parser = subparsers.add_parser("filter",
     help="Filter atoms in a structure and/or a trajectory\n",
+    formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 filter_parser.add_argument(
     "-is", "--input_structure", required=True,
@@ -629,7 +639,8 @@ filter_parser.add_argument(
 
 # The subset command
 subset_parser = subparsers.add_parser("subset",
-    help="Get a subset of frames from the current trajectory.",
+    help="Get a subset of frames from the current trajectory",
+    formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 subset_parser.add_argument(
     "-is", "--input_structure", required=True,
@@ -642,23 +653,24 @@ subset_parser.add_argument(
     help="Path to output trajectory file")
 subset_parser.add_argument(
     "-start", "--start", type=int, default=0,
-    help="Start frame")
+    help="Start frame (0-based)")
 subset_parser.add_argument(
     "-end", "--end", type=int, default=None,
-    help="End frame")
+    help="End frame (0-based)")
 subset_parser.add_argument(
     "-step", "--step", type=int, default=1,
     help="Frame step")
 subset_parser.add_argument(
     "-skip", "--skip", nargs='*', type=int, default=[],
-    help="Frames to be skipped")
+    help="Frames to be skipped (0-based)")
 subset_parser.add_argument(
     "-fr", "--frames", nargs='*', type=int, default=[],
-    help="Frames to be returned. Input frame order is ignored as original frame order is conserved.")
+    help="Frames to be returned (0-based). Input frame order is ignored as original frame order is conserved.")
 
 # The chainer command
 chainer_parser = subparsers.add_parser("chainer",
     help="Edit structure (pdb) chains",
+    formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 chainer_parser.add_argument(
     "-is", "--input_structure", required=True,
@@ -681,7 +693,7 @@ chainer_parser.add_argument(
     help="Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains.")
 
 # The NASSA commands 
-nassa_parser = subparsers.add_parser("nassa", formatter_class=RawTextHelpFormatter,
+nassa_parser = subparsers.add_parser("nassa", formatter_class=CustomHelpFormatter,
     help="Run and set the configuration of the NASSA analysis",
     parents=[common_parser])
 nassa_parser.add_argument(

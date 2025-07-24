@@ -5,6 +5,7 @@
 </div>
 
 [![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)](https://mddb-workflow.readthedocs.io/en/latest/)
+[![Coverage)](https://raw.githubusercontent.com/mmb-irb/MDDB-workflow/refs/heads/gh-pages/coverage/coveragebadge.svg)](https://mmb-irb.github.io/MDDB-workflow/coverage/)
 
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.
@@ -13,7 +14,7 @@ Both standard files and analysis results are to be uploaded to the database usin
 ## Installation
 
 This will install the package and create the entry point `mwf` to be used when executing the workflow.<br />
-Note that internet access is required to install the workflow using this protocol. If you are working in a machine where there is not internet then head to the 'Installation in HPC' section.
+Note that internet access is required to install the workflow using this protocol. If you are working in a machine where there is not internet then head to the ['Installation in HPC'](#installation-in-hpc) section.
 
 First clone the workflow repo and create a new environment using the `environment.yml` file in this repo:
 

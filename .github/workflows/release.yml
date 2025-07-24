@@ -1,0 +1,181 @@
+name: release
+
+on:
+  push:
+    # Only run on pushes to the release branch
+    branches: [ release ]
+    paths:
+      - 'model_workflow/**'
+      - 'test/**'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  install_mac:
+    # Skip until there is vmd for macOS
+    if: false
+    strategy:
+      matrix:
+        os: [macos-latest]
+        python-version: ["3.9"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - run: echo "Repository -> ${{ github.repository }}"
+      - run: echo "Branch -> ${{ github.ref }}"
+      - run: echo "Trigger event -> ${{ github.event_name }}"
+      - run: echo "Runner OS -> ${{ runner.os }}"
+
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+
+      - name: Setup-micromamba
+        uses: mamba-org/setup-micromamba@v2.0.4
+        with:
+          generate-run-shell: true
+          micromamba-version: '2.0.2-2'
+          post-cleanup: 'all'
+          init-shell: bash
+          environment-file: envs/environment.yml
+          create-args: >-
+            python=${{ matrix.python-version }}
+            pytest
+            pytest-cov
+            pip
+          cache-environment: true
+          cache-downloads: true
+
+      - name: List installed package versions
+        shell: bash -l {0}
+        run: micromamba list
+      
+      - name: Install model_workflow
+        shell: bash -l {0}
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run release tests
+        shell: bash -l {0}
+        run: pytest -m CI
+
+  install_coverage_and_tag:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.9"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Important for tag pushing later
+
+      - run: echo "Repository -> ${{ github.repository }}"
+      - run: echo "Branch -> ${{ github.ref }}"
+      - run: echo "Trigger event -> ${{ github.event_name }}"
+      - run: echo "Runner OS -> ${{ runner.os }}"
+
+      - name: Get version from pyproject.toml
+        id: get_version
+        run: |
+            VERSION=$(grep 'version = ' pyproject.toml | awk '{print $3}' | tr -d '"')
+            echo "Extracted version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            TAG_NAME="v$VERSION"
+            
+            # Check if the tag exists
+            if git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
+                echo "Tag v$VERSION already exists, update the version in the pyproject.toml file."
+                exit 1
+            fi
+
+            # Get version from the latest tag
+            LATEST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+
+            # Compare the versions
+            if [[ $(printf '%s\n' "$VERSION" "$LATEST_VERSION" | sort -V | head -n 1) == "$VERSION" ]]; then
+                echo "The new version ($VERSION) is not greater than the latest version ($LATEST_VERSION). Please update the version in pyproject.toml"
+                exit 1
+            else
+                echo "The new version ($VERSION) is greater than the latest version ($LATEST_VERSION). Proceeding with the workflow."
+            fi
+          
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+
+      # - name: Remove all micromamba installations
+      #   run: |
+      #     rm -rf $HOME/.bash_profile $HOME/.conda $HOME/micromamba $HOME/micromamba-bin 2>/dev/null
+      #     touch $HOME/.bash_profile
+
+      - name: Setup-micromamba
+        uses: mamba-org/setup-micromamba@v2.0.4
+        with:
+          generate-run-shell: true
+          micromamba-version: '2.0.2-2'
+          post-cleanup: 'all'
+          init-shell: bash
+          environment-file: envs/environment.yml
+          create-args: >-
+            python=${{ matrix.python-version }}
+            pytest
+            pytest-cov
+            pip
+          cache-environment: true
+          cache-downloads: true
+
+      - name: List installed package versions
+        shell: bash -l {0}
+        run: micromamba list
+      
+      - name: Install model_workflow
+        shell: bash -l {0}
+        run: python -m pip install -e ".[dev]"
+
+      # If [skip ci] or [skip tests] is present in the commit message, skip the tests
+      - name: Check commit message for skip flag
+        id: check_skip_flag
+        run: |
+          COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+          if [[ "$COMMIT_MESSAGE" == *"[skip tests]"* ]]; then
+            echo "Commit message contains skip flag. Skipping tests."
+            echo "skip_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "Commit message does not contain skip flag. Running tests."
+            echo "skip_tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run release tests
+        # Only run this step if the skip_tests flag is not set to true
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
+        shell: bash -l {0}
+        run: pytest -m release --cov-report xml:./reports/coverage/coverage.xml --cov-report html:./reports/coverage/ --cov=model_workflow
+          
+      - name: Generate Coverage badge
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
+        shell: bash -l {0}
+        run: |
+            coverage xml -o ./reports/coverage/coverage.xml
+            genbadge coverage --name "Coverage" --input-file ./reports/coverage/coverage.xml  --output-file ./reports/coverage/coveragebadge.svg
+            # Remove the .gitignore from coverage.py generated when the folder is empty
+            rm -rf ./reports/coverage/.gitignore
+
+      - name: Publish coverage report to GitHub Pages
+        if: steps.check_skip_flag.outputs.skip_tests == 'false'
+        uses: JamesIves/github-pages-deploy-action@v4.7.3
+        with:
+          folder: ./reports
+
+      - name: Create and push tag
+        if: success()
+        run: |
+          TAG_NAME="v${{ steps.get_version.outputs.version }}"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub Actions

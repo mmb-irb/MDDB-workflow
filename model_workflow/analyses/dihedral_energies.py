@@ -6,7 +6,7 @@ from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import save_json, mean
 from model_workflow.utils.constants import OUTPUT_DIHEDRAL_ENERGIES_FILENAME
 
-# Calculate torsions and then dihedral energies for every dihedral along the trajectory
+
 def compute_dihedral_energies (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -15,6 +15,7 @@ def compute_dihedral_energies (
     snapshots : int,
     frames_limit : int,
 ):
+    """Calculate torsions and then dihedral energies for every dihedral along the trajectory."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_DIHEDRAL_ENERGIES_FILENAME}'
 

@@ -33,9 +33,9 @@ class Remote:
             if error.code == 404:
                 raise InputError(f'Remote project "{self.accession}" not found')
             # If we don't know the error then simply say something went wrong
-            raise Exception('Error when downloading project data: ' + self.url)
+            raise Exception('Error when downloading project data: ' + self.url, 'with error: ' + str(error))
         except:
-            raise Exception('Something went wrong when requesting project data: ' + self.url)
+            raise Exception('Something went wrong when requesting project data: ' + self.url, 'with error: ' + str(error))
 
     # Get available files in the remove project
     def get_available_files (self):

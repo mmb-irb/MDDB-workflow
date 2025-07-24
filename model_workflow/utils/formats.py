@@ -2,37 +2,42 @@ import os
 from typing import Optional, List, Tuple, Callable, Generator
 from inspect import getfullargspec
 
-# Get a filename format
 def get_format (filename : str) -> str:
+    """Get a filename format."""
     if not filename:
         return None
     return filename.split('.')[-1]
 
-# Find a function which is suitable for any of the available request "format sets"**
-# All functions are checked for each request format set before jumping to another and they are evaluated in order
-# A function and new generated format set with formats in common are returned
-# None is returned when there is no suitable function
-# WARNING: Available functions must have the 'format_sets' property
-# ** Format sets are dictionaries which specify input and output formats
-# Consider function format sets as 'required input' and 'available output'
-# Consider request format sets as 'available input' and 'required output'
-# Both inputs and ouputs are dictionaries where keys are function arguments and values are sets of supported formats
-# Alternatively, an argument may have None as value to represent unnecessary requirements or missing availabilities
-# An example is shown below:
-# {
-#     'inputs': {
-#         'input_structure_filename': {'tpr'},
-#         'input_trajectory_filenames': {'xtc', 'trr'},
-#     },
-#     'outputs': {
-#         'output_trajectory_filename': {'pdb', 'gro'}
-#     },
-# }
-# Functions may have multiple format sets since different input formats may lead to different output formats
 def get_format_set_suitable_function (
     available_functions : List[Callable],
     available_request_format_sets : List[dict],
 ) -> Generator[ Optional[ Tuple[ Callable, dict ]], None, None ]:
+    """
+    Find a function which is suitable for any of the available request "format sets".
+    All functions are checked for each request format set before jumping to another and they are evaluated in order.
+    A function and new generated format set with formats in common are returned.
+    None is returned when there is no suitable function.
+
+    WARNING: Available functions must have the 'format_sets' property.
+    Format sets are dictionaries which specify input and output formats.
+    Consider function format sets as 'required input' and 'available output'.
+    Consider request format sets as 'available input' and 'required output'.
+    Both inputs and outputs are dictionaries where keys are function arguments and values are sets of supported formats.
+    Alternatively, an argument may have None as value to represent unnecessary requirements or missing availabilities.
+    
+    An example is shown below:
+    {
+        'inputs': {
+            'input_structure_filename': {'tpr'},
+            'input_trajectory_filenames': {'xtc', 'trr'},
+        },
+        'outputs': {
+            'output_trajectory_filename': {'pdb', 'gro'}
+        },
+    }
+
+    Functions may have multiple format sets since different input formats may lead to different output formats.
+    """
     # -------------------------------------------------------------
     # Use this to see what is going on
     # print('REQUEST')
@@ -68,14 +73,18 @@ def get_format_set_suitable_function (
                 # Otherwise we have the function
                 yield function, common_format_set
 
-# Get compatible formats between two groups of arguments
-# All required argument formats must be fulfilled by the available argument formats
-# Arguments are defined as dictionaries with argument names as keys and sets of available formats as values
-# e.g. {
-#     'input_structure_filename': {'tpr'},
-#     'input_trajectory_filenames': {'xtc', 'trr'},
-# },
 def get_common_argument_formats (required_arguments : dict, available_arguments : dict):
+    """
+    Get compatible formats between two groups of arguments.
+    All required argument formats must be fulfilled by the available argument formats.
+    Arguments are defined as dictionaries with argument names as keys and sets of available formats as values.
+    e.g.
+
+    {
+        'input_structure_filename': {'tpr'},
+        'input_trajectory_filenames': {'xtc', 'trr'},
+    }
+    """
     # If there are not required arguments we return an empty dictionary
     if not required_arguments:
         return {'not_required'}
@@ -103,11 +112,14 @@ def get_common_argument_formats (required_arguments : dict, available_arguments 
         common_argument_formats[required_argument] = common_formats
     return common_argument_formats
 
-# Check two format sets to be compatible
-# Both function and request format sets must match in their requirements
-# i.e. all function format set input arguments must be included in request format set input arguments
-# i.e. all request format set output arguments must be included in function format set output arguments
+
 def check_format_sets_compability (request_format_set : dict, function_format_set : dict) -> bool:
+    """
+    Check two format sets to be compatible.
+    Both function and request format sets must match in their requirements.
+    i.e. all function format set input arguments must be included in request format set input arguments.
+    i.e. all request format set output arguments must be included in function format set output arguments.
+    """
     # Check the function inputs keyowrds to exist in the request input arguments
     required_inputs = function_format_set.get('inputs', None)
     if required_inputs:
@@ -135,9 +147,6 @@ def check_format_sets_compability (request_format_set : dict, function_format_se
                 print('ERROR: Missing ' + argument + ' argument')
                 return False
     return True
-
-
-
 
 # WARNING: This function makes only sets for those functions whose output can be reused as input of others
 # WARNING: i.e. functions which return structure/trajectory files
@@ -314,10 +323,7 @@ def get_format_set_suitable_combination (
             yield combined_function, combined_format_set
 
 
-
-
 # Structure file formats
-
 def is_pdb (filename : str) -> bool:
     return filename[-4:] == '.pdb'
 
@@ -375,8 +381,8 @@ def is_pytraj_supported (filename : str) -> bool:
 #     "UNKNOWN_PARM": UNKNOWN_PARM,
 # }
 
-# Get the pytraj format key for the write_parm function for a specific file according to its format
 def get_pytraj_parm_format (filename : str) -> str:
+    """Get the pytraj format key for the write_parm function for a specific file according to its format."""
     if is_prmtop(filename):
         return 'AMBERPARM'
     if is_psf(filename):

@@ -11,7 +11,7 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, List, Generator
+from typing import Optional, List, Set, Generator, Union
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
@@ -74,6 +74,19 @@ letters = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
 def get_new_letter(current_letters : set) -> Optional[str]:
     return next((letter for letter in letters if letter not in current_letters), None)
 
+# Given a list or set of names, return a set with all case-posibilites:
+# All upper case
+# All lower case
+# First upper case and the rest lower case
+def all_cases (names : Union[List[str], Set[str]]) -> Set[str]:
+    all_names = []
+    for name in names:
+        all_upper = name.upper()
+        all_lower = name.lower()
+        one_upper = name[0].upper() + name[1:].lower()
+        all_names += [ all_upper, all_lower, one_upper ]
+    return set(all_names)
+
 # Given a residue name, return its single letter
 def residue_name_to_letter (residue_name : str) -> str:
     return RESIDUE_NAME_LETTERS.get(residue_name, 'X')
@@ -88,18 +101,18 @@ def load_json (filepath : str) -> dict:
         with open(filepath, 'r') as file:
             content = json.load(file)
         return content
-    except:
-        raise Exception('Something went wrong when loading JSON file ' + filepath)
-    
+    except Exception as error:
+        raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
+
 # Set a JSON saver with additional logic to better handle problems
 def save_json (content, filepath : str, indent : Optional[int] = None):
     try:
         with open(filepath, 'w') as file:
             json.dump(content, file, indent=indent)
-    except:
+    except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         rename(filepath, filepath + '.wrong')
-        raise Exception('Something went wrong when saving JSON file ' + filepath)
+        raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 # Set a YAML loader with additional logic to better handle problems
 # DANI: Por algún motivo yaml.load también funciona con archivos en formato JSON

@@ -2,7 +2,6 @@ from model_workflow.utils.auxiliar import warn, save_json, MISSING_CHARGES
 from model_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from model_workflow.utils.type_hints import *
 
-# Generate a json file to be uploaded to the database (mongo) with topology data
 def generate_topology (
     structure : 'Structure',
     charges : List[int],
@@ -11,6 +10,7 @@ def generate_topology (
     cg_residues : List[int],
     output_filepath : str
 ):
+    """Prepare the standard topology file to be uploaded to the database."""
 
     # The structure will be a bunch of arrays
     # Atom data

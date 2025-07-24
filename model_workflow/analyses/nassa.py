@@ -1126,7 +1126,7 @@ def workflow_nassa(
         print(f'  Using config file {config_file_path}')
         # Load the configuration file
         try:
-            with Path(config_file_path.absolute_path).open("r") as ymlfile:
+            with Path(config_file_path).open("r") as ymlfile:
                 config_archive = yaml.load(
                     ymlfile, Loader=yaml.FullLoader)
         except FileNotFoundError:
@@ -1177,9 +1177,13 @@ def workflow_nassa(
             except FileNotFoundError:
                 raise FileNotFoundError(
                     f"Configuration file {config_file_path} not found!")   
-            # Check if the NASSA output folder exists
-            output_path = os.path.join(config_archive['save_path'], 'nassa_analysis')
+            # Override nassa.yml output path if defined in the command line
+            if output is not None:
+                output_path = os.path.join(output, 'nassa_analysis')
+            else:
+                output_path = os.path.join(config_archive['save_path'], 'nassa_analysis')
             config_archive['save_path'] = output_path
+            # Check if the NASSA output folder exists
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
             # Check if the analysis output folder exists in NASSA output folder

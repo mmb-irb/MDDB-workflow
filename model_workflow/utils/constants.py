@@ -180,7 +180,7 @@ OUTPUT_LIPID_INTERACTIONS_FILENAME  = 'mda.lipid_inter.json'
 
 # Set problematic signs for directory/folder names
 # º is forbidden since paths including this characters are not readable by MDtraj
-FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º']
+FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
@@ -489,7 +489,7 @@ NASSA_ANALYSES_LIST = [ 'bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff' ]
 
 # Set the correponding canals archives (.ser) for each NASSA analysis
 NASSA_ANALYSES_CANALS = {
-    'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
+    #'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
     'coordist': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist','chiW', 'chiC'],
     'bpcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
     #'crdcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],

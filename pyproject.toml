@@ -4,18 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "model_workflow"
-version = "0.0.1"
+version = "0.1.0"
 requires-python = ">=3.9.0"
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
+    "genbadge[all]",
 ]
 docs = [
     "sphinx",
     "sphinx_rtd_theme",
     "myst-parser",
+    "nbsphinx",
 ]
 
 [project.scripts]
@@ -33,18 +35,33 @@ include-package-data = true
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+testpaths = ["test"]
+addopts = "-rsx -v --durations=0"
 
 [tool.conda-deny]
 safe-licenses = [
     "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception", # Apache License 2.0 with LLVM exception
     "Unlicense",
     "WTFPL",
     "MIT",
     "PSF-2.0",
     "BSD-3-Clause",
     "BSD-2-Clause",
+    "BSL-1.0",
+    "OFL-1.1", # Open Font License
     "ISC",
-    "LGPL-2.1-or-later",
+    #"GPL-1.0-or-later",
+    #"GPL-2.0-only",
+    #"GPL-2.0-or-later",
+    "LGPL-2.0-or-later",
     "LGPL-2.1-only",
-    "Zlib",
+    "LGPL-2.1-or-later",
+    #"GPL-3.0-only",
+    #"GPL-3.0-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "GPL-3.0-only WITH GCC-exception-3.1", # GPL with GCC Runtime Library Exception
+    "Python-2.0",
+    "Zlib"
 ]

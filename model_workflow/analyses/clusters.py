@@ -12,7 +12,6 @@ from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.type_hints import *
 
-# Run the cluster analysis
 def clusters_analysis (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -30,7 +29,7 @@ def clusters_analysis (
     # Set the atom selection for the overall clustering
     overall_selection : str = "name CA or name C5'",
 ):
-
+    """Run the cluster analysis."""
     # The cluster analysis is run for the overall structure and then once more for every interaction
     # We must set the atom selection of every run in atom indices, for MDtraj
     runs = []

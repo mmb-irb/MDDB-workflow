@@ -19,11 +19,9 @@ from model_workflow.utils.auxiliar import save_json, numerate_filename, get_anal
 from model_workflow.utils.constants import OUTPUT_HBONDS_FILENAME
 from model_workflow.utils.type_hints import *
 
-# Perform an hydrogen bonds analysis for each interaction interface
-# The 'interactions' input may be an empty list (i.e. there are no interactions)
-# In case there are no interactions the analysis stops
-# Note that this analysis find hydrogen bonds in a subset of frames along the trajectory
-# Storing the results for the whole trajectory is not possible due to storage limits
+# WARNING: the output file size depends on the number of hydrogen bonds
+# WARNING: analyses must be no heavier than 16Mb in BSON format
+# WARNING: In case of large surface interaction the output analysis may be larger than the limit
 def hydrogen_bonds (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -33,12 +31,16 @@ def hydrogen_bonds (
     interactions : list,
     is_time_dependent : bool,
     # Number of splits along the trajectory
-    time_splits : int,
+    time_splits : int = 100,
     # Explicit values for the most populated frames is saved apart
     # Set how many frames (in order of population) are saved
     most_populated_frames_number : int = 5,
     ):
-
+    """Perform an hydrogen bonds analysis for each interaction interface.
+    The 'interactions' input may be an empty list (i.e. there are no interactions).
+    In case there are no interactions the analysis stops.
+    Note that this analysis find hydrogen bonds in a subset of frames along the trajectory.
+    Storing the results for the whole trajectory is not possible due to storage limits."""
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')

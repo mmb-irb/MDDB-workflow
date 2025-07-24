@@ -42,7 +42,6 @@ KNOWN_MDPOCKET_ERRORS = set([
     'Error in creating clustering tree, return NULL pointer...breaking up'
 ])
 
-# Perform the pockets analysis
 def pockets (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -53,7 +52,8 @@ def pockets (
     # Get only the 10 first pockets since the analysis is quite slow by now
     # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
     maximum_pockets_number : int = 10):
-
+    """Perform the pockets analysis."""
+    
     # DANI: De momento, no se hacen pockets para simulaciones con residuos en PBC (e.g. membrana)
     # DANI: Esto es debido a que los átomos donde NO queremos que encuentre pockets no se pueden descartar
     # DANI: Descartarlos significa quitarlos, pero si los quitamos entonces podemos encontrar pockets donde están estos átomos
@@ -83,10 +83,7 @@ def pockets (
 
     # Save the MD path
     md_path, output_directory_name = split(output_directory)
-    # Count the number of directory deep we are now
-    # Thus we can know how many directories back we need to jump to get back to the original directory
-    if md_path[0] == '/': raise ValueError('This path should not be absolute, the fix below will not work')
-    if md_path[-1] == '/': md_path = md_path[0:-1]
+    # Save the current working directory so we can recover it later
     recovery_path = getcwd()
 
     # Move to the MD path so all relative paths become shorter

@@ -52,7 +52,6 @@ from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
-from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 from model_workflow.tools.process_input_files import process_input_files
 
 # Import local analyses
@@ -81,11 +80,14 @@ from model_workflow.analyses.helical_parameters import helical_parameters
 from model_workflow.analyses.markov import markov
 
 # Make the system output stream to not be buffered
-# This is useful to make prints work on time in Slurm
-# Otherwise, output logs are written after the script has fully run
-# Note that this fix affects all modules and built-ins
-unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
-sys.stdout = unbuffered
+# Only when not in a Jupyter notebook or using pytest
+# Check if we're in an interactive Python shell like Jupyter
+if not hasattr(sys, 'ps1') and not 'pytest' in sys.modules:  
+    # This is useful to make prints work on time in Slurm
+    # Otherwise, output logs are written after the script has fully run
+    # Note that this fix affects all modules and built-ins
+    unbuffered = io.TextIOWrapper(open(sys.stdout.fileno(), 'wb', 0), write_through=True)
+    sys.stdout = unbuffered
 
 # Set a special exception for missing inputs
 MISSING_INPUT_EXCEPTION = Exception('Missing input')
@@ -100,10 +102,6 @@ MISSING_VALUE_EXCEPTION = Exception('Missing value')
 # Name of the argument used by all functions to know where to write output
 OUTPUT_FILEPATH_ARG = 'output_filepath'
 OUTPUT_DIRECTORY_ARG = 'output_directory'
-
-# Run a fix in gromacs if not done before
-# Note that this is run always at the moment the code is read, no matter the command or calling origin
-fix_gromacs_masses()
 
 # Set some variables which are filled at the end but are referred by previously defined functions
 requestables = {}
@@ -716,7 +714,8 @@ class MD:
                     check_directory(directory)
                 # If no directory is specified in the inputs then guess it from the MD name
                 else:
-                    name = md['name']
+                    name = md.get('name', None)
+                    if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
                     directory = name_2_directory(name)
                 # If the directory matches then this is our MD inputs
                 if directory == self.directory:
@@ -801,8 +800,8 @@ class MD:
     # And by "files" I mean structure, trajectory and topology
     process_input_files = Task('inpro', 'Process input files', process_input_files)
 
-    # Get the processed structure
     def get_structure_file (self) -> str:
+        """Get the processed structure."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -825,8 +824,8 @@ class MD:
         return self._structure_file
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
-    # Get the processed trajectory
     def get_trajectory_file (self) -> str:
+        """Get the processed trajectory."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -1088,7 +1087,6 @@ class MD:
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
     # Reference frame
-    # Frame to be used when representing the MD
     get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
@@ -1166,9 +1164,6 @@ class MD:
         distance_per_residue, { 'frames_limit': 200 })
 
     # Hydrogen bonds
-    # WARNING: the output file size depends on the number of hydrogen bonds
-    # WARNING: analyses must be no heavier than 16Mb in BSON format
-    # WARNING: In case of large surface interaction the output analysis may be larger than the limit
     run_hbonds_analysis = Task('hbonds', 'Hydrogen bonds analysis',
         hydrogen_bonds, { 'time_splits': 100 })
 
@@ -1298,16 +1293,16 @@ class Project:
         self.input_trajectory_filepaths = input_trajectory_filepaths
 
         # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -stru, -traj)
-        if md_config and (md_directories or input_structure_filepath or input_trajectory_filepaths):
-            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -stru, -traj)')
+        if md_config and (md_directories or input_trajectory_filepaths):
+            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
         # Save the MD configurations
         self.md_config = md_config
         # Make sure MD configuration has the correct format
         if self.md_config:
             # Make sure all MD configurations have at least 3 values each
             for mdc in self.md_config:
-                if len(mdc) < 3:
-                    raise InputError('Wrong MD configuration: the patter is -md <directory> <structure> <trajectory> <trajectory 2> ...')
+                if len(mdc) < 2:
+                    raise InputError('Wrong MD configuration: the patter is -md <directory> <trajectory> <trajectory 2> ...')
             # Make sure there are no duplictaed MD directories
             md_directories = [ mdc[0] for mdc in self.md_config ]
             if len(md_directories) > len(set(md_directories)):
@@ -1494,10 +1489,26 @@ class Project:
         # New system with MD configurations (-md)
         if self.md_config:
             for n, config in enumerate(self.md_config, 1):
+                directory = config[0]
+                # LEGACY 
+                # In a previous version, the md config argument also holded the structure
+                # This was the second argument, so we check if we have more than 2 arguments
+                # If this is the case, then check if the second argument has different format
+                # Note that PDB format is also a trajectory supported format
+                has_structure = False
+                if len(config) > 2:
+                    first_sample = File(config[1])
+                    second_sample = File(config[2])
+                    if first_sample.format != second_sample.format:
+                        has_structure = True
+                # Finally set the input structure and trajectories
+                input_structure_filepath = config[1] if has_structure else self.input_structure_filepath
+                input_trajectory_filepaths = config[2:] if has_structure else config[1:]
+                # Define the MD
                 md = MD(
-                    project = self, number = n, directory = config[0],
-                    input_structure_filepath = config[1],
-                    input_trajectory_filepaths = config[2:],
+                    project = self, number = n, directory = directory,
+                    input_structure_filepath = input_structure_filepath,
+                    input_trajectory_filepaths = input_trajectory_filepaths,
                 )
                 self._mds.append(md)
         # Old system (-mdir, -stru -traj)
@@ -1533,7 +1544,7 @@ class Project:
         return False
 
     def get_inputs_file (self) -> File:
-        """Set a function to load the inputs file"""
+        """Set a function to load the inputs file."""
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
@@ -1782,7 +1793,6 @@ class Project:
     input_force_fields = property(input_getter('ff'), None, None, "Input force fields (read only)")
     input_collections = property(input_getter('collections'), None, None, "Input collections (read only)")
     input_chain_names = property(input_getter('chainnames'), None, None, "Input chain names (read only)")
-    input_type = property(input_getter('type'), None, None, "Input type (read only)")
     input_framestep = property(input_getter('framestep'), None, None, "Input framestep (read only)")
     input_name = property(input_getter('name'), None, None, "Input name (read only)")
     input_description = property(input_getter('description'), None, None, "Input description (read only)")
@@ -1877,7 +1887,8 @@ class Project:
         if self._topology_filepath:
             return self._topology_filepath
         # Otherwise we must find it
-        self._topology_filepath = self.inherit_topology_filename()
+        inherited_filename = self.inherit_topology_filename()
+        self._topology_filepath = self.pathify(inherited_filename) if inherited_filename else None
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
@@ -1966,8 +1977,8 @@ class Project:
         return self._topology_reader
     topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
 
-    # Dihedrals data
     def get_dihedrals (self) -> List[dict]:
+        """Get the topology dihedrals."""
         # If we already have a stored value then return it
         if self._dihedrals: return self._dihedrals
         # Calculate the dihedrals otherwise
@@ -2056,7 +2067,7 @@ class Project:
         get_mda_universe, use_cache = False)
     universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
 
-    # Lipid mapping
+    # Get the lipid references
     get_lipid_map = Task('lipmap', 'Lipid mapping',
         generate_lipid_references, output_filename = LIPID_REFERENCES_FILENAME)
     lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
@@ -2089,9 +2100,7 @@ class Project:
     get_standard_topology_file = prepare_standard_topology.get_output_file
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
-    # Prepare a screenshot of the system to be uploaded to the database
-    # Note that the get_screenshot function returns output but this output is not used here
-    # This outputs is used by other functions which use the get_screenshot function as well
+    # Get a screenshot of the system
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
         get_screenshot, output_filename = OUTPUT_SCREENSHOT_FILENAME)
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")

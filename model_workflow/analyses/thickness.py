@@ -14,6 +14,7 @@ def thickness (
     membrane_map: dict,
     snapshots : int,
     frames_limit: int = 100):
+    """Membrane thickness analysis."""
 
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping thickness analysis')

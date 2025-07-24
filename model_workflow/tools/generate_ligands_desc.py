@@ -319,7 +319,6 @@ def check_matched_ligand (ligand: dict, ligand_data: dict, cache: 'Cache') -> bo
     
     return False
     
-# Generate a map of residues associated to ligands
 def generate_ligand_mapping (
     structure : 'Structure',
     cache : 'Cache',
@@ -329,6 +328,7 @@ def generate_ligand_mapping (
     mercy : List[str] = [],
     ) -> List[dict]:
 
+    """Generate a map of residues associated to ligands."""
     # Merge input ligands and pdb ligands
     ligands = []
     if input_ligands:

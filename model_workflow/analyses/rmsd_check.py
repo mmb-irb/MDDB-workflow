@@ -2,12 +2,20 @@ import mdtraj as mdt
 import pytraj as pt
 import numpy as np
 import time
+import math
+import sys
+
+# Visual output tools
+from tqdm import tqdm
+import plotext as plt
 
 from model_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn
 from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 from model_workflow.utils.pyt_spells import get_pytraj_trajectory
 from model_workflow.utils.type_hints import *
-from tqdm import tqdm
+
+# Check if the output is going to a terminal or not
+is_terminal = sys.stdout.isatty()
 
 # LORE
 # This test was originaly intended to use a RMSD jump cutoff based on number of atoms and timestep
@@ -103,7 +111,7 @@ def check_trajectory_integrity (
     outliers_count = 0
     max_z_score = 0
     max_z_score_frame = 0
-    for i, rmsd_jump in enumerate(rmsd_jumps):
+    for i, rmsd_jump in enumerate(rmsd_jumps, 1):
         z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
         # Keep track of the maixmum z score
         if z_score > max_z_score:
@@ -112,7 +120,7 @@ def check_trajectory_integrity (
         # If z score bypassed the limit then report it
         if z_score > standard_deviations_cutoff:
             # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-            if i == bypassed_frames:
+            if i - 1 == bypassed_frames:
                 bypassed_frames += 1
                 continue
             if outliers_count >= 4:
@@ -125,20 +133,40 @@ def check_trajectory_integrity (
     print(f' Maximum z score {max_z_score:4f} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}.\n'
           f' Mean: {mean_rmsd_jump:4f}. Stdv: {stdv_rmsd_jump:4f}')
 
+    # Set if there was any error
+    error = None
     # If there were any outlier then the check has failed
     if outliers_count > 0:
+        error = 'RMSD check has failed: there may be sudden jumps along the trajectory'
+    # The message changes if the outliers are at the begining only
+    elif bypassed_frames > 0:
+        error = f'First {bypassed_frames} frames may be not equilibrated'
+
+    # In case there was a problem,
+    if error:
+        # Display a graph to show the distribution of sudden jumps along the trajectory
+        if is_terminal:
+            data = rmsd_jumps
+            if outliers_count == 0 and bypassed_frames > 0:
+                data = rmsd_jumps[0:bypassed_frames+100]
+            plt.scatter(data) 
+            plt.title("RMSD jumps along the trajectory")
+            plt.xlabel('Frame')
+            plt.ylabel('RMSD jump')
+            n_ticks = 5
+            n_jumps = len(data)
+            tickstep = math.ceil(n_jumps / n_ticks)
+            xticks = [ t+1 for t in range(0, n_jumps, tickstep) ]
+            xlabels = [ str(t) for t in xticks ]
+            plt.xticks(xticks, xlabels)
+            plt.show()
         # Add a warning an return True since the test failed in case we have mercy
-        message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
-            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, error)
             register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
             return False
-        # Otherwise kill the process right away
-        raise TestFailure(message)
-
-    # Warn the user if we had bypassed frames
-    if bypassed_frames > 0:
-        register.add_warning(TRAJECTORY_INTEGRITY_FLAG, f'First {bypassed_frames} frames may be not equilibrated')
+        # Otherwise kill the process
+        raise TestFailure(error)
 
     print(' Test has passed successfully')
     register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
@@ -257,7 +285,7 @@ def check_trajectory_integrity_per_fragment (
         fragment_max_z_score = 0
         fragment_max_z_score_frame = 0
 
-        for i, rmsd_jump in enumerate(rmsd_jumps):
+        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
             # Keep track of the maixmum z score for this fragment
             if z_score > fragment_max_z_score:
@@ -270,7 +298,7 @@ def check_trajectory_integrity_per_fragment (
             # If z score bypassed the limit then report it
             if z_score > standard_deviations_cutoff:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i == bypassed_frames:
+                if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
                 if outliers_count >= 4:
@@ -421,7 +449,7 @@ def check_trajectory_integrity_per_fragment_2 (
         max_z_score = 0
         max_z_score_frame = 0
 
-        for i, rmsd_jump in enumerate(rmsd_jumps):
+        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
             # Keep track of the maixmum z score
             if z_score > max_z_score:
@@ -430,7 +458,7 @@ def check_trajectory_integrity_per_fragment_2 (
             # If z score bypassed the limit then report it
             if z_score > standard_deviations_cutoff:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i == bypassed_frames:
+                if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
                 if outliers_count >= 4:
@@ -640,7 +668,7 @@ def check_trajectory_integrity_per_residue (
         outliers_count = 0
         max_z_score = 0
         max_z_score_frame = 0
-        for i, rmsd_jump in enumerate(rmsd_jumps):
+        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
             # Keep track of the maixmum z score
             if z_score > max_z_score:
@@ -649,7 +677,7 @@ def check_trajectory_integrity_per_residue (
             # If z score bypassed the limit then report it
             if z_score > standard_deviations_cutoff:
                 # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i == bypassed_frames:
+                if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
                 # Otherwise we consider this as an outlier and thus the test has failed

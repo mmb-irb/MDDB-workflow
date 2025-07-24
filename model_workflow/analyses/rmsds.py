@@ -1,31 +1,26 @@
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS, OUTPUT_RMSDS_FILENAME
+from model_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_RMSDS_FILENAME
+from model_workflow.utils.gmx_spells import run_gromacs
 from model_workflow.utils.type_hints import *
 
-import os
-from subprocess import run, PIPE, Popen
+from os import remove
 
-# Run multiple RMSD analyses
-# A RMSD analysis is run with each reference:
-# - First frame
-# - Average structure
-# A RMSD analysis is run over each rmsd target:
-# - Protein
-# - Nucleic acid
+
 def rmsds(
     trajectory_file : 'File',
     first_frame_file : 'File',
     average_structure_file : 'File',
     output_directory : str,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
     ligand_map : List[dict],
+    frames_limit : int = 5000,
     ):
-
+    """Run multiple RMSD analyses. One with each reference (first frame, average structure) 
+    and each selection (default: protein, nucleic)."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSDS_FILENAME}'
 
@@ -94,7 +89,7 @@ def rmsds(
         reference_name = REFERENCE_LABELS[reference.filename]
         for group_name, group_selection in non_pbc_selections.items():
             # Set the analysis filename
-            rmsd_analysis = f'rmsd.{reference_name}.{group_name.lower()}.xvg'
+            rmsd_analysis = f'rmsd.{reference_name}.{group_name.lower().replace(" ","_")}.xvg'
             # If part of the selection has coarse grain atoms then skip mass weighting
             # Otherwise Gromacs may fail since the atom name may not be in the atommass library
             has_cg = group_selection & cg_selection
@@ -113,7 +108,7 @@ def rmsds(
             }
             output_analysis.append(data)
             # Remove the analysis xvg file since it is not required anymore
-            os.remove(rmsd_analysis)
+            remove(rmsd_analysis)
 
     # Export the analysis in json format
     save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)
@@ -136,37 +131,9 @@ def rmsd (
         file.write(ndx_selection)
     
     # Run Gromacs
-    p = Popen([
-        "echo",
-        selection_name, # Select group for least squares fit
-        selection_name, # Select group for RMSD calculation
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "rms",
-        "-s",
-        reference_filepath,
-        "-f",
-        trajectory_filepath,
-        '-o',
-        output_analysis_filepath,
-        '-n',
-        ndx_filename,
-        # Supress mass weighting if requested
-        *([ '-mw', 'no' ] if skip_mass_weighting else []),
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    # Consuming the output makes the process run
-    output_logs = process.stdout.decode()
-    # Close the input
-    p.stdout.close()
-
-    # If the output does not exist at this point it means something went wrong with gromacs
-    if not os.path.exists(output_analysis_filepath):
-        print(output_logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise Exception('Something went wrong with GROMACS')
+    run_gromacs(f'rms -s {reference_filepath} -f {trajectory_filepath} \
+        -o {output_analysis_filepath} -n {ndx_filename} {"-mw no" if skip_mass_weighting else ""}',
+        user_input = f'{selection_name} {selection_name}')
 
     # Remove the ndx file
-    os.remove(ndx_filename)
+    remove(ndx_filename)

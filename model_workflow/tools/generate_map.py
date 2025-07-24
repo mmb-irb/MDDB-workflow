@@ -70,7 +70,7 @@ def generate_protein_mapping (
     input_protein_references : Union[list,dict] = [],
     pdb_ids : List[str] = [],
 ) -> dict:
-
+    """Map the structure aminoacids sequences against the Uniprot reference sequences."""
     # Set the output file
     protein_references_file = File(output_filepath)
 
@@ -587,7 +587,17 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
         description = None
         if comments_data:
             comments = [ comment for comment in parsed_response['comments'] if name == comment.get('molecule', None) ]
-            comment_text = [ comment['text'][0]['value'] for comment in comments if comment.get('text', False) ]
+            comment_text = []
+            for comment in comments:
+                if not comment.get('text', False): continue
+                text = comment.get('text', None)
+                if text == None: raise ValueError('Unexpected UniProt response format: no text in comment')
+                # DANI: el comment 'text' casi siempre es una lista
+                # DANI: solo tengo constancia de una vez en que era un string directamente
+                # DANI: en uno de los comentarios de https://www.ebi.ac.uk/proteins/api/proteins/Q15465
+                if type(text) == str: comment_text.append(text)
+                elif type(text) == list: comment_text.append(text[0]['value'])
+                else: raise ValueError('Unexpected UniProt response format: text in comment is neither str or list')
             description = '\n\n'.join(comment_text)
         # Set the domain selection
         # The domain 'begin' and 'end' values may include non-numeric symbols such as '~', '>' or '<'

@@ -1,29 +1,27 @@
-from os.path import exists
 from os import remove
-from subprocess import run, PIPE, Popen
 from numpy import mean, std
 
 from model_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from model_workflow.tools.xvg_parse import xvg_parse
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, OUTPUT_RGYR_FILENAME
+from model_workflow.utils.constants import OUTPUT_RGYR_FILENAME
+from model_workflow.utils.gmx_spells import run_gromacs
 from model_workflow.utils.type_hints import *
 
 # Set an auxiliar data filename
 rgyr_data_filename = '.rgyr_data.xvg'
 
-# Radius of gyration (Rgyr)
-# 
-# Perform the RMSd analysis 
-# Use the first trajectory frame in .pdb format as a reference
+
 def rgyr (
     structure_file : 'File',
     trajectory_file : 'File',
     output_directory : str,
     snapshots : int,
-    frames_limit : int,
     structure : 'Structure',
-    pbc_selection : 'Selection'):
+    pbc_selection : 'Selection',
+    frames_limit : int = 5000
+):
+    """Perform the RMSd analysis. Use the first trajectory frame in .pdb format as a reference."""
 
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RGYR_FILENAME}'
@@ -48,32 +46,8 @@ def rgyr (
         file.write(ndx_selection)
     
     # Run Gromacs
-    p = Popen([
-        "echo",
-        selection_name,
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "gyrate",
-        "-s",
-        structure_file.path,
-        "-f",
-        reduced_trajectory_filepath,
-        '-o',
-        rgyr_data_filename,
-        '-n',
-        ndx_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
-
-    # If the output does not exist at this point it means something went wrong with gromacs
-    if not exists(rgyr_data_filename):
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with GROMACS')
+    run_gromacs(f'gyrate -s {structure_file.path} -f {reduced_trajectory_filepath} \
+        -o {rgyr_data_filename} -n {ndx_filename}', user_input = selection_name)
 
     # Read the output file and parse it
     raw_rgyr_data = xvg_parse(rgyr_data_filename, ['times', 'rgyr', 'rgyrx', 'rgyry', 'rgyrz'])

@@ -75,3 +75,14 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 .rst-content .viewcode-link {
     color: #cf05ca;
 }
+
+#workflow-tasks a{
+    font-size: 70%;
+    color: #cf05ca;
+    font-weight: 700;
+    vertical-align: top;
+}
+
+#workflow-tasks a:hover {
+    color: #4f14a7;
+}

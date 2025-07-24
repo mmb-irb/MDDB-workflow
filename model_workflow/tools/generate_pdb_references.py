@@ -5,8 +5,9 @@ from model_workflow.utils.auxiliar import RemoteServiceError, load_json, save_js
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
-# Generate a json file including all PDB references and return these references to the workflow for further usage
+
 def prepare_pdb_references (pdb_ids : List[str], output_filepath : str):
+    """Prepare the PDB references json file to be uploaded to the database."""
     # Set the output file
     pdb_references_file = File(output_filepath)
     # If we already have PDB references then load them

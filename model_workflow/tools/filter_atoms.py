@@ -5,11 +5,10 @@ import json
 
 import pytraj as pt
 
-from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME, GREY_HEADER, COLOR_END
-from model_workflow.utils.constants import GROMACS_EXECUTABLE
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY
-from model_workflow.utils.gmx_spells import get_tpr_atom_count
+from model_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter, pdb_filter
 from model_workflow.utils.type_hints import *
 from model_workflow.tools.get_charges import get_raw_charges
 
@@ -72,9 +71,17 @@ def filter_atoms (
         # As long as indices are for atoms and not residues there should never be any incompatibility
         keep_selection.to_ndx_file(output_filepath = index_filename)
         # Filter the trajectory
-        xtc_filter(input_structure_file.path, input_trajectory_file.path, output_trajectory_file.path, index_filename)
+        xtc_filter(input_structure_file.path,
+            input_trajectory_file.path,
+            output_trajectory_file.path,
+            index_filename,
+            filter_group_name)
         # Filter the structure
-        pdb_filter(input_structure_file.path, output_structure_file.path, index_filename)
+        pdb_filter(
+            input_structure_file.path,
+            output_structure_file.path,
+            index_filename,
+            filter_group_name)
 
     # Filter topology according to the file format
     if input_topology_file != MISSING_TOPOLOGY and input_topology_file.exists:
@@ -111,7 +118,11 @@ def filter_atoms (
                     # In order to filter the tpr we need the filter.ndx file
                     # This must be generated from a pytraj supported topology that matches the number of atoms in the tpr file
                     raise ValueError('Topology atoms number does not match the structure atoms number and tpr files can not be filtered alone')
-                tpr_filter(input_topology_file.path, output_topology_file.path, index_filename)
+                tpr_filter(
+                    input_topology_file.path,
+                    output_topology_file.path,
+                    index_filename,
+                    filter_group_name)
                 # Get the output tpr atom count
                 filtered_topology_atoms_count = get_tpr_atom_count(output_topology_file.path)
             else:
@@ -157,87 +168,6 @@ def filter_atoms (
         output_trajectory_file.set_symlink_to(input_trajectory_file)
     if output_topology_file != MISSING_TOPOLOGY and not output_topology_file.exists:
         output_topology_file.set_symlink_to(input_topology_file)
-
-# Filter atoms in a pdb file
-# This method conserves maximum resolution and chains
-def pdb_filter (
-    input_pdb_filename : str,
-    output_pdb_filename : str,
-    index_filename : str
-):
-    # Filter the trajectory
-    p = Popen([
-        "echo",
-        filter_group_name,
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "editconf",
-        "-f",
-        input_pdb_filename,
-        '-o',
-        output_pdb_filename,
-        '-n',
-        index_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
-    p.stdout.close()
-
-# Filter atoms in a xtc file
-# Note that here we do not hide the stderr
-# This is because it shows the progress
-# Instead we color the output grey
-def xtc_filter(
-    structure_filename : str,
-    input_trajectory_filename : str,
-    output_trajectory_filename : str,
-    index_filename : str
-):
-    print(GREY_HEADER)
-    # Filter the trajectory
-    p = Popen([
-        "echo",
-        filter_group_name,
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "trjconv",
-        "-s",
-        structure_filename,
-        "-f",
-        input_trajectory_filename,
-        '-o',
-        output_trajectory_filename,
-        '-n',
-        index_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-    print(COLOR_END)
-
-# Filter atoms in both a pdb and a xtc file
-def tpr_filter(
-    input_tpr_filename : str,
-    output_tpr_filename : str,
-    index_filename : str
-):
-    # Filter the topology
-    p = Popen([
-        "echo",
-        filter_group_name,
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "convert-tpr",
-        "-s",
-        input_tpr_filename,
-        '-o',
-        output_tpr_filename,
-        '-n',
-        index_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
-    p.stdout.close()
 
 # Set a function to filter the standard topology file
 # WARNING: This function has not been checked in depth to work properly

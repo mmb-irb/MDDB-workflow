@@ -30,19 +30,20 @@ trajectory_converting_functions = [
     mdt_merge_and_convert_trajectories_unefficient
 ]
 
-# Handle conversions of different structure and trajectory formats
-# Merge multiple input trajectories into one single output trajectory
-# Inputs are the original strucutre and/or trajectory files and the list of possible output filenames
-# Only one of each group of output filenames will be generated (if possible)
-# Return the names of the generated output files
 def convert (
     input_structure_filepath :  Optional[str] = '',
     output_structure_filepath : Optional[str] = '',
     input_trajectory_filepaths :  Optional[List[str]] = [],
     output_trajectory_filepath : Optional[str] = ''
 ):
-
-    # If we have output but not input we must complain
+    """
+    Handle conversions of different structure and trajectory formats.
+    Merge multiple input trajectories into one single output trajectory.
+    Inputs are the original strucutre and/or trajectory files and the list of possible output filenames.
+    Only one of each group of output filenames will be generated (if possible).
+    Return the names of the generated output files.
+    If we have output but not input we must complain.
+    """
     if output_structure_filepath and not input_structure_filepath:
         raise InputError('Missing input structure')
     if output_trajectory_filepath and not input_trajectory_filepaths or len(input_trajectory_filepaths) == 0:

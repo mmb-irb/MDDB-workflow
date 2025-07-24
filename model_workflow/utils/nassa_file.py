@@ -51,31 +51,29 @@ def generate_nassa_config (
     # AGUS: habría que explorar más casos, no sé si será siempre así
     #actual_path = os.path.abspath(folder_path)
     #print('actual_path: ', actual_path)
-    print(folder_path)
     actual_path = getcwd()
     
     for path in folder_path:
         md_path = os.path.join(actual_path, path)
-        print(md_path)
-        if os.path.exists(os.path.join(md_path, 'helical_parameters')):
+        if os.path.exists(os.path.join(md_path, 'helical')):
             # If canals + curves have previously been calculated, we will use these outputs
             # We will create a list of the different .ser archives that we have interest in according to the values of NASSA_ANALYSES_CANALS
             coordinates = []
             [coordinates.extend(value) for value in NASSA_ANALYSES_CANALS.values()]
             coordinates = list(set(coordinates))
-            for seq_file in os.listdir(os.path.join(md_path, 'helical_parameters')):
+            for seq_file in os.listdir(os.path.join(md_path, 'helical')):
                 if seq_file.endswith('.ser'):
                     seq_file_coordinate = seq_file.split('_')[2].replace('.ser', '')
                     # Filter the archives with the correct coordinate
                     if seq_file_coordinate in coordinates:
                         if seq_file_coordinate not in nassa_config["coordinate_info"]:
                             nassa_config["coordinate_info"][seq_file_coordinate] = []
-                        nassa_config["coordinate_info"][seq_file_coordinate].append(os.path.join(md_path, 'helical_parameters', seq_file))
+                        nassa_config["coordinate_info"][seq_file_coordinate].append(os.path.join(md_path, 'helical', seq_file))
                         if n_sequences:
                             if len(nassa_config['coordinate_info'][seq_file_coordinate]) == n_sequences:
                                 continue
         else:
-            # If the helical_parameters folder does not exist, we will search for the sequences in the given path
+            # If the helical folder does not exist, we will search for the sequences in the given path
             # In this case, the sequences are in different folders, each folder is a coordinate
             # AGUS: pueden existir estos archivos en diferentes carpetas, por lo que habría que buscar en todas las carpetas ¿?
             folders = [f for f in os.listdir(actual_path) if os.path.isdir(os.path.join(actual_path, f))]

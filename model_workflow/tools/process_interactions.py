@@ -1,6 +1,3 @@
-# Processing the interactions means finding the residues of each interacting agent
-# In addition, interface residues are listed appart
-
 import itertools
 from os.path import exists
 
@@ -34,6 +31,7 @@ FAILED_INTERACTION_FLAG = 'failed'
 
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
+# Interface residues are listed apart
 # The heavy results of interactions are stored in a json file which is uploaded to the database independently
 # This file is also used as a backup here, since calculating interactions is a heavy calculation
 # In addition, this file may be used to force interactions with custom interface residues manually
@@ -45,15 +43,17 @@ def process_interactions (
     snapshots : int,
     output_directory : str,
     mercy : List[str],
-    frames_limit : int,
     interactions_auto : str,
     ligand_map : List[dict],
     pbc_selection : 'Selection',
+    frames_limit : int = 1000,
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
     interaction_cutoff : float = 0.1,
     ) -> list:
-
+    """Find the residues of each interacting agent.
+    It can automatically detect interactions based on chain names or ligand information, or use a predefined list of interactions.
+    """
     # Set the output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_INTERACTIONS_FILENAME}'
 
@@ -179,32 +179,6 @@ def process_interactions (
     interaction_count = len(interactions)
     if not interactions or interaction_count == 0:
         return []
-    
-    # Make sure there are no interactions with the same name
-    interaction_names = [ interaction['name'] for interaction in interactions ]
-    if len(set(interaction_names)) < len(interaction_names):
-        raise InputError('Interactions must have unique names')
-    # Check input interactions to be correct
-    for i, interaction in enumerate(interactions, 1):
-        name = interaction["name"]
-        # Check agents have different names
-        if interaction['agent_1'] == interaction['agent_2']:
-            raise InputError(f'Interaction agents must have different names at {name}')
-        # Check agents have different selections
-        if interaction['selection_1'] == interaction['selection_2']:
-            raise InputError(f'Interaction agents must have different selections at {name}')
-        # Make sure both agents have valid selections
-        agent_1_selection = structure.select(interaction['selection_1'])
-        if not agent_1_selection:
-            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 1 ({interaction["agent_1"]}): {interaction["selection_1"]}')
-        agent_2_selection = structure.select(interaction['selection_2'])
-        if not agent_2_selection:
-            raise InputError(f'Interaction "{name}" has a non valid (or empty) selection for agent 2 ({interaction["agent_2"]}): {interaction["selection_2"]}')
-        # Make sure selections do not overlap at all
-        # This makes not sense as interactions are implemented in this workflow
-        overlap = agent_1_selection & agent_2_selection
-        if overlap:
-            raise InputError(f'Agents in interaction "{name}" have {len(overlap)} overlapping atoms')
 
     # If there is a backup then use it
     # Load the backup and return its content as it is
