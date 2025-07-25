@@ -5,6 +5,7 @@ __pycache__
 **.log
 
 # Test
+atommass.dat
 .coverage*
 .pytest_cache/
 test/data/output/

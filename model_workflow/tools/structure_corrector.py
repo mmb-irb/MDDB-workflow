@@ -96,7 +96,7 @@ def structure_corrector (
         # Set some atoms which are to be skipped from these test given their "fake" nature
         excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
         # If bonds match from the begining we are done as well
-        print('Checking default structure bonds')
+        print('Checking default structure bonds (stabonds)')
         if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')

@@ -20,7 +20,20 @@ def generate_membrane_mapping(lipid_map : List[dict],
         debug (bool, optional): If True, additional debug information is returned. Defaults to False.
     
     Returns:
-        List[dict]: A list containing the membrane mapping. If debug is True, additional information is returned.
+        List[dict]: A list containing the membrane mapping. If debug is True, additional information is returned. Ex:
+
+        {
+            "n_mems": 1,
+            "mems": {
+                "0": {
+                    "leaflets": {
+                        "bot": [ 17096, 17097, ...],
+                        "top": [ 14730,  14804, ...]
+                    }
+                }
+            },
+            "no_mem_lipid": []
+        }
     
     Raises:
         AssertionError: If the topology file is not in JSON format.

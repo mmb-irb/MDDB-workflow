@@ -71,11 +71,32 @@ def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
     )
     return mda_top
 
-def get_mda_universe (standard_topology_file : 'File', structure_file : 'File') -> 'Universe':
+def get_mda_universe_from_stopology (standard_topology_file : 'File', structure_file : 'File') -> 'Universe':
     """Create a MDAnalysis universe using data in the workflow."""
     mda_topology = to_MDAnalysis_topology(standard_topology_file)
     # Create a MDAnalysis topology from the standard topology file
     return Universe(mda_topology, structure_file.path)
+
+def get_mda_universe (structure_file : 'File', # To load in MDAnalysis
+                      structure : 'Structure', # For atom bonds
+                      charges : List[float]) -> 'Universe': # To set the charges
+    """Create a MDAnalysis universe using data in the workflow."""
+    universe = Universe(structure_file.path)
+    # Set the atom bonds
+    atom_bonds = []
+    for atom_indices in structure.bonds:
+        atom_bonds.append(sorted(atom_indices))
+    bonds = []
+    for bond_from, bond_tos in enumerate(atom_bonds):
+        for bond_to in bond_tos:
+            bond = tuple(sorted([bond_from, bond_to]))
+            bonds.append(bond)
+    universe.add_TopologyAttr('bonds', set(bonds))
+
+    # Set the charges
+    if charges is not None and len(charges) > 0:
+        universe.add_TopologyAttr('charges', np.array(charges, dtype=np.float32))
+    return universe
 
 # Get a cksum from a MDA universe for equality comparission
 def get_mda_universe_cksum (universe) -> str:

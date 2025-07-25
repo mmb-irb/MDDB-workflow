@@ -1,8 +1,8 @@
 import MDAnalysis
 from rdkit import Chem
 from model_workflow.utils.structures import Structure
+from model_workflow.utils.auxiliar import warn
 from model_workflow.utils.type_hints import *
-from model_workflow.utils.warnings import warn
 from functools import lru_cache
 import requests
 

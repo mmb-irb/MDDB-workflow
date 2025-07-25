@@ -4,14 +4,22 @@ from model_workflow.utils.type_hints import *
 def generate_residue_mapping(
     protein_map : List[dict],
     ligand_map : List[dict],
+    lipid_map : List[dict],
     structure : 'Structure',
 ) -> dict:
-    """Build the residue map from both proteins and ligands maps
-    This is formatted as both the standard topology and metadata generators expect them."""
-    
-    # Reformat mapping data to the topology system
+    """
+    Build the residue map from both proteins and ligands maps.
+    This is formatted as both the standard topology and metadata generators expect them.
+    Task: resmap
+    Args:
+        ligand_map = { 'name': pubchem_id, 'residue_indices': residue_indices, 'match': { 'ref': { 'pubchem': pubchem_id } } }
 
+    """
+
+    # Reformat mapping data to the topology system
     # Add the reference type to each reference object
+    for data in lipid_map:
+        data['type'] = 'lipid'
     for data in protein_map:
         data['type'] = 'protein'
     for data in ligand_map:
@@ -26,7 +34,7 @@ def generate_residue_mapping(
     residue_reference_indices = [ None ] * residues_count
     residue_reference_numbers = [ None ] * residues_count
 
-    for data in protein_map + ligand_map:
+    for data in protein_map + ligand_map + lipid_map:
         match = data['match']
         # Get the reference index
         # Note that several matches may belong to the same reference and thus have the same index
@@ -60,6 +68,8 @@ def generate_residue_mapping(
             reference_id = reference['uniprot']
         elif reference_type == 'ligand':
             reference_id = reference['pubchem']
+        elif reference_type == 'lipid':
+            reference_id = reference['inchikey']
         else:
             raise ValueError('Not supported type ' + reference_type)
         # If we have a regular reference id (i.e. not a no referable / not found flag)
@@ -67,7 +77,7 @@ def generate_residue_mapping(
             reference_ids.append(reference_id)
             reference_types.append(reference_type)
         reference_index = reference_ids.index(reference_id)
-        # Set the topology reference number and index for each residue
+        # Set the topology reference index and number for each residue
         # Note that ligands do not have any residue reference numbering
         if reference_type == 'protein':
             for residue_index, residue_number in zip(data['residue_indices'], match['map']):
@@ -75,9 +85,10 @@ def generate_residue_mapping(
                     continue
                 residue_reference_indices[residue_index] = reference_index
                 residue_reference_numbers[residue_index] = residue_number
-        if reference_type == 'ligand':
+        if reference_type in ['ligand','lipid']:
             for residue_index in data['residue_indices']:
                 residue_reference_indices[int(residue_index)] = reference_index
+
     # If there are not references at the end then set all fields as None, in order to save space
     if len(reference_ids) == 0:
         reference_ids = None
@@ -90,6 +101,6 @@ def generate_residue_mapping(
         'reference_types': reference_types,
         'residue_reference_indices': residue_reference_indices,
         'residue_reference_numbers': residue_reference_numbers
-    }
+    }    
 
     return residue_map
