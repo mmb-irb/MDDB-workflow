@@ -622,7 +622,7 @@ class Residue:
         # To define carbohydrates search for rings made of 1 oxygen and 'n' carbons
         # WARNING: This logic may fail for some very specific molecules such as furine
         # LIMITATION: This logic only aims for cyclical carbohydrates. The linear form of carbohydrates is not yet consider
-        rings = list(self.find_rings())
+        rings = self.find_rings(6)
         for ring in rings:
             ring_elements = [ atom.element for atom in ring ]
             # Check the ring has 1 oxygen
@@ -762,9 +762,8 @@ class Residue:
         return formula
 
     # Find rings in the residue
-    def find_rings (self) -> Generator[ List[Atom], None, None ]:
-        return self.structure.find_rings(selection=self.get_selection())
-
+    def find_rings (self, max_ring_size : int) -> List[ List[Atom] ]:
+        return self.structure.find_rings(max_ring_size, selection=self.get_selection())
     
     def split (self,
         first_residue_atom_indices : List[int],
@@ -2626,17 +2625,12 @@ class Structure:
         merged_chains = self_chain_copies + other_chain_copies
         return Structure(merged_atoms, merged_residues, merged_chains)
 
-    # Find rings in the structure and yield them as they are found
-    # LIMITATION: Wrong rings may be found including smaller rings
-    # LIMITATION: Use this function to see if a specific ring exists, but not to count rings
-    def find_rings (self, selection : Optional[Selection] = None) -> Generator[ List[Atom], None, None ]:
+    # Find rings with a maximum specific size or less in the structure and yield them as they are found
+    def find_rings (self, max_ring_size : int, selection : Optional[Selection] = None) -> List[ List[Atom] ]:
+        found_rings = []
         selected_atom_indices = selection.atom_indices if selection else None
-        # We will use a logic which finds long paths of bonded heavy atoms
-        # These paths have no 'branches' and thus, when there are 2 possible paths then both paths are explored independently
-        # Save already searched atoms and the number of times it has been explored already
-        # Note that atoms may be visited as many times as their number of heavy atom bonds -1
-        already_searched_atoms = {}
-        def find_rings_recursive (atom_path : List[Atom]) -> Generator[ List[Atom], None, None ]:
+        # Find rings recursively
+        def find_rings_recursive (atom_path : List[Atom]) -> Generator[ Tuple[Atom], None, None ]:
             # Get the current atom to continue the followup: the last atom
             current_atom = atom_path[-1] # Note that the list MUST always have at least 1 atom
             # Get bonded atoms to continue the path
@@ -2646,13 +2640,6 @@ class Structure:
             # In case there is a selection, check followup atoms not to be in the selection
             if selected_atom_indices:
                 followup_atoms = [ atom for atom in followup_atoms if atom.index in selected_atom_indices ]
-            # Check if this atom has been visited already too many times and, if so, stop here
-            # Allowed search times is the posible number of rings where this atom can belong
-            allowed_search_times = comb(len(followup_atoms), 2)
-            already_search_times = already_searched_atoms.get(current_atom, 0)
-            if already_search_times == allowed_search_times:
-                return
-            already_searched_atoms[current_atom] = already_search_times + 1
             # Remove the previous atom to avoid going back
             previous_atom = atom_path[-2] if len(atom_path) > 1 else None
             if previous_atom:
@@ -2664,8 +2651,11 @@ class Structure:
                 # If so, we have found a ring
                 if path_index != None:
                     ring = atom_path[path_index:]
-                    yield ring
+                    ring.sort(key=lambda x: x.index)
+                    yield tuple(ring)
                     continue
+                # If the ring size is reached, we can not continue
+                if len(atom_path) == max_ring_size: continue
                 # Otherwise, keep searching
                 new_path = atom_path + [followup_atom]
                 for ring in find_rings_recursive(atom_path=new_path):
@@ -2675,21 +2665,18 @@ class Structure:
         for candidate_atom_index in candidate_atom_indices:
             candidate_atom = self.atoms[candidate_atom_index]
             # It must be heavy atom
-            if candidate_atom.element == 'H':
-                continue
+            if len(candidate_atom.bonds) < 2: continue
             # It must not be a dead end already
             bonded_atoms = candidate_atom.get_bonded_atoms()
-            bonded_atoms = [ atom for atom in bonded_atoms if atom.element != 'H' ]
+            bonded_atoms = [ atom for atom in bonded_atoms if len(atom.bonds) >= 2 ]
             # In case there is a selection, check followup atoms not to be in the selection
             if selected_atom_indices:
                 bonded_atoms = [ atom for atom in bonded_atoms if atom.index in selected_atom_indices ]
-            # Check this atom is not a dead end already
-            allowed_search_times = comb(len(bonded_atoms), 2)
-            if allowed_search_times < 1:
-                continue
             for ring in find_rings_recursive(atom_path=[candidate_atom]):
-                yield ring
-
+                found_rings.append(ring)
+        # Get unique rings
+        unique_rings = set(found_rings)
+        return list(unique_rings)
     # Given an atom selection, get all bonds between these atoms and any other atom in the structure
     # Note that inner bonds between atoms in the selection are discarded
     def get_selection_outer_bonds (self, selection : Selection) -> List[int]:

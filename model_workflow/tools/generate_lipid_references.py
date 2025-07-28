@@ -53,10 +53,10 @@ def generate_lipid_references(structure: 'Structure',
  
             # QUALITY CHECKS
             cls = res_data['classification']
-            # If the residue is a lipid, we check if it is classified as fatty
-            if all('fatty' not in classes for classes in cls):
-                warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is not '
-                     f'classified as fatty {cls} but it is a lipid')
+            # If the residue is a lipid, we check if it is classified as fatty/steroid
+            if all('fatty' not in classes for classes in cls) and \
+                all('steroid' not in classes for classes in cls):
+                warn(f'The residue {str(res_data["resname"])} is classified as {cls}, but the InChIKey "{inchikey}" is a lipid.')
 
         else:
             # If the InChIKey is not in SwissLipids or LIPID MAPS, we check if it is classified as fatty

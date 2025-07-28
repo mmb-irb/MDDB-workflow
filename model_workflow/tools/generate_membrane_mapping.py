@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, load_json
 from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
 
@@ -144,3 +144,23 @@ def generate_membrane_mapping(lipid_map : List[dict],
     save_json(mem_map_js, output_filepath)
     return mem_map_js
 
+
+def display_membrane_mapping(mem_map: str, pdb: str):
+    try:
+        import nglview as nv
+    except ImportError:
+        raise ImportError("nglview is required for displaying membrane mapping. Please install it using 'pip install nglview'.")
+    
+    mem_map = load_json(mem_map)
+    top = f"@{','.join(map(str,mem_map['mems']['0']['leaflets']['top']))}"
+    bot = f"@{','.join(map(str,mem_map['mems']['0']['leaflets']['bot']))}"
+    no_mem = f"@{','.join(map(str,mem_map['no_mem_lipid']))}"
+
+    view = nv.show_file(pdb)
+    view.clear(0)
+    #view.clear(1)
+    view.add_point(selection='not protein', color='green', scale=1.5)
+    view.add_point(selection=f'{top}', color='blue')
+    view.add_point(selection=f'{bot}', color='red')
+    view.add_point(selection=no_mem, color='yellow', scale=0.5)
+    return view

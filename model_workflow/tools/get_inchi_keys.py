@@ -134,9 +134,7 @@ def get_inchi_keys (
     for name, inchikeys in name_2_key.items():
         inchikeys = set(inchikeys)
         if len(inchikeys) > 1:
-            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"]): >4}. '
-                                    f'{key_2_name[key]["inchi"]}. '
-                                    f'Sample index: {key_2_name[key]["resindices"][0]}'
+            key_counts = '\n'.join([f'\t{key}: {len(key_2_name[key]["resindices"]): >4}'
                                       for key in inchikeys])
             warn(f'The residue {name} has more than one InChi key:\n'
                  f'{key_counts}')
