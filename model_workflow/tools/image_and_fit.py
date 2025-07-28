@@ -143,7 +143,7 @@ def image_and_fit (
             # i.e. -box 999 999 999
             run_gromacs(f'trjconv -s {output_structure_file.path} \
                 -f {output_trajectory_file.path} -o {output_trajectory_file.path} \
-                -pbc nojump',
+                -pbc nojump -n {CENTER_INDEX_FILEPATH}',
                 user_input = 'System', show_error_logs = True)
 
     # Fitting --------------------------------------------------------------------------------------
@@ -166,7 +166,8 @@ def image_and_fit (
         # Run Gromacs
         run_gromacs(f'trjconv -s {structure_to_fit.path} \
             -f {trajectroy_to_fit.path} -o {output_trajectory_file.path} \
-            -fit rot+trans', user_input = f'{CENTER_SELECTION_NAME} System',
+            -fit rot+trans',
+            user_input = f'{CENTER_SELECTION_NAME} System',
             show_error_logs = True)
         
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
