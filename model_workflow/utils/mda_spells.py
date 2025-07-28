@@ -77,17 +77,14 @@ def get_mda_universe_from_stopology (standard_topology_file : 'File', structure_
     # Create a MDAnalysis topology from the standard topology file
     return Universe(mda_topology, structure_file.path)
 
-def get_mda_universe (structure_file : 'File', # To load in MDAnalysis
-                      structure : 'Structure', # For atom bonds
+def get_mda_universe (structure_file : 'File',              # To load in MDAnalysis
+                      reference_bonds : List[List[int]],    # To set the bonds
                       charges : List[float]) -> 'Universe': # To set the charges
     """Create a MDAnalysis universe using data in the workflow."""
     universe = Universe(structure_file.path)
     # Set the atom bonds
-    atom_bonds = []
-    for atom_indices in structure.bonds:
-        atom_bonds.append(sorted(atom_indices))
     bonds = []
-    for bond_from, bond_tos in enumerate(atom_bonds):
+    for bond_from, bond_tos in enumerate(reference_bonds):
         for bond_to in bond_tos:
             bond = tuple(sorted([bond_from, bond_to]))
             bonds.append(bond)
