@@ -5,6 +5,7 @@ from model_workflow.utils.auxiliar import warn
 from model_workflow.utils.type_hints import *
 from functools import lru_cache
 import requests
+import multiprocessing
 
 
 def get_connected_residues(
@@ -55,11 +56,11 @@ def get_connected_residues(
     return list(all_external_bonds)
 
 
-def residue_to_inchi(res_atoms: 'MDAnalysis.AtomGroup', 
-                    resindex : int) -> Tuple[str, str, int]:
+def residue_to_inchi(task: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
     """
     Process a single residue to get its InChI key and related information.
     """
+    res_atoms , resindex = task
     # Convert to RDKIT and get InChI data
     res_RD = res_atoms.convert_to("RDKIT")
     # Calculate InChI key and string
@@ -101,7 +102,7 @@ def get_inchi_keys (
     """
     # 1) Prepare residue data for parallel processing (not yet implemented)
     # First group residues that are bonded together
-    results = []
+    tasks = []
     residues: List[Residue] = structure.residues
     visited = set()
     for resindex in range(len(residues)):
@@ -117,8 +118,17 @@ def get_inchi_keys (
             continue
         # Select residues atoms with MDAnalysis
         res_atoms = u.residues[res_grp_idx].atoms
+        # If you pass a residue selection to a parallel worker, you a passing a whole MDAnalysis
+        # universe, slowing the process down because you have to pickle the object
+        # To avoid this we create
+        residue = MDAnalysis.Merge(res_atoms).universe.atoms
         # Convert to RDKit and get InChI data
-        results.append(residue_to_inchi(res_atoms,res_grp_idx))
+        tasks.append((residue,res_grp_idx))
+
+    results = []
+    # Execute tasks in parallel
+    with multiprocessing.Pool() as pool:
+        results = pool.map(residue_to_inchi, tasks)
 
     # 2) Process results and build dictionaries
     key_2_name = {} # To see if different name for same residue
