@@ -3,6 +3,7 @@ import json
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import rdFingerprintGenerator
+from rdkit.Chem import inchi
 from mordred import Calculator, descriptors
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
@@ -12,6 +13,7 @@ from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 import re
+import requests
 
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
     # Request Drugbank
@@ -476,6 +478,76 @@ def generate_ligand_mapping (
         ligand_data['morgan_fp_bit_array'] = morgan_fp_bit_array
         ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
         ligand_data['mol_block'] = mol_block
+
+    # At this point maybe some ligands in the structure may not match because they have not been included by either the author or the user. Alternatively, the authors may have added them
+    # So those "ligands" are residues that are not matched to any ligand in the structure and the analyses will not run
+    # LORE AGUS: en el dataset de MDBind (cineca) hay muchas simulaciones con ligandos modificados (incluso solo un átomo) y no matchean 
+    # LORE AGUS: con los que están en el PDB, por lo que no se hace ningún análisis sobre estos (y se debería)
+    # LORE AGUS: ahora se intenta buscar su pubchem ID para extraer la información a partir del inchikey (da menos problemas que el smiles) y se hacen los análisis pertinentes. 
+    # AGUS: si no se puede extraer información de estos porque el inchikey no funciona, se muestra la información más básica posible y se genera una referencia vacía (será problemático)
+
+    # Obtain a list of the possible residues in the structure that are not either protein/nucleic/water/lipid or matched ligands
+    residue_element_count = count_atom_elements_per_residue(structure)
+    # Iterate over the residues and check if they are not matched
+    for residue, atoms_count in residue_element_count.items():
+        # If the residue is not connected to other residues then it may be a ligand
+        is_single_residue = len(residue.get_bonded_residue_indices()) == 0
+        if not is_single_residue: continue
+        # If the residue is not solvent, lipid or ion then it may be a ligand
+        has_right_classification = residue.classification not in ['solvent', 'lipid', 'ion']
+        if not has_right_classification: continue
+        # Check if the residue is already matched to a ligand
+        matched = False
+        for ligand_map in ligand_maps:
+            if residue.index in ligand_map['residue_indices']:
+                matched = True
+                break
+        # If the residue is not matched then add it to the ligands data
+        if matched: continue
+        # Create a new ligand data with the residue name and its atoms count
+        ligand_data = {
+            'name': residue.name,
+            'pubchem': None,
+            'drugbank': None,
+            'chembl': None,
+            'smiles': None,
+            'formula': None,
+            'morgan': None,
+            'mordred': None,
+            'pdbid': None
+        }
+        # Add the residue as a ligand map
+        ligand_map = { 
+            'name': residue.name, 
+            'residue_indices': [residue.index], 
+            'match': { 'ref': { 'pubchem': None } } 
+        }
+        # Get a PDB only with the target residue
+        residue_selection = structure.select_residue_indices([residue.index])
+        filtered_structure = structure.filter(residue_selection)
+        ligand_filename = "ligand.pdb"
+        filtered_structure.generate_pdb_file(ligand_filename)
+
+        # Obtain the InChIKey from the PDB file
+        inchikey = obtain_inchikey_from_pdb(ligand_filename)
+        # Remove the temporary PDB file
+        os.remove(ligand_filename)
+        # If the InChIKey is not None then try to obtain the PubChem CID
+        if inchikey:
+            cid = search_cid_by_inchikey(inchikey)
+            if cid:
+                ligand_data = obtain_ligand_data_from_pubchem( {'pubchem': cid} )
+                smiles = ligand_data['smiles']
+                mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block = obtain_mordred_morgan_descriptors(smiles)
+                ligand_data['mordred'] = mordred_results
+                ligand_data['morgan_fp_bit_array'] = morgan_fp_bit_array
+                ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
+                ligand_data['mol_block'] = mol_block
+        # Add the ligand data to the list of ligands data
+        ligands_data.append(ligand_data)
+        # Add the ligand map to the list of ligand maps
+        ligand_maps.append(ligand_map)
+    
     # Export ligands to a file
     save_json(ligands_data, output_filepath)
 
@@ -890,3 +962,19 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
         pubchem_ids.append(pubchem_id)
             
     return pubchem_ids
+
+def obtain_inchikey_from_pdb(pdb_file : str) -> Optional[str]:
+    mol = Chem.MolFromPDBFile(pdb_file, sanitize=True)
+    if mol is None:
+        print("❌ InchiKey couldn't be constructed from PDB file.")
+        return None
+    return inchi.MolToInchiKey(mol)
+
+def search_cid_by_inchikey(inchikey : str) -> Optional[str]:
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
+    r = requests.get(url)
+    if r.ok:
+        data = r.json()
+        return data['IdentifierList']['CID'][0]
+    else:
+        return None

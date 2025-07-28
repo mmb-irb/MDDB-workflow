@@ -42,5 +42,4 @@ def fix_gromacs_masses ():
 
     # Check if the backup file exists and, if not, then rename the current masses file as the backup
     if not local_custom_masses_file.exists:
-        print("aaaaaaaaaaaa")
         local_custom_masses_file.set_symlink_to(source_custom_masses_file)
