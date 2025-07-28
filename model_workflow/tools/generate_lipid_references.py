@@ -13,9 +13,9 @@ def generate_lipid_references(structure: 'Structure',
     try:
         # This would return a ConnectionError
         is_in_swiss_lipids('test')
-    except:
+    except Exception as e:
         # Then we map the lipids/membrane
-        warn('There was a problem connecting to the SwissLipids database.')
+        warn(f'There was a problem connecting to the SwissLipids database: {e}')
         return None
 
     if not universe.universe.atoms.charges.any(): # AGUS: he añadido .any() porque el error me lo indicaba, pero también me sugería .all() , no sé cuál encaja mejor
@@ -30,6 +30,11 @@ def generate_lipid_references(structure: 'Structure',
     for inchikey, res_data in inchi_keys.items():
         SL_data = is_in_swiss_lipids(inchikey)
         LM_data = is_in_LIPID_MAPS(inchikey)
+        # If we dont find it, we try without stereochemistry
+        if not SL_data:
+            SL_data = is_in_swiss_lipids(inchikey, only_first_layer=True)
+        if not LM_data:
+            LM_data = is_in_LIPID_MAPS(inchikey, only_first_layer=True)
 
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if SL_data or LM_data:
@@ -40,7 +45,8 @@ def generate_lipid_references(structure: 'Structure',
             # Format needed for generate_residue_mapping
             lipid_map.append({ 
                 'name': list(res_data['resname'])[0], 
-                'residue_indices': list(map(int, res_data['resindices'])), 
+                'residue_indices': list(map(int, res_data['resindices'])),
+                'resgroups': res_data['resgroups'], 
                 'match': { 
                     'ref': { 'inchikey': inchikey } } 
                     })
@@ -51,10 +57,6 @@ def generate_lipid_references(structure: 'Structure',
             if all('fatty' not in classes for classes in cls):
                 warn(f'The InChIKey {inchikey} of {str(res_data["resname"])} is not '
                      f'classified as fatty {cls} but it is a lipid')
-
-            # Glucolipids are saved separately to solve a problem with FATSLiM later (ex: A01IR, A01J5)
-            if type(cls) == list and all(len(classes) > 1 for classes in cls):
-                lipid_map[-1]['resgroups'] = list(map(int, res_data['resgroups']))
 
         else:
             # If the InChIKey is not in SwissLipids or LIPID MAPS, we check if it is classified as fatty

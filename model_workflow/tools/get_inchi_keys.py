@@ -8,66 +8,18 @@ import requests
 import multiprocessing
 
 
-def get_connected_residues(
-        residue: 'MDAnalysis.Residue',
-        visited=None):
-    """
-    Recursively finds all residues that are connected through bonds to the given residue.
-    Parameters
-    ----------
-    residue : MDAnalysis.core.groups.Residue
-        The residue to start the search from
-    visited : set, optional
-        Set of already visited residue IDs to prevent infinite recursion. 
-        Default is None, which initializes an empty set.
-    Returns
-    -------
-    list
-        A set containing the residue IDs of all residues that are connected 
-        through bonds to the input residue, either directly or indirectly.
-    Notes
-    -----
-    This function traverses the molecular structure recursively, following bonds 
-    between residues. It keeps track of visited residues to avoid cycles in the
-    traversal. Both direct bonds between residues and indirect connections through
-    other residues are included in the result.
-    """
-    
-    if visited is None:
-        visited = set()
-    
-    # Add current residue to visited set
-    visited.add(residue.resindex)
-    
-    # Get direct external bonds
-    external_bonds = set([residue.resindex])
-    for bond in residue.atoms.bonds:
-        external_bonds.update(bond.atoms.resindices)
-    
-    # Recursively check external bonds
-    all_external_bonds = external_bonds.copy()
-    u = residue.universe
-    for ext_resid in external_bonds:
-        if ext_resid not in visited:
-            # Get external bonds for the connected residue
-            recursive_bonds = get_connected_residues(u.residues[ext_resid], visited)
-            all_external_bonds.update(recursive_bonds)
-    
-    return list(all_external_bonds)
-
-
 def residue_to_inchi(task: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
     """
     Process a single residue to get its InChI key and related information.
     """
-    res_atoms , resindex = task
+    resatoms , resindices = task
     # Convert to RDKIT and get InChI data
-    res_RD = res_atoms.convert_to("RDKIT")
+    res_RD = resatoms.convert_to("RDKIT")
     # Calculate InChI key and string
     inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
     # rdinchi.MolToInchi so it doesnt print the warnings
     inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
-    return (inchikey, inchi, resindex)
+    return (inchikey, inchi, resindices)
 
 
 def get_inchi_keys (
@@ -104,26 +56,31 @@ def get_inchi_keys (
     # First group residues that are bonded together
     tasks = []
     residues: List[Residue] = structure.residues
-    visited = set()
-    for resindex in range(len(residues)):
-        # Skip residues that have already been visited
-        if resindex in visited:
+
+    # Check if the residues are the same as in the universe TODO: BORRAR
+    for i in range(len(residues)):
+        assert u.residues.resnames[i] == residues[i].name
+
+    # Fragment = residues that are bonded together
+    fragments = u.atoms.fragments  
+    skip_class = {'ion', 'solvent', 'dna', 'rna', 'protein'}
+    for i, fragment in enumerate(fragments):
+        resindices = list(set(fragment.resindices))
+        
+        # Continue to the next fragment if any of its 
+        # residues are of a disallowed classification
+        if any(residues[resindex].classification in skip_class
+            for resindex in resindices):
             continue
-        # Residues grouped by bonded atoms
-        res_grp_idx = get_connected_residues(u.residues[resindex], visited) 
-        classes = set([residues[grp_idx].classification for grp_idx in res_grp_idx])
-        # Skip residues that are aminoacids, nucleics, or too small
-        # We also skips residues connected to them: glicoprotein, lipid-anchored protein...
-        if any(cls in ['ion', 'solvent', 'dna', 'rna', 'protein'] for cls in classes):
-            continue
+
         # Select residues atoms with MDAnalysis
-        res_atoms = u.residues[res_grp_idx].atoms
+        resatoms = u.residues[resindices].atoms
         # If you pass a residue selection to a parallel worker, you a passing a whole MDAnalysis
         # universe, slowing the process down because you have to pickle the object
         # To avoid this we create
-        residue = MDAnalysis.Merge(res_atoms).universe.atoms
+        resatoms = MDAnalysis.Merge(resatoms).universe.atoms
         # Convert to RDKit and get InChI data
-        tasks.append((residue,res_grp_idx))
+        tasks.append((resatoms, resindices))
 
     results = []
     # Execute tasks in parallel
@@ -133,8 +90,7 @@ def get_inchi_keys (
     # 2) Process results and build dictionaries
     key_2_name = {} # To see if different name for same residue
     name_2_key = {} # To see if different residues under same name
-    for result in results:
-        inchikey, inchi, indexes = result
+    for (inchikey, inchi, resindices) in results:
 
         # If key don't existe we create the default entry with info that is only put once
         if inchikey not in key_2_name:
@@ -145,17 +101,19 @@ def get_inchi_keys (
                                     'classification': set()
                                     }
         # Add residue index to the list
-        key_2_name[inchikey]['resindices'].extend(indexes)
-        key_2_name[inchikey]['resgroups'].append(indexes)
+        key_2_name[inchikey]['resindices'].extend(resindices)
         # Add residue name to the list. For multi residues we join the names
-        resname = '-'.join(sorted([residues[index].name for index in indexes]))
+        resname = '-'.join(sorted([residues[index].name for index in resindices]))
         key_2_name[inchikey]['resname'].add(resname)
         # Add residue class to the list
-        if len(indexes) > 1:
-            classes = tuple(set([residues[index].classification for index in indexes]))
+        if len(resindices) > 1:
+            classes = tuple(set([residues[index].classification for index in resindices]))
             key_2_name[inchikey]['classification'].add(classes)
+            # Glucolipids saved the groups of residues the form a 'fragment' to solve a 
+            # problem with FATSLiM later (ex: A01IR, A01J5)
+            key_2_name[inchikey]['resgroups'].append(list(map(int, resindices)))
         else:
-            key_2_name[inchikey]['classification'].add(residues[indexes[0]].classification)
+            key_2_name[inchikey]['classification'].add(residues[resindices[0]].classification)
 
         # Incorrect residue name, estereoisomers, lose of atoms...
         if resname not in name_2_key:
@@ -192,7 +150,9 @@ def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
     # https://www.lipidmaps.org/resources/rest
     # Output item = physchem, is the only one that returns data for the inchi key
     # for only the two first layers (main and atom connection)
-    # To see InChiKey layers: https://www.inchi-trust.org/
+    # To see InChiKey layers: 
+    # https://www.inchi-trust.org/about-the-inchi-standard/
+    # Or https://www.rhea-db.org/help/inchi-inchikey#What_is_an_InChIKey_
     key = inchikey[:14] if only_first_layer else inchikey
     url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all"
     response = requests.get(url, headers=headers)
@@ -207,11 +167,12 @@ def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
 
 
 # @lru_cache(maxsize=None)
-def is_in_swiss_lipids(inchikey, only_first_layer=False) -> dict:
-    """Search the InChi keys in LIPID MAPS"""
+def is_in_swiss_lipids(inchikey, only_first_layer=False, 
+                       protonation=True) -> dict:
+    """Search the InChi keys in SwissLipids. Documentation: https://www.swisslipids.org/#/api"""
     key = inchikey[:14] if only_first_layer else inchikey
     headers = {'accept': 'json'}
-    url = f"https://www.swisslipids.org/api/index.php/advancedSearch?InChIkey={key}"
+    url = f"https://www.swisslipids.org/api/index.php/search?term={key}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return response.json()[0]

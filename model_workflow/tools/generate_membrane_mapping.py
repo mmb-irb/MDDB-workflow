@@ -58,14 +58,16 @@ def generate_membrane_mapping(lipid_map : List[dict],
     
     # Select only the lipids and potential membrane members
     lipid_ridx = []
+    glclipid_ridx = []
     for ref in lipid_map:
-        lipid_ridx.extend(ref['resindices'])
+        lipid_ridx.extend(ref['residue_indices'])
+        if ref['resgroups']:
+            glclipid_ridx.extend(ref['resgroups'])
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
         save_json(mem_map_js, output_filepath)
         return mem_map_js
-    glclipid_ridx = [grp for ref in lipid_map for grp in ref.get('resgroups', []) if len(grp) > 1]
     mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str,(lipid_ridx)))})')
 
     # for better leaflet assignation we only use polar atoms

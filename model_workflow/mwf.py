@@ -2077,7 +2077,7 @@ class Project:
     lipid_references_file = property(get_lipid_references_file, None, None, "File including lipid references data mined from PubChem (read only)")
 
     # Get mapping of residues in the membrane
-    get_membrane_map = Task('membranes', 'Membrane mapping',
+    get_membrane_map = Task('memmap', 'Membrane mapping',
         generate_membrane_mapping, output_filename = MEMBRANE_MAPPING_FILENAME) 
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
@@ -2206,7 +2206,7 @@ DEPENDENCY_FLAGS = {
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
     'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ],
-    'membs': ['membranes', 'density',  'thickness', 'apl', 'lorder', 'linter']
+    'membs': ['memmap', 'density',  'thickness', 'apl', 'lorder', 'linter']
 }
 
 # Set the default analyses to be run when no task is specified
