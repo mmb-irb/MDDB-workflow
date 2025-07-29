@@ -6,7 +6,7 @@ from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.type_hints import *
-
+from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
 # Set pytraj supported formats
 pytraj_supported_structure_formats = {'prmtop', 'pdb', 'mol2', 'psf', 'cif', 'sdf'}
 pytraj_supported_trajectory_formats = {'xtc', 'trr', 'crd', 'mdcrd', 'nc', 'dcd'}
@@ -22,7 +22,7 @@ def get_pytraj_trajectory (
         raise SystemExit('Missing topology file to setup PyTraj trajectory')
     
     # Set the pytraj trayectory and get the number of frames
-    # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atomos later
+    # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atoms later
     pyt_trajectory = pyt.iterload(input_trajectory_filename, input_topology_filename)
     
     # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
@@ -67,21 +67,8 @@ def get_reduced_pytraj_trajectory (
         frame_step = 1
         return pt_trajectory, frame_step, snapshots
 
-    # Otherwise, create a reduced trajectory with as much frames as specified above
-    # These frames are picked along the trajectory
-    # Calculate the step between frames in the reduced trajectory to match the final number of frames
-    # WARNING: Since the step must be an integer the thorical step must be rounded
-    # This means the specified final number of frames may not be accomplished, but it is okey
-    # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
-    # This means the final number of frames will be the specified or less
-    # CRITICAL WARNING:
-    # This formula is exactly the same that the client uses to request stepped frames to the API
-    # This means that the client and the workflow are coordinated and these formulas must not change
-    # If you decide to change this formula (in both workflow and client)...
-    # You will have to run again all the database analyses with reduced trajectories
-    frame_step = math.ceil(snapshots / reduced_trajectory_frames_limit)
+    frame_step, reduced_frame_count = calculate_frame_step(snapshots, reduced_trajectory_frames_limit)
     reduced_pt_trajectory = pt_trajectory[0:snapshots:frame_step]
-    reduced_frame_count = math.ceil(snapshots / frame_step)
     return reduced_pt_trajectory, frame_step, reduced_frame_count
 
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
