@@ -8,8 +8,7 @@ import MDAnalysis
 
 
 def lipid_order (
-    trajectory_file : 'File',
-    standard_topology_file : 'File',
+    universe : 'MDAnalysis.Universe',
     output_directory : str,
     membrane_map: dict,
     lipid_map: dict,
@@ -33,13 +32,11 @@ def lipid_order (
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     
-    mda_top = to_MDAnalysis_topology(standard_topology_file)
-    u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     for ref in lipid_map:
         # Take the first residue of the reference
-        res = u.residues[ref["resindices"][0]]
+        res = universe.residues[ref["resindices"][0]]
         if ref['lipidmaps']['name'] != 'Cholesterol':
             carbon_groups = get_all_acyl_chains(res)
         else:
@@ -51,15 +48,15 @@ def lipid_order (
             atoms = res.universe.atoms[group]
             C_names = sorted([atom.name for atom in atoms],key=natural_sort_key)
             # Find all C-H bonds indices
-            ch_pairs = find_CH_bonds(u, ref["resindices"], C_names)
+            ch_pairs = find_CH_bonds(universe, ref["resindices"], C_names)
             # Initialize the order parameters to sum over the trajectory
             order_parameters = []
             costheta_sums = {C_name: np.zeros(len(ch_pairs[C_name]['C'])) for C_name in C_names}
             n = 0
             # Loop over the trajectory
-            for ts in u.trajectory[0:snapshots:frame_step]:
+            for ts in universe.trajectory[0:snapshots:frame_step]:
                 for C_name in C_names:
-                    d = u.atoms[ch_pairs[C_name]['C']].positions - u.atoms[ch_pairs[C_name]['H']].positions
+                    d = universe.atoms[ch_pairs[C_name]['C']].positions - universe.atoms[ch_pairs[C_name]['H']].positions
                     costheta_sums[C_name] += d[:,2]**2/np.linalg.norm(d, axis=1)**2
                 n += 1
             order_parameters = 1.5 * np.array([costheta_sums[C_name].mean() for C_name in C_names])/n - 0.5

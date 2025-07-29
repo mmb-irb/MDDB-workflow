@@ -8,8 +8,7 @@ import numpy as np
 import MDAnalysis
 
 def lipid_interactions (
-    trajectory_file : 'File',
-    standard_topology_file : 'File',
+    universe : 'MDAnalysis.Universe',
     output_directory : str,
     membrane_map: dict,
     lipid_map: dict,
@@ -25,21 +24,19 @@ def lipid_interactions (
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
     
-    mda_top = to_MDAnalysis_topology(standard_topology_file)
-    u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
     lipids = set([ lipid['resname'] for lipid in lipid_map])
     lipids_str = " ".join(lipids)
-    resids = np.unique(u.select_atoms('protein').resindices)
+    resids = np.unique(universe.select_atoms('protein').resindices)
     ocupancy = {resid: Counter() for resid in resids}
 
     # Only iterate through the frames you need
-    for ts in u.trajectory[0:snapshots:frame_step]:
+    for ts in universe.trajectory[0:snapshots:frame_step]:
         # Select non-protein atoms near the protein once
-        non_protein_near = u.select_atoms(f'(around 6 protein) and (resname {lipids_str}) and not protein')
+        non_protein_near = universe.select_atoms(f'(around 6 protein) and (resname {lipids_str}) and not protein')
         # Make residue selections only once
         for resid in resids:
-            residue_atoms = u.select_atoms(f'resid {resid}')
+            residue_atoms = universe.select_atoms(f'resid {resid}')
             # Find non-protein atoms near this specific residue
             nearby = non_protein_near.select_atoms(f'around 6 global group residuegroup', 
                                                 residuegroup=residue_atoms)

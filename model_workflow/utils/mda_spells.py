@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 
 #from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.universe import Universe
@@ -78,10 +79,14 @@ def get_mda_universe_from_stopology (standard_topology_file : 'File', structure_
     return Universe(mda_topology, structure_file.path)
 
 def get_mda_universe (structure_file : 'File',              # To load in MDAnalysis
+                      trajectory_file : 'File',             # To load in MDAnalysis
                       reference_bonds : List[List[int]],    # To set the bonds
                       charges : List[float]) -> 'Universe': # To set the charges
     """Create a MDAnalysis universe using data in the workflow."""
-    universe = Universe(structure_file.path)
+
+    # Make MDAnalysis warnings and logs grey
+    print(GREY_HEADER, end='\r')
+    universe = Universe(structure_file.path, trajectory_file.path)
     # Set the atom bonds
     bonds = []
     for bond_from, bond_tos in enumerate(reference_bonds):
@@ -93,6 +98,7 @@ def get_mda_universe (structure_file : 'File',              # To load in MDAnaly
     # Set the charges
     if charges is not None and len(charges) > 0:
         universe.add_TopologyAttr('charges', np.array(charges, dtype=np.float32))
+    print(COLOR_END, end='\r')
     return universe
 
 # Get a cksum from a MDA universe for equality comparission
