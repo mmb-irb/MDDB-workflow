@@ -1,7 +1,7 @@
 from os import remove
 
 # Import local tools
-from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
 from model_workflow.tools.get_bonds import get_excluded_atoms_selection
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
@@ -96,14 +96,14 @@ def structure_corrector (
         # Set some atoms which are to be skipped from these test given their "fake" nature
         excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
         # If bonds match from the begining we are done as well
-        print('Checking default structure bonds (stabonds)')
+        print(f'Checking default structure bonds ({STABLE_BONDS_FLAG})')
         if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
         print(' They are wrong')
         # Find the first frame in the whole trajectory where safe bonds are respected
-        safe_bonds_frame = get_bonds_canonical_frame(
+        bonds_reference_frame = get_bonds_reference_frame(
             structure_file = output_structure_file,
             trajectory_file = input_trajectory_file,
             snapshots = snapshots,
@@ -111,10 +111,10 @@ def structure_corrector (
             structure = structure,
             pbc_selection = pbc_selection
         )
-        MD.get_reference_frame._set_parent_output(MD, safe_bonds_frame)
-        # If there is no canonical frame then stop here since there must be a problem
-        if safe_bonds_frame == None:
-            print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
+        MD.get_reference_frame._set_parent_output(MD, bonds_reference_frame)
+        # If there is no reference frame then stop here since there must be a problem
+        if bonds_reference_frame == None:
+            print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
             must_be_killed = STABLE_BONDS_FLAG not in mercy
             if must_be_killed:
                 raise TestFailure('Failed to find stable bonds')
@@ -123,7 +123,7 @@ def structure_corrector (
                 'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
             return
         # Set also the safe bonds frame structure to mine its coordinates
-        safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, safe_bonds_frame)
+        safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, bonds_reference_frame)
         safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
         # Set all coordinates in the main structure by copying the safe bonds frame coordinates
         for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):

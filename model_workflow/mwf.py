@@ -37,7 +37,7 @@ from model_workflow.utils.type_hints import *
 
 # Import local tools
 from model_workflow.tools.get_first_frame import get_first_frame
-from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_reference_frame
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.find_interaction_types import find_interaction_types
 from model_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
@@ -1087,7 +1087,7 @@ class MD:
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
     # Reference frame
-    get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
+    get_reference_frame = Task('reframe', 'Reference frame', get_bonds_reference_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
     # ---------------------------------------------------------------------------------
