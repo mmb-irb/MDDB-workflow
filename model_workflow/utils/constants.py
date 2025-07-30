@@ -308,7 +308,7 @@ PYTRAJ_PARM_FORMAT = {
 # DANI: Rb was found in PDB 3GGK
 
 # Set elements which are always "bonded"
-SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S' ])
+SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S', 'D' ])
 # Set elements which may be found both "bonded" or "alone"
 SUPPORTED_COORDINATED_ELEMENTS = set([ 'Zn', 'Fe', 'Mn', 'Co', 'Lu', 'U', 'V', 'Al', 'Ba', 'Be', 'F', 'Te' ])
 # Set elements which are always "alone"
