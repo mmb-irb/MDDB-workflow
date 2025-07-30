@@ -266,6 +266,7 @@ def find_safe_bonds (
     must_check_stable_bonds : bool,
     snapshots : int,
     structure : 'Structure',
+    guess_bonds : bool = False,
     # Optional file with bonds sorted according a new atom order
     resorted_bonds_file : Optional['File'] = None
 ) -> List[List[int]]:
@@ -275,18 +276,21 @@ def find_safe_bonds (
     if resorted_bonds_file != None and resorted_bonds_file.exists:
         warn('Using resorted safe bonds')
         return load_json(resorted_bonds_file.path)
-    # Try to get bonds from the topology before guessing
-    safe_bonds = mine_topology_bonds(topology_file)
-    if safe_bonds:
-        return safe_bonds
     # Get a selection including coarse grain atoms in the structure
     cg_selection = structure.select_cg()
-    # If all bonds are in coarse grain the set all bonds "wrong" already
+    # If all bonds are in coarse grain then set all bonds "wrong" already
     if len(cg_selection) == structure.atom_count:
         safe_bonds = [ MISSING_BONDS for atom in range(structure.atom_count) ]
         return safe_bonds
+    # Try to get bonds from the topology before guessing
+    if guess_bonds:
+        print('Bonds were forced to be guessed, so bonds in the topology file will be ignored')
+    else:
+        safe_bonds = mine_topology_bonds(topology_file)
+        if safe_bonds:
+            return safe_bonds
     # If failed to mine topology bonds then guess stable bonds
-    print('Bonds will be guessed by atom distances and radius')
+    print('Bonds will be guessed by atom distances and radii along different frames in the trajectory')
     # Find stable bonds if necessary
     if must_check_stable_bonds:
         # Using the trajectory, find the most stable bonds

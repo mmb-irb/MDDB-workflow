@@ -1260,6 +1260,7 @@ class Project:
         rmsd_cutoff : float = DEFAULT_RMSD_CUTOFF,
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         interactions_auto : Optional[str] = None,
+        guess_bonds : bool = False,
         # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : Optional[int] = None,
     ):
@@ -1368,6 +1369,7 @@ class Project:
         self.interaction_cutoff = interaction_cutoff
         self.sample_trajectory = sample_trajectory
         self.interactions_auto = interactions_auto
+        self.guess_bonds = guess_bonds
         # Set the inputs, where values from the inputs file will be stored
         self._inputs = None
 

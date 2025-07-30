@@ -43,8 +43,9 @@ def structure_corrector (
     pbc_selection : 'Selection',
     snapshots : int,
     register : 'Register',
-    mercy,
-    trust
+    mercy : List[str],
+    trust : List[str],
+    guess_bonds : bool
 ) -> dict:
     
     # Write the inital output structure file which will be overwritten several times further
@@ -79,7 +80,8 @@ def structure_corrector (
         input_trajectory_file,
         must_check_stable_bonds,
         snapshots,
-        structure
+        structure,
+        guess_bonds
     )
     # If safe bonds do not match structure bonds then we have to fix it
     def check_stable_bonds ():

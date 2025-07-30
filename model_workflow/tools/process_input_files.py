@@ -315,7 +315,8 @@ def process_input_files (
         snapshots = snapshots,
         register = self.register,
         mercy = self.project.mercy,
-        trust = self.project.trust
+        trust = self.project.trust,
+        guess_bonds = self.project.guess_bonds
     )
 
     # If the corrected output exists then use it
