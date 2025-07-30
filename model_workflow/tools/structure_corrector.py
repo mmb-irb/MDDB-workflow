@@ -132,7 +132,7 @@ def structure_corrector (
         remove(safe_bonds_frame_filename)
         # Set the modified variable as true since we have changes the structure
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (stable bonds) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
         # Set the test as passed
         register.update_test(STABLE_BONDS_FLAG, True)
@@ -177,7 +177,7 @@ def structure_corrector (
     
     # In case there are not chains at all
     if len(chains) == 1 and ( chains[0].name == ' ' or chains[0].name == 'X' ):
-        print('WARNING: chains are missing and they will be added')
+        warn('Chains are missing and they will be added')
         # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
         # Note that we rely in fragments (and thus in bonds) to guess chains
         if next((True for bonds in structure.bonds if bonds == MISSING_BONDS), False):
@@ -186,7 +186,7 @@ def structure_corrector (
         # Run the chainer
         structure.auto_chainer()
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (no chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     else:
@@ -205,7 +205,7 @@ def structure_corrector (
                 warn(f'Some chains are missing -> Unchained regions will be chained as {new_letter}')
                 unlettered_chain.name = new_letter
             # Update the structure file using the corrected structure
-            print(f' The structure file has been modified -> {output_structure_file.filename}')
+            print(f' The structure file has been modified (missing chains) -> {output_structure_file.filename}')
             structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -233,7 +233,7 @@ def structure_corrector (
 
     if structure.check_repeated_chains(fix_chains=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -292,7 +292,7 @@ def structure_corrector (
 
     # If we did any change then save the structure
     if had_to_split_chains:
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (split chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -301,7 +301,7 @@ def structure_corrector (
 
     if structure.check_repeated_residues(fix_residues=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
         # Sort trajectory coordinates in case atoms were sorted
@@ -325,5 +325,5 @@ def structure_corrector (
 
     if structure.check_repeated_atoms(fix_atoms=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated atoms) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
