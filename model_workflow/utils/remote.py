@@ -114,8 +114,8 @@ class Remote:
             with tqdm(unit = 'B', unit_scale = True, unit_divisor = 1024, 
                       miniters = 1, desc = ' Progress', leave=False) as t:
                 urllib.request.urlretrieve(request_url, output_file.path, reporthook = my_hook(t))
-        except:
-            raise Exception('Something went wrong when downloading the main trajectory: ' + request_url)
+        except Exception as error:
+            raise Exception('Something went wrong when downloading the main trajectory: ' + request_url, 'with error: ' + str(error))
 
     # Download the inputs file
     def download_inputs_file (self, output_file : 'File'):
