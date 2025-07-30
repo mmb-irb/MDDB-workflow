@@ -310,7 +310,7 @@ PYTRAJ_PARM_FORMAT = {
 # Set elements which are always "bonded"
 SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S' ])
 # Set elements which may be found both "bonded" or "alone"
-SUPPORTED_COORDINATED_ELEMENTS = set([ 'Zn', 'Fe', 'Mn', 'Co', 'Lu', 'U', 'V', 'Al', 'Ba', 'Be', 'F' ])
+SUPPORTED_COORDINATED_ELEMENTS = set([ 'Zn', 'Fe', 'Mn', 'Co', 'Lu', 'U', 'V', 'Al', 'Ba', 'Be', 'F', 'Te' ])
 # Set elements which are always "alone"
 SUPPORTED_ION_ELEMENTS = set([ 'K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl', 'Rb' ])
 SUPPORTED_ELEMENTS = {
