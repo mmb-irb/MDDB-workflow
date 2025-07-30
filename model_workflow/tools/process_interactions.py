@@ -82,9 +82,8 @@ def process_interactions (
             print(f' |-> Processing interactions automatically. Chain "{auto[0]}" is selected')
 
         # Get structure chains which are not completely in PBC
-        target_selection = structure.select_protein()
-        target_structure = structure.filter(target_selection)
-        target_chains = [ chain for chain in target_structure.chains if chain.get_selection() - pbc_selection ]
+        target_chains = [ chain for chain in structure.chains if chain.get_selection() - pbc_selection ]
+        
         # The greedy option is to find all possible interactions between chains
         if auto == 'autogreedy' or auto == 'greedy':
             # Use itertools to get all possible combinations of chains
