@@ -2394,8 +2394,6 @@ class Structure:
                     for residue in other_residues:
                         for atom in residue.atoms:
                             atom.residue = first_residue
-                        # Then these other residues are eliminated
-                        self.purge_residue(residue)
                 print('        Atoms will be sorted to be together by residues')
                 print('        NEVER FORGET: This will break any associated trajectory if coordinates are not sorted as well')
                 # Sort atoms to group residue atoms together
