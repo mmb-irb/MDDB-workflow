@@ -83,7 +83,7 @@ git merge master # -m "Merge master into release [skip tests]"
 
 2. Wait for the comprehensive test suite to complete. These tests verify workflow integrity and may take a considerable amount of time. If any tests fail, you can fix them in the release branch.
 
-3. Once all tests pass successfully, a new tag is generated automatically based on the `pyproject.toml` version number. This is done by the GitHub Actions workflow defined in [release.yml](.github/workflows/release.yml).
+3. Once all tests pass successfully, a new tag is generated automatically based on the `pyproject.toml` version number. This is done by the GitHub Actions workflow defined in [release.yml](https://github.com/mmb-irb/MDDB-workflow/blob/master/DEVELOPMENT.md).
 
 4. After the release is published, merge the release branch back to master if you made any changes to fix the tests:
 

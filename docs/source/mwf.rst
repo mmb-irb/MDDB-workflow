@@ -12,3 +12,23 @@ This section details the functions and classes available in `MDDB Workflow`.
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. autoclass:: model_workflow.utils.structures.Structure
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: model_workflow.utils.structures.Chain
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: model_workflow.utils.structures.Residue
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: model_workflow.utils.structures.Atom
+   :members:
+   :undoc-members:
+   :show-inheritance:
