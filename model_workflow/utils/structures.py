@@ -1104,12 +1104,44 @@ class Structure:
     # All atoms are searched if no selection is provided
     # WARNING: Note that fragments generated from a specific selection may not match the structure fragments
     # A selection including 2 separated regions of a structure fragment will yield 2 fragments
-    def find_fragments (self, selection : Optional['Selection'] = None) -> Generator['Selection', None, None]:
+    # For convenience, protein disulfide bonds are not considered in this logic by default
+    def find_fragments (self,
+        selection : Optional['Selection'] = None,
+        exclude_disulfide : bool = True
+    ) -> Generator['Selection', None, None]:
         # If there is no selection we consider all atoms
-        if not selection:
-            selection = self.select_all()
+        if not selection: selection = self.select_all()
         # Get/Find covalent bonds between atoms in a new object avoid further corruption (deletion) of the original list
         atom_indexed_covalent_bonds = { atom_index: [ *self.bonds[atom_index] ] for atom_index in selection.atom_indices }
+        # Exclude disulfide bonds from 
+        if exclude_disulfide:
+            # First search for protein disulfide bonds
+            excluded = set()
+            # Iterate atom bonds
+            for atom_index, bonds in atom_indexed_covalent_bonds.items():
+                # Get the actual atom
+                atom = self.atoms[atom_index]
+                # If it is not sulfur then continue
+                if atom.element != 'S': continue
+                # Iterate bonded atoms
+                for bonded_atom_index in bonds:
+                    # Bonds with atoms out of the selection are not considered
+                    if bonded_atom_index not in atom_indexed_covalent_bonds: continue
+                    # Get the bonded atom
+                    bonded_atom = self.atoms[bonded_atom_index]
+                    if bonded_atom.element != 'S': continue
+                    # We found a disulfide bond here
+                    # Make sure this is protein
+                    if atom.residue.classification != 'protein': continue
+                    if bonded_atom.residue.classification != 'protein': continue
+                    # We found a protein disulfide bond, we must exclude it
+                    bond = tuple(sorted([atom_index, bonded_atom_index]))
+                    excluded.add(bond)
+            # Now remove the corresponding bonds
+            for bond in excluded:
+                first_atom_index, second_atom_index = bond
+                atom_indexed_covalent_bonds[first_atom_index].remove(second_atom_index)
+                atom_indexed_covalent_bonds[second_atom_index].remove(first_atom_index)
         # Group the connected atoms in "fragments"
         while len(atom_indexed_covalent_bonds) > 0:
             start_atom_index, bonds = next(iter(atom_indexed_covalent_bonds.items()))
