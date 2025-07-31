@@ -114,8 +114,6 @@ class Atom:
             return
         # Relational indices are updated through a top-down hierarchy
         # Affected residues are the ones to update this atom internal residue index
-        current_residue = self.residue
-        current_residue.remove_atom(self)
         new_residue = self.structure.residues[new_residue_index]
         new_residue.add_atom(self)
     residue_index = property(get_residue_index, set_residue_index, None, "The atom residue index according to parent structure residues")
@@ -173,7 +171,6 @@ class Atom:
             self.structure.set_new_residue(new_residue)
             new_chain.add_residue(new_residue)
         # Now remove this atom from its current residue and move it to the new chain residue
-        self.residue.remove_atom(self)
         new_residue.add_atom(self)
     chain_index = property(get_chain_index, set_chain_index, None, "The atom chain index according to parent structure chains (read only)")
 
@@ -357,7 +354,7 @@ class Residue:
         self._classification = None
 
     def __repr__ (self):
-        return '<Residue ' + self.name + str(self.number) + (self.icode if self.icode else '') + '>'
+        return f'<Residue {self.name}{self.number}{self.icode if self.icode else ""}>'
 
     def __eq__ (self, other):
         if type(self) != type(other):
@@ -446,6 +443,9 @@ class Residue:
 
     # Add an atom to the residue
     def add_atom (self, new_atom : 'Atom'):
+        # Remove the atom from its previous residue owner
+        if new_atom.residue_index:
+            new_atom.residue.remove_atom(new_atom)
         # Insert the new atom index in the list of atom indices keeping the order
         new_atom_index = new_atom.index
         sorted_atom_index = bisect(self.atom_indices, new_atom_index)
@@ -2299,11 +2299,121 @@ class Structure:
 
         # Fix repeated chains if requested
         return len(repeated_chains) > 0
+    
+    def check_splitted_chains (self, fix_chains : bool = False, display_summary : bool = False) -> bool:
+        """
+        # Check if non-consecutive atoms belong to the same chain
+        # If so, separate pieces of non-consecuite atoms in different chains
+        # Note that the new chains will be duplicated, so you will need to run check_repeated_chains after
+        # Return true if we encountered splitted chains and false otherwise
+        """
+        splitted_fragments = []
+        # Keep track of already checked chains
+        checked_chains = set()
+        last_chain = None
+        last_fragment_start = None
+        for atom_index, atom in enumerate(self.atoms):
+            # Get the chain name
+            chain_name = atom.chain.name
+            # Skip the atom if it belong to the previous chain
+            if chain_name == last_chain: continue
+            # If we were in a splitted fragment then end it here
+            if last_fragment_start != None:
+                new_fragment_indices = list(range(last_fragment_start, atom_index))
+                new_fragment = (last_chain, new_fragment_indices)
+                splitted_fragments.append(new_fragment)
+                last_fragment_start = None
+            # Check if the chain was already found
+            if chain_name in checked_chains:
+                # Start a new fragment
+                last_fragment_start = atom_index
+            # Update last chain
+            last_chain = chain_name
+            # Add the new chain to the set of already checked chains
+            checked_chains.add(chain_name)
+
+        # Make a summary of the splitted chains if requested
+        if display_summary:
+            warn(f'Found {len(splitted_fragments)} splitted fragments')
+            affected_chains = sorted(list(set([ fragment[0] for fragment in splitted_fragments ])))
+            print(f'  We are having splits in chains {", ".join(affected_chains)}')
+
+        # Fix chains if requested
+        if fix_chains:
+            for fragment in splitted_fragments:
+                chain_name, fragment_atom_indices = fragment
+                # Create a new chain
+                new_chain = Chain(name=chain_name)
+                self.set_new_chain(new_chain)
+                new_chain_index = new_chain.index
+                # Move atoms in the fragment to the new chain
+                for atom_index in fragment_atom_indices:
+                    atom = self.atoms[atom_index]
+                    atom.set_chain_index(new_chain_index)
+
+        return len(splitted_fragments) > 0
+    
+    # Coherently sort residues according to the indices of the atoms they hold
+    def sort_residues (self):
+        # Set a function to sort atoms and residues by index
+        def by_first_atom_index (residue):
+            return min(residue.atom_indices)
+        # Sort residues according to their first atom index
+        sorted_residues = sorted(self.residues, key = by_first_atom_index)
+        # Iterate sorted residues letting them know their new index
+        for r, residue in enumerate(sorted_residues):
+            residue.index = r
+        # Finally update the structure's residues list
+        self.residues = sorted_residues
+
+    def check_merged_residues (self, fix_residues : bool = False, display_summary : bool = False) -> bool:
+        """
+        There may be residues which contain unconnected (unbonded) atoms. They are not allowed.
+        They may come from a wrong parsing and be indeed duplicated residues.
+
+        Search for merged residues.
+        Create new residues for every group of connected atoms if the fix_residues argument is True.
+        Note that the new residues will be repeated, so you will need to run check_repeated_residues after.
+        Return True if there were any merged residues.
+        """
+        # Get the list of merged residues we encounter
+        merged_residues = []
+        # Iterate residues
+        for residue in self.residues:
+            residue_selection = residue.get_selection()
+            residue_fragments = list(self.find_fragments(residue_selection))
+            if len(residue_fragments) <= 1: continue
+            # If current residue has more than 1 fragment then it is a merged residue
+            merged_residues.append(residue)
+            if not fix_residues: continue
+            # If the residue is to be fixed then let the first fragment as the current residue
+            # Then create a new residue for every other fragment
+            for extra_fragment in residue_fragments[1:]:
+                # Set a new residue identical to the current one
+                new_residue = Residue(residue.name, residue.number, residue.icode)
+                self.set_new_residue(new_residue)
+                # Add it to the same chain
+                residue.chain.add_residue(new_residue)
+                # Add atoms to it
+                for atom_index in extra_fragment.atom_indices:
+                    atom = self.atoms[atom_index]
+                    new_residue.add_atom(atom)
+            # Now that we have new resiudes, sort all residues to keep them coherent
+            self.sort_residues()
+        # Count how many merged residues we encountered
+        merged_residues_count = len(merged_residues)
+        # Log some details if the summary is requested
+        if display_summary:
+            print(f'Found {merged_residues_count} merged residues')
+            if merged_residues_count > 0:
+                print(f' e.g. {merged_residues[0]}')
+        # Return if we found merged residues
+        return merged_residues_count > 0
 
     
     def check_repeated_residues (self, fix_residues : bool = False, display_summary : bool = False) -> bool:
         """
-        There may be residues which are equal in the structure (i.e. same chain, name, number and icode).
+        There may be residues which are equal in the structure (i.e. same chain, number and icode).
         In case 2 residues in the structure are equal we must check distance between their atoms.
         If atoms are far it means they are different residues with the same notation (duplicated residues).
         If atoms are close it means they are indeed the same residue (splitted residue).

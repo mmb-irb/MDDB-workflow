@@ -214,20 +214,14 @@ def structure_corrector (
     # Splitted chains --------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    # Check if chains are splitted. If so, stop here and warn the user
-    checked_chains = []
-    last_chain = None
-    for atom in structure.atoms:
-        chain_name = atom.chain.name
-        if chain_name == last_chain:
-            continue
-        last_chain = chain_name
-        if chain_name in checked_chains:
-            # Note that this will never happen because of the pdb itself, duplicated chains are handled further
-            # This will only happen if chains were missing and guessed, and there is something very wrong in the structure
-            # Check fragments with the VMD and searh for wrong bonds
-            raise TestFailure(f'We are having splitted chains (e.g. {chain_name})')
-        checked_chains.append(chain_name)
+    # Note that this will never happen because of the pdb itself, duplicated chains are handled further
+    # This will only happen if chains were missing and guessed
+    # This may mean there is something wrong in the structure
+    # Check fragments with the VMD and searh for wrong bonds
+    if structure.check_splitted_chains(fix_chains = True, display_summary = True):
+        # Update the structure file using the corrected structure
+        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
     # Repeated chains --------------------------------------------------------------------------
@@ -294,6 +288,16 @@ def structure_corrector (
 
     # If we did any change then save the structure
     if had_to_split_chains:
+        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        structure.generate_pdb_file(output_structure_file.path)
+
+    # ------------------------------------------------------------------------------------------
+    # Merged residues ------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # NEVER FORGET: Merged residues may be generated when calling the structure.auto_chainer
+    if structure.check_merged_residues(fix_residues = True, display_summary = True):
+        # Update the structure file using the corrected structure
         print(' The structure file has been modified -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
