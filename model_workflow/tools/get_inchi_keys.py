@@ -164,7 +164,7 @@ def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
         print(f"Error for {inchikey}: {response.status_code}")
 
 
-# @lru_cache(maxsize=None)
+@lru_cache(maxsize=None)
 def is_in_swiss_lipids(inchikey, only_first_layer=False, 
                        protonation=True) -> dict:
     """Search the InChi keys in SwissLipids. Documentation: https://www.swisslipids.org/#/api"""

@@ -804,7 +804,7 @@ class MD:
     process_input_files = Task('inpro', 'Process input files', process_input_files)
 
     def get_structure_file (self) -> str:
-        """Get the processed structure."""
+        """Get the processed structure file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -828,7 +828,7 @@ class MD:
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
     def get_trajectory_file (self) -> str:
-        """Get the processed trajectory."""
+        """Get the processed trajectory file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -855,10 +855,11 @@ class MD:
         return self._trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
-    # Get the processed topology from the project
     def get_topology_file (self) -> str:
+        """Get the processed topology from the project."""
         return self.project.get_topology_file()
-    topology_file = property(get_topology_file, None, None, "Topology filename from the project (read only)")
+    topology_file = property(get_topology_file, None, None, 
+                             "Topology filename from the project (read only)")
 
     # ---------------------------------------------------------------------------------
     # Others values which may be found/calculated and files to be generated on demand

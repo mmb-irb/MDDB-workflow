@@ -5,7 +5,6 @@ import math
 import pytraj
 import MDAnalysis
 import numpy as np
-from scipy.special import comb # DANI: Substituye al math.comb porque fué añadido en python 3.8 y nosotros seguimos en 3.7
 from bisect import bisect
 
 from model_workflow.utils.file import File
@@ -2163,13 +2162,11 @@ class Structure:
         if not chain:
             chain = Chain(name=letter)
             self.set_new_chain(chain)
-        print(len(self.residues), 'residues found after new chain')
         # Set the chain index of every residue to the new chain
         for atom_index in selection.atom_indices:
             # WARNING: Chain index has to be read every iteration since it may change. Do not save it
             atom = self.atoms[atom_index]
             atom.set_chain_index(chain.index)
-        print(len(self.residues), 'residues found after chain index')
 
     # Get an available chain name
     # Find alphabetically the first letter which is not yet used as a chain name
@@ -2654,9 +2651,6 @@ class Structure:
                 new_name = initial + str(number)
                 while new_name in current_names:
                     number += 1
-                    if number > 999:
-                        # Having more than 999 repeated atoms breaks the pdb format
-                        raise ValueError('There are more than 999 repeated atoms in the structure')
                     new_name = initial + str(number)
                 # Save an example for the logs if there is none yet
                 if not example:
