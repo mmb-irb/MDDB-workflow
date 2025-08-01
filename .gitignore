@@ -9,6 +9,7 @@ atommass.dat
 .coverage*
 .pytest_cache/
 test/data/output/
+atommass.dat
 
 # Build
 build/

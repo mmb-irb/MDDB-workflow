@@ -10,51 +10,74 @@ from model_workflow.utils.type_hints import *
 
 from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 
-# Run a fix for gromacs if not done before
-# Note that this is run always at the moment the code is read, no matter the command or calling origin
-fix_gromacs_masses()
+# Set a function to call gromacs in a more confortable and standarized way:
+# - Standard gromacs executable, which may be provided by the user
+# - Gromacs mass fixes by using a custom atommass.dat file with extended atom names
+# - Hidden unnecessary output logs and grey-colored necessary ones
+# - Missing output checks
+# Then return both output and error logs
+def run_gromacs(command : str, user_input : Optional[str] = None,
+    expected_output_filepath : Optional[str] = 'auto',
+    show_output_logs : bool = False, show_error_logs : bool = False) -> Tuple[str, str]:
+
+    # Run a fix for gromacs if not done before
+    # Note that this is run always at the moment the code is read, no matter the command or calling origin
+    fix_gromacs_masses()
+
+    # In case we have user input we must open a process to then pipe it in the gromacs process
+    if user_input:
+        # The -e option allows the interpretation of '\', which is critial for the make_ndx command
+        user_input_process = Popen([ "echo", "-e", *user_input.split() ], stdout=PIPE)
+
+    # Set the gromacs process
+    # Note that at this point the command is not yet run
+    process = run([ GROMACS_EXECUTABLE, *command.split(), '-quiet' ],
+        stdin = user_input_process.stdout if user_input else None,
+        stdout = PIPE, stderr = PIPE if not show_error_logs else None)
+    
+    # If error is to be shown the color it in grey
+    # This is usually used to see progress logs
+    if show_error_logs: print(GREY_HEADER, end='\r')
+
+    # Consume the gromacs process output thus running the command
+    output_logs = process.stdout.decode()
+    # Consume also error logs, but this will not run the command again
+    error_logs = process.stderr.decode() if not show_error_logs else None
+
+    # End the grey coloring
+    if show_error_logs: print(COLOR_END, end='\r')
+
+    # In case the expected output is set as 'auto' we must guess it from the command
+    # Normally output comes after the '-o' option
+    if expected_output_filepath == 'auto':
+        command_splits = command.split()
+        if '-o' not in command_splits: expected_output_filepath = None
+        else:
+            option_flag_index = command_splits.index('-o')
+            expected_output_filepath = command_splits[option_flag_index + 1]
+
+    # If an output file was expected then check it actually exists
+    if expected_output_filepath and not exists(expected_output_filepath):
+        # If we are missing the expetced output then report it
+        print(output_logs)
+        print(error_logs)
+        # Recreate the exact command
+        final_command = f'{GROMACS_EXECUTABLE} {command}'
+        if user_input: final_command += f' (with user input "{user_input}")'
+        raise SystemExit(f'Something went wrong with Gromacs while running "{command}"')
+    
+    # If all was good then show final logs but only if it was requested
+    if show_output_logs: print(output_logs)
+
+    # Return outputs
+    return output_logs, error_logs
+
 
 # Get the first frame from a trajectory
 def get_first_frame (input_structure_filename : str, input_trajectory_filename : str, output_frame_filename : str):
     # Run Gromacs
-    if input_structure_filename:
-        p = Popen([
-            "echo",
-            "System",
-        ], stdout=PIPE)
-        process = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-s",
-            input_structure_filename,
-            "-f",
-            input_trajectory_filename,
-            "-o",
-            output_frame_filename,
-            "-dump",
-            "0",
-            "-quiet"
-        ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    else:
-        process = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-f",
-            input_trajectory_filename,
-            "-o",
-            output_frame_filename,
-            "-dump",
-            "0",
-            "-quiet"
-        ], stdout=PIPE, stderr=PIPE)
-    # Make the process run as logs are saved and decoded
-    logs = process.stdout.decode()
-    # If output has not been generated then warn the user
-    if not exists(output_frame_filename):
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with Gromacs')
+    run_gromacs(f'trjconv -s {input_structure_filename} -f {input_trajectory_filename} \
+                -o {output_frame_filename} -dump 0', user_input = 'System')
 
 # Set function supported formats
 get_first_frame.format_sets = [
@@ -137,36 +160,14 @@ def merge_and_convert_trajectories (input_trajectory_filenames : List[str], outp
     # If we have multiple trajectories then join them
     if len(input_trajectory_filenames) > 1:
         single_trajectory_filename = auxiliar_single_trajectory_filename
-        logs = run([
-            GROMACS_EXECUTABLE,
-            "trjcat",
-            "-f",
-            *input_trajectory_filenames,
-            "-o",
-            single_trajectory_filename,
-            "-quiet"
-        ], stderr=PIPE).stderr.decode()
-        # If output has not been generated then warn the user
-        if not exists(single_trajectory_filename):
-            print(logs)
-            raise SystemExit('Something went wrong with Gromacs')
+        run_gromacs(f'trjcat -f {" ".join(input_trajectory_filenames)} \
+                    -o {single_trajectory_filename}')
     else:
         single_trajectory_filename = sample_trajectory
     # In case input and output formats are different we must convert the trajectory
     if input_trajectories_format != output_trajectory_format:
-        logs = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-f",
-            single_trajectory_filename,
-            "-o",
-            output_trajectory_filename,
-            "-quiet"
-        ], stderr=PIPE).stderr.decode()
-        # If output has not been generated then warn the user
-        if not exists(output_trajectory_filename):
-            print(logs)
-            raise SystemExit('Something went wrong with Gromacs')
+        run_gromacs(f'trjconv -f {single_trajectory_filename} \
+                    -o {output_trajectory_filename}')
     else:
         copyfile(single_trajectory_filename, output_trajectory_filename)
     # Remove residual files
@@ -218,27 +219,8 @@ def get_trajectory_subset (
     generate_frames_ndx(output_frames, auxiliar_ndx_filename)
 
     # Now run gromacs trjconv command in order to extract the desired frames
-    p = Popen([
-        "echo",
-        "System",
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "trjconv",
-        "-f",
-        input_trajectory_filename,
-        "-o",
-        output_trajectory_filename,
-        "-fr",
-        auxiliar_ndx_filename,
-        "-quiet"
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-
-    # If output has not been generated then warn the user
-    if not exists(output_trajectory_filename):
-        print(logs)
-        raise SystemExit('Something went wrong with Gromacs (main conversion)')
+    run_gromacs(f'trjconv -f {input_trajectory_filename} -o {output_trajectory_filename} \
+                -fr {auxiliar_ndx_filename}', user_input = 'System')
 
     # Cleanup the auxiliar ndx file
     remove(auxiliar_ndx_filename)
@@ -269,30 +251,8 @@ def filter_structure (
         file.write(filter_index_content)
 
     # Filter the structure
-    print(GREY_HEADER, end='\r')
-    p = Popen([
-        "echo",
-        filter_selection_name,
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "editconf",
-        "-f",
-        input_structure_file.path,
-        '-o',
-        output_structure_file.path,
-        '-n',
-        filter_index_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-    print(COLOR_END, end='\r')
-
-    # Check the output file exists at this point
-    # If not then it means something went wrong with gromacs
-    if not output_structure_file.exists:
-        print(logs)
-        raise SystemExit('Something went wrong with Gromacs')
+    run_gromacs(f'editconf -f {input_structure_file.path} -o {output_structure_file.path} \
+                -n {filter_index_filename}', user_input = filter_selection_name)
 
     # Cleanup the index file
     remove(filter_index_filename)
@@ -323,32 +283,10 @@ def filter_trajectory (
         file.write(filter_index_content)
 
     # Filter the trajectory
-    print(GREY_HEADER, end='\r')
-    p = Popen([
-        "echo",
-        filter_selection_name,
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "trjconv",
-        "-s",
-        input_structure_file.path,
-        "-f",
-        input_trajectory_file.path,
-        '-o',
-        output_trajectory_file.path,
-        '-n',
-        filter_index_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-    print(COLOR_END, end='\r')
-
-    # Check the output file exists at this point
-    # If not then it means something went wrong with gromacs
-    if not output_trajectory_file.exists:
-        print(logs)
-        raise SystemExit('Something went wrong with Gromacs')
+    # Now run gromacs trjconv command in order to extract the desired frames
+    run_gromacs(f'trjconv -s {input_structure_file.path} -f {input_trajectory_file.path} \
+                -o {output_trajectory_file.path} -n {filter_index_filename}',
+                user_input = filter_selection_name)
 
     # Cleanup the index file
     remove(filter_index_filename)
@@ -382,16 +320,7 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
     if not exists(tpr_filepath):
         raise ValueError('Trying to count atoms from a topology which does not exist')
     # Run Gromacs only to see the number of atoms in the TPR
-    p = Popen([ "echo", "whatever" ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "convert-tpr",
-        "-s",
-        tpr_filepath,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    error_logs = process.stderr.decode()
-    p.stdout.close()
+    output_logs, error_logs = run_gromacs(f'convert-tpr -s {tpr_filepath}', user_input = "whatever")
     # Mine the number of atoms in the system from the logs
     atom_count = mine_system_atoms_count(error_logs)
     return atom_count
@@ -399,14 +328,7 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
 # Read a tpr file by converting it to ASCII
 def get_tpr_content (tpr_filepath : str) -> Tuple[str, str]:
     # Read the tpr file making a 'dump'
-    process = run([
-        GROMACS_EXECUTABLE,
-        "dump",
-        "-s",
-        tpr_filepath,
-        "-quiet"
-    ], stdout=PIPE, stderr=PIPE)
-    return process.stdout.decode(), process.stderr.decode()
+    return run_gromacs(f'dump -s {tpr_filepath}')
 
 # Regular expresion to mine atom charges
 GROMACS_TPR_ATOM_CHARGES_REGEX = r"q=([0-9e+-. ]*),"
@@ -516,28 +438,8 @@ def filter_tpr (
         file.write(filter_index_content)
 
     # Filter the tpr
-    p = Popen([
-        "echo",
-        filter_selection_name,
-    ], stdout=PIPE)
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "convert-tpr",
-        "-s",
-        input_structure_file.path,
-        '-o',
-        output_structure_file.path,
-        '-n',
-        filter_index_filename,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE).stdout.decode()
-    p.stdout.close()
-
-    # Check the output file exists at this point
-    # If not then it means something went wrong with gromacs
-    if not output_structure_file.exists:
-        print(logs)
-        raise SystemExit('Something went wrong with Gromacs')
+    run_gromacs(f'convert-tpr -s {input_structure_file.path} -o {output_structure_file.path} \
+                -n {filter_index_filename}', user_input = filter_selection_name)
 
     # Cleanup the index file
     remove(filter_index_filename)
@@ -561,19 +463,7 @@ def merge_xtc_files (current_file : str, new_file : str):
         rename(new_file, current_file)
         return
     # Run trjcat
-    logs = run([
-        GROMACS_EXECUTABLE,
-        "trjcat",
-        "-f",
-        new_file,
-        current_file,
-        '-o',
-        current_file,
-        '-quiet'
-    ],
-    stdout=PIPE,
-    stderr=PIPE
-    ).stdout.decode()
+    run_gromacs(f'trjcat -f {new_file.path} {current_file} -o {current_file.path}')
 
 # Generate a ndx file with a selection of frames
 def generate_frames_ndx (frames : List[int], filename : str):
@@ -658,30 +548,9 @@ def pdb_filter (
     index_filepath : str,
     filter_group_name : str
 ):
-    # Filter the trajectory
-    p = Popen([
-        "echo",
-        filter_group_name,
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "editconf",
-        "-f",
-        input_pdb_filepath,
-        '-o',
-        output_pdb_filepath,
-        '-n',
-        index_filepath,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
-    # If output has not been generated then warn the user
-    if not exists(output_pdb_filepath):
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with Gromacs while filtering PDB')
+    # Filter the PDB
+    run_gromacs(f'editconf -f {input_pdb_filepath} -o {output_pdb_filepath} \
+                -n {index_filepath}', user_input = filter_group_name)
 
 # Filter atoms in a xtc file
 # Note that here we do not hide the stderr
@@ -694,34 +563,9 @@ def xtc_filter(
     index_filepath : str,
     filter_group_name : str
 ):
-    print(GREY_HEADER)
     # Filter the trajectory
-    p = Popen([
-        "echo",
-        filter_group_name,
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "trjconv",
-        "-s",
-        structure_filepath,
-        "-f",
-        input_trajectory_filepath,
-        '-o',
-        output_trajectory_filepath,
-        '-n',
-        index_filepath,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
-    print(COLOR_END)
-    # If output has not been generated then warn the user
-    if not exists(output_trajectory_filepath):
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with Gromacs while filtering XTC')
+    run_gromacs(f'trjconv -s {structure_filepath} -f {input_trajectory_filepath} \
+        -o {output_trajectory_filepath} -n {index_filepath}', user_input = filter_group_name)
 
 # Filter atoms in both a pdb and a xtc file
 def tpr_filter(
@@ -731,58 +575,16 @@ def tpr_filter(
     filter_group_name : str
 ):
     # Filter the topology
-    p = Popen([
-        "echo",
-        filter_group_name,
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "convert-tpr",
-        "-s",
-        input_tpr_filepath,
-        '-o',
-        output_tpr_filepath,
-        '-n',
-        index_filepath,
-        '-quiet'
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
-    # If output has not been generated then warn the user
-    if not exists(output_tpr_filepath):
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with Gromacs while filtering TPR')
+    run_gromacs(f'convert-tpr -s {input_tpr_filepath} -o {output_tpr_filepath} \
+                -n {index_filepath}', user_input = filter_group_name)
 
 # Create a .ndx file from a complex mask
 # e.g. no water and no ions -> !"Water"&!"Ion"
 # This will return the group name to be further used
 def make_index (input_structure_file : 'File', output_index_file : 'File', mask : str) -> str:
     # Run Gromacs
-    p = Popen([
-        "echo",
-        "-e", # Allows the interpretation of '\'
-        mask,
-        '\nq' # Breakline + Save
-    ], stdout=PIPE)
-    process = run([
-        GROMACS_EXECUTABLE,
-        "make_ndx",
-        "-f",
-        input_structure_file.path,
-        '-o',
-        output_index_file.path
-    ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-    logs = process.stdout.decode()
-    p.stdout.close()
-    # Check the output file exists at this point
-    # If not then it means something went wrong with gromacs
-    if not output_index_file.exists:
-        print(logs)
-        error_logs = process.stderr.decode()
-        print(error_logs)
-        raise SystemExit('Something went wrong with Gromacs when creating index file')
+    run_gromacs(f'make_ndx -f {input_structure_file.path} -o {output_index_file.path}',
+                user_input = f'{mask} \nq')
     # The group name is automatically assigned by gromacs
     # It equals the mask but removing andy " symbol
     group_name = mask.replace('"','')

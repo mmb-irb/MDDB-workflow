@@ -1,11 +1,11 @@
 import tmscoring
 
-from subprocess import run, PIPE, Popen
-import os
+from os import remove
 
 from model_workflow.tools.get_pdb_frames import get_pdb_frames
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GROMACS_EXECUTABLE, REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME
+from model_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME
+from model_workflow.utils.gmx_spells import pdb_filter
 from model_workflow.utils.type_hints import *
 
 def tmscores (
@@ -51,35 +51,12 @@ def tmscores (
 
     # Iterate over each reference and group
     for reference in tmscore_references:
-        print(' Running TM score using ' + reference.filename + ' as reference')
+        print(f' Running TM score using {reference.filename} as reference')
         # Create a reference topology with only the group atoms
         # WARNING: Yes, TM score would work also with the whole reference, but it takes more time!!
         # This has been experimentally tested and it may take more than the double of time
         grouped_reference = 'gref.pdb'
-        p = Popen([
-            "echo",
-            selection_name,
-        ], stdout=PIPE)
-        logs = run([
-            GROMACS_EXECUTABLE,
-            "trjconv",
-            "-s",
-            reference.path,
-            "-f",
-            reference.path,
-            '-o',
-            grouped_reference,
-            '-n',
-            ndx_filename,
-            "-dump",
-            "0",
-            '-quiet'
-        ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
-        p.stdout.close()
-        # If the output does not exist at this point it means something went wrong with gromacs
-        if not os.path.exists(grouped_reference):
-            print(logs)
-            raise SystemExit('Something went wrong with GROMACS')
+        pdb_filter(reference.path, grouped_reference, ndx_filename, selection_name)
         # Get the TM score of each frame
         # It must be done this way since tmscoring does not support trajectories
         tmscores = []
@@ -88,36 +65,14 @@ def tmscores (
 
             # Filter atoms in the current frame
             filtered_frame = 'filtered_frame.pdb'
-            p = Popen([
-                "echo",
-                selection_name,
-            ], stdout=PIPE)
-            logs = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                current_frame,
-                "-f",
-                current_frame,
-                '-o',
-                filtered_frame,
-                '-n',
-                ndx_filename,
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE, stderr=PIPE).stdout.decode()
-            p.stdout.close()
-
-            # If the output does not exist at this point it means something went wrong with gromacs
-            if not os.path.exists(grouped_reference):
-                print(logs)
-                raise SystemExit('Something went wrong with GROMACS')
+            pdb_filter(current_frame, filtered_frame, ndx_filename, selection_name)
 
             # Run the tmscoring over the current frame against the current reference
             # Append the result data for each ligand
             tmscore = tmscoring.get_tm(grouped_reference, filtered_frame)
             tmscores.append(tmscore)
 
-            os.remove(filtered_frame)
+            remove(filtered_frame)
 
         # Get a standarized reference name
         reference_name = REFERENCE_LABELS[reference.filename]
@@ -129,7 +84,7 @@ def tmscores (
         }
         output_analysis.append(data)
 
-        os.remove(grouped_reference)
-    os.remove(ndx_filename)
+        remove(grouped_reference)
+    remove(ndx_filename)
     # Export the analysis in json format
     save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)

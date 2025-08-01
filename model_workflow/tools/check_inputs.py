@@ -1,7 +1,7 @@
 from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json, MISSING_TOPOLOGY
-from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, GROMACS_EXECUTABLE
+from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
-from model_workflow.utils.gmx_spells import mine_system_atoms_count
+from model_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count
 from model_workflow.utils.vmd_spells import vmd_to_pdb
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
@@ -10,7 +10,6 @@ from model_workflow.tools.guess_and_filter import guess_and_filter_topology
 
 from re import match, search
 from typing import *
-from subprocess import run, PIPE, Popen
 from scipy.io import netcdf_file
 import mdtraj as mdt
 import pytraj as pyt
@@ -131,26 +130,12 @@ def check_inputs (
             # Run Gromacs just to generate a structure using all atoms in the topology and coordinates in the first frame
             # If atoms do not match then we will see a specific error
             output_sample_file = File('.sample.gro')
-            p = Popen([ "echo", "System" ], stdout=PIPE)
-            process = run([
-                GROMACS_EXECUTABLE,
-                "trjconv",
-                "-s",
-                topology_file.path,
-                "-f",
-                trajectory_file.path,
-                '-o',
-                output_sample_file.path,
-                "-dump",
-                "0",
-                '-quiet'
-            ], stdin=p.stdout, stdout=PIPE, stderr=PIPE)
-            logs = process.stdout.decode()
-            p.stdout.close()
+            output_logs, error_logs = run_gromacs(f'trjconv -s {topology_file.path} \
+                -f {trajectory_file.path} -o {output_sample_file.path} -dump 0',
+                user_input = 'System', expected_output_filepath = None)
             # Always get error logs and mine topology atoms
-            # Note that this logs include the output selection request from Gromacs
+            # Note that these logs include the output selection request from Gromacs
             # This log should be always there, even if there was a mismatch and then Gromacs failed
-            error_logs = process.stderr.decode()
             topology_atom_count = mine_system_atoms_count(error_logs)
             # If the output does not exist at this point it means something went wrong with gromacs
             if not output_sample_file.exists:
@@ -161,7 +146,7 @@ def check_inputs (
                     trajectory_atom_count = int(error_match[1])
                     return topology_atom_count, trajectory_atom_count
                 # Otherwise just print the whole error logs and stop here anyway
-                print(logs)
+                print(output_logs)
                 print(error_logs)
                 raise SystemExit('Something went wrong with GROMACS during the checking')
             # If we had an output then it means both topology and trajectory match in the number of atoms
