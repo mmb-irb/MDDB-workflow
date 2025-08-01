@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 import re
 import requests
+from functools import lru_cache
 
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
     # Request Drugbank
@@ -494,7 +495,7 @@ def generate_ligand_mapping (
         is_single_residue = len(residue.get_bonded_residue_indices()) == 0
         if not is_single_residue: continue
         # If the residue is not solvent, lipid or ion then it may be a ligand
-        has_right_classification = residue.classification not in ['solvent', 'lipid', 'ion']
+        has_right_classification = residue.classification not in ['solvent', 'fatty', 'steroid', 'ion']
         if not has_right_classification: continue
         # Check if the residue is already matched to a ligand
         matched = False
@@ -970,6 +971,7 @@ def obtain_inchikey_from_pdb(pdb_file : str) -> Optional[str]:
         return None
     return inchi.MolToInchiKey(mol)
 
+@lru_cache(maxsize=None)
 def search_cid_by_inchikey(inchikey : str) -> Optional[str]:
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
     r = requests.get(url)
