@@ -467,6 +467,10 @@ run_parser_workflow_group.add_argument(
   - <chain letter>: All chains against this specific chain
   - ligands: All chains against every ligand""")
 )
+run_parser_workflow_group.add_argument(
+    "-gb", "--guess_bonds",
+    action='store_true',
+    help="Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.")
 
 # Set a group for the selection options
 run_parser_selection_group = run_parser.add_argument_group('SELECTION OPTIONS')
