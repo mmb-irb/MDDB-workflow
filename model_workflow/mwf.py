@@ -2075,7 +2075,7 @@ class Project:
 
     # Get the lipid references
     get_lipid_map = Task('lipmap', 'Lipid mapping',
-        generate_lipid_references, output_filename = LIPID_REFERENCES_FILENAME)
+        generate_lipid_references, output_filename = INCHIKEY_REFERENCES_FILENAME)
     lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
 
     # Define the output file of the lipid mapping including lipid references

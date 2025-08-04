@@ -19,7 +19,7 @@ def generate_residue_mapping(
     # Reformat mapping data to the topology system
     # Add the reference type to each reference object
     for data in lipid_map:
-        data['type'] = 'lipid'
+        data['type'] = 'inchikey'
     for data in protein_map:
         data['type'] = 'protein'
     for data in ligand_map:
@@ -68,7 +68,7 @@ def generate_residue_mapping(
             reference_id = reference['uniprot']
         elif reference_type == 'ligand':
             reference_id = reference['pubchem']
-        elif reference_type == 'lipid':
+        elif reference_type == 'inchikey':
             reference_id = reference['inchikey']
         else:
             raise ValueError('Not supported type ' + reference_type)
@@ -85,7 +85,7 @@ def generate_residue_mapping(
                     continue
                 residue_reference_indices[residue_index] = reference_index
                 residue_reference_numbers[residue_index] = residue_number
-        if reference_type in ['ligand','lipid']:
+        if reference_type in ['ligand','inchikey']:
             for residue_index in data['residue_indices']:
                 residue_reference_indices[int(residue_index)] = reference_index
 

@@ -70,6 +70,7 @@ def prepare_project_metadata (
     # Get ligand references from the residues map
     protein_references = []
     ligand_references = []
+    inchikey_references = []
     references = residue_map['references']
     if references and len(references) > 0:
         for ref, ref_type in zip(references, residue_map['reference_types']):
@@ -77,6 +78,8 @@ def prepare_project_metadata (
                 protein_references.append(ref)
             elif ref_type == 'ligand':
                 ligand_references.append(ref)
+            elif ref_type == 'inchikey':
+                inchikey_references.append(ref)
 
     # Get ligand names if any
     forced_ligand_names = {
@@ -158,6 +161,7 @@ def prepare_project_metadata (
         'INPUT_LIGANDS': input_ligands,
         'LIGANDS': ligand_references,
         'LIGANDNAMES': forced_ligand_names,
+        'INCHIKEYS': inchikey_references,
         'PROTSEQ': sequence_metadata['protein_sequences'],
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],

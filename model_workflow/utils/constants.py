@@ -135,8 +135,8 @@ PDB_REFERENCES_FILENAME = 'pdb_references.json'
 PROTEIN_REFERENCES_FILENAME = 'protein_references.json'
 # Set the ligand references filename
 LIGAND_REFERENCES_FILENAME = 'ligand_references.json'
-# Set the Lipid references filename
-LIPID_REFERENCES_FILENAME = 'lipid_references.json'
+# Set the InChIKey references filename
+INCHIKEY_REFERENCES_FILENAME = 'inchikey_references.json'
 
 # Set the chains filename
 OUTPUT_CHAINS_FILENAME = 'chains.json'

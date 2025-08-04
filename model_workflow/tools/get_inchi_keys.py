@@ -8,20 +8,6 @@ import requests
 import multiprocessing
 
 
-def residue_to_inchi(task: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
-    """
-    Process a single residue to get its InChI key and related information.
-    """
-    resatoms , resindices = task
-    # Convert to RDKIT and get InChI data
-    res_RD = resatoms.convert_to("RDKIT")
-    # Calculate InChI key and string
-    inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
-    # rdinchi.MolToInchi so it doesnt print the warnings
-    inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
-    return (inchikey, inchi, resindices)
-
-
 def get_inchi_keys (
     u : 'MDAnalysis.Universe',
     structure : 'Structure'
@@ -136,9 +122,23 @@ def get_inchi_keys (
         if len(inchikeys) > 1:
             key_counts = '\n'.join([f'\t{key}: {len(key_2_name[key]["resindices"]): >4}'
                                       for key in inchikeys])
-            warn(f'The residue {name} has more than one InChi key:\n'
+            warn(f'The fragment {name} has more than one InChi key:\n'
                  f'{key_counts}')
     return key_2_name
+
+
+def residue_to_inchi(task: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
+    """
+    Process a single residue to get its InChI key and related information.
+    """
+    resatoms , resindices = task
+    # Convert to RDKIT and get InChI data
+    res_RD = resatoms.convert_to("RDKIT")
+    # Calculate InChI key and string
+    inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
+    # rdinchi.MolToInchi so it doesnt print the warnings
+    inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
+    return (inchikey, inchi, resindices)
 
 
 @lru_cache(maxsize=None)
