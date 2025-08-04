@@ -714,14 +714,15 @@ def format_data (data : list) -> dict:
     atom_both_values = [[] for n in range(atom_count)]
     for frame in data:
         for a, values in enumerate(frame):
+            if values == None: continue
             atom_vdw_values[a].append(values[0])
             atom_es_values[a].append(values[1])
             atom_both_values[a].append(values[2])
 
     # Calculate the atom averages from each energy
-    atom_vdw_avg = [sum(v) / len(v) for v in atom_vdw_values]
-    atom_es_avg = [sum(v) / len(v) for v in atom_es_values]
-    atom_both_avg = [sum(v) / len(v) for v in atom_both_values]
+    atom_vdw_avg = [sum(v) / len(v) if len(v) > 0 else None for v in atom_vdw_values ]
+    atom_es_avg = [sum(v) / len(v) if len(v) > 0 else None for v in atom_es_values]
+    atom_both_avg = [sum(v) / len(v) if len(v) > 0 else None for v in atom_both_values]
 
     # Calculate the atom averages from each energy at the beginig and end of the trajectory
     # We take the initial 20% and the final 20% of frames to calculate each respectively
@@ -735,13 +736,14 @@ def format_data (data : list) -> dict:
     atom_both_values_initial = [[] for n in range(atom_count)]
     for frame in data[:p20]:
         for a, values in enumerate(frame):
+            if values == None: continue
             atom_vdw_values_initial[a].append(values[0])
             atom_es_values_initial[a].append(values[1])
             atom_both_values_initial[a].append(values[2])
 
-    atom_vdw_avg_initial = [sum(v) / len(v) for v in atom_vdw_values_initial]
-    atom_es_avg_initial = [sum(v) / len(v) for v in atom_es_values_initial]
-    atom_both_avg_initial = [sum(v) / len(v) for v in atom_both_values_initial]
+    atom_vdw_avg_initial = [sum(v) / len(v) if len(v) > 0 else None for v in atom_vdw_values_initial]
+    atom_es_avg_initial = [sum(v) / len(v) if len(v) > 0 else None for v in atom_es_values_initial]
+    atom_both_avg_initial = [sum(v) / len(v) if len(v) > 0 else None for v in atom_both_values_initial]
 
     # Finals
     atom_vdw_values_final = [[] for n in range(atom_count)]
@@ -749,13 +751,14 @@ def format_data (data : list) -> dict:
     atom_both_values_final = [[] for n in range(atom_count)]
     for frame in data[-p20:]:
         for a, values in enumerate(frame):
+            if values == None: continue
             atom_vdw_values_final[a].append(values[0])
             atom_es_values_final[a].append(values[1])
             atom_both_values_final[a].append(values[2])
 
-    atom_vdw_avg_final = [sum(v) / len(v) for v in atom_vdw_values_final]
-    atom_es_avg_final = [sum(v) / len(v) for v in atom_es_values_final]
-    atom_both_avg_final = [sum(v) / len(v) for v in atom_both_values_final]
+    atom_vdw_avg_final = [sum(v) / len(v) if len(v) > 0 else None for v in atom_vdw_values_final]
+    atom_es_avg_final = [sum(v) / len(v) if len(v) > 0 else None for v in atom_es_values_final]
+    atom_both_avg_final = [sum(v) / len(v) if len(v) > 0 else None for v in atom_both_values_final]
 
     # Format the results data and append it to the output data
     output = {
