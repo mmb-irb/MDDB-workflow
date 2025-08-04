@@ -1,7 +1,7 @@
 from model_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.pyt_spells import find_first_corrupted_frame
-from model_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count
+from model_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
 from model_workflow.utils.vmd_spells import vmd_to_pdb
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.file import File
@@ -86,6 +86,9 @@ def check_inputs (
 
     # Set a function to get atoms from a structure alone
     def get_structure_atoms (structure_file : 'File') -> int:
+        # If this is not a Structure supported file then use an alternative function
+        if structure_file.format == 'gro':
+            return get_atom_count(structure_file)
         # Get the number of atoms in the input structure
         structure = Structure.from_file(structure_file.path)
         return structure.atom_count

@@ -589,3 +589,11 @@ def make_index (input_structure_file : 'File', output_index_file : 'File', mask 
     # It equals the mask but removing andy " symbol
     group_name = mask.replace('"','')
     return group_name
+
+# Set a function to count atoms in a gromacs supported file
+ATOMS_LINE = r'\n# Atoms\s*([0-9]*)\n'
+def get_atom_count (mysterious_file : 'File') -> int:
+    output_logs, error_logs =  run_gromacs(f'check -f {mysterious_file.path}')
+    search_results = search(ATOMS_LINE, error_logs)
+    if not search_results: raise ValueError('Failed to mine atoms')
+    return int(search_results[1])
