@@ -468,6 +468,25 @@ def energies (
             print(f'  Calculating energies for {agent2_name} as guest and {agent1_name} as host')
             agent2_atom_energies = get_cmip_energies(cmip_inputs, agent2_cmip_guest, agent1_cmip_host)
 
+            # Add None in those places where there is a strong bond
+            strong_bond_atom_indices = set(sum(strong_bonds, []))
+            for i, atom_index in enumerate(agent1_atom_indices):
+                if atom_index in strong_bond_atom_indices:
+                    agent1_atom_energies.insert(i, None)
+            for i, atom_index in enumerate(agent2_atom_indices):
+                if atom_index in strong_bond_atom_indices:
+                    agent2_atom_energies.insert(i, None)
+
+            # Make sure the output size matches the number of atoms in the interaction
+            if len(agent1_atom_energies) != len(agent1_atom_indices):
+                print(f'Number of values: {len(agent1_atom_energies)}')
+                print(f'Number of atoms: {len(agent1_atom_indices)}')
+                raise ValueError('Missmatch in the number values and atoms in agent 1')
+            if len(agent2_atom_energies) != len(agent2_atom_indices):
+                print(f'Number of values: {len(agent2_atom_energies)}')
+                print(f'Number of atoms: {len(agent2_atom_indices)}')
+                raise ValueError('Missmatch in the number values and atoms in agent 2')
+
             # Print total energies at the end for every agent if the verbose flag has been passed
             if verbose:
                 for agent_name, agent_energies in zip([agent1_name, agent2_name], [agent1_atom_energies, agent2_atom_energies]):
@@ -554,7 +573,7 @@ def energies (
             'name': name,
             'agent1': agent1_output,
             'agent2': agent2_output,
-            'version': '1.0.0'
+            'version': '1.1.0'
         }
         # Export the current interaction analysis in json format
         save_json(output, numbered_output_analysis_filepath)
@@ -583,7 +602,7 @@ def set_cmip_elements (structure : 'Structure'):
             atom_bonds = atom.get_bonds()
             # There should be always only 1 bond
             if len(atom_bonds) != 1:
-                print('Atom ' + atom.name + ' (' + str(atom.index) + ') has ' + str(len(atom_bonds)) + ' bonds')
+                print(f'Atom {atom.name} ({atom.index}) has {len(atom_bonds)} bonds')
                 raise ValueError('An hydrogen should always have one and only one bond')
             bonded_atom_index = atom_bonds[0]
             bonded_atom_element = structure.atoms[bonded_atom_index].element
