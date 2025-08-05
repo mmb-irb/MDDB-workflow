@@ -53,7 +53,7 @@ Once you're done with your changes, you can create a [pull request (PR)](https:/
 ```shell
 # To run a test by its name and optionally a parameter:
 pytest test/test_run.py -k test_analysis_execution[pockets]
-pytest test/test_run.py -k "TestMWFRun and A01IP and dist"
+pytest test/test_run.py -k "TestRunAll and A01IP and dist"
 # To run on a subset of tests use the markers with -m {CI,release}:
 pytest -m CI
 # To run all tests and generate a coverage report:
