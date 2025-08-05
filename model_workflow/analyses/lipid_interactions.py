@@ -1,23 +1,20 @@
 from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from model_workflow.utils.mda_spells import to_MDAnalysis_topology
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME
 from model_workflow.utils.type_hints import *
-from collections import Counter
 import numpy as np
 import MDAnalysis
 
 def lipid_interactions (
     universe : 'MDAnalysis.Universe',
     output_directory : str,
-    membrane_map: dict,
-    lipid_map: dict,
+    lipid_map: List[dict],
     snapshots : int,
     frames_limit: int = 100):
     """
         Lipid-protein interactions analysis.
     """
-    if membrane_map is None or membrane_map['n_mems'] == 0:
+    if lipid_map is None or len(lipid_map) == 0:
         print('-> Skipping lipid-protein interactions analysis')
         return
     
@@ -25,33 +22,38 @@ def lipid_interactions (
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
     
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-    lipids = set([ lipid['resname'] for lipid in lipid_map])
+    lipids = sorted(list(set([ lipid['name'] for lipid in lipid_map])))
     lipids_str = " ".join(lipids)
-    resids = np.unique(universe.select_atoms('protein').resindices)
-    ocupancy = {resid: Counter() for resid in resids}
+    # Get the lipid residue indices
+    lipids_residx = universe.select_atoms('resname ' + lipids_str).residues.resindices
+    # Create a mapping from lipid residue indices to array indices
+    lipid_to_idx = {lipid: i for i, lipid in enumerate(lipids_residx)}
+    # A counter for each pair of protein-lipid residues
+    protein_residx = universe.select_atoms('protein').residues.resindices
+    ocupancy_arrs = np.zeros((len(protein_residx), len(lipids_residx)))
 
-    # Only iterate through the frames you need
+    # Only iterate through the frames you need. TODO: parallel frames
     for ts in universe.trajectory[0:snapshots:frame_step]:
-        # Select non-protein atoms near the protein once
-        non_protein_near = universe.select_atoms(f'(around 6 protein) and (resname {lipids_str}) and not protein')
-        # Make residue selections only once
-        for resid in resids:
-            residue_atoms = universe.select_atoms(f'resid {resid}')
-            # Find non-protein atoms near this specific residue
-            nearby = non_protein_near.select_atoms(f'around 6 global group residuegroup', 
+        # Select lipid atoms near the protein once
+        lipid_near_prot = universe.select_atoms(f'(around 6 protein) and (resname {lipids_str}) and not protein')
+        for i, residx in enumerate(protein_residx):
+            # Find lipid atoms near a specific residue
+            residue_atoms = universe.select_atoms(f'resindex {residx}')
+            lipid_near_res = lipid_near_prot.select_atoms(f'around 6 global group residuegroup', 
                                                 residuegroup=residue_atoms)
-            # Count residue names
-            ocupancy[resid].update(Counter(nearby.residues.resnames))
-
-    ocupancy_arrs = {lipid: np.zeros(len(ocupancy)) for lipid in lipids}
-    for resid, counter in ocupancy.items():
-        for lipid, count in counter.items():
-            ocupancy_arrs[lipid][resid] = count
+            # Add the count of lipids
+            for lipid_residx in lipid_near_res.residues.resindices:
+                ocupancy_arrs[i, lipid_to_idx[lipid_residx]] += 1
 
     # Normalize the occupancy arrays by dividing by the number of frames
-    for lipid in lipids:
-        ocupancy_arrs[lipid] /= frame_count
-        ocupancy_arrs[lipid] = ocupancy_arrs[lipid].tolist()
+    ocupancy_arrs /= frame_count
+    
     # Save the data
-    data = { 'data': ocupancy_arrs}
+    data = { 'residue_indices': protein_residx.tolist()}
+    for lipid in lipid_map:
+        # Convert lipid residue indices to array indices
+        lipid_idx = [lipid_to_idx[lipid_residx] for lipid_residx in lipid['residue_indices']]
+        data[lipid['match']['ref']['inchikey']] = ocupancy_arrs[:, lipid_idx].sum(1).tolist()
+    # Wrap the data in a dictionary
+    data = { 'data': data}
     save_json(data, output_analysis_filepath)

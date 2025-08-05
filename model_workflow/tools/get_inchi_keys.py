@@ -28,11 +28,11 @@ def get_inchi_keys (
 
     Returns:
         dict: A dictionary where keys are InChI keys and values are dictionaries containing:
-                - 'inchi' (str): The InChI string for the residue
-                - 'resindices' (list): A list of all residue indices with this InChI key
-                - 'resgroups' (list): Lists of residue indices that are connected as a single group
-                - 'resname' (set): Set of residue names associated with this InChI key
-                - 'classification' (set): Set of residue classifications for this InChI key
+            - 'inchi' (str): The InChI string for the residue
+            - 'resindices' (list): A list of all residue indices with this InChI key
+            - 'resgroups' (list): Lists of residue indices that are connected as a single group
+            - 'resname' (set): Set of residue names associated with this InChI key
+            - 'classification' (set): Set of residue classifications for this InChI key
     Notes:
         The function also performs consistency checks, warning if multiple residue names 
         map to the same InChI key or if multiple InChI keys map to the same residue name,

@@ -8,7 +8,15 @@ def generate_lipid_references(structure: 'Structure',
                               universe: 'Universe',
                               output_filepath : str,
                               ) -> List[dict]:
-    """Generate the lipid references."""
+    """Generate the lipid references.
+    Returns:
+        dict: A list of dictionaries containing lipid references and
+        the residues indices. For example:
+            [{'name': 'CHL1',
+              'residue_indices': [935, 936, 937, ...],
+              'resgroups': [],
+              'match': {'ref': {'inchikey': 'HVYWMOMLDIMFJA-DPAQBDIFSA-N'}}}, ...]
+    """
     # Patch case where there no internet
     try:
         # This would return a ConnectionError
