@@ -165,7 +165,7 @@ def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
 
 
 @lru_cache(maxsize=None)
-def is_in_swiss_lipids(inchikey, only_first_layer=False, 
+def is_in_swisslipids(inchikey, only_first_layer=False, 
                        protonation=True) -> dict:
     """Search the InChi keys in SwissLipids. Documentation: https://www.swisslipids.org/#/api"""
     key = inchikey[:14] if only_first_layer else inchikey
@@ -173,10 +173,23 @@ def is_in_swiss_lipids(inchikey, only_first_layer=False,
     url = f"https://www.swisslipids.org/api/index.php/search?term={key}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        return response.json()[0]
+        data = response.json()[0]
+        detailed_data = get_swisslipids_info(data['entity_id'])
+        data['synonyms'] = detailed_data.get('synonyms', [])
+        return data
     else:
         return False
-    
+
+def get_swisslipids_info(entity_id) -> dict:
+    """Get information about a SwissLipids entry."""
+    headers = {'accept': 'json'}
+    url = f"https://www.swisslipids.org/api/index.php/entity/{entity_id}"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return False
+
 def get_atoms_info(atom):
     """Get the RDkit atom information."""
     info = {

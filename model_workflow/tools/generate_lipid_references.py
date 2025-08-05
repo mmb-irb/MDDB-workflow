@@ -1,6 +1,7 @@
 from model_workflow.utils.auxiliar import save_json
 
-from model_workflow.tools.get_inchi_keys import get_inchi_keys, is_in_swiss_lipids, is_in_LIPID_MAPS
+from model_workflow.tools.get_inchi_keys import get_inchi_keys, \
+    is_in_swisslipids, is_in_LIPID_MAPS
 from model_workflow.utils.auxiliar import warn
 from model_workflow.utils.type_hints import *
 
@@ -20,7 +21,7 @@ def generate_lipid_references(structure: 'Structure',
     # Patch case where there no internet
     try:
         # This would return a ConnectionError
-        is_in_swiss_lipids('test')
+        is_in_swisslipids('test')
     except Exception as e:
         # Then we map the lipids/membrane
         warn(f'There was a problem connecting to the SwissLipids database: {e}')
@@ -36,11 +37,11 @@ def generate_lipid_references(structure: 'Structure',
     lipid_references = []
     lipid_map = []
     for inchikey, res_data in inchi_keys.items():
-        SL_data = is_in_swiss_lipids(inchikey)
+        SL_data = is_in_swisslipids(inchikey)
         LM_data = is_in_LIPID_MAPS(inchikey)
         # If we dont find it, we try without stereochemistry
         if not SL_data:
-            SL_data = is_in_swiss_lipids(inchikey, only_first_layer=True)
+            SL_data = is_in_swisslipids(inchikey, only_first_layer=True)
         if not LM_data:
             LM_data = is_in_LIPID_MAPS(inchikey, only_first_layer=True)
 
