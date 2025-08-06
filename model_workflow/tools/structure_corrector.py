@@ -1,6 +1,4 @@
 from os import remove
-
-# Import local tools
 from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
 from model_workflow.tools.get_bonds import get_excluded_atoms_selection
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
@@ -10,26 +8,6 @@ from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, 
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
 
-# Analyze the structure looking for irregularities and then modify the structure to standarize the format
-#
-# Supported cases:
-#
-# * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
-# * Unstable atom bonds: A bond is formed / broken because its 2 atoms are too close / far in the structure
-#   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
-# * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
-#   -> Stop the workflow and warn the user
-# * Missing chains -> Chains are added through VMD
-# * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
-# * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
-# * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
-# * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
-# * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
-
-# Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail
-# Note that the 'trust' flag may be passed for critical checkings to skip them
-
-# This function also sets some values in the passed MD
 
 def structure_corrector (
     # Note that this is an early provisional structure
@@ -47,6 +25,26 @@ def structure_corrector (
     trust : List[str],
     guess_bonds : bool
 ) -> dict:
+    """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
+
+    Supported cases:
+
+    * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
+    * Unstable atom bonds: A bond is formed / broken because its 2 atoms are too close / far in the structure
+      -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
+    * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
+      -> Stop the workflow and warn the user
+    * Missing chains -> Chains are added through VMD
+    * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
+    * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
+    * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
+    * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
+    * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
+
+    Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail.
+    Note that the 'trust' flag may be passed for critical checkings to skip them.
+
+    This function also sets some values in the passed MD."""
     
     # Write the inital output structure file which will be overwritten several times further
     structure.generate_pdb_file(output_structure_file.path)

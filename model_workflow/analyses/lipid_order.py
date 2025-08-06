@@ -1,5 +1,4 @@
 from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from model_workflow.utils.mda_spells import to_MDAnalysis_topology
 from model_workflow.utils.auxiliar import save_json
 from model_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME
 from model_workflow.utils.type_hints import *

@@ -27,19 +27,21 @@ STRUCTURE_SUPPORTED_FORMATS = { *TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro' }
 GROMACS_TRAJECTORY_SUPPORTED_FORMATS = { 'xtc', 'trr'}
 
 # Auxiliar PDB file which may be generated to load non supported restart files
-AUXILIAR_PDB_BILE = '.auxiliar.pdb'
+AUXILIAR_PDB_FILE = '.auxiliar.pdb'
 
-# Set excpetions for fixes applied from here
+# Set exceptions for fixes applied from here
 PREFILTERED_TOPOLOGY_EXCEPTION = Exception('Prefiltered topology')
 
-# Check input files coherence and intergrity
-# If there is any problem then raise an input error
-# Some exceptional problems may be fixed from here
-# In this cases both the exception and the modified file are return in a final dict
 def check_inputs (
     input_structure_file : 'File',
     input_trajectory_files : List['File'],
     input_topology_file : Union['File', Exception]) -> dict:
+    """
+    Check input files coherence and integrity.
+    If there is any problem then raises an input error.
+    Some exceptional problems may be fixed from here.
+    In these cases, both the exception and the modified file are returned in a final dict.
+    """
 
     # Set the exceptions dict to be returned at the end
     exceptions = {}
@@ -180,12 +182,12 @@ def check_inputs (
         use_auxiliar_pdb = False
         if trajectory_file.format == 'rst7':
             # Generate the auxiliar PDB file
-            vmd_to_pdb(topology_file.path, trajectory_file.path, AUXILIAR_PDB_BILE)
+            vmd_to_pdb(topology_file.path, trajectory_file.path, AUXILIAR_PDB_FILE)
             use_auxiliar_pdb = True
         # For any other format use MDtraj
         try:
             # Note that declaring the iterator will not fail even when there is a mismatch
-            trajectory_path = AUXILIAR_PDB_BILE if use_auxiliar_pdb else trajectory_file.path
+            trajectory_path = AUXILIAR_PDB_FILE if use_auxiliar_pdb else trajectory_file.path
             trajectory = mdt.iterload(trajectory_path, top=topology_file.path, chunk=1)
             # We must consume the generator first value to make the error raise
             frame = next(trajectory)

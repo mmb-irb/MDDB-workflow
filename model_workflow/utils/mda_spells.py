@@ -20,7 +20,7 @@ from MDAnalysis.core.topologyattrs import (
     Segids
 )
 
-def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
+def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
     """
     Creates a MDAnalysis topology from a json topology file.
 
@@ -38,7 +38,7 @@ def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
     :param topology: path to the json file
     :returns: a MDAnalysis topology object
     """
-    topology = json.load(open(standard_topology_file.path))
+    topology = json.load(open(standard_topology_path))
 
     # transform bond to non redundant tuples
     bonds = []
@@ -72,11 +72,11 @@ def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
     )
     return mda_top
 
-def get_mda_universe_from_stopology (standard_topology_file : 'File', structure_file : 'File') -> 'Universe':
+def get_mda_universe_from_stopology (standard_topology_path : str, structure_file : str) -> 'Universe':
     """Create a MDAnalysis universe using data in the workflow."""
-    mda_topology = to_MDAnalysis_topology(standard_topology_file)
+    mda_topology = to_MDAnalysis_topology(standard_topology_path)
     # Create a MDAnalysis topology from the standard topology file
-    return Universe(mda_topology, structure_file.path)
+    return Universe(mda_topology, structure_file)
 
 def get_mda_universe (structure_file : 'File',              # To load in MDAnalysis
                       trajectory_file : 'File',             # To load in MDAnalysis
