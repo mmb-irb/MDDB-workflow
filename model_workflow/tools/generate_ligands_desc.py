@@ -544,6 +544,8 @@ def generate_ligand_mapping (
                 ligand_data['morgan_fp_bit_array'] = morgan_fp_bit_array
                 ligand_data['morgan_highlight_atoms'] = morgan_highlight_atoms
                 ligand_data['mol_block'] = mol_block
+                ligand_data['pubchem'] = cid
+                ligand_map['match']['ref']['pubchem'] = str(cid)
         # Add the ligand data to the list of ligands data
         ligands_data.append(ligand_data)
         # Add the ligand map to the list of ligand maps
