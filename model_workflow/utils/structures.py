@@ -21,18 +21,15 @@ from model_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC
 from model_workflow.utils.constants import DNA_RESIDUE_NAME_LETTERS, RNA_RESIDUE_NAME_LETTERS
 from model_workflow.utils.constants import FATTY_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
 from model_workflow.utils.type_hints import *
-Coords = Tuple[float, float, float]
 
 
 # Set all available chains according to pdb standards
-AVAILABLE_CAPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-    'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
-AVAILABLE_LOWS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+AVAILABLE_CAPS = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+AVAILABLE_LOWS = list('abcdefghijklmnopqrstuvwxyz')
 AVAILABLE_LETTERS = AVAILABLE_CAPS + AVAILABLE_LOWS
 
 # Set letters to be found in alphanumerical bases
-hexadecimal_letters = set(AVAILABLE_CAPS[0:6] + AVAILABLE_LOWS[0:6])
+hexadecimal_letters    = set(AVAILABLE_CAPS[:6] + AVAILABLE_LOWS[:6])
 alphanumerical_letters = set(AVAILABLE_CAPS[6:] + AVAILABLE_LOWS[6:])
 
 # Set the expected number of bonds for each atom according to its element
@@ -89,7 +86,7 @@ class Atom:
         """The parent structure (read only).
         This value is set by the structure itself."""
         return self._structure
-    structure = property(get_structure, None, None, "The parent structure (read only)")
+    structure: 'Structure' = property(get_structure, None, None, "The parent structure (read only)")
 
     def get_index (self) -> Optional[int]:
         """The residue index according to parent structure residues (read only).
@@ -143,36 +140,7 @@ class Atom:
         if not self.residue:
             return None
         return self.residue.chain_index
-    
-    def set_chain_index (self, new_chain_index : int):
-        """Set a new chain index.
-        WARNING: You may create a new residue in this process."""
-        # If the new chain index is the current chain index do nothing
-        # WARNING: It is important to stop this here or it could delete a chain which is not to be deleted
-        if new_chain_index == self.chain_index:
-            return
-        # If there is not strucutre yet it means the chain is beeing set before the structure
-        # We just save the chain index and wait for the structure to be set
-        if not self.structure:
-            self._chain_index = new_chain_index
-            return
-        # Relational indices are updated through a top-down hierarchy
-        # Affected chains are the ones to update this residue internal chain index
-        # WARNING: It is critical to find the new chain before removing/adding residues
-        # WARNING: It may happend that we remove the last residue in the current chain and the current chain is purged
-        # WARNING: Thus the 'new_chain_index' would be obsolete since the structure.chains list would have changed
-        new_chain = self.structure.chains[new_chain_index]
-        # Set the new residue where this atom will be appended
-        new_residue = new_chain.find_residue(self.residue.number, self.residue.icode)
-        # If it does not exist yet then create it
-        # It will be a copy of the current residue (name, number and icode) but in the new chain
-        if not new_residue:
-            new_residue = Residue(self.residue.name, self.residue.number, self.residue.icode)
-            self.structure.set_new_residue(new_residue)
-            new_chain.add_residue(new_residue)
-        # Now remove this atom from its current residue and move it to the new chain residue
-        new_residue.add_atom(self)
-    chain_index = property(get_chain_index, set_chain_index, None, 
+    chain_index = property(get_chain_index, None, None, 
                            "The atom chain index according to parent structure chains (read only)")
 
     def get_chain (self) -> Optional['Chain']:
@@ -185,7 +153,7 @@ class Atom:
             return None
         # Get the chain in the structure according to the chain index
         return self.structure.chains[self.chain_index]
-    chain = property(get_chain, None, None, "The atom chain (read only)")
+    chain: 'Chain' = property(get_chain, None, None, "The atom chain (read only)")
 
     def get_bonds (self, skip_ions : bool = False, skip_dummies : bool = False) -> Optional[ List[int] ]:
         """Get indices of other atoms in the structure which are covalently bonded to this atom."""
@@ -378,7 +346,7 @@ class Residue:
         """Get the parent structure (read only).
         This value is set by the structure itself."""
         return self._structure
-    structure = property(get_structure, None, None, 
+    structure: 'Structure' = property(get_structure, None, None, 
                          "The parent structure (read only)")
 
     def get_index (self) -> Optional[int]:
@@ -439,7 +407,7 @@ class Residue:
                 raise ValueError('Atom ' + str(new_atom) + ' is not set in the structure')
             new_atom_indices.append(new_atom_index)
         self.set_atom_indices(new_atom_indices)
-    atoms = property(get_atoms, set_atoms, None, "The atoms in this residue")
+    atoms: List['Atom'] = property(get_atoms, set_atoms, None, "The atoms in this residue")
 
     # Get the number of atoms in the residue
     def get_atom_count (self) -> int:
@@ -523,7 +491,7 @@ class Residue:
         if new_chain_index == None:
             raise ValueError(f'Chain {new_chain} is not set in the structure')
         self.set_chain_index(new_chain_index)
-    chain = property(get_chain, set_chain, None, "The residue chain")
+    chain: 'Chain' = property(get_chain, set_chain, None, "The residue chain")
 
     def get_bonded_atom_indices (self) -> List[int]:
         """Get atom indices from atoms bonded to this residue."""
@@ -717,6 +685,7 @@ class Residue:
         WARNING: This logic is very limited and will return "unknown" most of the times.
         WARNING: This logic relies mostly in atom names, which may be not standard.
         """
+        # TODO: use match/case in python 3.10+
         if self.name in PROTEIN_RESIDUE_NAME_LETTERS:
             return 'protein'
         if self.name in DNA_RESIDUE_NAME_LETTERS:
@@ -892,7 +861,7 @@ class Chain:
     # This value is set by the structure itself
     def get_structure (self) -> Optional['Structure']:
         return self._structure
-    structure = property(get_structure, None, None, "The parent structure (read only)")
+    structure: 'Structure' = property(get_structure, None, None, "The parent structure (read only)")
 
     # The residue index according to parent structure residues (read only)
     # This value is set by the structure itself
@@ -950,7 +919,7 @@ class Chain:
                 raise ValueError(f'Residue {new_residue} is not set in the structure')
             new_residue_indices.append(new_residue_index)
         self.set_residue_indices(new_residue_indices)
-    residues = property(get_residues, set_residues, None, "The residues in this chain")
+    residues: List['Residue'] = property(get_residues, set_residues, None, "The residues in this chain")
 
     def add_residue (self, residue : 'Residue'):
         """Add a residue to the chain."""
@@ -980,7 +949,7 @@ class Chain:
         """Get the atoms in the chain (read only).
         In order to change atoms they must be changed in their corresponding residues."""
         return sum([ residue.atoms for residue in self.residues ], [])
-    atoms = property(get_atoms, None, None, "Atoms in the chain (read only)")
+    atoms: List['Atom'] = property(get_atoms, None, None, "Atoms in the chain (read only)")
 
     def get_atom_count (self) -> int:
         """Get the number of atoms in the chain (read only)."""
@@ -1042,9 +1011,9 @@ class Structure:
         chains : List['Chain'] = [],
         residue_numeration_base : int = 10,
         ):
-        self.atoms = []
-        self.residues = []
-        self.chains = []
+        self.atoms: List['Atom'] = []
+        self.residues: List['Residue'] = []
+        self.chains: List['Chain'] = []
         # Set references between instances
         for atom in atoms:
             self.set_new_atom(atom)
@@ -1102,7 +1071,7 @@ class Structure:
         self._fragments = list(self.find_fragments())
         return self._fragments
     # Fragments of covalently bonded atoms (read only)
-    fragments = property(get_fragments, None, None, "The structure fragments (read only)")
+    fragments: List['Selection'] = property(get_fragments, None, None, "The structure fragments (read only)")
 
     def find_fragments (self,
         selection : Optional['Selection'] = None,
@@ -2091,7 +2060,7 @@ class Structure:
     def chainer (self, 
                  selection : Optional['Selection'] = None, 
                  letter : Optional[str] = None, 
-                 whole_fragments : bool = True):
+                 whole_fragments : bool = False):
         """Set chains on demand.
         If no selection is passed then the whole structure will be affected.
         If no chain is passed then a "chain by fragment" logic will be applied."""
@@ -2101,13 +2070,13 @@ class Structure:
         # If the selection is empty then there is nothing to do here
         if len(selection) == 0: return
         # If a letter is specified then the logic is way simpler
-        if letter:
+        if letter and not whole_fragments:
             self.set_selection_chain_name(selection, letter)
             return
         # If a letter is not specified we run the "fragments" logic
         fragment_getter = self.find_whole_fragments if whole_fragments else self.find_fragments
         for fragment in fragment_getter(selection):
-            chain_name = self.get_available_chain_name()
+            chain_name = letter if letter else self.get_available_chain_name()
             self.set_selection_chain_name(fragment, chain_name)
 
     def auto_chainer (self):
@@ -2117,14 +2086,14 @@ class Structure:
         self.chainer(letter='X')
         # Set solvent and ions as a unique chain
         self.chainer(selection=self.select_ions() + self.select_water(), letter='S')
-        # Set fatty acids and steroids as a unique chain
-        # DANI: Se podrían incluir algunos carbohydrates (glycans)
-        # DANI: Se podrían descartarían residuos que no pertenezcan a la membrana por proximidad
-        self.chainer(selection=self.select_lipids(), letter='M')
         # Set carbohydrates as a unique chain as well, just in case we have glycans
         # Note that in case glycan atoms are mixed with protein atoms glycan chains will be overwritten
         # However this is not a problem. It is indeed the best solution if we don't want ro resort atoms
         self.chainer(selection=self.select_carbohydrates(), letter='H')
+        # Set fatty acids and steroids as a unique chain
+        # RUBEN: con whole_fragments algunos carbohidratos se sobreescriben como glucolípidos
+        # DANI: Se podrían descartarían residuos que no pertenezcan a la membrana por proximidad
+        self.chainer(selection=self.select_lipids(), letter='M', whole_fragments=True)
         # Add a chain per fragment for both proteins and nucleic acids
         self.chainer(selection=self.select_protein() + self.select_nucleic())
         # At this point we should have covered most of the molecules in the structure
@@ -2133,6 +2102,7 @@ class Structure:
         # Note that we may have a lot of independent residues (and thus a los of small fragments)
         # This would make us run out of letters in the alphabet and thus there would be no more chains
         # As the last step, fix repeated chains
+        # RUBEN: sacar esta parte ya que se hace luego en el structure_corrector?
         self.check_repeated_chains(fix_chains=True)
 
     def raw_protein_chainer (self):
@@ -2161,24 +2131,36 @@ class Structure:
         """
         # Find if the letter belongs to an already existing chain
         chain = self.get_chain_by_name(letter)
-        # If the chain does not exist yet then create it
         if not chain:
             chain = Chain(name=letter)
             self.set_new_chain(chain)
+        # Get the selection residue indices
+        selection_residue_indices = self.get_selection_residue_indices(selection)
         # Set the chain index of every residue to the new chain
-        for atom_index in selection.atom_indices:
+        # WARNING: 
+        #   This may have to be done atom by atom but we forgot why so we change 
+        #   it so see what was the problem. Doing it atom by atom is not efficient
+        #   and was causing a bug where residues with same number could change their name
+        #   to that of the first residue found with that number.
+        for residue_index in selection_residue_indices:
             # WARNING: Chain index has to be read every iteration since it may change. Do not save it
-            atom = self.atoms[atom_index]
-            atom.set_chain_index(chain.index)
+            residue = self.residues[residue_index]
+            residue.set_chain_index(chain.index)
+
+    def check_available_chains(self):
+            """Check if there are more chains than available letters."""
+            n_chains = len(self.chains)
+            n_available_letters = len(AVAILABLE_LETTERS)
+            if n_chains > n_available_letters:
+                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_letters})')
 
     def get_available_chain_name (self) -> str:
         """Get an available chain name.
         Find alphabetically the first letter which is not yet used as a chain name.
         If all letters in the alphabet are used already then raise an error."""
+        self.check_available_chains()
         current_chain_names = [ chain.name for chain in self.chains ]
         next_available_chain_name = next((name for name in AVAILABLE_LETTERS if name not in current_chain_names), None)
-        if next_available_chain_name == None:
-            raise InputError(f'There are more chains than available chain letters ({len(AVAILABLE_LETTERS)})')
         return next_available_chain_name
     
     def get_next_available_chain_name (self, anterior : str) -> str:
@@ -2191,6 +2173,7 @@ class Structure:
         Raises:
             ValueError: If the anterior is not a letter or if there are more chains than available
         """
+        self.check_available_chains()
         current_chain_names = set([ chain.name for chain in self.chains ])
         # If anterior is cap then try caps first, if anterior is lower then try lowers first
         if anterior.isupper():
@@ -2206,8 +2189,7 @@ class Structure:
         if next_letter: return next_letter
         # If there is not available letters is the first group then return the first available in the second
         next_letter = next((letter for letter in second_group if letter not in current_chain_names), None)
-        if next_letter: return next_letter
-        raise ValueError(f'There are more chains than available chain letters ({len(AVAILABLE_LETTERS)})')
+        return next_letter
 
     def get_chain_by_name (self, name : str) -> Optional['Chain']:
         """Get a chain by its name."""
@@ -2271,12 +2253,7 @@ class Structure:
                         print(f'- Chain {chain_name} has {chains_count} repeats')
         # Rename repeated chains if requested
         if len(repeated_chains) > 0 and fix_chains:
-            n_chains = len(self.chains)
-            n_available_letters = len(AVAILABLE_LETTERS)
-            if n_chains > n_available_letters:
-                # for chain in self.chains:
-                #     print(str(chain) + ': ' + str(chain.atom_indices[0]) + ' to ' + str(chain.atom_indices[-1]))
-                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_letters})')
+            self.check_available_chains()
             current_letters = list(name_chains.keys())
             for repeated_chain in repeated_chains:
                 last_chain_letter = repeated_chain.name
@@ -2285,6 +2262,7 @@ class Structure:
                 repeated_chain.name = last_chain_letter
                 current_letters.append(last_chain_letter)
         # Check if there are splitted chains
+        # RUBEN: sacar esta parte ya que esta self.check_splitted_chains
         for chain in self.chains:
             residue_indices = sorted(chain.residue_indices)
             # Check if residue indices are consecutive
@@ -2321,9 +2299,16 @@ class Structure:
         """Check if non-consecutive atoms belong to the same chain.
         If so, separate pieces of non-consecuite atoms in different chains.
         Note that the new chains will be duplicated, so you will need to run check_repeated_chains after.
-        Return true if we encountered splitted chains and false otherwise.
+
+        Args:
+            fix_chains (bool): If True then the splitted chains will be fixed.
+            display_summary (bool): If True then a summary of the splitted chains will be displayed.
+
+        Returns:
+            bool:
+                True if we encountered splitted chains and false otherwise.
         """
-        splitted_fragments = []
+        splitted_fragments: List[Tuple[str, List[int]]] = []
         # Keep track of already checked chains
         checked_chains = set()
         last_chain = None
@@ -2349,24 +2334,24 @@ class Structure:
             checked_chains.add(chain_name)
 
         # Make a summary of the splitted chains if requested
-        if display_summary:
+        if display_summary and len(splitted_fragments) > 0:
             warn(f'Found {len(splitted_fragments)} splitted fragments')
             affected_chains = sorted(list(set([ fragment[0] for fragment in splitted_fragments ])))
             print(f'  We are having splits in chains {", ".join(affected_chains)}')
 
         # Fix chains if requested
         if fix_chains:
-            for fragment in splitted_fragments:
-                chain_name, fragment_atom_indices = fragment
+            for chain_name, fragment_atom_indices in splitted_fragments:
                 # Create a new chain
                 new_chain = Chain(name=chain_name)
                 self.set_new_chain(new_chain)
-                new_chain_index = new_chain.index
+                # Ge the selection residue indices for the fragment
+                fragment_selection = self.select_atom_indices(fragment_atom_indices)
+                fragment_residue_indices = self.get_selection_residue_indices(fragment_selection)
                 # Move atoms in the fragment to the new chain
-                for atom_index in fragment_atom_indices:
-                    atom = self.atoms[atom_index]
-                    atom.set_chain_index(new_chain_index)
-
+                for residue_index in fragment_residue_indices:
+                    residue = self.residues[residue_index]
+                    residue.set_chain_index(new_chain.index)
         return len(splitted_fragments) > 0
     
     def sort_residues (self):
@@ -2585,6 +2570,7 @@ class Structure:
         if duplicated_residues_count > 0:
             if display_summary:
                 warn(f'There are {duplicated_residues_count} different groups of duplicated residues')
+                print(f'    e.g. {overall_duplicated_residues[0][0]}')
             # Renumerate duplicated residues if requested
             if fix_residues:
                 # First of all, from each group of repeated residues, discard the first residue
@@ -2652,6 +2638,8 @@ class Structure:
                 new_name = initial + str(number)
                 while new_name in current_names:
                     number += 1
+                    if number > 999:
+                        raise ValueError('There are more than 999 atoms with the same name in the residue')
                     new_name = initial + str(number)
                 # Save an example for the logs if there is none yet
                 if not example:

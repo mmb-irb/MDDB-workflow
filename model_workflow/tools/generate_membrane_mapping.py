@@ -61,8 +61,8 @@ def generate_membrane_mapping(lipid_map : List[dict],
     glclipid_ridx = []
     for ref in lipid_map:
         lipid_ridx.extend(ref['residue_indices'])
-        if ref['resgroups']:
-            glclipid_ridx.extend(ref['resgroups'])
+        if ref['fragments']:
+            glclipid_ridx.extend(ref['fragments'])
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
@@ -87,7 +87,8 @@ def generate_membrane_mapping(lipid_map : List[dict],
         'ignore_no_box': True,
         'disable_logs': True,
         'return_hydrogen': True,
-        'disable_sandbox': True, # Do not copy the input file to the sandbox
+        # Do not copy the input file to the sandbox
+        'disable_sandbox': True, 
     }
     output_ndx_path = "tmp_mem_map.ndx"
     print(' Running BioBB FATSLiM Membranes')

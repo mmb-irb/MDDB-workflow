@@ -45,7 +45,7 @@ def structure_corrector (
     Note that the 'trust' flag may be passed for critical checkings to skip them.
 
     This function also sets some values in the passed MD."""
-    
+
     # Write the inital output structure file which will be overwritten several times further
     structure.generate_pdb_file(output_structure_file.path)
 
@@ -57,7 +57,7 @@ def structure_corrector (
     # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
     if structure.fix_atom_elements(trust=(CORRECT_ELEMENTS in trust)):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (fix atom elements) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -218,7 +218,7 @@ def structure_corrector (
     # Check fragments with the VMD and searh for wrong bonds
     if structure.check_splitted_chains(fix_chains = True, display_summary = True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (splitted chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -227,7 +227,7 @@ def structure_corrector (
 
     if structure.check_repeated_chains(fix_chains=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified (repeated residues) -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -286,7 +286,7 @@ def structure_corrector (
 
     # If we did any change then save the structure
     if had_to_split_chains:
-        print(' The structure file has been modified (split chains) -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (coherent chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -296,7 +296,7 @@ def structure_corrector (
     # NEVER FORGET: Merged residues may be generated when calling the structure.auto_chainer
     if structure.check_merged_residues(fix_residues = True, display_summary = True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (merged residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------

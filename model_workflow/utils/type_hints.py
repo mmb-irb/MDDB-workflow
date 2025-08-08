@@ -6,6 +6,7 @@
 
 from pytraj import TrajectoryIterator
 from typing import TYPE_CHECKING, Callable, List, Set, Optional, Tuple, Union, Generator
+Coords = Tuple[float, float, float]
 
 if TYPE_CHECKING:
     from model_workflow.utils.structures import Structure, Residue, Atom

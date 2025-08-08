@@ -693,7 +693,7 @@ chainer_parser.add_argument(
     "-let", "--letter",
     help="New chain letter (one letter per fragment by default)")
 chainer_parser.add_argument(
-    "-whfr", "--whole_fragments", type=bool, default=True,
+    "-whfr", "--whole_fragments", type=bool, default=False,
     help="Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains.")
 
 # The NASSA commands 

@@ -72,11 +72,16 @@ def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
     )
     return mda_top
 
-def get_mda_universe_from_stopology (standard_topology_path : str, structure_file : str) -> 'Universe':
-    """Create a MDAnalysis universe using data in the workflow."""
+def get_mda_universe_from_stopology (
+        standard_topology_path : str, coordinates_file : str) -> 'Universe':
+    """Create a MDAnalysis universe using data in the workflow.
+    
+    Args:
+        standard_topology_path (str): Path to the standard topology file.
+        coordinates_file (str): Path to the coordinates file (e.g., PDB, XTC)."""
     mda_topology = to_MDAnalysis_topology(standard_topology_path)
     # Create a MDAnalysis topology from the standard topology file
-    return Universe(mda_topology, structure_file)
+    return Universe(mda_topology, coordinates_file)
 
 def get_mda_universe (structure_file : 'File',              # To load in MDAnalysis
                       trajectory_file : 'File',             # To load in MDAnalysis

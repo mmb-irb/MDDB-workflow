@@ -15,7 +15,7 @@ def generate_lipid_references(structure: 'Structure',
         the residues indices. For example:
             [{'name': 'CHL1',
               'residue_indices': [935, 936, 937, ...],
-              'resgroups': [],
+              'fragments': [],
               'match': {'ref': {'inchikey': 'HVYWMOMLDIMFJA-DPAQBDIFSA-N'}}}, ...]
     """
     # Patch case where there no internet
@@ -48,6 +48,7 @@ def generate_lipid_references(structure: 'Structure',
         # We don't use lipid data for now, if we have it it is present in LIPID MAPS
         if SL_data or LM_data:
             lipid_references.append({'inchikey': inchikey,
+                                     'inchi': res_data['inchi'],
                                      'swisslipids': SL_data,
                                      'lipidmaps': LM_data,
                                      })
@@ -55,7 +56,7 @@ def generate_lipid_references(structure: 'Structure',
             lipid_map.append({ 
                 'name': list(res_data['resname'])[0], 
                 'residue_indices': list(map(int, res_data['resindices'])),
-                'resgroups': res_data['resgroups'], 
+                'fragments': res_data['fragments'], 
                 'match': { 
                     'ref': { 'inchikey': inchikey } } 
                     })

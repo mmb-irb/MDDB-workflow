@@ -30,7 +30,7 @@ def get_inchi_keys (
         dict: A dictionary where keys are InChI keys and values are dictionaries containing:
             - 'inchi' (str): The InChI string for the residue
             - 'resindices' (list): A list of all residue indices with this InChI key
-            - 'resgroups' (list): Lists of residue indices that are connected as a single group
+            - 'fragments' (list): Lists of residue indices that are connected as a single group
             - 'resname' (set): Set of residue names associated with this InChI key
             - 'classification' (set): Set of residue classifications for this InChI key
     Notes:
@@ -82,7 +82,7 @@ def get_inchi_keys (
         if inchikey not in key_2_name:
             key_2_name[inchikey] = {'inchi': inchi,
                                     'resindices': [],
-                                    'resgroups': [], # For glucolipids
+                                    'fragments': [], # For glucolipids
                                     'resname': set(), 
                                     'classification': set()
                                     }
@@ -97,7 +97,7 @@ def get_inchi_keys (
             key_2_name[inchikey]['classification'].add(classes)
             # Glucolipids saved the groups of residues the form a 'fragment' to solve a 
             # problem with FATSLiM later (ex: A01IR, A01J5)
-            key_2_name[inchikey]['resgroups'].append(list(map(int, resindices)))
+            key_2_name[inchikey]['fragments'].append(list(map(int, resindices)))
         else:
             key_2_name[inchikey]['classification'].add(residues[resindices[0]].classification)
 
@@ -118,12 +118,18 @@ def get_inchi_keys (
 
     # Check if there are multiple InChI keys for the same name
     for name, inchikeys in name_2_key.items():
-        inchikeys = set(inchikeys)
-        if len(inchikeys) > 1:
-            key_counts = '\n'.join([f'\t{key}: {len(key_2_name[key]["resindices"]): >4}'
-                                      for key in inchikeys])
-            warn(f'The fragment {name} has more than one InChi key:\n'
-                 f'{key_counts}')
+        inchikeys = list(set(inchikeys))
+        if len(inchikeys) < 2: continue
+        counts = {}
+        # Count the number of fragments 
+        for key in inchikeys:
+            frag = len(key_2_name[key]["fragments"])
+            # If there are not fragments, we use the number of residues
+            counts[key] = frag if frag else len(key_2_name[key]["resindices"])
+        # Format the counts for printing
+        key_counts = '\n'.join([f'\t{key}: {counts[key]: >4}' for key in inchikeys])
+        warn(f'The fragment {name} has more than one InChi key:\n'
+                f'{key_counts}')
     return key_2_name
 
 
