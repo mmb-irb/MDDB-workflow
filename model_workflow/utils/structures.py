@@ -2404,10 +2404,9 @@ class Structure:
         # Count how many merged residues we encountered
         merged_residues_count = len(merged_residues)
         # Log some details if the summary is requested
-        if display_summary:
+        if display_summary and merged_residues_count > 0:
             print(f'Found {merged_residues_count} merged residues')
-            if merged_residues_count > 0:
-                print(f' e.g. {merged_residues[0]}')
+            print(f' e.g. {merged_residues[0]}')
         # Return if we found merged residues
         return merged_residues_count > 0
  

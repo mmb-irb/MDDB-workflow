@@ -9,7 +9,7 @@ from model_workflow.utils.type_hints import *
 def get_inchikeys (
     universe : 'MDAnalysis.Universe',
     structure : 'Structure',
-    skip_class = {'ion', 'solvent', 'dna', 'rna', 'protein'},
+    skip_class = {'ion', 'solvent'},
 ) -> dict:
     """
     Generate a dictionary mapping InChI keys to residue information for non-standard residues.
@@ -21,9 +21,9 @@ def get_inchikeys (
     details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers.
 
     Args:
-        u (Universe): The MDAnalysis Universe object containing the structure and topology.
+        universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
-        skip_class (set): A set of residue classifications to skip. Defaults to {'ion', 'solvent', 'dna', 'rna', 'protein'}.
+        skip_class (set): A set of residue classifications to skip. Defaults to {'ion', 'solvent'}.
 
     Returns:
         key_2_name (dict): A dictionary where keys are InChI keys and values are dictionaries containing:
@@ -42,14 +42,11 @@ def get_inchikeys (
     """
     if not universe.universe.atoms.charges.any():
         print('Topology file does not have charges, cannot generate lipid references.')
-    # 1) Prepare residue data for parallel processing (not yet implemented)
+        
+    # 1) Prepare residue data for parallel processing
     # First group residues that are bonded together
     tasks = []
-    residues: List[Residue] = structure.residues
-
-    # Check if the residues are the same as in the universe TODO: BORRAR
-    for i in range(len(residues)):
-        assert universe.residues.resnames[i] == residues[i].name
+    residues = structure.residues
 
     # Fragment = residues that are bonded together
     fragments = universe.atoms.fragments
@@ -58,8 +55,9 @@ def get_inchikeys (
 
         # Continue to the next fragment if any of its
         # residues are of a disallowed classification
-        if any(residues[resindex].classification in skip_class
-            for resindex in resindices):
+        classes = {residues[resindex].classification for resindex in resindices}
+        if (classes.intersection(skip_class) or
+            (classes.intersection({'dna', 'rna', 'protein'}) and len(resindices) > 1)):
             continue
 
         # Select residues atoms with MDAnalysis
