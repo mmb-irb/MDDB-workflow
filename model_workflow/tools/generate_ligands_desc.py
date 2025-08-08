@@ -964,13 +964,6 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
             
     return pubchem_ids
 
-def obtain_inchikey_from_pdb(pdb_file : str) -> Optional[str]:
-    mol = Chem.MolFromPDBFile(pdb_file, sanitize=True)
-    if mol is None:
-        print("❌ InchiKey couldn't be constructed from PDB file.")
-        return None
-    return inchi.MolToInchiKey(mol)
-
 @lru_cache(maxsize=None)
 def search_cid_by_inchikey(inchikey : str) -> Optional[str]:
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"

@@ -50,6 +50,7 @@ from model_workflow.tools.generate_lipid_references import generate_lipid_refere
 from model_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
+from model_workflow.tools.get_inchi_keys import get_inchikeys
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.process_input_files import process_input_files
@@ -1567,8 +1568,7 @@ class Project:
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
     # Topology filename ------------
-
-    
+  
     def guess_input_topology_filepath (self) -> Optional[str]:
         """If there is not input topology filepath, we try to guess it among the files in the project directory.
         Note that if we can download from the remote then we must check the remote available files as well."""
@@ -1614,7 +1614,6 @@ class Project:
         # If we did not find any valid topology filepath at this point then return None
         return None
 
-    
     def get_input_topology_filepath (self) -> Optional[str]:
         """Get the input topology filepath from the inputs or try to guess it.
         If the input topology filepath is a 'no' flag then we consider there is no topology at all
@@ -1973,6 +1972,10 @@ class Project:
     # Atom charges
     get_charges = Task('charges', 'Getting atom charges', get_charges)
     charges = property(get_charges, None, None, "Atom charges (read only)")
+
+    # Atom charges
+    get_inchi_keys = Task('inchikeys', 'Getting InChI keys', get_inchikeys)
+    inchikeys = property(get_inchi_keys, None, None, "InChI keys (read only)")
 
     # Topolody data reader
     def get_topology_reader (self) -> 'Topology':

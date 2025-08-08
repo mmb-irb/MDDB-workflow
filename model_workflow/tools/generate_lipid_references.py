@@ -1,15 +1,14 @@
+import requests
+from functools import lru_cache
 from model_workflow.utils.auxiliar import save_json
-
-from model_workflow.tools.get_inchi_keys import get_inchi_keys, \
-    is_in_swisslipids, is_in_LIPID_MAPS
 from model_workflow.utils.auxiliar import warn
 from model_workflow.utils.type_hints import *
 
-def generate_lipid_references(structure: 'Structure',
-                              universe: 'Universe',
+def generate_lipid_references(inchikeys: dict,
                               output_filepath : str,
                               ) -> List[dict]:
     """Generate the lipid references.
+
     Returns:
         dict: A list of dictionaries containing lipid references and
         the residues indices. For example:
@@ -27,16 +26,9 @@ def generate_lipid_references(structure: 'Structure',
         warn(f'There was a problem connecting to the SwissLipids database: {e}')
         return None
 
-    if not universe.universe.atoms.charges.any(): # AGUS: he añadido .any() porque el error me lo indicaba, pero también me sugería .all() , no sé cuál encaja mejor
-        print('Topology file does not have charges, cannot generate lipid references.')
-        return save_json([], output_filepath)
-
-    # Get InChI keys of non-proteic/non-nucleic residues
-    inchi_keys = get_inchi_keys(universe, structure)
-
     lipid_references = []
     lipid_map = []
-    for inchikey, res_data in inchi_keys.items():
+    for inchikey, res_data in inchikeys['key_2_name'].items():
         SL_data = is_in_swisslipids(inchikey)
         LM_data = is_in_LIPID_MAPS(inchikey)
         # If we dont find it, we try without stereochemistry
@@ -77,3 +69,51 @@ def generate_lipid_references(structure: 'Structure',
 
     save_json(lipid_references, output_filepath)
     return lipid_map
+
+@lru_cache(maxsize=None)
+def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
+    """Search the InChi keys in LIPID MAPS"""
+    headers = {'accept': 'json'}
+    # https://www.lipidmaps.org/resources/rest
+    # Output item = physchem, is the only one that returns data for the inchi key
+    # for only the two first layers (main and atom connection)
+    # To see InChiKey layers: 
+    # https://www.inchi-trust.org/about-the-inchi-standard/
+    # Or https://www.rhea-db.org/help/inchi-inchikey#What_is_an_InChIKey_
+    key = inchikey[:14] if only_first_layer else inchikey
+    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        js = response.json()
+        if js != []:
+           return js      
+        else:
+            return False  
+    else:
+        print(f"Error for {inchikey}: {response.status_code}")
+
+@lru_cache(maxsize=None)
+def is_in_swisslipids(inchikey, only_first_layer=False, 
+                       protonation=True) -> dict:
+    """Search the InChi keys in SwissLipids. Documentation: https://www.swisslipids.org/#/api"""
+    key = inchikey[:14] if only_first_layer else inchikey
+    headers = {'accept': 'json'}
+    url = f"https://www.swisslipids.org/api/index.php/search?term={key}"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()[0]
+        detailed_data = get_swisslipids_info(data['entity_id'])
+        data['synonyms'] = detailed_data.get('synonyms', [])
+        return data
+    else:
+        return False
+
+def get_swisslipids_info(entity_id) -> dict:
+    """Get information about a SwissLipids entry."""
+    headers = {'accept': 'json'}
+    url = f"https://www.swisslipids.org/api/index.php/entity/{entity_id}"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return False
