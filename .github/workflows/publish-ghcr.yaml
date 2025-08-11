@@ -51,9 +51,9 @@ jobs:
       - name: Send Slack message
         run: |
           STATUS="${{ needs.build-and-push.result }}"
-        MESSAGE="Workflow *${{ github.workflow }}* in repo *${{ github.repository }}* completed with status: ${STATUS}"
-        curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\":\"${MESSAGE}\"}" \
-          "$SLACK_WEBHOOK_URL"
+          MESSAGE="Workflow *${{ github.workflow }}* in repo *${{ github.repository }}* completed with status: ${STATUS}"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"${MESSAGE}\"}" \
+            "$SLACK_WEBHOOK_URL"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
