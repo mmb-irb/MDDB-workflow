@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.source https://github.com/mmb-irb/MDDB-workflow
 # Define working dir
 WORKDIR /app
 
-# Install libgl1 for avoiding problems with VMD and fuse for using fusermount and goofys
+# Install libgl1 for avoiding problems with VMD
 RUN apt-get update && \
     apt-get install -y libgl1
 
