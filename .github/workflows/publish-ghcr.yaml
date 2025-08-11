@@ -42,3 +42,18 @@ jobs:
             org.opencontainers.image.source=${{ github.repository_url }}
             org.opencontainers.image.description="Container image for MDDB workflow"
             org.opencontainers.image.version=${{ github.ref_name }}
+
+  slack_notification:
+    runs-on: ubuntu-latest
+    needs: [ build-and-push ] # Wait for all main jobs to finish
+    if: always() # Run even if one of the jobs fails
+    steps:
+      - name: Send Slack message
+        run: |
+          STATUS="${{ needs.build-and-push.result }}"
+        MESSAGE="Workflow *${{ github.workflow }}* in repo *${{ github.repository }}* completed with status: ${STATUS}"
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"${MESSAGE}\"}" \
+          "$SLACK_WEBHOOK_URL"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
