@@ -677,7 +677,7 @@ def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
             if not organisms: raise ValueError('Missing organism')
             # Get scientific names in lower caps since sometimes they are all upper caps
             scientific_names = set(
-                [ organism.get('scientific_name', '').lower() for organism in organisms ])
+                [ (organism.get('scientific_name') or '').lower() for organism in organisms ])
             if 'synthetic construct' in scientific_names:
                 entity = polymer.get('entity_poly', None)
                 if not entity: raise ValueError(f'Missing entity in {pdb_id}')
