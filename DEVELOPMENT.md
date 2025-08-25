@@ -116,5 +116,5 @@ conda mambabuild /home/rchaves/repo/biobb/bioconda-recipes/recipes/mddb_workflow
 Linting:
 ```shell
 cd ~/repo/biobb/bioconda-recipes
-bioconda-utils lint  --packages mddb_workflow
+bioconda-utils lint --packages mddb_workflow
 ```

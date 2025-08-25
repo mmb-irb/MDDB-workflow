@@ -4,8 +4,9 @@ from tqdm import tqdm
 from model_workflow.utils.auxiliar import load_json, save_json, InputError
 from model_workflow.utils.type_hints import *
 
+
 class Remote:
-    def __init__ (self, database_url : str, accession : str):
+    def __init__(self, database_url: str, accession: str):
         # Save input arguments
         self.database_url = database_url
         self.accession = accession
@@ -19,7 +20,7 @@ class Remote:
 
     # Get project data
     # This is only used to make sure the project exists by now
-    def get_project_data (self):
+    def get_project_data(self):
         # Return the internal value if we already have it
         if self._project_data != None:
             return self._project_data
