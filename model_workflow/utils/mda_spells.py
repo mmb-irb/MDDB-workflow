@@ -4,6 +4,7 @@ import pickle
 
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
+from model_workflow.utils.auxiliar import MISSING_CHARGES
 
 #from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.universe import Universe
@@ -101,7 +102,7 @@ def get_mda_universe (structure_file : 'File',              # To load in MDAnaly
     universe.add_TopologyAttr('bonds', set(bonds))
 
     # Set the charges
-    if charges is not None and len(charges) > 0:
+    if charges != MISSING_CHARGES and len(charges) > 0:
         universe.add_TopologyAttr('charges', np.array(charges, dtype=np.float32))
     print(COLOR_END, end='\r')
     return universe

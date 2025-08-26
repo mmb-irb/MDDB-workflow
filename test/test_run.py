@@ -10,9 +10,12 @@ from model_workflow.console import  main
 
 @pytest.mark.release
 class TestRunAll:
-    """Test all the tasks workflow for reference accessions"""
-
-    @pytest.fixture(scope="class", params=["A0001", "A01IP", "A01VE"])
+    """Test all the tasks workflow for reference accessions:
+      - A0001: base case
+      - A01IP: for membrane analyses
+      - A01V7: for only ligand
+    """
+    @pytest.fixture(scope="class", params=["A0001", "A01IP", "A01V7"])
     def test_accession(self, request):
         return request.param
     
@@ -122,6 +125,7 @@ class TestRunSpecial:
 
     @pytest.mark.parametrize("test_accession", ["cg_test"], scope="class")
     def test_CG(self, project: 'Project'):
+        """Test coarse-grained (CG) model."""
         # Only two tasks. In the future "all" should be supported 
         md = project.mds[0]
         md.get_processed_interactions(md)
@@ -129,6 +133,7 @@ class TestRunSpecial:
 
     @pytest.mark.parametrize("test_accession", ["test_020"], scope="class")
     def test_dihedrals(self, project: 'Project'):
+        """Test dihedrals energy calculation."""
         project.get_dihedrals()
 
 

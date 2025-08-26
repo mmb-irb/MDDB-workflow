@@ -40,9 +40,11 @@ def get_inchikeys (
         map to the same InChI key or if multiple InChI keys map to the same residue name,
         which can indicate mismatched residue definitions or stereoisomers.
     """
-    if not universe.universe.atoms.charges.any():
-        print('Topology file does not have charges, cannot generate lipid references.')
-        
+    try:
+        universe.universe.atoms.charges
+    except:
+        warn('Topology file does not have charges, InChI keys may be unreliable.')
+
     # 1) Prepare residue data for parallel processing
     # First group residues that are bonded together
     tasks = []
@@ -123,10 +125,10 @@ def get_inchikeys (
                  f'{inchikey} + -> {str(data["classification"])} for names {str(data["resname"])}')
         # Check if there are multiple fragments length for the same InChI key
         if len(data['fragments']) == 0:
-            data['frag_length'] = 1
+            data['frag_len'] = 1
         else:
-            frag_len = set([len(fragment) for fragment in data['fragments']])
-            assert len(frag_len) == 1, \
+            frag_len = len(set([len(fragment) for fragment in data['fragments']]))
+            assert frag_len == 1, \
                 f'Fragments of different lengths for InChI key {inchikey}: {str(frag_len)}'
             data['frag_len'] = frag_len
 
