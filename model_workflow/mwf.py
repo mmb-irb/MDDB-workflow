@@ -532,15 +532,6 @@ class MD:
             inputs_value = self.project.get_input('input_structure_filepath')
             # If there is a valid input then use it
             if inputs_value: return relativize_and_parse_paths(inputs_value)
-        # If there is not input structure then asume it is the default
-        # Check the default structure file exists or it may be downloaded
-        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME, may_not_exist=True)
-        default_structure_file = File(default_structure_filepath)
-        # AGUS: si default_structure_filepath es None, default_structure_file será un objeto File y no se puede evaluar como None
-        # AGUS: de esta forma al evaluar directamente si default_structure_filepath es None, se evita el error
-        if default_structure_filepath is not None:
-            if default_structure_file.exists or self.remote:
-                return default_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
@@ -658,11 +649,6 @@ class MD:
             inputs_value = self.project.get_input('input_trajectory_filepaths')
             if inputs_value:
                 return relativize_and_parse_paths(inputs_value)
-        # If no input trajectory is passed then asume it is the default
-        default_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
-        default_trajectory_file = File(default_trajectory_filepath)
-        if default_trajectory_file.exists or self.remote:
-            return relativize_and_parse_paths([ TRAJECTORY_FILENAME ])
         # If there is no trajectory available then we surrender
         raise InputError('There is not input trajectory at all')
 
@@ -1567,53 +1553,6 @@ class Project:
 
     # Topology filename ------------
 
-    
-    def guess_input_topology_filepath (self) -> Optional[str]:
-        """If there is not input topology filepath, we try to guess it among the files in the project directory.
-        Note that if we can download from the remote then we must check the remote available files as well."""
-        # Find the first supported topology file according to its name and format
-        def find_first_accepted_topology_filename (available_filenames : List[str]) -> Optional[str]:
-            for filename in available_filenames:
-                # Make sure it is a valid topology file candidate
-                # i.e. topology.xxx
-                filename_splits = filename.split('.')
-                if len(filename_splits) != 2 or filename_splits[0] != 'topology':
-                    continue
-                # Then make sure its format is among the accepted topology formats
-                extension = filename_splits[1]
-                format = EXTENSION_FORMATS[extension]
-                if format in ACCEPTED_TOPOLOGY_FORMATS:
-                    return filename
-            return None
-        # First check among the local available files
-        local_files = list_files(self.directory)
-        accepted_topology_filename = find_first_accepted_topology_filename(local_files)
-        if accepted_topology_filename:
-            return self.pathify(accepted_topology_filename)
-        # In case we did not find a topology among the local files, repeat the process with the remote files
-        if self.remote:
-            remote_files = self.remote.available_files
-            accepted_topology_filename = find_first_accepted_topology_filename(remote_files)
-            if accepted_topology_filename:
-                return self.pathify(accepted_topology_filename)
-        # If no actual topology is to be found then try with the standard topology instead
-        # Check if the standard topology file is available
-        # Note that we do not use standard_topology_file property to avoid generating it at this point
-        standard_topology_filepath = self.pathify(STANDARD_TOPOLOGY_FILENAME)
-        standard_topology_file = File(standard_topology_filepath)
-        if standard_topology_file.exists:
-            return standard_topology_filepath
-        # If not we may also try to download the standard topology
-        if self.remote:
-            self.remote.download_standard_topology(standard_topology_file)
-            return standard_topology_filepath
-        # DEPRECATED: Find if the raw charges file is present as a last resource
-        if exists(RAW_CHARGES_FILENAME):
-            return RAW_CHARGES_FILENAME
-        # If we did not find any valid topology filepath at this point then return None
-        return None
-
-    
     def get_input_topology_filepath (self) -> Optional[str]:
         """Get the input topology filepath from the inputs or try to guess it.
         If the input topology filepath is a 'no' flag then we consider there is no topology at all
@@ -1649,10 +1588,6 @@ class Project:
             # If there is a valid input then use it
             if inputs_value:
                 return parse(inputs_value)
-        # Otherwise we must guess which is the topology file
-        guess = self.guess_input_topology_filepath()
-        if guess:
-            return guess
         # If nothing worked then surrender
         raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
             '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +

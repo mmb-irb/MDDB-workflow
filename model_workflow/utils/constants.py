@@ -103,7 +103,7 @@ CORRECTED = 'corrected'
 CORRECTED_STRUCTURE = 'corrected.pdb'
 CORRECTED_TRAJECTORY = 'corrected.xtc'
 
-# Input and output core files
+# Output core files
 STANDARD_TOPOLOGY_FILENAME = 'topology.json'
 STRUCTURE_FILENAME = 'structure.pdb'
 TRAJECTORY_FILENAME = 'trajectory.xtc'
