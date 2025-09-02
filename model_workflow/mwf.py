@@ -21,7 +21,7 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.constants import *
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
-from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files, is_directory_empty
+from model_workflow.utils.auxiliar import warn, load_json, load_yaml, is_directory_empty
 from model_workflow.utils.auxiliar import is_glob, parse_glob, safe_getattr
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
@@ -402,13 +402,11 @@ class MD:
             self.accession = f'{self.project.accession}.{self.number}'
             self.remote = Remote(self.project.database_url, self.accession)
         # Save the directory
+        self.directory = normpath(directory)
         # If it is an absolute then make it relative to the project
-        if isabs(directory):
-            # This function already removes the final slash
-            self.directory = relpath(directory, self.project.directory)
-        # Otherwise save it as is but just removing the final slash (if any)
-        else:
-            self.directory = remove_final_slash(directory)
+        if isabs(self.directory):
+            self.directory = relpath(self.directory, self.project.directory)
+        # Now set the director relative to the project
         self.directory = self.project.pathify(self.directory)
         # Make sure the MD directory does not equal the project directory
         if normpath(self.directory) == normpath(self.project.directory):
@@ -468,7 +466,7 @@ class MD:
 
     # Given a filename or relative path, add the MD directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
-        return self.directory + '/' + filename_or_relative_path
+        return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Input structure file ------------
 
@@ -588,7 +586,7 @@ class MD:
             # Make sure all or none of the trajectory paths are absolute
             abs_count = sum([ isabs(path) for path in checked_paths ])
             if not (abs_count == 0 or abs_count == len(checked_paths)):
-                raise InputError('All trajectory frames must be relative or absolute. Mixing is not supported')
+                raise InputError('All trajectory paths must be relative or absolute. Mixing is not supported')
             # Set a function to glob-parse and merge all paths
             def parse_all_glob (paths : List[str]) -> List[str]:
                 parsed_paths = []
@@ -636,17 +634,20 @@ class MD:
             # If we have a path however it may be downloaded from the database if we have a remote
             if not self.remote:
                 raise InputError(f'Cannot find anywhere a trajectory file with path(s) "{", ".join(input_paths)}"')
-            # In this case we set the path as MD relative
             # Note that if input path was not glob based it will be both as project relative and MD relative
             if len(md_parsed_paths) == 0: raise ValueError('This should never happen')
-            return md_parsed_paths
+            # If file is to be downloaded then we must make sure the path is relative to the project
+            project_relative_paths = [
+                self.project.pathify(path) if f'{self.directory}/' in path else self.pathify(path) for path in checked_paths
+            ]
+            return project_relative_paths
         # If we have a value passed through command line
         if self.input_trajectory_filepaths:
             return relativize_and_parse_paths(self.input_trajectory_filepaths)
         # Check if the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value
-            inputs_value = self.project.get_input('input_trajectory_filepaths')
+            inputs_value = self.get_input('input_trajectory_filepaths')
             if inputs_value:
                 return relativize_and_parse_paths(inputs_value)
         # If there is no trajectory available then we surrender
@@ -707,7 +708,7 @@ class MD:
                     if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
                     directory = name_2_directory(name)
                 # If the directory matches then this is our MD inputs
-                if directory == self.directory:
+                if normpath(directory) == self.directory:
                     self._md_inputs = md
                     return self._md_inputs
         # If this MD directory has not associated inputs then it means it was forced through command line
@@ -717,6 +718,16 @@ class MD:
         return self._md_inputs
 
     md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
+
+    # Get a specific 'input' value from MD inputs
+    # If the key is not found among MD inputs then try with the project input getter
+    def get_input (self, name: str):
+        print(self.md_inputs)
+        value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
+        # If we had a value then return it
+        if value != MISSING_INPUT_EXCEPTION:
+            return value
+        return self.project.get_input(name)
 
     # ---------------------------------
 
@@ -1251,7 +1262,7 @@ class Project:
         sample_trajectory : Optional[int] = None,
     ):
         # Save input parameters
-        self.directory = remove_final_slash(directory)
+        self.directory = normpath(directory)
         self.database_url = database_url
         self.accession = accession
         # Set the project URL in case we have the required data
@@ -1397,7 +1408,7 @@ class Project:
 
     # Given a filename or relative path, add the project directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
-        return self.directory + '/' + filename_or_relative_path
+        return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Check MD directories to be right
     # If there is any problem then directly raise an input error
@@ -1704,7 +1715,7 @@ class Project:
     # Then set getters for every value in the inputs file
 
     # Get a specific 'input' value
-    # Handle a possible missing keys
+    # Handle missing keys
     def get_input (self, name: str):
         value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
@@ -2071,8 +2082,9 @@ def name_2_directory (name : str) -> str:
 def check_directory (directory : str) -> str:
     """Check for problematic characters in a directory path."""
     # Remove problematic characters
+    directory_characters = set(directory)
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
-        if character in directory:
+        if character in directory_characters:
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
 def directory_2_name (directory : str) -> str:
@@ -2081,13 +2093,6 @@ def directory_2_name (directory : str) -> str:
     # Replace white spaces with underscores
     name = directory.split('/')[-1].replace('_', ' ')
     return name
-
-def remove_final_slash (directory : str) -> str:
-    """Remove the final slash if exists since it may cause 
-    problems when recognizing input directories."""
-    if directory[-1] == '/':
-        return directory[:-1]
-    return directory
 
 # Project input files
 project_input_files = {
