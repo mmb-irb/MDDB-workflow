@@ -7,13 +7,13 @@ import numpy as np
 import MDAnalysis
 
 
-def lipid_order (
-    trajectory_file : 'File',
-    standard_topology_file : 'File',
-    output_directory : str,
+def lipid_order(
+    trajectory_file: 'File',
+    standard_topology_file: 'File',
+    output_directory: str,
     membrane_map: dict,
     lipid_map: dict,
-    snapshots : int,
+    snapshots: int,
     frames_limit: int = 100):
     """
     Calculate lipid order parameters for membranes.
@@ -29,10 +29,10 @@ def lipid_order (
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping lipid order analysis')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
-    
+
     mda_top = to_MDAnalysis_topology(standard_topology_file)
     u = MDAnalysis.Universe(mda_top, trajectory_file.path)
     order_parameters_dict = {}
@@ -49,7 +49,7 @@ def lipid_order (
         # For every 'tail'
         for chain_idx, group in enumerate(carbon_groups):
             atoms = res.universe.atoms[group]
-            C_names = sorted([atom.name for atom in atoms],key=natural_sort_key)
+            C_names = sorted([atom.name for atom in atoms], key=natural_sort_key)
             # Find all C-H bonds indices
             ch_pairs = find_CH_bonds(u, ref["resindices"], C_names)
             # Initialize the order parameters to sum over the trajectory
@@ -60,7 +60,7 @@ def lipid_order (
             for ts in u.trajectory[0:snapshots:frame_step]:
                 for C_name in C_names:
                     d = u.atoms[ch_pairs[C_name]['C']].positions - u.atoms[ch_pairs[C_name]['H']].positions
-                    costheta_sums[C_name] += d[:,2]**2/np.linalg.norm(d, axis=1)**2
+                    costheta_sums[C_name] += d[:, 2]**2/np.linalg.norm(d, axis=1)**2
                 n += 1
             order_parameters = 1.5 * np.array([costheta_sums[C_name].mean() for C_name in C_names])/n - 0.5
             serrors = 1.5 * np.array([costheta_sums[C_name].std() for C_name in C_names])/n
@@ -69,19 +69,19 @@ def lipid_order (
                 'avg': order_parameters.tolist(),
                 'std': serrors.tolist()}
     # Save the data
-    data = { 'data': order_parameters_dict}
+    data = {'data': order_parameters_dict}
     save_json(data, output_analysis_filepath)
 
 
 def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list:
     """
     Finds all groups of connected Carbon atoms within a residue, including cyclic structures.
-    
+
     Parameters
     ----------
     residue : MDAnalysis.core.groups.Residue
         The residue to analyze
-        
+
     Returns
     -------
     list
@@ -120,7 +120,7 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list:
         if carbon.index not in visited:
             # Get all carbons connected to this one
             connected_carbons = explore_carbon_group(carbon, visited)
-            if len(connected_carbons)>6:  # Only add non-empty groups
+            if len(connected_carbons) > 6:  # Only add non-empty groups
                 carbon_groups.append(sorted(connected_carbons))
     return carbon_groups
 
@@ -128,11 +128,11 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list:
 def find_CH_bonds(universe, lipid_resindices, atom_names):
     """
     Find all carbon-hydrogen bonds in a lipid molecule using topology information.
-    
+
     Args:
         universe: MDAnalysis Universe object with topology information
         lipid_resname: Residue name of the lipid (default: 'DPPC')
-    
+
     Returns:
         dict: Dict for each carbon, of tuples containing (carbon_index, hydrogen_index) for each C-H bond
     """
@@ -141,7 +141,7 @@ def find_CH_bonds(universe, lipid_resindices, atom_names):
     # Get how many carbons with different name that we will average over later
     ch_pairs = {}
     for name in atom_names:
-        ch_pairs[name] = { 'C':[], 'H':[] }
+        ch_pairs[name] = {'C': [], 'H': []}
 
     # Iterate through each carbon
     for carbon in carbons:
@@ -163,6 +163,7 @@ def find_CH_bonds(universe, lipid_resindices, atom_names):
         ch_pairs[name]['C'] = np.array(ch_pairs[name]['C'])
         ch_pairs[name]['H'] = np.array(ch_pairs[name]['H'])
     return ch_pairs
+
 
 def natural_sort_key(s):
     """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)"""

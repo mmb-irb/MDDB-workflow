@@ -253,7 +253,7 @@ def structure_corrector (
     for chain in structure.get_selection_chains(sequence_polymers_selection):
         # If there is only one fragment we are good
         chain_selection = chain.get_selection()
-        fragments = list(structure.find_fragments(chain_selection))
+        fragments = list(structure.find_fragments(chain_selection, atom_bonds=safe_bonds))
         if len(fragments) == 0: raise ValueError(f'No fragments found in chain {chain.name}')
         if len(fragments) == 1: continue
         # We also want to support having a solution of free aminoacids/nucleotides
