@@ -9,7 +9,7 @@
 
 The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
 These files next to some additional author inputs are analyzed.
-Both standard files and analysis results are to be uploaded to the database using the [loader](https://github.com/mmb-irb/MDDB-loader).
+Both standard files and analysis results are to be uploaded to the database using the [loader](https://github.com/mmb-irb/MDDB-loader). After that, results can be visualized on the [MDposit](https://mdposit.mddbr.eu/) client.
 
 ## Installation
 

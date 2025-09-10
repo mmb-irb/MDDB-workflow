@@ -103,8 +103,8 @@ def get_raw_charges (topology_filename : str) -> list:
 def get_tpr_charges (topology_filename : str) -> list:
     try:
         charges = get_tpr_charges_mdanalysis(topology_filename)
-    except:
-        print(' MDAnalysis failed to extract charges. Using manual extraction...')
+    except Exception as err:
+        print(f' MDAnalysis failed to extract charges: {err}. Using manual extraction...')
         charges = get_tpr_charges_gromacs(topology_filename)
     return charges
 
