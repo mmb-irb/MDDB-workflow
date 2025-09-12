@@ -171,6 +171,7 @@ OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
 OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket' # WARNING: If this is changed then the pockets function must be updated as well
 OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
 OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
+OUTPUT_PROVENANCE_FILENAME = 'mda.provenance.json'
 MEMBRANE_MAPPING_FILENAME = 'mda.mem_map.json'
 OUTPUT_DENSITY_FILENAME = 'mda.density.json'
 OUTPUT_THICKNESS_FILENAME = 'mda.thickness.json'

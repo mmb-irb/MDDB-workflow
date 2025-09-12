@@ -53,6 +53,7 @@ from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.process_input_files import process_input_files
+from model_workflow.tools.provenance import produce_provenance
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -1242,6 +1243,8 @@ class Project:
         # Input populations and transitions (MSM only)
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
+        # Input AiiDA data
+        aiida_data_filepath : Optional[str] = None,
         # Processing and analysis instructions
         filter_selection : Union[bool, str] = False,
         pbc_selection : Optional[str] = None,
@@ -1314,6 +1317,9 @@ class Project:
         self._populations_file = File(self.populations_filepath)
         self.transitions_filepath = transitions_filepath
         self._transitions_file = File(self.transitions_filepath)
+        # Input AiiDA data
+        self.aiida_data_filepath = aiida_data_filepath
+        self._aiida_data_file = File(self.aiida_data_filepath) if aiida_data_filepath else None
 
         # Set the processed topology filepath, which depends on the input topology filename
         # Note that this file is different from the standard topology, although it may be standard as well
@@ -1657,23 +1663,32 @@ class Project:
         return self.reference_md._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames for each MD (read only)")
 
-    # Populations filename ------------
+    # Populations file ------------
 
-    def get_populations_file (self) -> File:
-        """Get the MSM equilibrium populations filename."""
+    def get_populations_file (self) -> Optional[File]:
+        """Get the MSM equilibrium populations file."""
         if not self.get_file(self._populations_file):
             return None
         return self._populations_file
-    populations_file = property(get_populations_file, None, None, "MSM equilibrium populations filename (read only)")
+    populations_file = property(get_populations_file, None, None, "MSM equilibrium populations file (read only)")
 
-    # Transitions filename ------------
+    # Transitions file ------------
 
-    def get_transitions_file (self) -> Optional[str]:
-        """Get the MSM transition probabilities filename."""
+    def get_transitions_file (self) -> Optional[File]:
+        """Get the MSM transition probabilities file."""
         if not self.get_file(self._transitions_file):
             return None
         return self._transitions_file
-    transitions_file = property(get_transitions_file, None, None, "MSM transition probabilities filename (read only)")
+    transitions_file = property(get_transitions_file, None, None, "MSM transition probabilities file (read only)")
+
+    # AiiDA data file
+
+    def get_aiida_data_file (self) -> Optional[File]:
+        """Get the AiiDA data file."""
+        if not self._aiida_data_file: return None
+        if not self.get_file(self._aiida_data_file): return None
+        return self._aiida_data_file
+    aiida_data_file = property(get_aiida_data_file, None, None, "AiiDA data file (read only)")
 
     # ---------------------------------
 
@@ -2065,6 +2080,9 @@ class Project:
         get_screenshot, output_filename = OUTPUT_SCREENSHOT_FILENAME)
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
+    # Provenance data
+    produce_provenance = Task('aiidata', 'Produce provenance', produce_provenance)
+
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
 
 # Set a function to read a file which may be in differen formats
@@ -2224,8 +2242,8 @@ def workflow (
     # If the include argument then add only the specified tasks to the list
     elif include and len(include) > 0:
         tasks = [ *include ]
-        # Find for special flags among included
-        for flag, dependencies, in DEPENDENCY_FLAGS.items():
+        # Search for special flags among included
+        for flag, dependencies in DEPENDENCY_FLAGS.items():
             if flag not in tasks: continue
             # If the flag is found then remove it and write the corresponding dependencie instead
             # Make sure not to duplicate a dependency if it was already included
