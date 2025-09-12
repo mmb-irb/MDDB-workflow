@@ -1577,7 +1577,8 @@ class Project:
         In this scenario we can keep working but there are some consecuences:
         1 - Analysis using atom charges such as 'energies' will be skipped
         2 - The standard topology file will not include atom charges
-        3 - Bonds will be guessed"""
+        3 - Bonds will be guessed
+        """
         if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
             return MISSING_TOPOLOGY
         # Set a function to parse possible glob notation

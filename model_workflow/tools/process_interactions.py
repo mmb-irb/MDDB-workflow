@@ -279,6 +279,16 @@ def process_interactions (
         strong_bonds = get_covalent_bonds_between(structure_file.path, interaction['selection_1'], interaction['selection_2'])
         interaction['strong_bonds'] = strong_bonds
 
+        # If one of the agents is fully made of strong bonds then the interaction is not valid
+        strong_bonded_atoms = set(sum(strong_bonds, []))
+        if all( index in strong_bonded_atoms for index in agent_1_selection.atom_indices ) or \
+           all( index in strong_bonded_atoms for index in agent_2_selection.atom_indices ):
+            warn(f'Interaction "{interaction_name}" is not valid since one of the agents is fully bonded to the other agent.\n'
+                 'This may be due to wrong selections or a wrong interaction to be considered.\n'
+                 'This interaction will be ignored and will not appear in further analyses')
+            interaction[FAILED_INTERACTION_FLAG] = True
+            continue
+
         # Save the interactions version
         interaction['version'] = '2.0.0'
 
@@ -287,7 +297,7 @@ def process_interactions (
             + interaction["interface_residue_indices_2"])
         print(f'{interaction_name} (time: {pretty_frames_percent} %) -> {interface_residue_indices}')
 
-    # Filter away interactions whcih have failed
+    # Filter away interactions which have failed
     valid_interactions = [ inte for inte in interactions if not inte.get(FAILED_INTERACTION_FLAG, False) ]
 
     # If there are no valid interactions then stop here
