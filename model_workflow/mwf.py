@@ -1667,7 +1667,7 @@ class Project:
         if self._input_topology_file != None:
             return self._input_topology_file
         # Set the input topology filepath
-        input_topology_filepath = self.pathify(self.get_input_topology_filepath())
+        input_topology_filepath = self.get_input_topology_filepath()
         # If the input filepath is None then it menas we must proceed without a topology
         if input_topology_filepath == MISSING_TOPOLOGY:
             self._input_topology_file = MISSING_TOPOLOGY
