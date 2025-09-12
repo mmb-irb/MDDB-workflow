@@ -21,8 +21,8 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.constants import *
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
-from model_workflow.utils.auxiliar import warn, load_json, load_yaml, is_directory_empty
-from model_workflow.utils.auxiliar import is_glob, parse_glob, safe_getattr
+from model_workflow.utils.auxiliar import warn, load_json, load_yaml, save_yaml
+from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
@@ -1711,6 +1711,15 @@ class Project:
         # Finally return the updated inputs
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
+
+    # Permanently update the inputs file
+    # This may be done when command line inputs do not match file inputs
+    def update_inputs (self):
+        # If there is no inputs file then do not try to save anything
+        if not self.is_inputs_file_available(): return
+        # Write the new inputs to disk
+        # Note that comments in the original YAML file will be not kept
+        save_yaml(self.inputs, self.inputs_file.path)
 
     # Then set getters for every value in the inputs file
 
