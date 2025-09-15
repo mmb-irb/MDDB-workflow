@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath, normpath
+from os.path import exists, isdir, isabs, relpath, normpath, split
 from shutil import rmtree
 import sys
 import io
@@ -404,14 +404,12 @@ class MD:
             self.remote = Remote(self.project.database_url, self.accession)
         # Save the directory
         self.directory = normpath(directory)
-        # If it is an absolute then make it relative to the project
-        if isabs(self.directory):
-            self.directory = relpath(self.directory, self.project.directory)
         # Now set the director relative to the project
         self.directory = self.project.pathify(self.directory)
-        # Make sure the MD directory does not equal the project directory
         if normpath(self.directory) == normpath(self.project.directory):
             raise InputError(f'MD {self.number} has the same directory as the project: {self.directory}')
+        # Save the directory name alone apart
+        self.directory_location, self.directory_name = split(self.directory)
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
@@ -607,6 +605,7 @@ class MD:
             # If trajectory paths are not absolute then check if they are relative to the MD directory
             # Get paths relative to the current MD directory
             md_relative_paths = [ self.pathify(path) for path in checked_paths ]
+            print(md_relative_paths)
             # In case there are glob characters we must parse the paths
             md_parsed_paths = parse_all_glob(md_relative_paths)
             # Check we successfully defined some trajectory file
@@ -617,6 +616,7 @@ class MD:
             # If no trajectory files where found then asume they are relative to the project
             # Get paths relative to the project directory
             project_relative_paths = [ self.project.pathify(path) for path in checked_paths ]
+            print(project_relative_paths)
             # In case there are glob characters we must parse the paths
             project_parsed_paths = parse_all_glob(project_relative_paths)
             # Check we successfully defined some trajectory file
@@ -639,7 +639,7 @@ class MD:
             if len(md_parsed_paths) == 0: raise ValueError('This should never happen')
             # If file is to be downloaded then we must make sure the path is relative to the project
             project_relative_paths = [
-                self.project.pathify(path) if f'{self.directory}/' in path else self.pathify(path) for path in checked_paths
+                self.project.pathify(path) if f'{self.directory_name}/' in path else self.pathify(path) for path in checked_paths
             ]
             return project_relative_paths
         # If we have a value passed through command line
@@ -709,7 +709,7 @@ class MD:
                     if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
                     directory = name_2_directory(name)
                 # If the directory matches then this is our MD inputs
-                if normpath(directory) == self.directory:
+                if self.project.pathify(directory) == self.directory:
                     self._md_inputs = md
                     return self._md_inputs
         # If this MD directory has not associated inputs then it means it was forced through command line
@@ -723,7 +723,6 @@ class MD:
     # Get a specific 'input' value from MD inputs
     # If the key is not found among MD inputs then try with the project input getter
     def get_input (self, name: str):
-        print(self.md_inputs)
         value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
         if value != MISSING_INPUT_EXCEPTION:
@@ -1266,6 +1265,10 @@ class Project:
     ):
         # Save input parameters
         self.directory = normpath(directory)
+        # If it is an absolute path then make it relative to the project
+        if isabs(self.directory):
+            self.directory = relpath(self.directory)
+        
         self.database_url = database_url
         self.accession = accession
         # Set the project URL in case we have the required data
