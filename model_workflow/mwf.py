@@ -23,6 +23,7 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, save_yaml
 from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
+from model_workflow.utils.auxiliar import read_ndict, write_ndict
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
@@ -394,8 +395,9 @@ class MD:
         self.project = project
         if not project:
             raise Exception('Project is mandatory to instantiate a new MD')
-        # Save the MD number
+        # Save the MD number and index
         self.number = number
+        self.index = number - 1
         # Set the MD accession and request URL
         self.accession = None
         self.remote = None
@@ -418,11 +420,13 @@ class MD:
         # If the path is absolute then it is considered unique
         # If the file does not exist and it is to be downloaded then it is downloaded for each MD
         # Priorize the MD directory over the project directory
-        self.input_structure_filepath = input_structure_filepath
+        self.arg_input_structure_filepath = input_structure_filepath
+        self._input_structure_filepath = None
         # Set the internal variable for the input structure file, to be assigned later
         self._input_structure_file = None
         # Save the input trajectory filepaths
-        self.input_trajectory_filepaths = input_trajectory_filepaths
+        self.arg_input_trajectory_filepaths = input_trajectory_filepaths
+        self._input_trajectory_filepaths = None
         # Set the internal variable for the input trajectory files, to be assigned later
         self._input_trajectory_files = None
 
@@ -471,6 +475,9 @@ class MD:
 
     def get_input_structure_filepath (self) -> str:
         """Set a function to get input structure file path"""
+        # Return the internal value if it is already assigned
+        if self._input_structure_filepath != None:
+            return self._input_structure_filepath
         # Set a function to find out if a path is relative to MD directories or to the project directory
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
@@ -520,15 +527,22 @@ class MD:
                 raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
             return md_parsed_filepath
         # If we have a value passed through command line
-        if self.input_structure_filepath:
+        if self.arg_input_structure_filepath:
             # Find out if it is relative to MD directories or to the project directory
-            return relativize_and_parse_paths(self.input_structure_filepath)
+            self._input_structure_filepath = relativize_and_parse_paths(self.arg_input_structure_filepath)
+            # Save the parsed value in the inputs file
+            self.project.update_inputs(
+                f'mds.{self.index}.input_structure_filepath',
+                self._input_structure_filepath)
+            return self._input_structure_filepath
         # If we have a value passed through the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.project.get_input('input_structure_filepath')
             # If there is a valid input then use it
-            if inputs_value: return relativize_and_parse_paths(inputs_value)
+            if inputs_value:
+                self._input_structure_filepath = relativize_and_parse_paths(inputs_value)
+                return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
@@ -569,6 +583,9 @@ class MD:
     # Input trajectory filename ------------
 
     def get_input_trajectory_filepaths (self) -> str:
+        # Return the internal value if it is already assigned
+        if self._input_trajectory_filepaths != None:
+            return self._input_trajectory_filepaths
         """Set a function to get input trajectory file paths."""
         # Set a function to check and fix input trajectory filepaths
         # Also relativize paths to the current MD directory and parse glob notation
@@ -641,14 +658,20 @@ class MD:
             ]
             return project_relative_paths
         # If we have a value passed through command line
-        if self.input_trajectory_filepaths:
-            return relativize_and_parse_paths(self.input_trajectory_filepaths)
+        if self.arg_input_trajectory_filepaths:
+            self._input_trajectory_filepaths = relativize_and_parse_paths(self.arg_input_trajectory_filepaths)
+            # Save the parsed value in the inputs file
+            self.project.update_inputs(
+                f'mds.{self.index}.input_trajectory_filepaths',
+                self._input_trajectory_filepaths)
+            return self._input_trajectory_filepaths
         # Check if the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value
             inputs_value = self.get_input('input_trajectory_filepaths')
             if inputs_value:
-                return relativize_and_parse_paths(inputs_value)
+                self._input_trajectory_filepaths = relativize_and_parse_paths(inputs_value)
+                return self._input_trajectory_filepaths
         # If there is no trajectory available then we surrender
         raise InputError('There is not input trajectory at all')
 
@@ -710,10 +733,13 @@ class MD:
                 if self.project.pathify(directory) == self.directory:
                     self._md_inputs = md
                     return self._md_inputs
-        # If this MD directory has not associated inputs then it means it was forced through command line
-        # We set a provisional MD inputs for it
-        provisional_name = directory_2_name(self.directory)
-        self._md_inputs = { 'name': provisional_name }
+        # If this MD directory has not associated inputs then it means it was passed through command line
+        # We set a new MD inputs for it
+        new_md_name = directory_2_name(self.directory)
+        self._md_inputs = { 'name': new_md_name, 'mdir': self.directory }
+        # Update the inputs file with the new MD inputs
+        new_mds_inputs = [ *self.project.inputs.mds, self._md_inputs ]
+        self.project.update_inputs('mds', new_mds_inputs)
         return self._md_inputs
 
     md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
@@ -1290,7 +1316,8 @@ class Project:
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
-        self.input_topology_filepath = input_topology_filepath
+        self.arg_input_topology_filepath = input_topology_filepath
+        self._input_topology_filepath = None
         self._input_topology_file = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
@@ -1580,8 +1607,13 @@ class Project:
         2 - The standard topology file will not include atom charges
         3 - Bonds will be guessed
         """
-        if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
-            return MISSING_TOPOLOGY
+        # If we arelady have an internal value calculated then return it
+        if self._input_topology_filepath != None:
+            return self._input_topology_filepath
+        # If it is explicitly stated that there is no topology
+        if type(self.arg_input_topology_filepath) == str and self.arg_input_topology_filepath.lower() in { 'no', 'not', 'na' }:
+            self._input_topology_filepath = MISSING_TOPOLOGY
+            return self._input_topology_filepath
         # Set a function to parse possible glob notation
         def parse (filepath : str) -> str:
             # If there is no glob pattern then just return the string as is
@@ -1598,15 +1630,19 @@ class Project:
                 raise InputError(f'Multiple topologies found with "{filepath}": {", ".join(parsed_filepaths)}')
             return parsed_filepaths[0]
         # If this value was passed through command line then it would be set as the internal value already
-        if self.input_topology_filepath:
-            return parse(self.input_topology_filepath)
+        if self.arg_input_topology_filepath:
+            self._input_topology_filepath = parse(self.arg_input_topology_filepath)
+            # Update the input topology fielpath in the inputs file, in case it is not matching
+            self.update_inputs('input_topology_filepath', self._input_topology_filepath)
+            return self._input_topology_filepath
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
             if inputs_value:
-                return parse(inputs_value)
+                self._input_topology_filepath = parse(inputs_value)
+                return self._input_topology_filepath
         # If nothing worked then surrender
         raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
             '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
@@ -1731,9 +1767,15 @@ class Project:
 
     # Permanently update the inputs file
     # This may be done when command line inputs do not match file inputs
-    def update_inputs (self):
+    def update_inputs (self, nested_key : str, new_value):
+        # If the input already matches then do nothing
+        current_value = read_ndict(self.inputs, nested_key, MISSING_INPUT_EXCEPTION)
+        if current_value == new_value: return
+        # Set the new value
+        write_ndict(self.inputs, nested_key, new_value)
         # If there is no inputs file then do not try to save anything
         if not self.is_inputs_file_available(): return
+        print(f'* Field "{nested_key}" in the inputs file will be permanently modified')
         # Write the new inputs to disk
         # Note that comments in the original YAML file will be not kept
         save_yaml(self.inputs, self.inputs_file.path)

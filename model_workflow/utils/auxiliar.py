@@ -397,3 +397,38 @@ def safe_getattr (instance, attribute_name : str, defualt):
     if not safe_hasattr(instance, attribute_name): return defualt
     return getattr(instance, attribute_name)
     
+# Function to read and write a dict nested value with using a single combined key
+
+# Read a value in a nested dictionary and return the placeholder if any key in the path does not exist
+def read_ndict (nested_dict : dict, nested_key : str, placeholder = KeyError('Missing nested key')):
+    keys = nested_key.split('.')
+    value = nested_dict
+    for key in keys:
+        # support list indices
+        if key.isdigit():
+            index = int(key)
+            value = value[index]
+        # support dict keys
+        else:
+            value = value.get(key, placeholder)
+            if value == placeholder: return placeholder
+    return value
+
+# Write a value in a nested dictionary and raise an error if any key in the path s missing
+def write_ndict (nested_dict : dict, nested_key : str, value):
+    keys = nested_key.split('.')
+    nested_keys = keys[0:-1]
+    next_target = nested_dict
+    for key in nested_keys:
+        # support list indices
+        if key.isdigit():
+            index = int(key)
+            next_target = next_target[index]
+        # support dict keys
+        else:
+            missing_key_error = KeyError(f'Missing nested key {key}')
+            next_target = next_target.get(key, missing_key_error)
+            if next_target == missing_key_error: return missing_key_error
+    field = keys[-1]
+    next_target[field] = value
+    
