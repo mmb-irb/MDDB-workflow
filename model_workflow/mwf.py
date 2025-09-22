@@ -605,7 +605,6 @@ class MD:
             # If trajectory paths are not absolute then check if they are relative to the MD directory
             # Get paths relative to the current MD directory
             md_relative_paths = [ self.pathify(path) for path in checked_paths ]
-            print(md_relative_paths)
             # In case there are glob characters we must parse the paths
             md_parsed_paths = parse_all_glob(md_relative_paths)
             # Check we successfully defined some trajectory file
@@ -616,7 +615,6 @@ class MD:
             # If no trajectory files where found then asume they are relative to the project
             # Get paths relative to the project directory
             project_relative_paths = [ self.project.pathify(path) for path in checked_paths ]
-            print(project_relative_paths)
             # In case there are glob characters we must parse the paths
             project_parsed_paths = parse_all_glob(project_relative_paths)
             # Check we successfully defined some trajectory file
