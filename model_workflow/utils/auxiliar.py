@@ -1,5 +1,6 @@
 # Auxiliar generic functions and classes used along the workflow
 
+from model_workflow import __path__
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
 from model_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 
@@ -16,6 +17,7 @@ from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
 import requests
+from subprocess import run, PIPE
 
 
 # Check if a module has been imported
@@ -432,3 +434,8 @@ def write_ndict (nested_dict : dict, nested_key : str, value):
     field = keys[-1]
     next_target[field] = value
     
+# Get the current git version
+def get_git_version () -> str:
+    git_command = f"git -C {__path__[0]} describe"
+    process = run(git_command, shell=True, stdout=PIPE)
+    return process.stdout.decode().replace('\n','')

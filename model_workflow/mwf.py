@@ -23,7 +23,7 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, save_yaml
 from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
-from model_workflow.utils.auxiliar import read_ndict, write_ndict
+from model_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
@@ -2267,7 +2267,8 @@ def workflow (
     # Move the current directory to the working directory
     chdir(working_directory)
     current_directory_name = getcwd().split('/')[-1]
-    print(f'\n{CYAN_HEADER}Running workflow for project at {current_directory_name}{COLOR_END}')
+    git_version = get_git_version()
+    print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}) for project at {current_directory_name}{COLOR_END}')
 
     # Initiate the project project
     project = Project(**project_parameters)
