@@ -1075,7 +1075,8 @@ class Structure:
 
     def find_fragments (self,
         selection : Optional['Selection'] = None,
-        exclude_disulfide : bool = True
+        exclude_disulfide : bool = True,
+        atom_bonds : Optional[List[List[int]]] = None,
     ) -> Generator['Selection', None, None]:
         """Find fragments in a selection of atoms. A fragment is a selection of
         covalently bonded atoms. All atoms are searched if no selection is provided.
@@ -1089,7 +1090,8 @@ class Structure:
         # If there is no selection we consider all atoms
         if not selection: selection = self.select_all()
         # Get/Find covalent bonds between atoms in a new object avoid further corruption (deletion) of the original list
-        atom_indexed_covalent_bonds = { atom_index: [ *self.bonds[atom_index] ] for atom_index in selection.atom_indices }
+        safe_bonds = atom_bonds if atom_bonds else self.bonds
+        atom_indexed_covalent_bonds = { atom_index: [ *safe_bonds[atom_index] ] for atom_index in selection.atom_indices }
         # Exclude disulfide bonds from 
         if exclude_disulfide:
             # First search for protein disulfide bonds

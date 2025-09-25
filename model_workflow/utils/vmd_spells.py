@@ -456,7 +456,7 @@ def get_covalent_bonds_between (
     
     # Raw indexes is a string with all indexes separated by spaces
     index_1 = [ int(i) for i in raw_index_1.split() ]
-    index_2 = [ int(i) for i in raw_index_2.split() ]
+    index_2 = set([ int(i) for i in raw_index_2.split() ])
     
     # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
     # Raw bonds format is (for each atom in the selection):
@@ -502,7 +502,10 @@ def get_covalent_bonds_between (
         bonds = bonds_per_atom[i]
         for bond in bonds:
             if bond in index_2:
-                crossed_bond = (index, bond)
+                # DANI: A tuple may make more sense than a list to define a bond
+                # DANI: However tuples are converted to lists when JSON serialized
+                # DANI: And the interactions are saved to json, so a list keeps things more coherent
+                crossed_bond = [index, bond]
                 crossed_bonds.append(crossed_bond)
                 
     return crossed_bonds

@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath, normpath
+from os.path import exists, isdir, isabs, relpath, normpath, split
 from shutil import rmtree
 import sys
 import io
@@ -21,8 +21,9 @@ from model_workflow.utils.constants import *
 from model_workflow.utils.constants import *
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
-from model_workflow.utils.auxiliar import warn, load_json, load_yaml, list_files, is_directory_empty
-from model_workflow.utils.auxiliar import is_glob, parse_glob, safe_getattr
+from model_workflow.utils.auxiliar import warn, load_json, load_yaml, save_yaml
+from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
+from model_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version
 from model_workflow.utils.arg_cksum import get_cksum_id
 from model_workflow.utils.register import Register
 from model_workflow.utils.cache import Cache
@@ -54,6 +55,7 @@ from model_workflow.tools.get_inchi_keys import get_inchikeys
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.process_input_files import process_input_files
+from model_workflow.tools.provenance import produce_provenance
 
 # Import local analyses
 from model_workflow.analyses.rmsds import rmsds
@@ -394,8 +396,9 @@ class MD:
         self.project = project
         if not project:
             raise Exception('Project is mandatory to instantiate a new MD')
-        # Save the MD number
+        # Save the MD number and index
         self.number = number
+        self.index = number - 1
         # Set the MD accession and request URL
         self.accession = None
         self.remote = None
@@ -403,17 +406,13 @@ class MD:
             self.accession = f'{self.project.accession}.{self.number}'
             self.remote = Remote(self.project.database_url, self.accession)
         # Save the directory
-        # If it is an absolute then make it relative to the project
-        if isabs(directory):
-            # This function already removes the final slash
-            self.directory = relpath(directory, self.project.directory)
-        # Otherwise save it as is but just removing the final slash (if any)
-        else:
-            self.directory = remove_final_slash(directory)
+        self.directory = normpath(directory)
+        # Now set the director relative to the project
         self.directory = self.project.pathify(self.directory)
-        # Make sure the MD directory does not equal the project directory
         if normpath(self.directory) == normpath(self.project.directory):
             raise InputError(f'MD {self.number} has the same directory as the project: {self.directory}')
+        # Save the directory name alone apart
+        self.directory_location, self.directory_name = split(self.directory)
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
@@ -422,11 +421,13 @@ class MD:
         # If the path is absolute then it is considered unique
         # If the file does not exist and it is to be downloaded then it is downloaded for each MD
         # Priorize the MD directory over the project directory
-        self.input_structure_filepath = input_structure_filepath
+        self.arg_input_structure_filepath = input_structure_filepath
+        self._input_structure_filepath = None
         # Set the internal variable for the input structure file, to be assigned later
         self._input_structure_file = None
         # Save the input trajectory filepaths
-        self.input_trajectory_filepaths = input_trajectory_filepaths
+        self.arg_input_trajectory_filepaths = input_trajectory_filepaths
+        self._input_trajectory_filepaths = None
         # Set the internal variable for the input trajectory files, to be assigned later
         self._input_trajectory_files = None
 
@@ -469,12 +470,15 @@ class MD:
 
     # Given a filename or relative path, add the MD directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
-        return self.directory + '/' + filename_or_relative_path
+        return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Input structure file ------------
 
     def get_input_structure_filepath (self) -> str:
         """Set a function to get input structure file path"""
+        # Return the internal value if it is already assigned
+        if self._input_structure_filepath != None:
+            return self._input_structure_filepath
         # Set a function to find out if a path is relative to MD directories or to the project directory
         # To do so just check if the file exists in any of those
         # In case it exists in both or none then assume it is relative to MD directory
@@ -524,24 +528,22 @@ class MD:
                 raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
             return md_parsed_filepath
         # If we have a value passed through command line
-        if self.input_structure_filepath:
+        if self.arg_input_structure_filepath:
             # Find out if it is relative to MD directories or to the project directory
-            return relativize_and_parse_paths(self.input_structure_filepath)
+            self._input_structure_filepath = relativize_and_parse_paths(self.arg_input_structure_filepath)
+            # Save the parsed value in the inputs file
+            self.project.update_inputs(
+                f'mds.{self.index}.input_structure_filepath',
+                self._input_structure_filepath)
+            return self._input_structure_filepath
         # If we have a value passed through the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.project.get_input('input_structure_filepath')
             # If there is a valid input then use it
-            if inputs_value: return relativize_and_parse_paths(inputs_value)
-        # If there is not input structure then asume it is the default
-        # Check the default structure file exists or it may be downloaded
-        default_structure_filepath = relativize_and_parse_paths(STRUCTURE_FILENAME, may_not_exist=True)
-        default_structure_file = File(default_structure_filepath)
-        # AGUS: si default_structure_filepath es None, default_structure_file será un objeto File y no se puede evaluar como None
-        # AGUS: de esta forma al evaluar directamente si default_structure_filepath es None, se evita el error
-        if default_structure_filepath is not None:
-            if default_structure_file.exists or self.remote:
-                return default_structure_filepath
+            if inputs_value:
+                self._input_structure_filepath = relativize_and_parse_paths(inputs_value)
+                return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
@@ -582,6 +584,9 @@ class MD:
     # Input trajectory filename ------------
 
     def get_input_trajectory_filepaths (self) -> str:
+        # Return the internal value if it is already assigned
+        if self._input_trajectory_filepaths != None:
+            return self._input_trajectory_filepaths
         """Set a function to get input trajectory file paths."""
         # Set a function to check and fix input trajectory filepaths
         # Also relativize paths to the current MD directory and parse glob notation
@@ -598,7 +603,7 @@ class MD:
             # Make sure all or none of the trajectory paths are absolute
             abs_count = sum([ isabs(path) for path in checked_paths ])
             if not (abs_count == 0 or abs_count == len(checked_paths)):
-                raise InputError('All trajectory frames must be relative or absolute. Mixing is not supported')
+                raise InputError('All trajectory paths must be relative or absolute. Mixing is not supported')
             # Set a function to glob-parse and merge all paths
             def parse_all_glob (paths : List[str]) -> List[str]:
                 parsed_paths = []
@@ -646,24 +651,28 @@ class MD:
             # If we have a path however it may be downloaded from the database if we have a remote
             if not self.remote:
                 raise InputError(f'Cannot find anywhere a trajectory file with path(s) "{", ".join(input_paths)}"')
-            # In this case we set the path as MD relative
             # Note that if input path was not glob based it will be both as project relative and MD relative
             if len(md_parsed_paths) == 0: raise ValueError('This should never happen')
-            return md_parsed_paths
+            # If file is to be downloaded then we must make sure the path is relative to the project
+            project_relative_paths = [
+                self.project.pathify(path) if f'{self.directory_name}/' in path else self.pathify(path) for path in checked_paths
+            ]
+            return project_relative_paths
         # If we have a value passed through command line
-        if self.input_trajectory_filepaths:
-            return relativize_and_parse_paths(self.input_trajectory_filepaths)
+        if self.arg_input_trajectory_filepaths:
+            self._input_trajectory_filepaths = relativize_and_parse_paths(self.arg_input_trajectory_filepaths)
+            # Save the parsed value in the inputs file
+            self.project.update_inputs(
+                f'mds.{self.index}.input_trajectory_filepaths',
+                self._input_trajectory_filepaths)
+            return self._input_trajectory_filepaths
         # Check if the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value
-            inputs_value = self.project.get_input('input_trajectory_filepaths')
+            inputs_value = self.get_input('input_trajectory_filepaths')
             if inputs_value:
-                return relativize_and_parse_paths(inputs_value)
-        # If no input trajectory is passed then asume it is the default
-        default_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
-        default_trajectory_file = File(default_trajectory_filepath)
-        if default_trajectory_file.exists or self.remote:
-            return relativize_and_parse_paths([ TRAJECTORY_FILENAME ])
+                self._input_trajectory_filepaths = relativize_and_parse_paths(inputs_value)
+                return self._input_trajectory_filepaths
         # If there is no trajectory available then we surrender
         raise InputError('There is not input trajectory at all')
 
@@ -722,16 +731,28 @@ class MD:
                     if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
                     directory = name_2_directory(name)
                 # If the directory matches then this is our MD inputs
-                if directory == self.directory:
+                if self.project.pathify(directory) == self.directory:
                     self._md_inputs = md
                     return self._md_inputs
-        # If this MD directory has not associated inputs then it means it was forced through command line
-        # We set a provisional MD inputs for it
-        provisional_name = directory_2_name(self.directory)
-        self._md_inputs = { 'name': provisional_name }
+        # If this MD directory has not associated inputs then it means it was passed through command line
+        # We set a new MD inputs for it
+        new_md_name = directory_2_name(self.directory)
+        self._md_inputs = { 'name': new_md_name, 'mdir': self.directory }
+        # Update the inputs file with the new MD inputs
+        new_mds_inputs = [ *self.project.inputs.mds, self._md_inputs ]
+        self.project.update_inputs('mds', new_mds_inputs)
         return self._md_inputs
 
     md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
+
+    # Get a specific 'input' value from MD inputs
+    # If the key is not found among MD inputs then try with the project input getter
+    def get_input (self, name: str):
+        value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
+        # If we had a value then return it
+        if value != MISSING_INPUT_EXCEPTION:
+            return value
+        return self.project.get_input(name)
 
     # ---------------------------------
 
@@ -1247,6 +1268,8 @@ class Project:
         # Input populations and transitions (MSM only)
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
+        # Input AiiDA data
+        aiida_data_filepath : Optional[str] = None,
         # Processing and analysis instructions
         filter_selection : Union[bool, str] = False,
         pbc_selection : Optional[str] = None,
@@ -1267,7 +1290,11 @@ class Project:
         sample_trajectory : Optional[int] = None,
     ):
         # Save input parameters
-        self.directory = remove_final_slash(directory)
+        self.directory = normpath(directory)
+        # If it is an absolute path then make it relative to the project
+        if isabs(self.directory):
+            self.directory = relpath(self.directory)
+        
         self.database_url = database_url
         self.accession = accession
         # Set the project URL in case we have the required data
@@ -1291,7 +1318,8 @@ class Project:
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
-        self.input_topology_filepath = input_topology_filepath
+        self.arg_input_topology_filepath = input_topology_filepath
+        self._input_topology_filepath = None
         self._input_topology_file = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
@@ -1319,6 +1347,9 @@ class Project:
         self._populations_file = File(self.populations_filepath)
         self.transitions_filepath = transitions_filepath
         self._transitions_file = File(self.transitions_filepath)
+        # Input AiiDA data
+        self.aiida_data_filepath = aiida_data_filepath
+        self._aiida_data_file = File(self.aiida_data_filepath) if aiida_data_filepath else None
 
         # Set the processed topology filepath, which depends on the input topology filename
         # Note that this file is different from the standard topology, although it may be standard as well
@@ -1413,7 +1444,7 @@ class Project:
 
     # Given a filename or relative path, add the project directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
-        return self.directory + '/' + filename_or_relative_path
+        return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Check MD directories to be right
     # If there is any problem then directly raise an input error
@@ -1568,51 +1599,6 @@ class Project:
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
     # Topology filename ------------
-  
-    def guess_input_topology_filepath (self) -> Optional[str]:
-        """If there is not input topology filepath, we try to guess it among the files in the project directory.
-        Note that if we can download from the remote then we must check the remote available files as well."""
-        # Find the first supported topology file according to its name and format
-        def find_first_accepted_topology_filename (available_filenames : List[str]) -> Optional[str]:
-            for filename in available_filenames:
-                # Make sure it is a valid topology file candidate
-                # i.e. topology.xxx
-                filename_splits = filename.split('.')
-                if len(filename_splits) != 2 or filename_splits[0] != 'topology':
-                    continue
-                # Then make sure its format is among the accepted topology formats
-                extension = filename_splits[1]
-                format = EXTENSION_FORMATS[extension]
-                if format in ACCEPTED_TOPOLOGY_FORMATS:
-                    return filename
-            return None
-        # First check among the local available files
-        local_files = list_files(self.directory)
-        accepted_topology_filename = find_first_accepted_topology_filename(local_files)
-        if accepted_topology_filename:
-            return self.pathify(accepted_topology_filename)
-        # In case we did not find a topology among the local files, repeat the process with the remote files
-        if self.remote:
-            remote_files = self.remote.available_files
-            accepted_topology_filename = find_first_accepted_topology_filename(remote_files)
-            if accepted_topology_filename:
-                return self.pathify(accepted_topology_filename)
-        # If no actual topology is to be found then try with the standard topology instead
-        # Check if the standard topology file is available
-        # Note that we do not use standard_topology_file property to avoid generating it at this point
-        standard_topology_filepath = self.pathify(STANDARD_TOPOLOGY_FILENAME)
-        standard_topology_file = File(standard_topology_filepath)
-        if standard_topology_file.exists:
-            return standard_topology_filepath
-        # If not we may also try to download the standard topology
-        if self.remote:
-            self.remote.download_standard_topology(standard_topology_file)
-            return standard_topology_filepath
-        # DEPRECATED: Find if the raw charges file is present as a last resource
-        if exists(RAW_CHARGES_FILENAME):
-            return RAW_CHARGES_FILENAME
-        # If we did not find any valid topology filepath at this point then return None
-        return None
 
     def get_input_topology_filepath (self) -> Optional[str]:
         """Get the input topology filepath from the inputs or try to guess it.
@@ -1621,9 +1607,15 @@ class Project:
         In this scenario we can keep working but there are some consecuences:
         1 - Analysis using atom charges such as 'energies' will be skipped
         2 - The standard topology file will not include atom charges
-        3 - Bonds will be guessed"""
-        if type(self.input_topology_filepath) == str and self.input_topology_filepath.lower() in { 'no', 'not', 'na' }:
-            return MISSING_TOPOLOGY
+        3 - Bonds will be guessed
+        """
+        # If we arelady have an internal value calculated then return it
+        if self._input_topology_filepath != None:
+            return self._input_topology_filepath
+        # If it is explicitly stated that there is no topology
+        if type(self.arg_input_topology_filepath) == str and self.arg_input_topology_filepath.lower() in { 'no', 'not', 'na' }:
+            self._input_topology_filepath = MISSING_TOPOLOGY
+            return self._input_topology_filepath
         # Set a function to parse possible glob notation
         def parse (filepath : str) -> str:
             # If there is no glob pattern then just return the string as is
@@ -1640,19 +1632,19 @@ class Project:
                 raise InputError(f'Multiple topologies found with "{filepath}": {", ".join(parsed_filepaths)}')
             return parsed_filepaths[0]
         # If this value was passed through command line then it would be set as the internal value already
-        if self.input_topology_filepath:
-            return parse(self.input_topology_filepath)
+        if self.arg_input_topology_filepath:
+            self._input_topology_filepath = parse(self.arg_input_topology_filepath)
+            # Update the input topology fielpath in the inputs file, in case it is not matching
+            self.update_inputs('input_topology_filepath', self._input_topology_filepath)
+            return self._input_topology_filepath
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
             # Get the input value, whose key must exist
             inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
             if inputs_value:
-                return parse(inputs_value)
-        # Otherwise we must guess which is the topology file
-        guess = self.guess_input_topology_filepath()
-        if guess:
-            return guess
+                self._input_topology_filepath = parse(inputs_value)
+                return self._input_topology_filepath
         # If nothing worked then surrender
         raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
             '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
@@ -1711,23 +1703,32 @@ class Project:
         return self.reference_md._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames for each MD (read only)")
 
-    # Populations filename ------------
+    # Populations file ------------
 
-    def get_populations_file (self) -> File:
-        """Get the MSM equilibrium populations filename."""
+    def get_populations_file (self) -> Optional[File]:
+        """Get the MSM equilibrium populations file."""
         if not self.get_file(self._populations_file):
             return None
         return self._populations_file
-    populations_file = property(get_populations_file, None, None, "MSM equilibrium populations filename (read only)")
+    populations_file = property(get_populations_file, None, None, "MSM equilibrium populations file (read only)")
 
-    # Transitions filename ------------
+    # Transitions file ------------
 
-    def get_transitions_file (self) -> Optional[str]:
-        """Get the MSM transition probabilities filename."""
+    def get_transitions_file (self) -> Optional[File]:
+        """Get the MSM transition probabilities file."""
         if not self.get_file(self._transitions_file):
             return None
         return self._transitions_file
-    transitions_file = property(get_transitions_file, None, None, "MSM transition probabilities filename (read only)")
+    transitions_file = property(get_transitions_file, None, None, "MSM transition probabilities file (read only)")
+
+    # AiiDA data file
+
+    def get_aiida_data_file (self) -> Optional[File]:
+        """Get the AiiDA data file."""
+        if not self._aiida_data_file: return None
+        if not self.get_file(self._aiida_data_file): return None
+        return self._aiida_data_file
+    aiida_data_file = property(get_aiida_data_file, None, None, "AiiDA data file (read only)")
 
     # ---------------------------------
 
@@ -1766,10 +1767,25 @@ class Project:
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
 
+    # Permanently update the inputs file
+    # This may be done when command line inputs do not match file inputs
+    def update_inputs (self, nested_key : str, new_value):
+        # If the input already matches then do nothing
+        current_value = read_ndict(self.inputs, nested_key, MISSING_INPUT_EXCEPTION)
+        if current_value == new_value: return
+        # Set the new value
+        write_ndict(self.inputs, nested_key, new_value)
+        # If there is no inputs file then do not try to save anything
+        if not self.is_inputs_file_available(): return
+        print(f'* Field "{nested_key}" in the inputs file will be permanently modified')
+        # Write the new inputs to disk
+        # Note that comments in the original YAML file will be not kept
+        save_yaml(self.inputs, self.inputs_file.path)
+
     # Then set getters for every value in the inputs file
 
     # Get a specific 'input' value
-    # Handle a possible missing keys
+    # Handle missing keys
     def get_input (self, name: str):
         value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
@@ -2114,6 +2130,9 @@ class Project:
         get_screenshot, output_filename = OUTPUT_SCREENSHOT_FILENAME)
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
+    # Provenance data
+    produce_provenance = Task('aiidata', 'Produce provenance', produce_provenance)
+
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
 
 # Set a function to read a file which may be in differen formats
@@ -2140,8 +2159,9 @@ def name_2_directory (name : str) -> str:
 def check_directory (directory : str) -> str:
     """Check for problematic characters in a directory path."""
     # Remove problematic characters
+    directory_characters = set(directory)
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
-        if character in directory:
+        if character in directory_characters:
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
 def directory_2_name (directory : str) -> str:
@@ -2150,13 +2170,6 @@ def directory_2_name (directory : str) -> str:
     # Replace white spaces with underscores
     name = directory.split('/')[-1].replace('_', ' ')
     return name
-
-def remove_final_slash (directory : str) -> str:
-    """Remove the final slash if exists since it may cause 
-    problems when recognizing input directories."""
-    if directory[-1] == '/':
-        return directory[:-1]
-    return directory
 
 # Project input files
 project_input_files = {
@@ -2260,7 +2273,8 @@ def workflow (
     # Move the current directory to the working directory
     chdir(working_directory)
     current_directory_name = getcwd().split('/')[-1]
-    print(f'\n{CYAN_HEADER}Running workflow for project at {current_directory_name}{COLOR_END}')
+    git_version = get_git_version()
+    print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}) for project at {current_directory_name}{COLOR_END}')
 
     # Initiate the project project
     project = Project(**project_parameters)
@@ -2279,8 +2293,8 @@ def workflow (
     # If the include argument then add only the specified tasks to the list
     elif include and len(include) > 0:
         tasks = [ *include ]
-        # Find for special flags among included
-        for flag, dependencies, in DEPENDENCY_FLAGS.items():
+        # Search for special flags among included
+        for flag, dependencies in DEPENDENCY_FLAGS.items():
             if flag not in tasks: continue
             # If the flag is found then remove it and write the corresponding dependencie instead
             # Make sure not to duplicate a dependency if it was already included

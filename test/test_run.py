@@ -119,6 +119,7 @@ class TestRunFlags:
 
         os.chdir(test_data_dir)
 
+@pytest.mark.CI
 @pytest.mark.release
 class TestRunSpecial:
     """Test for special cases and specific accessions"""
