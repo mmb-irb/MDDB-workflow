@@ -2,10 +2,10 @@ import MDAnalysis
 from rdkit import Chem
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
-from model_workflow.utils.warnings import warn
+from model_workflow.utils.auxiliar import warn
 from functools import lru_cache
 import requests
-
+import warnings
 
 def get_connected_residues(
         residue: 'MDAnalysis.Residue',
@@ -61,7 +61,10 @@ def residue_to_inchi(res_atoms: 'MDAnalysis.AtomGroup',
     Process a single residue to get its InChI key and related information.
     """
     # Convert to RDKIT and get InChI data
-    res_RD = res_atoms.convert_to("RDKIT")
+    with warnings.catch_warnings(record=True) as recorded_warnings:
+        res_RD = res_atoms.convert_to("RDKIT", force=True)
+    for w in recorded_warnings:
+        warn(f"Residue {res_atoms.residues[0].resname}: {w.message}")
     # Calculate InChI key and string
     inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
     # rdinchi.MolToInchi so it doesnt print the warnings
