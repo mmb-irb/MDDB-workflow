@@ -49,13 +49,13 @@ def generate_membrane_mapping(lipid_map : List[dict],
     if not universe: raise RuntimeError('Missing universe')
 
     # Prepare the membrane mapping OBJ/JSON
-    mem_map_js = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
+    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_map) == 0:
         # no lipids found in the structure.
-        save_json(mem_map_js, output_filepath)
-        return mem_map_js
-    
+        save_json(membrane_map, output_filepath)
+        return membrane_map
+
     # Select only the lipids and potential membrane members
     lipid_ridx = []
     glclipid_ridx = []
@@ -66,8 +66,8 @@ def generate_membrane_mapping(lipid_map : List[dict],
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
-        save_json(mem_map_js, output_filepath)
-        return mem_map_js
+        save_json(membrane_map, output_filepath)
+        return membrane_map
     mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str,(lipid_ridx)))})')
 
     # for better leaflet assignation we only use polar atoms
@@ -101,7 +101,7 @@ def generate_membrane_mapping(lipid_map : List[dict],
     os.remove(output_ndx_path)
     # Save the membrane mapping as a JSON file
     n_mems = len(mem_map)//2
-    mem_map_js['n_mems'] = n_mems
+    membrane_map['n_mems'] = n_mems
     no_mem_lipids = set(mem_candidates.atoms.indices)
     for i in range(n_mems):
         # and they are not assigned to any membrane. FATSLiM indexes start at 1
@@ -127,7 +127,7 @@ def generate_membrane_mapping(lipid_map : List[dict],
         no_mem_lipids -= top
         no_mem_lipids -= bot
         # Check in which leaflets each of the polar atoms is and save them
-        mem_map_js['mems'][(str(i))] = {
+        membrane_map['mems'][(str(i))] = {
             'leaflets': {
                 'bot': list(map(int, bot)),
                 'top': list(map(int, top)),
@@ -138,12 +138,12 @@ def generate_membrane_mapping(lipid_map : List[dict],
             }
         }
 
-    mem_map_js['no_mem_lipid'] = list(map(int, no_mem_lipids))
+    membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
     print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
-    save_json(mem_map_js, output_filepath)
-    return mem_map_js
+    save_json(membrane_map, output_filepath)
+    return membrane_map
 
 
 def display_membrane_mapping(mem_map: str, pdb: str):
