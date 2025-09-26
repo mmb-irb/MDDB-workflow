@@ -738,7 +738,7 @@ class MD:
         new_md_name = directory_2_name(self.directory)
         self._md_inputs = { 'name': new_md_name, 'mdir': self.directory }
         # Update the inputs file with the new MD inputs
-        new_mds_inputs = [ *self.project.inputs.mds, self._md_inputs ]
+        new_mds_inputs = [ *self.project.inputs.get('mds', []), self._md_inputs ]
         self.project.update_inputs('mds', new_mds_inputs)
         return self._md_inputs
 
@@ -2105,6 +2105,11 @@ class Project:
     get_residue_map = Task('resmap', 'Residue mapping', generate_residue_mapping)
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
 
+    # The processed interactions from the reference replica
+    # This is used to get interaction types, which should be the same between replicas
+    def get_processed_interactions (self) -> dict:
+        return self.reference_md.interactions
+    interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
     # Get interaction types
     get_interaction_types = Task('intertypes', 'Finding interaction types', find_interaction_types)
     interaction_types = property(get_interaction_types, None, None, "Interaction types (read only)")
