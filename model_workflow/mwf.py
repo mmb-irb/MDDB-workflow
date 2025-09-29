@@ -252,6 +252,10 @@ class Task:
         # Find if we have cached output
         if self.use_cache:
             output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
+            # Some values are transformed to become JSON serializable
+            # Convert these values back to their original types
+            if type(output) == str and output[0:11] == 'Exception: ':
+                output = Exception(output)
             self._set_parent_output(parent, output)
         # Check if this dependency is to be overwriten
         forced_overwrite = self.flag in parent.overwritables
@@ -313,8 +317,13 @@ class Task:
         # Run the actual task
         output = self.func(**processed_args)
         self._set_parent_output(parent, output)
+        # Set the output to be saved in cache
+        # Note that all must be JSON serializable values
+        cache_output = output
+        if type(output) == Exception:
+            cache_output = f'Exception: {output}' 
         # Update cache output unless it is marked to not save it
-        if self.use_cache: parent.cache.update(self.cache_output_key, output)
+        if self.use_cache: parent.cache.update(self.cache_output_key, cache_output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # As a brief cleanup, if the output directory is empty at the end, then remove it
@@ -551,7 +560,8 @@ class MD:
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
         # However if we are using the standard topology file we can not extract the PDB from it (yet)
-        if self.project.input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME:
+        if self.project.input_topology_file != MISSING_TOPOLOGY and \
+        self.project.input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME:
             return self.project.input_topology_file.path
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')
