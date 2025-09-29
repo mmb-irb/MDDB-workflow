@@ -464,6 +464,10 @@ class MD:
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
 
+        # Get MD inputs just to fill the inputs' "mds" value
+        # Some functions may fail otherwise when its value is missing
+        self.get_md_inputs()
+
     def __repr__ (self):
         return 'MD'
 
@@ -738,7 +742,9 @@ class MD:
         new_md_name = directory_2_name(self.directory)
         self._md_inputs = { 'name': new_md_name, 'mdir': self.directory }
         # Update the inputs file with the new MD inputs
-        new_mds_inputs = [ *self.project.inputs.get('mds', []), self._md_inputs ]
+        mds = self.project.inputs.get('mds', None)
+        if mds == None: mds = []
+        new_mds_inputs = [ *mds, self._md_inputs ]
         self.project.update_inputs('mds', new_mds_inputs)
         return self._md_inputs
 
