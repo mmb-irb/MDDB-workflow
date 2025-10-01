@@ -408,10 +408,12 @@ def read_ndict (nested_dict : dict, nested_key : str, placeholder = KeyError('Mi
     for key in keys:
         # support list indices
         if key.isdigit():
+            if type(value) != list: return placeholder
             index = int(key)
             value = value[index]
         # support dict keys
         else:
+            if type(value) != dict: return placeholder
             value = value.get(key, placeholder)
             if value == placeholder: return placeholder
     return value
@@ -421,16 +423,20 @@ def write_ndict (nested_dict : dict, nested_key : str, value):
     keys = nested_key.split('.')
     nested_keys = keys[0:-1]
     next_target = nested_dict
-    for key in nested_keys:
+    for k, key in enumerate(nested_keys):
         # support list indices
         if key.isdigit():
+            if type(next_target) != list:
+                raise ValueError(f'{".".join(nested_keys[0:k])} should be a list, but it is {next_target}')
             index = int(key)
             next_target = next_target[index]
         # support dict keys
         else:
+            if type(next_target) != dict:
+                raise ValueError(f'{".".join(nested_keys[0:k])} should be a dict, but it is {next_target}')
             missing_key_error = KeyError(f'Missing nested key {key}')
             next_target = next_target.get(key, missing_key_error)
-            if next_target == missing_key_error: return missing_key_error
+            if next_target == missing_key_error: raise missing_key_error
     field = keys[-1]
     next_target[field] = value
     

@@ -529,19 +529,25 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
     # Request Uniprot
     request_url = 'https://www.ebi.ac.uk/proteins/api/proteins/' + uniprot_accession
     parsed_response = None
+    request = urllib.request.Request(request_url)
+    # One day the API was returning a 'Secure Connection Failed' error and this header fixed the problem
+    request.add_header('Referer', 'https://www.uniprot.org/')
     try:
-        with urllib.request.urlopen(request_url) as response:
+        with urllib.request.urlopen(request) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
     # If the accession is not found in UniProt then the id is not valid
     except urllib.error.HTTPError as error:
         if error.code == 404:
-            print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
+            warn('Cannot find UniProt entry for accession ' + uniprot_accession)
             return None
         print('Error when requesting ' + request_url)
-        raise ValueError(f'Something went wrong with the Uniprot request (error {error.code})')
+        raise RuntimeError(f'Something went wrong with the Uniprot request (error {error.code})')
+    except:
+        print('Error when requesting ' + request_url)
+        raise RuntimeError(f'Something went very wrong with the Uniprot request')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
     if parsed_response == None:
-        print('WARNING: Cannot find UniProt entry for accession ' + uniprot_accession)
+        warn('Cannot find UniProt entry for accession ' + uniprot_accession)
         return None
     # Get the full protein name
     protein_data = parsed_response['protein']
