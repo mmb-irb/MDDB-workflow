@@ -18,8 +18,6 @@ dependencies:
   # Gromacs is used for several processing and analysis steps
   - gromacs
   # MDanalysis is used for some processing steps
-  # WARNING: Further versions require biopython 1.8
-  # WARNING: Further versions of python do not allow MDanalysis to keep working with biopython 1.79
   - mdanalysis
   # MDtraj is used for several processing and analysis steps
   # MDtraj 1.10 has a critical error: https://github.com/mdtraj/mdtraj/issues/1893
@@ -35,7 +33,7 @@ dependencies:
   - rdkit
   - mordred
   # Membrane proteins analysis
-  - bioconda::biobb_mem=5.1.2
+  - bioconda::biobb_mem=5.1.1=py310h1fe012e_1
   - requests # To check is molecules is in LIPID MAPS
   # We must declare pip explicitly according to a warning
   # AGUS: por problemas en el cluster con certificados y requests, la versión de 'openssl' 
