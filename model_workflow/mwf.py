@@ -138,7 +138,9 @@ class Task:
         output_filename : Optional[str] = None,
         # Set if the returned output is to be cached
         # Note that argument values are always cached, this is not optional
-        use_cache : bool = True
+        use_cache : bool = True,
+        # Set if the task is run in debug mode thus producing more output logs
+        debug : bool = False,
     ):
         # Save input arguments
         self.flag = flag
@@ -147,6 +149,7 @@ class Task:
         self.args = args
         self.output_filename = output_filename
         self.use_cache = use_cache
+        self.debug = debug
         # Set the key used to store and retireve data in the parent and cache
         self.parent_output_key = f'_{self.flag}_task_output'
         self.parent_output_filepath_key = f'{self.flag}_task_output_filepath'
@@ -377,6 +380,10 @@ class Task:
             new_cksum = get_cksum_id(arg_value)
             # Retrieve the cksum from the old argument value
             old_cksum = cache_cksums.get(arg_name, None)
+            if self.debug: print(f'Task "{self.name}" -> argument "{arg_name}"\n' +
+                f' new value: {arg_value}\n' +
+                f' new value cksum: {new_cksum}\n' +
+                f' old value cksum: {old_cksum}\n')
             # Compare new and old cksums
             if new_cksum != old_cksum:
                 # If we found a missmatch then add it to the list
