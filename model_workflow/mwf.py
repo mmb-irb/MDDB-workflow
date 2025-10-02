@@ -1649,7 +1649,7 @@ class Project:
         if self.arg_input_topology_filepath:
             self._input_topology_filepath = parse(self.arg_input_topology_filepath)
             # Update the input topology fielpath in the inputs file, in case it is not matching
-            self.update_inputs('input_topology_filepath', self._input_topology_filepath)
+            self.update_inputs('input_topology_filepath', relpath(self._input_topology_filepath, self.directory))
             return self._input_topology_filepath
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
@@ -1657,7 +1657,8 @@ class Project:
             inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
             if inputs_value:
-                self._input_topology_filepath = parse(inputs_value)
+                parsed_input_value = parse(inputs_value)
+                self._input_topology_filepath = self.pathify(parsed_input_value)
                 return self._input_topology_filepath
         # If nothing worked then surrender
         raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
