@@ -139,7 +139,9 @@ class Task:
         output_filename : Optional[str] = None,
         # Set if the returned output is to be cached
         # Note that argument values are always cached, this is not optional
-        use_cache : bool = True
+        use_cache : bool = True,
+        # Set if the task is run in debug mode thus producing more output logs
+        debug : bool = False,
     ):
         # Save input arguments
         self.flag = flag
@@ -148,6 +150,7 @@ class Task:
         self.args = args
         self.output_filename = output_filename
         self.use_cache = use_cache
+        self.debug = debug
         # Set the key used to store and retireve data in the parent and cache
         self.parent_output_key = f'_{self.flag}_task_output'
         self.parent_output_filepath_key = f'{self.flag}_task_output_filepath'
@@ -378,6 +381,10 @@ class Task:
             new_cksum = get_cksum_id(arg_value)
             # Retrieve the cksum from the old argument value
             old_cksum = cache_cksums.get(arg_name, None)
+            if self.debug: print(f'Task "{self.name}" -> argument "{arg_name}"\n' +
+                f' new value: {arg_value}\n' +
+                f' new value cksum: {new_cksum}\n' +
+                f' old value cksum: {old_cksum}\n')
             # Compare new and old cksums
             if new_cksum != old_cksum:
                 # If we found a missmatch then add it to the list
@@ -481,8 +488,8 @@ class MD:
     def __repr__ (self):
         return 'MD'
 
-    # Given a filename or relative path, add the MD directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
+        """Given a filename or relative path, add the MD directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Input structure file ------------
@@ -539,6 +546,7 @@ class MD:
             # As an exception, if the 'may not exist' flag is passed then we return the result even if there is no remote
             if not may_not_exist and not self.remote:
                 raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
+            md_parsed_filepath = self.project.pathify(input_path) if f'{self.directory_name}/' in md_parsed_filepath else self.pathify(input_path)
             return md_parsed_filepath
         # If we have a value passed through command line
         if self.arg_input_structure_filepath:
@@ -552,7 +560,7 @@ class MD:
         # If we have a value passed through the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.project.get_input('input_structure_filepath')
+            inputs_value = self.get_input('input_structure_filepath')
             # If there is a valid input then use it
             if inputs_value:
                 self._input_structure_filepath = relativize_and_parse_paths(inputs_value)
@@ -1458,8 +1466,8 @@ class Project:
     def __repr__ (self):
         return 'Project'
 
-    # Given a filename or relative path, add the project directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
+        """Given a filename or relative path, add the project directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Check MD directories to be right
@@ -1651,7 +1659,7 @@ class Project:
         if self.arg_input_topology_filepath:
             self._input_topology_filepath = parse(self.arg_input_topology_filepath)
             # Update the input topology fielpath in the inputs file, in case it is not matching
-            self.update_inputs('input_topology_filepath', self._input_topology_filepath)
+            self.update_inputs('input_topology_filepath', relpath(self._input_topology_filepath, self.directory))
             return self._input_topology_filepath
         # Check if the inputs file has the value
         if self.is_inputs_file_available():
@@ -1659,7 +1667,8 @@ class Project:
             inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
             if inputs_value:
-                self._input_topology_filepath = parse(inputs_value)
+                parsed_input_value = parse(inputs_value)
+                self._input_topology_filepath = self.pathify(parsed_input_value)
                 return self._input_topology_filepath
         # If nothing worked then surrender
         raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +

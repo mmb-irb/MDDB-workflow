@@ -53,15 +53,13 @@ class Remote:
         return self._available_files
     available_files = property(get_available_files, None, None, "Remote available files (read only)")
 
-    # Download a specific file
     def download_file (self, output_file : 'File'):
+        """Download a specific file from the project/files endpoint."""
         request_url = f'{self.url}/files/{output_file.filename}'
         print(f'Downloading file "{output_file.filename}" ({output_file.path})\n')
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except urllib.error.HTTPError as error:
-            # Try to provide comprehensive error logs depending on the error
-            # If file was not found
             if error.code == 404:
                 raise Exception(f'Missing remote file "{output_file.filename}"')
             # If we don't know the error then simply say something went wrong
@@ -73,18 +71,18 @@ class Remote:
         print(f'Downloading standard topology ({output_file.path})\n')
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
-        except:
-            raise Exception('Something went wrong when downloading the standard topology: ' + request_url)
-        
+        except Exception as error:
+            raise Exception('Something went wrong when downloading the standard topology: ' + request_url, 'with error: ' + str(error))
+
     # Download the standard structure
     def download_standard_structure (self, output_file : 'File'):
         request_url = self.url + '/structure'
         print(f'Downloading standard structure ({output_file.path})\n')
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
-        except:
-            raise Exception('Something went wrong when downloading the standard structure: ' + request_url)
-        
+        except Exception as error:
+            raise Exception('Something went wrong when downloading the standard structure: ' + request_url, 'with error: ' + str(error))
+
     # Download the main trajectory
     def download_trajectory (self,
         output_file : 'File',
@@ -145,9 +143,9 @@ class Remote:
             # Format JSON if needed
             file_content = load_json(output_file.path)
             save_json(file_content, output_file.path, indent=4)
-        except:
-            raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url}')
-        
+        except Exception as error:
+            raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url}', 'with error: ' + str(error))
+
 # from https://gist.github.com/leimao/37ff6e990b3226c2c9670a2cd1e4a6f5
 def my_hook(t):
     """Wraps tqdm instance.

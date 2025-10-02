@@ -1,4 +1,3 @@
-from shutil import copyfile
 from typing import List, Optional
 from inspect import getfullargspec
 
@@ -96,14 +95,12 @@ def convert (
     # Do it inside a function just to return as soon as we are done
     def convert_structure ():
         # If there is no output filename it means we have nothing to do here
-        if not output_structure_file:
-            return
+        if not output_structure_file: return
         # If the input and output names match then we are done
-        if input_structure_file.path == output_structure_file.path:
-            return
+        if input_structure_file.path == output_structure_file.path: return
         # If input and output formats are the same then just copy the file with the new name
         if input_structure_format == output_structure_format:
-            copyfile(input_structure_file.path, output_structure_file.path)
+            output_structure_file.set_symlink_to(input_structure_file)
             return
         print(f'Getting structure in {output_structure_format} format from {input_structure_format} file')
         # Otherwise, we must convert
@@ -146,15 +143,13 @@ def convert (
 
     def convert_trajectory ():
         # If there is no output filename it means we have nothing to do here
-        if not output_trajectory_file:
-            return
+        if not output_trajectory_file: return
         # If the input and output names match then we are done
         trajectory_files_count = len(input_trajectory_files)
-        if trajectory_files_count == 1 and trajectory_sample == output_trajectory_file:
-            return
+        if trajectory_files_count == 1 and trajectory_sample == output_trajectory_file: return
         # If there is only 1 input trajectory and it has the same format that the output then just copy the file with the new name
         if trajectory_files_count == 1 and input_trajectory_format == output_trajectory_format:
-            copyfile(trajectory_sample.path, output_trajectory_file.path)
+            output_trajectory_file.set_symlink_to(trajectory_sample)
             return
         print(f'Converting trajectory format from {input_trajectory_format} to {output_trajectory_format}')
         # Otherwise, we must convert
