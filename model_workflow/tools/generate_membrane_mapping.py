@@ -2,6 +2,7 @@ import os
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
 from model_workflow.utils.auxiliar import save_json, load_json
+from model_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
 from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
 
@@ -49,7 +50,23 @@ def generate_membrane_mapping(lipid_map : List[dict],
     if not universe: raise RuntimeError('Missing universe')
 
     # Prepare the membrane mapping OBJ/JSON
+    is_cg = 'Cg' in universe.atoms.types
+
+    if is_cg:
+        membrane_map = coarse_grain_membranes(structure_file, universe, output_filepath)
+    else:
+        membrane_map = all_atom_membranes(lipid_map, structure_file, universe, output_filepath)
+    save_json(membrane_map, output_filepath)
+    return membrane_map
+
+
+def all_atom_membranes(lipid_map : List[dict],
+                       structure_file : 'File',
+                       universe: 'Universe',
+                       output_filepath: str,
+                       ) -> List[dict]:
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
+    
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_map) == 0:
         # no lipids found in the structure.
@@ -142,7 +159,86 @@ def generate_membrane_mapping(lipid_map : List[dict],
     # Print the results and save the membrane mapping
     no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx)>0 else ''
     print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
-    save_json(membrane_map, output_filepath)
+    return membrane_map
+
+
+def coarse_grain_membranes(structure_file : 'File',
+                           universe: 'Universe',
+                           output_filepath: str,
+                           ) -> List[dict]:
+    """
+    Generates membrane mapping for coarse-grained systems using residue names and P atoms as headgroups.
+    """
+    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': []}
+    
+    # Find all lipid residues in the system
+    lipid_residues = []
+    for resname in LIPIDS_RESIDUE_NAMES:
+        lipids = universe.select_atoms(f'resname {resname}')
+        if len(lipids) > 0:
+            lipid_residues.append(resname)
+    
+    if len(lipid_residues) == 0:
+        print("No coarse-grained lipid residues found in the structure.")
+        return membrane_map
+    
+    # Select P atoms (headgroups) from lipid residues
+    headgroup_atoms = f'resname {" ".join(lipid_residues)} and name P*'
+
+    # Run FATSLiM to find the membranes
+    prop = {
+        'selection': headgroup_atoms,
+        'cutoff': 2.5,  # Slightly larger cutoff for CG systems
+        'ignore_no_box': True,
+        'disable_logs': True,
+        'disable_sandbox': True,
+    }
+    
+    output_ndx_path = "tmp_cg_mem_map.ndx"
+    print(' Running BioBB FATSLiM Membranes for coarse-grained system')
+    
+    #with redirect_stdout(None):
+    fatslim_membranes(input_top_path=structure_file.absolute_path,
+                      output_ndx_path=output_ndx_path,
+                      properties=prop)
+    
+    # Parse the output to get the membrane mapping
+    mem_map = parse_index(output_ndx_path)
+    os.remove(output_ndx_path)
+    
+    # Process the membrane mapping
+    n_mems = len(mem_map) // 2
+    membrane_map['n_mems'] = n_mems
+    
+    all_lipid_atoms = universe.select_atoms(f'resname {" ".join(lipid_residues)}')
+    no_mem_lipids = set(all_lipid_atoms.atoms.indices)
+    
+    for i in range(n_mems):
+        # FATSLiM indexes start at 1, convert to 0-based
+        bot_atoms = (np.array(mem_map[f'membrane_{i+1}_leaflet_1']) - 1).tolist()
+        top_atoms = (np.array(mem_map[f'membrane_{i+1}_leaflet_2']) - 1).tolist()
+        
+        # Remove assigned atoms from no_mem_lipids
+        no_mem_lipids -= set(bot_atoms)
+        no_mem_lipids -= set(top_atoms)
+        
+        membrane_map['mems'][str(i)] = {
+            'leaflets': {
+                'bot': bot_atoms,
+                'top': top_atoms,
+            },
+            'polar_atoms': {
+                'bot': universe.atoms[bot_atoms].select_atoms('name P*').indices.tolist(),
+                'top': universe.atoms[top_atoms].select_atoms('name P*').indices.tolist(),
+            }
+        }
+    
+    membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
+    
+    # Print results
+    no_mem_lipids_str = f'{len(no_mem_lipids)} lipid atoms not assigned to any membrane.' if len(no_mem_lipids) > 0 else ''
+    print(f'{n_mems} membrane/s found in coarse-grained system. ' + no_mem_lipids_str)
+    
     return membrane_map
 
 

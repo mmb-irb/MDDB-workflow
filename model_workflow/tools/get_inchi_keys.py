@@ -64,6 +64,9 @@ def get_inchikeys (
 
         # Select residues atoms with MDAnalysis
         resatoms = universe.residues[resindices].atoms
+        if 'Cg' in resatoms.types:
+            # Skip coarse grain residues
+            continue
         # If you pass a residue selection to a parallel worker, you a passing a whole MDAnalysis
         # universe, slowing the process down because you have to pickle the object
         # To avoid this we create

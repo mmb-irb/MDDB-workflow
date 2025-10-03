@@ -1055,7 +1055,7 @@ class MD:
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # Set the coare grain selection
+    # Set the coarse grain selection
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = False) -> 'Selection':
         if verbose: print('Setting Coarse Grained (CG) atoms selection')

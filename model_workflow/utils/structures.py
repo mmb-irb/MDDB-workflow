@@ -685,7 +685,6 @@ class Residue:
         WARNING: This logic is very limited and will return "unknown" most of the times.
         WARNING: This logic relies mostly in atom names, which may be not standard.
         """
-        # TODO: use match/case in python 3.10+
         if self.name in PROTEIN_RESIDUE_NAME_LETTERS:
             return 'protein'
         if self.name in DNA_RESIDUE_NAME_LETTERS:

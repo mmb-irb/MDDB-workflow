@@ -1,5 +1,5 @@
 from biobb_mem.fatslim.fatslim_apl import fatslim_apl
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, load_json
 from model_workflow.utils.constants import OUTPUT_APL_FILENAME
 from model_workflow.utils.type_hints import *
 from scipy.interpolate import griddata
@@ -78,3 +78,30 @@ def process_apl(output_csv_path, res=100j):
         grid = griddata(points, values, (grid_x, grid_y), method='cubic')
         grids.append(grid)
     return grids, grid_x, grid_y, m, s
+
+
+def plot_apl(output_analysis_filepath):
+    """Plot the area per lipid for both leaflets."""
+    import matplotlib.pyplot as plt
+    data = load_json(output_analysis_filepath)
+    grids = data['data']
+    lower_leaflet = np.array(grids['lower leaflet'])
+    upper_leaflet = np.array(grids['upper leaflet'])
+    grid_x = np.array(grids['grid_x'])
+    grid_y = np.array(grids['grid_y'])
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    c1 = axs[0].contourf(grid_x, grid_y, lower_leaflet.T, cmap='viridis')
+    axs[0].set_title('Lower Leaflet')
+    axs[0].set_xlabel('X (Å)')
+    axs[0].set_ylabel('Y (Å)')
+    fig.colorbar(c1, ax=axs[0])
+
+    c2 = axs[1].contourf(grid_x, grid_y, upper_leaflet.T, cmap='viridis')
+    axs[1].set_title('Upper Leaflet')
+    axs[1].set_xlabel('X (Å)')
+    axs[1].set_ylabel('Y (Å)')
+    fig.colorbar(c2, ax=axs[1])
+
+    plt.tight_layout()
+    plt.show()
