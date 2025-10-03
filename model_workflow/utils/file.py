@@ -111,12 +111,9 @@ class File:
     # DANI: This is provisional and it is not yet based in a cksum neither the file content
     def get_cksum (self) -> str:
         """Get a cksum code used to compare identical file content."""
-        # If we already have an internal value then use it
-        if self._cksum != None: return self._cksum
         # Calculate it otherwise
-        if not self.exists: self._cksum = f'missing {self.path}'
-        else: self._cksum = f'{self.path} -> {self.mtime} {self.size}'
-        return self._cksum
+        if not self.exists: return f'missing {self.path}'
+        return f'{self.path} -> {self.mtime} {self.size}'
     cksum = property(get_cksum, None, None, "Cksum code used to compare identical file content (read only)")
 
     # Set a couple of additional functions according to pytraj format requirements

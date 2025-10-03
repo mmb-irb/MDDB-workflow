@@ -1,5 +1,3 @@
-from os import rename
-
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, warn
 from model_workflow.utils.constants import STRUCTURE_FILENAME, TRAJECTORY_FILENAME
 from model_workflow.utils.constants import CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY
@@ -81,7 +79,7 @@ def process_input_files (
     # Here we have not standarized the format so we must check differently with every format
     exceptions = check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
 
-    # There is a chance theat the inputs checker has prefiltered the topology to match trajectory
+    # There is a chance that the inputs checker has prefiltered the topology to match trajectory
     # If this is the case then use the prefiltered topology from now on
     prefiltered_topology = exceptions.get(PREFILTERED_TOPOLOGY_EXCEPTION, None)
     if prefiltered_topology:
@@ -130,7 +128,11 @@ def process_input_files (
             output_trajectory_filepath = incompleted_converted_trajectory_file.path,
         )
         # Once converted, rename the trajectory file as completed
-        rename(incompleted_converted_trajectory_file.path, converted_trajectory_file.path)
+        # If the converted trajectory already exists then it means it is the input trajectory
+        if converted_trajectory_file.exists:
+            incompleted_converted_trajectory_file.remove()
+        else:
+            incompleted_converted_trajectory_file.rename_to(converted_trajectory_file)
 
     # Topologies are never converted, but they are kept in their original format
 
@@ -189,7 +191,11 @@ def process_input_files (
             filter_selection = filter_selection,
         )
         # Once filetered, rename the trajectory file as completed
-        rename(incompleted_filtered_trajectory_file.path, filtered_trajectory_file.path)
+        # If the filtered trajectory already exists then it means it is the input trajectory
+        if filtered_trajectory_file.exists:
+            incompleted_filtered_trajectory_file.remove()
+        else:
+            incompleted_filtered_trajectory_file.rename_to(filtered_trajectory_file)
         # Update the cache
         self.cache.update(FILTERED, filter_selection)
 
@@ -255,7 +261,11 @@ def process_input_files (
             pbc_selection = provisional_pbc_selection
         )
         # Once imaged, rename the trajectory file as completed
-        rename(incompleted_imaged_trajectory_file.path, imaged_trajectory_file.path)
+        # If the imaged trajectory already exists then it means it is the input trajectory
+        if imaged_trajectory_file.exists:
+            incompleted_imaged_trajectory_file.remove()
+        else:
+            incompleted_imaged_trajectory_file.rename_to(imaged_trajectory_file)
         # Update the cache
         self.cache.update(IMAGED, (image, fit, *translation))
         # Update the provisional strucutre coordinates

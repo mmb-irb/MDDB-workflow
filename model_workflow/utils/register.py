@@ -2,7 +2,7 @@ from sys import argv
 from os.path import exists
 from datetime import datetime
 
-from model_workflow.utils.auxiliar import load_json, save_json, warn
+from model_workflow.utils.auxiliar import load_json, save_json, warn, get_git_version
 from model_workflow.utils.constants import DATE_STYLE
 from model_workflow.utils.type_hints import *
 
@@ -19,6 +19,8 @@ class Register:
         self.call = ' '.join(quoted_argv)
         # Save the current date
         self.date = datetime.today().strftime(DATE_STYLE)
+        # Save the current version
+        self.version = get_git_version()
         # Set the tests tracker
         self.tests = {}
         # Set the warnings list, which will be filled by failing tests
@@ -49,6 +51,7 @@ class Register:
         dictionary = {
             'call': self.call,
             'date': self.date,
+            'version': self.version,
             'tests': self.tests,
             'warnings': self.warnings,
         }

@@ -1,5 +1,6 @@
 # Auxiliar generic functions and classes used along the workflow
 
+from model_workflow import __path__
 from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
 from model_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 
@@ -16,6 +17,7 @@ from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
 import requests
+from subprocess import run, PIPE
 
 
 # Check if a module has been imported
@@ -397,3 +399,49 @@ def safe_getattr (instance, attribute_name : str, defualt):
     if not safe_hasattr(instance, attribute_name): return defualt
     return getattr(instance, attribute_name)
     
+# Function to read and write a dict nested value with using a single combined key
+
+# Read a value in a nested dictionary and return the placeholder if any key in the path does not exist
+def read_ndict (nested_dict : dict, nested_key : str, placeholder = KeyError('Missing nested key')):
+    keys = nested_key.split('.')
+    value = nested_dict
+    for key in keys:
+        # support list indices
+        if key.isdigit():
+            if type(value) != list: return placeholder
+            index = int(key)
+            value = value[index]
+        # support dict keys
+        else:
+            if type(value) != dict: return placeholder
+            value = value.get(key, placeholder)
+            if value == placeholder: return placeholder
+    return value
+
+# Write a value in a nested dictionary and raise an error if any key in the path s missing
+def write_ndict (nested_dict : dict, nested_key : str, value):
+    keys = nested_key.split('.')
+    nested_keys = keys[0:-1]
+    next_target = nested_dict
+    for k, key in enumerate(nested_keys):
+        # support list indices
+        if key.isdigit():
+            if type(next_target) != list:
+                raise ValueError(f'{".".join(nested_keys[0:k])} should be a list, but it is {next_target}')
+            index = int(key)
+            next_target = next_target[index]
+        # support dict keys
+        else:
+            if type(next_target) != dict:
+                raise ValueError(f'{".".join(nested_keys[0:k])} should be a dict, but it is {next_target}')
+            missing_key_error = KeyError(f'Missing nested key {key}')
+            next_target = next_target.get(key, missing_key_error)
+            if next_target == missing_key_error: raise missing_key_error
+    field = keys[-1]
+    next_target[field] = value
+    
+# Get the current git version
+def get_git_version () -> str:
+    git_command = f"git -C {__path__[0]} describe"
+    process = run(git_command, shell=True, stdout=PIPE)
+    return process.stdout.decode().replace('\n','')
