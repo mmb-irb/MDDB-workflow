@@ -634,9 +634,6 @@ def count_atom_elements_per_residue ( structure : 'Structure' ) -> dict:
     residue_element_count = {}
     # Iterate over the residue(s)
     for residue in structure.residues:
-        # Skip protein residues
-        if residue.classification == 'protein':
-            continue
         # Obtain the list of elements for each residue
         atom_elements = [ atom.element for atom in residue.atoms ]
         # Generate a dict with elements (keys) and their counting (values)
