@@ -156,7 +156,7 @@ def filter_atoms (
 
     # Filter the trajectory if an output trajectory file was provided
     if output_trajectory_file:
-        print(f'Filtering trajectory {output_trajectory_file.path} to {output_trajectory_file.path}')
+        print(f'Filtering trajectory {input_trajectory_file.path} to {output_trajectory_file.path}')
         # Otherwise, we must convert
         # Choose the right conversion function according to input and output formats
         request_format_set = {
