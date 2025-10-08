@@ -356,8 +356,8 @@ def generate_ligand_mapping (
     if new_data_to_cache: cache.update(PDB_TO_PUBCHEM, pdb_to_pubchem_cache)
 
     # If no input ligands are passed then stop here
-    if len(ligands) == 0:
-        return []
+    # if len(ligands) == 0:
+    #     return []
     
     # Save data from all ligands to be saved in a file
     json_ligands_data = []
@@ -517,6 +517,7 @@ def generate_ligand_mapping (
         inchikey = inchikeys['residx_2_key'].get(residue.index, None)
         # If the InChIKey is not None then try to obtain the PubChem CID
         if inchikey:
+            ligand_data['inchikey'] = inchikey
             if cid := search_cid_by_inchikey(inchikey):
                 ligand_data = obtain_ligand_data_from_pubchem( {'pubchem': cid} )
                 smiles = ligand_data['smiles']

@@ -1583,7 +1583,7 @@ class Project:
                 )
                 self._mds.append(md)
         return self._mds
-    mds = property(get_mds, None, None, "Available MDs (read only)")
+    mds: list[MD] = property(get_mds, None, None, "Available MDs (read only)")
 
     # Check input files exist when their filenames are read
     # If they do not exist then try to download them
