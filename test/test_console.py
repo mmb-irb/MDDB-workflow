@@ -167,6 +167,7 @@ class TestNassa:
         """Override the default accession for this test"""
         return "seq001-1"
     
+    @pytest.mark.CI
     def test_helical(self, project: 'Project'):
         project.mds[0].run_helical_analysis(project)
 

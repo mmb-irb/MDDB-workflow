@@ -487,8 +487,8 @@ class MD:
     def __repr__ (self):
         return 'MD'
 
-    # Given a filename or relative path, add the MD directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
+        """Given a filename or relative path, add the MD directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Input structure file ------------
@@ -545,6 +545,7 @@ class MD:
             # As an exception, if the 'may not exist' flag is passed then we return the result even if there is no remote
             if not may_not_exist and not self.remote:
                 raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
+            md_parsed_filepath = self.project.pathify(input_path) if f'{self.directory_name}/' in md_parsed_filepath else self.pathify(input_path)
             return md_parsed_filepath
         # If we have a value passed through command line
         if self.arg_input_structure_filepath:
@@ -558,7 +559,7 @@ class MD:
         # If we have a value passed through the inputs file has the value
         if self.project.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.project.get_input('input_structure_filepath')
+            inputs_value = self.get_input('input_structure_filepath')
             # If there is a valid input then use it
             if inputs_value:
                 self._input_structure_filepath = relativize_and_parse_paths(inputs_value)
@@ -1463,8 +1464,8 @@ class Project:
     def __repr__ (self):
         return 'Project'
 
-    # Given a filename or relative path, add the project directory path at the beginning
     def pathify (self, filename_or_relative_path : str) -> str:
+        """Given a filename or relative path, add the project directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Check MD directories to be right
@@ -1580,7 +1581,7 @@ class Project:
                 )
                 self._mds.append(md)
         return self._mds
-    mds = property(get_mds, None, None, "Available MDs (read only)")
+    mds: list[MD] = property(get_mds, None, None, "Available MDs (read only)")
 
     # Check input files exist when their filenames are read
     # If they do not exist then try to download them
