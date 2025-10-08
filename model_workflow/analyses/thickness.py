@@ -36,7 +36,8 @@ def thickness (
         'steps': frame_step,
         'height_sel': head_sel_mda,
         'ignore_no_box': True,
-        'disable_logs': True
+        'disable_logs': True,
+        'disable_sandbox': True,
     }
     print(' Running BioBB LiPyphilic ZPositions')
     with redirect_stdout(None):

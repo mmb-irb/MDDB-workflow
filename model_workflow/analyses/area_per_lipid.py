@@ -30,9 +30,10 @@ def area_per_lipid (
     head_sel_mda = 'index ' + " ".join(map(str,(head_sel)))
     # Run the analysis on the whole membrane
     prop = {
-    'lipid_selection': head_sel_mda,
-    'ignore_no_box': True,
-    'disable_logs': True,
+        'lipid_selection': head_sel_mda,
+        'ignore_no_box': True,
+        'disable_logs': True,
+        'disable_sandbox': True,
     }
     apl_tmp = '.apl.csv'
     print(' Running BioBB FATSLiM APL')
