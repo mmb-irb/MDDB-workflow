@@ -325,9 +325,7 @@ def generate_ligand_mapping (
     ) -> List[dict]:
     """Generate a map of residues associated to ligands."""
     # Merge input ligands and pdb ligands
-    ligands = []
-    if input_ligands:
-        ligands += input_ligands
+    ligands = input_ligands or []
     # Check we have cached pdb 2 pubchem values
     pdb_to_pubchem_cache = cache.retrieve(PDB_TO_PUBCHEM, {})
     new_data_to_cache = False
@@ -496,17 +494,8 @@ def generate_ligand_mapping (
         # If the residue is not matched then add it to the ligands data
         if matched: continue
         # Create a new ligand data with the residue name and its atoms count
-        ligand_data = {
-            'name': residue.name,
-            'pubchem': None,
-            'drugbank': None,
-            'chembl': None,
-            'smiles': None,
-            'formula': None,
-            'morgan': None,
-            'mordred': None,
-            'pdbid': None
-        }
+        ligand_data = { field: None for field in LIGAND_DATA_FIELDS }
+        ligand_data['name'] = residue.name
         # Add the residue as a ligand map
         ligand_map = { 
             'name': residue.name, 
