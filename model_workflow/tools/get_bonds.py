@@ -5,10 +5,12 @@ from model_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from model_workflow.utils.vmd_spells import get_covalent_bonds
 from model_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
 from model_workflow.utils.gmx_spells import get_tpr_atom_count
+from model_workflow.utils.mda_spells import get_tpr_bonds_mdanalysis
 from model_workflow.utils.type_hints import *
 import pytraj as pt
-from MDAnalysis.topology.TPRParser import TPRParser
 from collections import Counter
+
+FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
 
 # Set some atoms which are to be skipped from bonding tests given their "fake" nature
 def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Selection') -> 'Selection':
@@ -209,11 +211,11 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ 
     elif bonds_source_file.format == 'tpr':
         print(f' Bonds will be mined from TPR file "{bonds_source_file.path}"')
         raw_bonds = get_tpr_bonds(bonds_source_file.path)
-        # Sort bonds
-        atom_count = get_tpr_atom_count(bonds_source_file.path)
-        atom_bonds = sort_bonds(raw_bonds, atom_count)
-        # If there is any bonding data then return atom bonds
-        if any(len(bonds) > 0 for bonds in atom_bonds): return atom_bonds
+        if raw_bonds != FAILED_BOND_MINING_EXCEPTION:
+            # Sort bonds
+            atom_count = get_tpr_atom_count(bonds_source_file.path)
+            atom_bonds = sort_bonds(raw_bonds, atom_count)
+            return atom_bonds
     # If we failed to mine bonds then return None and they will be guessed further
     print (' Failed to mine bonds -> They will be guessed from atom distances and radius')
     return None
@@ -227,20 +229,12 @@ def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
         print(' Our tool failed to extract bonds. Using MDAnalysis extraction...')
         try:
             bonds = get_tpr_bonds_mdanalysis(tpr_filepath)
+            # This happens when the filter selection is what we want to exclude, and not to keep
+            if len(bonds) == 0:
+                warn('Bonds were mined successfully but it looks like there are no bonds. Is it all ions or CG solvent?')
         except Exception as err:
             print(f' MDAnalysis failed to extract bonds: {err}. Relying on guess...')
-            bonds = []
-    return bonds
-
-# Get TPR bonds using MDAnalysis
-# WARNING: Sometimes this function takes additional constrains as actual bonds
-# DANI: si miras los topology.bonds.values estos enlaces falsos van al final
-# DANI: Lo veo porque los índices están en orden ascendente y veulven a empezar
-# DANI: He pedido ayuda aquí https://github.com/MDAnalysis/mdanalysis/pull/463
-def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> List[ Tuple[int, int] ]:
-    parser = TPRParser(tpr_filepath)
-    topology = parser.parse()
-    bonds = list(topology.bonds.values)
+            bonds = FAILED_BOND_MINING_EXCEPTION
     return bonds
 
 # Sort bonds according to our format: a list with the bonded atom indices for each atom

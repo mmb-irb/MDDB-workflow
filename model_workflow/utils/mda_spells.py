@@ -6,6 +6,7 @@ from model_workflow.utils.type_hints import *
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
 from model_workflow.utils.auxiliar import MISSING_CHARGES
 
+from MDAnalysis.topology.TPRParser import TPRParser
 #from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.universe import Universe
 from MDAnalysis.core.topology import Topology
@@ -111,3 +112,14 @@ def get_mda_universe (structure_file : 'File',              # To load in MDAnaly
 def get_mda_universe_cksum (universe) -> str:
     pickled = pickle.dumps(universe.atoms)
     return sum(pickled)
+
+# Get TPR bonds using MDAnalysis
+# WARNING: Sometimes this function takes additional constrains as actual bonds
+# DANI: si miras los topology.bonds.values estos enlaces falsos van al final
+# DANI: Lo veo porque los índices están en orden ascendente y veulven a empezar
+# DANI: He pedido ayuda aquí https://github.com/MDAnalysis/mdanalysis/pull/463
+def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+    parser = TPRParser(tpr_filepath)
+    topology = parser.parse()
+    bonds = list(topology.bonds.values)
+    return bonds

@@ -11,6 +11,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.selections import Selection
 from model_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from model_workflow.utils.mdt_spells import sort_trajectory_atoms
+from model_workflow.utils.gmx_spells import make_index, read_ndx
 from model_workflow.utils.auxiliar import InputError, MISSING_BONDS
 from model_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn
 from model_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
@@ -1723,7 +1724,7 @@ class Structure:
         os.remove(pdb_filepath)
         return pytraj_topology
 
-    SUPPORTED_SELECTION_SYNTAXES = { 'vmd', 'pytraj' }
+    SUPPORTED_SELECTION_SYNTAXES = { 'vmd', 'pytraj', 'gmx' }
     def select (self, selection_string : str, syntax : str = 'vmd') -> Optional['Selection']:
         """Select atoms from the structure thus generating an atom indices list.
         Different tools may be used to make the selection:
@@ -1731,11 +1732,11 @@ class Structure:
         - pytraj"""
         if syntax == 'vmd':
             # Generate a pdb for vmd to read it
-            pdb_filepath = '.structure.pdb'
-            self.generate_pdb_file(pdb_filepath)
+            auxiliar_pdb_filepath = '.structure.pdb'
+            self.generate_pdb_file(auxiliar_pdb_filepath)
             # Use vmd to find atom indices
-            atom_indices = get_vmd_selection_atom_indices(pdb_filepath, selection_string)
-            os.remove(pdb_filepath)
+            atom_indices = get_vmd_selection_atom_indices(auxiliar_pdb_filepath, selection_string)
+            os.remove(auxiliar_pdb_filepath)
             if len(atom_indices) == 0:
                 return Selection()
             return Selection(atom_indices)
@@ -1749,6 +1750,26 @@ class Structure:
             if len(atom_indices) == 0:
                 return Selection()
             return Selection(atom_indices)
+        if syntax == 'gmx':
+            # Generate a pdb strucutre to feed gmx
+            auxiliar_pdb_filepath = '.structure.pdb'
+            self.generate_pdb_file(auxiliar_pdb_filepath)
+            auxiliar_pdb_file = File(auxiliar_pdb_filepath)
+            # Create the index file with the current atom selection
+            index_filepath = f'.structure.ndx'
+            index_file = File(index_filepath)
+            selection_name = make_index(auxiliar_pdb_file, index_file, selection_string)
+            # Read the index file to capture the selection of atoms
+            index_groups = read_ndx(index_file)
+            indices = index_groups.get(selection_name, None)
+            if indices == None:
+                available_selections = ', '.join(list(index_groups.keys()))
+                raise InputError(f'Something was wrong with the selection. Available gromacs selections: {available_selections}')
+            # Cleanup auxiliar files
+            auxiliar_pdb_file.remove()
+            index_file.remove()
+            # Return the parsed selection
+            return Selection(indices)
 
         options = ', '.join(self.SUPPORTED_SELECTION_SYNTAXES)
         raise InputError(f'Syntax "{syntax}" is not supported. Choose one of the following: {options}')
@@ -2080,23 +2101,38 @@ class Structure:
             chain_name = letter if letter else self.get_available_chain_name()
             self.set_selection_chain_name(fragment, chain_name)
 
-    def auto_chainer (self):
+    def auto_chainer (self, verbose : bool = False):
         """Smart function to set chains automatically.
         Original chains will be overwritten."""
+        if verbose: print('Running auto-chainer')
         # Set all chains to X
         self.chainer(letter='X')
         # Set solvent and ions as a unique chain
-        self.chainer(selection=self.select_ions() + self.select_water(), letter='S')
-        # Set carbohydrates as a unique chain as well, just in case we have glycans
-        # Note that in case glycan atoms are mixed with protein atoms glycan chains will be overwritten
-        # However this is not a problem. It is indeed the best solution if we don't want ro resort atoms
-        self.chainer(selection=self.select_carbohydrates(), letter='H')
+        ion_selection = self.select_ions()
+        if verbose: print(f' Ion atoms: {len(ion_selection)}')
+        solvent_selection = self.select_water()
+        if verbose: print(f' Solvent atoms: {len(solvent_selection)}')
+        ion_and_indices_selection = ion_selection + solvent_selection
+        self.chainer(selection=ion_and_indices_selection, letter='S')
         # Set fatty acids and steroids as a unique chain
         # RUBEN: con whole_fragments algunos carbohidratos se sobreescriben como glucolípidos
         # DANI: Se podrían descartarían residuos que no pertenezcan a la membrana por proximidad
-        self.chainer(selection=self.select_lipids(), letter='M', whole_fragments=True)
+        membrane_selection = self.select_lipids()
+        if verbose: print(f' Membrane atoms: {len(membrane_selection)}')
+        self.chainer(selection=membrane_selection, letter='M', whole_fragments=True)
+        # Set carbohydrates as a unique chain as well, just in case we have glycans
+        # Note that in case glycan atoms are mixed with protein atoms glycan chains will be overwritten
+        # However this is not a problem. It is indeed the best solution if we don't want ro resort atoms
+        carbohydrate_selection = self.select_carbohydrates()
+        if verbose: print(f' Carbohydrate atoms: {len(carbohydrate_selection)}')
+        self.chainer(selection=carbohydrate_selection, letter='H')
         # Add a chain per fragment for both proteins and nucleic acids
-        self.chainer(selection=self.select_protein() + self.select_nucleic())
+        protein_selection = self.select_protein()
+        if verbose: print(f' Protein atoms: {len(protein_selection)}')
+        nucleic_selection = self.select_nucleic()
+        if verbose: print(f' Nucleic acid atoms: {len(nucleic_selection)}')
+        protein_and_nucleic_selection = protein_selection + nucleic_selection
+        self.chainer(selection=protein_and_nucleic_selection)
         # At this point we should have covered most of the molecules in the structure
         # However, in case there are more molecules, we have already set them all as a single chain ('X')
         # Here we do not apply the chain per fragment logic since it may be dangerous
@@ -2149,11 +2185,14 @@ class Structure:
             residue.set_chain_index(chain.index)
 
     def check_available_chains(self):
-            """Check if there are more chains than available letters."""
-            n_chains = len(self.chains)
-            n_available_letters = len(AVAILABLE_LETTERS)
-            if n_chains > n_available_letters:
-                raise ValueError(f'There are more chains ({n_chains}) than available chain letters ({n_available_letters})')
+        """Check if there are more chains than available letters."""
+        n_chains = len(self.chains)
+        n_available_letters = len(AVAILABLE_LETTERS)
+        if n_chains <= n_available_letters: return
+        raise InputError(f'There are {n_chains} chains in the structure so far. If this is not expected then there may be a problem.\n' +
+            f'  If this is expected then unfortunatelly there is a limit of {n_available_letters} available chain letters.\n' +
+            '  Please manually set the chains from scratch or merge together some chains to reduce the number.\n' +
+            '  Customize a PDB file using the command "mwf chainer". Then use the customized PDB as input structure (-stru).')
 
     def get_available_chain_name (self) -> str:
         """Get an available chain name.

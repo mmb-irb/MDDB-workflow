@@ -182,7 +182,7 @@ def structure_corrector (
         # Note that we rely in fragments (and thus in bonds) to guess chains
         if next((True for bonds in structure.bonds if bonds == MISSING_BONDS), False):
             raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
-                ' Please either provide a topology or set chains in the structure PDB file.')
+                ' Please either provide a topology including bonds or set chains in the structure PDB file.')
         # Run the chainer
         structure.auto_chainer()
         # Update the structure file using the corrected structure
