@@ -1,5 +1,4 @@
 from math import ceil
-from subprocess import run, PIPE, Popen
 
 from model_workflow.utils.constants import INCOMPLETE_PREFIX
 from model_workflow.utils.gmx_spells import run_gromacs
