@@ -1,5 +1,5 @@
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, load_json
 from model_workflow.utils.constants import OUTPUT_DENSITY_FILENAME
 from model_workflow.utils.type_hints import *
 
@@ -70,3 +70,38 @@ def density (
     # Export results
     data = {'data': { 'comps': components, 'z': list(out['z']) } }
     save_json(data, output_analysis_filepath)
+
+def plot_density(output_analysis_filepath):
+    """Plot density analysis grouped by density type."""
+    import matplotlib.pyplot as plt
+    # Load the density analysis results
+    data = load_json(output_analysis_filepath)
+
+    components = data['data']['comps']
+    z = data['data']['z']
+
+    # Group plots by density type in a 2x2 grid
+    density_types = ['number', 'mass', 'charge', 'electron']
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
+
+    for i, density_type in enumerate(density_types):
+        ax = axes[i]
+        for component in components:
+            name = component['name']
+            if density_type in component:
+                dens = component[density_type].get('dens', [])
+                stdv = component[density_type].get('stdv', [])
+                if dens:
+                    ax.plot(z, dens, label=f"{name}")
+                    ax.fill_between(z, [d - s for d, s in zip(dens, stdv)],
+                                       [d + s for d, s in zip(dens, stdv)], alpha=0.2)
+
+        ax.set_title(f"{density_type.capitalize()} Density Analysis")
+        ax.set_xlabel("Z-axis")
+        ax.set_ylabel(f"{density_type.capitalize()} Density")
+        ax.legend()
+        ax.grid()
+
+    plt.tight_layout()
+    plt.show()

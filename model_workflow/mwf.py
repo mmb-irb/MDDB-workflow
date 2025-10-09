@@ -38,7 +38,7 @@ from model_workflow.utils.type_hints import *
 
 # Import local tools
 from model_workflow.tools.get_first_frame import get_first_frame
-from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_reference_frame
 from model_workflow.tools.process_interactions import process_interactions
 from model_workflow.tools.find_interaction_types import find_interaction_types
 from model_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
@@ -51,6 +51,7 @@ from model_workflow.tools.generate_lipid_references import generate_lipid_refere
 from model_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
 from model_workflow.tools.generate_topology import generate_topology
 from model_workflow.tools.get_charges import get_charges
+from model_workflow.tools.get_inchi_keys import get_inchikeys
 from model_workflow.tools.remove_trash import remove_trash
 from model_workflow.tools.get_screenshot import get_screenshot
 from model_workflow.tools.process_input_files import process_input_files
@@ -849,7 +850,7 @@ class MD:
     process_input_files = Task('inpro', 'Process input files', process_input_files)
 
     def get_structure_file (self) -> str:
-        """Get the processed structure."""
+        """Get the processed structure file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -873,7 +874,7 @@ class MD:
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
     def get_trajectory_file (self) -> str:
-        """Get the processed trajectory."""
+        """Get the processed trajectory file."""
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -900,10 +901,11 @@ class MD:
         return self._trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
-    # Get the processed topology from the project
     def get_topology_file (self) -> str:
+        """Get the processed topology from the project."""
         return self.project.get_topology_file()
-    topology_file = property(get_topology_file, None, None, "Topology filename from the project (read only)")
+    topology_file = property(get_topology_file, None, None, 
+                             "Topology filename from the project (read only)")
 
     # ---------------------------------------------------------------------------------
     # Others values which may be found/calculated and files to be generated on demand
@@ -1053,7 +1055,7 @@ class MD:
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # Set the coare grain selection
+    # Set the coarse grain selection
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = False) -> 'Selection':
         if verbose: print('Setting Coarse Grained (CG) atoms selection')
@@ -1135,7 +1137,7 @@ class MD:
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
     # Reference frame
-    get_reference_frame = Task('reframe', 'Reference frame', get_bonds_canonical_frame)
+    get_reference_frame = Task('reframe', 'Reference frame', get_bonds_reference_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
 
     # ---------------------------------------------------------------------------------
@@ -2012,6 +2014,10 @@ class Project:
     get_charges = Task('charges', 'Getting atom charges', get_charges)
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
+    # Atom charges
+    get_inchi_keys = Task('inchikeys', 'Getting InChI keys', get_inchikeys)
+    inchikeys = property(get_inchi_keys, None, None, "InChI keys (read only)")
+
     # Topolody data reader
     def get_topology_reader (self) -> 'Topology':
         # If we already have a stored value then return it
@@ -2113,7 +2119,7 @@ class Project:
 
     # Get the lipid references
     get_lipid_map = Task('lipmap', 'Lipid mapping',
-        generate_lipid_references, output_filename = LIPID_REFERENCES_FILENAME)
+        generate_lipid_references, output_filename = INCHIKEY_REFERENCES_FILENAME)
     lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
 
     # Define the output file of the lipid mapping including lipid references
@@ -2121,7 +2127,7 @@ class Project:
     lipid_references_file = property(get_lipid_references_file, None, None, "File including lipid references data mined from PubChem (read only)")
 
     # Get mapping of residues in the membrane
-    get_membrane_map = Task('membranes', 'Membrane mapping',
+    get_membrane_map = Task('memmap', 'Membrane mapping',
         generate_membrane_mapping, output_filename = MEMBRANE_MAPPING_FILENAME) 
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
@@ -2252,7 +2258,7 @@ DEPENDENCY_FLAGS = {
     'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
     'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ],
-    'membs': ['membranes', 'density',  'thickness', 'apl', 'lorder', 'linter']
+    'membs': ['memmap', 'density',  'thickness', 'apl', 'lorder', 'linter']
 }
 
 # Set the default analyses to be run when no task is specified

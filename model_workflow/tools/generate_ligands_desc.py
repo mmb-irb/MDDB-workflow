@@ -1,20 +1,18 @@
+import re
 import os
 import json
+import requests
 from rdkit import Chem
-from rdkit.Chem import AllChem
-from rdkit.Chem import rdFingerprintGenerator
-from rdkit.Chem import inchi
+from functools import lru_cache
 from mordred import Calculator, descriptors
 from model_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
 from model_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.structures import Structure
+from model_workflow.tools.get_inchi_keys import obtain_inchikey_from_pdb
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
-import re
-import requests
-from functools import lru_cache
 
 def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
     # Request Drugbank
@@ -39,8 +37,6 @@ def get_drugbank_smiles (id_drugbank : str) -> Optional[str]:
         raise ValueError('Something went wrong with the MDposit request')
 
     return smiles
-
-
 
 # Given a ChemBL ID, use the uniprot API to request its data and then mine what is needed for the database
 def get_chembl_smiles (id_chembl : str) -> Optional[str]:
@@ -192,7 +188,6 @@ def get_pubchem_data (id_pubchem : str) -> Optional[dict]:
     # Prepare the pubchem data to be returned
     return { 'name': name_substance, 'smiles': smiles, 'formula': molecular_formula , 'pdbid': pdb_id, 'inchi': inchi, 'inchikey': inchikey }
 
-
 def find_drugbank_pubchem (drugbank_id):
     # Request Drugbank
     request_url = Request(
@@ -224,7 +219,6 @@ def find_drugbank_pubchem (drugbank_id):
         raise ValueError('Something went wrong with the DrugBank request')
     
     return pubchem_id
-
 
 def find_chembl_pubchem (id_chembl):
     # Request ChemBL
@@ -266,7 +260,7 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
         print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
         return None
 
-    AllChem.Compute2DCoords(mol)
+    Chem.AllChem.Compute2DCoords(mol)
     mol_block = Chem.MolToMolBlock(mol)
     # We can select the different submodules of mordred descriptors, avaible in: 'https://mordred-descriptor.github.io/documentation/master/'
     calc = Calculator([
@@ -287,8 +281,8 @@ def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
     mordred_results = calc(mol).drop_missing().asdict()
 
     ######## MORGAN FINGERPRINT ###########
-    morgan_fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
-    ao = rdFingerprintGenerator.AdditionalOutput()
+    morgan_fp_gen = Chem.rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+    ao = Chem.rdFingerprintGenerator.AdditionalOutput()
     ao.AllocateAtomCounts()
     ao.AllocateAtomToBits()
     ao.AllocateBitInfoMap()
@@ -326,9 +320,9 @@ def generate_ligand_mapping (
     input_ligands : Optional[List[dict]],
     pdb_ids : List[str],
     output_filepath : str,
+    inchikeys: dict,
     mercy : List[str] = [],
     ) -> List[dict]:
-
     """Generate a map of residues associated to ligands."""
     # Merge input ligands and pdb ligands
     ligands = []
@@ -488,15 +482,11 @@ def generate_ligand_mapping (
     # AGUS: si no se puede extraer información de estos porque el inchikey no funciona, se muestra la información más básica posible y se genera una referencia vacía (será problemático)
 
     # Obtain a list of the possible residues in the structure that are not either protein/nucleic/water/lipid or matched ligands
-    residue_element_count = count_atom_elements_per_residue(structure)
-    # Iterate over the residues and check if they are not matched
-    for residue, atoms_count in residue_element_count.items():
-        # If the residue is not connected to other residues then it may be a ligand
-        is_single_residue = len(residue.get_bonded_residue_indices()) == 0
-        if not is_single_residue: continue
-        # If the residue is not solvent, lipid or ion then it may be a ligand
-        has_right_classification = residue.classification not in ['solvent', 'fatty', 'steroid', 'ion']
-        if not has_right_classification: continue
+    for residue in structure.residues:
+        # Skip solvent, lipid or ion then it may be a ligand or  is bonded to other residues
+        if (residue.classification in ['solvent', 'fatty', 'steroid', 'ion'] 
+            or len(residue.get_bonded_residue_indices()) > 0):
+            continue
         # Check if the residue is already matched to a ligand
         matched = False
         for ligand_map in ligand_maps:
@@ -523,22 +513,12 @@ def generate_ligand_mapping (
             'residue_indices': [residue.index], 
             'match': { 'ref': { 'pubchem': None } } 
         }
-        # Get a PDB only with the target residue
-        residue_selection = structure.select_residue_indices([residue.index])
-        filtered_structure = structure.filter(residue_selection)
-        ligand_filename = "ligand.pdb"
-        filtered_structure.generate_pdb_file(ligand_filename)
 
-        # Obtain the InChIKey from the PDB file
-        inchikey = obtain_inchikey_from_pdb(ligand_filename)
-        print(f' InChIKey obtained from residue {residue.name} (index {residue.index}): {inchikey}')
-        # Remove the temporary PDB file
-        os.remove(ligand_filename)
+        inchikey = inchikeys['residx_2_key'].get(residue.index, None)
         # If the InChIKey is not None then try to obtain the PubChem CID
         if inchikey:
             ligand_data['inchikey'] = inchikey
-            cid = search_cid_by_inchikey(inchikey)
-            if cid:
+            if cid := search_cid_by_inchikey(inchikey):
                 ligand_data = obtain_ligand_data_from_pubchem( {'pubchem': cid} )
                 smiles = ligand_data['smiles']
                 mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block = obtain_mordred_morgan_descriptors(smiles)
@@ -627,9 +607,9 @@ def obtain_ligand_data_from_pubchem (ligand : dict) -> dict:
     ligand_data = { **ligand_data, **pubchem_data }
     return ligand_data
 
-
-# For each residue, count the number of atom elements
+# RUBEN: mover a Structure.count_atom_elements_per_residue
 def count_atom_elements_per_residue ( structure : 'Structure' ) -> dict:
+    """For each residue, count the number of atom elements."""
     # Obtain a list of residues of ligand candidates
     residue_element_count = {}
     # Iterate over the residue(s)
@@ -647,7 +627,6 @@ def count_atom_elements_per_residue ( structure : 'Structure' ) -> dict:
         residue_element_count[residue] = atoms_count
 
     return residue_element_count
-
 
 def nest_brackets(tokens, i = 0):
     l = []
@@ -710,7 +689,6 @@ def parse_splits (splits : List[str]) -> dict:
     if previous_key:
         parsed[previous_key] = 1
     return parsed
-
 
 def match_ligandsID_to_res (ligand_atom_element_count : dict, residue_atom_element_count : dict) -> bool:
         # Remove hydrogens since we only pay attention to heavy atoms
@@ -964,13 +942,6 @@ def pdb_to_pubchem (pdb_id : str) -> List[str]:
         pubchem_ids.append(pubchem_id)
             
     return pubchem_ids
-
-def obtain_inchikey_from_pdb(pdb_file : str) -> Optional[str]:
-    mol = Chem.MolFromPDBFile(pdb_file, sanitize=True)
-    if mol is None:
-        print("❌ InchiKey couldn't be constructed from PDB file.")
-        return None
-    return inchi.MolToInchiKey(mol)
 
 @lru_cache(maxsize=None)
 def search_cid_by_inchikey(inchikey : str) -> Optional[str]:

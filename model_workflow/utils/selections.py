@@ -82,6 +82,10 @@ class Selection:
     def to_ngl (self) -> str:
         return '@' + ','.join([ str(index) for index in self.atom_indices ])
     
+    def to_list (self) -> List[int]:
+        """Return a copy of the atom indices as a list."""
+        return self.atom_indices.copy()
+    
     # Get a string made of all indexes separated by underscores
     # This string can be then passed as a bash argument and easily parsed by other programms
     # Indices can start from 0 or from 1

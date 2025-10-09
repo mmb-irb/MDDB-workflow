@@ -117,17 +117,17 @@ def get_most_stable_bonds (
     return most_stable_bonds
 
 
-def get_bonds_canonical_frame (
+def get_bonds_reference_frame (
     structure_file : 'File',
     trajectory_file : 'File',
     snapshots : int,
     reference_bonds : List[ List[int] ],
     structure : 'Structure',
     pbc_selection : 'Selection',
-    patience : int = 100, # Limit of frames to check before we surrender
+    patience : int = 100,  # Limit of frames to check before we surrender
     verbose : bool = False,
 ) -> Optional[int]:
-    """Return a canonical frame number where all bonds are exactly as they should.
+    """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD."""
     # Set some atoms which are to be skipped from these test given their "fake" nature
     excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
@@ -135,24 +135,24 @@ def get_bonds_canonical_frame (
     # If all atoms are to be excluded then set the first frame as the reference frame and stop here
     if len(excluded_atoms_selection) == len(structure.atoms): return 0
 
-    # Now that we have the reference bonds, we must find a frame where bonds are exactly the canonical ones
+    # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
     # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1
     frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots,patience=patience)
     if step != 1: raise ValueError('If we are skipping frames then the code below will silently return a wrong reference frame')
-    print(f'Searching reference bonds canonical frame. Only first {min(patience, count)} frames will be checked.')
+    print(f'Searching the reference frame for the bonds. Only first {min(patience, count)} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
-    reference_bonds_frame = None
+    bonds_reference_frame = None
     counter_list = []
     for frame_number, frame_pdb in enumerate(frames):
         # Get the actual frame number
         bonds = get_covalent_bonds(frame_pdb)
         if do_bonds_match(bonds, reference_bonds, excluded_atoms_selection, counter_list=counter_list, verbose=verbose):
-            reference_bonds_frame = frame_number
+            bonds_reference_frame = frame_number
             break
     frames.close()
-    # If no frame has the canonical bonds then we return None
-    if reference_bonds_frame == None:
-        # Print the first clashes
+    # If no frame has the reference bonds then we return None
+    if bonds_reference_frame == None:
+        # Print the first clashes table
         print(' First clash stats:')
         headers = ['Count', 'Atom', 'Is bonding with', 'Should bond with']
         count = Counter(counter_list).most_common(10)
@@ -170,9 +170,9 @@ def get_bonds_canonical_frame (
         for row in table_data:
             print(format_row(row))
         return None
-    print(f' Got it -> Frame {reference_bonds_frame + 1}')
+    print(f' Got it -> Frame {bonds_reference_frame + 1}')
 
-    return reference_bonds_frame
+    return bonds_reference_frame
 
 # Extract bonds from a source file and format them per atom
 def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ List[int] ]:

@@ -135,8 +135,8 @@ PDB_REFERENCES_FILENAME = 'pdb_references.json'
 PROTEIN_REFERENCES_FILENAME = 'protein_references.json'
 # Set the ligand references filename
 LIGAND_REFERENCES_FILENAME = 'ligand_references.json'
-# Set the Lipid references filename
-LIPID_REFERENCES_FILENAME = 'lipid_references.json'
+# Set the InChIKey references filename
+INCHIKEY_REFERENCES_FILENAME = 'inchikey_references.json'
 
 # Set the chains filename
 OUTPUT_CHAINS_FILENAME = 'chains.json'
@@ -462,6 +462,7 @@ FATTY_RESIDUE_NAMES = {
     "SM18", "TOCL", "TLCL_0H", "TMCL", "GM1", "DPPGK", "GB3", "BOG"
 }
 STEROID_RESIDUE_NAMES = { "CHL", "CHL1", "CHOL", "DCHOL" }
+LIPIDS_RESIDUE_NAMES = FATTY_RESIDUE_NAMES.union(STEROID_RESIDUE_NAMES)
 
 # Set typical residue names to guess what residues are
 STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4'}
