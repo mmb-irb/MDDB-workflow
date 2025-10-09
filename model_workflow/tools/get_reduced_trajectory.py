@@ -4,8 +4,16 @@ from model_workflow.utils.constants import INCOMPLETE_PREFIX
 from model_workflow.utils.gmx_spells import run_gromacs
 from model_workflow.utils.type_hints import *
 
-def calculate_frame_step(snapshots, reduced_trajectory_frames_limit):
-    # Calculate the step between frames in the reduced trajectory to match the final number of frames
+def calculate_frame_step(snapshots: int, reduced_trajectory_frames_limit: int) -> tuple[int, int]:
+    """
+    Calculate the step between frames in the reduced trajectory to match the final number of frames.
+    Also calculate the final number of frames given the current step.
+
+    Returns:
+        tuple:
+            - step (int): The step between frames in the reduced trajectory.
+            - frames (int): The final number of frames in the reduced trajectory.
+    """
     # WARNING: Since the step must be an integer the thorical step must be rounded
     # This means the specified final number of frames may not be accomplished, but it is okey
     # WARNING: Since the step is rounded with the math.ceil function it will always be rounded up
@@ -68,8 +76,6 @@ def get_reduced_trajectory (
                 user_input = 'System')
         # Once the trajectory is complete we rename it as complete
         incomplete_trajectory_file.rename_to(output_trajectory_file)
-
-    
 
     # Return gromacs logs
     return output_trajectory_file.path, step, frames

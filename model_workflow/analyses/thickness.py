@@ -1,6 +1,6 @@
 from biobb_mem.lipyphilic_biobb.lpp_zpositions import lpp_zpositions, frame_df
 from model_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
-from model_workflow.utils.auxiliar import save_json
+from model_workflow.utils.auxiliar import save_json, load_json
 from model_workflow.utils.constants import OUTPUT_THICKNESS_FILENAME
 from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
@@ -36,14 +36,15 @@ def thickness (
         'steps': frame_step,
         'height_sel': head_sel_mda,
         'ignore_no_box': True,
-        'disable_logs': True
+        'disable_logs': True,
+        'disable_sandbox': True,
     }
     print(' Running BioBB LiPyphilic ZPositions')
     with redirect_stdout(None):
         lpp_zpositions(input_top_path=structure_file.path,
-                    input_traj_path=trajectory_file.path,
-                    output_positions_path='.zpositions.csv',
-                    properties=prop)
+                       input_traj_path=trajectory_file.path,
+                       output_positions_path='.zpositions.csv',
+                       properties=prop)
     df = frame_df('.zpositions.csv') # Per frame data
     os.remove('.zpositions.csv')
 
@@ -68,3 +69,39 @@ def thickness (
         }
     }
     save_json(data, output_analysis_filepath)
+
+
+def plot_thickness(output_analysis_filepath):
+    import matplotlib.pyplot as plt
+
+    data = load_json(output_analysis_filepath)["data"]
+
+    # Extract data for plotting
+    frames = data['frame']
+    thickness = data['thickness']
+    std_thickness = data['std_thickness']
+    midplane_z = data['midplane_z']
+    mean_positive = data['mean_positive']
+    mean_negative = data['mean_negative']
+    std_positive = data['std_positive']
+    std_negative = data['std_negative']
+
+    # Create the plot
+    plt.figure(figsize=(12, 8))
+
+    # Plot thickness with error bars
+    plt.errorbar(frames, thickness, yerr=std_thickness, label='Thickness', fmt='-o', capsize=3)
+
+    # Plot midplane z position
+    plt.plot(frames, midplane_z, label='Midplane Z', linestyle='--', color='orange')
+
+    # Plot mean positive and mean negative with error bars
+    eb1= plt.errorbar(frames, mean_positive, yerr=std_positive, label='Mean Positive', fmt='-o', color='green', capsize=3)
+    eb1[-1][0].set_linestyle('--')
+    eb2 = plt.errorbar(frames, mean_negative, yerr=std_negative, label='Mean Negative', fmt='-o', color='red', capsize=3)
+    eb2[-1][0].set_linestyle('--')
+
+    # Add labels, legend, and title
+    plt.xlabel('Frame'); plt.ylabel('Value')
+    plt.title('Membrane Thickness, Midplane Z Position, and Mean Positive/Negative with Errors')
+    plt.legend(); plt.grid(); plt.show()

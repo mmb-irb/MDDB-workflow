@@ -1,80 +1,15 @@
 import MDAnalysis
+import multiprocessing
 from rdkit import Chem
 from model_workflow.utils.structures import Structure
-from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import warn
-from functools import lru_cache
-import requests
-import warnings
-
-def get_connected_residues(
-        residue: 'MDAnalysis.Residue',
-        visited=None):
-    """
-    Recursively finds all residues that are connected through bonds to the given residue.
-    Parameters
-    ----------
-    residue : MDAnalysis.core.groups.Residue
-        The residue to start the search from
-    visited : set, optional
-        Set of already visited residue IDs to prevent infinite recursion. 
-        Default is None, which initializes an empty set.
-    Returns
-    -------
-    list
-        A set containing the residue IDs of all residues that are connected 
-        through bonds to the input residue, either directly or indirectly.
-    Notes
-    -----
-    This function traverses the molecular structure recursively, following bonds 
-    between residues. It keeps track of visited residues to avoid cycles in the
-    traversal. Both direct bonds between residues and indirect connections through
-    other residues are included in the result.
-    """
-    
-    if visited is None:
-        visited = set()
-    
-    # Add current residue to visited set
-    visited.add(residue.resindex)
-    
-    # Get direct external bonds
-    external_bonds = set([residue.resindex])
-    for bond in residue.atoms.bonds:
-        external_bonds.update(bond.atoms.resindices)
-    
-    # Recursively check external bonds
-    all_external_bonds = external_bonds.copy()
-    u = residue.universe
-    for ext_resid in external_bonds:
-        if ext_resid not in visited:
-            # Get external bonds for the connected residue
-            recursive_bonds = get_connected_residues(u.residues[ext_resid], visited)
-            all_external_bonds.update(recursive_bonds)
-    
-    return list(all_external_bonds)
+from model_workflow.utils.type_hints import *
 
 
-def residue_to_inchi(res_atoms: 'MDAnalysis.AtomGroup', 
-                    resindex : int) -> Tuple[str, str, int]:
-    """
-    Process a single residue to get its InChI key and related information.
-    """
-    # Convert to RDKIT and get InChI data
-    with warnings.catch_warnings(record=True) as recorded_warnings:
-        res_RD = res_atoms.convert_to("RDKIT", force=True)
-    for w in recorded_warnings:
-        warn(f"Residue {res_atoms.residues[0].resname}: {w.message}")
-    # Calculate InChI key and string
-    inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
-    # rdinchi.MolToInchi so it doesnt print the warnings
-    inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
-    return (inchikey, inchi, resindex)
-
-
-def get_inchi_keys (
-    u : 'MDAnalysis.Universe',
-    structure : 'Structure'
+def get_inchikeys (
+    universe : 'MDAnalysis.Universe',
+    structure : 'Structure',
+    skip_class = {'ion', 'solvent'},
 ) -> dict:
     """
     Generate a dictionary mapping InChI keys to residue information for non-standard residues.
@@ -86,131 +21,163 @@ def get_inchi_keys (
     details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers.
 
     Args:
-        input_structure_file (File): The input structure file.
-        input_topology_file (Optional[File]): The input topology file.
+        universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
+        skip_class (set): A set of residue classifications to skip. Defaults to {'ion', 'solvent'}.
 
     Returns:
-        dict: A dictionary where keys are InChI keys and values are dictionaries containing:
-                - 'inchi' (str): The InChI string for the residue
-                - 'resindices' (list): A list of all residue indices with this InChI key
-                - 'resgroups' (list): Lists of residue indices that are connected as a single group
-                - 'resname' (set): Set of residue names associated with this InChI key
-                - 'classification' (set): Set of residue classifications for this InChI key
+        key_2_name (dict): A dictionary where keys are InChI keys and values are dictionaries containing:
+            - 'inchi' (str): The InChI string for the residue
+            - 'resindices' (list): A list of all residue indices with this InChI key
+            - 'fragments' (List[list]): Lists of residue indices that are connected as a single group
+            - 'frag_len' (int): Length of the fragments. 1 if no fragments are present.
+            - 'resname' (set): Set of residue names associated with this InChI key
+            - 'classification' (set): Set of residue classifications for this InChI key
+        residx_2_key (dict): A dictionary mapping residue indices to their corresponding InChI keys.
+    
     Notes:
         The function also performs consistency checks, warning if multiple residue names 
         map to the same InChI key or if multiple InChI keys map to the same residue name,
         which can indicate mismatched residue definitions or stereoisomers.
     """
-    # 1) Prepare residue data for parallel processing (not yet implemented)
+    try:
+        universe.universe.atoms.charges
+    except:
+        warn('Topology file does not have charges, InChI keys may be unreliable.')
+
+    # 1) Prepare residue data for parallel processing
     # First group residues that are bonded together
-    results = []
-    residues: List[Residue] = structure.residues
-    visited = set()
-    for resindex in range(len(residues)):
-        # Skip residues that have already been visited
-        if resindex in visited:
+    tasks = []
+    residues = structure.residues
+
+    # Fragment = residues that are bonded together
+    fragments = universe.atoms.fragments
+    for i, fragment in enumerate(fragments):
+        resindices = fragment.residues.resindices.tolist()
+
+        # Continue to the next fragment if any of its
+        # residues are of a disallowed classification
+        classes = {residues[resindex].classification for resindex in resindices}
+        if (classes.intersection(skip_class) or
+            (classes.intersection({'dna', 'rna', 'protein'}) and len(resindices) > 1)):
             continue
-        # Residues grouped by bonded atoms
-        res_grp_idx = get_connected_residues(u.residues[resindex], visited) 
-        classes = set([residues[grp_idx].classification for grp_idx in res_grp_idx])
-        # Skip residues that are aminoacids, nucleics, or too small
-        # We also skips residues connected to them: glicoprotein, lipid-anchored protein...
-        if any(cls in ['ion', 'solvent', 'dna', 'rna', 'protein'] for cls in classes):
-            continue
+
         # Select residues atoms with MDAnalysis
-        res_atoms = u.residues[res_grp_idx].atoms
+        resatoms = universe.residues[resindices].atoms
+        if 'Cg' in resatoms.types:
+            # Skip coarse grain residues
+            continue
+        # If you pass a residue selection to a parallel worker, you a passing a whole MDAnalysis
+        # universe, slowing the process down because you have to pickle the object
+        # To avoid this we create
+        resatoms = MDAnalysis.Merge(resatoms).universe.atoms
         # Convert to RDKit and get InChI data
-        results.append(residue_to_inchi(res_atoms,res_grp_idx))
+        tasks.append((resatoms, resindices))
+
+    results = []
+    # Execute tasks in parallel
+    with multiprocessing.Pool() as pool:
+        results = pool.map(residue_to_inchi, tasks)
 
     # 2) Process results and build dictionaries
     key_2_name = {} # To see if different name for same residue
     name_2_key = {} # To see if different residues under same name
-    for result in results:
-        inchikey, inchi, indexes = result
+    residx_2_key = {}  # A mapping from residue index to InChI key
+    for (inchikey, inchi, resindices) in results:
 
         # If key don't existe we create the default entry with info that is only put once
         if inchikey not in key_2_name:
             key_2_name[inchikey] = {'inchi': inchi,
                                     'resindices': [],
-                                    'resgroups': [], # For glucolipids
+                                    'fragments': [], # For glucolipids
                                     'resname': set(), 
                                     'classification': set()
                                     }
         # Add residue index to the list
-        key_2_name[inchikey]['resindices'].extend(indexes)
-        key_2_name[inchikey]['resgroups'].append(indexes)
+        key_2_name[inchikey]['resindices'].extend(resindices)
         # Add residue name to the list. For multi residues we join the names
-        resname = '-'.join(sorted([residues[index].name for index in indexes]))
+        resname = '-'.join(sorted([residues[index].name for index in resindices]))
         key_2_name[inchikey]['resname'].add(resname)
         # Add residue class to the list
-        if len(indexes) > 1:
-            classes = tuple(set([residues[index].classification for index in indexes]))
+        if len(resindices) > 1:
+            classes = tuple(set([residues[index].classification for index in resindices]))
             key_2_name[inchikey]['classification'].add(classes)
+            # Glucolipids saved the groups of residues the form a 'fragment' to solve a 
+            # problem with FATSLiM later (ex: A01IR, A01J5)
+            key_2_name[inchikey]['fragments'].append(list(map(int, resindices)))
         else:
-            key_2_name[inchikey]['classification'].add(residues[indexes[0]].classification)
+            key_2_name[inchikey]['classification'].add(residues[resindices[0]].classification)
 
         # Incorrect residue name, estereoisomers, lose of atoms...
         if resname not in name_2_key:
             name_2_key[resname] = []
         name_2_key[resname].append(inchikey)
+        # Add the InChI key to the residue index mapping
+        for resindex in resindices:
+            residx_2_key[resindex] = inchikey
     
     # 3) Check data coherence
-    # Check if there are multiple names for the same InChI key
     for inchikey, data in key_2_name.items():
+        # Check if there are multiple names for the same InChI key 
         if len(data['resname']) > 1:
             warn('Same residue with different names:\n'
                 f'{inchikey} -> {str(data["resname"])}')
+        # Check if there are multiple classifications for the same InChI key
         if len(data['classification']) > 1:
             warn('Same residue with different classifications:\n'
-                 f'{inchikey} + -> {str(data["classification"])} for names {str(data["resname"])}')   
+                 f'{inchikey} + -> {str(data["classification"])} for names {str(data["resname"])}')
+        # Check if there are multiple fragments length for the same InChI key
+        if len(data['fragments']) == 0:
+            data['frag_len'] = 1
+        else:
+            frag_len = len(set([len(fragment) for fragment in data['fragments']]))
+            assert frag_len == 1, \
+                f'Fragments of different lengths for InChI key {inchikey}: {str(frag_len)}'
+            data['frag_len'] = frag_len
 
     # Check if there are multiple InChI keys for the same name
     for name, inchikeys in name_2_key.items():
-        inchikeys = set(inchikeys)
-        if len(inchikeys) > 1:
-            key_counts = '\n'.join([f'{key}: {len(key_2_name[key]["resindices"]): >4}. '
-                                    f'{key_2_name[key]["inchi"]}. '
-                                    f'Sample index: {key_2_name[key]["resindices"][0]}'
-                                      for key in inchikeys])
-            warn(f'The residue {name} has more than one InChi key:\n'
-                 f'{key_counts}')
-    return key_2_name
-
-
-@lru_cache(maxsize=None)
-def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
-    """Search the InChi keys in LIPID MAPS"""
-    headers = {'accept': 'json'}
-    # https://www.lipidmaps.org/resources/rest
-    # Output item = physchem, is the only one that returns data for the inchi key
-    # for only the two first layers (main and atom connection)
-    # To see InChiKey layers: https://www.inchi-trust.org/
-    key = inchikey[:14] if only_first_layer else inchikey
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        js = response.json()
-        if js != []:
-           return js      
-        else:
-            return False  
-    else:
-        print(f"Error for {inchikey}: {response.status_code}")
-
-
-# @lru_cache(maxsize=None)
-def is_in_swiss_lipids(inchikey, only_first_layer=False) -> dict:
-    """Search the InChi keys in LIPID MAPS"""
-    key = inchikey[:14] if only_first_layer else inchikey
-    headers = {'accept': 'json'}
-    url = f"https://www.swisslipids.org/api/index.php/advancedSearch?InChIkey={key}"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()[0]
-    else:
-        return False
+        inchikeys = list(set(inchikeys))
+        if len(inchikeys) < 2: continue
+        counts = {}
+        # Count the number of fragments 
+        for key in inchikeys:
+            # If there are not fragments, we use the number of residues
+            counts[key] = (key_2_name[key]["frag_len"] 
+                           if key_2_name[key]["frag_len"] > 1 
+                           else len(key_2_name[key]["resindices"]))
+        # Format the counts for printing
+        key_counts = '\n'.join([f'\t{key}: {counts[key]: >4}' for key in inchikeys])
+        warn(f'The fragment {name} has more than one InChi key:\n'
+                f'{key_counts}')
     
+    # Convert sets to lists for JSON serialization
+    for inchikey in key_2_name:
+        key_2_name[inchikey]['resname'] = list(key_2_name[inchikey]['resname'])
+        key_2_name[inchikey]['classification'] = list(key_2_name[inchikey]['classification'])
+
+    return { 'key_2_name': key_2_name, 'residx_2_key': residx_2_key }
+
+def residue_to_inchi(task: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
+    """
+    Process a single residue to get its InChI key and related information.
+    """
+    resatoms , resindices = task
+    # Convert to RDKIT and get InChI data
+    res_RD = resatoms.convert_to("RDKIT")
+    # Calculate InChI key and string
+    inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
+    # rdinchi.MolToInchi so it doesnt print the warnings
+    inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
+    return (inchikey, inchi, resindices)
+
+def obtain_inchikey_from_pdb(pdb_file : str) -> Optional[str]:
+    mol = Chem.MolFromPDBFile(pdb_file, sanitize=True)
+    if mol is None:
+        print("❌ InchiKey couldn't be constructed from PDB file.")
+        return None
+    return Chem.inchi.MolToInchiKey(mol)
+
 def get_atoms_info(atom):
     """Get the RDkit atom information."""
     info = {
@@ -226,7 +193,6 @@ def get_atoms_info(atom):
     }
     return info
 
-
 def inchi_2_mol(inchi, withHs=False, neutralize=False):
     """Converts an InChI string to a RDKIT. Usefull to display them."""
     mol = Chem.MolFromInchi(inchi)
@@ -239,7 +205,6 @@ def inchi_2_mol(inchi, withHs=False, neutralize=False):
             if charge:
                 idx = atom.GetIdx()
                 Hs = atom.GetNumExplicitHs()
-                
                 rw_atom = rwmol.GetAtomWithIdx(idx)
                 rw_atom.SetFormalCharge(0)
                 rw_atom.SetNumExplicitHs(Hs-charge)
@@ -249,7 +214,6 @@ def inchi_2_mol(inchi, withHs=False, neutralize=False):
         return Chem.AddHs(mol)
     else:
         return mol
-
 
 def Residue_2_Mol(res: 'Residue'):
     "WiP"

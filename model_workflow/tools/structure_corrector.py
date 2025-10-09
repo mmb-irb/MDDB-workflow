@@ -1,7 +1,5 @@
 from os import remove
-
-# Import local tools
-from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_canonical_frame
+from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
 from model_workflow.tools.get_bonds import get_excluded_atoms_selection
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
 from model_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
@@ -10,26 +8,6 @@ from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, 
 from model_workflow.utils.structures import Structure
 from model_workflow.utils.type_hints import *
 
-# Analyze the structure looking for irregularities and then modify the structure to standarize the format
-#
-# Supported cases:
-#
-# * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
-# * Unstable atom bonds: A bond is formed / broken because its 2 atoms are too close / far in the structure
-#   -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
-# * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
-#   -> Stop the workflow and warn the user
-# * Missing chains -> Chains are added through VMD
-# * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
-# * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
-# * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
-# * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
-# * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
-
-# Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail
-# Note that the 'trust' flag may be passed for critical checkings to skip them
-
-# This function also sets some values in the passed MD
 
 def structure_corrector (
     # Note that this is an early provisional structure
@@ -47,7 +25,27 @@ def structure_corrector (
     trust : List[str],
     guess_bonds : bool
 ) -> dict:
-    
+    """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
+
+    Supported cases:
+
+    * Missing/Non-standard elements -> Atom elements are guessed when missing and standarized (e.g. ZN -> Zn)
+    * Unstable atom bonds: A bond is formed / broken because its 2 atoms are too close / far in the structure
+      -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
+    * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
+      -> Stop the workflow and warn the user
+    * Missing chains -> Chains are added through VMD
+    * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
+    * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
+    * Splitted residues -> Atoms are sorted together by residue. Trajectory coordinates are also sorted
+    * Repeated residues -> Residues are renumerated (e.g. 1, 2, 3, 1, 2, 1, 2 -> 1, 2, 3, 4, 5, 6, 7)
+    * Repeated atoms -> Atoms are renamed with their numeration (e.g. C, C, C, O, O -> C1, C2, C3, O1, O2)
+
+    Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail.
+    Note that the 'trust' flag may be passed for critical checkings to skip them.
+
+    This function also sets some values in the passed MD."""
+
     # Write the inital output structure file which will be overwritten several times further
     structure.generate_pdb_file(output_structure_file.path)
 
@@ -59,7 +57,7 @@ def structure_corrector (
     # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
     if structure.fix_atom_elements(trust=(CORRECT_ELEMENTS in trust)):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (fix atom elements) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -98,14 +96,14 @@ def structure_corrector (
         # Set some atoms which are to be skipped from these test given their "fake" nature
         excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
         # If bonds match from the begining we are done as well
-        print('Checking default structure bonds')
+        print(f'Checking default structure bonds ({STABLE_BONDS_FLAG})')
         if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
         print(' They are wrong')
         # Find the first frame in the whole trajectory where safe bonds are respected
-        safe_bonds_frame = get_bonds_canonical_frame(
+        bonds_reference_frame = get_bonds_reference_frame(
             structure_file = output_structure_file,
             trajectory_file = input_trajectory_file,
             snapshots = snapshots,
@@ -113,10 +111,10 @@ def structure_corrector (
             structure = structure,
             pbc_selection = pbc_selection
         )
-        MD.get_reference_frame._set_parent_output(MD, safe_bonds_frame)
-        # If there is no canonical frame then stop here since there must be a problem
-        if safe_bonds_frame == None:
-            print('There is no canonical frame for safe bonds. Is the trajectory not imaged?')
+        MD.get_reference_frame._set_parent_output(MD, bonds_reference_frame)
+        # If there is no reference frame then stop here since there must be a problem
+        if bonds_reference_frame == None:
+            print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
             must_be_killed = STABLE_BONDS_FLAG not in mercy
             if must_be_killed:
                 raise TestFailure('Failed to find stable bonds')
@@ -125,7 +123,7 @@ def structure_corrector (
                 'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
             return
         # Set also the safe bonds frame structure to mine its coordinates
-        safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, safe_bonds_frame)
+        safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, bonds_reference_frame)
         safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
         # Set all coordinates in the main structure by copying the safe bonds frame coordinates
         for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
@@ -134,7 +132,7 @@ def structure_corrector (
         remove(safe_bonds_frame_filename)
         # Set the modified variable as true since we have changes the structure
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (stable bonds) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
         # Set the test as passed
         register.update_test(STABLE_BONDS_FLAG, True)
@@ -179,7 +177,7 @@ def structure_corrector (
     
     # In case there are not chains at all
     if len(chains) == 1 and ( chains[0].name == ' ' or chains[0].name == 'X' ):
-        print('WARNING: chains are missing and they will be added')
+        warn('Chains are missing and they will be added')
         # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
         # Note that we rely in fragments (and thus in bonds) to guess chains
         if next((True for bonds in structure.bonds if bonds == MISSING_BONDS), False):
@@ -188,7 +186,7 @@ def structure_corrector (
         # Run the chainer
         structure.auto_chainer()
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (no chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     else:
@@ -207,7 +205,7 @@ def structure_corrector (
                 warn(f'Some chains are missing -> Unchained regions will be chained as {new_letter}')
                 unlettered_chain.name = new_letter
             # Update the structure file using the corrected structure
-            print(f' The structure file has been modified -> {output_structure_file.filename}')
+            print(f' The structure file has been modified (missing chains) -> {output_structure_file.filename}')
             structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -220,7 +218,7 @@ def structure_corrector (
     # Check fragments with the VMD and searh for wrong bonds
     if structure.check_splitted_chains(fix_chains = True, display_summary = True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (splitted chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -229,7 +227,7 @@ def structure_corrector (
 
     if structure.check_repeated_chains(fix_chains=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -288,7 +286,7 @@ def structure_corrector (
 
     # If we did any change then save the structure
     if had_to_split_chains:
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (coherent chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -298,7 +296,7 @@ def structure_corrector (
     # NEVER FORGET: Merged residues may be generated when calling the structure.auto_chainer
     if structure.check_merged_residues(fix_residues = True, display_summary = True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (merged residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -307,7 +305,7 @@ def structure_corrector (
 
     if structure.check_repeated_residues(fix_residues=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
 
         # Sort trajectory coordinates in case atoms were sorted
@@ -331,5 +329,5 @@ def structure_corrector (
 
     if structure.check_repeated_atoms(fix_atoms=True, display_summary=True):
         # Update the structure file using the corrected structure
-        print(' The structure file has been modified -> ' + output_structure_file.filename)
+        print(' The structure file has been modified (repeated atoms) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)

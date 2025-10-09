@@ -3,6 +3,8 @@ import numpy as np
 import pickle
 
 from model_workflow.utils.type_hints import *
+from model_workflow.utils.constants import GREY_HEADER, COLOR_END
+from model_workflow.utils.auxiliar import MISSING_CHARGES
 
 #from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.universe import Universe
@@ -19,7 +21,7 @@ from MDAnalysis.core.topologyattrs import (
     Segids
 )
 
-def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
+def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
     """
     Creates a MDAnalysis topology from a json topology file.
 
@@ -37,7 +39,7 @@ def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
     :param topology: path to the json file
     :returns: a MDAnalysis topology object
     """
-    topology = json.load(open(standard_topology_file.path))
+    topology = json.load(open(standard_topology_path))
 
     # transform bond to non redundant tuples
     bonds = []
@@ -71,11 +73,39 @@ def to_MDAnalysis_topology(standard_topology_file : 'File') -> 'Topology':
     )
     return mda_top
 
-def get_mda_universe (standard_topology_file : 'File', structure_file : 'File') -> 'Universe':
-    """Create a MDAnalysis universe using data in the workflow."""
-    mda_topology = to_MDAnalysis_topology(standard_topology_file)
+def get_mda_universe_from_stopology (
+        standard_topology_path : str, coordinates_file : str) -> 'Universe':
+    """Create a MDAnalysis universe using data in the workflow.
+    
+    Args:
+        standard_topology_path (str): Path to the standard topology file.
+        coordinates_file (str): Path to the coordinates file (e.g., PDB, XTC)."""
+    mda_topology = to_MDAnalysis_topology(standard_topology_path)
     # Create a MDAnalysis topology from the standard topology file
-    return Universe(mda_topology, structure_file.path)
+    return Universe(mda_topology, coordinates_file)
+
+def get_mda_universe (structure_file : 'File',              # To load in MDAnalysis
+                      trajectory_file : 'File',             # To load in MDAnalysis
+                      reference_bonds : List[List[int]],    # To set the bonds
+                      charges : List[float]) -> 'Universe': # To set the charges
+    """Create a MDAnalysis universe using data in the workflow."""
+
+    # Make MDAnalysis warnings and logs grey
+    print(GREY_HEADER, end='\r')
+    universe = Universe(structure_file.path, trajectory_file.path)
+    # Set the atom bonds
+    bonds = []
+    for bond_from, bond_tos in enumerate(reference_bonds):
+        for bond_to in bond_tos:
+            bond = tuple(sorted([bond_from, bond_to]))
+            bonds.append(bond)
+    universe.add_TopologyAttr('bonds', set(bonds))
+
+    # Set the charges
+    if charges != MISSING_CHARGES and len(charges) > 0:
+        universe.add_TopologyAttr('charges', np.array(charges, dtype=np.float32))
+    print(COLOR_END, end='\r')
+    return universe
 
 # Get a cksum from a MDA universe for equality comparission
 def get_mda_universe_cksum (universe) -> str:

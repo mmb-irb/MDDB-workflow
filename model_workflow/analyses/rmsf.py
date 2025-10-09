@@ -4,7 +4,7 @@
 from numpy import mean, std
 
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import GREY_HEADER, COLOR_END, OUTPUT_RMSF_FILENAME
+from model_workflow.utils.constants import OUTPUT_RMSF_FILENAME
 from model_workflow.utils.type_hints import *
 
 from MDAnalysis import Universe
@@ -14,19 +14,12 @@ from MDAnalysis.analysis import rms
 # LORE: Fluctuation analysis was done with Gromacs before
 # LORE: However Gromacs required masses and atom radii, which was a problem in coarse grain
 def rmsf (
-    structure_file : 'File',
-    trajectory_file : 'File',
+    universe : 'Universe',
     output_directory : str,
     pbc_selection : 'Selection'):
     """Perform the fluctuation analysis."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RMSF_FILENAME}'
-
-    # Load the MDAnalysis universe
-    # Make MDAnalysis warnings and logs grey
-    print(GREY_HEADER, end='\r')
-    universe = Universe(structure_file.path, trajectory_file.path)
-    print(COLOR_END, end='\r')
 
     # Run the analysis in all atoms
     # Even atoms to be excluded (e.g. PBC) are excluded later to don't mess atom results order

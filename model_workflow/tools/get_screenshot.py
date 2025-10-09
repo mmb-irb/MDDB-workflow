@@ -242,7 +242,7 @@ def get_screenshot (
         # WARNING: Points are projected in the line but very shifted
         # WARNING: However the error is the same for the molecule points and the view center
         # WARNING: For this reason the resulting difference is correct and it works
-        def get_projected_point (P_point : Tuple[float, float, float]) -> Tuple[float, float, float]:
+        def get_projected_point (P_point : Coords) -> Coords:
             AP_vector = [A_point[i] + P_point[i] for i in range(3)]
             AP_AB_dot_product = np.dot(AP_vector, AB_vector)
             AB_AB_dot_product = np.dot(AB_vector, AB_vector)

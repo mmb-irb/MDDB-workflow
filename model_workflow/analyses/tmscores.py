@@ -1,12 +1,14 @@
-import tmscoring
-
 from os import remove
-
-from model_workflow.tools.get_pdb_frames import get_pdb_frames
+from Bio.Data.IUPACData import protein_letters_1to3_extended
+import numpy as np
+import biotite.structure as struc
+import biotite.structure.io as strucio
+import biotite.structure.io.xtc as xtc
 from model_workflow.utils.auxiliar import save_json
-from model_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME
+from model_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME, PROTEIN_RESIDUE_NAME_LETTERS
 from model_workflow.utils.gmx_spells import pdb_filter
 from model_workflow.utils.type_hints import *
+from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
 def tmscores (
     trajectory_file : 'File',
@@ -36,43 +38,42 @@ def tmscores (
         print('WARNING: There are not atoms to be analyzed for the TM score analysis after PBC substraction')
         return
 
-    # Convert the selection to ndx so we can use it in gromacs
-    selection_name = 'alpha-carbons'
-    ndx_selection = selection.to_ndx(selection_name)
-    ndx_filename = '.tmscore.ndx'
-    with open(ndx_filename, 'w') as file:
-        file.write(ndx_selection)
-
     # Set the frame start and step
     start = 0
     step = None
     
     output_analysis = []
 
+    template = strucio.load_structure(first_frame_file.path)
+    ca_list = selection.to_list()
+
+    ca_mask = np.isin(np.arange(template.array_length()), ca_list)
+    template = template[ca_mask]
+    # Fix histidine naming issues so they are recognized as standard amino acids
+    for non_standard in np.unique(template[~struc.filter.filter_amino_acids(template)].res_name):
+        if non_standard in PROTEIN_RESIDUE_NAME_LETTERS:
+            standard = protein_letters_1to3_extended[PROTEIN_RESIDUE_NAME_LETTERS[non_standard]].upper()
+            template.res_name[template.res_name == non_standard] = standard
+    is_aa = struc.filter.filter_amino_acids(template)
+    assert np.all(is_aa), ("Non-standard amino acids in template", np.unique(template[~is_aa].res_name))
+    frame_step, _ = calculate_frame_step(snapshots, frames_limit)
+    xtc_file = xtc.XTCFile.read(trajectory_file.path, atom_i=ca_list, step=frame_step)
+    trajectory = xtc_file.get_structure(template)
+    
     # Iterate over each reference and group
     for reference in tmscore_references:
         print(f' Running TM score using {reference.filename} as reference')
-        # Create a reference topology with only the group atoms
-        # WARNING: Yes, TM score would work also with the whole reference, but it takes more time!!
-        # This has been experimentally tested and it may take more than the double of time
-        grouped_reference = 'gref.pdb'
-        pdb_filter(reference.path, grouped_reference, ndx_filename, selection_name)
+
         # Get the TM score of each frame
-        # It must be done this way since tmscoring does not support trajectories
         tmscores = []
-        frames, step, count = get_pdb_frames(reference.path, trajectory_file.path, snapshots, frames_limit)
-        for current_frame in frames:
-
-            # Filter atoms in the current frame
-            filtered_frame = 'filtered_frame.pdb'
-            pdb_filter(current_frame, filtered_frame, ndx_filename, selection_name)
-
+        reference_frame = trajectory[0]
+        for i in range(1, len(trajectory)):
+            subject = trajectory[i]
+            superimposed, _, ref_indices, sub_indices = struc.superimpose_structural_homologs(
+                reference_frame, subject)
             # Run the tmscoring over the current frame against the current reference
-            # Append the result data for each ligand
-            tmscore = tmscoring.get_tm(grouped_reference, filtered_frame)
-            tmscores.append(tmscore)
-
-            remove(filtered_frame)
+            tm = struc.tm_score(reference_frame, superimposed, ref_indices, sub_indices)
+            tmscores.append(tm)
 
         # Get a standarized reference name
         reference_name = REFERENCE_LABELS[reference.filename]
@@ -84,7 +85,5 @@ def tmscores (
         }
         output_analysis.append(data)
 
-        remove(grouped_reference)
-    remove(ndx_filename)
     # Export the analysis in json format
     save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)

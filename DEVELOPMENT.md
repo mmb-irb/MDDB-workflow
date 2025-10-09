@@ -53,7 +53,7 @@ Once you're done with your changes, you can create a [pull request (PR)](https:/
 ```shell
 # To run a test by its name and optionally a parameter:
 pytest test/test_run.py -k test_analysis_execution[pockets]
-pytest test/test_run.py -k "TestMWFRun and A01IP and dist"
+pytest test/test_run.py -k "TestRunAll and A01IP and dist"
 # To run on a subset of tests use the markers with -m {CI,release}:
 pytest -m CI
 # To run all tests and generate a coverage report:
@@ -83,7 +83,7 @@ git merge master # -m "Merge master into release [skip tests]"
 
 2. Wait for the comprehensive test suite to complete. These tests verify workflow integrity and may take a considerable amount of time. If any tests fail, you can fix them in the release branch.
 
-3. Once all tests pass successfully, a new tag is generated automatically based on the `pyproject.toml` version number. This is done by the GitHub Actions workflow defined in [release.yml](.github/workflows/release.yml).
+3. Once all tests pass successfully, a new tag is generated automatically based on the `pyproject.toml` version number. This is done by the GitHub Actions workflow defined in [release.yml](https://github.com/mmb-irb/MDDB-workflow/blob/master/DEVELOPMENT.md).
 
 4. After the release is published, merge the release branch back to master if you made any changes to fix the tests:
 
@@ -116,5 +116,5 @@ conda mambabuild /home/rchaves/repo/biobb/bioconda-recipes/recipes/mddb_workflow
 Linting:
 ```shell
 cd ~/repo/biobb/bioconda-recipes
-bioconda-utils lint  --packages mddb_workflow
+bioconda-utils lint --packages mddb_workflow
 ```
