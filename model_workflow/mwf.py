@@ -2348,7 +2348,17 @@ def workflow (
         ]
         # If the exclude parameter was passed then remove excluded tasks from the default tasks
         if exclude and len(exclude) > 0:
-            tasks = [ name for name in tasks if name not in exclude ]
+            excluded_dependencies = [ *exclude ]
+            # Search for special flags among excluded
+            for flag, dependencies in DEPENDENCY_FLAGS.items():
+                if flag not in exclude: continue
+                # If the flag is found then exclude the dependencies instead
+                # Make sure not to duplicate a dependency if it was already included
+                excluded_dependencies.remove(flag)
+                for dep in dependencies:
+                    if dep in exclude: continue
+                    excluded_dependencies.append(dep)
+            tasks = [ name for name in tasks if name not in excluded_dependencies ]
 
     # If the user requested to overwrite something, make sure it is in the tasks list
 
