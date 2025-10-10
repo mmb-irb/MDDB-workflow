@@ -2255,7 +2255,7 @@ DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
     'meta': ['pmeta', 'mdmeta'],
-    'network': [ 'mapping', 'ligands', 'chains', 'pdbs', 'membrane' ],
+    'network': [ 'resmap', 'ligands', 'chains', 'pdbs', 'memmap' ],
     'minimal': [ 'pmeta', 'mdmeta', 'stopology' ],
     'interdeps': [ 'interactions', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist' ],
     'membs': ['memmap', 'density',  'thickness', 'apl', 'lorder', 'linter']
