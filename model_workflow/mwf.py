@@ -68,6 +68,7 @@ from model_workflow.analyses.thickness import thickness
 from model_workflow.analyses.area_per_lipid import area_per_lipid
 from model_workflow.analyses.lipid_order import lipid_order
 from model_workflow.analyses.lipid_interactions import lipid_interactions
+from model_workflow.analyses.ligand_interactions import ligand_interactions
 #from model_workflow.analyses.pca_contacts import pca_contacts
 from model_workflow.analyses.rmsd_per_residue import rmsd_per_residue
 from model_workflow.analyses.rmsd_pairwise import rmsd_pairwise
@@ -1257,6 +1258,10 @@ class MD:
     # Lipid-protein interactions analysis
     run_lipid_interactions_analysis = Task('linter', 'Membrane lipid-protein interactions analysis',
         lipid_interactions, { 'frames_limit': 100 })
+    
+    # Ligand-interactions analysis
+    run_ligand_interactions_analysis = Task('liginter', 'Ligand interactions analysis', 
+        ligand_interactions, { 'frames_limit': 500 })
         
 # The project is the main project
 # A project is a set of related MDs
