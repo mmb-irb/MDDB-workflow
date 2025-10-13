@@ -47,6 +47,7 @@ def structure_corrector (
     This function also sets some values in the passed MD."""
 
     # Write the inital output structure file which will be overwritten several times further
+    print(' The structure file has been copied -> ' + output_structure_file.filename)
     structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
@@ -140,6 +141,24 @@ def structure_corrector (
 
     # Write safe bonds back to the MD
     MD.project.get_reference_bonds._set_parent_output(MD.project, safe_bonds)
+
+    # ------------------------------------------------------------------------------------------
+    # Incoherent residue bonds ---------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Make sure there are no disconnected groups of atoms in every residue
+    for residue in structure.residues:
+        if residue.is_coherent(): continue
+        residue_selection = residue.get_selection()
+        fragments = list(structure.find_fragments(residue_selection))
+        if len(fragments) == 0: raise RuntimeError('Do we have an empty residue?')
+        if len(fragments) == 1: raise RuntimeError('Test failed but should not')
+        warn(f'Multiple fragments in residue {residue.index}: {residue}')
+        for f, fragment in enumerate(fragments, 1):
+            fragment_atoms = [ structure.atoms[index] for index in fragment.atom_indices ]
+            atom_names = [ atom.label for atom in fragment_atoms ]
+            print(f' Fragment {f}: {", ".join(atom_names)}')
+        raise TestFailure(f'Residue {residue.index}: {residue} is not coherent: some atoms are disconnected')
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------

@@ -325,7 +325,7 @@ class Residue:
         self._classification = None
 
     def __repr__ (self):
-        return f'<Residue {self.name}{self.number}{self.icode if self.icode else ""}>'
+        return f'<Residue {self.label}>'
 
     def __eq__ (self, other):
         if type(self) != type(other):
@@ -521,6 +521,13 @@ class Residue:
         bonded_atom_indices = set(self.get_bonded_atom_indices())
         if next((index for index in other.atom_indices if index in bonded_atom_indices), None) != None: return True
         return False
+    
+    def is_coherent (self) -> bool:
+        """Make sure atoms within the residue are all bonded."""
+        residue_selection = self.get_selection()
+        residue_fragments = self.structure.find_fragments(residue_selection)
+        first_residue_fragment = next(residue_fragments)
+        return len(first_residue_fragment) == self.atom_count
 
     def get_classification (self) -> str:
         """
