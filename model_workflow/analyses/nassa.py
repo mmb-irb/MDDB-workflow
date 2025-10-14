@@ -18,7 +18,7 @@ from model_workflow.utils.heatmaps_nassa import arlequin_plot
 from model_workflow.utils.bibitransformer_nassa import BiBiTransformer
 from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.nassa_file import generate_nassa_config
-from typing import Optional, List
+from typing import Optional
 import yaml
 
 # There are five analyses in total
@@ -1003,14 +1003,14 @@ def run_nassa(analysis_name: str,
 
 def workflow_nassa(
     config_file_path: Optional[str], 
-    analysis_names: Optional[List[str]], 
+    analysis_names: Optional[list[str]], 
     make_config: bool = False, 
-    output: Optional[List[str]] = None,
+    output: Optional[list[str]] = None,
     working_directory: str = '.',
     overwrite: bool = False,
     overwrite_nassa: bool = False,
     helical_par: bool = False,
-    proj_dirs: Optional[List[str]] = None,
+    proj_dirs: Optional[list[str]] = None,
     input_structure_file: Optional[str] = None,
     input_trajectory_file: Optional[str] = None,
     input_top_file: Optional[str] = None,
@@ -1018,7 +1018,7 @@ def workflow_nassa(
     unit_len: int = 6,
     n_sequences: Optional[int] = '*',
     seq_path: str = None,
-    md_directories: Optional[List[str]] = None,
+    md_directories: Optional[list[str]] = None,
     trust: bool = False,
     mercy: bool = False,
     ):

@@ -459,7 +459,7 @@ def rotate_vector (vector : tuple, angle : float, axis : tuple) -> tuple:
 
 
 # Calculate the distance between two atoms
-def calculate_distance (first_coordinates : tuple, second_coordinates : tuple, dimensions : List[str]) -> float:
+def calculate_distance (first_coordinates : tuple, second_coordinates : tuple, dimensions : list[str]) -> float:
     squared_distances_sum = 0
     for dimension, i in { 'x': 0, 'y': 1, 'z': 2 }.items():
         if dimension not in dimensions:

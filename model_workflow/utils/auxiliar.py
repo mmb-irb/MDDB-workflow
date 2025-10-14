@@ -12,7 +12,7 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, List, Set, Generator, Union
+from typing import Optional, Generator
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
@@ -80,7 +80,7 @@ def get_new_letter(current_letters : set) -> Optional[str]:
 # All upper case
 # All lower case
 # First upper case and the rest lower case
-def all_cases (names : Union[List[str], Set[str]]) -> Set[str]:
+def all_cases (names : list[str] | set[str]) -> set[str]:
     all_names = []
     for name in names:
         all_upper = name.upper()
@@ -151,7 +151,7 @@ def warn (message : str):
     print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
 
 # Get the mean/average of a list of values
-def mean(values : List[float]) -> float:
+def mean(values : list[float]) -> float:
     return sum(values) / len(values)
 
 # Round a number to hundredths
@@ -164,7 +164,7 @@ def round_to_thousandths (number : float) -> float:
 
 # Given a list with numbers,  create a string where number in a row are represented rangedly
 # e.g. [1, 3, 5, 6, 7, 8] => "1, 3, 5-8"
-def ranger (numbers : List[int]) -> str:
+def ranger (numbers : list[int]) -> str:
     # Remove duplicates and sort numbers
     sorted_numbers = sorted(list(set(numbers)))
     # Get the number of numbers in the list
@@ -213,7 +213,7 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
         yield value, others
 
 # List files in a directory
-def list_files (directory : str) -> List[str]:
+def list_files (directory : str) -> list[str]:
     return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]
 
 # Check if a directory is empty
@@ -239,7 +239,7 @@ def is_glob (path : str) -> bool:
 # Parse a glob path into one or several results
 # If the path has no glob characters then return it as it is
 # Otherwise make sure
-def parse_glob (path : str) -> List[str]:
+def parse_glob (path : str) -> list[str]:
     # If there is no glob pattern then just return the string as is
     if not is_glob(path):
         return [ path ]
@@ -256,7 +256,7 @@ SUPPORTED_BYTE_SIZES = {
 
 # Data is a list of numeric values
 # Bit size is the number of bits for each value in data to be occupied
-def store_binary_data (data : List[float], byte_size : int, filepath : str):
+def store_binary_data (data : list[float], byte_size : int, filepath : str):
     # Check bit size to make sense
     letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
     if not letter:

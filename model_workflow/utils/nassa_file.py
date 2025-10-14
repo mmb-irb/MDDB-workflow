@@ -7,7 +7,7 @@ from typing import List
 from model_workflow.utils.constants import NASSA_ANALYSES_CANALS
 
 def generate_nassa_config ( 
-        folder_path: List[str],
+        folder_path: list[str],
         seq_path: str,
         output_path: str,
         unit_len: int,

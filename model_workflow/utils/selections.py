@@ -5,7 +5,7 @@ from model_workflow.utils.auxiliar import ranger
 # A selection is a list of atom indices from a structure
 class Selection:
 
-    def __init__ (self, atom_indices : Optional[ List[int] ] = None):
+    def __init__ (self, atom_indices : Optional[ list[int] ] = None):
         self.atom_indices = atom_indices if atom_indices != None else []
 
     def __repr__ (self):
@@ -82,7 +82,7 @@ class Selection:
     def to_ngl (self) -> str:
         return '@' + ','.join([ str(index) for index in self.atom_indices ])
     
-    def to_list (self) -> List[int]:
+    def to_list (self) -> list[int]:
         """Return a copy of the atom indices as a list."""
         return self.atom_indices.copy()
     

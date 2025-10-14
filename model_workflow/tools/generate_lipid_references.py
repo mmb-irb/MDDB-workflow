@@ -6,7 +6,7 @@ from model_workflow.utils.type_hints import *
 
 def generate_lipid_references(inchikeys: dict,
                               output_filepath : str,
-                              ) -> List[dict]:
+                              ) -> list[dict]:
     """Generate the lipid references.
 
     Returns:

@@ -378,7 +378,7 @@ def energies (
 
     # Given a pdb structure, use CMIP to extract energies
     # Output energies are returned by atom
-    def get_frame_energy (frame_structure : 'Structure') -> List[dict]:
+    def get_frame_energy (frame_structure : 'Structure') -> list[dict]:
 
         # WARNING: At this point structure should be corrected
         # WARNING: Repeated atoms will make the analysis fail

@@ -63,7 +63,7 @@ class Register:
         self.save()
 
     # Get current warnings filtered by tag
-    def get_warnings (self, tag : str) -> List[dict]:
+    def get_warnings (self, tag : str) -> list[dict]:
         return [ warning for warning in self.warnings if warning['tag'] == tag ]
 
     # Add warnings with the right format and save the register

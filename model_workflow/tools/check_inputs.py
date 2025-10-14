@@ -34,8 +34,8 @@ PREFILTERED_TOPOLOGY_EXCEPTION = Exception('Prefiltered topology')
 
 def check_inputs (
     input_structure_file : 'File',
-    input_trajectory_files : List['File'],
-    input_topology_file : Union['File', Exception]) -> dict:
+    input_trajectory_files : list['File'],
+    input_topology_file : 'File' | Exception) -> dict:
     """
     Check input files coherence and integrity.
     If there is any problem then raises an input error.
@@ -96,7 +96,7 @@ def check_inputs (
         return structure.atom_count
 
     # Set a function to get atoms from structure and trajectory together
-    def get_structure_and_trajectory_atoms (structure_file : 'File', trajectory_file : 'File') -> Tuple[int, int]:
+    def get_structure_and_trajectory_atoms (structure_file : 'File', trajectory_file : 'File') -> tuple[int, int]:
         # Note that declaring the iterator will not fail even when there is a mismatch
         trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
         # We must consume the generator first value to make the error raise
@@ -112,7 +112,7 @@ def check_inputs (
         return structure_atom_count, trajectory_atom_count
     
     # Set a function to get atoms from topology and trajectory together
-    def get_topology_and_trajectory_atoms (topology_file : 'File', trajectory_file : 'File') -> Tuple[int, int]:
+    def get_topology_and_trajectory_atoms (topology_file : 'File', trajectory_file : 'File') -> tuple[int, int]:
         # To do so rely on different tools depending on the topology format
         # If there is no topology file then just compare strucutre and trajectory an exit
         if topology_file == MISSING_TOPOLOGY:

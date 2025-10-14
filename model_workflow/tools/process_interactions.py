@@ -42,9 +42,9 @@ def process_interactions (
     structure : 'Structure',
     snapshots : int,
     output_directory : str,
-    mercy : List[str],
+    mercy : list[str],
     interactions_auto : str,
-    ligand_map : List[dict],
+    ligand_map : list[dict],
     pbc_selection : 'Selection',
     frames_limit : int = 1000,
     # Percent of frames where an interaction must have place (from 0 to 1)

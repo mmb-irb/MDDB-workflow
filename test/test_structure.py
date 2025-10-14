@@ -85,7 +85,7 @@ class TestStructure:
 
     def test_atom_functions(self, structure: 'Structure'):
         """Test atom-related functions in the project"""
-        atoms: List['Atom'] = structure.atoms[:5]
+        atoms: list['Atom'] = structure.atoms[:5]
         atom1, atom2, atom3, atom4 = atoms[:4]
         print(atom1)
         atom1.set_residue_index(42)

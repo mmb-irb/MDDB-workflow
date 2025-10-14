@@ -26,7 +26,7 @@ def hydrogen_bonds (
     structure_file : 'File',
     trajectory_file : 'File',
     output_directory : str,
-    populations : Optional[List[float]],
+    populations : Optional[list[float]],
     structure : 'Structure',
     interactions : list,
     is_time_dependent : bool,

@@ -6,7 +6,7 @@ from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
 
 
-def prepare_pdb_references (pdb_ids : List[str], output_filepath : str):
+def prepare_pdb_references (pdb_ids : list[str], output_filepath : str):
     """Prepare the PDB references json file to be uploaded to the database."""
     # Set the output file
     pdb_references_file = File(output_filepath)

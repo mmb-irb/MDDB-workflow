@@ -107,14 +107,14 @@ class Topology:
         return values
 
     # Get dihedrals data in a standarized format
-    def get_dihedrals_data (self) -> List[dict]:
+    def get_dihedrals_data (self) -> list[dict]:
         if self.format == 'prmtop': return self._get_dihedrals_data_amber()
         raise ValueError(f'Reading dihedrals data is not supported in {self.format} topologies')
 
     # Amber topologies only
     # Get dihedrals data in a standarized format
     # https://ambermd.org/FileFormats.php
-    def _get_dihedrals_data_amber (self) -> List[dict]:
+    def _get_dihedrals_data_amber (self) -> list[dict]:
         # Get dihedral-related values from the topology
         including_hydrogens = self.mine_amber_flag('DIHEDRALS_INC_HYDROGEN')
         excluding_hydrogens = self.mine_amber_flag('DIHEDRALS_WITHOUT_HYDROGEN')

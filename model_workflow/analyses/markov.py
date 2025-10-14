@@ -10,7 +10,7 @@ def markov (
     trajectory_file : 'File',
     output_directory : str,
     structure : 'Structure',
-    populations : List[float],
+    populations : list[float],
     rmsd_selection : str = PROTEIN_AND_NUCLEIC,
     nodes_number : int = 20,
 ):

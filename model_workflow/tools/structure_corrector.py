@@ -13,7 +13,7 @@ def structure_corrector (
     # Note that this is an early provisional structure
     structure : 'Structure',
     input_trajectory_file : Optional['File'],
-    input_topology_file : Union['File', Exception],
+    input_topology_file : 'File' | Exception,
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
     MD : 'MD',
@@ -21,8 +21,8 @@ def structure_corrector (
     pbc_selection : 'Selection',
     snapshots : int,
     register : 'Register',
-    mercy : List[str],
-    trust : List[str],
+    mercy : list[str],
+    trust : list[str],
     guess_bonds : bool
 ) -> dict:
     """Analyze the structure looking for irregularities and then modify the structure to standarize the format.

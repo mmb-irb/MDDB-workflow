@@ -184,7 +184,7 @@ def chainer (
 # WARNING: The input structure filename may be None
 def merge_and_convert_trajectories (
     input_structure_filename : Optional[str],
-    input_trajectory_filenames : List[str],
+    input_trajectory_filenames : list[str],
     output_trajectory_filename : str
     ):
 
@@ -254,7 +254,7 @@ merge_and_convert_trajectories.format_sets = [
 ]
 
 # Given an atom selection in vmd syntax, return the list of atom indices it corresponds to
-def get_vmd_selection_atom_indices (input_structure_filename : str, selection : str) -> List[int]:
+def get_vmd_selection_atom_indices (input_structure_filename : str, selection : str) -> list[int]:
 
     # Escape TCL meaningful characters
     escaped_selection = escape_tcl_selection(selection)
@@ -303,7 +303,7 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
 
 # Set a function to retrieve all covalent (strong) bonds in a structure
 # You may provide an atom selection as well
-def get_covalent_bonds (structure_filename : str, selection : Optional['Selection'] = None) -> List[ List[int] ]:
+def get_covalent_bonds (structure_filename : str, selection : Optional['Selection'] = None) -> list[ list[int] ]:
 
     # Parse the selection to vmd
     vmd_selection = 'all'
@@ -389,9 +389,9 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
 def get_covalent_bonds_between (
     structure_filename : str,
     # Selections may be either selection instances or selection strings already in VMD format
-    selection_1 : Union['Selection', str],
-    selection_2 : Union['Selection', str]
-) -> List[ List[int] ]:
+    selection_1 : 'Selection' | str,
+    selection_2 : 'Selection' | str
+) -> list[ list[int] ]:
     
     # Parse selections (if not parsed yet)
     parsed_selection_1 = selection_1 if type(selection_1) == str else selection_1.to_vmd()
@@ -519,7 +519,7 @@ def get_interface_atom_indices (
     selection_1 : str,
     selection_2 : str,
     distance_cutoff : float,
-) -> List[int]:
+) -> list[int]:
 
     # Set the interface selections
     interface_selection_1 = (f'({selection_1}) and within {distance_cutoff} of ({selection_2})')
@@ -632,7 +632,7 @@ def get_interface_atom_indices (
             raise SystemExit('Something went wrong with VMD')
     
     # Set a function to read the VMD output and parse the atom indices string to an array of integers
-    def process_vmd_output (output_filename : str) -> List[int]:
+    def process_vmd_output (output_filename : str) -> list[int]:
         with open(output_filename, 'r') as file:
             raw_atom_indices = file.read()
         return [ int(i) for i in raw_atom_indices.split() ]

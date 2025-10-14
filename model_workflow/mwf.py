@@ -340,7 +340,7 @@ class Task:
         return output
 
     # Find argument values, thus running any dependency
-    def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
+    def find_arg_value (self, arg : str, parent : 'Project' | 'MD', default_arguments : set):
         # Word 'task' is reserved for getting the task itself
         if arg == 'task': return self
         # Word 'self' is reserved for getting the caller Project/MD
@@ -365,8 +365,8 @@ class Task:
     
     # Find out if inputs changed regarding the last run
     def get_changed_inputs (self,
-        parent : Union['Project', 'MD'],
-        processed_args : dict) -> Tuple[ List[str], bool ]:
+        parent : 'Project' | 'MD',
+        processed_args : dict) -> tuple[ list[str], bool ]:
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
         had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
@@ -407,7 +407,7 @@ class MD:
         directory : str,
         # Input structure and trajectory files
         input_structure_filepath : str,
-        input_trajectory_filepaths : List[str],
+        input_trajectory_filepaths : list[str],
     ):
         # Save the inputs
         self.project = project
@@ -613,7 +613,7 @@ class MD:
         """Set a function to get input trajectory file paths."""
         # Set a function to check and fix input trajectory filepaths
         # Also relativize paths to the current MD directory and parse glob notation
-        def relativize_and_parse_paths (input_paths : List[str]) -> List[str]:
+        def relativize_and_parse_paths (input_paths : list[str]) -> list[str]:
             checked_paths = input_paths
             # Input trajectory filepaths may be both a list or a single string
             # However we must keep a list
@@ -628,7 +628,7 @@ class MD:
             if not (abs_count == 0 or abs_count == len(checked_paths)):
                 raise InputError('All trajectory paths must be relative or absolute. Mixing is not supported')
             # Set a function to glob-parse and merge all paths
-            def parse_all_glob (paths : List[str]) -> List[str]:
+            def parse_all_glob (paths : list[str]) -> list[str]:
                 parsed_paths = []
                 for path in paths:
                     parsed_paths += parse_glob(path)
@@ -917,7 +917,7 @@ class MD:
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
     # Safe bonds
-    def get_reference_bonds (self) -> List[List[int]]:
+    def get_reference_bonds (self) -> list[list[int]]:
         return self.project.reference_bonds
     reference_bonds = property(get_reference_bonds, None, None, "Atom bonds to be trusted (read only)")
 
@@ -1042,7 +1042,7 @@ class MD:
     # Indices of residues in periodic boundary conditions
     # WARNING: Do not inherit project pbc residues
     # WARNING: It may trigger all the processing logic of the reference MD when there is no need
-    def get_pbc_residues (self) -> List[int]:
+    def get_pbc_residues (self) -> list[int]:
         # If we already have a stored value then return it
         if self.project._pbc_residues:
             return self.project._pbc_residues
@@ -1105,7 +1105,7 @@ class MD:
     # Indices of residues in coarse grain
     # WARNING: Do not inherit project cg residues
     # WARNING: It may trigger all the processing logic of the reference MD when there is no need
-    def get_cg_residues (self) -> List[int]:
+    def get_cg_residues (self) -> list[int]:
         # If we already have a stored value then return it
         if self.project._cg_residues:
             return self.project._cg_residues
@@ -1121,13 +1121,13 @@ class MD:
 
     # Equilibrium populations from a MSM
     # Inherited from project
-    def get_populations (self) -> List[float]:
+    def get_populations (self) -> list[float]:
         return self.project.populations
     populations = property(get_populations, None, None, "Equilibrium populations from a MSM (read only)")
 
     # Transition probabilities from a MSM
     # Inherited from project
-    def get_transitions (self) -> List[List[float]]:
+    def get_transitions (self) -> list[list[float]]:
         return self.project.transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
@@ -1286,7 +1286,7 @@ class Project:
         input_trajectory_filepaths : Optional[str] = None,
         # Set the different MD directories to be run
         # Each MD directory must contain a trajectory and may contain a structure
-        md_directories : Optional[List[str]] = None,
+        md_directories : Optional[list[str]] = None,
         # Set an alternative MD configuration input
         md_config : Optional[list] = None,
         # Reference MD directory
@@ -1299,14 +1299,14 @@ class Project:
         # Input AiiDA data
         aiida_data_filepath : Optional[str] = None,
         # Processing and analysis instructions
-        filter_selection : Union[bool, str] = False,
+        filter_selection : bool | str = False,
         pbc_selection : Optional[str] = None,
         cg_selection : Optional[str] = None,
         image : bool = False,
         fit : bool = False,
-        translation : List[float] = [0, 0, 0],
-        mercy : Union[ List[str], bool ] = [],
-        trust : Union[ List[str], bool ] = [],
+        translation : list[float] = [0, 0, 0],
+        mercy : list[str] | bool = [],
+        trust : list[str] | bool = [],
         faith : bool = False,
         pca_analysis_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
         pca_fit_selection : str = PROTEIN_AND_NUCLEIC_BACKBONE,
@@ -1726,7 +1726,7 @@ class Project:
 
     # Input trajectory filename ------------
 
-    def get_input_trajectory_files (self) -> List[File]:
+    def get_input_trajectory_files (self) -> list[File]:
         """Get the input trajectory filename(s) from the inputs.
         If file(s) are not found try to download it."""
         return self.reference_md._input_trajectory_files
@@ -1985,12 +1985,12 @@ class Project:
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")
 
     # Indices of residues in periodic boundary conditions
-    def get_pbc_residues (self) -> List[int]:
+    def get_pbc_residues (self) -> list[int]:
         return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
     # Indices of residues in coarse grain
-    def get_cg_residues (self) -> List[int]:
+    def get_cg_residues (self) -> list[int]:
         return self.reference_md.cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
@@ -2031,7 +2031,7 @@ class Project:
         return self._topology_reader
     topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
 
-    def get_dihedrals (self) -> List[dict]:
+    def get_dihedrals (self) -> list[dict]:
         """Get the topology dihedrals."""
         # If we already have a stored value then return it
         if self._dihedrals: return self._dihedrals
@@ -2041,7 +2041,7 @@ class Project:
     dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
 
     # Equilibrium populations from a MSM
-    def get_populations (self) -> Optional[List[float]]:
+    def get_populations (self) -> Optional[list[float]]:
         # If we already have a stored value then return it
         if self._populations:
             return self._populations
@@ -2053,7 +2053,7 @@ class Project:
     populations = property(get_populations, None, None, "Equilibrium populations from a MSM (read only)")
 
     # Transition probabilities from a MSM
-    def get_transitions (self) -> Optional[List[List[float]]]:
+    def get_transitions (self) -> Optional[list[list[float]]]:
         # If we already have a stored value then return it
         if self._transitions:
             return self._transitions
@@ -2065,7 +2065,7 @@ class Project:
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
     # Tested and standarized PDB ids
-    def get_pdb_ids (self) -> List[str]:
+    def get_pdb_ids (self) -> list[str]:
         # If we already have a stored value then return it
         if self._pdb_ids != None:
             return self._pdb_ids
@@ -2282,11 +2282,11 @@ def workflow (
     # Download and correct only
     setup : bool = False,
     # Run only specific analyses/processes
-    include : Optional[List[str]] = None,
+    include : Optional[list[str]] = None,
     # Run everything but specific analyses/processes
-    exclude : Optional[List[str]] = None,
+    exclude : Optional[list[str]] = None,
     # Overwrite already existing output files
-    overwrite : Optional[ Union[ List[str], bool ] ] = None,
+    overwrite : Optional[ list[str] | bool ] = None,
 ):
 
     # Check there are not input errors

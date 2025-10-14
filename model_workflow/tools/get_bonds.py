@@ -24,15 +24,15 @@ def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Sele
 
 # Check if two sets of bonds match perfectly
 def do_bonds_match (
-    bonds_1 : List[ List[int] ],
-    bonds_2 : List[ List[int] ],
+    bonds_1 : list[ list[int] ],
+    bonds_2 : list[ list[int] ],
     # A selection of atoms whose bonds are not evaluated
     excluded_atoms_selection : 'Selection',
     # Set verbose as true to show which are the atoms preventing the match
     verbose : bool = False,
     # The rest of inputs are just for logs and debug
-    atoms : Optional[ List['Atom'] ] = None,
-    counter_list : Optional[ List[int] ] = None
+    atoms : Optional[ list['Atom'] ] = None,
+    counter_list : Optional[ list[int] ] = None
 ) -> bool:
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
@@ -77,7 +77,7 @@ def get_most_stable_bonds (
     trajectory_filepath : str,
     snapshots : int,
     frames_limit : int = 10
-) -> List[ List[int] ]:
+) -> list[ list[int] ]:
 
     # Get each frame in pdb format to run VMD
     print('Finding most stable bonds')
@@ -123,7 +123,7 @@ def get_bonds_reference_frame (
     structure_file : 'File',
     trajectory_file : 'File',
     snapshots : int,
-    reference_bonds : List[ List[int] ],
+    reference_bonds : list[ list[int] ],
     structure : 'Structure',
     pbc_selection : 'Selection',
     patience : int = 100,  # Limit of frames to check before we surrender
@@ -177,7 +177,7 @@ def get_bonds_reference_frame (
     return bonds_reference_frame
 
 # Extract bonds from a source file and format them per atom
-def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ List[int] ]:
+def mine_topology_bonds (bonds_source_file : 'File' | Exception) -> list[ list[int] ]:
     # If there is no topology then return no bonds at all
     if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
@@ -222,7 +222,7 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> List[ 
 
 # Get TPR bonds
 # Try 2 different methods and hope 1 of them works
-def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
     try:
         bonds = get_tpr_bonds_gromacs(tpr_filepath)
     except:
@@ -239,7 +239,7 @@ def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
 
 # Sort bonds according to our format: a list with the bonded atom indices for each atom
 # Source data is the usual format to store bonds: a list of tuples with every pair of bonded atoms
-def sort_bonds (source_bonds : List[ Tuple[int, int] ], atom_count : int) -> List[ List[int] ]:
+def sort_bonds (source_bonds : list[ tuple[int, int] ], atom_count : int) -> list[ list[int] ]:
     # Set a list of lists with an empty list for every atom
     atom_bonds = [ [] for i in range(atom_count) ]
     for bond in source_bonds:
@@ -252,9 +252,9 @@ def sort_bonds (source_bonds : List[ Tuple[int, int] ], atom_count : int) -> Lis
 # Get safe bonds
 # First try to mine bonds from a topology files
 # If the mining fails then search for the most stable bonds
-# If we turst in stable bonds then simply return the structure bonds
+# If we trust in stable bonds then simply return the structure bonds
 def find_safe_bonds (
-    topology_file : Union['File', Exception],
+    topology_file : 'File' | Exception,
     structure_file : 'File',
     trajectory_file : 'File',
     must_check_stable_bonds : bool,
@@ -263,7 +263,7 @@ def find_safe_bonds (
     guess_bonds : bool = False,
     # Optional file with bonds sorted according a new atom order
     resorted_bonds_file : Optional['File'] = None
-) -> List[List[int]]:
+) -> list[list[int]]:
     """Find reference safe bonds in the system."""
     # If we have a resorted file then use it
     # Note that this is very excepcional

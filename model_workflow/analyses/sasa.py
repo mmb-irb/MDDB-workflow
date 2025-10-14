@@ -17,7 +17,7 @@ def sasa(
     trajectory_file: 'File',
     output_directory: str,
     structure : 'Structure',
-    pbc_residues : List[int],
+    pbc_residues : list[int],
     snapshots : int,
     frames_limit : int = 100,
 ):
