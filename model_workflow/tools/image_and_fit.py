@@ -37,7 +37,7 @@ def image_and_fit (
     input_trajectory_file : 'File',
     # This must be in .tpr format
     # This is optional if there are no PBC residues
-    input_topology_file : 'File' | Exception,
+    input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : 'File',
     image : bool, fit : bool,

@@ -389,8 +389,8 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
 def get_covalent_bonds_between (
     structure_filename : str,
     # Selections may be either selection instances or selection strings already in VMD format
-    selection_1 : 'Selection' | str,
-    selection_2 : 'Selection' | str
+    selection_1 : Union['Selection', str],
+    selection_2 : Union['Selection', str]
 ) -> list[ list[int] ]:
     
     # Parse selections (if not parsed yet)

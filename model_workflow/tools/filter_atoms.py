@@ -23,10 +23,10 @@ filter_group_name = "not_water_or_counter_ions"
 def filter_atoms (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
-    input_topology_file : 'File' | Exception,
+    input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : 'File',
-    output_topology_file : 'File' | Exception,
+    output_topology_file : Union['File', Exception],
     # Reference structure used to parse the actual selection
     reference_structure : 'Structure',
     # Filter selection may be a custom selection or true

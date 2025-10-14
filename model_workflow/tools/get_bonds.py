@@ -177,7 +177,7 @@ def get_bonds_reference_frame (
     return bonds_reference_frame
 
 # Extract bonds from a source file and format them per atom
-def mine_topology_bonds (bonds_source_file : 'File' | Exception) -> list[ list[int] ]:
+def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ list[int] ]:
     # If there is no topology then return no bonds at all
     if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
@@ -254,7 +254,7 @@ def sort_bonds (source_bonds : list[ tuple[int, int] ], atom_count : int) -> lis
 # If the mining fails then search for the most stable bonds
 # If we trust in stable bonds then simply return the structure bonds
 def find_safe_bonds (
-    topology_file : 'File' | Exception,
+    topology_file : Union['File', Exception],
     structure_file : 'File',
     trajectory_file : 'File',
     must_check_stable_bonds : bool,

@@ -35,7 +35,7 @@ PREFILTERED_TOPOLOGY_EXCEPTION = Exception('Prefiltered topology')
 def check_inputs (
     input_structure_file : 'File',
     input_trajectory_files : list['File'],
-    input_topology_file : 'File' | Exception) -> dict:
+    input_topology_file : Union['File', Exception]) -> dict:
     """
     Check input files coherence and integrity.
     If there is any problem then raises an input error.

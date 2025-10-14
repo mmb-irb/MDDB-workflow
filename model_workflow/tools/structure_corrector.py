@@ -13,7 +13,7 @@ def structure_corrector (
     # Note that this is an early provisional structure
     structure : 'Structure',
     input_trajectory_file : Optional['File'],
-    input_topology_file : 'File' | Exception,
+    input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : Optional['File'],
     MD : 'MD',

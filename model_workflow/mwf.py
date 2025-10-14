@@ -340,7 +340,7 @@ class Task:
         return output
 
     # Find argument values, thus running any dependency
-    def find_arg_value (self, arg : str, parent : 'Project' | 'MD', default_arguments : set):
+    def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
         # Word 'task' is reserved for getting the task itself
         if arg == 'task': return self
         # Word 'self' is reserved for getting the caller Project/MD
@@ -365,7 +365,7 @@ class Task:
     
     # Find out if inputs changed regarding the last run
     def get_changed_inputs (self,
-        parent : 'Project' | 'MD',
+        parent : Union['Project', 'MD'],
         processed_args : dict) -> tuple[ list[str], bool ]:
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)

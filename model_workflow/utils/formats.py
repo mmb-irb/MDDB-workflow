@@ -154,7 +154,7 @@ def check_format_sets_compability (request_format_set : dict, function_format_se
 def get_format_set_suitable_combination (
     available_functions : list[Callable],
     available_request_format_sets : list[dict],
-) -> Generator[Optional[tuple[Callable, dict]]]:
+) -> Generator[Optional[tuple[Callable, dict]], None, None]:
     
     # Try with each request format set
     for request_format_set in available_request_format_sets:

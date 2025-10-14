@@ -472,7 +472,7 @@ class Residue:
             return None
         # Get the chain in the structure according to the chain index
         return self.structure.chains[self.chain_index]
-    def set_chain (self, new_chain : 'Chain' | str):
+    def set_chain (self, new_chain : Union['Chain', str]):
         # In case the chain is just a string we must find/create the corresponding chain
         if type(new_chain) == str:
             letter = new_chain
@@ -1650,7 +1650,7 @@ class Structure:
         for i, atom in enumerate(self.atoms):
             atom.coords = tuple(new_coordinates[i])
     
-    def get_ion_atom_indices (self) -> Set:
+    def get_ion_atom_indices (self) -> set:
         """Get all supported ion atom indices together in a set."""
         # If we already did this then return the stored value
         if self._ion_atom_indices != None:
@@ -1664,7 +1664,7 @@ class Structure:
         return self._ion_atom_indices
     ion_atom_indices = property(get_ion_atom_indices, None, None, "Atom indices for what we consider supported ions")
 
-    def get_dummy_atom_indices (self) -> Set:
+    def get_dummy_atom_indices (self) -> set:
         """Get all dummy atom indices together in a set."""
         # If we already did this then return the stored value
         if self._dummy_atom_indices != None:
@@ -1997,7 +1997,7 @@ class Structure:
         else:
             return "mix"
 
-    def filter (self, selection : 'Selection' | str, selection_syntax : str = 'vmd') -> 'Structure':
+    def filter (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':
         """Create a new structure from the current using a selection to filter atoms."""
         if not selection:
             raise InputError('No selection was passed')
