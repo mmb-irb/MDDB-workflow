@@ -2008,7 +2008,7 @@ class Project:
         if self.register.tests.get(STABLE_BONDS_FLAG, None) == True:
             must_check = False
         return must_check
-    must_check_stable_bonds = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+    must_check_stable_bonds = property(get_check_stable_bonds, None, None, "Check if we must check stable bonds (read only)")
 
     # Reference bonds
     get_reference_bonds = Task('refbonds', 'Reference bonds', find_safe_bonds)
