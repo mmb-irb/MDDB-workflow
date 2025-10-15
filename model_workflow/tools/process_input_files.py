@@ -23,6 +23,8 @@ def process_input_files (
     input_structure_file : 'File',
     input_trajectory_files : 'File',
     input_topology_file : 'File',
+    # Output
+    output_directory : str,
     topology_filepath : str,
     # Processing parameters
     filter_selection : str,
@@ -50,6 +52,7 @@ def process_input_files (
         raise InputError('All input trajectory files must have the same format')
 
     # Set the output filepaths
+    # Note that these outputs aim for the MD directory, not for the task directory
     output_structure_filepath = self.pathify(STRUCTURE_FILENAME)
     output_structure_file = File(output_structure_filepath)
     output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
@@ -92,7 +95,7 @@ def process_input_files (
     # Set the output format for the already converted structure
     input_structure_format = input_structure_file.format
     output_structure_format = output_structure_file.format
-    converted_structure_filepath = self.pathify(CONVERTED_STRUCTURE)
+    converted_structure_filepath = f'{output_directory}/{CONVERTED_STRUCTURE}'
     # If input structure already matches the output format then avoid the renaming
     if input_structure_format == output_structure_format:
         converted_structure_filepath = input_structure_file.path
@@ -102,7 +105,7 @@ def process_input_files (
     input_trajectories_format = list(input_trajectory_formats)[0]
     output_trajectory_format = output_trajectory_file.format
     # Set the output file for the already converted trajectory
-    converted_trajectory_filepath = self.pathify(CONVERTED_TRAJECTORY)
+    converted_trajectory_filepath = f'{output_directory}/{CONVERTED_TRAJECTORY}'
     # If input trajectory already matches the output format and is unique then avoid the renaming
     if input_trajectories_format == output_trajectory_format and len(input_trajectory_files) == 1:
         converted_trajectory_filepath = input_trajectory_files[0].path
@@ -112,7 +115,7 @@ def process_input_files (
 
     # Set an intermeidate file for the trajectory while it is being converted
     # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
-    incompleted_converted_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY)
+    incompleted_converted_trajectory_filepath = f'{output_directory}/{INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY}'
     incompleted_converted_trajectory_file = File(incompleted_converted_trajectory_filepath)
     # If there is an incomplete trajectory then remove it
     if incompleted_converted_trajectory_file.exists:
@@ -157,13 +160,19 @@ def process_input_files (
 
     # Set output filenames for the already filtered structure and trajectory
     # Note that this is the only step affecting topology and thus here we output the definitive topology
-    filtered_structure_file = File(self.pathify(FILTERED_STRUCTURE)) if must_filter else converted_structure_file
-    filtered_trajectory_file = File(self.pathify(FILTERED_TRAJECTORY)) if must_filter else converted_trajectory_file
+    filtered_structure_filepath = f'{output_directory}/{FILTERED_STRUCTURE}'
+    if not must_filter:
+        filtered_structure_filepath = converted_structure_filepath
+    filtered_structure_file = File(filtered_structure_filepath)
+    filtered_trajectory_filepath = f'{output_directory}/{FILTERED_TRAJECTORY}'
+    if not must_filter:
+        filtered_trajectory_filepath = converted_trajectory_filepath
+    filtered_trajectory_file = File(filtered_trajectory_filepath)
     filtered_topology_file = output_topology_file if must_filter else input_topology_file
 
     # Set an intermeidate file for the trajectory while it is being filtered
     # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while filtering
-    incompleted_filtered_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + FILTERED_TRAJECTORY)
+    incompleted_filtered_trajectory_filepath = f'{output_directory}/{INCOMPLETE_PREFIX + FILTERED_TRAJECTORY}'
     incompleted_filtered_trajectory_file = File(incompleted_filtered_trajectory_filepath)
     # If there is an incomplete trajectory then remove it
     if incompleted_filtered_trajectory_file.exists:
@@ -225,12 +234,18 @@ def process_input_files (
     must_image = image or fit
 
     # Set output filenames for the already filtered structure and trajectory
-    imaged_structure_file = File(self.pathify(IMAGED_STRUCTURE)) if must_image else filtered_structure_file
-    imaged_trajectory_file = File(self.pathify(IMAGED_TRAJECTORY)) if must_image else filtered_trajectory_file
+    imaged_structure_filepath = f'{output_directory}/{IMAGED_STRUCTURE}'
+    if not must_image:
+        imaged_structure_filepath = filtered_structure_filepath
+    imaged_structure_file = File(imaged_structure_filepath)
+    imaged_trajectory_filepath = f'{output_directory}/{IMAGED_TRAJECTORY}'
+    if not must_image:
+        imaged_trajectory_filepath = filtered_trajectory_filepath
+    imaged_trajectory_file = File(imaged_trajectory_filepath)
 
     # Set an intermeidate file for the trajectory while it is being imaged
     # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while imaging
-    incompleted_imaged_trajectory_filepath = self.pathify(INCOMPLETE_PREFIX + IMAGED_TRAJECTORY)
+    incompleted_imaged_trajectory_filepath = f'{output_directory}/{INCOMPLETE_PREFIX + IMAGED_TRAJECTORY}'
     incompleted_imaged_trajectory_file = File(incompleted_imaged_trajectory_filepath)
     # If there is an incomplete trajectory then remove it
     if incompleted_imaged_trajectory_file.exists:
@@ -309,8 +324,10 @@ def process_input_files (
     print(' * Correcting structure')
 
     # Set output filenames for the already filtered structure and trajectory
-    corrected_structure_file = File(self.pathify(CORRECTED_STRUCTURE))
-    corrected_trajectory_file = File(self.pathify(CORRECTED_TRAJECTORY))
+    corrected_structure_filepath = f'{output_directory}/{CORRECTED_STRUCTURE}'
+    corrected_structure_file = File(corrected_structure_filepath)
+    corrected_trajectory_filepath = f'{output_directory}/{CORRECTED_TRAJECTORY}'
+    corrected_trajectory_file = File(corrected_trajectory_filepath)
 
     # Correct the structure
     # This function reads and or modifies the following MD variables:
@@ -353,8 +370,7 @@ def process_input_files (
     for input_file, processed_file, output_file in input_and_output_files:
         # If the processed file is already the output file then there is nothing to do here
         # This means it was already the input file and no changes were made
-        if processed_file == output_file:
-            continue
+        if processed_file == output_file: continue
         # There is a chance that the input files have not been modified
         # This means the input format has already the output format and it is not to be imaged, fitted or corrected
         # However we need the output files to exist and we dont want to rename the original ones to conserve them
@@ -384,7 +400,7 @@ def process_input_files (
     self._trajectory_file = output_trajectory_file
     self.project._topology_file = output_topology_file
 
-    # If the input and outpu file have the same name then overwrite input cksums
+    # If the input and output file have the same name then overwrite input cksums
     # Thus we avoid this task to run forever
     # DANI: Esto es provisional, hay que prohibir que los inputs se llamen como los outputs
     if input_structure_file == output_structure_file:
@@ -430,3 +446,13 @@ def process_input_files (
         # Note that a broken symlink does not 'exists'
         if removable_file.exists or removable_file.is_symlink():
             removable_file.remove()
+
+    # We must leave something in the directory
+    # Otherwise the task will find out it is empty and will delete it
+    # And we don't want to delete it or it will be done again in the next run
+    # To solve this leave some symbolic file
+    manifest_filepath = f'{output_directory}/manifest.txt'
+    with open(manifest_filepath, 'w') as file:
+        file.write('Input files were processed sucessfully.\n' +
+            'Intermediate files were removed to save space.\n'
+            'Please do not remove this file\n')

@@ -847,7 +847,7 @@ class MD:
 
     # Run the actual processing to generate output processed files out of input raw files
     # And by "files" I mean structure, trajectory and topology
-    process_input_files = Task('inpro', 'Process input files', process_input_files)
+    input_files_processing = Task('inpro', 'Input files processing', process_input_files)
 
     def get_structure_file (self) -> str:
         """Get the processed structure file."""
@@ -868,7 +868,7 @@ class MD:
                     '  Please refrain from using the faith argument (-f) if you ignore its effect.')
             return self._structure_file
         # Run the processing logic
-        self.process_input_files(self)
+        self.input_files_processing(self)
         # Now that the file is sure to exist we return it
         return self._structure_file
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
@@ -896,7 +896,7 @@ class MD:
                     '  Please refrain from using the faith argument (-f) if you ignore its effect.')
             return self._trajectory_file
         # Run the processing logic
-        self.process_input_files(self)
+        self.input_files_processing(self)
         # Now that the file is sure to exist we return it
         return self._trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
@@ -1956,7 +1956,7 @@ class Project:
                     '  Please refrain from using the faith argument (-f) if you ignore its effect.')
             return self._topology_file
         # Run the processing logic
-        self.reference_md.process_input_files(self.reference_md)
+        self.reference_md.input_files_processing(self.reference_md)
         # Now that the file is sure to exist we return it
         return self._topology_file
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
