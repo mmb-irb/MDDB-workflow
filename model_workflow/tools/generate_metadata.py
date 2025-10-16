@@ -54,7 +54,7 @@ def prepare_project_metadata (
     input_cv19_abs : bool,
     input_cv19_nanobs : bool,
     ):
-    """Prepare a JSON file with all project metadata."""
+    """ Prepare a JSON file with all project metadata. """
 
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(

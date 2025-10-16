@@ -244,7 +244,7 @@ def coarse_grain_membranes(structure_file : 'File',
 
 def display_membrane_mapping(mem_map: str, pdb: str):
     try:
-        import nglview as nv
+        import nglview as nv  # type: ignore
     except ImportError:
         raise ImportError("nglview is required for displaying membrane mapping. Please install it using 'pip install nglview'.")
     

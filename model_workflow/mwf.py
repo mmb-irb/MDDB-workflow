@@ -14,11 +14,10 @@ from glob import glob
 from inspect import getfullargspec
 
 # Constants
+# Importing constants first is important
 from model_workflow.utils.constants import *
 
 # Import local utils
-# Importing constants first is important
-from model_workflow.utils.constants import *
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, load_yaml, save_yaml
@@ -111,39 +110,57 @@ OUTPUT_DIRECTORY_ARG = 'output_directory'
 requestables = {}
 inverted_requestables = {}
 
-# Set a class to handle a generic task
-# WARNING: Note that a task is static in relation to its Project/MD
-# This means that all MDs share the same task and thus it can not store internal values
-# Instead all its internal vallues are stored in the parent using a key name
-# This is not easy to change with the curent implementation
+
 class Task:
+    """ Descriptor class to handle a generic task.
+    It implements lazy properties, caching and overwriting.
+
+    Since its properties are static, results are stored in the parent object
+    (MD/Project), or otherwise all MDs would share the same task values. """
+
     def __init__ (self,
-        # The task flag
-        # This name is to be used by the include/exclude/overwrite arguments
-        # It will also name the folder containing all analysis output
         flag : str,
-        # The task nice name
-        # This user-firendly name is to be used in the logs
         name : str,
-        # The task function
-        # Function argument names must correspond with Project/MD property names
         func : Callable,
-        # The task function "additional" inputs
-        # Project/MD properties are automatically sent to the function as arguments
-        # However some analyses have additional arguments (e.g. frames limit, cutoffs, etc.)
         args : dict = {},
-        # In case this task is to produce an output file, set here its name
-        # The actual path relative to its project/MD will be set automatically
-        # For those tasks which generate a directory with multiple outputs this is not necessary
-        # However this may come in handy by tasks with a single file output
-        # Specillay when this output file is used later in this workflow
         output_filename : Optional[str] = None,
-        # Set if the returned output is to be cached
-        # Note that argument values are always cached, this is not optional
         use_cache : bool = True,
-        # Set if the task is run in debug mode thus producing more output logs
         debug : bool = False,
     ):
+        """
+        Initialize the Task object.
+
+        Args:
+            flag (str):
+                The task flag.
+                This name is used by the include/exclude/overwrite arguments and to name the analysis output directory.
+
+            name (str):
+                The task user-friendly name is to be used in the logs.
+
+            func (Callable):
+                The task function.
+                Function argument names must correspond with Project/MD property names.
+
+            args (dict, optional):
+                The task function additional arguments.
+                Project/MD properties are automatically sent to the function as arguments.
+                However some analyses have additional arguments (e.g. frames limit, cutoffs, etc.)
+
+            output_filename (str, optional):
+                The task output filename.
+                Path will be set automatically relative to its project/MD.
+                For those tasks which generate a directory with multiple outputs this is not necessary.
+                However this may come in handy by tasks with a single file output.
+                Specially when this output file is used later in this workflow.
+
+            use_cache (bool, optional):
+                Set if the returned output is to be cached.
+                Note that argument values are always cached, this is not optional.
+
+            debug (bool, optional):
+                If the task is run in debug mode, producing more output logs. Defaults to False.
+        """
         # Save input arguments
         self.flag = flag
         self.name = name
@@ -393,22 +410,31 @@ class Task:
                 # Update the references
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
-    
-# A Molecular Dynamics (MD) is the union of a structure and a trajectory
-# Having this data several analyses are possible
-# Note that an MD is always defined inside of a Project and thus it has additional topology and metadata
+
+
 class MD:
+    """ A Molecular Dynamics (MD) is the union of a structure and a trajectory.
+    Having this data several analyses are possible.
+    Note that an MD is always defined inside of a Project and thus it has additional topology and metadata. """
+
     def __init__ (self,
-        # The parent project this MD belongs to
         project : 'Project',
-        # The number of the MD according to its accession
         number : int,
-        # The local directory where the MD takes place
         directory : str,
-        # Input structure and trajectory files
         input_structure_filepath : str,
         input_trajectory_filepaths : list[str],
     ):
+        """
+        Initialize the MD object.
+        
+        Args:
+            project (Project): The parent project this MD belongs to.
+            number (int): The number of the MD according to its accession.
+            directory (str): The local directory where the MD takes place.
+            input_structure_filepath (str): The input structure file path.
+            input_trajectory_filepaths (list[str]): The input trajectory file paths.
+        """
+        
         # Save the inputs
         self.project = project
         if not project:
@@ -490,13 +516,13 @@ class MD:
         return 'MD'
 
     def pathify (self, filename_or_relative_path : str) -> str:
-        """Given a filename or relative path, add the MD directory path at the beginning."""
+        """ Given a filename or relative path, add the MD directory path at the beginning. """
         return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Input structure file ------------
 
     def get_input_structure_filepath (self) -> str:
-        """Set a function to get input structure file path"""
+        """ Set a function to get input structure file path. """
         # Return the internal value if it is already assigned
         if self._input_structure_filepath != None:
             return self._input_structure_filepath
@@ -577,8 +603,8 @@ class MD:
         raise InputError('There is not input structure at all')
 
     def get_input_structure_file (self) -> str:
-        """Get the input pdb filename from the inputs.
-        If the file is not found try to download it."""
+        """ Get the input pdb filename from the inputs.
+        If the file is not found try to download it. """
         # If the input structure file is already defined then return it
         if self._input_structure_file:
             return self._input_structure_file
@@ -607,10 +633,10 @@ class MD:
     # Input trajectory filename ------------
 
     def get_input_trajectory_filepaths (self) -> str:
+        """ Get the input trajectory file paths. """
         # Return the internal value if it is already assigned
         if self._input_trajectory_filepaths != None:
             return self._input_trajectory_filepaths
-        """Set a function to get input trajectory file paths."""
         # Set a function to check and fix input trajectory filepaths
         # Also relativize paths to the current MD directory and parse glob notation
         def relativize_and_parse_paths (input_paths : list[str]) -> list[str]:
@@ -700,8 +726,8 @@ class MD:
         raise InputError('There is not input trajectory at all')
 
     def get_input_trajectory_files (self) -> str:
-        """Get the input trajectory filename(s) from the inputs.
-        If file(s) are not found try to download it."""
+        """ Get the input trajectory filename(s) from the inputs.
+        If file(s) are not found try to download it. """
         # If we already defined input trajectory files then return them
         if self._input_trajectory_files != None:
             return self._input_trajectory_files
@@ -734,7 +760,7 @@ class MD:
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
     def get_md_inputs (self) -> dict:
-        """MD specific inputs."""
+        """ Get MD specific inputs. """
         # If we already have a value stored then return it
         if self._md_inputs:
             return self._md_inputs
@@ -770,9 +796,8 @@ class MD:
 
     md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
 
-    # Get a specific 'input' value from MD inputs
-    # If the key is not found among MD inputs then try with the project input getter
     def get_input (self, name: str):
+        """ Get a specific 'input' value from MD inputs. """
         value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
         if value != MISSING_INPUT_EXCEPTION:
@@ -782,9 +807,9 @@ class MD:
     # ---------------------------------
 
     def get_file (self, target_file : File) -> bool:
-        """Check if a file exists. If not, try to download it from the database.
+        """ Check if a file exists. If not, try to download it from the database.
         If the file is not found in the database it is fine, we do not even warn the user.
-        Note that this function is used to get populations and transitions files, which are not common."""
+        Note that this function is used to get populations and transitions files, which are not common. """
         # If it exists we are done
         if target_file.exists:
             return True
@@ -800,8 +825,8 @@ class MD:
         self.remote.download_file(target_file)
         return True
     
-    # Make a summary of tests and their status
     def print_tests_summary (self):
+        """ Make a summary of tests and their status. """
         print('Tests summary:')
         for test_name in AVAILABLE_CHECKINGS:
             test_result = self.register.tests.get(test_name, None)
@@ -851,7 +876,7 @@ class MD:
     process_input_files = Task('inpro', 'Process input files', process_input_files)
 
     def get_structure_file (self) -> str:
-        """Get the processed structure file."""
+        """ Get the processed structure file. """
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._structure_file:
@@ -875,7 +900,7 @@ class MD:
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
 
     def get_trajectory_file (self) -> str:
-        """Get the processed trajectory file."""
+        """ Get the processed trajectory file. """
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._trajectory_file:
@@ -1092,8 +1117,8 @@ class MD:
             print('  e.g. ' + example_residue_names)
         return parsed_selection
 
-    # Coarse grain atom selection
     def get_cg_selection (self) -> 'Selection':
+        """ Get the coarse grain atom selection. """
         # If we already have a stored value then return it
         if self.project._cg_selection:
             return self.project._cg_selection
@@ -1102,10 +1127,10 @@ class MD:
         return self.project._cg_selection
     cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
-    # Indices of residues in coarse grain
     # WARNING: Do not inherit project cg residues
     # WARNING: It may trigger all the processing logic of the reference MD when there is no need
     def get_cg_residues (self) -> list[int]:
+        """ Get indices of residues in coarse grain. """
         # If we already have a stored value then return it
         if self.project._cg_residues:
             return self.project._cg_residues
@@ -1119,21 +1144,18 @@ class MD:
         return self.project._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-    # Equilibrium populations from a MSM
-    # Inherited from project
     def get_populations (self) -> list[float]:
+        """ Get equilibrium populations from a MSM from the project. """
         return self.project.populations
     populations = property(get_populations, None, None, "Equilibrium populations from a MSM (read only)")
 
-    # Transition probabilities from a MSM
-    # Inherited from project
     def get_transitions (self) -> list[list[float]]:
+        """ Get transition probabilities from a MSM from the project. """
         return self.project.transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
-    # Residues mapping
-    # Inherited from project
     def get_protein_map (self) -> dict:
+        """ Get the residues mapping from the project. """
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
@@ -1262,43 +1284,26 @@ class MD:
     run_lipid_interactions_analysis = Task('channels', 'Membrane channels analysis',
         channels, { 'frames_limit': 10 })
         
-# The project is the main project
-# A project is a set of related MDs
-# These MDs share all or most topology and metadata
+
 class Project:
+    """ Class for the main project of an MDDB accession.
+    A project is a set of related MDs.
+    These MDs share all or most topology and metadata. """
+
     def __init__ (self,
-        # The local directory where the project takes place
         directory : str = '.',
-        # Accession of the project in the database, given that this project is already uploaded
         accession : Optional[str] = None,
-        # URL to query for missing files when an accession is provided
         database_url : str = DEFAULT_API_URL,
-        # A file containing a lof of inputs related to metadata, MD simulation parameters and analysis configurations
         inputs_filepath : str = None,
-        # The input topology filename
-        # Multiple formats are accepted but the default is our own parsed json topology
         input_topology_filepath : Optional[str] = None,
-        # Input structure filepath
-        # It may be both relative to the project directory or to every MD directory
         input_structure_filepath : Optional[str] = None,
-        # Input trajectory filepaths
-        # These files are searched in every MD directory so the path MUST be relative
         input_trajectory_filepaths : Optional[str] = None,
-        # Set the different MD directories to be run
-        # Each MD directory must contain a trajectory and may contain a structure
         md_directories : Optional[list[str]] = None,
-        # Set an alternative MD configuration input
         md_config : Optional[list] = None,
-        # Reference MD directory
-        # Project functions which require structure or trajectory will use the ones from the reference MD
-        # If no reference is passed then the first directory is used
-        reference_md_index : Optional[int] = None,        
-        # Input populations and transitions (MSM only)
+        reference_md_index : Optional[int] = None,
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
-        # Input AiiDA data
         aiida_data_filepath : Optional[str] = None,
-        # Processing and analysis instructions
         filter_selection : bool | str = False,
         pbc_selection : Optional[str] = None,
         cg_selection : Optional[str] = None,
@@ -1314,9 +1319,42 @@ class Project:
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         interactions_auto : Optional[str] = None,
         guess_bonds : bool = False,
-        # Set it we must download just a few frames instead of the whole trajectory
         sample_trajectory : Optional[int] = None,
     ):
+        """
+        Initialize a Project.
+
+        Args:
+            directory (str): Local directory where the project takes place.
+            accession (Optional[str]): Accession of the project in the database (if already uploaded).
+            database_url (str): URL to query/download missing files when an accession is provided.
+            inputs_filepath (str): Path to a file with inputs for metadata, simulation parameters and analysis config.
+            input_topology_filepath (Optional[str]): Input topology filename (multiple formats accepted; default is our parsed JSON topology).
+            input_structure_filepath (Optional[str]): Input structure filepath (relative to project or per-MD directories).
+            input_trajectory_filepaths (Optional[str]): Input trajectory filepaths (searched in each MD directory; should be relative).
+            md_directories (Optional[list[str]]): List of MD directories to run (each must contain a trajectory, may contain a structure).
+            md_config (Optional[list]): Alternative MD configuration input (see CLI -md format).
+            reference_md_index (Optional[int]): Index of the reference MD (used by project-level functions; defaults to first MD).
+            populations_filepath (str): Path to MSM equilibrium populations file.
+            transitions_filepath (str): Path to MSM transition probabilities file.
+            aiida_data_filepath (Optional[str]): Path to AiiDA provenance/data file.
+            filter_selection (bool|str): Filter selection instruction passed to filtering logic.
+            pbc_selection (Optional[str]): Periodic boundary conditions atom selection (console overrides inputs file).
+            cg_selection (Optional[str]): Coarse-grained atom selection (console overrides inputs file).
+            image (bool): Set if the trajectory needs to be imaged so atoms stay in the PBC box.
+            fit (bool): Whether to apply fitting during processing.
+            translation (list[float]): Translation vector applied when processing (default [0,0,0]).
+            mercy (list[str]|bool): Failures to be tolerated (or boolean to set all/none).
+            trust (list[str]|bool): Tests to skip/trust (or boolean to set all/none).
+            faith (bool): If True, require input files to match expected output files and skip processing.
+            pca_analysis_selection (str): Selection string for PCA analysis.
+            pca_fit_selection (str): Selection string for PCA fitting.
+            rmsd_cutoff (float): RMSD cutoff used in some checks.
+            interaction_cutoff (float): Distance cutoff for interaction detection.
+            interactions_auto (Optional[str]): Automatic interactions detection mode.
+            guess_bonds (bool): Whether to guess bonds when topology is missing.
+            sample_trajectory (Optional[int]): If provided, download only a sample number of frames instead of full trajectory.
+        """
         # Save input parameters
         self.directory = normpath(directory)
         # If it is an absolute path then make it relative to the project
@@ -1471,7 +1509,7 @@ class Project:
         return 'Project'
 
     def pathify (self, filename_or_relative_path : str) -> str:
-        """Given a filename or relative path, add the project directory path at the beginning."""
+        """ Given a filename or relative path, add the project directory path at the beginning. """
         return normpath(self.directory + '/' + filename_or_relative_path)
 
     # Check MD directories to be right
@@ -1547,6 +1585,7 @@ class Project:
 
     # Setup the MDs
     def get_mds (self) -> list:
+        """ Get the available MDs (read only). """
         # If MDs are already declared then return them
         if self._mds:
             return self._mds
@@ -1596,8 +1635,8 @@ class Project:
     # Inputs filename ------------
 
     def is_inputs_file_available (self) -> bool:
-        """Set a function to check if inputs file is available.
-        Note that asking for it when it is not available will lead to raising an input error."""
+        """ Set a function to check if inputs file is available.
+        Note that asking for it when it is not available will lead to raising an input error. """
         # If name is not declared then it is impossible to reach it
         if not self._inputs_file:
             return False
@@ -1610,7 +1649,7 @@ class Project:
         return False
 
     def get_inputs_file (self) -> File:
-        """Set a function to load the inputs file."""
+        """ Set a function to load the inputs file. """
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
@@ -1629,7 +1668,7 @@ class Project:
     # Topology filename ------------
 
     def get_input_topology_filepath (self) -> Optional[str]:
-        """Get the input topology filepath from the inputs or try to guess it.
+        """ Get the input topology filepath from the inputs or try to guess it.
         If the input topology filepath is a 'no' flag then we consider there is no topology at all
         So far we extract atom charges and atom bonds from the topology file
         In this scenario we can keep working but there are some consecuences:
@@ -1681,8 +1720,8 @@ class Project:
             '  Some analyses such us the interaction energies will be skiped')
 
     def get_input_topology_file (self) -> Optional[File]:
-        """Get the input topology file.
-        If the file is not found try to download it."""
+        """ Get the input topology file.
+        If the file is not found try to download it. """
         # If we already have a value then return it
         if self._input_topology_file != None:
             return self._input_topology_file
@@ -1719,7 +1758,7 @@ class Project:
 
     # Input structure filename ------------
     def get_input_structure_file (self) -> File:
-        """Get the input structure filename."""
+        """ Get the input structure filename. """
         # When calling this function make sure all MDs have the file or try to download it
         return self.reference_md._input_structure_file
     input_structure_file = property(get_input_structure_file, None, None, "Input structure filename for each MD (read only)")
@@ -1727,15 +1766,15 @@ class Project:
     # Input trajectory filename ------------
 
     def get_input_trajectory_files (self) -> list[File]:
-        """Get the input trajectory filename(s) from the inputs.
-        If file(s) are not found try to download it."""
+        """ Get the input trajectory filename(s) from the inputs.
+        If file(s) are not found try to download it. """
         return self.reference_md._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames for each MD (read only)")
 
     # Populations file ------------
 
     def get_populations_file (self) -> Optional[File]:
-        """Get the MSM equilibrium populations file."""
+        """ Get the MSM equilibrium populations file. """
         if not self.get_file(self._populations_file):
             return None
         return self._populations_file
@@ -1744,7 +1783,7 @@ class Project:
     # Transitions file ------------
 
     def get_transitions_file (self) -> Optional[File]:
-        """Get the MSM transition probabilities file."""
+        """ Get the MSM transition probabilities file. """
         if not self.get_file(self._transitions_file):
             return None
         return self._transitions_file
@@ -1753,7 +1792,7 @@ class Project:
     # AiiDA data file
 
     def get_aiida_data_file (self) -> Optional[File]:
-        """Get the AiiDA data file."""
+        """ Get the AiiDA data file."""
         if not self._aiida_data_file: return None
         if not self.get_file(self._aiida_data_file): return None
         return self._aiida_data_file
@@ -1761,11 +1800,12 @@ class Project:
 
     # ---------------------------------
 
-    # Check if a file exists
-    # If not, try to download it from the database
-    # If the file is not found in the database it is fine, we do not even warn the user
-    # Note that nowadays this function is used to get populations and transitions files, which are not common
     def get_file (self, target_file : File) -> bool:
+        """ Check if a file exists.
+        If not, try to download it from the database.
+        If the file is not found in the database it is fine, we do not even warn the user.
+        Note that nowadays this function is used to get populations and transitions files, which are not common.
+        """
         return self.reference_md.get_file(target_file)
 
     # Input file values -----------------------------------------
@@ -1796,9 +1836,9 @@ class Project:
         return self._inputs
     inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
 
-    # Permanently update the inputs file
-    # This may be done when command line inputs do not match file inputs
     def update_inputs (self, nested_key : str, new_value):
+        """ Permanently update the inputs file.
+        This may be done when command line inputs do not match file inputs. """
         # If the input already matches then do nothing
         current_value = read_ndict(self.inputs, nested_key, MISSING_INPUT_EXCEPTION)
         if current_value == new_value: return
@@ -1813,9 +1853,8 @@ class Project:
 
     # Then set getters for every value in the inputs file
 
-    # Get a specific 'input' value
-    # Handle missing keys
     def get_input (self, name: str):
+        """ Get a specific 'input' value. """
         value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
         if value != MISSING_INPUT_EXCEPTION:
@@ -1908,7 +1947,7 @@ class Project:
     # Set additional values infered from input values
 
     def check_is_time_dependent (self) -> bool:
-        """Set if MDs are time dependent."""
+        """ Set if MDs are time dependent. """
         if self.input_type == 'trajectory':
             return True
         elif self.input_type == 'ensemble':
@@ -2169,9 +2208,9 @@ class Project:
 
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------
 
-# Set a function to read a file which may be in differen formats
 # DANI: En cuanto se concrete el formato de los markov esta función no hará falta
 def read_file (target_file : File) -> dict:
+    """ Set a function to read a file which may be in different formats. """
     # Get the file format
     file_format = target_file.filename.split('.')[-1]
     # Read numpy files
@@ -2181,8 +2220,8 @@ def read_file (target_file : File) -> dict:
     if file_format == 'json':
         return load_json(target_file.path)
 
-# Set a function to convert an MD name into an equivalent MD directory
 def name_2_directory (name : str) -> str:
+    """ Set a function to convert an MD name into an equivalent MD directory. """
     # Replace white spaces with underscores
     directory = name.replace(' ', '_')
     # Remove problematic characters
@@ -2191,7 +2230,7 @@ def name_2_directory (name : str) -> str:
     return directory
 
 def check_directory (directory : str) -> str:
-    """Check for problematic characters in a directory path."""
+    """ Check for problematic characters in a directory path. """
     # Remove problematic characters
     directory_characters = set(directory)
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
@@ -2199,7 +2238,7 @@ def check_directory (directory : str) -> str:
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
 def directory_2_name (directory : str) -> str:
-    """Convert an MD directory into an equivalent MD name."""
+    """ Convert an MD directory into an equivalent MD name. """
     # Remove a possible starting './'
     # Replace white spaces with underscores
     name = directory.split('/')[-1].replace('_', ' ')
