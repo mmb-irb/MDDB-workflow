@@ -98,11 +98,15 @@ def protein_residue_name_to_letter (residue_name : str) -> str:
     return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
 # Set a JSON loader with additional logic to better handle problems
-def load_json (filepath : str) -> dict: 
+def load_json (filepath : str, replaces : Optional[List[tuple]] = []) -> dict: 
     try:
         with open(filepath, 'r') as file:
-            content = json.load(file)
-        return content
+            content = file.read()
+            for replace in replaces:
+                target, replacement = replace
+                content = content.replace(target, replacement)
+            parsed_content = json.loads(content)
+        return parsed_content
     except Exception as error:
         raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
 
@@ -117,12 +121,18 @@ def save_json (content, filepath : str, indent : Optional[int] = None):
         raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 # Set a YAML loader with additional logic to better handle problems
+# The argument replaces allows to replace file content before beeing processed
+# Every replace is a tuple whith two values: the target and the replacement
 # DANI: Por algún motivo yaml.load también funciona con archivos en formato JSON
-def load_yaml (filepath : str):
+def load_yaml (filepath : str, replaces : Optional[List[tuple]] = []) -> dict:
     try:
         with open(filepath, 'r') as file:
-            content = yaml.load(file, Loader=yaml.CLoader)
-        return content
+            content = file.read()
+            for replace in replaces:
+                target, replacement = replace
+                content = content.replace(target, replacement)
+            parsed_content = yaml.load(content, Loader=yaml.CLoader)
+        return parsed_content
     except Exception as error:
         warn(str(error).replace('\n', ' '))
         raise InputError('Something went wrong when loading YAML file ' + filepath)

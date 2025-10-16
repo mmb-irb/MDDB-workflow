@@ -4,7 +4,7 @@
 
 # Import python libraries
 from os import chdir, rename, remove, walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath, normpath, split
+from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 from shutil import rmtree
 import sys
 import io
@@ -1318,6 +1318,11 @@ class Project:
         # If it is an absolute path then make it relative to the project
         if isabs(self.directory):
             self.directory = relpath(self.directory)
+        # Save the directory name alone apart
+        if self.directory == '.':
+            self.directory_name = basename(getcwd())
+        else:
+            self.directory_name = basename(self.directory)
         
         self.database_url = database_url
         self.accession = accession
@@ -1773,12 +1778,16 @@ class Project:
         # If inputs are already loaded then return them
         if self._inputs:
             return self._inputs
+        # When loading the inuts file, replace some values automatically
+        replaces = [
+            ( '$DIR', self.directory_name )
+        ]
         # Otherwise, load inputs from the inputs file
         inputs_data = None
         if self.inputs_file.format == 'json':
-            inputs_data = load_json(self.inputs_file.path)
+            inputs_data = load_json(self.inputs_file.path, replaces)
         elif self.inputs_file.format == 'yaml':
-            inputs_data = load_yaml(self.inputs_file.path)
+            inputs_data = load_yaml(self.inputs_file.path, replaces)
         else:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
         if not inputs_data:
