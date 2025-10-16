@@ -40,7 +40,6 @@ from model_workflow.utils.type_hints import *
 from model_workflow.tools.get_first_frame import get_first_frame
 from model_workflow.tools.get_bonds import find_safe_bonds, get_bonds_reference_frame
 from model_workflow.tools.process_interactions import process_interactions
-from model_workflow.tools.find_interaction_types import find_interaction_types
 from model_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
 from model_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from model_workflow.tools.chains import prepare_chain_references
@@ -2150,9 +2149,6 @@ class Project:
     def get_processed_interactions (self) -> dict:
         return self.reference_md.interactions
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
-    # Get interaction types
-    get_interaction_types = Task('intertypes', 'Finding interaction types', find_interaction_types)
-    interaction_types = property(get_interaction_types, None, None, "Interaction types (read only)")
 
     # Prepare the project metadata file to be upload to the database
     prepare_metadata = Task('pmeta', 'Prepare project metadata',

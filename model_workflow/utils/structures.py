@@ -2006,8 +2006,7 @@ class Structure:
 
     def filter (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':
         """Create a new structure from the current using a selection to filter atoms."""
-        if not selection:
-            raise InputError('No selection was passed')
+        if not selection: raise RuntimeError('No selection was passed')
         # In case the selection is not an actual Selection, but a string, parse the string into a Selection
         if type(selection) == str:
             selection = self.select(selection, selection_syntax)

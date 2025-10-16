@@ -5,6 +5,9 @@ from model_workflow.utils.auxiliar import InputError, save_json
 from model_workflow.utils.constants import MD_DIRECTORY
 from model_workflow.utils.type_hints import *
 
+# Input fields + interaction type
+METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "selection_2", "type" }
+
 def prepare_project_metadata (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -16,8 +19,7 @@ def prepare_project_metadata (
     ligand_map : dict,
     input_protein_references : Union[ List[str], dict ],
     input_ligands : List[dict],
-    input_interactions : list,
-    interaction_types : dict,
+    interactions : list,
     warnings : dict,
     # Set all inputs to be loaded as they are
     input_force_fields : List[str],
@@ -121,12 +123,11 @@ def prepare_project_metadata (
     framestep = None if md_type == 'ensemble' else input_framestep
 
     # Metadata interactions are input interactions and the interaction types combined
+    # Thus we take the processed interactions and remove the field we are not interested in
     metadata_interactions = []
-    if input_interactions is not None:
-        for interaction in input_interactions:
-            metadata_interaction = { k: v for k, v in interaction.items() }
-            interaction_name = metadata_interaction['name']
-            metadata_interaction['type'] = interaction_types[interaction_name]
+    if interactions is not None:
+        for interaction in interactions:
+            metadata_interaction = { k: v for k, v in interaction.items() if k in METADATA_INTERACTION_FIELDS }
             metadata_interactions.append(metadata_interaction)
 
     # Make sure links are correct
