@@ -16,7 +16,7 @@ from MDAnalysis.core.universe import Universe
 
 # Given a value of any type, generate a 'cksum' like code which is reproducible
 # This is used to compare values between different runs without having to store the whole value
-def get_cksum_id (value) -> Optional[Union[int, float, str]]:
+def get_cksum_id (value) -> Optional[int | float | str]:
     # Nones remain as they are
     if value == None: return None
     # Ge the value type

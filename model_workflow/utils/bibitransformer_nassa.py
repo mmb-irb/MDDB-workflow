@@ -117,7 +117,7 @@ class BiBiTransformer(TransformerMixin):
         :param bics0: BIC value for 1-component model
         :param bics1: BIC value for 2-component model
 
-        :return: Tuple with uninormal, binormal and insuficient evidence boolean values.
+        :return: tuple with uninormal, binormal and insuficient evidence boolean values.
         """
         diff_bic = bics1 - bics0
         # probability of a two-component model

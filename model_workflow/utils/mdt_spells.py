@@ -23,7 +23,7 @@ mdtraj_supported_trajectory_formats = {'dcd', 'xtc', 'trr', 'nc', 'h5', 'binpos'
 # Use mdtraj 'mdconvert' command-line script (there is no python version for this tool apparently)
 # Multiple files may be selected with bash syntax
 def merge_and_convert_trajectories (
-    input_trajectory_filenames : List[str],
+    input_trajectory_filenames : list[str],
     output_trajectory_filename : str
     ):
 
@@ -61,7 +61,7 @@ merge_and_convert_trajectories.format_sets = [
 # WARNING: This process is restricted to trr/xtc output files given the merger
 def merge_and_convert_trajectories_alternative (
     input_structure_filename : str,
-    input_trajectory_filenames : List[str],
+    input_trajectory_filenames : list[str],
     output_trajectory_filename : str
     ):
 
@@ -124,7 +124,7 @@ merge_and_convert_trajectories_alternative.format_sets = [
 # DEPRECTAED: Use VMD instead
 def merge_and_convert_trajectories_unefficient (
     input_structure_filename : str,
-    input_trajectory_filenames : List[str],
+    input_trajectory_filenames : list[str],
     output_trajectory_filename : str,
 ):
     print('WARNING: You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
@@ -165,8 +165,8 @@ def get_trajectory_subset (
     start : int = 0,
     end : int = None,
     step : int = 1,
-    frames : List[int] = [],
-    skip : List[int] = [],
+    frames : list[int] = [],
+    skip : list[int] = [],
 ):
 
     # Load the trajectory frame by frame and get only the desired frames
@@ -340,7 +340,7 @@ def sort_trajectory_atoms (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
     output_trajectory_file : 'File',
-    new_atom_indices : List[int]
+    new_atom_indices : list[int]
 ):
 
     # Load the topology, which is used further

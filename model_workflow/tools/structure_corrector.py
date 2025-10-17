@@ -21,8 +21,8 @@ def structure_corrector (
     pbc_selection : 'Selection',
     snapshots : int,
     register : 'Register',
-    mercy : List[str],
-    trust : List[str],
+    mercy : list[str],
+    trust : list[str],
     guess_bonds : bool
 ) -> dict:
     """Analyze the structure looking for irregularities and then modify the structure to standarize the format.

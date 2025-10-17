@@ -9,7 +9,7 @@ import MDAnalysis
 def lipid_interactions (
     universe : 'MDAnalysis.Universe',
     output_directory : str,
-    lipid_map: List[dict],
+    lipid_map: list[dict],
     cg_residues: list[int],
     snapshots : int,
     frames_limit: int = 100):

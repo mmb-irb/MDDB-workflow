@@ -16,7 +16,7 @@ def rmsds(
     snapshots : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
-    ligand_map : List[dict],
+    ligand_map : list[dict],
     frames_limit : int = 5000,
     ):
     """Run multiple RMSD analyses. One with each reference (first frame, average structure) 

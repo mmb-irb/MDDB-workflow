@@ -17,8 +17,8 @@ def get_trajectory_subset (
     start : int = 0,
     end : int = None,
     step : int = 1,
-    frames : List[int] = [],
-    skip : List[int] = [],
+    frames : list[int] = [],
+    skip : list[int] = [],
 ):
     # If there is no end set then the end as the last frame of the simulation
     if end == None:

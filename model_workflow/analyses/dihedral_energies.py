@@ -11,7 +11,7 @@ def compute_dihedral_energies (
     structure_file : 'File',
     trajectory_file : 'File',
     output_directory : str,
-    dihedrals : List[dict],
+    dihedrals : list[dict],
     snapshots : int,
     frames_limit : int,
 ):

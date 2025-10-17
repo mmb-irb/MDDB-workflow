@@ -31,7 +31,7 @@ def filter_atoms (
     reference_structure : 'Structure',
     # Filter selection may be a custom selection or true
     # If true then we run a default filtering of water and counter ions
-    filter_selection : Union[bool, str],
+    filter_selection : bool | str,
     filter_selection_syntax : str = 'vmd',
 ):
 
@@ -193,7 +193,7 @@ def standard_topology_filter (
     chain_backmapping = { old_index: new_index for new_index, old_index in enumerate(chain_indices) }
 
     # Set a function to get substract specific values of a list given by its indices
-    def filter_by_indices (values : list, indices : List[int]) -> list:
+    def filter_by_indices (values : list, indices : list[int]) -> list:
         if values == None:
             return None
         return [ values[i] for i in indices ]

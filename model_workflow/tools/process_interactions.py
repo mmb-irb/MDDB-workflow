@@ -41,7 +41,7 @@ def process_interactions (
     structure : 'Structure',
     snapshots : int,
     output_directory : str,
-    mercy : List[str],
+    mercy : list[str],
     interactions_auto : str,
     pbc_selection : 'Selection',
     frames_limit : int = 1000,

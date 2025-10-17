@@ -29,7 +29,7 @@ def get_inchikeys (
         key_2_name (dict): A dictionary where keys are InChI keys and values are dictionaries containing:
             - 'inchi' (str): The InChI string for the residue
             - 'resindices' (list): A list of all residue indices with this InChI key
-            - 'fragments' (List[list]): Lists of residue indices that are connected as a single group
+            - 'fragments' (list[list]): Lists of residue indices that are connected as a single group
             - 'frag_len' (int): Length of the fragments. 1 if no fragments are present.
             - 'resname' (set): Set of residue names associated with this InChI key
             - 'classification' (set): Set of residue classifications for this InChI key
@@ -158,7 +158,7 @@ def get_inchikeys (
 
     return { 'key_2_name': key_2_name, 'residx_2_key': residx_2_key }
 
-def residue_to_inchi(task: Tuple['MDAnalysis.AtomGroup', int]) -> Tuple[str, str, int]:
+def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str, int]:
     """
     Process a single residue to get its InChI key and related information.
     """

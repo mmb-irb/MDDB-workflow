@@ -519,7 +519,7 @@ class custom (Action):
             setattr(namespace, self.dest, self.const)
 
 # Set a function to pretty print a list of available checkings / failures
-def pretty_list (availables : List[str]) -> str:
+def pretty_list (availables : list[str]) -> str:
     final_line = 'Available protocols:'
     for available in availables:
         nice_name = NICE_NAMES.get(available, None)

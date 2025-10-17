@@ -1,6 +1,9 @@
+import os
+import sys
+import shutil
+import pytest
+import requests
 import numpy as np
-import os, sys, shutil, pytest
-
 from model_workflow.utils.constants import *
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.auxiliar import load_json, InputError
@@ -98,6 +101,29 @@ class TestRunFlags:
                     '-i', 'setup', 'rmsds']
 
         with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
+            main()
+
+        os.chdir(test_data_dir)
+
+    def test_no_internet(self, test_data_dir: str, monkeypatch):
+        """Test the workflow with no internet connection."""
+
+        def raise_connection_error(*args, **kwargs):
+            raise requests.exceptions.ConnectionError("No internet connection")
+
+        monkeypatch.setattr(requests, "get", raise_connection_error)
+
+        working_directory = os.path.join(test_data_dir, 'output/A0001')
+        # working_directory = os.path.join(test_data_dir, 'output/test_no_internet')
+        # if os.path.exists(working_directory):
+        #     shutil.rmtree(working_directory)
+        # os.makedirs(working_directory)
+
+        sys.argv = ['model_workflow', 'run',
+                    '-dir', working_directory,
+                    '-e', 'network']
+
+        with pytest.raises(requests.exceptions.ConnectionError):
             main()
 
         os.chdir(test_data_dir)

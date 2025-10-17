@@ -4,10 +4,10 @@ from model_workflow.utils.type_hints import *
 
 def generate_topology (
     structure : 'Structure',
-    charges : List[int],
+    charges : list[int],
     residue_map : dict,
-    pbc_residues : List[int],
-    cg_residues : List[int],
+    pbc_residues : list[int],
+    cg_residues : list[int],
     output_filepath : str
 ):
     """Prepare the standard topology file to be uploaded to the database."""

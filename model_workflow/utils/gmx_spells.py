@@ -19,7 +19,7 @@ from model_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 # Then return both output and error logs
 def run_gromacs(command : str, user_input : Optional[str] = None,
     expected_output_filepath : Optional[str] = 'auto',
-    show_output_logs : bool = False, show_error_logs : bool = False) -> Tuple[str, str]:
+    show_output_logs : bool = False, show_error_logs : bool = False) -> tuple[str, str]:
 
     # Run a fix for gromacs if not done before
     # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -162,7 +162,7 @@ get_structure_alone.format_sets = [
 ]
 
 # Get gromacs supported trajectories merged and converted to a different format
-def merge_and_convert_trajectories (input_trajectory_filenames : List[str], output_trajectory_filename : str):
+def merge_and_convert_trajectories (input_trajectory_filenames : list[str], output_trajectory_filename : str):
     # Get trajectory formats
     sample_trajectory = input_trajectory_filenames[0]
     sample_trajectory_file = File(sample_trajectory)
@@ -221,8 +221,8 @@ def get_trajectory_subset (
     start : int = 0,
     end : int = None,
     step : int = 1,
-    frames : List[int] = [],
-    skip : List[int] = []
+    frames : list[int] = [],
+    skip : list[int] = []
 ):
     # Set a list with frame indices from
     output_frames = frames if frames and len(frames) > 0 else [ frame for frame in range(start, end, step) if frame not in skip ]
@@ -339,7 +339,7 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
     return atom_count
 
 # Read a tpr file by converting it to ASCII
-def get_tpr_content (tpr_filepath : str) -> Tuple[str, str]:
+def get_tpr_content (tpr_filepath : str) -> tuple[str, str]:
     # Read the tpr file making a 'dump'
     return run_gromacs(f'dump -s {tpr_filepath}')
 
@@ -348,7 +348,7 @@ GROMACS_TPR_ATOM_CHARGES_REGEX = r"q=([0-9e+-. ]*),"
 
 # Get tpr atom charges
 # This works for the new tpr format (tested in 122)
-def get_tpr_charges (tpr_filepath : str) -> List[float]:
+def get_tpr_charges (tpr_filepath : str) -> list[float]:
     # Read the TPR
     tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
     # Mine the atomic charges
@@ -381,7 +381,7 @@ GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*([0-9]*) type=[0-9]* \((BONDS|CONSTR|CONNBO
 GROMACS_TPR_SETTLE_REGEX = r"^\s*([0-9]*) type=[0-9]* \(SETTLE\)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)$"
 
 # Get tpr atom bonds
-def get_tpr_bonds (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
     # Read the TPR
     tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
     lines = tpr_content.split('\n')
@@ -479,7 +479,7 @@ def merge_xtc_files (current_file : str, new_file : str):
     run_gromacs(f'trjcat -f {new_file.path} {current_file} -o {current_file.path}')
 
 # Generate a ndx file with a selection of frames
-def generate_frames_ndx (frames : List[int], filename : str):
+def generate_frames_ndx (frames : list[int], filename : str):
     # Add a header 
     content = '[ frames ]\n'
     count = 0
@@ -501,7 +501,7 @@ def generate_frames_ndx (frames : List[int], filename : str):
 # DANI: No se usa, pero me costó un rato ponerla a punto así que la conservo
 # Set a function to read and parse xpm files with a single matrix
 # Inspired in https://gromacswrapper.readthedocs.io/en/latest/_modules/gromacs/fileformats/xpm.html#XPM
-def parse_xpm (filename : str) -> List[ List[float] ]:
+def parse_xpm (filename : str) -> list[ list[float] ]:
     with open(filename) as file:
         # First lines include metadata such as the title, description and legend
         # Read lines until we find the start of the array

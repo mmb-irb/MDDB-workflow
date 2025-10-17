@@ -7,11 +7,11 @@ from model_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
 
 
-def generate_membrane_mapping(lipid_map : List[dict],
+def generate_membrane_mapping(lipid_map : list[dict],
                               structure_file : 'File',
                               universe: 'Universe',
                               output_filepath: str,
-                              ) -> List[dict]:
+                              ) -> list[dict]:
     """
     Generates a list of residue numbers of membrane components from a given structure and topology file.
     Args:
@@ -21,7 +21,7 @@ def generate_membrane_mapping(lipid_map : List[dict],
         debug (bool, optional): If True, additional debug information is returned. Defaults to False.
     
     Returns:
-        List[dict]: A list containing the membrane mapping. If debug is True, additional information is returned. Ex:
+        list[dict]: A list containing the membrane mapping. If debug is True, additional information is returned. Ex:
 
         {
             "n_mems": 1,
@@ -60,11 +60,11 @@ def generate_membrane_mapping(lipid_map : List[dict],
     return membrane_map
 
 
-def all_atom_membranes(lipid_map : List[dict],
+def all_atom_membranes(lipid_map : list[dict],
                        structure_file : 'File',
                        universe: 'Universe',
                        output_filepath: str,
-                       ) -> List[dict]:
+                       ) -> list[dict]:
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     
     # if no lipids are found, we save the empty mapping and return
@@ -165,7 +165,7 @@ def all_atom_membranes(lipid_map : List[dict],
 def coarse_grain_membranes(structure_file : 'File',
                            universe: 'Universe',
                            output_filepath: str,
-                           ) -> List[dict]:
+                           ) -> list[dict]:
     """
     Generates membrane mapping for coarse-grained systems using residue names and P atoms as headgroups.
     """
@@ -244,7 +244,7 @@ def coarse_grain_membranes(structure_file : 'File',
 
 def display_membrane_mapping(mem_map: str, pdb: str):
     try:
-        import nglview as nv
+        import nglview as nv  # type: ignore
     except ImportError:
         raise ImportError("nglview is required for displaying membrane mapping. Please install it using 'pip install nglview'.")
     

@@ -19,8 +19,8 @@ def markov (
     input_trajectory_filename : str,
     output_analysis_filename : str,
     structure : 'Structure',
-    populations : List[float],
-    transitions : List[List[float]],
+    populations : list[float],
+    transitions : list[list[float]],
     nodes_number : int = 20,
 ):
 

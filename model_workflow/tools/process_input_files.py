@@ -30,7 +30,7 @@ def process_input_files (
     filter_selection : str,
     image : bool,
     fit : bool,
-    translation : Tuple,
+    translation : tuple,
     # Make sure the MD is used only to set values or use its functions, but not to get values
     # Values msut be passed separatedly as inputs so the taks can identify when inputs change
     self : 'MD',

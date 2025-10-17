@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 from inspect import getfullargspec
 
 from model_workflow.utils.formats import get_format_set_suitable_function, get_format_set_suitable_combination
@@ -32,7 +32,7 @@ trajectory_converting_functions = [
 def convert (
     input_structure_filepath :  Optional[str] = '',
     output_structure_filepath : Optional[str] = '',
-    input_trajectory_filepaths :  Optional[List[str]] = [],
+    input_trajectory_filepaths :  Optional[list[str]] = [],
     output_trajectory_filepath : Optional[str] = ''
 ):
     """

@@ -254,7 +254,7 @@ def find_chembl_pubchem (id_chembl):
     return pubchem_id
 
 # Calculate the Morgan fingerprint and the Mordred descriptors from a ligand SMILES
-def obtain_mordred_morgan_descriptors (smiles : str) -> Tuple:
+def obtain_mordred_morgan_descriptors (smiles : str) -> tuple:
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         print(f'WARNING: Cannot generate a molecule from SMILES {smiles}')
@@ -317,12 +317,12 @@ def check_matched_ligand (ligand: dict, ligand_data: dict, cache: 'Cache') -> bo
 def generate_ligand_mapping (
     structure : 'Structure',
     cache : 'Cache',
-    input_ligands : Optional[List[dict]],
-    pdb_ids : List[str],
+    input_ligands : Optional[list[dict]],
+    pdb_ids : list[str],
     output_filepath : str,
     inchikeys: dict,
-    mercy : List[str] = [],
-    ) -> List[dict]:
+    mercy : list[str] = [],
+    ) -> list[dict]:
     """Generate a map of residues associated to ligands."""
     # Merge input ligands and pdb ligands
     ligands = input_ligands or []
@@ -553,7 +553,7 @@ def import_ligands (output_filepath : str) -> dict:
     return imported_ligands
 
 # Check if the current input ligand is already among the ligands we already have data for
-def obtain_ligand_data_from_file ( ligands_data : List[dict], ligand: dict ) -> Optional[dict]:
+def obtain_ligand_data_from_file ( ligands_data : list[dict], ligand: dict ) -> Optional[dict]:
     for ligand_data in ligands_data:
         if (ligand.get('pubchem') and ligand['pubchem'] == ligand_data.get('pubchem')) or \
         (ligand.get('drugbank') and ligand['drugbank'] == ligand_data.get('drugbank')) or \
@@ -630,7 +630,7 @@ def nest_brackets(tokens, i = 0):
         i += 1
     return i,l
 
-def parse_compound(formula : str) -> List[str]:
+def parse_compound(formula : str) -> list[str]:
     tokens = [''.join(t) for t in split_when(formula, lambda a,b: b.isupper() or b in '()' or (b.isdigit() and not a.isdigit()))]
     tokens = [(int(t) if t.isdigit() else t) for t in tokens]
     i, l = nest_brackets(tokens)
@@ -638,7 +638,7 @@ def parse_compound(formula : str) -> List[str]:
     return l
 
 # Split a string using a function
-def split_when(string : str, func : Callable) -> List[str]:
+def split_when(string : str, func : Callable) -> list[str]:
     splits = []
     last_split = string[0]
     for s in string[1:]:
@@ -662,7 +662,7 @@ def count_atom_elements (molecular_formula : str) -> dict:
 # This function associates elements in a list
 # If a string is followed by a number then they go together
 # If a string has no number then the number is 1 for this specific string
-def parse_splits (splits : List[str]) -> dict:
+def parse_splits (splits : list[str]) -> dict:
     parsed = {}
     previous_key = None
     for split in splits:
@@ -855,7 +855,7 @@ def pdb_ligand_to_pubchem_RAW_RAW (pdb_ligand_id : str) -> Optional[str]:
 
 # Given a PDB id, get all its ligand codes
 # e.g. 2I3I -> 618, BTB, ZN, EDO, LI
-def get_pdb_ligand_codes (pdb_id : str) -> List[str]:
+def get_pdb_ligand_codes (pdb_id : str) -> list[str]:
     # Set the request query
     query = '''query structure($id: String!) {
         entry(entry_id: $id) {
@@ -909,7 +909,7 @@ def get_prd_ligand_code (pdb_id : str) -> Optional[str]:
 # Given a pdb id, get its pubchem ids
 # DANI: De momento no usamos las SMILES que alguna vez me han dado problemas (e.g. 2I3I)
 # e.g. 4YDF -> 
-def pdb_to_pubchem (pdb_id : str) -> List[str]:
+def pdb_to_pubchem (pdb_id : str) -> list[str]:
     print(f'Searching PubChem ids for PDB {pdb_id}')
     pubchem_ids = []
     # Iterate over pdb ligand codes

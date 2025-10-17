@@ -66,9 +66,9 @@ def generate_protein_mapping (
     output_filepath : str,
     database_url : str,
     register : dict,
-    mercy : List[str] = [],
-    input_protein_references : Union[list,dict] = [],
-    pdb_ids : List[str] = [],
+    mercy : list[str] = [],
+    input_protein_references : list | dict = [],
+    pdb_ids : list[str] = [],
 ) -> dict:
     """Map the structure aminoacids sequences against the Uniprot reference sequences."""
     # Set the output file
@@ -98,7 +98,7 @@ def generate_protein_mapping (
     # Try first asking to the MDposit database in case the reference exists already
     # If not, retrieve UniProt data and build the reference object
     # Return also a boolean to set if the reference already existed (True) or not (False)
-    def get_reference (uniprot_accession : str) -> Tuple[dict, bool]:
+    def get_reference (uniprot_accession : str) -> tuple[dict, bool]:
         reference = references.get(uniprot_accession, None)
         if reference:
             return reference, True
@@ -399,7 +399,7 @@ def get_parsed_chains (structure : 'Structure') -> list:
 # Return also the score of the alignment
 # Return None when there is not valid alignment at all
 # Set verbose = True to see a visual summary of the sequence alignments in the logs
-def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Optional[ Tuple[list, float] ]:
+def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Optional[ tuple[list, float] ]:
 
     #print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
 
@@ -656,7 +656,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
 
 # Given a pdb Id, get its uniprot id
 # e.g. 6VW1 -> Q9BYF1, P0DTC2, P59594
-def pdb_to_uniprot (pdb_id : str) -> List[ Union[str, NoReferableException] ]:
+def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
     # Set the request query
     query = '''query ($id: String!) {
         entry(entry_id: $id) {

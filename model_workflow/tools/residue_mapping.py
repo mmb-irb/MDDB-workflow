@@ -2,9 +2,9 @@ from model_workflow.utils.constants import NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from model_workflow.utils.type_hints import *
 
 def generate_residue_mapping(
-    protein_map : List[dict],
-    ligand_map : List[dict],
-    lipid_map : List[dict],
+    protein_map : list[dict],
+    ligand_map : list[dict],
+    lipid_map : list[dict],
     structure : 'Structure',
 ) -> dict:
     """

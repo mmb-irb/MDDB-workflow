@@ -5,14 +5,13 @@ from model_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE
 from model_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 
 import os
-from os import rename, listdir, remove
 from os.path import isfile, exists
 import re
 import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, List, Set, Generator, Union
+from typing import Optional, Generator
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
@@ -80,7 +79,7 @@ def get_new_letter(current_letters : set) -> Optional[str]:
 # All upper case
 # All lower case
 # First upper case and the rest lower case
-def all_cases (names : Union[List[str], Set[str]]) -> Set[str]:
+def all_cases (names : list[str] | set[str]) -> set[str]:
     all_names = []
     for name in names:
         all_upper = name.upper()
@@ -117,7 +116,7 @@ def save_json (content, filepath : str, indent : Optional[int] = None):
             json.dump(content, file, indent=indent)
     except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
-        rename(filepath, filepath + '.wrong')
+        os.rename(filepath, filepath + '.wrong')
         raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 # Set a YAML loader with additional logic to better handle problems
@@ -161,7 +160,7 @@ def warn (message : str):
     print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
 
 # Get the mean/average of a list of values
-def mean(values : List[float]) -> float:
+def mean(values : list[float]) -> float:
     return sum(values) / len(values)
 
 # Round a number to hundredths
@@ -174,7 +173,7 @@ def round_to_thousandths (number : float) -> float:
 
 # Given a list with numbers,  create a string where number in a row are represented rangedly
 # e.g. [1, 3, 5, 6, 7, 8] => "1, 3, 5-8"
-def ranger (numbers : List[int]) -> str:
+def ranger (numbers : list[int]) -> str:
     # Remove duplicates and sort numbers
     sorted_numbers = sorted(list(set(numbers)))
     # Get the number of numbers in the list
@@ -223,12 +222,12 @@ def otherwise (values : list) -> Generator[tuple, None, None]:
         yield value, others
 
 # List files in a directory
-def list_files (directory : str) -> List[str]:
-    return [f for f in listdir(directory) if isfile(f'{directory}/{f}')]
+def list_files (directory : str) -> list[str]:
+    return [f for f in os.listdir(directory) if isfile(f'{directory}/{f}')]
 
 # Check if a directory is empty
 def is_directory_empty (directory : str) -> bool:
-    return len(listdir(directory)) == 0
+    return len(os.listdir(directory)) == 0
 
 # Set a function to check if a string has patterns to be parsed by a glob function
 # Note that this is not trivial, but this function should be good enough for our case
@@ -249,7 +248,7 @@ def is_glob (path : str) -> bool:
 # Parse a glob path into one or several results
 # If the path has no glob characters then return it as it is
 # Otherwise make sure
-def parse_glob (path : str) -> List[str]:
+def parse_glob (path : str) -> list[str]:
     # If there is no glob pattern then just return the string as is
     if not is_glob(path):
         return [ path ]
@@ -266,7 +265,7 @@ SUPPORTED_BYTE_SIZES = {
 
 # Data is a list of numeric values
 # Bit size is the number of bits for each value in data to be occupied
-def store_binary_data (data : List[float], byte_size : int, filepath : str):
+def store_binary_data (data : list[float], byte_size : int, filepath : str):
     # Check bit size to make sense
     letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
     if not letter:
@@ -387,7 +386,7 @@ def purge_glob (filename : str):
     glob_pattern = glob_filename(filename)
     existing_outputs = glob(glob_pattern)
     for existing_output in existing_outputs:
-        if exists(existing_output): remove(existing_output)
+        if exists(existing_output): os.remove(existing_output)
 
 # Given a filename with the the pattern 'mda.xxxx.json', get the 'xxxx' out of it
 def get_analysis_name (filename : str) -> str:
@@ -405,8 +404,8 @@ def get_analysis_name (filename : str) -> str:
 # DANI: This is a python itself unresolved error https://bugs.python.org/issue39865
 def safe_hasattr (instance, attribute_name : str) -> bool:
     return attribute_name in set(dir(instance))
-def safe_getattr (instance, attribute_name : str, defualt):
-    if not safe_hasattr(instance, attribute_name): return defualt
+def safe_getattr (instance, attribute_name : str, default):
+    if not safe_hasattr(instance, attribute_name): return default
     return getattr(instance, attribute_name)
     
 # Function to read and write a dict nested value with using a single combined key

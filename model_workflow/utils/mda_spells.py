@@ -87,8 +87,8 @@ def get_mda_universe_from_stopology (
 
 def get_mda_universe (structure_file : 'File',              # To load in MDAnalysis
                       trajectory_file : 'File',             # To load in MDAnalysis
-                      reference_bonds : List[List[int]],    # To set the bonds
-                      charges : List[float]) -> 'Universe': # To set the charges
+                      reference_bonds : list[list[int]],    # To set the bonds
+                      charges : list[float]) -> 'Universe': # To set the charges
     """Create a MDAnalysis universe using data in the workflow."""
 
     # Make MDAnalysis warnings and logs grey
@@ -118,7 +118,7 @@ def get_mda_universe_cksum (universe) -> str:
 # DANI: si miras los topology.bonds.values estos enlaces falsos van al final
 # DANI: Lo veo porque los índices están en orden ascendente y veulven a empezar
 # DANI: He pedido ayuda aquí https://github.com/MDAnalysis/mdanalysis/pull/463
-def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> List[ Tuple[int, int] ]:
+def get_tpr_bonds_mdanalysis (tpr_filepath : str) -> list[ tuple[int, int] ]:
     parser = TPRParser(tpr_filepath)
     topology = parser.parse()
     bonds = list(topology.bonds.values)

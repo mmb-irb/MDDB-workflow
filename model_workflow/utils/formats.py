@@ -1,5 +1,5 @@
 import os
-from typing import Optional, List, Tuple, Callable, Generator
+from typing import Optional, Callable, Generator
 from inspect import getfullargspec
 
 def get_format (filename : str) -> str:
@@ -9,9 +9,9 @@ def get_format (filename : str) -> str:
     return filename.split('.')[-1]
 
 def get_format_set_suitable_function (
-    available_functions : List[Callable],
-    available_request_format_sets : List[dict],
-) -> Generator[ Optional[ Tuple[ Callable, dict ]], None, None ]:
+    available_functions : list[Callable],
+    available_request_format_sets : list[dict],
+) -> Generator[ Optional[ tuple[ Callable, dict ]], None, None ]:
     """
     Find a function which is suitable for any of the available request "format sets".
     All functions are checked for each request format set before jumping to another and they are evaluated in order.
@@ -152,9 +152,9 @@ def check_format_sets_compability (request_format_set : dict, function_format_se
 # WARNING: i.e. functions which return structure/trajectory files
 # WARNING: This function should be called only when "get_format_set_suitable_function" has failed
 def get_format_set_suitable_combination (
-    available_functions : List[Callable],
-    available_request_format_sets : List[dict],
-) -> Optional[ Tuple[ Callable, dict ] ]:
+    available_functions : list[Callable],
+    available_request_format_sets : list[dict],
+) -> Generator[Optional[tuple[Callable, dict]], None, None]:
     
     # Try with each request format set
     for request_format_set in available_request_format_sets:
@@ -164,8 +164,8 @@ def get_format_set_suitable_combination (
     
         # For each function + format set possibility which is compatible with the required inputs, return the available outputs
         def get_combinations (
-            current_functions : List[Callable],
-            current_function_common_inputs : List[dict],
+            current_functions : list[Callable],
+            current_function_common_inputs : list[dict],
             available_inputs : dict,
         ):
             # Search functions to match formats for every required argument
@@ -221,7 +221,7 @@ def get_format_set_suitable_combination (
             # Combine all functions into one single function
             def combined_function (
                 input_structure_filename : Optional[str] = None,
-                input_trajectory_filenames : Optional[List[str]] = None,
+                input_trajectory_filenames : Optional[list[str]] = None,
                 output_structure_filename : Optional[str] = None,
                 output_trajectory_filename : Optional[str] = None
             ):
