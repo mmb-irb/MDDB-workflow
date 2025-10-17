@@ -25,7 +25,8 @@ def structure_corrector (
     trust : list[str],
     guess_bonds : bool
 ) -> dict:
-    """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
+    """
+    Analyze the structure looking for irregularities and then modify the structure to standarize the format.
 
     Supported cases:
 
@@ -44,7 +45,8 @@ def structure_corrector (
     Note that the 'mercy' flag may be passed for critical checkings to not kill the process on fail.
     Note that the 'trust' flag may be passed for critical checkings to skip them.
 
-    This function also sets some values in the passed MD."""
+    This function also sets some values in the passed MD.
+    """
 
     # Write the inital output structure file which will be overwritten several times further
     print(' The structure file has been copied -> ' + output_structure_file.filename)

@@ -14,8 +14,8 @@ from model_workflow.utils.auxiliar import warn
 # Set characters to be escaped since they have a meaning in TCL
 TCL_RESERVED_CHARACTERS = ['"','[',']']
 
-# Given a VMD atom selection string, escape TCL meaningful characters and return the escaped string
 def escape_tcl_selection (selection : str) -> str:
+    """ Given a VMD atom selection string, escape TCL meaningful characters and return the escaped string. """
     escaped_selection = selection
     for character in TCL_RESERVED_CHARACTERS:
         escaped_selection = escaped_selection.replace(character, '\\' + character)
@@ -98,22 +98,24 @@ vmd_to_pdb.format_sets = [
     }
 ]
 
-# This tool allows you to set the chain of all atoms in a selection
-# This is powered by VMD and thus the selection lenguage must be the VMD's
-# Arguments are as follows:
-# 1 - Input pdb filename
-# 2 - Atom selection (All atoms by defualt)
-# 3 - Chain letter (May be the flag 'fragment', which is the default indeed)
-# 4 - Output pdb filename (Input filename by default)
-# WARNING: When no selection is passed, if only a part of a "fragment" is missing the chain then the whole fragment will be affected
-# WARNING: VMD only handles fragments if there are less fragments than letters in the alphabet
-# DEPRECATED: Use the structures chainer instead
 def chainer (
     input_pdb_filename : str,
     atom_selection : Optional[str] = None,
     chain_letter : Optional[str] = None,
     output_pdb_filename : Optional[str] = None
 ):
+    """ This tool allows you to set the chain of all atoms in a selection.
+    This is powered by VMD and thus the selection lenguage must be the VMD's.
+    Arguments are as follows:
+
+    1. Input pdb filename
+    2. Atom selection (All atoms by defualt)
+    3. Chain letter (May be the flag 'fragment', which is the default indeed)
+    4. Output pdb filename (Input filename by default)
+
+    WARNING: When no selection is passed, if only a part of a "fragment" is missing the chain then the whole fragment will be affected
+    WARNING: VMD only handles fragments if there are less fragments than letters in the alphabet
+    DEPRECATED: Use the structures chainer instead. """
 
     # If no atom selection is provided then all atoms are selected
     if not atom_selection:
@@ -179,14 +181,14 @@ def chainer (
     # Remove the vmd commands file
     os.remove(commands_filename)
 
-# Get vmd supported trajectories merged and converted to a different format
-# WARNING: Note that this process is not memory efficient so beware the size of trajectories to be converted
-# WARNING: The input structure filename may be None
 def merge_and_convert_trajectories (
     input_structure_filename : Optional[str],
     input_trajectory_filenames : list[str],
     output_trajectory_filename : str
     ):
+    """ Get vmd supported trajectories merged and converted to a different format.
+    WARNING: Note that this process is not memory efficient so beware the size of trajectories to be converted.
+    WARNING: The input structure filename may be None. """
 
     warn('You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
     print('Note that we cannot display the progress of the conversion since we are using VMD')
@@ -253,8 +255,8 @@ merge_and_convert_trajectories.format_sets = [
     }
 ]
 
-# Given an atom selection in vmd syntax, return the list of atom indices it corresponds to
 def get_vmd_selection_atom_indices (input_structure_filename : str, selection : str) -> list[int]:
+    """ Given an atom selection in vmd syntax, return the list of atom indices it corresponds to. """
 
     # Escape TCL meaningful characters
     escaped_selection = escape_tcl_selection(selection)
@@ -301,9 +303,9 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
 
     return atom_indices
 
-# Set a function to retrieve all covalent (strong) bonds in a structure
-# You may provide an atom selection as well
 def get_covalent_bonds (structure_filename : str, selection : Optional['Selection'] = None) -> list[ list[int] ]:
+    """ Set a function to retrieve all covalent (strong) bonds in a structure using VMD.
+    You may provide an atom selection as well. """
 
     # Parse the selection to vmd
     vmd_selection = 'all'
@@ -385,13 +387,13 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
                 
     return bonds_per_atom
 
-# Set a function to retrieve covalent (strong) bonds between 2 atom selections
 def get_covalent_bonds_between (
     structure_filename : str,
     # Selections may be either selection instances or selection strings already in VMD format
     selection_1 : Union['Selection', str],
     selection_2 : Union['Selection', str]
 ) -> list[ list[int] ]:
+    """ Set a function to retrieve covalent (strong) bonds between 2 atom selections. """
     
     # Parse selections (if not parsed yet)
     parsed_selection_1 = selection_1 if type(selection_1) == str else selection_1.to_vmd()
@@ -510,9 +512,6 @@ def get_covalent_bonds_between (
                 
     return crossed_bonds
 
-# Given two atom selections, find interface atoms and return their indices
-# Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
-# Return also atom indices for the whole selections
 def get_interface_atom_indices (
     input_structure_filepath : str,
     input_trajectory_filepath : str,
@@ -520,6 +519,9 @@ def get_interface_atom_indices (
     selection_2 : str,
     distance_cutoff : float,
 ) -> list[int]:
+    """ Given two atom selections, find interface atoms and return their indices
+    Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
+    Return also atom indices for the whole selections. """
 
     # Set the interface selections
     interface_selection_1 = (f'({selection_1}) and within {distance_cutoff} of ({selection_2})')

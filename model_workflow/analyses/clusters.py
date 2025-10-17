@@ -29,7 +29,7 @@ def clusters_analysis (
     # Set the atom selection for the overall clustering
     overall_selection : str = "name CA or name C5'",
 ):
-    """Run the cluster analysis."""
+    """ Run the cluster analysis. """
     # The cluster analysis is run for the overall structure and then once more for every interaction
     # We must set the atom selection of every run in atom indices, for MDtraj
     runs = []

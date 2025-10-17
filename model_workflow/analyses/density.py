@@ -14,7 +14,7 @@ def density (
     snapshots : int,
     density_types = ['number', 'mass', 'charge', 'electron'],
     frames_limit = 1000):
-    """Membrane density analysis."""
+    """ Membrane density analysis. """
     
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping density analysis')

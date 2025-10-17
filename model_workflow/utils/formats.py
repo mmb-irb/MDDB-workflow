@@ -3,7 +3,7 @@ from typing import Optional, Callable, Generator
 from inspect import getfullargspec
 
 def get_format (filename : str) -> str:
-    """Get a filename format."""
+    """ Get a filename format. """
     if not filename:
         return None
     return filename.split('.')[-1]
@@ -382,7 +382,7 @@ def is_pytraj_supported (filename : str) -> bool:
 # }
 
 def get_pytraj_parm_format (filename : str) -> str:
-    """Get the pytraj format key for the write_parm function for a specific file according to its format."""
+    """ Get the pytraj format key for the write_parm function for a specific file according to its format. """
     if is_prmtop(filename):
         return 'AMBERPARM'
     if is_psf(filename):

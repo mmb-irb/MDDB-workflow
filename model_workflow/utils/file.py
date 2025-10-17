@@ -12,7 +12,7 @@ LOCAL_PATH = '.'
 
 
 class File:
-    """File handler class.
+    """ File handler class.
     Absolute paths are used in runtime.
     Relative paths are used to store paths.
     """
@@ -82,13 +82,13 @@ class File:
         return False
 
     def check_existence (self) -> bool:
-        """Check if file exists."""
+        """ Check if file exists. """
         return exists(self.path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
 
     def get_format (self) -> Optional[str]:
-        """Get file format based on the extension.
-        If the extension is not recognized then raise an error."""
+        """ Get file format based on the extension.
+        If the extension is not recognized then raise an error. """
         if not self.extension:
             return None
         extension_format = EXTENSION_FORMATS.get(self.extension, None)
@@ -98,19 +98,19 @@ class File:
     format = property(get_format, None, None, "File standard format (read only)")
 
     def get_mtime (self) -> str:
-        """Get the file last modification time."""
+        """ Get the file last modification time. """
         raw_mtime = getmtime(self.path)
         return strftime(DATE_STYLE, gmtime(raw_mtime))
     mtime = property(get_mtime, None, None, "File last modification date (read only)")
 
     def get_size (self) -> str:
-        """Get the file size in bytes."""
+        """ Get the file size in bytes. """
         return getsize(self.path)
     size = property(get_size, None, None, "File size in bytes (read only)")
 
     # DANI: This is provisional and it is not yet based in a cksum neither the file content
     def get_cksum (self) -> str:
-        """Get a cksum code used to compare identical file content."""
+        """ Get a cksum code used to compare identical file content. """
         # Calculate it otherwise
         if not self.exists: return f'missing {self.path}'
         return f'{self.path} -> {self.mtime} {self.size}'
@@ -123,18 +123,18 @@ class File:
         return PYTRAJ_PARM_FORMAT.get(self.format, None)
 
     def remove (self):
-        """Remove the file."""
+        """ Remove the file. """
         remove(self.path)
 
     def get_standard_file (self) -> 'File':
-        """Given a file who has non-standard extension of a supported format we set a symlink with the standard extension."""
+        """ Given a file who has non-standard extension of a supported format we set a symlink with the standard extension. """
         # If current file already has the extension then there is nothing to return
         if self.extension == self.format:
             return self
         return self.reformat(self.format)
     
     def reformat (self, new_extension : str) -> 'File':
-        """Given a file and a new extension we set a symlink from a new file with that extension."""
+        """ Given a file and a new extension we set a symlink from a new file with that extension. """
         # Set the filename with the standard extension and initiate the file
         reformatted_filename = f'{self.extensionless_filepath}.{new_extension}'
         reformatted_file = File(reformatted_filename)
@@ -144,22 +144,22 @@ class File:
         return reformatted_file
 
     def get_prefixed_file (self, prefix : str) -> 'File':
-        """Get a prefixed file using this file name as the name base."""
+        """ Get a prefixed file using this file name as the name base. """
         return File(f'{self.basepath}/{prefix}{self.filename}')
     
     def get_neighbour_file (self, filename : str) -> 'File':
-        """Get a file in the same path but with a different name."""
+        """ Get a file in the same path but with a different name."""
         return File(f'{self.basepath}/{filename}')
 
     def get_symlink (self) -> Optional['File']:
-        """Get the symlink target of this file."""
+        """ Get the symlink target of this file. """
         target_filepath = readlink(self.path)
         if not target_filepath:
             return None
         return File(self.basepath + '/' + target_filepath)
 
     def set_symlink_to (self, other_file : 'File'):
-        """Set this file a symlink to another file."""
+        """ Set this file a symlink to another file. """
         # Check if symlinks are allowed
         no_symlinks = GLOBALS['no_symlinks']
         # If symlinks are now allowed then copy the file instead
@@ -175,13 +175,13 @@ class File:
         symlink(relative_path, self.path)
 
     def is_symlink (self) -> bool:
-        """Check if a file is already a symlink."""
+        """ Check if a file is already a symlink. """
         return islink(self.path)
 
     def copy_to (self, other_file : 'File'):
-        """Copy a file to another."""
+        """ Copy a file to another. """
         copyfile(self.path, other_file.path)
 
     def rename_to (self, other_file : 'File'):
-        """Rename a file to another."""
+        """ Rename a file to another. """
         rename(self.path, other_file.path)

@@ -214,7 +214,7 @@ class Task:
     def __repr__ (self): return f'<Task ({self.flag})>'
 
     # When a task is called
-    def __call__(self, parent):
+    def __call__(self, parent: Union['Project', 'MD']):
         # First of all check if this task has been already done in this very run
         # If so then return the stored vale
         output = self._get_parent_output(parent)
@@ -355,8 +355,8 @@ class Task:
         # Now return the function result
         return output
 
-    # Find argument values, thus running any dependency
     def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
+        """ Find argument values, thus running any dependency if necessary. """
         # Word 'task' is reserved for getting the task itself
         if arg == 'task': return self
         # Word 'self' is reserved for getting the caller Project/MD
@@ -379,10 +379,10 @@ class Task:
         # You may have forgotten the additional argument in the task args
         raise RuntimeError(f'Function "{self.func.__name__}" from task "{self.flag}" expects argument "{arg}" but it is missing')
     
-    # Find out if inputs changed regarding the last run
     def get_changed_inputs (self,
         parent : Union['Project', 'MD'],
         processed_args : dict) -> tuple[ list[str], bool ]:
+        """ Find out if input arguments changed regarding the last run. """
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
         had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
@@ -1653,7 +1653,7 @@ class Project:
         return False
 
     def get_inputs_file (self) -> File:
-        """ Set a function to load the inputs file. """
+        """ Set a function to load the inputs yaml file. """
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
@@ -1760,22 +1760,17 @@ class Project:
         return self._input_topology_file
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
-    # Input structure filename ------------
     def get_input_structure_file (self) -> File:
         """ Get the input structure filename. """
         # When calling this function make sure all MDs have the file or try to download it
         return self.reference_md._input_structure_file
     input_structure_file = property(get_input_structure_file, None, None, "Input structure filename for each MD (read only)")
 
-    # Input trajectory filename ------------
-
     def get_input_trajectory_files (self) -> list[File]:
         """ Get the input trajectory filename(s) from the inputs.
         If file(s) are not found try to download it. """
         return self.reference_md._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames for each MD (read only)")
-
-    # Populations file ------------
 
     def get_populations_file (self) -> Optional[File]:
         """ Get the MSM equilibrium populations file. """
@@ -1784,16 +1779,12 @@ class Project:
         return self._populations_file
     populations_file = property(get_populations_file, None, None, "MSM equilibrium populations file (read only)")
 
-    # Transitions file ------------
-
     def get_transitions_file (self) -> Optional[File]:
         """ Get the MSM transition probabilities file. """
         if not self.get_file(self._transitions_file):
             return None
         return self._transitions_file
     transitions_file = property(get_transitions_file, None, None, "MSM transition probabilities file (read only)")
-
-    # AiiDA data file
 
     def get_aiida_data_file (self) -> Optional[File]:
         """ Get the AiiDA data file."""
@@ -1979,7 +1970,7 @@ class Project:
         return 'topology.' + standard_format
 
     def get_topology_filepath (self) -> str:
-        """Get the processed topology file path."""
+        """ Get the processed topology file path. """
         # If we have a stored value then return it
         if self._topology_filepath:
             return self._topology_filepath
@@ -1990,7 +1981,7 @@ class Project:
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
     def get_topology_file (self) -> str:
-        """Get the processed topology file."""
+        """ Get the processed topology file. """
         # If we have a stored value then return it
         # This means we already found or generated this file
         if self._topology_file != None:
@@ -2079,7 +2070,7 @@ class Project:
     topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
 
     def get_dihedrals (self) -> list[dict]:
-        """Get the topology dihedrals."""
+        """ Get the topology dihedrals. """
         # If we already have a stored value then return it
         if self._dihedrals: return self._dihedrals
         # Calculate the dihedrals otherwise

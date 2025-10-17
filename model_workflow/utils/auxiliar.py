@@ -11,7 +11,7 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, Generator, List
+from typing import Optional, Generator
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
@@ -97,7 +97,7 @@ def protein_residue_name_to_letter (residue_name : str) -> str:
     return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
 # Set a JSON loader with additional logic to better handle problems
-def load_json (filepath : str, replaces : Optional[List[tuple]] = []) -> dict: 
+def load_json (filepath : str, replaces : Optional[list[tuple]] = []) -> dict: 
     try:
         with open(filepath, 'r') as file:
             content = file.read()
@@ -123,7 +123,7 @@ def save_json (content, filepath : str, indent : Optional[int] = None):
 # The argument replaces allows to replace file content before beeing processed
 # Every replace is a tuple whith two values: the target and the replacement
 # DANI: Por algún motivo yaml.load también funciona con archivos en formato JSON
-def load_yaml (filepath : str, replaces : Optional[List[tuple]] = []) -> dict:
+def load_yaml (filepath : str, replaces : Optional[list[tuple]] = []) -> dict:
     try:
         with open(filepath, 'r') as file:
             content = file.read()

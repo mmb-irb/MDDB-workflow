@@ -15,7 +15,7 @@ def compute_dihedral_energies (
     snapshots : int,
     frames_limit : int,
 ):
-    """Calculate torsions and then dihedral energies for every dihedral along the trajectory."""
+    """ Calculate torsions and then dihedral energies for every dihedral along the trajectory. """
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_DIHEDRAL_ENERGIES_FILENAME}'
 

@@ -7,9 +7,9 @@ from model_workflow.utils.constants import DATE_STYLE
 from model_workflow.utils.type_hints import *
 
 
-# The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
-# It is also responsible for storing test failure warnings to be written in metadata
 class Register:
+    """ The register tracks activity along multiple runs and thus avoids repeating some already succeeded tests
+    It is also responsible for storing test failure warnings to be written in metadata. """
     def __init__ (self, register_file : 'File'):
         # Save the previous register
         self.file = register_file
@@ -57,18 +57,18 @@ class Register:
         }
         return dictionary
 
-    # Update a test result and save the register
     def update_test (self, key : str, value : Optional[bool]):
+        """ Update a test result and save the register. """
         self.tests[key] = value
         self.save()
 
-    # Get current warnings filtered by tag
     def get_warnings (self, tag : str) -> list[dict]:
+        """ Get current warnings filtered by tag. """
         return [ warning for warning in self.warnings if warning['tag'] == tag ]
 
-    # Add warnings with the right format and save the register
-    # A flag is to be passed to handle further removal of warnings
     def add_warning (self, tag : str, message : str):
+        """ Add warnings with the right format and save the register. 
+        A flag is to be passed to handle further removal of warnings. """
         warn(message)
         # If we already had this exact warning then do not repeat it
         for warning in self.warnings:
@@ -78,13 +78,13 @@ class Register:
         self.warnings.append(warning)
         self.save()
 
-    # Remove warnings filtered by tag and save the register
     def remove_warnings (self, tag : str):
+        """ Remove warnings filtered by tag and save the register. """
         self.warnings = [ warning for warning in self.warnings if warning['tag'] != tag ]
         self.save()
 
-    # Save the register to a json file
     def save (self):
+        """ Save the register to a json file. """
         # If path does not exist then do nothing
         # WARNING: I know this looks a bit silent 
         # WARNING: Otherwise it is a constant spam when something goes wrong close to beginning

@@ -2,7 +2,6 @@ from pathlib import Path
 from os.path import exists
 from shutil import copyfile
 from subprocess import call
-from typing import List
 from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAction
 from textwrap import wrap
 
@@ -61,7 +60,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
         return essential_usage
     
     def _format_action_invocation(self, action):
-        """Format the display of options with choices more cleanly"""
+        """ Format the display of options with choices more cleanly. """
         if not action.option_strings:
             # This is a positional argument
             return super()._format_action_invocation(action)

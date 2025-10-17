@@ -38,8 +38,8 @@ def process_input_files (
     # Thus we may knwo which inputs have changed compared to previous runs
     task : 'Task',
 ):
-    """Process input files to generate the processed files.
-    This process corrects and standarizes the topology, the trajectory and the structure."""
+    """ Process input files to generate the processed files.
+    This process corrects and standarizes the topology, the trajectory and the structure. """
 
     # Make sure we do not enter in a loop
     # This may happen when we read/call an output value/file by mistake
