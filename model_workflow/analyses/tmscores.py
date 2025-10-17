@@ -67,7 +67,7 @@ def tmscores (
         # Get the TM score of each frame
         tmscores = []
         reference_frame = trajectory[0]
-        for i in range(1, len(trajectory)):
+        for i in range(1, len(trajectory), frame_step):
             subject = trajectory[i]
             superimposed, _, ref_indices, sub_indices = struc.superimpose_structural_homologs(
                 reference_frame, subject)
