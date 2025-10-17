@@ -1389,7 +1389,7 @@ class Project:
             pca_fit_selection (str):
                 Atom selection for the PCA fitting in VMD syntax.
             rmsd_cutoff (float):
-               Set the cutoff for the RMSD sudden jumps analysis to fail.
+                Set the cutoff for the RMSD sudden jumps analysis to fail.
                 This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.
             interaction_cutoff (float):
                 Set the cutoff for the interactions analysis to fail.
