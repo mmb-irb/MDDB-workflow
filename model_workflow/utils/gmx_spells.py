@@ -31,7 +31,9 @@ def run_gromacs(command : str, user_input : Optional[str] = None,
         user_input_process = Popen([ "echo", "-e", *user_input.split() ], stdout=PIPE)
 
     # Get the time at the moment we start to run the command
-    start_time = time()
+    # WARNING: We must truncate this value, because the file mtime is truncated as well
+    # Otherwise it may happen that gromacs runs in less than 1 seconds and the start time is higher
+    start_time = time().__trunc__()
 
     # Set the gromacs process
     # Note that at this point the command is not yet run
