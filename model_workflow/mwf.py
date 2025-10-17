@@ -1296,7 +1296,7 @@ class Project:
         inputs_filepath : str = None,
         input_topology_filepath : Optional[str] = None,
         input_structure_filepath : Optional[str] = None,
-        input_trajectory_filepaths : Optional[str] = None,
+        input_trajectory_filepaths : Optional[list[str]] = None,
         md_directories : Optional[list[str]] = None,
         md_config : Optional[list] = None,
         reference_md_index : Optional[int] = None,
@@ -1324,35 +1324,87 @@ class Project:
         Initialize a Project.
 
         Args:
-            directory (str): Local directory where the project takes place.
-            accession (Optional[str]): Accession of the project in the database (if already uploaded).
-            database_url (str): URL to query/download missing files when an accession is provided.
-            inputs_filepath (str): Path to a file with inputs for metadata, simulation parameters and analysis config.
-            input_topology_filepath (Optional[str]): Input topology filename (multiple formats accepted; default is our parsed JSON topology).
-            input_structure_filepath (Optional[str]): Input structure filepath (relative to project or per-MD directories).
-            input_trajectory_filepaths (Optional[str]): Input trajectory filepaths (searched in each MD directory; should be relative).
-            md_directories (Optional[list[str]]): List of MD directories to run (each must contain a trajectory, may contain a structure).
-            md_config (Optional[list]): Alternative MD configuration input (see CLI -md format).
-            reference_md_index (Optional[int]): Index of the reference MD (used by project-level functions; defaults to first MD).
-            populations_filepath (str): Path to MSM equilibrium populations file.
-            transitions_filepath (str): Path to MSM transition probabilities file.
-            aiida_data_filepath (Optional[str]): Path to AiiDA provenance/data file.
-            filter_selection (bool|str): Filter selection instruction passed to filtering logic.
-            pbc_selection (Optional[str]): Periodic boundary conditions atom selection (console overrides inputs file).
-            cg_selection (Optional[str]): Coarse-grained atom selection (console overrides inputs file).
-            image (bool): Set if the trajectory needs to be imaged so atoms stay in the PBC box.
-            fit (bool): Whether to apply fitting during processing.
-            translation (list[float]): Translation vector applied when processing (default [0,0,0]).
-            mercy (list[str]|bool): Failures to be tolerated (or boolean to set all/none).
-            trust (list[str]|bool): Tests to skip/trust (or boolean to set all/none).
-            faith (bool): If True, require input files to match expected output files and skip processing.
-            pca_analysis_selection (str): Selection string for PCA analysis.
-            pca_fit_selection (str): Selection string for PCA fitting.
-            rmsd_cutoff (float): RMSD cutoff used in some checks.
-            interaction_cutoff (float): Distance cutoff for interaction detection.
-            interactions_auto (Optional[str]): Automatic interactions detection mode.
-            guess_bonds (bool): Whether to guess bonds when topology is missing.
-            sample_trajectory (Optional[int]): If provided, download only a sample number of frames instead of full trajectory.
+            directory (str):
+                Local directory where the project takes place.
+            accession (Optional[str]):
+                Project accession to download missing input files from the database (if already uploaded).
+            database_url (str):
+                API URL to download missing data. when an accession is provided.
+            inputs_filepath (str):
+                Path to a file with inputs for metadata, simulation parameters and analysis config.
+            input_topology_filepath (Optional[str]): 
+                Path to input topology file relative to the project directory.
+                Multiple formats accepted; default is our parsed JSON topology.
+            input_structure_filepath (Optional[str]): 
+                Path to input structure file. It may be relative to the project or to each MD directory.
+                If this value is not passed then the standard structure file is used as input by default.
+            input_trajectory_filepaths (Optional[list[str]]): 
+                Paths to input trajectory files relative to each MD directory.
+                If this value is not passed then the standard trajectory file path is used as input by default.
+            md_directories (Optional[list[str]]):
+                Path to the different MD directories.
+                Each directory is to contain an independent trajectory and structure.
+                Several output files will be generated in every MD directory.
+            md_config (Optional[list]):
+                Configuration of a specific MD. You may declare as many as you want.
+                Every MD requires a directory name and at least one trajectory path.
+                The structure is -md <directory> <trajectory_1> <trajectory_2> ...
+                Note that all trajectories from the same MD will be merged.
+                For legacy reasons, you may also provide a specific structure for an MD.
+                e.g. -md <directory> <structure> <trajectory_1> <trajectory_2> ...
+            reference_md_index (Optional[int]):
+                Index of the reference MD (used by project-level functions; defaults to first MD).
+            populations_filepath (str):
+                Path to equilibrium populations file (Markov State Model only)
+            transitions_filepath (str):
+                Path to transition probabilities file (Markov State Model only).
+            aiida_data_filepath (Optional[str]):
+                Path to the AiiDA data file.
+                This file may be generated by the aiida-gromacs plugin and contains provenance data.
+            filter_selection (bool|str):
+                Atoms selection to be filtered in VMD format.
+                If the argument is passed alone (i.e. with no selection) then water and counter ions are filtered.
+            pbc_selection (Optional[str]):
+                Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory.
+                e.g. remaining solvent, ions, membrane lipids, etc.
+                Selection passed through console overrides the one in inputs file.
+            cg_selection (Optional[str]):
+                Selection of atoms which are not actual atoms but Coarse Grained beads.
+                Selection passed through console overrides the one in inputs file.
+            image (bool):
+                Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
+            fit (bool):
+                Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.
+            translation (list[float]):
+                Set the x y z translation for the imaging process.
+                e.g. -trans 0.5 -1 0
+            mercy (list[str]|bool):
+                Failures to be tolerated (or boolean to set all/none).
+            trust (list[str]|bool):
+                Tests to skip/trust (or boolean to set all/none).
+            faith (bool):
+                If True, require input files to match expected output files and skip processing.
+            pca_analysis_selection (str):
+                Atom selection for PCA analysis in VMD syntax.
+            pca_fit_selection (str):
+                Atom selection for the PCA fitting in VMD syntax.
+            rmsd_cutoff (float):
+               Set the cutoff for the RMSD sudden jumps analysis to fail.
+                This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.
+            interaction_cutoff (float):
+                Set the cutoff for the interactions analysis to fail.
+                This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).
+            interactions_auto (Optional[str]):
+                Guess input interactions automatically. Available options:
+                - greedy (default): All chains against all chains
+                - humble: If there are only two chains then select the interaction between them
+                - <chain letter>: All chains against this specific chain
+                - ligands: All chains against every ligand
+            guess_bonds (bool):
+                Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.
+            sample_trajectory (Optional[int]):
+                If passed, download the first 10 (by default) frames from the trajectory.
+                You can specify a different number by providing an integer value.
         """
         # Save input parameters
         self.directory = normpath(directory)
