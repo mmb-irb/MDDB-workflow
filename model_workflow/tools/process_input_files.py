@@ -19,6 +19,17 @@ from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.structure_corrector import structure_corrector
 
 
+def is_amber_top (input_topology_file : 'File', input_trajectories_format: str) -> bool:
+    """ Check if a .top file is from Amber. """
+    if input_topology_file != MISSING_TOPOLOGY and \
+        input_topology_file.extension == 'top' and \
+            input_trajectories_format == 'nc':
+        with open(input_topology_file.path, 'r') as f:
+            first_line = f.readline()
+            return first_line.strip().startswith('%VERSION')
+    return False
+
+
 def process_input_files (
     input_structure_file : 'File',
     input_trajectory_files : 'File',
@@ -67,15 +78,15 @@ def process_input_files (
     # However it is usual than Amber topologies (ideally .prmtop) are also '.top'
     # So if the trajectory is Amber and the topology is .top then assume it is Amber
     input_trajectories_format = list(input_trajectory_formats)[0]
-    if input_topology_file != MISSING_TOPOLOGY and \
-        input_topology_file.extension == 'top' and input_trajectories_format == 'nc':
+    if is_amber_top(input_topology_file, input_trajectories_format):
         # Creating a topology symlink/copy with the correct extension
-        warn(f'Topology is .top but the trajectory is from Amber. I assume the topology is .prmtop')
+        warn(f'Topology is .top but the trajectory is from Amber. It is assumed the topology is .prmtop')
         reformatted_topology_file = input_topology_file.reformat('prmtop')
+        output_topology_file.path = output_topology_file.extensionless_filepath+'.prmtop'
         if input_structure_file == input_topology_file:
             input_structure_file = reformatted_topology_file
         input_topology_file = reformatted_topology_file
-
+        
     # --- FIRST CHECK -----------------------------------------------------------------------
 
     # Check input files match in number of atoms
@@ -433,7 +444,7 @@ def process_input_files (
     self.print_tests_summary()
 
     # Issue some warnings if failed or never run tests are skipped
-    self._issue_required_test_warnings
+    self._issue_required_test_warnings()
         
     # --- Cleanup intermediate files
 
