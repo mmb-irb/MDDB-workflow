@@ -11,7 +11,7 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, Generator
+from typing import Optional, Generator, List
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
