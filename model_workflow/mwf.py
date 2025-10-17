@@ -20,7 +20,7 @@ from model_workflow.utils.constants import *
 # Import local utils
 #from model_workflow.utils.httpsf import mount
 from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
-from model_workflow.utils.auxiliar import warn, load_json, load_yaml, save_yaml
+from model_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
 from model_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version
 from model_workflow.utils.arg_cksum import get_cksum_id
@@ -1847,8 +1847,13 @@ class Project:
         if not self.is_inputs_file_available(): return
         print(f'* Field "{nested_key}" in the inputs file will be permanently modified')
         # Write the new inputs to disk
-        # Note that comments in the original YAML file will be not kept
-        save_yaml(self.inputs, self.inputs_file.path)
+        if self.inputs_file.format == 'json':
+            save_json(self.inputs, self.inputs_file.path)
+        elif self.inputs_file.format == 'yaml':
+            # Note that comments in the original YAML file will be not kept
+            save_yaml(self.inputs, self.inputs_file.path)
+        else:
+            raise InputError('Input file format is not supported. Please use json or yaml files.')
 
     # Then set getters for every value in the inputs file
 
