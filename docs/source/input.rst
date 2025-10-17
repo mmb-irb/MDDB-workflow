@@ -290,6 +290,7 @@ Simulation parameters.
 ~~~~~~~~~~~~~
 
 Time framestep in nanoseconds (ns).
+Time between each snapshot/frame.
 May be None if this is not a trajectory, but an ensemble.
 Framestep is an important value since it is used in many graph axes in the web client.
 
@@ -304,7 +305,8 @@ Framestep is an important value since it is used in many graph axes in the web c
 
 The rest of values are displayed in the web client as trajectory metadata.
 These values do not affect other outcomes in the workflow.
-Simulation timestep in femtoseconds (fs)
+Simulation timestep in femtoseconds (fs).
+Time step used for the numerical integration of the simulation.
 
 
 

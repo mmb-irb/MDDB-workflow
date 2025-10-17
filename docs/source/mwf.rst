@@ -7,6 +7,7 @@ This section details the functions and classes available in `MDDB Workflow`.
    :members:
    :undoc-members:
    :show-inheritance:
+   :special-members: __init__
 
 .. autoclass:: model_workflow.mwf.MD
    :members:

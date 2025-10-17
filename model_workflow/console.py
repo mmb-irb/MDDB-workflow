@@ -3,7 +3,8 @@ from os.path import exists
 from shutil import copyfile
 from subprocess import call
 from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAction
-from textwrap import wrap
+from textwrap import wrap, dedent
+import re
 
 from model_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
 from model_workflow.utils.structures import Structure
@@ -26,11 +27,22 @@ test_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/usage.html#tests
 task_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/tasks.html'
 
 class CustomHelpFormatter(RawTextHelpFormatter):
-    """Custom formatter for argparse help text with better organization and spacing"""
+    """ Custom formatter for argparse help text with better organization and spacing. """
     
     def __init__(self, prog, indent_increment=2, max_help_position=6, width=None):
         super().__init__(prog, indent_increment, max_help_position, width)
         
+    def _get_help_string(self, action):
+        import argparse
+        help = action.help
+        if '%(default)' not in action.help:
+            if action.default is not argparse.SUPPRESS and \
+                action.default and action.default != '.':
+                defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
+                if action.option_strings or action.nargs in defaulting_nargs:
+                    help += '\nDefault: %(default)s'
+        return help
+
     def _split_lines(self, text, width):
         lines = []
         for line in text.splitlines():
@@ -88,7 +100,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
                 return f"{opts} {metavar}"
 
 class CustomArgumentParser(ArgumentParser):
-    """This parser extends the ArgumentParser to handle subcommands and errors more gracefully."""
+    """ This parser extends the ArgumentParser to handle subcommands and errors more gracefully. """
     def error(self, message):
         # Check for subcommand in sys.argv
         import sys
@@ -115,6 +127,37 @@ class CustomArgumentParser(ArgumentParser):
             self.print_usage(sys.stderr)
             self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
         sys.exit(2) 
+
+def parse_docstring_for_help(docstring):
+    """ Parses a docstring to extract help for arguments. """
+    if not docstring:
+        return {}
+    
+    docstring = dedent(docstring)
+    arg_section_match = re.search(r'Args:\n(.*?)(?=\n\n|\Z)', docstring, re.S)
+    if not arg_section_match:
+        return {}
+
+    arg_section = arg_section_match.group(1)
+    arg_lines = arg_section.strip().split('\n')
+    
+    help_dict = {}
+    # Regex to find argument name and its full description, including newlines
+    arg_blocks = re.findall(r'^\s*([a-zA-Z0-9_]+)\s*\(.*?\):\s*(.*?)(?=\n\s*[a-zA-Z0-9_]+\s*\(|\Z)', arg_section, re.S | re.M)
+
+    for arg_name, help_text in arg_blocks:
+        # Clean up the help text: remove leading/trailing whitespace from each line and join
+        lines = []
+        for line in help_text.strip().split('\n'):
+            # For lines that are part of a list, just rstrip to keep indentation
+            if line.lstrip().startswith('-'):
+                lines.append('  '+line.strip())
+            else:
+                lines.append(line.strip())
+        help_dict[arg_name] = '\n'.join(lines)
+        
+    return help_dict
+
 # Main ---------------------------------------------------------------------------------            
 
 # Function called through argparse
@@ -343,6 +386,9 @@ common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_
 parser = CustomArgumentParser(description="MDDB Workflow")
 subparsers = parser.add_subparsers(help='Name of the subcommand to be used', dest="subcommand")
 
+# Parse Project.__init__ docstring for help texts
+project_init_help = parse_docstring_for_help(Project.__init__.__doc__)
+
 # Set the run subcommand
 run_parser = subparsers.add_parser("run",
     help="Run the workflow",
@@ -355,19 +401,17 @@ run_parser_input_group = run_parser.add_argument_group('INPUT OPTIONS')
 run_parser_input_group.add_argument(
     "-top", "--input_topology_filepath",
     default=None, # There is no default since many formats may be possible
-    help="Path to input topology file. It is relative to the project directory.")
+    help=project_init_help['input_topology_filepath'])
 run_parser_input_group.add_argument(
     "-stru", "--input_structure_filepath",
     default=None,
-    help=("Path to input structure file. It may be relative to the project or to each MD directory.\n"
-        "If this value is not passed then the standard structure file is used as input by default"))
+    help=project_init_help['input_structure_filepath'])
 run_parser_input_group.add_argument(
     "-traj", "--input_trajectory_filepaths",
     #type=argparse.FileType('r'),
     nargs='*',
     default=None,
-    help=("Path to input trajectory file. It is relative to each MD directory.\n"
-        "If this value is not passed then the standard trajectory file path is used as input by default"))
+    help=project_init_help['input_trajectory_filepaths'])
 run_parser_input_group.add_argument(
     "-dir", "--working_directory",
     default='.',
@@ -376,29 +420,21 @@ run_parser_input_group.add_argument(
     "-mdir", "--md_directories",
     nargs='*',
     default=None,
-    help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
-        "Several output files will be generated in every MD directory")
-)
+    help=project_init_help['md_directories'])
 run_parser_input_group.add_argument(
     "-md", "--md_config",
     action='append',
     nargs='*',
     default=None,
-    help=("Configuration of a specific MD. You may declare as many as you want.\n"
-          "Every MD requires a directory name and at least one trajectory path.\n"
-          "The structure is -md <directory> <trajectory_1> <trajectory_2> ...\n"
-          "Note that all trajectories from the same MD will be merged.\n"
-          "For legacy reasons, you may also provide a specific structure for an MD.\n"
-          "e.g. -md <directory> <structure> <trajectory_1> <trajectory_2> ...")
-)
+    help=project_init_help['md_config'])
 run_parser_input_group.add_argument(
     "-proj", "--accession",
     default=None,
-    help="Project accession to download missing input files from the database.")
+    help=project_init_help['accession'])
 run_parser_input_group.add_argument(
     "-url", "--database_url",
     default=DEFAULT_API_URL,
-    help=f"API URL to download missing data. Default value is {DEFAULT_API_URL}")
+    help=project_init_help['database_url'])
 run_parser_input_group.add_argument(
     "-inp", "--inputs_filepath",
     default=None,
@@ -406,40 +442,38 @@ run_parser_input_group.add_argument(
 run_parser_input_group.add_argument(
     "-pop", "--populations_filepath",
     default=DEFAULT_POPULATIONS_FILENAME,
-    help="Path to equilibrium populations file (Markov State Model only)")
+    help=project_init_help['populations_filepath'])
 run_parser_input_group.add_argument(
     "-tpro", "--transitions_filepath",
     default=DEFAULT_TRANSITIONS_FILENAME,
-    help="Path to transition probabilities file (Markov State Model only)")
+    help=project_init_help['transitions_filepath'])
 run_parser_input_group.add_argument(
     "-ad", "--aiida_data_filepath",
     default=None,
-    help=("Path to the AiiDA data file.\n"
-        "This file may be generated by the aiida-gromacs plugin and contains provenance data."))
+    help=project_init_help['aiida_data_filepath'])
 # Set a group for the workflow control options
 run_parser_workflow_group = run_parser.add_argument_group('WORKFLOW CONTROL OPTIONS')
 run_parser_workflow_group.add_argument(
     "-img", "--image",
     action='store_true',
-    help="Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.")
+    help=project_init_help['aiida_data_filepath'])
 run_parser_workflow_group.add_argument(
     "-fit", "--fit",
     action='store_true',
-    help="Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.")
+    help=project_init_help['fit'])
 run_parser_workflow_group.add_argument(
     "-trans", "--translation",
     nargs='*',
     default=[0,0,0],
-    help=("Set the x y z translation for the imaging process\n"
-        "e.g. -trans 0.5 -1 0"))
+    help=project_init_help['translation'])
 run_parser_workflow_group.add_argument(
     "-d", "--download",
     action='store_true',
-    help="If passed, only download required files. Then exits.")
+    help="(Deprecated: use -i download) If passed, only download required files. Then exits.")
 run_parser_workflow_group.add_argument(
     "-s", "--setup",
     action='store_true',
-    help="If passed, only download required files and run mandatory dependencies. Then exits.")
+    help="(Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.")
 run_parser_workflow_group.add_argument(
     "-smp", "--sample_trajectory",
     type=int,
@@ -447,34 +481,27 @@ run_parser_workflow_group.add_argument(
     default=None,
     const=10,
     metavar='N_FRAMES',
-    help="If passed, download the first 10 (by default) frames from the trajectory. You can specify a different number by providing an integer value.")
+    help=project_init_help['sample_trajectory'])
 run_parser_workflow_group.add_argument(
     "-rcut", "--rmsd_cutoff",
     type=float,
     default=DEFAULT_RMSD_CUTOFF,
-    help=(f"Set the cutoff for the RMSD sudden jumps analysis to fail (default {DEFAULT_RMSD_CUTOFF}).\n"
-        "This cutoff stands for the number of standard deviations away from the mean an RMSD value is to be.\n"))
+    help=project_init_help['rmsd_cutoff'])
 run_parser_workflow_group.add_argument(
     "-icut", "--interaction_cutoff",
     type=float,
     default=DEFAULT_INTERACTION_CUTOFF,
-    help=(f"Set the cutoff for the interactions analysis to fail (default {(DEFAULT_INTERACTION_CUTOFF)}).\n"
-        "This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).\n"))
+    help=project_init_help['interaction_cutoff'])
 run_parser_workflow_group.add_argument(
     "-iauto", "--interactions_auto",
     type=str,
     nargs='?',
     const=True,
-    help=("""Guess input interactions automatically. Available options:
-  - greedy (default): All chains against all chains
-  - humble: If there are only two chains then select the interaction between them
-  - <chain letter>: All chains against this specific chain
-  - ligands: All chains against every ligand""")
-)
+    help=project_init_help['interactions_auto'])
 run_parser_workflow_group.add_argument(
     "-gb", "--guess_bonds",
     action='store_true',
-    help="Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.")
+    help=project_init_help['guess_bonds'])
 
 # Set a group for the selection options
 run_parser_selection_group = run_parser.add_argument_group('SELECTION OPTIONS')
@@ -483,25 +510,23 @@ run_parser_selection_group.add_argument(
     nargs='?',
     default=False,
     const=True,
-    help=("Atoms selection to be filtered in VMD format. "
-        "If the argument is passed alone (i.e. with no selection) then water and counter ions are filtered"))
+    help=project_init_help['filter_selection'])
 run_parser_selection_group.add_argument(
     "-pbc", "--pbc_selection",
     default=None,
-    help=("Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory. "
-        "e.g. remaining solvent, ions, membrane lipids, etc."))
+    help=project_init_help['pbc_selection'])
 run_parser_selection_group.add_argument(
     "-cg", "--cg_selection",
     default=None,
-    help="Selection of atoms which are not actual atoms but Coarse Grained beads.")
+    help=project_init_help['cg_selection'])
 run_parser_selection_group.add_argument(
     "-pcafit", "--pca_fit_selection",
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
-    help="Atom selection for the pca fitting in vmd syntax")
+    help=project_init_help['pca_fit_selection'])
 run_parser_selection_group.add_argument(
     "-pcana", "--pca_analysis_selection",
     default=PROTEIN_AND_NUCLEIC_BACKBONE,
-    help="Atom selection for pca analysis in vmd syntax")
+    help=project_init_help['pca_analysis_selection'])
 
 
 # Set a custom argparse action to handle the following 2 arguments
@@ -562,7 +587,7 @@ run_parser_checks_group.add_argument(
 # Set a list with the alias of all requestable dependencies
 choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))
 
-run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS', description=f"Available tasks: {choices}\nFor more information about each task please visit:\n{task_docs_url}")
+run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS', description=f"Available tasks: {choices}\nFor more information about each task, please visit:\n{task_docs_url}")
 run_parser_analysis_group.add_argument(
     "-i", "--include",
     nargs='*',
