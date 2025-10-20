@@ -17,6 +17,7 @@ import pytraj as pyt
 # Set some known message errors
 NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.'
 MDTRAJ_ATOM_MISMATCH_ERROR = r'xyz must be shape \(Any, ([0-9]*), 3\). You supplied  \(1, ([0-9]*), 3\)'
+MDTRAJ_INSERTION_CODES_ERROR = r'^Could not convert residue number \[[0-9]*[a-zA-Z]\]$'
 PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does not match # atoms in (topology|parm) [\w.-]* \(([0-9]*)\)'
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
 
@@ -162,20 +163,7 @@ def check_inputs (
             return topology_atom_count, trajectory_atom_count
         # For .top files we use PyTraj since MDtraj can not handle it
         if topology_file.format == 'top':
-            # Note that calling ierload will print a error log when atoms do not match but will not raise a proper error
-            # To capture the error log we must throw this command wrapped in a stdout redirect
-            trajectory = None
-            with CaptureOutput('stderr') as output:
-                trajectory = pyt.iterload(trajectory_file.path, top=topology_file.path)
-            logs = output.captured_text
-            error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
-            if error_match:
-                topology_atom_count = int(error_match[3])
-                trajectory_atom_count = int(error_match[1])
-            # Now obtain the number of atoms from the frame we just read
-            else:
-                topology_atom_count = trajectory_atom_count = trajectory.n_atoms
-            return topology_atom_count, trajectory_atom_count
+            return get_topology_and_trajectory_atoms_pytraj(topology_file, trajectory_file)
         # At this point the topology should be supported by MDtraj
         # However, f the trajectory is a restart file MDtraj will not be able to read it
         # Make the conversion here, since restart files are single-frame trajectories this should be fast
@@ -208,10 +196,36 @@ def check_inputs (
                 topology_atom_count = int(error_match[1])
                 trajectory_atom_count = int(error_match[2])
                 return topology_atom_count, trajectory_atom_count
+            error_match = match(MDTRAJ_INSERTION_CODES_ERROR, error_message)
+            if error_match:
+                warn('The input topology has insertion codes.\n'+ \
+                ' Some tools may crash when reading the topology (MDtraj).\n'+ \
+                ' Some tools may ignore insertion codes when reading the topology (MDAnlysis, PyTraj, VMD).')
+                # Use other tool to read the topology
+                # Other tools could ignore the inserion codes
+                # However this is not a problem here, where we only care bout the number of atoms
+                return get_topology_and_trajectory_atoms_pytraj(topology_file, trajectory_file)
             # If we do not know the error then raise it as is
-            else:
-                raise error
+            raise error
         
+    # Set a function to get atoms from topology and trajectory together using pytraj
+    # This is an altermative method used when MDtraj can not handle it
+    def get_topology_and_trajectory_atoms_pytraj (topology_file : 'File', trajectory_file : 'File') -> tuple[int, int]:
+        # Note that calling iterload will print a error log when atoms do not match but will not raise a proper error
+        # To capture the error log we must throw this command wrapped in a stdout redirect
+        trajectory = None
+        with CaptureOutput('stderr') as output:
+            trajectory = pyt.iterload(trajectory_file.path, top=topology_file.path)
+        logs = output.captured_text
+        error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
+        if error_match:
+            topology_atom_count = int(error_match[3])
+            trajectory_atom_count = int(error_match[1])
+        # Now obtain the number of atoms from the frame we just read
+        else:
+            topology_atom_count = trajectory_atom_count = trajectory.n_atoms
+        return topology_atom_count, trajectory_atom_count
+
     # Get topology and trajectory atom counts
     topology_atom_count, trajectory_atom_count = get_topology_and_trajectory_atoms(input_topology_file, trajectory_sample)
 
