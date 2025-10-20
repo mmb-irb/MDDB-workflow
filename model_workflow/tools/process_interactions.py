@@ -205,7 +205,9 @@ def process_interactions (
         pretty_frames_percent = str(round(frames_percent * 10000) / 100)
         if frames_percent < interaction_cutoff:
             # If this interaction was set automatically then simply skip it silently
-            if interaction.get('auto', False): continue
+            if interaction.get('auto', False):
+                interaction[FAILED_INTERACTION_FLAG] = True
+                continue
             meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
             print(f'Interaction "{interaction_name}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
                 f'This means the interaction {meaning_log}.\n'
