@@ -12,6 +12,7 @@ import re
 import numpy
 from glob import glob
 from inspect import getfullargspec
+import time
 
 # Constants
 # Importing constants first is important
@@ -327,6 +328,7 @@ class Task:
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
         print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
+        start_time = time.time()
         # If the task is to be run again because an inputs changed then let the user know
         if any_input_changed and had_cache and not forced_overwrite:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
@@ -337,6 +339,8 @@ class Task:
         self.cache_cksums = cache_cksums
         # Run the actual task
         output = self.func(**processed_args)
+        end_time = time.time()
+        print(f'   Task {self.flag} completed in {end_time - start_time:.2f} seconds{COLOR_END}')
         self._set_parent_output(parent, output)
         # Set the output to be saved in cache
         # Note that all must be JSON serializable values

@@ -19,7 +19,7 @@ def tmscores (
     pbc_selection : 'Selection',
     snapshots : int,
     frames_limit : int = 200):
-    """Perform the tm score using the tmscoring package."""
+    """ Perform the tm score using the tmscoring package. """
 
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_TMSCORES_FILENAME}'
@@ -70,7 +70,7 @@ def tmscores (
         for i in range(1, len(trajectory), frame_step):
             subject = trajectory[i]
             superimposed, _, ref_indices, sub_indices = struc.superimpose_structural_homologs(
-                reference_frame, subject)
+                reference_frame, subject, max_iterations=1000)
             # Run the tmscoring over the current frame against the current reference
             tm = struc.tm_score(reference_frame, superimposed, ref_indices, sub_indices)
             tmscores.append(tm)
