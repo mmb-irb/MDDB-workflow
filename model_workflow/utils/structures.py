@@ -2699,8 +2699,9 @@ class Structure:
         return repeated_atoms_count > 0
 
     def check_incoherent_bonds (self) -> bool:
-        """Check bonds to be incoherent i.e. check atoms not to have more or less 
-        bonds than expected according to their element."""
+        """ Check bonds to be incoherent i.e. check atoms not to have more or less 
+        bonds than expected according to their element. 
+        Return True if any incoherent bond is found. """
         # Find out if there are hydrogens in the structure
         # It may happen that we encounter an structure without hydrogens
         has_hydrogen = next(( True for atom in self.atoms if atom.element == 'H' ), False)

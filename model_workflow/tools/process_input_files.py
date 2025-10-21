@@ -19,14 +19,27 @@ from model_workflow.tools.get_charges import get_charges
 from model_workflow.tools.structure_corrector import structure_corrector
 
 
-def is_amber_top (input_topology_file : 'File', input_trajectories_format: str) -> bool:
-    """ Check if a .top file is from Amber. """
+def is_amber_top (input_topology_file : 'File') -> bool:
+    """ Check if a .top file is from Amber. 
+    Returns True if it is Amber, False if it is Gromacs. """
     if input_topology_file != MISSING_TOPOLOGY and \
-        input_topology_file.extension == 'top' and \
-            input_trajectories_format == 'nc':
+        input_topology_file.extension == 'top':
         with open(input_topology_file.path, 'r') as f:
-            first_line = f.readline()
-            return first_line.strip().startswith('%VERSION')
+            lines = f.readlines(5)
+
+            # If all non-empty first words are '%' assume Amber (.prmtop)
+            first_words = {line.split()[0] for line in lines if line.strip()}
+            if '%VERSION' in first_words:
+                return True
+
+            # If any line starts with ';' or '[' assume Gromacs (.top)
+            first_chars = {word[0] for word in first_words}
+            if any(c in (';', '[') for c in first_chars):
+                return False
+
+            # Otherwise we cannot decide
+            raise InputError('Unable to infer topology format from first five lines')
+            
     return False
 
 
@@ -78,7 +91,7 @@ def process_input_files (
     # However it is usual than Amber topologies (ideally .prmtop) are also '.top'
     # So if the trajectory is Amber and the topology is .top then assume it is Amber
     input_trajectories_format = list(input_trajectory_formats)[0]
-    if is_amber_top(input_topology_file, input_trajectories_format):
+    if is_amber_top(input_topology_file):
         # Creating a topology symlink/copy with the correct extension
         warn(f'Topology is .top but the trajectory is from Amber. It is assumed the topology is .prmtop')
         reformatted_topology_file = input_topology_file.reformat('prmtop')
@@ -462,8 +475,9 @@ def process_input_files (
     # Otherwise the task will find out it is empty and will delete it
     # And we don't want to delete it or it will be done again in the next run
     # To solve this leave some symbolic file
-    manifest_filepath = f'{output_directory}/manifest.txt'
-    with open(manifest_filepath, 'w') as file:
-        file.write('Input files were processed sucessfully.\n' +
-            'Intermediate files were removed to save space.\n'
-            'Please do not remove this file\n')
+    if all(self.register.tests.values()):
+        manifest_filepath = f'{output_directory}/manifest.txt'
+        with open(manifest_filepath, 'w') as file:
+            file.write('Input files were processed sucessfully.\n' +
+                'Intermediate files were removed to save space.\n'
+                'Please do not remove this file\n')

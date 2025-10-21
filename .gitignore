@@ -10,6 +10,7 @@ atommass.dat
 .pytest_cache/
 test/data/output/
 atommass.dat
+**/tmp/
 
 # Build
 build/
