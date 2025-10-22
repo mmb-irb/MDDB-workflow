@@ -65,6 +65,7 @@ def generate_protein_mapping (
     structure : 'Structure',
     output_filepath : str,
     database_url : str,
+    cache : 'Cache',
     register : dict,
     mercy : list[str] = [],
     input_protein_references : list | dict = [],
@@ -321,7 +322,7 @@ def generate_protein_mapping (
             continue
         # Run the blast
         sequence = chain_data['sequence']
-        uniprot_id = blast(sequence)
+        uniprot_id = blast(sequence, cache)
         if not uniprot_id:
             chain_data['match'] = { 'ref': NOT_FOUND_FLAG }
             continue
@@ -477,7 +478,15 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
 # Note that we are blasting against UniProtKB / Swiss-Prot so results will always be valid UniProt accessions
 # WARNING: This always means results will correspond to curated entries only
 #   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
-def blast (sequence : str) -> Optional[str]:
+# Since this function may take some time we always cache the result
+def blast (sequence : str, cache : Optional['Cache'] = None) -> Optional[str]:
+    # Check if we have the resulted saved in cache already
+    if cache != None:
+        cached_blasts = cache.retrieve('blasts', {})
+        if sequence in cached_blasts:
+            accession = cached_blasts[sequence]
+            print(f'Using previous blast result from cache: {accession}')
+            return accession
     print('Throwing blast...')
     result = NCBIWWW.qblast(
         program = "blastp",
@@ -496,6 +505,10 @@ def blast (sequence : str) -> Optional[str]:
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
     accession = result['Hit_accession']
     print('Result: ' + accession)
+    # Save the result in the cache
+    if cache != None:
+        cached_blasts[sequence] = accession
+        cached_blasts = cache.update('blasts', cached_blasts)
     return accession
 
 # Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
