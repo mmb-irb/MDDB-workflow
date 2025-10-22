@@ -204,7 +204,8 @@ def process_input_files (
 
     # Check if any output file is missing
     missing_filter_output = not filtered_structure_file.exists \
-        or not filtered_trajectory_file.exists or not filtered_topology_file.exists
+        or not filtered_trajectory_file.exists \
+        or (filtered_topology_file != MISSING_TOPOLOGY and not filtered_topology_file.exists)
 
     # Check if parameters have changed
     # Note that for this specific step only filtering is important

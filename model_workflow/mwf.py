@@ -1739,10 +1739,6 @@ class Project:
         # If we arelady have an internal value calculated then return it
         if self._input_topology_filepath != None:
             return self._input_topology_filepath
-        # If it is explicitly stated that there is no topology
-        if type(self.arg_input_topology_filepath) == str and self.arg_input_topology_filepath.lower() in { 'no', 'not', 'na' }:
-            self._input_topology_filepath = MISSING_TOPOLOGY
-            return self._input_topology_filepath
         # Set a function to parse possible glob notation
         def parse (filepath : str) -> str:
             # If there is no glob pattern then just return the string as is
@@ -1760,6 +1756,9 @@ class Project:
             return parsed_filepaths[0]
         # If this value was passed through command line then it would be set as the internal value already
         if self.arg_input_topology_filepath:
+            if self.arg_input_topology_filepath.lower() in { 'no', 'not', 'na' }:
+                self._input_topology_filepath = MISSING_TOPOLOGY
+                return self._input_topology_filepath
             self._input_topology_filepath = parse(self.arg_input_topology_filepath)
             # Update the input topology fielpath in the inputs file, in case it is not matching
             self.update_inputs('input_topology_filepath', relpath(self._input_topology_filepath, self.directory))
@@ -1769,7 +1768,11 @@ class Project:
             # Get the input value, whose key must exist
             inputs_value = self.get_input('input_topology_filepath')
             # If there is a valid input then use it
-            if inputs_value:
+            if inputs_value != None:
+                # WARNING: the yaml parser automatically converts 'no' to False
+                if inputs_value == False or inputs_value.lower() in { 'no', 'not', 'na' }:
+                    self._input_topology_filepath = MISSING_TOPOLOGY
+                    return self._input_topology_filepath
                 parsed_input_value = parse(inputs_value)
                 self._input_topology_filepath = self.pathify(parsed_input_value)
                 return self._input_topology_filepath
