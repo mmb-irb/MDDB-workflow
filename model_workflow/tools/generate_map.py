@@ -14,6 +14,15 @@ from Bio import Align
 from Bio.Blast import NCBIWWW
 from Bio.Align import substitution_matrices, Alignment
 
+# Set generic sequences which should be similar to known antibodies
+REFERENCE_ANTIBODY_SEQUENCES = {
+    # Single domain antibody
+    # This sequence has been designed with the aid of DeepSeek
+    # CDR regionds have been replaced by X
+    'QVQLVESGGGLVQPGGSLRLSCAASXXXXXXXWYRQAPGKEREFVAXXXXXXRFTISRDNAKNTVYLQMNSLKPEDTAVYYCXXXXXXXXXXWGQGTQVTVSS'
+}
+
+
 # Save current stderr to further restore it
 stderr_backup = sys.stderr
 # Suppress stderr
@@ -706,6 +715,23 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
                 sequence = entity.get('pdbx_seq_one_letter_code', None)
                 if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
                 uniprot_ids.append( NoReferableException(sequence) )
+                continue
+            # Check if the sequence of this chain may belong to an antibody
+            entity = polymer.get('entity_poly', None)
+            if not entity: continue
+            sequence = entity.get('pdbx_seq_one_letter_code', None)
+            if not sequence: continue
+            is_antibody = False
+            for reference_sequence in REFERENCE_ANTIBODY_SEQUENCES:
+                if align(reference_sequence, sequence):
+                    is_antibody = True
+                    break
+            # If so, the also set this chain as no referable since antibodies have no UniProt id
+            if is_antibody:
+                uniprot_ids.append( NoReferableException(sequence) )
+                continue
+            # If we did not fall in any of the previous sections then continue, but we may have problems
+            warn(f'Chain with no UniP {pdb_id} -> Is this a chimeric entity?')
             continue
         # If we have multiple uniprots in a single entity then we skip them
         # Note tha they belong to an entity which is no referable (e.g. a chimeric entity)
