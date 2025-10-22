@@ -721,17 +721,19 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
             if not entity: continue
             sequence = entity.get('pdbx_seq_one_letter_code', None)
             if not sequence: continue
+            print(' Could this be an antibody?')
             is_antibody = False
             for reference_sequence in REFERENCE_ANTIBODY_SEQUENCES:
                 if align(reference_sequence, sequence):
                     is_antibody = True
                     break
+            conclusion = f'  I would guess it {"is" if is_antibody else "is not"} an antibody'
+            print(conclusion)
             # If so, the also set this chain as no referable since antibodies have no UniProt id
             if is_antibody:
                 uniprot_ids.append( NoReferableException(sequence) )
                 continue
-            # If we did not fall in any of the previous sections then continue, but we may have problems
-            warn(f'Chain with no UniP {pdb_id} -> Is this a chimeric entity?')
+            # If we did not fall in any of the previous sections then continue
             continue
         # If we have multiple uniprots in a single entity then we skip them
         # Note tha they belong to an entity which is no referable (e.g. a chimeric entity)
