@@ -173,7 +173,10 @@ def generate_protein_mapping (
                     continue
             # If the chain has already a match and this match is among the forced references then stop here
             # Forced references have priority and this avoids having a match with a not forced reference further
-            if chain_data['match']['ref'] and chain_data['match']['ref']['uniprot'] in input_protein_references:
+            # Same behaviour if the match is with an unreferable sequence
+            if chain_data['match']['ref'] and ( chain_data['match']['ref'] == NO_REFERABLE_FLAG
+                or chain_data['match']['ref'] == NOT_FOUND_FLAG
+                or chain_data['match']['ref']['uniprot'] in input_protein_references):
                 continue
             # Iterate over the different available reference sequences
             for uniprot_id, reference_sequence in reference_sequences.items():
