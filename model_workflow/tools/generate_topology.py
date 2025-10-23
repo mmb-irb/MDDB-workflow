@@ -10,7 +10,7 @@ def generate_topology (
     cg_residues : list[int],
     output_filepath : str
 ):
-    """Prepare the standard topology file to be uploaded to the database."""
+    """ Prepare the standard topology file to be uploaded to the database. """
 
     # The structure will be a bunch of arrays
     # Atom data

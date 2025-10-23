@@ -12,9 +12,6 @@ on:
     branches: [ master ]
     paths:
       - 'model_workflow/**'
-  # every 6 hours
-  # schedule:
-  #   - cron: "0 */6 * * *" 
 
 jobs:
   # Name of the Job

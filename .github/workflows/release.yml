@@ -4,11 +4,10 @@ on:
   push:
     # Only run on pushes to the release branch
     branches: [ release ]
-    paths:
-      - 'model_workflow/**'
-      - 'test/**'
-      - '.github/workflows/release.yml'
-
+  # everyday Monday to Saturday at 9am UTC
+  schedule:
+    - cron: "0 9 * * 1-6"
+    
 permissions:
   contents: write
 
