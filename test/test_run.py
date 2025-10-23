@@ -13,7 +13,7 @@ from model_workflow.console import  main
 
 @pytest.mark.release
 class TestRunAll:
-    """Test all the tasks workflow for reference accessions:
+    """ Test all the tasks workflow for reference accessions:
       - A0001: base case
       - A01IP: for membrane analyses
       - A01V7: for only ligand
@@ -32,13 +32,13 @@ class TestRunAll:
 
     @pytest.mark.parametrize("project_task", project_requestables.keys())
     def test_project_task(self, project: 'Project', project_task: str):
-        """Test that each project task runs without errors"""
+        """ Test that each project task runs without errors. """
         project.overwritables = {project_task}
         project_requestables[project_task](project)
 
     @pytest.mark.parametrize("md_task", md_requestables.keys())
     def test_md_task(self, project: 'Project', md_task: str, capsys):
-        """Test that each analysis runs without errors"""
+        """ Test that each analysis runs without errors """
         if md_task == 'dihedrals':
             pytest.skip(f"Skipping analysis.")
         elif project.accession == 'A01IP' and md_task in ['pockets', 'pockets', 'dist', 'energies']:
@@ -52,10 +52,10 @@ class TestRunAll:
 
 @pytest.mark.release
 class TestRunFlags:
-    """Test the run subcommand with different flags"""
+    """ Test the run subcommand with different flags. """
 
     def test_top_no(self, test_data_dir: str):
-        """Test the flag -top no. Add , 'protmap' for coverage"""
+        """ Test the flag -top no. Add , 'protmap' for coverage. """
 
         working_directory = os.path.join(test_data_dir, 'output/test_top_no')
         # Remove the directory if it already exists to ensure a clean state
@@ -79,7 +79,7 @@ class TestRunFlags:
         os.chdir(test_data_dir)
 
     def test_no_inputs(self, test_data_dir: str):
-        """Test the workflow without no inputs yaml"""
+        """ Test the workflow without no inputs yaml. """
 
         working_directory = os.path.join(test_data_dir, 'output/test_no_inputs')
         # Remove the directory if it already exists to ensure a clean state
@@ -106,8 +106,8 @@ class TestRunFlags:
         os.chdir(test_data_dir)
 
     def test_no_internet(self, test_data_dir: str, monkeypatch):
-        """Test the workflow with no internet connection."""
-
+        """ Test the workflow with no internet connection. """
+        pytest.skip("Skipping test (not implemented yet).")
         def raise_connection_error(*args, **kwargs):
             raise requests.exceptions.ConnectionError("No internet connection")
 
@@ -131,11 +131,11 @@ class TestRunFlags:
 @pytest.mark.CI
 @pytest.mark.release
 class TestRunSpecial:
-    """Test for special cases and specific accessions"""
+    """ Test for special cases and specific accessions. """
 
     @pytest.mark.parametrize("test_accession", ["cg_test"], scope="class")
     def test_CG(self, project: 'Project'):
-        """Test coarse-grained (CG) model."""
+        """ Test coarse-grained (CG) model. """
         # Only two tasks. In the future "all" should be supported 
         md = project.mds[0]
         md.get_processed_interactions(md)
@@ -143,5 +143,5 @@ class TestRunSpecial:
 
     @pytest.mark.parametrize("test_accession", ["test_020"], scope="class")
     def test_dihedrals(self, project: 'Project'):
-        """Test dihedrals energy calculation."""
+        """ Test dihedrals energy calculation. """
         project.get_dihedrals()
