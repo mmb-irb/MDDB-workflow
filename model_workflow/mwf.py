@@ -20,7 +20,7 @@ from model_workflow.utils.constants import *
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, STANDARD_EXCEPTIONS
 from model_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
 from model_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version
@@ -276,8 +276,14 @@ class Task:
             output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
             # Some values are transformed to become JSON serializable
             # Convert these values back to their original types
+            # WARNING: Do not declare new expections here but use the constant ones
+            # WARNING: Otherwise further equality comparisions will fail
             if type(output) == str and output[0:11] == 'Exception: ':
-                output = Exception(output)
+                exception_message = output[11:]
+                standard_exception = next((exception for exception in STANDARD_EXCEPTIONS if str(exception) == exception_message), None)
+                if standard_exception == None:
+                    raise ValueError(f'Exception "{exception_message}" is not among standard exceptions')
+                output = standard_exception
             self._set_parent_output(parent, output)
         # Check if this dependency is to be overwriten
         forced_overwrite = self.flag in parent.overwritables

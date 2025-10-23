@@ -68,6 +68,9 @@ MISSING_CHARGES = Exception('Missing atom charges')
 MISSING_BONDS = Exception('Missing atom bonds')
 JSON_SERIALIZABLE_MISSING_BONDS = 'MB'
 
+# Keep all exceptions in a set
+STANDARD_EXCEPTIONS = { MISSING_TOPOLOGY, MISSING_CHARGES, MISSING_BONDS }
+
 # Set a function to get the next letter from an input letter in alphabetic order
 # Return None if we run out of letters
 letters = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
