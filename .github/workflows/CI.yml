@@ -12,6 +12,9 @@ on:
     branches: [ master ]
     paths:
       - 'model_workflow/**'
+  # everyday Monday to Saturday at 9am UTC
+  schedule:
+    - cron: "0 9 * * 1-6"
 
 jobs:
   # Name of the Job
@@ -64,5 +67,11 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run CI tests
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         shell: bash -l {0}
         run: pytest -m CI
+
+      - name: Run extensive tests
+        if: github.event_name == 'schedule'
+        shell: bash -l {0}
+        run: pytest -m release
