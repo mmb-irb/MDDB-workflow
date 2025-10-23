@@ -45,5 +45,5 @@ def fix_gromacs_masses ():
         # If it does not exists then it means it is a symlink pointing to a not valid direction
         # This may happend when working in different machines
         # Simply remove the old symlink
-        if local_custom_masses_file.is_symlink: local_custom_masses_file.remove()
+        if local_custom_masses_file.is_symlink(): local_custom_masses_file.remove()
         local_custom_masses_file.set_symlink_to(source_custom_masses_file)
