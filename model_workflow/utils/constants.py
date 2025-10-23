@@ -185,7 +185,7 @@ OUTPUT_CHANNELS_FILENAME = 'mda.channels.json'
 FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 
 # Default parameters
-DEFAULT_RMSD_CUTOFF = 9
+DEFAULT_RMSD_CUTOFF = 10.1
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
 # Set register cache flags
