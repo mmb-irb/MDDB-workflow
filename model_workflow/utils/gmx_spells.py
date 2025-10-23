@@ -28,7 +28,9 @@ def run_gromacs(command : str, user_input : Optional[str] = None,
     # In case we have user input we must open a process to then pipe it in the gromacs process
     if user_input:
         # The -e option allows the interpretation of '\', which is critial for the make_ndx command
-        user_input_process = Popen([ "echo", "-e", *user_input.split() ], stdout=PIPE)
+        # WARNING: Explicity split by whitespaces
+        # WARNING: If not specified then breaklines are also removed, which is ciritcal for make_ndx
+        user_input_process = Popen([ "echo", "-e", *user_input.split(' ') ], stdout=PIPE)
 
     # Get the time at the moment we start to run the command
     # WARNING: We must truncate this value, because the file mtime is truncated as well
@@ -603,9 +605,13 @@ def make_index (input_structure_file : 'File', output_index_file : 'File', mask 
     run_gromacs(f'make_ndx -f {input_structure_file.path} -o {output_index_file.path}',
                 user_input = f'{mask} \nq')
     # The group name is automatically assigned by gromacs
-    # It equals the mask but removing andy " symbol
-    group_name = mask.replace('"','')
-    return group_name
+    # It equals the mask but removing any " symbols and with a few additional changes
+    # WARNING: Not all mask symbols are supported here, beware of complex masks
+    group_name = mask.replace('"','').replace('&','_&_').replace('|','_')
+    # Check if the group was created
+    content = read_ndx(output_index_file)
+    created = group_name in content
+    return group_name, created
 
 # Read a .ndx file
 def read_ndx (input_index_file : 'File') -> dict:

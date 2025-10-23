@@ -61,7 +61,9 @@ def guess_and_filter_topology (
             # Create the index file with the current atom selection
             index_filepath = f'{input_topology_file.basepath}/.auxiliar.ndx'
             index_file = File(index_filepath)
-            filter_group_name = make_index(input_topology_file, index_file, mask)
+            filter_group_name, group_exists = make_index(input_topology_file, index_file, mask)
+            # If the filter was not created then it means there was no water or ions to begin with
+            if not group_exists: continue
             # Filter the tpr
             tpr_filter(
                 input_topology_file.path,

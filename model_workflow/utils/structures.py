@@ -1765,14 +1765,14 @@ class Structure:
             # Create the index file with the current atom selection
             index_filepath = f'.structure.ndx'
             index_file = File(index_filepath)
-            selection_name = make_index(auxiliar_pdb_file, index_file, selection_string)
+            selection_name, selection_exists = make_index(auxiliar_pdb_file, index_file, selection_string)
+            if not selection_exists:
+                available_selections = ', '.join(list(index_groups.keys()))
+                raise InputError(f'Something was wrong with the selection. Available gromacs selections: {available_selections}')
             # Read the index file to capture the selection of atoms
             index_groups = read_ndx(index_file)
             indices = index_groups.get(selection_name, None)
-            if indices == None:
-                available_selections = ', '.join(list(index_groups.keys()))
-                raise InputError(f'Something was wrong with the selection. Available gromacs selections: {available_selections}')
-            # Cleanup auxiliar files
+            if indices == None: raise RuntimeError('Atom group must exist at this point')
             auxiliar_pdb_file.remove()
             index_file.remove()
             # Return the parsed selection
