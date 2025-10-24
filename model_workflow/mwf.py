@@ -1405,11 +1405,7 @@ class Project:
                 Set the cutoff for the interactions analysis to fail.
                 This cutoff stands for percent of the trajectory where the interaction happens (from 0 to 1).
             interactions_auto (Optional[str]):
-                Guess input interactions automatically. Available options:
-                - greedy (default): All chains against all chains
-                - humble: If there are only two chains then select the interaction between them
-                - <chain letter>: All chains against this specific chain
-                - ligands: All chains against every ligand
+                Guess input interactions automatically. A VMD selection may be passed to limit guessed interactions to a specific subset of atoms.
             guess_bonds (bool):
                 Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.
             sample_trajectory (Optional[int]):
