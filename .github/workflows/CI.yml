@@ -12,9 +12,9 @@ on:
     branches: [ master ]
     paths:
       - 'model_workflow/**'
-  # everyday Monday to Saturday at 9am UTC
+  # everyday Monday to Saturday at 7am UTC
   schedule:
-    - cron: "0 9 * * 1-6"
+    - cron: "0 7 * * 1-6"
 
 jobs:
   # Name of the Job
