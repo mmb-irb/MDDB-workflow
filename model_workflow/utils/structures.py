@@ -2837,6 +2837,9 @@ class Structure:
             # Remove the previous atom to avoid going back
             previous_atom = atom_path[-2] if len(atom_path) > 1 else None
             if previous_atom:
+                # HARDCODE: This is a problem which should be studied and fixed
+                # DANI: I temporatily bypass the problem to make it on time to a meeting
+                if previous_atom not in followup_atoms: return
                 followup_atoms.remove(previous_atom)
             # Iterate over the following bonded atoms
             for followup_atom in followup_atoms:
