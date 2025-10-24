@@ -5,6 +5,7 @@ from subprocess import run, PIPE, Popen
 from re import search
 from time import time
 
+from model_workflow.utils.auxiliar import load_json
 from model_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from model_workflow.utils.file import File
 from model_workflow.utils.type_hints import *
@@ -342,6 +343,14 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
     atom_count = mine_system_atoms_count(error_logs)
     return atom_count
 
+# Read and parse a tpr using the MDDB-specific tool from gromacs
+def read_and_parse_tpr (tpr_filepath : str) -> dict:
+    expected_output_filepath = 'siminfo.json'
+    run_gromacs(f'dump -s {tpr_filepath} --json', expected_output_filepath = expected_output_filepath)
+    parsed_tpr = load_json(expected_output_filepath)
+    #remove(expected_output_filepath)
+    return parsed_tpr
+
 # Read a tpr file by converting it to ASCII
 def get_tpr_content (tpr_filepath : str) -> tuple[str, str]:
     # Read the tpr file making a 'dump'
@@ -386,58 +395,11 @@ GROMACS_TPR_SETTLE_REGEX = r"^\s*([0-9]*) type=[0-9]* \(SETTLE\)\s*([0-9]*)\s*([
 
 # Get tpr atom bonds
 def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
-    # Read the TPR
-    tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
-    lines = tpr_content.split('\n')
-    # Mine the atomic bonds
-    bonds = []
-    # Save the moment we already processed a bond of each class (e.g. bonds, constr, connbonds, etc.)
-    processed_bond_classes = set()
-    # Save already processed bond classes which have an index restart
-    # This is a coomon problem in TPR bonding, we do not know the meaning but bonds after the index restart are always wrong
-    restarted_bond_classes = set()
-    # Iterate tpr content lines to find bonds
-    for line in lines:
-        # Parse the line to get only atomic bonds
-        match = search(GROMACS_TPR_ATOM_BONDS_REGEX, line)
-        # If this is not a line with bonding data then skip it
-        if not match: continue
-        # Mine bond index and class
-        bond_index = int(match[1])
-        bond_class = match[2]
-        # If this class has a restart then skip it
-        if bond_class in restarted_bond_classes: continue
-        # If the index of the bond is 0 but we already processed bonds from this classes then this is a restart
-        if bond_index == 0 and bond_class in processed_bond_classes:
-            # If not, then add the class to the restarted classes
-            restarted_bond_classes.add(bond_class)
-            # And skip it
-            continue
-        # Add the class to the list
-        processed_bond_classes.add(bond_class)
-        # Get atom indices of bonded atoms
-        bond = ( int(match[3]), int(match[4]) )
-        bonds.append(bond)
-    # Iterate bonds again to find water bonds with the SETTLE algorithm
-    for line in lines:
-        # Parse the line to get only atomic bonds
-        match = search(GROMACS_TPR_SETTLE_REGEX, line)
-        # If this is not a line with bonding data then skip it
-        if not match: continue
-        # If there is a 4rth atom we stop here
-        if match[5]: raise ValueError('Found SETTLE bonds with 4 atoms. This is not yet supported')
-        # Mine the settle
-        settle = ( int(match[2]), int(match[3]), int(match[4]) )
-        # Set actual bonds from the settles
-        # The oxygen is always declared first
-        # DANI: De esto no estoy 100% seguro, pero Miłosz me dijo que probablemente es así
-        # DANI: Si no se cumple, el test de coherent bonds enconrará un hidrógeno con 2 enlaces
-        bonds += [ (settle[0], settle[1]), (settle[0], settle[2]) ]
-    # If we successfully got atom bonds then return them
-    if len(bonds) > 0: return bonds
-    # If there are no bonds at the end then something went wrong
-    print(tpr_error_logs)
-    raise RuntimeError(f'Bonds extraction from tpr file "{tpr_filepath}" has failed')
+    # Read and parse the TPR
+    parsed_tpr = read_and_parse_tpr(tpr_filepath)
+    # Get the bonds only
+    tpr_bonds = parsed_tpr['gromacs-topology']['bond']['value']
+    return tpr_bonds
 
 # Filter topology atoms
 # DANI: Note that a TPR file is not a structure but a topology
