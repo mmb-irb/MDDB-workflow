@@ -253,6 +253,9 @@ class Atom:
         # If the name is SOD and it is a lonely atom then it is clearly sodium, not sulfur
         if self.name.upper() == 'SOD' and self.residue.atom_count == 1:
             return 'Na'
+        # If the name is POT and it is a lonely atom then it is clearly potassium, not phosphor
+        if self.name.upper() == 'POT' and self.residue.atom_count == 1:
+            return 'K'
         # Find a obvios element name in the atom name
         element = self.get_name_suggested_element()
         # CA may refer to calcium or alpha carbon, so the number of atoms in the residue is decisive
