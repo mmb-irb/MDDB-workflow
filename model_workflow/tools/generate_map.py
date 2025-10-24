@@ -2,6 +2,8 @@ import sys
 import json
 import urllib.request
 import numpy as np
+import re
+
 from model_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException
 from model_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from model_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -714,6 +716,11 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
                 if not entity: raise ValueError(f'Missing entity in {pdb_id}')
                 sequence = entity.get('pdbx_seq_one_letter_code', None)
                 if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
+                # WARNING: A syntetic construct may have a "special" sequence
+                # It may combine one-letter code with 3-letter code in parenthesis for special aminoacids
+                # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
+                # We simply replace these special aminoacids by X
+                sequence = re.sub(r'\([0-9A-Z]{3}\)', 'X', sequence)
                 uniprot_ids.append( NoReferableException(sequence) )
                 continue
             # Check if the sequence of this chain may belong to an antibody
