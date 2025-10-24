@@ -16,6 +16,7 @@ from model_workflow.utils.auxiliar import InputError
 from model_workflow.utils.nassa_file import generate_nassa_config
 from model_workflow.tools.conversions import convert
 from model_workflow.analyses.nassa import workflow_nassa
+from model_workflow.core.dataset import Dataset
 
 # Set the path to the input setter jupyter notebook
 inputs_template = str(Path(__file__).parent / "resources" / "inputs_file_template.yml")
@@ -282,6 +283,9 @@ def main ():
         # Generate the output file from the modified structure
         structure.generate_pdb_file(args.output_structure)
         print(f'Changes written to {args.output_structure}')
+    elif subcommand == 'dataset':
+        dataset = Dataset(dataset_yaml_path=args.dataset_yaml)
+        dataset.launch_workflow(slurm=args.slurm, job_template=args.job_template)
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
@@ -847,3 +851,11 @@ nassa_parser.add_argument(
     action='store_true',
     help="If passed, merge duplicate subunits if there is more than one, in the sequences. if not only the last will be selected"
 )
+
+# Dataset subcommand
+dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpFormatter,
+    help="Manage and process a dataset of MDDB projects.",
+    parents=[common_parser])
+dataset_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+dataset_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
+dataset_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
