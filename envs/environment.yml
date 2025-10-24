@@ -46,3 +46,5 @@ dependencies:
   - bioconda::curves
   # Visual tool to display graphs in terminal and even text logs
   - plotext
+  # For dataset templates
+  - jinja2

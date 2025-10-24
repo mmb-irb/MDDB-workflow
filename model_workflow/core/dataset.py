@@ -1,10 +1,8 @@
 from model_workflow.utils.auxiliar import load_yaml, is_glob
 from model_workflow.mwf import workflow
 import glob
-import jinja2
 import subprocess
 import os
-import argparse
 from pathlib import Path
 
 
@@ -52,7 +50,9 @@ class Dataset:
         """
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
-
+        if slurm:
+            # Lazy import jinja2 for now to not break environments
+            import jinja2
         for project_dir in self.project_directories:
             if slurm:
                 inputs_yaml_path = Path(project_dir) / 'inputs.yaml'
