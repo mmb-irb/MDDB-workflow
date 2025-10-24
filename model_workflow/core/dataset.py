@@ -75,7 +75,7 @@ class Dataset:
                 os.chmod(job_script_path, 0o755)
 
                 print(f"Submitting SLURM job for {project_dir}")
-                subprocess.run(['sbatch', str(job_script_path)], cwd=project_dir)
+                subprocess.run(['sbatch', 'mwf_slurm_job.sh'], cwd=project_dir)
 
             else:
                 # Normal Python execution
