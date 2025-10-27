@@ -10,6 +10,18 @@ from model_workflow.utils.gmx_spells import pdb_filter
 from model_workflow.utils.type_hints import *
 from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
+
+def _tm_score_no_filter(reference, subject, reference_indices, subject_indices, reference_length="shorter"):
+    # Bypass the filter_amino_acids check by directly computing the score
+    ref_length = struc.tm._get_reference_length(
+        reference_length, 
+        struc.get_residue_count(reference), 
+        struc.get_residue_count(subject)
+    )
+    distances = struc.geometry.distance(reference[reference_indices], subject[subject_indices])
+    return np.sum(struc.tm._tm_score(distances, ref_length)).item() / ref_length
+_tm_score_no_filter.__doc__ = struc.tm_score.__doc__
+
 def tmscores (
     trajectory_file : 'File',
     output_directory : str,
@@ -23,7 +35,7 @@ def tmscores (
 
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_TMSCORES_FILENAME}'
-
+    struc.filter_amino_acids = lambda array: np.ones(array.array_length(), dtype=bool)
     tmscore_references  = [first_frame_file, average_structure_file]
 
     # Set the alpha carbon selection
@@ -49,13 +61,6 @@ def tmscores (
 
     ca_mask = np.isin(np.arange(template.array_length()), ca_list)
     template = template[ca_mask]
-    # Fix histidine naming issues so they are recognized as standard amino acids
-    for non_standard in np.unique(template[~struc.filter.filter_amino_acids(template)].res_name):
-        if non_standard in PROTEIN_RESIDUE_NAME_LETTERS:
-            standard = protein_letters_1to3_extended[PROTEIN_RESIDUE_NAME_LETTERS[non_standard]].upper()
-            template.res_name[template.res_name == non_standard] = standard
-    is_aa = struc.filter.filter_amino_acids(template)
-    assert np.all(is_aa), ("Non-standard amino acids in template", np.unique(template[~is_aa].res_name))
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     xtc_file = xtc.XTCFile.read(trajectory_file.path, atom_i=ca_list, step=frame_step)
     trajectory = xtc_file.get_structure(template)
@@ -72,7 +77,7 @@ def tmscores (
             superimposed, _, ref_indices, sub_indices = struc.superimpose_structural_homologs(
                 reference_frame, subject, max_iterations=1000)
             # Run the tmscoring over the current frame against the current reference
-            tm = struc.tm_score(reference_frame, superimposed, ref_indices, sub_indices)
+            tm = _tm_score_no_filter(reference_frame, superimposed, ref_indices, sub_indices)
             tmscores.append(tm)
 
         # Get a standarized reference name
