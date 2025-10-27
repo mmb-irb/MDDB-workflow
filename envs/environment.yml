@@ -48,3 +48,4 @@ dependencies:
   - plotext
   # For dataset templates
   - jinja2
+  - numexpr >=2.8.4

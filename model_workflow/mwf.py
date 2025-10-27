@@ -1000,6 +1000,11 @@ class MD:
         process_interactions, { 'frames_limit': 1000 })
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
+    # MDAnalysis Universe object
+    get_MDAnalysis_Universe = Task('mda_univ', 'MDAnalysis Universe object',
+        get_mda_universe, use_cache = False)
+    universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
+
     # Set a function to get input values which may be MD specific
     # If the MD input is missing then we use the project input
     def input_getter (name : str):
@@ -1168,6 +1173,11 @@ class MD:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
+    def get_charges (self) -> dict:
+        """ Get the residues mapping from the project. """
+        return self.project.charges
+    charges = property(get_charges, None, None, "Residues charges (read only)")
+
     # Reference frame
     get_reference_frame = Task('reframe', 'Reference frame', get_bonds_reference_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
@@ -1308,7 +1318,7 @@ class Project:
         input_structure_filepath : Optional[str] = None,
         input_trajectory_filepaths : Optional[list[str]] = None,
         md_directories : Optional[list[str]] = None,
-        md_config : Optional[list] = None,
+        md_config : Optional[list[list[str]]] = None,
         reference_md_index : Optional[int] = None,
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
@@ -1636,14 +1646,14 @@ class Project:
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
 
     # Set the reference MD
-    def get_reference_md (self) -> int:
+    def get_reference_md (self) -> MD:
         # If we are already have a value then return it
         if self._reference_md:
             return self._reference_md
         # Otherwise we must find the reference MD
         self._reference_md = self.mds[self.reference_md_index]
         return self._reference_md
-    reference_md = property(get_reference_md, None, None, "Reference MD (read only)")
+    reference_md: MD = property(get_reference_md, None, None, "Reference MD (read only)")
 
     # Setup the MDs
     def get_mds (self) -> list:
@@ -2098,12 +2108,16 @@ class Project:
         return self.reference_md.cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-    # Reference MD spanshots
+    # Reference MD snapshots
     # Used next to the reference MD trajectory data
-    def get_snaphsots (self) -> int:
+    def get_snapshots (self) -> int:
         return self.reference_md.snapshots
-    snapshots = property(get_snaphsots, None, None, "Reference MD snapshots (read only)")
-    
+    snapshots = property(get_snapshots, None, None, "Reference MD snapshots (read only)")
+
+    def get_universe (self) -> int:
+        return self.reference_md.universe
+    universe = property(get_universe, None, None, "MDAnalysis Universe object (read only)")
+
     # Check if we must check stable bonds
     def get_check_stable_bonds (self) -> bool:
         # Set if stable bonds have to be checked
@@ -2122,7 +2136,7 @@ class Project:
     get_charges = Task('charges', 'Getting atom charges', get_charges)
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
-    # Atom charges
+    # InChI keys
     get_inchi_keys = Task('inchikeys', 'Getting InChI keys', get_inchikeys)
     inchikeys = property(get_inchi_keys, None, None, "InChI keys (read only)")
 
@@ -2219,12 +2233,7 @@ class Project:
     # Define the output file of the ligand mapping including ligand references
     get_ligand_references_file = get_ligand_map.get_output_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
-
-    # MDAnalysis Universe object
-    get_MDAnalysis_Universe = Task('mda_univ', 'MDAnalysis Universe object',
-        get_mda_universe, use_cache = False)
-    universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
-
+    
     # Get the lipid references
     get_lipid_map = Task('lipmap', 'Lipid mapping',
         generate_lipid_references, output_filename = INCHIKEY_REFERENCES_FILENAME)
