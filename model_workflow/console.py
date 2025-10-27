@@ -171,6 +171,8 @@ def main ():
     # Apply common arguments as necessary
     if hasattr(args, 'no_symlinks') and args.no_symlinks:
         GLOBALS['no_symlinks'] = True
+    if hasattr(args, 'no_colors') and args.no_colors:
+        GLOBALS['no_colors'] = True
     # Find which subcommand was called
     subcommand = args.subcommand
     # If there is not subcommand then print help
@@ -398,6 +400,7 @@ common_parser = ArgumentParser(add_help=False)
 # Files will be copied instead thus taking more time and disk
 # However symlinks are not always allowed in all file systems so this is sometimes necessary
 common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true', help="Do not use symlinks internally")
+common_parser.add_argument("-nc", "--no_colors", default=False, action='store_true', help="Do not use colors for logging")
 
 # Define console arguments to call the workflow
 parser = CustomArgumentParser(description="MDDB Workflow")
