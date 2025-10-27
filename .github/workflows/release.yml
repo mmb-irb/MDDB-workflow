@@ -171,7 +171,7 @@ jobs:
         if: success()
         run: |
           TAG_NAME="v${{ steps.get_version.outputs.version }}"
-          git tag $TAG_NAME
+          git tag -a $TAG_NAME -m "Release v$TAG_NAME"
           git push origin $TAG_NAME
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub Actions
