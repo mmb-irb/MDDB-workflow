@@ -20,7 +20,7 @@ from model_workflow.utils.constants import *
 
 # Import local utils
 #from model_workflow.utils.httpsf import mount
-from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, STANDARD_EXCEPTIONS
+from model_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from model_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from model_workflow.utils.auxiliar import is_directory_empty, is_glob, parse_glob, safe_getattr
 from model_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version
@@ -274,16 +274,6 @@ class Task:
         # Find if we have cached output
         if self.use_cache:
             output = parent.cache.retrieve(self.cache_output_key, MISSING_VALUE_EXCEPTION)
-            # Some values are transformed to become JSON serializable
-            # Convert these values back to their original types
-            # WARNING: Do not declare new expections here but use the constant ones
-            # WARNING: Otherwise further equality comparisions will fail
-            if type(output) == str and output[0:11] == 'Exception: ':
-                exception_message = output[11:]
-                standard_exception = next((exception for exception in STANDARD_EXCEPTIONS if str(exception) == exception_message), None)
-                if standard_exception == None:
-                    raise ValueError(f'Exception "{exception_message}" is not among standard exceptions')
-                output = standard_exception
             self._set_parent_output(parent, output)
         # Check if this dependency is to be overwriten
         forced_overwrite = self.flag in parent.overwritables
@@ -351,8 +341,6 @@ class Task:
         # Set the output to be saved in cache
         # Note that all must be JSON serializable values
         cache_output = output
-        if type(output) == Exception:
-            cache_output = f'Exception: {output}' 
         # Update cache output unless it is marked to not save it
         if self.use_cache: parent.cache.update(self.cache_output_key, cache_output)
         # Update the overwritables so this is not remade further in the same run
@@ -411,7 +399,8 @@ class Task:
             if self.debug: print(f'Task "{self.name}" -> argument "{arg_name}"\n' +
                 f' new value: {arg_value}\n' +
                 f' new value cksum: {new_cksum}\n' +
-                f' old value cksum: {old_cksum}\n')
+                f' old value cksum: {old_cksum}\n' +
+                f' match: {new_cksum == old_cksum}')
             # Compare new and old cksums
             if new_cksum != old_cksum:
                 # If we found a missmatch then add it to the list

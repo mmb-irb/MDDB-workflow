@@ -11,12 +11,7 @@ class Cache:
         # Set a dict to store the actual cached data
         self.data = {}
         # Load data from the cache file, if it already exists
-        if self.file.exists:
-            # Read the cache in disk
-            previous_data = load_json(self.file.path)
-            # Inherit every field
-            for field_name, field_value in previous_data.items():
-                self.data[field_name] = field_value
+        self.load()
         # Save the entry for the first time
         self.save()
 
@@ -40,6 +35,13 @@ class Cache:
     def reset (self):
         self.data = {}
         self.save()
+
+    # Load the cache to memory, as a dict
+    def load (self):
+        # Load data from the cache file, if it already exists
+        if not self.file.exists: return
+        # Read the cache in disk
+        self.data = load_json(self.file.path)
 
     # Save the cache to disk, as a json file
     def save (self):

@@ -429,11 +429,11 @@ def process_input_files (
     # Thus we avoid this task to run forever
     # DANI: Esto es provisional, hay que prohibir que los inputs se llamen como los outputs
     if input_structure_file == output_structure_file:
-        task.cache_cksums['input_structure_file'] = output_structure_file.get_cksum()
+        task.cache_cksums['input_structure_file'] = get_cksum_id(output_structure_file)
     if len(input_trajectory_files) == 1 and input_trajectory_files[0] == output_trajectory_file:
         task.cache_cksums['input_trajectory_files'] = get_cksum_id([ output_trajectory_file ])
     if input_topology_file == output_topology_file:
-        task.cache_cksums['input_topology_file'] = str(MISSING_TOPOLOGY) if output_topology_file == MISSING_TOPOLOGY else output_topology_file.get_cksum()
+        task.cache_cksums['input_topology_file'] = get_cksum_id(output_topology_file)
 
     # --- Definitive PBC selection ---
 

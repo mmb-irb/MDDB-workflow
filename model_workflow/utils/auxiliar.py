@@ -11,7 +11,7 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, Generator
+from typing import Optional, Generator, Callable
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
@@ -99,16 +99,107 @@ def residue_name_to_letter (residue_name : str) -> str:
 def protein_residue_name_to_letter (residue_name : str) -> str:
     return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
+# Set a recursive cloner for nested dicts and lists
+OBJECT_TYPES = { dict, list, tuple }
+BASIC_TYPES = { bool, int, float, str }
+def recursive_cloner (target_object : dict | list | tuple) -> dict | list | tuple:
+    object_type = type(target_object)
+    # Get a starting object and entries iterator depending on the object type
+    if object_type == dict:
+        clone = {}
+        entries = target_object.items()
+    elif object_type == list:
+        clone = [ None for i in range(len(target_object)) ]
+        entries = enumerate(target_object)
+    elif object_type == tuple:
+        clone = ( None for i in range(len(target_object)) )
+        entries = enumerate(target_object)
+    else: ValueError(f'The recuersive cloner should only be applied to object and lists, not to {object_type}')
+    # Iterate the different entries in the object
+    for index_or_key, value in entries:
+        # Handle the None apart
+        if value == None:
+            clone[index_or_key] = None
+            continue
+        # Get he value type
+        value_type = type(value)
+        # If it is a dict or list then call the transformer recursively
+        if value_type in OBJECT_TYPES: clone[index_or_key] = recursive_cloner(value)
+        # If it is a basic type then copy it as is
+        elif value_type in BASIC_TYPES: clone[index_or_key] = value
+        # Other supported types
+        elif value_type == Exception: clone[index_or_key] = Exception(str(value))
+        # Other non-supported types
+        else: raise ValueError(f'Not supported type {value_type}')
+    return clone
+
+# Set a recursive transformer for nested dicts and lists
+def recursive_transformer (target_object : dict | list | tuple, transformer : Callable) -> dict | list | tuple:
+    object_type = type(target_object)
+    # Get an entries iterator depending on the object type
+    if object_type == dict:
+        entries = target_object.items()
+    elif object_type == list or object_type == tuple:
+        entries = enumerate(target_object)
+    else: ValueError(f'The recuersive transformer should only be applied to dicts, lists and tuples, not to {object_type}')
+    # Iterate the different entries in the object
+    for index_or_key, value in entries:
+        value_type = type(value)
+        # If it is a dict or list then call the transformer recursively
+        if value_type in OBJECT_TYPES:
+            target_object[index_or_key] = recursive_transformer(value, transformer)
+        # If it is not an object type then apply the transformer to it
+        else:
+            target_object[index_or_key] = transformer(value)
+    return target_object
+
+# Set some headers for the serializer
+EXCEPTION_HEADER = 'Exception: '
+# Set a standard JSON serializer/unserializer to support additonal types
+# LORE: This was originally intended to support exceptions in the cache
+def json_serializer (object : dict | list | tuple) -> dict | list | tuple:
+    # Clone the input object in order to prevent further mutation
+    object_clone = recursive_cloner(object)
+    def serializer (value):
+        # If we have exceptions then convert them to text with an appropiate header
+        if type(value) == Exception:
+            return f'{EXCEPTION_HEADER}{value}'
+        # If the type is not among the ones we check then assume it is already serializable
+        return value
+    recursive_transformer(object_clone, serializer)
+    return object_clone
+def json_deserializer (object : dict | list | tuple) -> dict | list | tuple:
+    # Clone the input object in order to prevent further mutation
+    object_clone = recursive_cloner(object)
+    def deserializer (value):
+        # Check if there is any value which was adapted to become JSON serialized and restore it
+        if type(value) == str and value[0:11] == EXCEPTION_HEADER:
+            # WARNING: Do not declare new exceptions here but use the constant ones
+            # WARNING: Otherwise further equality comparisions will fail
+            exception_message = value[11:]
+            standard_exception = next((exception for exception in STANDARD_EXCEPTIONS if str(exception) == exception_message), None)
+            if standard_exception == None:
+                raise ValueError(f'Exception "{exception_message}" is not among standard exceptions')
+            return standard_exception
+        # If the type is not among the ones we check then assume it is already deserialized
+        return value
+    recursive_transformer(object_clone, deserializer)
+    return object_clone
+
 # Set a JSON loader with additional logic to better handle problems
 def load_json (filepath : str, replaces : Optional[list[tuple]] = []) -> dict: 
     try:
         with open(filepath, 'r') as file:
             content = file.read()
+            # Make pure text replacements
             for replace in replaces:
                 target, replacement = replace
                 content = content.replace(target, replacement)
+            # Parse the content to JSON
             parsed_content = json.loads(content)
-        return parsed_content
+            # Deserialize some types like Exceptions, which are stored in JSONs in this context
+            deserialized_content = json_deserializer(parsed_content)
+        return deserialized_content
     except Exception as error:
         raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
 
@@ -116,7 +207,8 @@ def load_json (filepath : str, replaces : Optional[list[tuple]] = []) -> dict:
 def save_json (content, filepath : str, indent : Optional[int] = None):
     try:
         with open(filepath, 'w') as file:
-            json.dump(content, file, indent=indent)
+            serialized_content = json_serializer(content)
+            json.dump(serialized_content, file, indent=indent)
     except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         os.rename(filepath, filepath + '.wrong')
