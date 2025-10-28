@@ -112,5 +112,5 @@ def get_tpr_charges (topology_filename : str) -> list:
 def get_tpr_charges_mdanalysis (topology_filename : str) -> list:
     parser = TPRParser(topology_filename)
     topology = parser.parse()
-    charges = list(topology.charges.values)
+    charges = [ float(charge) for charge in topology.charges.values ]
     return charges
