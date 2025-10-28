@@ -926,7 +926,7 @@ class MD:
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
     def get_topology_file (self) -> str:
-        """Get the processed topology from the project."""
+        """ Get the processed topology from the project. """
         return self.project.get_topology_file()
     topology_file = property(get_topology_file, None, None, 
                              "Topology filename from the project (read only)")
@@ -939,13 +939,13 @@ class MD:
     get_snapshots = Task('frames', 'Count trajectory frames', get_frames_count)
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
-    # Safe bonds
     def get_reference_bonds (self) -> list[list[int]]:
+        """ Get the reference bonds. """
         return self.project.reference_bonds
     reference_bonds = property(get_reference_bonds, None, None, "Atom bonds to be trusted (read only)")
 
-    # Parsed structure
     def get_structure (self) -> 'Structure':
+        """ Get the parsed structure. """
         # If we already have a stored value then return it
         if self._structure:
             return self._structure
@@ -989,6 +989,11 @@ class MD:
         process_interactions, { 'frames_limit': 1000 })
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
+    # MDAnalysis Universe object
+    get_MDAnalysis_Universe = Task('mda_univ', 'MDAnalysis Universe object',
+        get_mda_universe, use_cache = False)
+    universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
+
     # Set a function to get input values which may be MD specific
     # If the MD input is missing then we use the project input
     def input_getter (name : str):
@@ -1007,9 +1012,9 @@ class MD:
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
 
-    # Internal function to set PBC selection
-    # It may parse the inputs file selection string if it is available or guess it otherwise
     def _set_pbc_selection (self, reference_structure : 'Structure', verbose : bool = False) -> 'Selection':
+        """ Internal function to set PBC selection.
+        It may parse the inputs file selection string if it is available or guess it otherwise. """
         # Otherwise we must set the PBC selection
         if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
         selection_string = None
@@ -1052,8 +1057,8 @@ class MD:
             print('  e.g. ' + example_residue_names)
         return parsed_selection
 
-    # Periodic boundary conditions atom selection
     def get_pbc_selection (self) -> 'Selection':
+        """ Get the periodic boundary conditions atom selection. """
         # If we already have a stored value then return it
         if self.project._pbc_selection != None:
             return self.project._pbc_selection
@@ -1062,10 +1067,10 @@ class MD:
         return self.project._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
-    # Indices of residues in periodic boundary conditions
     # WARNING: Do not inherit project pbc residues
     # WARNING: It may trigger all the processing logic of the reference MD when there is no need
     def get_pbc_residues (self) -> list[int]:
+        """ Get indices of residues in periodic boundary conditions. """
         # If we already have a stored value then return it
         if self.project._pbc_residues:
             return self.project._pbc_residues
@@ -1079,9 +1084,9 @@ class MD:
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # Set the coarse grain selection
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection (self, reference_structure : 'Structure', verbose : bool = False) -> 'Selection':
+        """ Set the coarse grain selection. """
         if verbose: print('Setting Coarse Grained (CG) atoms selection')
         # If there is no inputs file then asum there is no CG selection
         if not self.project.is_inputs_file_available():
@@ -1157,6 +1162,11 @@ class MD:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
+    def get_charges (self) -> dict:
+        """ Get the residues mapping from the project. """
+        return self.project.charges
+    charges = property(get_charges, None, None, "Residues charges (read only)")
+
     # Reference frame
     get_reference_frame = Task('reframe', 'Reference frame', get_bonds_reference_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
@@ -1165,8 +1175,8 @@ class MD:
     # Tests
     # ---------------------------------------------------------------------------------
 
-    # Sudden jumps test
     def is_trajectory_integral (self) -> Optional[bool]:
+        """ Sudden jumps test. """
         # If we already have a stored value then return it
         if self._trajectory_integrity != None:
             return self._trajectory_integrity
@@ -1297,7 +1307,7 @@ class Project:
         input_structure_filepath : Optional[str] = None,
         input_trajectory_filepaths : Optional[list[str]] = None,
         md_directories : Optional[list[str]] = None,
-        md_config : Optional[list] = None,
+        md_config : Optional[list[list[str]]] = None,
         reference_md_index : Optional[int] = None,
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
@@ -1625,14 +1635,14 @@ class Project:
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
 
     # Set the reference MD
-    def get_reference_md (self) -> int:
+    def get_reference_md (self) -> MD:
         # If we are already have a value then return it
         if self._reference_md:
             return self._reference_md
         # Otherwise we must find the reference MD
         self._reference_md = self.mds[self.reference_md_index]
         return self._reference_md
-    reference_md = property(get_reference_md, None, None, "Reference MD (read only)")
+    reference_md: MD = property(get_reference_md, None, None, "Reference MD (read only)")
 
     # Setup the MDs
     def get_mds (self) -> list:
@@ -2011,9 +2021,9 @@ class Project:
 
     # Processed files ----------------------------------------------------
 
-    # Set the expected output topology filename given the input topology filename
-    # Note that topology formats are conserved
     def inherit_topology_filename (self) -> Optional[str]:
+        """ Set the expected output topology filename given the input topology filename.
+        Note that topology formats are conserved. """
         if self.input_topology_file == MISSING_TOPOLOGY:
             return None
         filename = self.input_topology_file.filename
@@ -2058,13 +2068,13 @@ class Project:
         return self._topology_file
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
 
-    # Get the processed structure from the reference MD
     def get_structure_file (self) -> str:
+        """ Get the processed structure from the reference MD. """
         return self.reference_md.structure_file
     structure_file = property(get_structure_file, None, None, "Structure filename from the reference MD (read only)")
 
-    # Get the processed trajectory from the reference MD
     def get_trajectory_file (self) -> str:
+        """ Get the processed trajectory from the reference MD. """
         return self.reference_md.trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory filename from the reference MD (read only)")
 
@@ -2072,29 +2082,38 @@ class Project:
     # Others values which may be found/calculated and files to be generated on demand
     # ---------------------------------------------------------------------------------
 
-    # Parsed structure from reference MD
     def get_structure (self) -> 'Structure':
+        """ Get the parsed structure from the reference MD. """
         return self.reference_md.structure
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")
 
-    # Indices of residues in periodic boundary conditions
     def get_pbc_residues (self) -> list[int]:
+        """ Get the indices of residues in periodic boundary conditions. """
         return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # Indices of residues in coarse grain
     def get_cg_residues (self) -> list[int]:
+        """ Get the indices of residues in coarse grain. """
         return self.reference_md.cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
-    # Reference MD spanshots
-    # Used next to the reference MD trajectory data
-    def get_snaphsots (self) -> int:
+    def get_snapshots (self) -> int:
+        """ Get the reference MD snapshots. """
         return self.reference_md.snapshots
-    snapshots = property(get_snaphsots, None, None, "Reference MD snapshots (read only)")
-    
-    # Check if we must check stable bonds
+    snapshots = property(get_snapshots, None, None, "Reference MD snapshots (read only)")
+
+    def get_universe (self) -> int:
+        """ Get the MDAnalysis Universe from the reference MD. """
+        return self.reference_md.universe
+    universe = property(get_universe, None, None, "MDAnalysis Universe object (read only)")
+
+    def get_processed_interactions (self) -> dict:
+        """ Get the processed interactions from the reference replica, which are the same for all replicas. """
+        return self.reference_md.interactions
+    interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
+
     def get_check_stable_bonds (self) -> bool:
+        """ Check if we must check stable bonds. """
         # Set if stable bonds have to be checked
         must_check = STABLE_BONDS_FLAG not in self.trust
         # If this analysis has been already passed then we can trust structure bonds
@@ -2111,12 +2130,12 @@ class Project:
     get_charges = Task('charges', 'Getting atom charges', get_charges)
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
-    # Atom charges
+    # InChI keys
     get_inchi_keys = Task('inchikeys', 'Getting InChI keys', get_inchikeys)
     inchikeys = property(get_inchi_keys, None, None, "InChI keys (read only)")
 
-    # Topolody data reader
     def get_topology_reader (self) -> 'Topology':
+        """ Get the topology data reader. """
         # If we already have a stored value then return it
         if self._topology_reader: return self._topology_reader
         # Instantiate the topology reader
@@ -2133,8 +2152,8 @@ class Project:
         return self._dihedrals
     dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
 
-    # Equilibrium populations from a MSM
     def get_populations (self) -> Optional[list[float]]:
+        """ Get the equilibrium populations from a MSM. """
         # If we already have a stored value then return it
         if self._populations:
             return self._populations
@@ -2145,8 +2164,8 @@ class Project:
         return self._populations
     populations = property(get_populations, None, None, "Equilibrium populations from a MSM (read only)")
 
-    # Transition probabilities from a MSM
     def get_transitions (self) -> Optional[list[list[float]]]:
+        """ Get the transition probabilities from a MSM. """
         # If we already have a stored value then return it
         if self._transitions:
             return self._transitions
@@ -2157,8 +2176,8 @@ class Project:
         return self._transitions
     transitions = property(get_transitions, None, None, "Transition probabilities from a MSM (read only)")
 
-    # Tested and standarized PDB ids
     def get_pdb_ids (self) -> list[str]:
+        """ Get the tested and standardized PDB ids. """
         # If we already have a stored value then return it
         if self._pdb_ids != None:
             return self._pdb_ids
@@ -2208,12 +2227,7 @@ class Project:
     # Define the output file of the ligand mapping including ligand references
     get_ligand_references_file = get_ligand_map.get_output_file
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
-
-    # MDAnalysis Universe object
-    get_MDAnalysis_Universe = Task('mda_univ', 'MDAnalysis Universe object',
-        get_mda_universe, use_cache = False)
-    universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
-
+    
     # Get the lipid references
     get_lipid_map = Task('lipmap', 'Lipid mapping',
         generate_lipid_references, output_filename = INCHIKEY_REFERENCES_FILENAME)
@@ -2232,12 +2246,6 @@ class Project:
     # This is formatted as both the standard topology and metadata producers expect them
     get_residue_map = Task('resmap', 'Residue mapping', generate_residue_mapping)
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
-
-    # The processed interactions from the reference replica
-    # This is used to get interaction types, which should be the same between replicas
-    def get_processed_interactions (self) -> dict:
-        return self.reference_md.interactions
-    interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     # Prepare the project metadata file to be upload to the database
     prepare_metadata = Task('pmeta', 'Prepare project metadata',

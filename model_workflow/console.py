@@ -171,6 +171,8 @@ def main ():
     # Apply common arguments as necessary
     if hasattr(args, 'no_symlinks') and args.no_symlinks:
         GLOBALS['no_symlinks'] = True
+    if hasattr(args, 'no_colors') and args.no_colors:
+        GLOBALS['no_colors'] = True
     # Find which subcommand was called
     subcommand = args.subcommand
     # If there is not subcommand then print help
@@ -284,8 +286,21 @@ def main ():
         structure.generate_pdb_file(args.output_structure)
         print(f'Changes written to {args.output_structure}')
     elif subcommand == 'dataset':
+        if not hasattr(args, 'dataset_subcommand') or not args.dataset_subcommand:
+            dataset_parser.print_help()
+            return
+
         dataset = Dataset(dataset_yaml_path=args.dataset_yaml)
-        dataset.launch_workflow(slurm=args.slurm, job_template=args.job_template)
+
+        if args.dataset_subcommand == 'run':
+            dataset.launch_workflow(
+                include_groups=args.include_groups,
+                exclude_groups=args.exclude_groups,
+                slurm=args.slurm,
+                job_template=args.job_template
+            )
+        elif args.dataset_subcommand == 'status':
+            dataset.show_groups(cmd=True)
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
@@ -385,6 +400,7 @@ common_parser = ArgumentParser(add_help=False)
 # Files will be copied instead thus taking more time and disk
 # However symlinks are not always allowed in all file systems so this is sometimes necessary
 common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true', help="Do not use symlinks internally")
+common_parser.add_argument("-nc", "--no_colors", default=False, action='store_true', help="Do not use colors for logging")
 
 # Define console arguments to call the workflow
 parser = CustomArgumentParser(description="MDDB Workflow")
@@ -854,8 +870,21 @@ nassa_parser.add_argument(
 
 # Dataset subcommand
 dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpFormatter,
-    help="Manage and process a dataset of MDDB projects.",
+    help="Manage and process a dataset of MDDB projects.")
+dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
+
+# Dataset run subcommand
+dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
+    help="Run the workflow for a dataset of MDDB projects.",
     parents=[common_parser])
-dataset_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
-dataset_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
-dataset_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
+dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
+dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
+dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, default=[], help="List of group IDs to be run.")
+dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
+
+# Dataset status subcommand
+dataset_status_parser = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter,
+    help="Show the status of projects in a dataset, grouped by their last log message.",
+    parents=[common_parser])
+dataset_status_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")

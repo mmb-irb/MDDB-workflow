@@ -59,7 +59,7 @@ def process_input_files (
     # Values msut be passed separatedly as inputs so the taks can identify when inputs change
     self : 'MD',
     # Get the task which is calling this function
-    # Thus we may knwo which inputs have changed compared to previous runs
+    # Thus we may know which inputs have changed compared to previous runs
     task : 'Task',
 ):
     """ Process input files to generate the processed files.
@@ -231,7 +231,6 @@ def process_input_files (
             incompleted_filtered_trajectory_file.remove()
         else:
             incompleted_filtered_trajectory_file.rename_to(filtered_trajectory_file)
-        # Update the cache
         self.cache.update(FILTERED, filter_selection)
 
     # --- provisional reference structure ---
