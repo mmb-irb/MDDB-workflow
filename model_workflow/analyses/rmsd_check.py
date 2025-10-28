@@ -67,7 +67,7 @@ def check_trajectory_integrity (
         register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
         return True
 
-    print('Checking trajectory integrity')
+    print('Checking trajectory integrity (intrajrity)')
 
     # Load the trajectory frame by frame
     trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)

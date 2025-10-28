@@ -994,9 +994,9 @@ class MD:
         get_mda_universe, use_cache = False)
     universe = property(get_MDAnalysis_Universe, None, None, "MDAnalysis Universe object (read only)")
 
-    # Set a function to get input values which may be MD specific
-    # If the MD input is missing then we use the project input
     def input_getter (name : str):
+        """ Function to get input values which may be MD specific.
+        If the MD input is missing then we use the project input value. """
         # Set the getter
         def getter (self):
             # Get the MD input
@@ -1807,7 +1807,10 @@ class Project:
             raise InputError(f'Missing input topology file "{self._input_topology_file.filename}"')
         # Otherwise, try to download it using the files endpoint
         # Note that this is not usually required
-        self.remote.download_file(self._input_topology_file)
+        if self._input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+            self.remote.download_standard_topology(self._input_topology_file)
+        else:
+            self.remote.download_file(self._input_topology_file)
         # In case the topology is a '.top' file we consider it is a Gromacs topology
         # It may come with additional itp files we must download as well
         if self._input_topology_file.format == 'top':

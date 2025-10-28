@@ -133,7 +133,7 @@ class TestRunFlags:
 class TestRunSpecial:
     """ Test for special cases and specific accessions. """
 
-    @pytest.mark.parametrize("test_accession", ["cg_test"], scope="class")
+    @pytest.mark.parametrize("test_accession", ["cg_test", "cg_test2"], scope="class")
     def test_CG(self, project: 'Project'):
         """ Test coarse-grained (CG) model. """
         # Only two tasks. In the future "all" should be supported 

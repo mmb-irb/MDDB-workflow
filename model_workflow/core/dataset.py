@@ -69,6 +69,7 @@ class Dataset:
             # en un futuro se recuperar el estado a partir de .register/.mwf_cache
             log_files = glob.glob(os.path.join(project_dir, '*[0-9].out'))
             if log_files:
+                log_files.sort()
                 log_files = [log_files[-1]]  # Take the most recent one
                 with open(log_files[0], 'r') as f:
                     last_line = f.read().splitlines()[-1].strip()

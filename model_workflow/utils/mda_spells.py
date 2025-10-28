@@ -104,7 +104,7 @@ def get_mda_universe (structure_file : 'File',              # To load in MDAnaly
     universe.add_TopologyAttr('bonds', set(bonds))
 
     # Set the charges
-    if charges != MISSING_CHARGES and len(charges) > 0:
+    if charges and charges != MISSING_CHARGES and len(charges) > 0:
         universe.add_TopologyAttr('charges', np.array(charges, dtype=np.float32))
     print(COLOR_END, end='\r')
     return universe
