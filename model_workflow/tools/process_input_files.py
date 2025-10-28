@@ -281,9 +281,8 @@ def process_input_files (
     # Check if parameters have changed
     # Note that for this step the filter parameters is also important
     previous_imaged_parameters = self.cache.retrieve(IMAGED)
-    same_imaged_parameters = previous_imaged_parameters == (image, fit, *translation)
-    print(f'IMAGE PARAMETERS: {previous_imaged_parameters} vs {(image, fit, *translation)} -> {same_imaged_parameters}')
-
+    same_imaged_parameters = previous_imaged_parameters == [image, fit, *translation]
+    
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
     # Fit the trajectory by removing the translation and rotation if it is required
