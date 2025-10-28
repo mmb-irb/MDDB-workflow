@@ -429,6 +429,10 @@ def get_screenshot (
     # Restore the environment variable to not cause problem in possible future uses of VMD
     environ['VMDSCRSIZE'] = VMDSCRSIZE_backup
 
+    # Make sure returned values are JSON serializable
+    y_axis_difference_vector = [ float(v) for v in y_axis_difference_vector ]
+    x_axis_difference_vector = [ float(v) for v in x_axis_difference_vector ]
+
     # Return the camera rotation, translation and zoom values we just used to get the picture
     return {
         'angle': angle,
