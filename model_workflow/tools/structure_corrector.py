@@ -2,7 +2,7 @@ from os import remove
 from model_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
 from model_workflow.tools.get_bonds import get_excluded_atoms_selection
 from model_workflow.tools.get_pdb_frames import get_pdb_frame
-from model_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
+from model_workflow.utils.auxiliar import InputError, TestFailure
 from model_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from model_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from model_workflow.utils.structures import Structure
@@ -150,7 +150,12 @@ def structure_corrector (
 
     # Make sure there are no disconnected groups of atoms in every residue
     for residue in structure.residues:
+        # If the residue is missing bonds then we can not check if it is coherent
+        # We assume it is and continue
+        if residue.is_missing_any_bonds(): continue
+        # If the residue is coherent then continue
         if residue.is_coherent(): continue
+        # Otherwise we report the problem
         residue_selection = residue.get_selection()
         fragments = list(structure.find_fragments(residue_selection))
         if len(fragments) == 0: raise RuntimeError('Do we have an empty residue?')
@@ -201,7 +206,7 @@ def structure_corrector (
         warn('Chains are missing and they will be added')
         # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
         # Note that we rely in fragments (and thus in bonds) to guess chains
-        if next((True for bonds in structure.bonds if bonds == MISSING_BONDS), False):
+        if structure.is_missing_any_bonds():
             raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
                 ' Please either provide a topology including bonds or set chains in the structure PDB file.')
         # Run the chainer
@@ -270,6 +275,9 @@ def structure_corrector (
 
     # Iterate sequence polymer chains
     for chain in structure.get_selection_chains(sequence_polymers_selection):
+        # If the chain is missing bonds then we can not check if it is coherent
+        # We assume it is and continue
+        if chain.is_missing_any_bonds(): continue
         # If there is only one fragment we are good
         chain_selection = chain.get_selection()
         fragments = list(structure.find_fragments(chain_selection, atom_bonds=safe_bonds))
@@ -314,8 +322,10 @@ def structure_corrector (
     # Merged residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # There may be residues which contain unconnected (unbonded) atoms. They are not allowed.
+    # They may come from a wrong parsing and be indeed duplicated residues.
     # NEVER FORGET: Merged residues may be generated when calling the structure.auto_chainer
-    if structure.check_merged_residues(fix_residues = True, display_summary = True):
+    if not structure.is_missing_any_bonds() and structure.check_merged_residues(fix_residues = True, display_summary = True):
         # Update the structure file using the corrected structure
         print(' The structure file has been modified (merged residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)

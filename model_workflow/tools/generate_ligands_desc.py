@@ -481,10 +481,12 @@ def generate_ligand_mapping (
 
     # Obtain a list of the possible residues in the structure that are not either protein/nucleic/water/lipid or matched ligands
     for residue in structure.residues:
-        # Skip solvent, lipid or ion then it may be a ligand or  is bonded to other residues
-        if (residue.classification in ['solvent', 'fatty', 'steroid', 'ion'] 
-            or len(residue.get_bonded_residue_indices()) > 0):
-            continue
+        # Skip solvent, lipid or ions
+        if residue.classification in ['solvent', 'fatty', 'steroid', 'ion']: continue
+        # Make sure the residue is not bonded to other things
+        # If we are missing bonds then we can not rely in this rule
+        if residue.is_missing_any_bonds(): continue
+        if len(residue.get_bonded_residue_indices()) > 0: continue
         # Check if the residue is already matched to a ligand
         matched = False
         for ligand_map in ligand_maps:

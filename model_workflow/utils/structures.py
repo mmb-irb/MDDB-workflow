@@ -525,8 +525,14 @@ class Residue:
         if next((index for index in other.atom_indices if index in bonded_atom_indices), None) != None: return True
         return False
     
+    def is_missing_any_bonds (self) -> bool:
+        return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
+
     def is_coherent (self) -> bool:
         """Make sure atoms within the residue are all bonded."""
+        # If bonds are missing then just say everything is
+        if self.is_missing_any_bonds():
+            raise RuntimeError('Trying to check if residue with missing bonds is coherent')
         residue_selection = self.get_selection()
         residue_fragments = self.structure.find_fragments(residue_selection)
         first_residue_fragment = next(residue_fragments)
@@ -1004,6 +1010,9 @@ class Chain:
     def has_cg (self) -> bool:
         """Ask if the current chain has at least one coarse grain atom/residue."""
         return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
+    
+    def is_missing_any_bonds (self) -> bool:
+        return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
     
     def find_residue (self, number : int, icode : str = '', index = None) -> Optional['Residue']:
         """Find a residue by its number and insertion code."""
@@ -2700,6 +2709,9 @@ class Structure:
                 warn(f'There are repeated atoms ({repeated_atoms_count})')
                 print(f'    e.g. {example}')
         return repeated_atoms_count > 0
+    
+    def is_missing_any_bonds (self) -> bool:
+        return any(bond == MISSING_BONDS for bond in self.bonds)
 
     def check_incoherent_bonds (self) -> bool:
         """ Check bonds to be incoherent i.e. check atoms not to have more or less 

@@ -4,7 +4,7 @@ import pickle
 
 from model_workflow.utils.type_hints import *
 from model_workflow.utils.constants import GREY_HEADER, COLOR_END
-from model_workflow.utils.auxiliar import MISSING_CHARGES
+from model_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS
 
 from MDAnalysis.topology.TPRParser import TPRParser
 #from MDAnalysis.topology.PDBParser import PDBParser # for class reference
@@ -97,6 +97,7 @@ def get_mda_universe (structure_file : 'File',              # To load in MDAnaly
     # Set the atom bonds
     bonds = []
     for bond_from, bond_tos in enumerate(reference_bonds):
+        if bond_tos == MISSING_BONDS: continue
         for bond_to in bond_tos:
             bond = tuple(sorted([bond_from, bond_to]))
             bonds.append(bond)
