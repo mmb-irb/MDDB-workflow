@@ -4,7 +4,7 @@ channels:
   - nodefaults
 dependencies:
   # Compatible with python<3.13
-  - python=3.10
+  - python=3.11
   # Use pyyaml to read the inputs.yaml file
   - pyyaml
   # From ambertools we use pytraj mostly
@@ -21,7 +21,7 @@ dependencies:
   - mdanalysis
   # MDtraj is used for several processing and analysis steps
   # MDtraj 1.10 has a critical error: https://github.com/mdtraj/mdtraj/issues/1893
-  - mdtraj!=1.10.0
+  - mdtraj >=1.11.0
   # Numpy and scipy are usually already included but they are required
   - numpy
   - scipy
@@ -33,7 +33,7 @@ dependencies:
   - rdkit
   - mordred
   # Membrane proteins analysis
-  - bioconda::biobb_mem=5.1.1=py310h1fe012e_1
+  - bioconda::biobb_mem=5.1.1=*_1
   - requests # To check is molecules is in LIPID MAPS
   # We must declare pip explicitly according to a warning
   # AGUS: por problemas en el cluster con certificados y requests, la versión de 'openssl' 
@@ -48,4 +48,3 @@ dependencies:
   - plotext
   # For dataset templates
   - jinja2
-  - numexpr >=2.8.4
