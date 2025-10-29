@@ -58,7 +58,7 @@ class Dataset:
         Retrieves last line from logs from all project directories as a pandas DataFrame.
 
         Returns:
-            pd.DataFrame: Index is project directory; columns: state, message, log_file.
+            pd.DataFrame: Index is project directory; columns: state, message, log_file, error_log_file.
         """
         if self._status is not None:
             return self._status
@@ -67,7 +67,9 @@ class Dataset:
         for project_dir in self.project_directories:
             # RUBEN: por ahora usamos el mismo patron de log que en launch_workflow
             # en un futuro se recuperar el estado a partir de .register/.mwf_cache
-            log_files = glob.glob(os.path.join(project_dir, '*[0-9].out'))
+            log_files = glob.glob(os.path.join(project_dir, 'logs', 'mwf*[0-9].out'))
+            err_files = glob.glob(os.path.join(project_dir, 'logs', 'mwf*[0-9].err'))
+
             if log_files:
                 log_files.sort()
                 log_files = [log_files[-1]]  # Take the most recent one
@@ -79,19 +81,33 @@ class Dataset:
                 else:
                     state, message, log_file = 'error', last_line, log_files[0]
             else:
-                state, message, log_file = 'not_run', None, 'not_run'
+                state, message, log_file = 'not_run', 'No output log available', None
+
+            # Handle error log files
+            if err_files:
+                err_files.sort()
+                err_file = err_files[-1]  # Take the most recent one
+            else:
+                err_file = None
 
             rows.append({
                 'rel_path': os.path.relpath(project_dir, self.root_path),
                 'state': state,
                 'message': message,
-                'log_file': os.path.relpath(log_file, project_dir) if log_file else None
+                'log_file': os.path.relpath(log_file, project_dir) if log_file else '',
+                'err_file': os.path.relpath(err_file, project_dir) if err_file else ''
             })
 
         df = pd.DataFrame(rows).set_index('rel_path').sort_index()
         # Assign an integer group id for identical messages, with messages sorted first
         unique_messages = sorted(df['message'].unique())
-        mapping = {msg: idx for idx, msg in enumerate(unique_messages)}
+        if 'Done!' in unique_messages:
+            # Ensure 'Done!' is always group 0, then assign other messages
+            unique_messages.remove('Done!')
+            mapping = {'Done!': 0}
+            mapping.update({msg: idx + 1 for idx, msg in enumerate(unique_messages)})
+        else:
+            mapping = {msg: idx for idx, msg in enumerate(unique_messages)}
         df['group'] = df['message'].map(mapping).astype(int)
         self._status = df
         return self._status
@@ -116,6 +132,54 @@ class Dataset:
                 'state': 'count'
             }).rename(columns={'state': 'count'})
             return grouped
+
+    def status_with_links(self) -> pd.DataFrame:
+        """
+        Returns the status DataFrame with clickable log file links.
+        """
+        df = self.status.copy()
+        
+        # Create clickable links for log files
+        def make_out_link(row):
+            if row['log_file'] and row['state'] != 'not_run':
+                project_dir = os.path.join(self.root_path, row.name)
+                log_path = os.path.join(project_dir, row['log_file'])
+                # Create a file:// URL for local files
+                file_url = f"file://{log_path}"
+                return f'<a href="{file_url}" target="_blank">{row["log_file"]}</a>'
+            return row['log_file']
+        
+        # Create clickable links for error log files
+        def make_error_link(row):
+            if row['err_file'] and row['state'] != 'not_run':
+                project_dir = os.path.join(self.root_path, row.name)
+                error_log_path = os.path.join(project_dir, row['err_file'])
+                # Create a file:// URL for local files
+                file_url = f"file://{error_log_path}"
+                return f'<a href="{file_url}" target="_blank">{row["err_file"]}</a>'
+            return row['err_file']
+        
+        df['log_file_link'] = df.apply(make_out_link, axis=1)
+        df['err_file_link'] = df.apply(make_error_link, axis=1)
+        return df
+
+    def display_status_with_links(self):
+        """
+        Display the status DataFrame with clickable links in Jupyter.
+        """
+        from IPython.display import HTML, display
+        
+        df = self.status_with_links()
+        # Drop the original log_file columns and rename the link columns
+        df_display = df.drop(['log_file', 'err_file'], axis=1)
+        df_display = df_display.rename(columns={
+            'log_file_link': 'log_file',
+            'err_file_link': 'err_file'
+        })
+        
+        # Convert to HTML and display
+        html = df_display.to_html(escape=False)
+        display(HTML(html))
 
     def launch_workflow(self,
         include_groups: list[int]=[],
@@ -170,13 +234,18 @@ class Dataset:
                 rendered_script = template.render(**inputs_config, **project_status)
 
                 job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
+                log_dir = os.path.join(project_dir, 'logs')
+                os.makedirs(log_dir, exist_ok=True)
                 with open(job_script_path, 'w') as f:
                     f.write(rendered_script)
                 
                 os.chmod(job_script_path, 0o755)
 
                 print(f"Submitting SLURM job for {project_dir}")
-                subprocess.run(['sbatch', 'mwf_slurm_job.sh'], cwd=project_dir)
+                subprocess.run(['sbatch', 'mwf_slurm_job.sh', 
+                                '--output', os.path.join(log_dir, 'mwf-%j.out'), 
+                                '--error', os.path.join(log_dir, 'mwf-%j.err')], 
+                                cwd=project_dir)
 
             else:
                 # Normal Python execution
