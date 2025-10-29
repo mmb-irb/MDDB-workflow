@@ -12,6 +12,7 @@ MDDB Workflow
    python
    dataset
    mwf
+   change_log
    develop
    coverage
 
