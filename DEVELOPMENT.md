@@ -77,8 +77,9 @@ When ready to make a new release, follow these steps:
 1. Merge the master branch into the release branch. Add [skip tests] to the commit message to skip the CI tests:
 
 ```shell
-git checkout release
-git merge master # -m "Merge master into release [skip tests]"
+git branch -D release # Remove old release branch if exists
+git checkout -b release # Create and switch to release branch
+git push origin release # Push release branch to remote
 ```
 
 2. Wait for the comprehensive test suite to complete. These tests verify workflow integrity and may take a considerable amount of time. If any tests fail, you can fix them in the release branch.
