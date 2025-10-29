@@ -19,15 +19,13 @@ These tasks are executed once per project:
 
 * ``inchikeys`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_inchi_keys.py#L9>`__: generate a dictionary mapping InChI keys to residue information for non-standard residues.  This function uses MDAnalysis to parse the input structure and topology files and identifies residues that are not classified as 'ion', 'solvent', 'nucleic', or 'protein'. For each identified residue, it converts the structure to RDKit format to obtain the InChI key and InChI string. The resulting data is stored in dictionaries to map InChI keys to residue details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers. 
 
-* ``inputs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1708>`__: set a function to load the inputs yaml file.
+* ``inputs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1713>`__: set a function to load the inputs yaml file.
 
-* ``itopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1779>`__: get the input topology file. If the file is not found try to download it.
+* ``itopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1787>`__: get the input topology file. If the file is not found try to download it.
 
 * ``ligmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_ligands_desc.py#L317>`__: generate a map of residues associated to ligands.
 
 * ``lipmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_lipid_references.py#L7>`__: generate the lipid references. 
-
-* ``mda_univ`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/mda_spells.py#L88>`__: create a MDAnalysis universe using data in the workflow.
 
 * ``memmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_membrane_mapping.py#L10>`__: generates a list of residue numbers of membrane components from a given structure and topology file.     {         "n_mems": 1,         "mems": {             "0": {                 "leaflets": {                     "bot": [ 17096, 17097, ...],                     "top": [ 14730,  14804, ...]                 }             }         },         "no_mem_lipid": []     } 
 
@@ -35,9 +33,9 @@ These tasks are executed once per project:
 
 * ``pmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_metadata.py#L11>`__: prepare a JSON file with all project metadata.
 
-* ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1828>`__: get the MSM equilibrium populations file.
+* ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1839>`__: get the MSM equilibrium populations file.
 
-* ``protmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_map.py#L64>`__: map the structure aminoacids sequences against the Uniprot reference sequences.
+* ``protmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_map.py#L75>`__: map the structure aminoacids sequences against the Uniprot reference sequences.
 
 * ``refbonds`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_bonds.py#L251>`__: find reference safe bonds in the system. First try to mine bonds from a topology files. If the mining fails then search for the most stable bonds. If we trust in stable bonds then simply return the structure bonds.
 
@@ -47,9 +45,9 @@ These tasks are executed once per project:
 
 * ``stopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_topology.py#L5>`__: prepare the standard topology file to be uploaded to the database.
 
-* ``topology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L2036>`__: get the processed topology file.
+* ``topology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L2052>`__: get the processed topology file.
 
-* ``transitions`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1835>`__: get the MSM transition probabilities file.
+* ``transitions`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1846>`__: get the MSM transition probabilities file.
 
 MD Tasks
 -----------
@@ -59,15 +57,15 @@ These tasks are executed for each MD in the project:
 Files
 ~~~~~~~~
 
-* ``inpro`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/process_input_files.py#L33>`__: process input files to generate the processed files. This process corrects and standarizes the topology, the trajectory and the structure.
+* ``inpro`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/process_input_files.py#L46>`__: process input files to generate the processed files. This process corrects and standarizes the topology, the trajectory and the structure.
 
-* ``istructure`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L604>`__: get the input pdb filename from the inputs. If the file is not found try to download it.
+* ``istructure`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L603>`__: get the input pdb filename from the inputs. If the file is not found try to download it.
 
-* ``itrajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L727>`__: get the input trajectory filename(s) from the inputs. If file(s) are not found try to download it.
+* ``itrajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L726>`__: get the input trajectory filename(s) from the inputs. If file(s) are not found try to download it.
 
-* ``structure`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L878>`__: get the processed structure file.
+* ``structure`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L876>`__: get the processed structure file.
 
-* ``trajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L902>`__: get the processed trajectory file.
+* ``trajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L900>`__: get the processed trajectory file.
 
 Analyses
 ~~~~~~~~~~~~~~
@@ -102,6 +100,8 @@ Analyses
 
 * ``markov`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/markov.py#L8>`__: set the data needed to represent a Markov State Model graph in the client. This is finding the most populated frames and calculating an RMSD matrix between these frames.
 
+* ``mda_univ`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/mda_spells.py#L88>`__: create a MDAnalysis universe using data in the workflow.
+
 * ``mdmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_metadata.py#L242>`__: produce the MD metadata file to be uploaded to the database.
 
 * ``pairwise`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/rmsd_pairwise.py#L17>`__: perform an analysis for the overall structure and then one more analysis for each interaction.
@@ -124,7 +124,7 @@ Analyses
 
 * ``thickness`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/thickness.py#L10>`__: membrane thickness analysis.
 
-* ``tmscore`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/tmscores.py#L13>`__: perform the tm score using the tmscoring package.
+* ``tmscore`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/tmscores.py#L25>`__: perform the tm score using the tmscoring package.
 
 Task Groups
 -------------
