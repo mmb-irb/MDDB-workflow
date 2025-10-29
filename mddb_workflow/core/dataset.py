@@ -1,10 +1,11 @@
 from mddb_workflow.utils.auxiliar import load_yaml, is_glob
 from mddb_workflow.mwf import workflow
-import glob
 import subprocess
 import os
+import glob
+import yaml
+import jinja2
 import pandas as pd
-
 
 class Dataset:
     """
@@ -51,6 +52,40 @@ class Dataset:
                 self._project_directories.append(p)
 
         return self._project_directories
+
+    def generate_inputs_yaml(self, inputs_template_path: str, input_generator: callable, overwrite: bool = False):
+        """
+        Generates an inputs.yaml file in each project directory based on the dataset configuration.
+        
+        Args:
+            inputs_template_path (str): The file path to the Jinja2 template file that will be
+                used to generate the inputs YAML files.
+            input_generator (callable): A callable function intended for generating input values.
+                Currently, it is called with the project directory name (DIR) as its argument
+            overwrite (bool): Whether to overwrite existing inputs.yaml files. Default is False.
+        
+        """
+        # Load the template
+        with open(inputs_template_path, 'r') as f:
+            template_str = f.read()
+        
+        template = jinja2.Template(template_str)
+        
+        for project_dir in self.project_directories:
+            inputs_yaml_path = os.path.join(project_dir, 'inputs.yaml')
+            if os.path.exists(inputs_yaml_path) and not overwrite:
+                continue
+            
+             # Get the directory name
+            DIR = os.path.basename(os.path.normpath(project_dir))
+            
+            # Render the template with project defaults
+            rendered_yaml = template.render(DIR=DIR, title=input_generator(DIR))
+
+            # Write the rendered YAML to inputs.yaml
+            with open(inputs_yaml_path, 'w') as f:
+                f.write(rendered_yaml)
+            break
 
     @property
     def status(self) -> pd.DataFrame:
@@ -208,9 +243,6 @@ class Dataset:
             
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
-        if slurm:
-            # Lazy import jinja2 for now to not break environments
-            import jinja2
         for project_dir in self.project_directories:
             project_status = self.status.loc[os.path.relpath(project_dir, self.root_path)].to_dict()
             # Check group inclusion/exclusion

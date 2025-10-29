@@ -10,6 +10,7 @@ MDDB Workflow
    input
    tasks
    python
+   dataset
    mwf
    develop
    coverage
