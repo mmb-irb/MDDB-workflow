@@ -322,10 +322,15 @@ def structure_corrector (
     # Merged residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # Check if the structure is missing bonds
+    missing_any_bonds = structure.is_missing_any_bonds()
+
     # There may be residues which contain unconnected (unbonded) atoms. They are not allowed.
     # They may come from a wrong parsing and be indeed duplicated residues.
     # NEVER FORGET: Merged residues may be generated when calling the structure.auto_chainer
-    if not structure.is_missing_any_bonds() and structure.check_merged_residues(fix_residues = True, display_summary = True):
+    # Note that we need bonds to check for merged residues
+    # If bonds are missing then we skip this check
+    if not missing_any_bonds and structure.check_merged_residues(fix_residues = True, display_summary = True):
         # Update the structure file using the corrected structure
         print(' The structure file has been modified (merged residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
@@ -334,7 +339,9 @@ def structure_corrector (
     # Splitted residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    if structure.check_repeated_residues(fix_residues=True, display_summary=True):
+    # Note that we need bonds to check for splitted residues
+    # If bonds are missing then we skip this check
+    if not missing_any_bonds and structure.check_repeated_residues(fix_residues=True, display_summary=True):
         # Update the structure file using the corrected structure
         print(' The structure file has been modified (repeated residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
