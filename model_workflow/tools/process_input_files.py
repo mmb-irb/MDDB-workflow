@@ -307,7 +307,7 @@ def process_input_files (
         else:
             incompleted_imaged_trajectory_file.rename_to(imaged_trajectory_file)
         # Update the cache
-        self.cache.update(IMAGED, (image, fit, *translation))
+        self.cache.update(IMAGED, [image, fit, *translation])
         # Update the provisional strucutre coordinates
         imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
         imaged_structure_coords = [ atom.coords for atom in imaged_structure.atoms ]

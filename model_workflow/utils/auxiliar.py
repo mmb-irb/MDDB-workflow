@@ -99,78 +99,49 @@ def residue_name_to_letter (residue_name : str) -> str:
 def protein_residue_name_to_letter (residue_name : str) -> str:
     return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
-# Set a recursive cloner for nested dicts and lists
+# Set a recursive transformer for nested dicts and lists
+# Note that a new object is created to prevent mutating the original
+# If no transformer function is passed then it becomes a recursive cloner
+# WARNING: the transformer function could mutate some types of the original object if not done properly
 OBJECT_TYPES = { dict, list, tuple }
-BASIC_TYPES = { bool, int, float, str }
-def recursive_cloner (target_object : dict | list | tuple) -> dict | list | tuple:
+def recursive_transformer (target_object : dict | list | tuple, transformer : Optional[Callable] = None) -> dict | list | tuple:
     object_type = type(target_object)
     # Get a starting object and entries iterator depending on the object type
     if object_type == dict:
         clone = {}
         entries = target_object.items()
-    elif object_type == list:
+    elif object_type == list or object_type == tuple:
+        # Note that if it is a tuple we make a list anyway and we convert it to tuple at the end
+        # WARNING: Note that tuples do not support reassigning items
         clone = [ None for i in range(len(target_object)) ]
-        entries = enumerate(target_object)
-    elif object_type == tuple:
-        clone = ( None for i in range(len(target_object)) )
         entries = enumerate(target_object)
     else: ValueError(f'The recuersive cloner should only be applied to object and lists, not to {object_type}')
     # Iterate the different entries in the object
     for index_or_key, value in entries:
-        # Handle the None apart
-        if value == None:
-            clone[index_or_key] = None
-            continue
         # Get he value type
         value_type = type(value)
         # If it is a dict or list then call the transformer recursively
-        if value_type in OBJECT_TYPES: clone[index_or_key] = recursive_cloner(value)
-        # If it is a basic type then copy it as is
-        elif value_type in BASIC_TYPES: clone[index_or_key] = value
-        # Other supported types
-        elif value_type == Exception: clone[index_or_key] = Exception(str(value))
-        # Other non-supported types
-        else: raise ValueError(f'Not supported type {value_type}')
-    return clone
-
-# Set a recursive transformer for nested dicts and lists
-def recursive_transformer (target_object : dict | list | tuple, transformer : Callable) -> dict | list | tuple:
-    object_type = type(target_object)
-    # Get an entries iterator depending on the object type
-    if object_type == dict:
-        entries = target_object.items()
-    elif object_type == list or object_type == tuple:
-        entries = enumerate(target_object)
-    else: ValueError(f'The recuersive transformer should only be applied to dicts, lists and tuples, not to {object_type}')
-    # Iterate the different entries in the object
-    for index_or_key, value in entries:
-        value_type = type(value)
-        # If it is a dict or list then call the transformer recursively
-        if value_type in OBJECT_TYPES:
-            target_object[index_or_key] = recursive_transformer(value, transformer)
+        if value_type in OBJECT_TYPES: clone[index_or_key] = recursive_transformer(value)
         # If it is not an object type then apply the transformer to it
-        else:
-            target_object[index_or_key] = transformer(value)
-    return target_object
+        else: clone[index_or_key] = transformer(value) if transformer else value
+    # If it was a tuple then make the conversion now
+    if object_type == tuple: clone = tuple(clone)
+    return clone
 
 # Set some headers for the serializer
 EXCEPTION_HEADER = 'Exception: '
 # Set a standard JSON serializer/unserializer to support additonal types
 # LORE: This was originally intended to support exceptions in the cache
 def json_serializer (object : dict | list | tuple) -> dict | list | tuple:
-    # Clone the input object in order to prevent further mutation
-    object_clone = recursive_cloner(object)
     def serializer (value):
         # If we have exceptions then convert them to text with an appropiate header
         if type(value) == Exception:
             return f'{EXCEPTION_HEADER}{value}'
         # If the type is not among the ones we check then assume it is already serializable
         return value
-    recursive_transformer(object_clone, serializer)
+    object_clone =  recursive_transformer(object, serializer)
     return object_clone
 def json_deserializer (object : dict | list | tuple) -> dict | list | tuple:
-    # Clone the input object in order to prevent further mutation
-    object_clone = recursive_cloner(object)
     def deserializer (value):
         # Check if there is any value which was adapted to become JSON serialized and restore it
         if type(value) == str and value[0:11] == EXCEPTION_HEADER:
@@ -183,7 +154,7 @@ def json_deserializer (object : dict | list | tuple) -> dict | list | tuple:
             return standard_exception
         # If the type is not among the ones we check then assume it is already deserialized
         return value
-    recursive_transformer(object_clone, deserializer)
+    object_clone = recursive_transformer(object, deserializer)
     return object_clone
 
 # Set a JSON loader with additional logic to better handle problems
