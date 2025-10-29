@@ -1,7 +1,6 @@
 import mdtraj as mdt
 import pytraj as pt
 import numpy as np
-import time
 import math
 import sys
 
@@ -10,7 +9,8 @@ from tqdm import tqdm
 import plotext as plt
 
 from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn
-from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
+from mddb_workflow.utils.auxiliar import round_to_hundredths
+from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, RED_HEADER, COLOR_END
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory
 from mddb_workflow.utils.type_hints import *
 
@@ -25,6 +25,7 @@ is_terminal = sys.stdout.isatty()
 
 # Look for sudden raises of RMSd values from one frame to another
 # To do so, we check the RMSD of every frame using its previous frame as reference
+# This was allowed thanks to people from MDtraj https://github.com/mdtraj/mdtraj/issues/1966
 def check_trajectory_integrity (
     input_structure_filename : str,
     input_trajectory_filename : str,
@@ -47,155 +48,10 @@ def check_trajectory_integrity (
     # Skip the test if it is already passed according to the register
     if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
         return True
-
-    # Remove old warnings
-    register.remove_warnings(TRAJECTORY_INTEGRITY_FLAG)
-
-    # Parse the selection in VMD selection syntax
-    parsed_selection = structure.select(check_selection, syntax='vmd')
-
-    # If there is nothing to check then warn the user and stop here
-    if not parsed_selection:
-        raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
-
-    # Discard PBC residues from the selection to be checked
-    parsed_selection -= pbc_selection
-
-    # If there is nothing to check then warn the user and stop here
-    if not parsed_selection:
-        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
-        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
-        return True
-
-    print('Checking trajectory integrity (intrajrity)')
-
-    # Load the trajectory frame by frame
-    trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
-
-    # Save the previous frame any time
-    previous_frame = next(trajectory)
-
-    # Save all RMSD jumps
-    rmsd_jumps = []
-
-    # Initialize progress bar first
-    pbar = tqdm(enumerate(trajectory, 1), total=snapshots, desc=' Frame', unit='frame', initial=1)
     
-    for f, frame in pbar:
-        # Calculate RMSD value between previous and current frame
-        rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=parsed_selection.atom_indices)[0]
-        rmsd_jumps.append(rmsd_value)
-
-        # Update the previous frame as the current one
-        previous_frame = frame
-    time.sleep(0.1) # Needed for progress bar to be print at the correct place
-
     # If the trajectory has only 1 or 2 frames then there is no test to do
-    if len(rmsd_jumps) <= 1:
+    if snapshots < 3:
         register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
-        return True
-
-    # Get the maximum RMSD value and check it is a reasonable deviation from the average values
-    # Otherwise, if it is an outlier, the test fails
-    mean_rmsd_jump = np.mean(rmsd_jumps)
-    stdv_rmsd_jump = np.std(rmsd_jumps)
-
-    # First frames may not be perfectly equilibrated and thus have stronger RMSD jumps
-    # For this reason we allow the first frames to bypass the check
-    # As soon as one frame is below the cutoff the bypass is finished for the following frames
-    # Count the number of bypassed frames and warn the user in case there are any
-    bypassed_frames = 0
-
-    # Capture outliers
-    # If we capture more than 5 we stop searching
-    outliers_count = 0
-    max_z_score = 0
-    max_z_score_frame = 0
-    for i, rmsd_jump in enumerate(rmsd_jumps, 1):
-        z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
-        # Keep track of the maixmum z score
-        if z_score > max_z_score:
-            max_z_score = z_score
-            max_z_score_frame = i
-        # If z score bypassed the limit then report it
-        if z_score > standard_deviations_cutoff:
-            # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-            if i - 1 == bypassed_frames:
-                bypassed_frames += 1
-                continue
-            if outliers_count >= 4:
-                print(' etc...')
-                break
-            print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}. RMSD jump: {rmsd_jump:4f}')
-            outliers_count += 1
-
-    # Always print the maximum z score and its frames
-    print(f' Maximum z score {max_z_score:4f} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}.\n'
-          f' Mean: {mean_rmsd_jump:4f}. Stdv: {stdv_rmsd_jump:4f}')
-
-    # Set if there was any error
-    error = None
-    # If there were any outlier then the check has failed
-    if outliers_count > 0:
-        error = 'RMSD check has failed: there may be sudden jumps along the trajectory'
-    # The message changes if the outliers are at the begining only
-    elif bypassed_frames > 0:
-        error = f'First {bypassed_frames} frames may be not equilibrated'
-
-    # In case there was a problem,
-    if error:
-        # Display a graph to show the distribution of sudden jumps along the trajectory
-        if is_terminal:
-            data = rmsd_jumps
-            if outliers_count == 0 and bypassed_frames > 0:
-                data = rmsd_jumps[0:bypassed_frames+100]
-            plt.scatter(data) 
-            plt.title("RMSD jumps along the trajectory")
-            plt.xlabel('Frame')
-            plt.ylabel('RMSD jump')
-            n_ticks = 5
-            n_jumps = len(data)
-            tickstep = math.ceil(n_jumps / n_ticks)
-            xticks = [ t+1 for t in range(0, n_jumps, tickstep) ]
-            xlabels = [ str(t) for t in xticks ]
-            plt.xticks(xticks, xlabels)
-            plt.show()
-        # Add a warning an return True since the test failed in case we have mercy
-        if TRAJECTORY_INTEGRITY_FLAG in mercy:
-            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, error)
-            register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
-            return False
-        # Otherwise kill the process
-        raise TestFailure(error)
-
-    print(' Test has passed successfully')
-    register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
-    return True
-
-# Look for sudden raises of RMSd values from one frame to another
-# To do so, we check the RMSD of every frame using its previous frame as reference
-# DANI: Dependemos de que cambien el comportamiento de MDtraj para que esto funcione
-# DANI: https://github.com/mdtraj/mdtraj/issues/1966
-def check_trajectory_integrity_per_fragment (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    structure : 'Structure',
-    pbc_selection : 'Selection',
-    mercy : list[str],
-    trust: list[str],
-    register : 'Register',
-    #time_length : float,
-    check_selection : str,
-    # DANI: He visto saltos 'correctos' pasar de 6
-    # DANI: He visto saltos 'incorrectos' no bajar de 10
-    standard_deviations_cutoff : float) -> bool:
-
-    # Skip the test if we trust
-    if TRAJECTORY_INTEGRITY_FLAG in trust:
-        return True
-
-    # Skip the test if it is already passed according to the register
-    if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
         return True
 
     # Remove old warnings
@@ -235,213 +91,31 @@ def check_trajectory_integrity_per_fragment (
     # Save all RMSD jumps
     fragment_rmsd_jumps = { fragment: [] for fragment in fragments }
 
-    # Add an extra breakline before the first log
-    print()
+    # Initialize progress bar first
+    pbar = tqdm(trajectory, total=snapshots, desc=' Frame', unit='frame', initial=1)
 
     # Iterate trajectory frames
-    for f, frame in enumerate(trajectory, 1):
-        # Update the current frame log
-        reprint(f' Frame {f}')
+    for frame in pbar:
 
         # Iterate over the different fragments
         for fragment in fragment_rmsd_jumps:
             # Calculate RMSD value between previous and current frame
             # DANI: El centrado de MDtraj elimina el salto a través de las boundaries
             # DANI: El precentered=True debería evitarlo, pero es ignorado si hay atom_indices
-            rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=fragment.atom_indices)[0]
+            rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=fragment.atom_indices, superpose=False)[0]
             fragment_rmsd_jumps[fragment].append(rmsd_value)
 
         # Update the previous frame as the current one
         previous_frame = frame
 
-    # First frames may not be perfectly equilibrated and thus have stronger RMSD jumps
-    # For this reason we allow the first frames to bypass the check
-    # As soon as one frame is below the cutoff the bypass is finished for the following frames
-    # Count the maximum number of bypassed frames and warn the user in case there are any
-    max_bypassed_frames = 0
-
-    # Capture outliers
-    # If we capture more than 5 we stop searching
-    outliers_count = 0
-    max_z_score = 0
-    max_z_score_frame = 0
+    # Check all fragments and store their test result here before issuing the final report
+    fragment_reports = []
 
     # Iterate over the different fragments
     for fragment, rmsd_jumps in fragment_rmsd_jumps.items():
 
-        # If the trajectory has only 1 or 2 frames then there is no test to do
-        if len(rmsd_jumps) <= 1:
-            register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
-            return True
-
-        # Get the maximum RMSD value and check it is a reasonable deviation from the average values
-        # Otherwise, if it is an outlier, the test fails
-        mean_rmsd_jump = np.mean(rmsd_jumps)
-        stdv_rmsd_jump = np.std(rmsd_jumps)
-
-        # Count the number of bypassed frames for this fragment
-        bypassed_frames = 0
-
-        fragment_max_z_score = 0
-        fragment_max_z_score_frame = 0
-
-        for i, rmsd_jump in enumerate(rmsd_jumps, 1):
-            z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
-            # Keep track of the maixmum z score for this fragment
-            if z_score > fragment_max_z_score:
-                fragment_max_z_score = z_score
-                fragment_max_z_score_frame = i
-            # Keep track of the maixmum z score
-            if z_score > max_z_score:
-                max_z_score = z_score
-                max_z_score_frame = i
-            # If z score bypassed the limit then report it
-            if z_score > standard_deviations_cutoff:
-                # If there are as many bypassed frames as the index then it means no frame has passed the cutoff yet
-                if i - 1 == bypassed_frames:
-                    bypassed_frames += 1
-                    continue
-                if outliers_count >= 4:
-                    print(' etc...')
-                    break
-                print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}')
-                outliers_count += 1
-
-        print(f'Fragment {structure.name_selection(fragment)} -> {fragment_max_z_score} in frame {fragment_max_z_score_frame}')
-
-        # Update the maximum number of bypassed frames
-        if bypassed_frames > max_bypassed_frames:
-            max_bypassed_frames = bypassed_frames
-
-        # If there were any outlier then the check has failed
-        if outliers_count > 0:
-            # Add a warning an return True since the test failed in case we have mercy
-            message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
-            if TRAJECTORY_INTEGRITY_FLAG in mercy:
-                register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
-                register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
-                return False
-            # Otherwise kill the process right away
-            raise TestFailure(message)
-        
-    # Always print the maximum z score and its frames
-    print(f' Maximum z score {max_z_score} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
-
-    # Warn the user if we had bypassed frames
-    if max_bypassed_frames > 0:
-        register.add_warning(TRAJECTORY_INTEGRITY_FLAG, f'First {max_bypassed_frames} frames may be not equilibrated')
-
-    print(' Test has passed successfully')
-    register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
-    return True
-
-# Look for sudden raises of RMSd values from one frame to another
-# To do so, we check the RMSD of every frame using its previous frame as reference
-# DANI: Dependemos de que cambien el comportamiento de MDtraj para que esto funcione
-# DANI: https://github.com/mdtraj/mdtraj/issues/1966
-def check_trajectory_integrity_per_fragment_2 (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    structure : 'Structure',
-    pbc_selection : 'Selection',
-    mercy : list[str],
-    trust: list[str],
-    register : 'Register',
-    #time_length : float,
-    check_selection : str,
-    # DANI: He visto saltos 'correctos' pasar de 6
-    # DANI: He visto saltos 'incorrectos' no bajar de 10
-    standard_deviations_cutoff : float) -> bool:
-
-    # Skip the test if we trust
-    if TRAJECTORY_INTEGRITY_FLAG in trust:
-        return True
-
-    # Skip the test if it is already passed according to the register
-    if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
-        return True
-
-    # Remove old warnings
-    register.remove_warnings(TRAJECTORY_INTEGRITY_FLAG)
-
-    # Parse the selection in VMD selection syntax
-    parsed_selection = structure.select(check_selection, syntax='vmd')
-
-    # If there is nothing to check then warn the user and stop here
-    if not parsed_selection:
-        raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
-
-    # Discard PBC residues from the selection to be checked
-    parsed_selection -= pbc_selection
-
-    # If there is nothing to check then warn the user and stop here
-    if not parsed_selection:
-        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
-        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
-        return True
-    
-    # First frames may not be perfectly equilibrated and thus have stronger RMSD jumps
-    # For this reason we allow the first frames to bypass the check
-    # As soon as one frame is below the cutoff the bypass is finished for the following frames
-    # Count the maximum number of bypassed frames and warn the user in case there are any
-    max_bypassed_frames = 0
-    
-    # Get fragments out of the parsed selection
-    # Fragments will be analyzed independently
-    # A small fragment may cause a small RMSD perturbation when it is part of a large structure
-    # Note that jumps of partial fragments along boundaries are rare imaging problems
-    # Usually are whole fragments the ones which jump
-    fragments = list(structure.find_fragments(parsed_selection))
-
-    print(f'Checking trajectory integrity')
-
-    # Iterate over the different fragments
-    for f, fragment in enumerate(fragments, 1):
+        # Log the fragment name
         fragment_name = structure.name_selection(fragment)
-        print(f'Fragment {f}/{len(fragments)} -> {fragment_name}')
-
-        # Load the trajectory frame by frame
-        trajectory = mdt.iterload(
-            input_trajectory_filename,
-            top=input_structure_filename,
-            atom_indices=fragment.atom_indices,
-            chunk=1)
-        
-        # Save all RMSD jumps
-        rmsd_jumps = []
-
-        # Save the previous frame any time
-        previous_frame = next(trajectory)
-
-        # Add an extra breakline before the first log
-        print()
-
-        # Iterate trajectory frames
-        for f, frame in enumerate(trajectory, 1):
-            # Update the current frame log
-            reprint(f' Frame {f}')
-        
-            # Calculate RMSD value between previous and current frame
-            # DANI: El centrado de MDtraj elimina el salto a través de las boundaries
-            # DANI: El precentered=True debería evitarlo, pero es ignorado si hay atom_indices
-            rmsd_value = mdt.rmsd(frame, previous_frame, precentered=True)[0]
-            rmsd_jumps.append(rmsd_value)
-
-            # Update the previous frame as the current one
-            previous_frame = frame
-
-        # If the trajectory has only 1 or 2 frames then there is no test to do
-        if len(rmsd_jumps) <= 1:
-            register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
-            return True
-
-        # Get the maximum RMSD value and check it is a reasonable deviation from the average values
-        # Otherwise, if it is an outlier, the test fails
-        mean_rmsd_jump = np.mean(rmsd_jumps)
-        stdv_rmsd_jump = np.std(rmsd_jumps)
-
-        # Count the number of bypassed frames for this fragment
-        bypassed_frames = 0
 
         # Capture outliers
         # If we capture more than 5 we stop searching
@@ -449,9 +123,20 @@ def check_trajectory_integrity_per_fragment_2 (
         max_z_score = 0
         max_z_score_frame = 0
 
+        # Get the maximum RMSD value and check it is a reasonable deviation from the average values
+        # Otherwise, if it is an outlier, the test fails
+        mean_rmsd_jump = np.mean(rmsd_jumps)
+        stdv_rmsd_jump = np.std(rmsd_jumps)
+
+        # First frames may not be perfectly equilibrated and thus have stronger RMSD jumps
+        # For this reason we allow the first frames to bypass the check
+        # As soon as one frame is below the cutoff the bypass is finished for the following frames
+        # Count the number of bypassed frames for this fragment
+        bypassed_frames = 0
+
         for i, rmsd_jump in enumerate(rmsd_jumps, 1):
             z_score = abs( (rmsd_jump - mean_rmsd_jump) / stdv_rmsd_jump )
-            # Keep track of the maixmum z score
+            # Keep track of the maximum z score
             if z_score > max_z_score:
                 max_z_score = z_score
                 max_z_score_frame = i
@@ -461,37 +146,105 @@ def check_trajectory_integrity_per_fragment_2 (
                 if i - 1 == bypassed_frames:
                     bypassed_frames += 1
                     continue
-                if outliers_count >= 4:
+                # If we are no long bypassing frist frames then outliers mean the test has failed
+                # But don't kill the check just yet
+                if outliers_count < 4:
+                    print(f' FAIL: Sudden RMSD jump if fragment "{fragment_name}" between frames {i} and {i+1} (z score = {round_to_hundredths(z_score)})')
+                if outliers_count == 4:
                     print(' etc...')
-                    break
-                print(f' FAIL: Sudden RMSD jump between frames {i} and {i+1}')
                 outliers_count += 1
 
-        # Always print the maximum z score and its frames
-        print(f' Maximum z score {max_z_score} reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
+        # Save the report for this fragment
+        fragment_reports.append({
+            'name': fragment_name,
+            'score': max_z_score,
+            'frame': max_z_score_frame,
+            'outliers': outliers_count,
+            'bypass': bypassed_frames,
+            'jumps' : rmsd_jumps
+        })
 
-        # Update the maximum number of bypassed frames
-        if bypassed_frames > max_bypassed_frames:
-            max_bypassed_frames = bypassed_frames
+    # If there was any outliers or any bypassed frames then the test has failed
+    # LORE: Back in the day having bypassed frames was not a test failure, but now it is
+    any_outliers = any(report['outliers'] > 0 for report in fragment_reports)
+    any_bypassed_frames = any(report['bypass'] > 0 for report in fragment_reports)
 
-        # If there were any outlier then the check has failed
-        if outliers_count > 0:
-            # Add a warning an return True since the test failed in case we have mercy
-            message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
-            if TRAJECTORY_INTEGRITY_FLAG in mercy:
-                register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
-                register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
-                return False
-            # Otherwise kill the process right away
-            raise TestFailure(message)
+    # If the test has failed then display a full report
+    if any_outliers or any_bypassed_frames:
+        print('-- RMSD Check final report --')
+        for report in fragment_reports:
+            name = report['name']
+            max_z_score = round_to_hundredths(report['score'])
+            max_z_score_frame = report['frame']
+            outliers = report['outliers']
+            bypassed_frames = report['bypass']
+            passed = outliers == 0 and bypassed_frames == 0
+            # If the fragment has n0 problems
+            if passed:
+                print(f'Fragment "{name}" PASSED with a maximum z-score of {max_z_score}' + \
+                    f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
+                continue
+            # If the fragment failed to pass the test
+            print(f'{RED_HEADER}Fragment "{name}" FAILED with a maximum z-score of {max_z_score}' + \
+                f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}{COLOR_END}')
+            if outliers > 0: print(f' Outliers: {outliers}')
+            if bypassed_frames > 0: print(f' Bypassed frames: {bypassed_frames}')
+        print('*The z-score of a value means how many times the standard deviation away it is from the average')
+            
+    # If there were any outlier then the check has failed
+    if any_outliers > 0:
+        # Add a warning an return True since the test failed in case we have mercy
+        message = 'RMSD check has failed: there may be sudden jumps along the trajectory'
+        if TRAJECTORY_INTEGRITY_FLAG in mercy:
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
+            register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
+            return False
+        # Otherwise kill the process right away, after displaying a graph
+        max_z_score = max(report['score'] for report in fragment_reports)
+        worst_report = next(report for report in fragment_reports if report['score'] == max_z_score)
+        title = f'RMSD jumps along the trajectory in fragment "{report["name"]}"'
+        report_data = worst_report['jumps']
+        display_rmsd_jumps_graph(report_data, title)
+        raise TestFailure(message)
 
     # Warn the user if we had bypassed frames
-    if max_bypassed_frames > 0:
-        register.add_warning(TRAJECTORY_INTEGRITY_FLAG, f'First {max_bypassed_frames} frames may be not equilibrated')
+    if any_bypassed_frames > 0:
+        # Set the error message
+        max_bypassed_frames = max(report['bypass'] for report in fragment_reports)
+        message = f'First {max_bypassed_frames} frames may be not equilibrated'
+        # Add a warning an return True since the test failed in case we have mercy
+        if TRAJECTORY_INTEGRITY_FLAG in mercy:
+            register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
+            register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
+            return False
+        # Otherwise kill the process, after displaying a graph
+        max_z_score = max(report['score'] for report in fragment_reports)
+        worst_report = next(report for report in fragment_reports if report['score'] == max_z_score)
+        graph_frames_limit = max_bypassed_frames + 100
+        report_data = worst_report['jumps'][0:graph_frames_limit]
+        title = f'RMSD jumps along the trajectory in fragment "{report["name"]}" (first {graph_frames_limit} frames)'
+        display_rmsd_jumps_graph(report_data, title)
+        raise TestFailure(message)
 
     print(' Test has passed successfully')
     register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
     return True
+
+# Display a graph to show the distribution of sudden jumps along the trajectory in the terminal itself
+def display_rmsd_jumps_graph (data : list, title : str):
+    if not is_terminal: return
+    # Display a graph to show the distribution of sudden jumps along the trajectory
+    plt.scatter(data) 
+    plt.title(title)
+    plt.xlabel('Frame')
+    plt.ylabel('RMSD jump')
+    n_ticks = 5
+    n_jumps = len(data)
+    tickstep = math.ceil(n_jumps / n_ticks)
+    xticks = [ t+1 for t in range(0, n_jumps, tickstep) ]
+    xlabels = [ str(t) for t in xticks ]
+    plt.xticks(xticks, xlabels)
+    plt.show()
 
 # Compute every residue RMSD to check if there are sudden jumps along the trajectory
 # HARDCODE: This function is not fully implemented but enabled manually for specific cases
