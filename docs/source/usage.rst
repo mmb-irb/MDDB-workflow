@@ -94,7 +94,7 @@ In order to generate this file, a template to build the file explaining every fi
 
 .. |inputs_file_template.yml| raw:: html
 
-    <a href="https://github.com/mmb-irb/MDDB-workflow/blob/release/model_workflow/resources/inputs_file_template.yml" target="_blank">inputs_file_template.yml</a>
+    <a href="https://github.com/mmb-irb/MDDB-workflow/blob/release/mddb_workflow/resources/inputs_file_template.yml" target="_blank">inputs_file_template.yml</a>
 
 .. code-block:: bash
 

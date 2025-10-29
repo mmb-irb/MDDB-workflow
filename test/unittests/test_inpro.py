@@ -1,7 +1,7 @@
 import shutil
 import pathlib
-from model_workflow.mwf import Project, MD
-from model_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
+from mddb_workflow.mwf import Project, MD
+from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
 
 
 # Set up paths

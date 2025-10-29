@@ -5,7 +5,7 @@ import sys
 import os
 import inspect
 from pathlib import Path
-from model_workflow.mwf import project_requestables, md_requestables, DEPENDENCY_FLAGS, Task
+from mddb_workflow.mwf import project_requestables, md_requestables, DEPENDENCY_FLAGS, Task
 
 # Add the repository root to the Python path so we can import modules
 repo_root = Path('..').resolve()

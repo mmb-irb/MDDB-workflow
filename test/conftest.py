@@ -1,6 +1,6 @@
 import os, shutil, pytest
-from model_workflow.mwf import Project
-from model_workflow.utils.constants import *
+from mddb_workflow.mwf import Project
+from mddb_workflow.utils.constants import *
 
 
 def pytest_configure(config):

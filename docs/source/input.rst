@@ -4,7 +4,7 @@ Input File
 ==========================
 
 .. note::
-   This documentation is automatically generated from the `YAML template file <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/resources/inputs_file_template.yml>`_.
+   This documentation is automatically generated from the `YAML template file <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/resources/inputs_file_template.yml>`_.
 
 This file defines a set of fields which are then read and used by the workflow.
 Every field is explained and example values are provided.

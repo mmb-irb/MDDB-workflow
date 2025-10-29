@@ -1,6 +1,6 @@
 from sys import argv
 
-from model_workflow.utils.auxiliar import load_yaml, save_yaml
+from mddb_workflow.utils.auxiliar import load_yaml, save_yaml
 
 # Read a reference inputs file
 reference_inputs_path = 'inputs.yaml'

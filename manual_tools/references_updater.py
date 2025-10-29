@@ -1,12 +1,12 @@
 import urllib.request
 import json
 from os.path import exists
-from model_workflow.utils.constants import *
-from model_workflow.utils.file import File
-from model_workflow.tools.generate_pdb_references import prepare_pdb_references 
-from model_workflow.tools.generate_map import get_uniprot_reference
-from model_workflow.tools.chains import request_interpsocan, get_interproscan_results
-from model_workflow.utils.auxiliar import save_json
+from mddb_workflow.utils.constants import *
+from mddb_workflow.utils.file import File
+from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references 
+from mddb_workflow.tools.generate_map import get_uniprot_reference
+from mddb_workflow.tools.chains import request_interpsocan, get_interproscan_results
+from mddb_workflow.utils.auxiliar import save_json
 
 # Set the database API URL
 database_api_url = 'https://irb.mddbr.eu/api/rest/current/'

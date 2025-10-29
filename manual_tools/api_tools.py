@@ -1,6 +1,6 @@
 import json, urllib
 from math import ceil
-from model_workflow.console import DEFAULT_API_URL
+from mddb_workflow.console import DEFAULT_API_URL
 
 # The URL to the API from our node
 base_url = DEFAULT_API_URL+'rest/current'

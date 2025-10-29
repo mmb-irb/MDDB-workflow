@@ -1,8 +1,8 @@
 import os, pytest
-from model_workflow.mwf import Project
-from model_workflow.utils.file import File
-from model_workflow.utils.type_hints import *
-from model_workflow.tools.get_reduced_trajectory import calculate_frame_step
+from mddb_workflow.mwf import Project
+from mddb_workflow.utils.file import File
+from mddb_workflow.utils.type_hints import *
+from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
 
 def get_reduced_trajectory(project: Project, test_proj_dir, n_frames: int = 100):

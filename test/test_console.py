@@ -2,8 +2,8 @@ import subprocess
 import os, sys, shutil, pytest
 from io import StringIO
 from unittest.mock import patch
-from model_workflow.console import parser, main
-from model_workflow.utils.type_hints import *
+from mddb_workflow.console import parser, main
+from mddb_workflow.utils.type_hints import *
 
 
 @pytest.mark.CI
@@ -19,7 +19,7 @@ class TestConsoleArgumentParsing:
     def test_no_arguments(self):
         """Test behavior when no arguments are provided"""
         # Set up empty arguments
-        sys.argv = ['model_workflow']
+        sys.argv = ['mddb_workflow']
         
         # Capture the output of parser.print_help() for comparison
         expected_help_buffer = StringIO()
@@ -47,7 +47,7 @@ class TestConsoleIntegration:
     ])
     def test_subcommand_help(self, subcommand):
         """Test that help text is printed for each subcommand"""
-        sys.argv = ['model_workflow', subcommand, '-h']
+        sys.argv = ['mddb_workflow', subcommand, '-h']
         
         # Run the main function, which should print help
         with pytest.raises(SystemExit):
@@ -63,7 +63,7 @@ class TestConsoleIntegration:
     @pytest.mark.parametrize("subcommand", [ "error", "run error"])
     def test_errors(self, subcommand):
         """Test that errors are raised for invalid commands"""
-        sys.argv = ['model_workflow', *subcommand.split()]
+        sys.argv = ['mddb_workflow', *subcommand.split()]
 
         # Run the main function, which should raise SystemExit
         with pytest.raises(SystemExit) as exc_info:
@@ -88,7 +88,7 @@ class TestSubcommands:
             dirs_exist_ok=True
         )
 
-        sys.argv = ['model_workflow', 'run',
+        sys.argv = ['mddb_workflow', 'run',
                     '-dir', working_directory,
                     '-stru', 'raw_structure.pdb',
                     '-traj', 'raw_trajectory.xtc',
@@ -103,7 +103,7 @@ class TestSubcommands:
         # TODO add a flag to specify the input directory
         cwd = os.getcwd()
         os.chdir(test_data_dir + '/output')
-        sys.argv = ['model_workflow', 'inputs', '-ed', 'none']
+        sys.argv = ['mddb_workflow', 'inputs', '-ed', 'none']
         main()
         os.chdir(cwd)
         assert os.path.exists(f'{test_data_dir}/output/inputs.yaml')
@@ -126,7 +126,7 @@ class TestSubcommands:
         """Test that the convert subcommand can be executed without errors"""
         outputs = [f'{test_data_dir}/output/subcommand/converted.gro',
                    f'{test_data_dir}/output/subcommand/converted.xtc']
-        args = ['model_workflow', 'convert', 
+        args = ['mddb_workflow', 'convert', 
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-it', f'{test_data_dir}/input/raw_project/2_frames.mdcrd',
                 '-os', outputs[0], '-ot', outputs[1]]
@@ -136,7 +136,7 @@ class TestSubcommands:
         """Test that the filter subcommand can be executed without errors"""
         outputs = [f'{test_data_dir}/output/subcommand/filtered.pdb',
                    f'{test_data_dir}/output/subcommand/filtered.xtc']
-        args = ['model_workflow', 'filter', 
+        args = ['mddb_workflow', 'filter', 
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
                 '-os', outputs[0], '-ot', outputs[1], '-sel', 'chain A']
@@ -144,7 +144,7 @@ class TestSubcommands:
 
     def test_subset(self, test_data_dir: str):
         outputs = [f'{test_data_dir}/output/subcommand/subset.xtc']
-        args = ['model_workflow', 'subset', 
+        args = ['mddb_workflow', 'subset', 
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-it', f'{test_data_dir}/input/raw_project/raw_trajectory.xtc',
                 '-ot', outputs[0], '-start', '1', '-end', '8', '-step', '2']
@@ -152,7 +152,7 @@ class TestSubcommands:
 
     def test_chainer(self, test_data_dir: str):
         outputs = [f'{test_data_dir}/output/subcommand/chained.pdb']
-        args = ['model_workflow', 'chainer', 
+        args = ['mddb_workflow', 'chainer', 
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
                 '-os', f'{test_data_dir}/output/subcommand/chained.pdb',
                 '-sel', '::A',

@@ -4,11 +4,11 @@ import shutil
 import pytest
 import requests
 import numpy as np
-from model_workflow.utils.constants import *
-from model_workflow.utils.type_hints import *
-from model_workflow.utils.auxiliar import load_json, InputError
-from model_workflow.mwf import project_requestables, md_requestables
-from model_workflow.console import  main
+from mddb_workflow.utils.constants import *
+from mddb_workflow.utils.type_hints import *
+from mddb_workflow.utils.auxiliar import load_json, InputError
+from mddb_workflow.mwf import project_requestables, md_requestables
+from mddb_workflow.console import  main
 
 
 @pytest.mark.release
@@ -68,7 +68,7 @@ class TestRunFlags:
             ignore=shutil.ignore_patterns('topology.tpr'),
             dirs_exist_ok=True)
 
-        sys.argv = ['model_workflow', 'run',
+        sys.argv = ['mddb_workflow', 'run',
                     '-dir', working_directory,
                     '-stru', 'raw_structure.pdb',
                     '-traj', 'raw_trajectory.xtc',
@@ -92,7 +92,7 @@ class TestRunFlags:
             ignore=shutil.ignore_patterns('inputs.yaml'),
             dirs_exist_ok=True)
 
-        sys.argv = ['model_workflow', 'run',
+        sys.argv = ['mddb_workflow', 'run',
                     '-dir', working_directory,
                     '-top', 'topology.tpr',
                     '-md', 'replica_1',
@@ -119,7 +119,7 @@ class TestRunFlags:
         #     shutil.rmtree(working_directory)
         # os.makedirs(working_directory)
 
-        sys.argv = ['model_workflow', 'run',
+        sys.argv = ['mddb_workflow', 'run',
                     '-dir', working_directory,
                     '-e', 'network']
 

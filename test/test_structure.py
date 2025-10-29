@@ -1,7 +1,7 @@
 import os
 import pytest
-import model_workflow.utils.structures as structures
-from model_workflow.utils.type_hints import *
+import mddb_workflow.utils.structures as structures
+from mddb_workflow.utils.type_hints import *
 
 
 @pytest.mark.CI

@@ -86,7 +86,7 @@ def extract_yaml_documentation(yaml_file_path):
     rst_content += "Input File\n"
     rst_content += "==========================\n\n"
     rst_content += ".. note::\n"
-    rst_content += "   This documentation is automatically generated from the `YAML template file <https://github.com/mmb-irb/MDDB-workflow/blob/master/model_workflow/resources/inputs_file_template.yml>`_.\n\n"
+    rst_content += "   This documentation is automatically generated from the `YAML template file <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/resources/inputs_file_template.yml>`_.\n\n"
 
     # Add file description
     if file_description:
@@ -184,7 +184,7 @@ def main():
     # Define paths
     print("Generating input file documentation...")
     repo_root = Path('..').resolve()
-    yaml_template = repo_root / 'model_workflow' / \
+    yaml_template = repo_root / 'mddb_workflow' / \
         'resources' / 'inputs_file_template.yml'
     output_rst = repo_root / 'docs' / 'source' / 'input.rst'
 
