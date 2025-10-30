@@ -456,6 +456,12 @@ run_parser_input_group.add_argument(
     default=None,
     help="Path to inputs file")
 run_parser_input_group.add_argument(
+    "-fin", "--forced_inputs",
+    action='append',
+    nargs='*',
+    default=None,
+    help=project_init_help['forced_inputs'])
+run_parser_input_group.add_argument(
     "-pop", "--populations_filepath",
     default=DEFAULT_POPULATIONS_FILENAME,
     help=project_init_help['populations_filepath'])

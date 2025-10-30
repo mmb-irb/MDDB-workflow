@@ -1310,6 +1310,7 @@ class Project:
         md_directories : Optional[list[str]] = None,
         md_config : Optional[list[list[str]]] = None,
         reference_md_index : Optional[int] = None,
+        forced_inputs : Optional[list[list[str]]] = None,
         populations_filepath : str = DEFAULT_POPULATIONS_FILENAME,
         transitions_filepath : str = DEFAULT_TRANSITIONS_FILENAME,
         aiida_data_filepath : Optional[str] = None,
@@ -1364,6 +1365,12 @@ class Project:
                 e.g. -md <directory> <structure> <trajectory_1> <trajectory_2> ...
             reference_md_index (Optional[int]):
                 Index of the reference MD (used by project-level functions; defaults to first MD).
+            forced_inputs (Optional[list]):
+                Force a specific input through the command line.
+                Inputs passed through command line have priority over the ones from the inputs file.
+                In fact, these values will overwritten or be appended in the inputs file.
+                Every forced input requires an input name and a value.
+                The structure is -fi <input name> <new input value>
             populations_filepath (str):
                 Path to equilibrium populations file (Markov State Model only)
             transitions_filepath (str):
@@ -1454,7 +1461,7 @@ class Project:
         self.input_structure_filepath = input_structure_filepath
         self.input_trajectory_filepaths = input_trajectory_filepaths
 
-        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -stru, -traj)
+        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
         if md_config and (md_directories or input_trajectory_filepaths):
             raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
         # Save the MD configurations
@@ -1546,6 +1553,38 @@ class Project:
         self._transitions = None
         self._pdb_ids = None
         self._mds = None
+
+        # Save forced inputs and use them when necessary
+        self.forced_inputs = {}
+        if forced_inputs:
+            # Make sure the format is respected
+            for forced_input in forced_inputs:
+                n_values = len(forced_input)
+                if n_values == 0:
+                    raise InputError('There is an empty "-fin". Please remove it from the command line.')
+                if n_values == 1:
+                    only_value = forced_input[0]
+                    raise InputError(f'There is a "-fin {only_value}" which is missing the new input value.')
+                if n_values > 2:
+                    suggested_fix = f'{forced_input[0]} "{" ".join(forced_input[1:])}"'
+                    raise InputError(f'Too many values in "-fin {" ".join(forced_input)}".\n'+ \
+                        ' Note that only two values are expected: -fin <input name> <new input value>\n' + \
+                        f' Did you forget the quotes maybe? Try this: -fin {suggested_fix}')
+
+            # Save forced inputs as a dict
+            self.forced_inputs = { name: value for name, value in forced_inputs }
+
+            # Check that forced inputs exist
+            # This is to prevent the user from loosing a lot of time for a silly typo
+            template_inputs = load_yaml(INPUTS_TEMPLATE_FILEPATH)
+            for input_name in self.forced_inputs.keys():
+                if input_name in template_inputs: continue
+                available_inputs = ', '.join(template_inputs.keys())
+                raise InputError(f'Unrecognized forced input "{input_name}". Available inputs: {available_inputs}')
+            
+            # Overwrite input file values
+            for input_name, input_value in self.forced_inputs.items():
+                self.update_inputs(input_name, input_value)
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
@@ -1922,9 +1961,12 @@ class Project:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
 
     # Then set getters for every value in the inputs file
-
     def get_input (self, name: str):
         """ Get a specific 'input' value. """
+        # Check if the value of this input was forced from command line
+        if name in self.forced_inputs:
+            return self.forced_inputs[name]
+        # Get the input value from the inputs file
         value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
         if value != MISSING_INPUT_EXCEPTION:
