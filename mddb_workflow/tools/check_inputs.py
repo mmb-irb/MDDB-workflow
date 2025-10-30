@@ -176,6 +176,8 @@ def check_inputs (
                 raise RuntimeError('Something went wrong when reading trajectory atoms')
             # Get the trajectory atom count
             trajectory_atom_count = int(match[1])
+            # Cleanup the file we just created and proceed
+            output_sample_xtc_file.remove()
             return topology_atom_count, trajectory_atom_count
         # For .top files we use PyTraj since MDtraj can not handle it
         if topology_file.format == 'top':
