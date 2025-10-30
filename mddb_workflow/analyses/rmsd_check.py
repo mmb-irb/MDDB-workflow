@@ -75,10 +75,18 @@ def check_trajectory_integrity (
     
     # Get fragments out of the parsed selection
     # Fragments will be analyzed independently
-    # A small fragment may cause a small RMSD perturbation when it is part of a large structure
-    # Note that jumps of partial fragments along boundaries are rare imaging problems
-    # Usually are whole fragments the ones which jump
-    fragments = list(structure.find_fragments(parsed_selection))
+    # A sudden jump of a small fragment may cause a small RMSD perturbation when
+    #  it is part of a large fragment which is not jumping
+    # Jumps or artifacts of partial fragments along boundaries are rare imaging problems, althoug possible
+    # For this reason splitting the test in fragments is a good meassure
+    # Although big fragments could be splitted in even smaller parts in the future
+    # In the other hand a very small fragment may overcome the cutoff with small RMSD jumps, so beware
+    # If the structure is missing bonds then there are no fragments to select
+    # In this case we just split the structure in chains
+    if structure.is_missing_any_bonds():
+        fragments = [ chain.get_selection() for chain in structure.chains ]
+    else:
+        fragments = list(structure.find_fragments(parsed_selection))
 
     print(f'Checking trajectory integrity ({len(fragments)} fragments)')
 
