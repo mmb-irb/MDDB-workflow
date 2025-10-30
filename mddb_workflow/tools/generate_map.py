@@ -511,10 +511,14 @@ def blast (sequence : str, cache : Optional['Cache'] = None) -> Optional[str]:
     if not hits:
         return None
     # Get the first result only
-    result = hits['Hit'][0]
+    # Note that when there is only one result the Hit isnot an list, but the hit itself
+    results = hits['Hit']
+    if type(results) == list: first_result = results[0]
+    elif type(results) == dict: first_result = results
+    else: raise RuntimeError('Invalid hit format')
     # Return the accession
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
-    accession = result['Hit_accession']
+    accession = first_result['Hit_accession']
     print('Result: ' + accession)
     # Save the result in the cache
     if cache != None:
