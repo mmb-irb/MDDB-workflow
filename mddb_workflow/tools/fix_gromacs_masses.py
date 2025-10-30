@@ -1,6 +1,4 @@
-from os import environ
-from pathlib import Path
-
+from mddb_workflow.utils.constants import GROMACS_CUSTOM_MASSES_FILEPATH
 from mddb_workflow.utils.file import File
 
 # Replace the default gromacs masses file (atommass.dat) by our custom masses file
@@ -23,16 +21,13 @@ from mddb_workflow.utils.file import File
 # But the real problem was that writting in the enviornment was not allowed
 # Otherwise the container could not be shared between different user in a cluster
 
-# Set the absolute path to the workflow resources directory
-resources = str(Path(__file__).parent.parent / "resources")
-
 # Replace the original file by a symlink to our custom file if it is not done yet
 def fix_gromacs_masses ():
 
     # Set the source file
     # WARNING: Note that this must be done here, not outside the function
     # Otherwise a workflow called with a '-dir' parameter would have a wrong relative path
-    source_custom_masses_file = File(resources + '/atommass.dat')
+    source_custom_masses_file = File(GROMACS_CUSTOM_MASSES_FILEPATH)
 
     # Set the path to a local copy of the workflow custom masses file
     # According to Justin Lemkul:

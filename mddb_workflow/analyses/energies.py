@@ -19,7 +19,6 @@
 from os import mkdir, remove
 from os.path import exists
 from shutil import copyfile
-from pathlib import Path
 from glob import glob
 import re
 import math
@@ -29,6 +28,8 @@ from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
 from mddb_workflow.utils.auxiliar import load_json, save_json, warn, numerate_filename, get_analysis_name
 from mddb_workflow.utils.constants import OUTPUT_ENERGIES_FILENAME
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
+from mddb_workflow.utils.constants import CMIP_INPUTS_CHECKONLY_SOURCE, CMIP_INPUTS_SOURCE
+from mddb_workflow.utils.constants import CMIP_VDW_SOURCE, ENERGIES_DEBUG_SCRIPT_SOURCE
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
@@ -36,15 +37,6 @@ from mddb_workflow.utils.type_hints import *
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_3_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
-
-# Set some auxiliar file names
-CMIP_INPUTS_FILE = 'cmip.in'
-CMIP_CHECK_INPUTS_FILE = 'cmip_check.in'
-VDW_PARAMETERS = 'vdwprm'
-DEBUG_ENERGIES_SUM_SCRIPT = 'get_energies_sum.py'
-
-# Set the path to the resources folder where we store auxiliar files required for this analysis
-resources = str(Path(__file__).parent.parent / "resources")
 
 def energies (
     trajectory_file : File,
@@ -73,10 +65,10 @@ def energies (
     output_analysis_filepath = f'{output_directory}/{OUTPUT_ENERGIES_FILENAME}'
 
     # Set the auxiliar files further required as CMIP inputs
-    cmip_inputs_checkonly_source = File(f'{resources}/{CMIP_CHECK_INPUTS_FILE}')
-    cmip_inputs_source = File(f'{resources}/{CMIP_INPUTS_FILE}')
-    vdw_source = File(f'{resources}/{VDW_PARAMETERS}')
-    debug_script_source = File(f'{resources}/{DEBUG_ENERGIES_SUM_SCRIPT}')
+    cmip_inputs_checkonly_source = File(CMIP_INPUTS_CHECKONLY_SOURCE)
+    cmip_inputs_source = File(CMIP_INPUTS_SOURCE)
+    vdw_source = File(CMIP_VDW_SOURCE)
+    debug_script_source = File(ENERGIES_DEBUG_SCRIPT_SOURCE)
 
     # Set a backup file to store some results on the fly
     # This is useful to restore these values in case the analysis is disrupt since it is a long analysis
@@ -429,7 +421,8 @@ def energies (
             # Inputs will be modified to adapt the cmip grid to both agents together
             # Note than modified inputs file is not conserved along frames
             # Structures may change along trajectory thus requiring a different grid size
-            cmip_inputs = File(f'{output_directory}/{CMIP_INPUTS_FILE}')
+            cmip_inputs_filename = cmip_inputs_source.filename
+            cmip_inputs = File(f'{output_directory}/{cmip_inputs_filename}')
             copyfile(cmip_inputs_source.path, cmip_inputs.path)
 
             # Set the CMIP box dimensions and densities to fit both the host and the guest
@@ -440,10 +433,12 @@ def energies (
             # If the debug flag is passed then, instead of calculating energies, leave it all ready and stop here
             if debug:
                 # Copy in the energies folder a small python script used to sum output energies
-                debug_script = File(f'{output_directory}/{DEBUG_ENERGIES_SUM_SCRIPT}')
+                debug_script_filename = debug_script_source.filename
+                debug_script = File(f'{output_directory}/{debug_script_filename}')
                 copyfile(debug_script_source.path, debug_script.path)
                 # Copy in the energies folder the VDM parameters input file
-                debug_vdw_parameters = File(f'{output_directory}/{VDW_PARAMETERS}')
+                debug_vdw_filename = vdw_source.fiename
+                debug_vdw_parameters = File(f'{output_directory}/{debug_vdw_filename}')
                 copyfile(vdw_source.path, debug_vdw_parameters.path)
                 # Set auxiliar output filenames
                 debug_output_1 = 'first_output.pdb'
@@ -454,11 +449,11 @@ def energies (
                     file.write(
                         '# Energies debug\n\n'
                         '# Run CMIP\n'
-                        f'cmip -i {CMIP_INPUTS_FILE} -pr {agent1_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent2_cmip_host.filename} -byat {debug_output_1}\n\n'
+                        f'cmip -i {cmip_inputs_filename} -pr {agent1_cmip_guest.filename} -vdw {debug_vdw_filename} -hs {agent2_cmip_host.filename} -byat {debug_output_1}\n\n'
                         '# Run CMIP inverting host and guest\n'
-                        f'cmip -i {CMIP_INPUTS_FILE} -pr {agent2_cmip_guest.filename} -vdw {VDW_PARAMETERS} -hs {agent1_cmip_host.filename} -byat {debug_output_2}\n\n'
+                        f'cmip -i {cmip_inputs_filename} -pr {agent2_cmip_guest.filename} -vdw {debug_vdw_filename} -hs {agent1_cmip_host.filename} -byat {debug_output_2}\n\n'
                         '# Sum both energies and compare\n'
-                        f'python {DEBUG_ENERGIES_SUM_SCRIPT} {debug_output_1} {debug_output_2}\n'
+                        f'python {debug_script_filename} {debug_output_1} {debug_output_2}\n'
                     )
                 raise SystemExit(' READY TO DEBUG -> Please go to the corresponding replica "energies" directory and follow the README instructions')
 

@@ -1,4 +1,5 @@
 from os import environ
+from pathlib import Path
 from shutil import which
 
 # CONSTANTS ---------------------------------------------------------------------------
@@ -66,6 +67,16 @@ DEFAULT_INPUT_VALUES = {
     'linkcense': 'https://creativecommons.org/licenses/by/4.0/',
     'mdref': 0,
 }
+
+# Resource files which are always part of the workflow
+RESOURCES_DIRECTORY_PATH = resources = str(Path(__file__).parent.parent / "resources")
+INPUTS_TEMPLATE_FILEPATH = f'{RESOURCES_DIRECTORY_PATH}/inputs_file_template.yml'
+NASSA_TEMPLATE_FILEPATH = f'{RESOURCES_DIRECTORY_PATH}/nassa_template.yml'
+GROMACS_CUSTOM_MASSES_FILEPATH = f'{RESOURCES_DIRECTORY_PATH}/atommass.dat'
+CMIP_INPUTS_CHECKONLY_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/cmip_check.in'
+CMIP_INPUTS_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/cmip.in'
+CMIP_VDW_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/vdwprm'
+ENERGIES_DEBUG_SCRIPT_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/get_energies_sum.py'
 
 # Expected MD inputs
 MD_DIRECTORY = 'mdir'

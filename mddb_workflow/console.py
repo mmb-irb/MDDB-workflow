@@ -18,10 +18,6 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
-# Set the path to the input setter jupyter notebook
-inputs_template = str(Path(__file__).parent / "resources" / "inputs_file_template.yml")
-nassa_template = str(Path(__file__).parent / "resources" / "nassa_template.yml")
-
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
 test_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/usage.html#tests-and-other-checking-processes'
@@ -204,7 +200,7 @@ def main ():
         if exists(DEFAULT_INPUTS_FILENAME):
             print(f"File {DEFAULT_INPUTS_FILENAME} already exists")
         else:
-            copyfile(inputs_template, DEFAULT_INPUTS_FILENAME)
+            copyfile(INPUTS_TEMPLATE_FILEPATH, DEFAULT_INPUTS_FILENAME)
             print(f"File {DEFAULT_INPUTS_FILENAME} has been generated")
         # Set the editor to be used to modify the inputs file
         editor_command = args.editor
@@ -314,7 +310,7 @@ def main ():
             if args.make_config == True or args.make_config == []:
             # Make a copy of the template in the local directory if there is not an inputs file yet
                 if not exists(DEFAULT_NASSA_CONFIG_FILENAME):
-                    copyfile(nassa_template, DEFAULT_NASSA_CONFIG_FILENAME)
+                    copyfile(NASSA_TEMPLATE_FILEPATH, DEFAULT_NASSA_CONFIG_FILENAME)
                 # Open a text editor for the user
                 call(["vim", DEFAULT_NASSA_CONFIG_FILENAME])
                 print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
