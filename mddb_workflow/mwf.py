@@ -508,7 +508,8 @@ class MD:
 
         # Get MD inputs just to fill the inputs' "mds" value
         # Some functions may fail otherwise when its value is missing
-        self.get_md_inputs()
+        if self.project.is_inputs_file_available():
+            self.get_md_inputs()
 
     def __repr__ (self):
         return 'MD'
@@ -1901,6 +1902,8 @@ class Project:
     def update_inputs (self, nested_key : str, new_value):
         """ Permanently update the inputs file.
         This may be done when command line inputs do not match file inputs. """
+        # If there is no inputs file then rhere is nothing to update
+        if not self.is_inputs_file_available(): return
         # If the input already matches then do nothing
         current_value = read_ndict(self.inputs, nested_key, MISSING_INPUT_EXCEPTION)
         if current_value == new_value: return
