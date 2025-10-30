@@ -350,7 +350,10 @@ def generate_protein_mapping (
     # If not, kill the process unless mercy was given
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
-        raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence')
+        raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence. See the warnings above.\n' + \
+            ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file.\n' + \
+            ' If your system has exotic proteins whose sequences are not found in the Swiss-Prot database you may force non-curated UniProt ids.\n' + \
+            ' If your system has very exotic proteins whose sequence are not in UniProt you can use the "--mercy refseq" flag to skip this error.')
     warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
     register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
     return protein_parsed_chains
