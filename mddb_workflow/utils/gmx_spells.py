@@ -348,7 +348,7 @@ def read_and_parse_tpr (tpr_filepath : str) -> dict:
     expected_output_filepath = 'siminfo.json'
     run_gromacs(f'dump -s {tpr_filepath} --json', expected_output_filepath = expected_output_filepath)
     parsed_tpr = load_json(expected_output_filepath)
-    #remove(expected_output_filepath)
+    remove(expected_output_filepath)
     return parsed_tpr
 
 # Read a tpr file by converting it to ASCII
