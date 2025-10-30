@@ -20,6 +20,7 @@ MDTRAJ_ATOM_MISMATCH_ERROR = r'xyz must be shape \(Any, ([0-9]*), 3\). You suppl
 MDTRAJ_INSERTION_CODES_ERROR = r'^Could not convert residue number \[[0-9]*[a-zA-Z]\]$'
 PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does not match # atoms in (topology|parm) [\w.-]* \(([0-9]*)\)'
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
+GROMACS_ATOM_COUNT_CHECK = r'# Atoms  ([0-9]*)'
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = { 'tpr', 'top', 'prmtop', 'psf' }
@@ -134,17 +135,17 @@ def check_inputs (
             if trajectory_file.format not in GROMACS_TRAJECTORY_SUPPORTED_FORMATS:
                 raise InputError('Why loading a TPR topology with a non-gromacs trajectory?')
             # Run Gromacs just to generate a structure using all atoms in the topology and coordinates in the first frame
-            # If atoms do not match then we will see a specific error
-            output_sample_file = File('.sample.gro')
+            # If trajectory atoms are fewer than topology atoms then we will see a specific error
+            output_sample_gro_file = File('.sample.gro')
             output_logs, error_logs = run_gromacs(f'trjconv -s {topology_file.path} \
-                -f {trajectory_file.path} -o {output_sample_file.path} -dump 0',
+                -f {trajectory_file.path} -o {output_sample_gro_file.path} -dump 0',
                 user_input = 'System', expected_output_filepath = None)
             # Always get error logs and mine topology atoms
             # Note that these logs include the output selection request from Gromacs
             # This log should be always there, even if there was a mismatch and then Gromacs failed
             topology_atom_count = mine_system_atoms_count(error_logs)
             # If the output does not exist at this point it means something went wrong with gromacs
-            if not output_sample_file.exists:
+            if not output_sample_gro_file.exists:
                 # Check if we know the error
                 error_match = search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
                 if error_match:
@@ -157,9 +158,24 @@ def check_inputs (
                 raise SystemExit('Something went wrong with GROMACS during the checking')
             # If we had an output then it means both topology and trajectory match in the number of atoms
             # Cleanup the file we just created and proceed
-            output_sample_file.remove()
-            # If there was no problem then it means the trajectory atom count matches the topology atom count
-            trajectory_atom_count = topology_atom_count
+            output_sample_gro_file.remove()
+            # Now make sure trajectory atoms are not more than topology atoms
+            # Easiest way to print trajectory atoms is using gmx check
+            # However if we feed this command with the whole trajectory it will read it all
+            # To prevent this we must create a single frame before
+            output_sample_xtc_file = File('.sample.xtc')
+            # Note that we do NOT pass the -s argument here
+            # Otherwise the structure/topology would eclipse the actual number of atoms in the trajectory
+            run_gromacs(f'trjconv -f {trajectory_file.path} -o {output_sample_xtc_file.path} -dump 0',
+                user_input = 'System', expected_output_filepath = output_sample_xtc_file.path)
+            # Now read the number of atoms
+            output_logs, error_logs = run_gromacs(f'check -f {output_sample_xtc_file.path}')
+            match = search(GROMACS_ATOM_COUNT_CHECK, error_logs)
+            if not match:
+                print(error_logs)
+                raise RuntimeError('Something went wrong when reading trajectory atoms')
+            # Get the trajectory atom count
+            trajectory_atom_count = int(match[1])
             return topology_atom_count, trajectory_atom_count
         # For .top files we use PyTraj since MDtraj can not handle it
         if topology_file.format == 'top':
