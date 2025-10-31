@@ -275,8 +275,8 @@ class Dataset:
 
                 print(f"Submitting SLURM job for {project_dir}")
                 subprocess.run(['sbatch', 'mwf_slurm_job.sh', 
-                                '--output', os.path.join(log_dir, 'mwf-%j.out'), 
-                                '--error', os.path.join(log_dir, 'mwf-%j.err')], 
+                                '--output', 'logs/mwf_%j.out', 
+                                '--error', 'logs/mwf_%j.err'], 
                                 cwd=project_dir)
 
             else:
