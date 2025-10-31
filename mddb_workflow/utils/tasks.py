@@ -7,6 +7,7 @@ import time
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.auxiliar import is_directory_empty, safe_getattr
 from mddb_workflow.utils.constants import *
+from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
 # Set a special exception for missing task function arguments
