@@ -274,10 +274,12 @@ class Dataset:
                 os.chmod(job_script_path, 0o755)
 
                 print(f"Submitting SLURM job for {project_dir}")
-                subprocess.run(['sbatch', 'mwf_slurm_job.sh', 
-                                '--output', 'logs/mwf_%j.out', 
-                                '--error', 'logs/mwf_%j.err'], 
-                                cwd=project_dir)
+                #print(f"Command: sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
+                subprocess.run(['sbatch', 
+                                '--output=logs/mwf_%j.out',
+                                '--error=logs/mwf_%j.err',
+                                job_script_path],
+                               cwd=project_dir)
 
             else:
                 # Normal Python execution
