@@ -6,7 +6,7 @@ from rdkit import Chem
 from functools import lru_cache
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
-from mddb_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
+from mddb_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data, warn
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.structures import Structure
 from urllib.request import Request, urlopen
@@ -517,7 +517,7 @@ def generate_ligand_mapping (
         if inchikey:
             inchi = inchikeys['key_2_name'][inchikey]['inchi']
             ligand_data['inchikey'] = inchikey
-            if cid := inchikey_2_cid(inchikey, inchi):
+            if cid := inchikey_2_pubchem(inchikey, inchi):
                 ligand_data = obtain_ligand_data_from_pubchem( {'pubchem': cid} )
                 smiles = ligand_data['smiles']
                 mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block = obtain_mordred_morgan_descriptors(smiles)
@@ -957,7 +957,7 @@ def pdb_2_pubchem (pdb_id : str) -> list[str]:
     return pubchem_ids
 
 @lru_cache(maxsize=None)
-def inchikey_2_cid(inchikey : str, inchi) -> Optional[str]:
+def inchikey_2_pubchem(inchikey : str, inchi) -> Optional[str]:
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
     r = requests.get(url)
     if r.ok:
@@ -972,4 +972,5 @@ def inchikey_2_cid(inchikey : str, inchi) -> Optional[str]:
         data = r.json()
         return data['PC_Compounds'][0]['id']['id']['cid']
     # RUBEN: esto puede que sea muy extremo pero es para ver si hay errores silenciosos
-    raise RuntimeError(f"Failed to fetch CID for InChIKey {inchikey}: {r.status_code} {r.reason}")
+    warn(f"Failed to fetch CID for InChIKey {inchikey}: {r.status_code} {r.reason}")
+    return None
