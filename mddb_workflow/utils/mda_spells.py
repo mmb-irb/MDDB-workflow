@@ -56,7 +56,6 @@ def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
 
     attrs = [Atomnames (topology['atom_names']),
              Elements  (topology['atom_elements']),
-             Charges   (topology['atom_charges']),
              Bonds     (topology['bonds']),
              Resnames  (topology['residue_names']),
              Resnums   (topology['residue_numbers']),
@@ -64,7 +63,9 @@ def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
              Segids    (topology['chain_names']),
              Resids    (np.arange(len(topology['residue_names']))),
     ]
-
+    if topology['atom_charges']:
+        attrs.append(Charges(topology['atom_charges']))
+        
     mda_top = Topology(n_atoms=len(topology['atom_names']), 
                        n_res=len(topology['residue_names']), 
                        n_seg=len(topology['chain_names']),
@@ -76,11 +77,11 @@ def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
 
 def get_mda_universe_from_stopology (
         standard_topology_path : str, coordinates_file : str) -> 'Universe':
-    """Create a MDAnalysis universe using data in the workflow.
+    """ Create a MDAnalysis universe using data in the workflow.
     
     Args:
         standard_topology_path (str): Path to the standard topology file.
-        coordinates_file (str): Path to the coordinates file (e.g., PDB, XTC)."""
+        coordinates_file (str): Path to the coordinates file (e.g., PDB, XTC). """
     mda_topology = to_MDAnalysis_topology(standard_topology_path)
     # Create a MDAnalysis topology from the standard topology file
     return Universe(mda_topology, coordinates_file)
@@ -89,8 +90,7 @@ def get_mda_universe (structure_file : 'File',              # To load in MDAnaly
                       trajectory_file : 'File',             # To load in MDAnalysis
                       reference_bonds : list[list[int]],    # To set the bonds
                       charges : list[float]) -> 'Universe': # To set the charges
-    """Create a MDAnalysis universe using data in the workflow."""
-
+    """ Create a MDAnalysis universe using data in the workflow. """
     # Make MDAnalysis warnings and logs grey
     print(GREY_HEADER, end='\r')
     universe = Universe(structure_file.path, trajectory_file.path)

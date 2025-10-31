@@ -164,9 +164,9 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
     """
     resatoms , resindices = task
     # Convert to RDKIT and get InChI data
-    res_RD = resatoms.convert_to("RDKIT")
+    res_RD = resatoms.convert_to.rdkit()
     # Calculate InChI key and string
-    inchikey = Chem.MolToInchiKey(res_RD)  # slow step, 50% of time 
+    inchikey = Chem.MolToInchiKey(res_RD)
     # rdinchi.MolToInchi so it doesnt print the warnings
     inchi, retcode, message, logs, aux  = Chem.rdinchi.MolToInchi(res_RD)
     return (inchikey, inchi, resindices)

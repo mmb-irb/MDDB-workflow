@@ -56,7 +56,8 @@ def generate_membrane_mapping(lipid_map : list[dict],
         membrane_map = coarse_grain_membranes(structure_file, universe, output_filepath)
     else:
         membrane_map = all_atom_membranes(lipid_map, structure_file, universe, output_filepath)
-    save_json(membrane_map, output_filepath)
+    if membrane_map['n_mems'] > 0:
+        save_json(membrane_map, output_filepath)
     return membrane_map
 
 
@@ -67,10 +68,8 @@ def all_atom_membranes(lipid_map : list[dict],
                        ) -> list[dict]:
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
     
-    # if no lipids are found, we save the empty mapping and return
     if len(lipid_map) == 0:
         # no lipids found in the structure.
-        save_json(membrane_map, output_filepath)
         return membrane_map
 
     # Select only the lipids and potential membrane members
@@ -83,7 +82,6 @@ def all_atom_membranes(lipid_map : list[dict],
     # if no lipids are found, we save the empty mapping and return
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
-        save_json(membrane_map, output_filepath)
         return membrane_map
     mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str,(lipid_ridx)))})')
 

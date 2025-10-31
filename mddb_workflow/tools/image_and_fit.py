@@ -40,7 +40,8 @@ def image_and_fit (
     input_topology_file : Union['File', Exception],
     output_structure_file : 'File',
     output_trajectory_file : 'File',
-    image : bool, fit : bool,
+    image : bool,
+    fit : bool,
     translation : list,
     # Note that this is an early provisional structure
     structure : 'Structure',

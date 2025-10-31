@@ -481,3 +481,4 @@ def process_input_files (
             file.write('Input files were processed sucessfully.\n' +
                 'Intermediate files were removed to save space.\n'
                 'Please do not remove this file\n')
+            

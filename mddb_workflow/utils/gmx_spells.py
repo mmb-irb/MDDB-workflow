@@ -9,18 +9,21 @@ from mddb_workflow.utils.auxiliar import load_json
 from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
-
 from mddb_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 
-# Set a function to call gromacs in a more confortable and standarized way:
-# - Standard gromacs executable, which may be provided by the user
-# - Gromacs mass fixes by using a custom atommass.dat file with extended atom names
-# - Hidden unnecessary output logs and grey-colored necessary ones
-# - Missing output checks
-# Then return both output and error logs
-def run_gromacs(command : str, user_input : Optional[str] = None,
+
+def run_gromacs(
+    command : str, 
+    user_input : Optional[str] = None,
     expected_output_filepath : Optional[str] = 'auto',
-    show_output_logs : bool = False, show_error_logs : bool = False) -> tuple[str, str]:
+    show_output_logs : bool = False,
+    show_error_logs : bool = False) -> tuple[str, str]:
+    """ Set a function to call gromacs in a more confortable and standarized way:
+    - Standard gromacs executable, which may be provided by the user
+    - Gromacs mass fixes by using a custom atommass.dat file with extended atom names
+    - Hidden unnecessary output logs and grey-colored necessary ones
+    - Missing output checks
+    Then return both output and error logs. """
 
     # Run a fix for gromacs if not done before
     # Note that this is run always at the moment the code is read, no matter the command or calling origin
@@ -91,8 +94,8 @@ def run_gromacs(command : str, user_input : Optional[str] = None,
     return output_logs, error_logs
 
 
-# Get the first frame from a trajectory
 def get_first_frame (input_structure_filename : str, input_trajectory_filename : str, output_frame_filename : str):
+    """ Get the first frame from a trajectory. """
     # Run Gromacs
     run_gromacs(f'trjconv -s {input_structure_filename} -f {input_trajectory_filename} \
                 -o {output_frame_filename} -dump 0', user_input = 'System')
@@ -137,8 +140,9 @@ get_first_frame.format_sets = [
     }
 ]
 
-# Get the structure using the first frame getter function
+
 def get_structure (input_structure_filename : str, input_trajectory_filename : str, output_structure_filename : str):
+    """ Get the structure using the first frame getter function. """
     get_first_frame(input_structure_filename, input_trajectory_filename, output_structure_filename)
 get_structure.format_sets = [
     {
@@ -152,8 +156,9 @@ get_structure.format_sets = [
     }
 ]
 
-# Convert the structure using the first frame getter function (no trajectory is required)
+
 def get_structure_alone (input_structure_filename : str, output_structure_filename : str):
+    """ Convert the structure using the first frame getter function (no trajectory is required). """
     get_first_frame(input_structure_filename, input_structure_filename, output_structure_filename)
 get_structure_alone.format_sets = [
     {
@@ -166,8 +171,9 @@ get_structure_alone.format_sets = [
     }
 ]
 
-# Get gromacs supported trajectories merged and converted to a different format
+
 def merge_and_convert_trajectories (input_trajectory_filenames : list[str], output_trajectory_filename : str):
+    """ Get gromacs supported trajectories merged and converted to a different format. """
     # Get trajectory formats
     sample_trajectory = input_trajectory_filenames[0]
     sample_trajectory_file = File(sample_trajectory)
@@ -219,7 +225,7 @@ merge_and_convert_trajectories.format_sets = [
     }
 ]
 
-# Get specific frames from a trajectory
+
 def get_trajectory_subset (
     input_trajectory_filename : str,
     output_trajectory_filename : str,
@@ -229,6 +235,7 @@ def get_trajectory_subset (
     frames : list[int] = [],
     skip : list[int] = []
 ):
+    """ Get specific frames from a trajectory. """
     # Set a list with frame indices from
     output_frames = frames if frames and len(frames) > 0 else [ frame for frame in range(start, end, step) if frame not in skip ]
 
@@ -255,12 +262,13 @@ get_trajectory_subset.format_sets = [
     }
 ]
 
-# Filter trajectory atoms
+
 def filter_structure (
     input_structure_file : 'File',
     output_structure_file : 'File',
     input_selection : 'Selection'
 ):
+    """ Filter trajectory atoms. """
     # Generate a ndx file with the desired selection
     filter_selection_name = 'filter'
     filter_index_content = input_selection.to_ndx(selection_name=filter_selection_name)
@@ -286,13 +294,14 @@ filter_structure.format_sets = [
     }
 ]
 
-# Filter trajectory atoms
+
 def filter_trajectory (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
     output_trajectory_file : 'File',
     input_selection : 'Selection'
 ):
+    """ Filter trajectory atoms. """
     # Generate a ndx file with the desired selection
     filter_selection_name = 'filter'
     filter_index_content = input_selection.to_ndx(selection_name=filter_selection_name)
@@ -324,16 +333,18 @@ filter_trajectory.format_sets = [
 # Set a regular expression to further mine data from gromacs logs
 GROMACS_SYSTEM_ATOMS_REGEX = r'System\) has[ ]+([0-9]*) elements'
 
-# Mine system atoms count from gromacs logs
+
 def mine_system_atoms_count (logs : str) -> int:
+    """ Mine system atoms count from gromacs logs. """
     system_atoms_match = search(GROMACS_SYSTEM_ATOMS_REGEX, logs)
     if not system_atoms_match:
         print(logs)
         raise ValueError('Failed to mine Gromacs error logs')
     return int(system_atoms_match[1])
 
-# Count TPR atoms
+
 def get_tpr_atom_count (tpr_filepath : str) -> int:
+    """ Count TPR atoms. """
     # Make sure the filepath is valid
     if not exists(tpr_filepath):
         raise ValueError('Trying to count atoms from a topology which does not exist')
@@ -343,25 +354,28 @@ def get_tpr_atom_count (tpr_filepath : str) -> int:
     atom_count = mine_system_atoms_count(error_logs)
     return atom_count
 
-# Read and parse a tpr using the MDDB-specific tool from gromacs
+
 def read_and_parse_tpr (tpr_filepath : str) -> dict:
+    """ Read and parse a tpr using the MDDB-specific tool from gromacs. """
     expected_output_filepath = 'siminfo.json'
     run_gromacs(f'dump -s {tpr_filepath} --json', expected_output_filepath = expected_output_filepath)
     parsed_tpr = load_json(expected_output_filepath)
     remove(expected_output_filepath)
     return parsed_tpr
 
-# Read a tpr file by converting it to ASCII
+
 def get_tpr_content (tpr_filepath : str) -> tuple[str, str]:
+    """ Read a tpr file by converting it to ASCII. """
     # Read the tpr file making a 'dump'
     return run_gromacs(f'dump -s {tpr_filepath}')
 
 # Regular expresion to mine atom charges
 GROMACS_TPR_ATOM_CHARGES_REGEX = r"q=([0-9e+-. ]*),"
 
-# Get tpr atom charges
-# This works for the new tpr format (tested in 122)
+
 def get_tpr_charges (tpr_filepath : str) -> list[float]:
+    """ Get tpr atom charges.
+    This works for the new tpr format (tested in 122). """
     # Read the TPR
     tpr_content, tpr_error_logs = get_tpr_content(tpr_filepath)
     # Mine the atomic charges
@@ -393,22 +407,24 @@ GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*([0-9]*) type=[0-9]* \((BONDS|CONSTR|CONNBO
 # This is not yet supported, but at least we check if this is happening to raise an error when found
 GROMACS_TPR_SETTLE_REGEX = r"^\s*([0-9]*) type=[0-9]* \(SETTLE\)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)$"
 
-# Get tpr atom bonds
+
 def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
+    """ Get tpr atom bonds. """
     # Read and parse the TPR
     parsed_tpr = read_and_parse_tpr(tpr_filepath)
     # Get the bonds only
     tpr_bonds = parsed_tpr['gromacs-topology']['bond']['value']
     return tpr_bonds
 
-# Filter topology atoms
-# DANI: Note that a TPR file is not a structure but a topology
-# DANI: However it is important that the argument is called 'structure' for the format finder
+
 def filter_tpr (
     input_structure_file : 'File',
     output_structure_file : 'File',
     input_selection : 'Selection'
 ):
+    """ Filter topology atoms.
+    DANI: Note that a TPR file is not a structure but a topology
+    DANI: However it is important that the argument is called 'structure' for the format finder"""
     # Generate a ndx file with the desired selection
     filter_selection_name = 'filter'
     filter_index_content = input_selection.to_ndx(selection_name=filter_selection_name)
@@ -434,9 +450,10 @@ filter_tpr.format_sets = [
     }
 ]
 
-# Join xtc files
-# This is a minimal implementation of 'gmx trjcat' used in loops
+
 def merge_xtc_files (current_file : str, new_file : str):
+    """ Join xtc files.
+    This is a minimal implementation of 'gmx trjcat' used in loops. """
     # If the current file does nt exist then set the new file as the current file
     if not exists(current_file):
         rename(new_file, current_file)
@@ -444,9 +461,10 @@ def merge_xtc_files (current_file : str, new_file : str):
     # Run trjcat
     run_gromacs(f'trjcat -f {new_file.path} {current_file} -o {current_file.path}')
 
-# Generate a ndx file with a selection of frames
+
 def generate_frames_ndx (frames : list[int], filename : str):
-    # Add a header 
+    """ Generate a ndx file with a selection of frames. """
+    # Add a header
     content = '[ frames ]\n'
     count = 0
     for frame in frames:
@@ -496,11 +514,11 @@ def parse_xpm (filename : str) -> list[ list[float] ]:
         x_axis = []
         y_axis = []
         # Every line has a maximum of 80 labels
-        x_lines = math.ceil(x_dimension / 80)
+        x_lines = math.ceil(x_dimension / 80) # type: ignore
         for l in range(x_lines):
             line = file.readline()[12:-3].split()
             x_axis += [ int(v) for v in line ]
-        y_lines = math.ceil(y_dimension / 80)
+        y_lines = math.ceil(y_dimension / 80) # type: ignore
         for l in range(y_lines):
             line = file.readline()[12:-3].split()
             y_axis += [ int(v) for v in line ]
@@ -519,22 +537,20 @@ def parse_xpm (filename : str) -> list[ list[float] ]:
         # Return the output
         return { 'entities': entities, 'x_axis': x_axis, 'y_axis': y_axis, 'matrix': matrix }
 
-# Filter atoms in a pdb file
-# This method conserves maximum resolution and chains
+
 def pdb_filter (
     input_pdb_filepath : str,
     output_pdb_filepath : str,
     index_filepath : str,
     filter_group_name : str
 ):
+    """ Filter atoms in a pdb file.
+    This method conserves maximum resolution and chains. """
     # Filter the PDB
     run_gromacs(f'editconf -f {input_pdb_filepath} -o {output_pdb_filepath} \
                 -n {index_filepath}', user_input = filter_group_name)
 
-# Filter atoms in a xtc file
-# Note that here we do not hide the stderr
-# This is because it shows the progress
-# Instead we color the output grey
+
 def xtc_filter(
     structure_filepath : str,
     input_trajectory_filepath : str,
@@ -542,26 +558,32 @@ def xtc_filter(
     index_filepath : str,
     filter_group_name : str
 ):
+    """ Filter atoms in a xtc file.
+    Note that here we do not hide the stderr.
+    This is because it shows the progress.
+    Instead we color the output grey. """
     # Filter the trajectory
     run_gromacs(f'trjconv -s {structure_filepath} -f {input_trajectory_filepath} \
         -o {output_trajectory_filepath} -n {index_filepath}', user_input = filter_group_name)
 
-# Filter atoms in both a pdb and a xtc file
+
 def tpr_filter(
     input_tpr_filepath : str,
     output_tpr_filepath : str,
     index_filepath : str,
     filter_group_name : str
 ):
+    """ Filter atoms in both a pdb and a xtc file. """
     # Filter the topology
     run_gromacs(f'convert-tpr -s {input_tpr_filepath} -o {output_tpr_filepath} \
                 -n {index_filepath}', user_input = filter_group_name)
 
-# Create a .ndx file from a complex mask
-# e.g. no water and no ions -> !"Water"&!"Ion"
-# This will return the group name to be further used
+
 def make_index (input_structure_file : 'File', output_index_file : 'File', mask : str) -> str:
-    # Make sure the 
+    """ Create a .ndx file from a complex mask.
+    e.g. no water and no ions -> !"Water"&!"Ion".
+    This will return the group name to be further used. """
+    # Make sure the
     #if output_index_file.exists: output_index_file.remove()
     # Run Gromacs
     run_gromacs(f'make_ndx -f {input_structure_file.path} -o {output_index_file.path}',
@@ -575,8 +597,9 @@ def make_index (input_structure_file : 'File', output_index_file : 'File', mask 
     created = group_name in content
     return group_name, created
 
-# Read a .ndx file
+
 def read_ndx (input_index_file : 'File') -> dict:
+    """ Read a .ndx file """
     # Make sure the file exists
     if not input_index_file.exists:
         raise RuntimeError(f'Index file {input_index_file.path} does not exist')
@@ -606,9 +629,10 @@ def read_ndx (input_index_file : 'File') -> dict:
     # Finally return the parsed content
     return groups
 
-# Set a function to count atoms in a gromacs supported file
+
 ATOMS_LINE = r'\n# Atoms\s*([0-9]*)\n'
 def get_atom_count (mysterious_file : 'File') -> int:
+    """ Count atoms in a gromacs supported file. """
     output_logs, error_logs =  run_gromacs(f'check -f {mysterious_file.path}')
     search_results = search(ATOMS_LINE, error_logs)
     if not search_results: raise ValueError('Failed to mine atoms')

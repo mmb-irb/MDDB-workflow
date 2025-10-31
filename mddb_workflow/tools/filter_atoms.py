@@ -1,6 +1,5 @@
 from os import remove
 from os.path import exists
-from subprocess import run, PIPE, Popen
 import json
 
 import pytraj as pt
@@ -17,9 +16,6 @@ index_filename = 'filter.ndx'
 # Set the name for the group name in gromacs ndx file
 filter_group_name = "not_water_or_counter_ions"
 
-# Filter atoms of all input topologies by remvoing atoms and ions
-# As an exception, some water and ions may be not removed if specified
-# At the end, all topologies must match in atoms count
 def filter_atoms (
     input_structure_file : 'File',
     input_trajectory_file : 'File',
@@ -34,6 +30,9 @@ def filter_atoms (
     filter_selection : bool | str,
     filter_selection_syntax : str = 'vmd',
 ):
+    """ Filter atoms of all input topologies by removing atoms and ions.
+    As an exception, some water and ions may be not removed if specified.
+    At the end, all topologies must match in atoms count. """
 
     # Handle missing filter selection
     if not filter_selection:
