@@ -244,10 +244,12 @@ class Dataset:
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
         for project_dir in self.project_directories:
-            project_status = self.status.loc[os.path.relpath(project_dir, self.root_path)].to_dict()
+            rel_path = os.path.relpath(project_dir, self.root_path)
+            project_status = self.status.loc[rel_path].to_dict()
+            project_status['rel_path'] = rel_path
             # Check group inclusion/exclusion
-            group_id = project_status['group']
-            if group_id in exclude_groups or (include_groups and group_id not in include_groups):
+            if project_status['group'] in exclude_groups or \
+                (include_groups and project_status['group'] not in include_groups):
                 continue
             # Launch workflow
             if slurm:
