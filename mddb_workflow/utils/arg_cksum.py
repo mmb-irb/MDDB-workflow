@@ -36,8 +36,6 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     if value_type == set:
         standard = list(value).sort()
         return get_cksum_id(standard)
-    # For functions simply store the name
-    if callable(value): return value.__name__
     # For files use file last modification time and size
     if isinstance(value, File): return value.get_cksum()
     # For the parsed structure
@@ -56,5 +54,10 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     if safe_hasattr(value, '__class__'):
         if value.__class__.__name__ == 'Project': return True
         if value.__class__.__name__ == 'MD': return True
+        if value.__class__.__name__ == 'Task': return True
+    # For functions get some parsed code variables and get thier cksums
+    # We check for functions in the last place because some classes may be callable as well (e.g. Taks)
+    if callable(value):
+        return get_cksum_id(f'{value.__code__.co_code} {value.__code__.co_consts}')
     # If the value has non of previous types then we complain
     raise TypeError(f'Non supported type "{value_type}" for cksum id: {value}')
