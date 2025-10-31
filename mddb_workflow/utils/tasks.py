@@ -274,7 +274,7 @@ class Task:
         if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
         # If the parent is an MD then it may happen the property is from the Project
         # We can not use the 'isinstance' function here because we can not import the MD class
-        if str(parent) == 'MD':
+        if parent.__class__.__name__ == 'MD':
             arg_value = safe_getattr(parent.project, arg, MISSING_ARGUMENT_EXCEPTION)
             if arg_value != MISSING_ARGUMENT_EXCEPTION: return arg_value
         # If the property is missing then search among the additional arguments
