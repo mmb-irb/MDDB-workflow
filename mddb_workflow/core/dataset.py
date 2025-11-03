@@ -1,11 +1,12 @@
 from mddb_workflow.utils.auxiliar import load_yaml, is_glob
 from mddb_workflow.mwf import workflow
-import subprocess
-import os
-import glob
-import yaml
-import jinja2
 import pandas as pd
+import subprocess
+import jinja2
+import time
+import glob
+import os
+
 
 class Dataset:
     """
@@ -21,27 +22,30 @@ class Dataset:
         self.root_path = os.path.dirname(os.path.abspath(dataset_yaml_path))
         self.config = load_yaml(dataset_yaml_path)
         # Properties cache
-        self._project_directories = None
+        self.project_directories = self.get_project_directories()
+        self.groups = self.get_groups()
         self._status = None
 
-    @property
-    def project_directories(self) -> list[str]:
+    def _resolve_directory_patterns(self, dir_patterns: list[str]) -> list[str]:
         """
-        Retrieves the list of project directories from the dataset configuration.
+        Helper method to resolve directory patterns (glob or absolute/relative paths).
+        Validates that resolved paths are under the dataset root.
+
+        Args:
+            dir_patterns (list[str]): List of directory patterns to resolve.
 
         Returns:
-            list: List of project directory patterns.
-        """
-        if self._project_directories is not None:
-            return self._project_directories
+            list[str]: List of resolved directory paths.
         
-        config_project_directories = self.config.get('global', {}).get('project_directories', [])
-        self._project_directories = []
-        for i, dir_pattern in enumerate(config_project_directories):
+        Raises:
+            ValueError: If a resolved path is outside the dataset root.
+        """
+        directories = []
+        for dir_pattern in dir_patterns:
             if is_glob(dir_pattern):
                 matched_dirs = glob.glob(os.path.join(self.root_path, dir_pattern))
                 # keep only directories
-                self._project_directories.extend([p for p in matched_dirs if os.path.isdir(p)])
+                directories.extend([p for p in matched_dirs if os.path.isdir(p)])
             else:
                 p = dir_pattern
                 if not os.path.isabs(p):
@@ -49,9 +53,23 @@ class Dataset:
                 # ensure the resolved path is under the dataset root
                 if os.path.commonprefix([p, self.root_path]) != self.root_path:
                     raise ValueError(f"Project directory '{p}' is outside the dataset root '{self.root_path}'")
-                self._project_directories.append(p)
+                directories.append(p)
+        return directories
 
-        return self._project_directories
+    def get_project_directories(self) -> list[str]:
+        """
+        Retrieves the list of project directories from the dataset configuration.
+
+        Returns:
+            list: List of project directory patterns.
+        """
+        return self._resolve_directory_patterns(self.config.get('project_directories', []))
+
+    def get_groups(self) -> dict[str, list[str]]:
+        groups = {}
+        for group in self.config.get('groups', []):
+            groups[group] = self._resolve_directory_patterns(self.config['groups'][group])
+        return groups
 
     def generate_inputs_yaml(self, inputs_template_path: str, input_generator: callable, overwrite: bool = False):
         """
@@ -95,8 +113,6 @@ class Dataset:
         Returns:
             pd.DataFrame: Index is project directory; columns: state, message, log_file, error_log_file.
         """
-        if self._status is not None:
-            return self._status
 
         rows = []
         for project_dir in self.project_directories:
@@ -110,6 +126,8 @@ class Dataset:
                 log_files = [log_files[-1]]  # Take the most recent one
                 with open(log_files[0], 'r') as f:
                     last_line = f.read().splitlines()[-1].strip()
+                    if len(last_line) > 80:
+                        last_line = last_line[:80]+'...'
 
                 if last_line == 'Done!':
                     state, message, log_file = 'done', last_line, log_files[0]
@@ -125,12 +143,27 @@ class Dataset:
             else:
                 err_file = None
 
+            # Check if files were modified recently (within last 5 minutes) to detect running state
+            current_time = time.time()
+            recently_modified_threshold = 300  # 5 minutes in seconds
+
+            last_modified = ''
+            if (log_file and os.path.exists(log_file) and (current_time - os.path.getmtime(log_file)) < recently_modified_threshold) or \
+                (err_file and os.path.exists(err_file) and (current_time - os.path.getmtime(err_file)) < recently_modified_threshold):
+                 if state != 'done':
+                      state = 'running'
+            else:
+                # Save last modification time if not running
+                if log_file and os.path.exists(log_file):
+                    last_modified = time.strftime('%H:%M:%S %d/%m/%y', time.localtime(os.path.getmtime(log_file)))
+            
             rows.append({
                 'rel_path': os.path.relpath(project_dir, self.root_path),
                 'state': state,
                 'message': message,
                 'log_file': os.path.relpath(log_file, project_dir) if log_file else '',
-                'err_file': os.path.relpath(err_file, project_dir) if err_file else ''
+                'err_file': os.path.relpath(err_file, project_dir) if err_file else '',
+                'last_modified': last_modified
             })
 
         df = pd.DataFrame(rows).set_index('rel_path').sort_index()
@@ -181,7 +214,7 @@ class Dataset:
                 log_path = os.path.join(project_dir, row['log_file'])
                 # Create a file:// URL for local files
                 file_url = f"file://{log_path}"
-                return f'<a href="{file_url}" target="_blank">{row["log_file"]}</a>'
+                return f'<a href="{file_url}" target="_blank">{row["log_file"].split("/")[-1]}</a>'
             return row['log_file']
         
         # Create clickable links for error log files
@@ -191,7 +224,7 @@ class Dataset:
                 error_log_path = os.path.join(project_dir, row['err_file'])
                 # Create a file:// URL for local files
                 file_url = f"file://{error_log_path}"
-                return f'<a href="{file_url}" target="_blank">{row["err_file"]}</a>'
+                return f'<a href="{file_url}" target="_blank">{row["err_file"].split("/")[-1]}</a>'
             return row['err_file']
         
         df['log_file_link'] = df.apply(make_out_link, axis=1)
@@ -203,6 +236,7 @@ class Dataset:
         Display the status DataFrame with clickable links in Jupyter.
         """
         from IPython.display import HTML, display
+
         
         df = self.status_with_links()
         # Drop the original log_file columns and rename the link columns
@@ -220,7 +254,8 @@ class Dataset:
         include_groups: list[int]=[],
         exclude_groups: list[int]=[],
         slurm: bool=False,
-        job_template: str=None):
+        job_template: str=None,
+        debug: bool=False):
         """
         Launches the workflow for each project directory in the dataset.
         Args:
@@ -275,13 +310,16 @@ class Dataset:
                 
                 os.chmod(job_script_path, 0o755)
 
-                print(f"Submitting SLURM job for {project_dir}")
-                #print(f"Command: sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
-                subprocess.run(['sbatch', 
-                                '--output=logs/mwf_%j.out',
-                                '--error=logs/mwf_%j.err',
-                                job_script_path],
-                               cwd=project_dir)
+                if debug:
+                    print(f"cd {project_dir}")
+                    print(f"sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
+                else:
+                    print(f"Submitting SLURM job for {project_dir}")
+                    subprocess.run(['sbatch', 
+                                    '--output=logs/mwf_%j.out',
+                                    '--error=logs/mwf_%j.err',
+                                    job_script_path],
+                                cwd=project_dir)
 
             else:
                 # Normal Python execution
