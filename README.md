@@ -97,7 +97,3 @@ License version 2.0 ([Apache-2.0](LICENSE)).
 The MDDB Workflow package (including the workflow with its required
 dependencies) is distributed under the terms of the GNU General Public
 License version 3 or any later version (GPL-3.0+).
-
-The MDDB Workflow package also includes external codes and dependencies
-provided under licenses compatible with the terms of the GNU General
-Public License version 3 or any later version (GPL-3.0+).
