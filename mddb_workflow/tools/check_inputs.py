@@ -8,7 +8,7 @@ from mddb_workflow.utils.file import File
 
 from mddb_workflow.tools.guess_and_filter import guess_and_filter_topology
 
-from re import match, search
+import re
 from typing import *
 from scipy.io import netcdf_file
 import mdtraj as mdt
@@ -147,7 +147,7 @@ def check_inputs (
             # If the output does not exist at this point it means something went wrong with gromacs
             if not output_sample_gro_file.exists:
                 # Check if we know the error
-                error_match = search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
+                error_match = re.search(GROMACS_ATOM_MISMATCH_ERROR, error_logs)
                 if error_match:
                     # Get the trajectory atom count
                     trajectory_atom_count = int(error_match[1])
@@ -170,12 +170,12 @@ def check_inputs (
                 user_input = 'System', expected_output_filepath = output_sample_xtc_file.path)
             # Now read the number of atoms
             output_logs, error_logs = run_gromacs(f'check -f {output_sample_xtc_file.path}')
-            match = search(GROMACS_ATOM_COUNT_CHECK, error_logs)
-            if not match:
+            search_results = re.search(GROMACS_ATOM_COUNT_CHECK, error_logs)
+            if not search_results:
                 print(error_logs)
                 raise RuntimeError('Something went wrong when reading trajectory atoms')
             # Get the trajectory atom count
-            trajectory_atom_count = int(match[1])
+            trajectory_atom_count = int(search_results[1])
             # Cleanup the file we just created and proceed
             output_sample_xtc_file.remove()
             return topology_atom_count, trajectory_atom_count
@@ -209,12 +209,12 @@ def check_inputs (
         except Exception as error:
             # If the error message matches with a known error then report the problem
             error_message = str(error)
-            error_match = match(MDTRAJ_ATOM_MISMATCH_ERROR, error_message)
+            error_match = re.match(MDTRAJ_ATOM_MISMATCH_ERROR, error_message)
             if error_match:
                 topology_atom_count = int(error_match[1])
                 trajectory_atom_count = int(error_match[2])
                 return topology_atom_count, trajectory_atom_count
-            error_match = match(MDTRAJ_INSERTION_CODES_ERROR, error_message)
+            error_match = re.match(MDTRAJ_INSERTION_CODES_ERROR, error_message)
             if error_match:
                 warn('The input topology has insertion codes.\n'+ \
                 ' Some tools may crash when reading the topology (MDtraj).\n'+ \
@@ -235,7 +235,7 @@ def check_inputs (
         with CaptureOutput('stderr') as output:
             trajectory = pyt.iterload(trajectory_file.path, top=topology_file.path)
         logs = output.captured_text
-        error_match = match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
+        error_match = re.match(PYTRAJ_XTC_ATOM_MISMATCH_ERROR, logs)
         if error_match:
             topology_atom_count = int(error_match[3])
             trajectory_atom_count = int(error_match[1])
