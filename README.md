@@ -88,3 +88,16 @@ For detailed instructions on how to use the workflow, please refer to the [usage
 ## Development
 
 For instructions about how to develop and test check the [development guide](https://mddb-workflow.readthedocs.io/en/latest/develop.html).
+
+## License
+
+The MDDB Workflow source code is provided under the terms of the Apache
+License version 2.0 ([Apache-2.0](LICENSE)).
+
+The MDDB Workflow package (including the workflow with its required
+dependencies) is distributed under the terms of the GNU General Public
+License version 3 or any later version (GPL-3.0+).
+
+The MDDB Workflow package also includes external codes and dependencies
+provided under licenses compatible with the terms of the GNU General
+Public License version 3 or any later version (GPL-3.0+).
