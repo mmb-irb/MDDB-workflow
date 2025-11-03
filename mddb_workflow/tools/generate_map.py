@@ -705,44 +705,49 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
     parsed_response = request_pdb_data(pdb_id, query)
     # Mine data
     uniprot_ids = []
+    # WARNING: Polymers do not come in the same order than in PDB
+    # WARNING: You will not know the entity number by enumerating them
     for polymer in parsed_response['polymer_entities']:
+        # Get the aminoacids sequence of this polymer (or chain)
+        entity = polymer.get('entity_poly', None)
+        sequence = entity.get('pdbx_seq_one_letter_code', None) if entity else None
+        if sequence:
+            # WARNING: some polymers/chains may have a "special" sequence
+            # It may combine one-letter code with 3-letter code in parenthesis for special aminoacids
+            # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
+            # e.g. 6ME2, entity 1 -> ... DRYLYI(YCM)HSLKYD ...
+            # We simply replace these special aminoacids by X
+            sequence = re.sub(r'\([0-9A-Z]{3}\)', 'X', sequence)
+        # Get the uniprot ids associated to this polymer (or chain)
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
-        # Get the uniprot
         uniprots = identifier.get('uniprot_ids', None)
-        # If there are not UniProts at all in this entity skip to the next
+        # If there are not UniProt ids in this entity then it may be no referable
+        # If we have a no referable entity then we must return an exception with its sequence
         if not uniprots:
-            # However, it may happen the the polymer organism is set as synthetic construct
-            # In this case we keep the sequence and return a no referable exception
+            # If this polymer, whatever it is, has not sequence then there is nothing we can do
+            if not sequence: continue
+            # Get the organisms
             organisms = polymer.get('rcsb_entity_source_organism', None)
-            if not organisms: raise ValueError('Missing organism')
+            # Some synthetic constructs may have not defined organisms at all
+            # e.g. 3H11, entity 3
+            if not organisms:
+                uniprot_ids.append( NoReferableException(sequence) )
+                continue
             # Get scientific names in lower caps since sometimes they are all upper caps
             scientific_names = set(
                 [ (organism.get('scientific_name') or '').lower() for organism in organisms ])
+            # If we have a synthetic construct then flag the sequence as no referable
             if 'synthetic construct' in scientific_names:
-                entity = polymer.get('entity_poly', None)
-                if not entity: raise ValueError(f'Missing entity in {pdb_id}')
-                sequence = entity.get('pdbx_seq_one_letter_code', None)
-                if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
-                # WARNING: A syntetic construct may have a "special" sequence
-                # It may combine one-letter code with 3-letter code in parenthesis for special aminoacids
-                # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
-                # We simply replace these special aminoacids by X
-                sequence = re.sub(r'\([0-9A-Z]{3}\)', 'X', sequence)
                 uniprot_ids.append( NoReferableException(sequence) )
                 continue
             # Check if the sequence of this chain may belong to an antibody
-            entity = polymer.get('entity_poly', None)
-            if not entity: continue
-            sequence = entity.get('pdbx_seq_one_letter_code', None)
-            if not sequence: continue
             print(' Could this be an antibody?')
             is_antibody = False
             for reference_sequence in REFERENCE_ANTIBODY_SEQUENCES:
                 if align(reference_sequence, sequence):
                     is_antibody = True
                     break
-            conclusion = f'  I would guess it {"is" if is_antibody else "is not"} an antibody'
-            print(conclusion)
+            print(f'  I guess it {"is" if is_antibody else "is not"} an antibody')
             # If so, the also set this chain as no referable since antibodies have no UniProt id
             if is_antibody:
                 uniprot_ids.append( NoReferableException(sequence) )
@@ -754,22 +759,23 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
         # See 5GY2 and 7E2Z labeled as chimeric entities and 6e67, which is not labeled likewise
         if len(uniprots) > 1:
             warn(f'Multiple UniProt ids in the same entity in {pdb_id} -> Is this a chimeric entity?')
-            entity = polymer.get('entity_poly', None)
-            if not entity: raise ValueError(f'Missing entity in {pdb_id}')
-            sequence = entity.get('pdbx_seq_one_letter_code', None)
-            if not sequence: raise ValueError(f'Missing sequence in {pdb_id}')
+            if not sequence: raise ValueError(f'Missing sequence with multiple UniProt ids in {pdb_id}')
             uniprot_ids.append( NoReferableException(sequence) )
             continue
+        # Normally, a polymer/chain will have one UniProt id only
         uniprot_id = uniprots[0]
         uniprot_ids.append(uniprot_id)
+    # Count how many UniProt ids we found
     actual_uniprot_ids = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == str ]
     if len(actual_uniprot_ids) > 0:
         print(f' UniProt ids for PDB id {pdb_id}: ' + ', '.join(actual_uniprot_ids))
     else: print(f' No UniProt ids were found for PDB id {pdb_id}')
+    # Count how many no referable sequences we found
     no_refs = [ uniprot_id for uniprot_id in uniprot_ids if type(uniprot_id) == NoReferableException ]
     no_refs_count = len(no_refs)
     if no_refs_count > 0:
         print(f' Also encountered {no_refs_count} no refereable sequences for PDB id {pdb_id}')
+    # Return them all
     return uniprot_ids
 
 # This function is used by the generate_metadata script
