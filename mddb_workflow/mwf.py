@@ -972,7 +972,7 @@ class MD:
     run_lipid_interactions_analysis = Task('linter', 'Membrane lipid-protein interactions analysis',
         lipid_interactions, { 'frames_limit': 100 })
     
-    run_lipid_interactions_analysis = Task('channels', 'Membrane channels analysis',
+    run_channels_analysis = Task('channels', 'Membrane channels analysis',
         channels, { 'frames_limit': 10 })
         
 
