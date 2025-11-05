@@ -716,16 +716,20 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
             # It may combine one-letter code with 3-letter code in parenthesis for special aminoacids
             # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
             # e.g. 6ME2, entity 1 -> ... DRYLYI(YCM)HSLKYD ...
+            # e.g. nucleic acids -> (DC)(DA)(DA)(DC)(DC)(DG)(DC)(DA)(DA)(DC)
             # We simply replace these special aminoacids by X
-            sequence = re.sub(r'\([0-9A-Z]{3}\)', 'X', sequence)
+            sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
         # Get the uniprot ids associated to this polymer (or chain)
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
         uniprots = identifier.get('uniprot_ids', None)
         # If there are not UniProt ids in this entity then it may be no referable
         # If we have a no referable entity then we must return an exception with its sequence
+        # Beware that nucleic acids also fall in this section
         if not uniprots:
             # If this polymer, whatever it is, has not sequence then there is nothing we can do
             if not sequence: continue
+            # Nueclic acid sequences should be all X at this point
+            if all(letter == 'X' for letter in sequence): continue
             # Get the organisms
             organisms = polymer.get('rcsb_entity_source_organism', None)
             # Some synthetic constructs may have not defined organisms at all
