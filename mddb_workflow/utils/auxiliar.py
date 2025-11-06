@@ -121,7 +121,7 @@ def recursive_transformer (target_object : dict | list | tuple, transformer : Op
         # Get he value type
         value_type = type(value)
         # If it is a dict or list then call the transformer recursively
-        if value_type in OBJECT_TYPES: clone[index_or_key] = recursive_transformer(value)
+        if value_type in OBJECT_TYPES: clone[index_or_key] = recursive_transformer(value, transformer)
         # If it is not an object type then apply the transformer to it
         else: clone[index_or_key] = transformer(value) if transformer else value
     # If it was a tuple then make the conversion now
@@ -139,7 +139,7 @@ def json_serializer (object : dict | list | tuple) -> dict | list | tuple:
             return f'{EXCEPTION_HEADER}{value}'
         # If the type is not among the ones we check then assume it is already serializable
         return value
-    object_clone =  recursive_transformer(object, serializer)
+    object_clone = recursive_transformer(object, serializer)
     return object_clone
 def json_deserializer (object : dict | list | tuple) -> dict | list | tuple:
     def deserializer (value):
