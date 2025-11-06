@@ -1899,6 +1899,9 @@ class Structure:
     def select_cg (self) -> 'Selection':
         """Select coarse grain atoms."""
         return Selection([ atom.index for atom in self.atoms if atom.element == CG_ATOM_ELEMENT ])
+    
+    def select_missing_bonds (self) -> 'Selection':
+        return Selection([ index for index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])
 
     def select_cartoon (self, include_terminals : bool = False) -> 'Selection':
         """Select cartoon representable regions for VMD.
@@ -2920,15 +2923,13 @@ class Structure:
     def find_ptms (self) -> Generator[dict, None, None]:
         """Find Post Translational Modifications (PTM) in the structure."""
         # Find bonds between protein and non-protein atoms
-        # First get all protein atoms
-        protein_selection = self.select_protein()
-        if not protein_selection:
-            return
+        # First get all protein atoms with bonds
+        protein_selection = self.select_protein() - self.select_missing_bonds()
+        if not protein_selection: return
         protein_atom_indices = set(protein_selection.atom_indices) # This is used later
         protein_outer_bonds = set(self.get_selection_outer_bonds(protein_selection))
         non_protein_selection = self.invert_selection(protein_selection)
-        if not non_protein_selection:
-            return
+        if not non_protein_selection: return
         non_protein_atom_indices = set(non_protein_selection.atom_indices)
         non_protein_atom_indices_bonded_to_protein = protein_outer_bonds.intersection(non_protein_atom_indices)
         # Get each residue bonded to the protein and based on its 'classification' set the name of the PTM
