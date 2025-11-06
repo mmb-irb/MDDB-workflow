@@ -23,7 +23,8 @@ def structure_corrector (
     register : 'Register',
     mercy : list[str],
     trust : list[str],
-    guess_bonds : bool
+    guess_bonds : bool,
+    ignore_bonds : bool,
 ) -> dict:
     """
     Analyze the structure looking for irregularities and then modify the structure to standarize the format.
@@ -82,7 +83,9 @@ def structure_corrector (
         must_check_stable_bonds,
         snapshots,
         structure,
-        guess_bonds
+        register,
+        guess_bonds,
+        ignore_bonds
     )
     # If safe bonds do not match structure bonds then we have to fix it
     def check_stable_bonds ():

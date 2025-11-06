@@ -524,6 +524,10 @@ run_parser_workflow_group.add_argument(
     "-gb", "--guess_bonds",
     action='store_true',
     help=project_init_help['guess_bonds'])
+run_parser_workflow_group.add_argument(
+    "-ib", "--ignore_bonds",
+    action='store_true',
+    help=project_init_help['ignore_bonds'])
 
 # Set a group for the selection options
 run_parser_selection_group = run_parser.add_argument_group('SELECTION OPTIONS')

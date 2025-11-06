@@ -1011,6 +1011,7 @@ class Project:
         interaction_cutoff : float = DEFAULT_INTERACTION_CUTOFF,
         interactions_auto : Optional[str] = None,
         guess_bonds : bool = False,
+        ignore_bonds : bool = False,
         sample_trajectory : Optional[int] = None,
     ):
         """
@@ -1097,6 +1098,8 @@ class Project:
                 Guess input interactions automatically. A VMD selection may be passed to limit guessed interactions to a specific subset of atoms.
             guess_bonds (bool):
                 Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.
+            ignore_bonds (bool):
+                Force the workflow to ignore atom bonds. This will result in many check-ins being skipped
             sample_trajectory (Optional[int]):
                 If passed, download the first 10 (by default) frames from the trajectory.
                 You can specify a different number by providing an integer value.
@@ -1220,6 +1223,7 @@ class Project:
         self.sample_trajectory = sample_trajectory
         self.interactions_auto = interactions_auto
         self.guess_bonds = guess_bonds
+        self.ignore_bonds = ignore_bonds
         # Set the inputs, where values from the inputs file will be stored
         self._inputs = None
 

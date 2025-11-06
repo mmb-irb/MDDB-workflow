@@ -368,7 +368,8 @@ def process_input_files (
         register = self.register,
         mercy = self.project.mercy,
         trust = self.project.trust,
-        guess_bonds = self.project.guess_bonds
+        guess_bonds = self.project.guess_bonds,
+        ignore_bonds = self.project.ignore_bonds,
     )
 
     # If the corrected output exists then use it

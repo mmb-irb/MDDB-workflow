@@ -1,7 +1,7 @@
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
 from mddb_workflow.utils.auxiliar import load_json, warn, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
-from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
+from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, MISSING_BONDS_FLAG
 from mddb_workflow.utils.vmd_spells import get_covalent_bonds
 from mddb_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count
@@ -255,7 +255,9 @@ def find_safe_bonds (
     must_check_stable_bonds : bool,
     snapshots : int,
     structure : 'Structure',
+    register : 'Register',
     guess_bonds : bool = False,
+    ignore_bonds : bool = False,
     # Optional file with bonds sorted according a new atom order
     resorted_bonds_file : Optional['File'] = None
 ) -> list[list[int]]:
@@ -263,6 +265,11 @@ def find_safe_bonds (
     First try to mine bonds from a topology files.
     If the mining fails then search for the most stable bonds.
     If we trust in stable bonds then simply return the structure bonds. """
+    # If bonds are to be ignored then set all bonds as missing bonds already
+    register.remove_warnings(MISSING_BONDS_FLAG)
+    if ignore_bonds:
+        register.add_warning(MISSING_BONDS_FLAG, 'Bonds were ignored')
+        return [ MISSING_BONDS for atom in range(structure.atom_count) ]
     # If we have a resorted file then use it
     # Note that this is very excepcional
     if resorted_bonds_file != None and resorted_bonds_file.exists:
@@ -279,6 +286,7 @@ def find_safe_bonds (
             return safe_bonds
     # If all bonds are in coarse grain then set all bonds "wrong" already
     if len(cg_selection) == structure.atom_count:
+        register.add_warning(MISSING_BONDS_FLAG, 'Bonds were missing')
         safe_bonds = [ MISSING_BONDS for atom in range(structure.atom_count) ]
         return safe_bonds
     # If failed to mine topology bonds then guess stable bonds

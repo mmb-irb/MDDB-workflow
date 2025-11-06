@@ -206,7 +206,8 @@ SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
 NOT_MATCHED_LIGANDS = 'notmatchedligands'
 
-# Set the different test flags
+# Set the different test and warning flags
+MISSING_BONDS_FLAG = 'nobonds'
 STABLE_BONDS_FLAG = 'stabonds'
 COHERENT_BONDS_FLAG = 'cohbonds'
 TRAJECTORY_INTEGRITY_FLAG = 'intrajrity'
