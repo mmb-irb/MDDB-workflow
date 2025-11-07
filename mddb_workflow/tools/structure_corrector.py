@@ -2,7 +2,7 @@ from os import remove
 from mddb_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
 from mddb_workflow.tools.get_bonds import get_excluded_atoms_selection
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frame
-from mddb_workflow.utils.auxiliar import InputError, TestFailure
+from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from mddb_workflow.utils.structures import Structure
@@ -68,13 +68,10 @@ def structure_corrector (
     # Unstable atom bonds ----------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
-    # Check if the structure is missing bonds
-    missing_any_bonds = structure.is_missing_any_bonds()
-
     # Set if stable bonds have to be checked
     # Note that we must not skip this even if the test already passed
     # It may be a corrected structure the one which passed the structure, while this structure comes from the raw input
-    must_check_stable_bonds = STABLE_BONDS_FLAG not in trust and not missing_any_bonds
+    must_check_stable_bonds = STABLE_BONDS_FLAG not in trust
 
     # Get safe bonds
     # Use topology bonds if possible
@@ -90,6 +87,11 @@ def structure_corrector (
         guess_bonds,
         ignore_bonds
     )
+
+    # Check if the structure is missing bonds
+    missing_any_bonds = any(bond == MISSING_BONDS for bond in safe_bonds)
+    if missing_any_bonds: must_check_stable_bonds = False
+
     # If safe bonds do not match structure bonds then we have to fix it
     def check_stable_bonds ():
         # Save the current structure bonds to further compare with the safe bonds
