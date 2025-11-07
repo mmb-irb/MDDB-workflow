@@ -68,10 +68,13 @@ def structure_corrector (
     # Unstable atom bonds ----------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # Check if the structure is missing bonds
+    missing_any_bonds = structure.is_missing_any_bonds()
+
     # Set if stable bonds have to be checked
     # Note that we must not skip this even if the test already passed
     # It may be a corrected structure the one which passed the structure, while this structure comes from the raw input
-    must_check_stable_bonds = STABLE_BONDS_FLAG not in trust
+    must_check_stable_bonds = STABLE_BONDS_FLAG not in trust and not missing_any_bonds
 
     # Get safe bonds
     # Use topology bonds if possible
@@ -324,9 +327,6 @@ def structure_corrector (
     # ------------------------------------------------------------------------------------------
     # Merged residues ------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
-
-    # Check if the structure is missing bonds
-    missing_any_bonds = structure.is_missing_any_bonds()
 
     # There may be residues which contain unconnected (unbonded) atoms. They are not allowed.
     # They may come from a wrong parsing and be indeed duplicated residues.
