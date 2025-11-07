@@ -562,6 +562,9 @@ class Residue:
             return self._classification
         # If this is a CG residue then we can not classify it
         if self.is_cg(): return self.get_classification_by_name()
+        # If this residue is missing bonds then we can not classify it
+        # Some parts of the logic like the find_rings logic rely on bonds
+        if self.is_missing_any_bonds(): return self.get_classification_by_name()
         # If we dont have a value then we must classify the residue
         # -------------------------------------------------------------------------------------------------------
         # Ions are single atom residues
@@ -2839,6 +2842,9 @@ class Structure:
 
     def find_rings (self, max_ring_size : int, selection : Optional[Selection] = None) -> list[ list[Atom] ]:
         """Find rings with a maximum specific size or less in the structure and yield them as they are found."""
+        # Make sure the selection does not include rgions without bonds
+        if selection & self.select_missing_bonds():
+            raise RuntimeError('The find rings logic can not be used when we are missing bonds')
         found_rings = []
         selected_atom_indices = selection.atom_indices if selection else None
         # Find rings recursively
