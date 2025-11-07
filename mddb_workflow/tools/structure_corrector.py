@@ -181,6 +181,7 @@ def structure_corrector (
 
     # Set if coherent bonds have to be checked
     must_check_coherent_bonds = COHERENT_BONDS_FLAG not in trust
+    if missing_any_bonds: must_check_coherent_bonds = False
 
     # If this analysis has been already passed then we skip the process
     if register.tests.get(COHERENT_BONDS_FLAG, None) == True:
