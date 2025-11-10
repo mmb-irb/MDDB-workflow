@@ -26,14 +26,13 @@ def get_inchikeys (
         skip_class (set): A set of residue classifications to skip. Defaults to {'ion', 'solvent'}.
 
     Returns:
-        key_2_name (dict): A dictionary where keys are InChI keys and values are dictionaries containing:
+        dict: A dictionary where keys are InChI keys and values are dictionaries containing:
             - 'inchi' (str): The InChI string for the residue
             - 'resindices' (list): A list of all residue indices with this InChI key
             - 'fragments' (list[list]): Lists of residue indices that are connected as a single group
             - 'frag_len' (int): Length of the fragments. 1 if no fragments are present.
             - 'resname' (set): Set of residue names associated with this InChI key
             - 'classification' (set): Set of residue classifications for this InChI key
-        residx_2_key (dict): A dictionary mapping residue indices to their corresponding InChI keys.
     
     Notes:
         The function also performs consistency checks, warning if multiple residue names 
@@ -80,44 +79,40 @@ def get_inchikeys (
         results = pool.map(residue_to_inchi, tasks)
 
     # 2) Process results and build dictionaries
-    key_2_name = {} # To see if different name for same residue
+    key_2_data = {} # To see if different name for same residue
     name_2_key = {} # To see if different residues under same name
-    residx_2_key = {}  # A mapping from residue index to InChI key
     for (inchikey, inchi, resindices) in results:
 
         # If key don't existe we create the default entry with info that is only put once
-        if inchikey not in key_2_name:
-            key_2_name[inchikey] = {'inchi': inchi,
+        if inchikey not in key_2_data:
+            key_2_data[inchikey] = {'inchi': inchi,
                                     'resindices': [],
                                     'fragments': [], # For glucolipids
                                     'resname': set(), 
                                     'classification': set()
                                     }
         # Add residue index to the list
-        key_2_name[inchikey]['resindices'].extend(resindices)
+        key_2_data[inchikey]['resindices'].extend(resindices)
         # Add residue name to the list. For multi residues we join the names
         resname = '-'.join(sorted([residues[index].name for index in resindices]))
-        key_2_name[inchikey]['resname'].add(resname)
+        key_2_data[inchikey]['resname'].add(resname)
         # Add residue class to the list
         if len(resindices) > 1:
             classes = tuple(set([residues[index].classification for index in resindices]))
-            key_2_name[inchikey]['classification'].add(classes)
+            key_2_data[inchikey]['classification'].add(classes)
             # Glucolipids saved the groups of residues the form a 'fragment' to solve a 
             # problem with FATSLiM later (ex: A01IR, A01J5)
-            key_2_name[inchikey]['fragments'].append(list(map(int, resindices)))
+            key_2_data[inchikey]['fragments'].append(list(map(int, resindices)))
         else:
-            key_2_name[inchikey]['classification'].add(residues[resindices[0]].classification)
+            key_2_data[inchikey]['classification'].add(residues[resindices[0]].classification)
 
         # Incorrect residue name, estereoisomers, lose of atoms...
         if resname not in name_2_key:
             name_2_key[resname] = []
         name_2_key[resname].append(inchikey)
-        # Add the InChI key to the residue index mapping
-        for resindex in resindices:
-            residx_2_key[resindex] = inchikey
     
     # 3) Check data coherence
-    for inchikey, data in key_2_name.items():
+    for inchikey, data in key_2_data.items():
         # Check if there are multiple names for the same InChI key 
         if len(data['resname']) > 1:
             warn('Same residue with different names:\n'
@@ -143,20 +138,20 @@ def get_inchikeys (
         # Count the number of fragments 
         for key in inchikeys:
             # If there are not fragments, we use the number of residues
-            counts[key] = (key_2_name[key]["frag_len"] 
-                           if key_2_name[key]["frag_len"] > 1 
-                           else len(key_2_name[key]["resindices"]))
+            counts[key] = (key_2_data[key]["frag_len"] 
+                           if key_2_data[key]["frag_len"] > 1 
+                           else len(key_2_data[key]["resindices"]))
         # Format the counts for printing
         key_counts = '\n'.join([f'\t{key}: {counts[key]: >4}' for key in inchikeys])
         warn(f'The fragment {name} has more than one InChi key:\n'
                 f'{key_counts}')
     
     # Convert sets to lists for JSON serialization
-    for inchikey in key_2_name:
-        key_2_name[inchikey]['resname'] = list(key_2_name[inchikey]['resname'])
-        key_2_name[inchikey]['classification'] = list(key_2_name[inchikey]['classification'])
+    for inchikey in key_2_data:
+        key_2_data[inchikey]['resname'] = list(key_2_data[inchikey]['resname'])
+        key_2_data[inchikey]['classification'] = list(key_2_data[inchikey]['classification'])
 
-    return { 'key_2_name': key_2_name, 'residx_2_key': residx_2_key }
+    return key_2_data
 
 def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str, int]:
     """

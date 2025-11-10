@@ -28,7 +28,7 @@ def generate_lipid_references(inchikeys: dict,
 
     lipid_references = []
     lipid_map = []
-    for inchikey, res_data in inchikeys['key_2_name'].items():
+    for inchikey, res_data in inchikeys.items():
         SL_data = is_in_swisslipids(inchikey)
         LM_data = is_in_LIPID_MAPS(inchikey)
         # If we dont find it, we try without stereochemistry

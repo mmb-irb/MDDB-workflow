@@ -485,7 +485,9 @@ def generate_ligand_mapping (
     # LORE AGUS: con los que están en el PDB, por lo que no se hace ningún análisis sobre estos (y se debería)
     # LORE AGUS: ahora se intenta buscar su pubchem ID para extraer la información a partir del inchikey (da menos problemas que el smiles) y se hacen los análisis pertinentes. 
     # AGUS: si no se puede extraer información de estos porque el inchikey no funciona, se muestra la información más básica posible y se genera una referencia vacía (será problemático)
-
+    residx_2_inchikey = {resid: inchikey 
+                         for inchikey, data in inchikeys.items() 
+                         for resid in data['resindices']}
     # Obtain a list of the possible residues in the structure that are not either protein/nucleic/water/lipid or matched ligands
     for residue in structure.residues:
         # Skip solvent, lipid or ions
@@ -512,10 +514,10 @@ def generate_ligand_mapping (
             'match': { 'ref': { 'pubchem': None } } 
         }
 
-        inchikey = inchikeys['residx_2_key'].get(residue.index, None)
+        inchikey = residx_2_inchikey[residue.index]
         # If the InChIKey is not None then try to obtain the PubChem CID
         if inchikey:
-            inchi = inchikeys['key_2_name'][inchikey]['inchi']
+            inchi = inchikeys[inchikey]['inchi']
             ligand_data['inchikey'] = inchikey
             if cid := inchikey_2_pubchem(inchikey, inchi):
                 ligand_data = obtain_ligand_data_from_pubchem( {'pubchem': cid} )
