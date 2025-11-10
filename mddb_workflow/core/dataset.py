@@ -124,15 +124,20 @@ class Dataset:
             if log_files:
                 log_files.sort()
                 log_files = [log_files[-1]]  # Take the most recent one
+                print(f"Reading log file: {log_files}")
                 with open(log_files[0], 'r') as f:
-                    last_line = f.read().splitlines()[-1].strip()
-                    if len(last_line) > 80:
-                        last_line = last_line[:80]+'...'
+                    lines = f.read().splitlines()
+                    if lines:
+                        last_line = lines[-1].strip()
+                        if len(last_line) > 80:
+                            last_line = last_line[:80]+'...'
+                    else:
+                        last_line = ''
 
                 if last_line == 'Done!':
                     state, message, log_file = 'done', last_line, log_files[0]
                 else:
-                    state, message, log_file = 'error', last_line, log_files[0]
+                    state, message, log_file = 'error', last_line if last_line else 'Empty log file', log_files[0]
             else:
                 state, message, log_file = 'not_run', 'No output log available', None
 
