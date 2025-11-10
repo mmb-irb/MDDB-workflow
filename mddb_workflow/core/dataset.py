@@ -113,6 +113,8 @@ class Dataset:
         Returns:
             pd.DataFrame: Index is project directory; columns: state, message, log_file, error_log_file.
         """
+        if self._status is not None:
+            return self._status
 
         rows = []
         for project_dir in self.project_directories:
@@ -209,6 +211,7 @@ class Dataset:
         """
         Returns the status DataFrame with clickable log file links.
         """
+        self._status = None  # Force reload
         df = self.status.copy()
         
         # Create clickable links for log files
