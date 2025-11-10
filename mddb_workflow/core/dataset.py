@@ -124,7 +124,6 @@ class Dataset:
             if log_files:
                 log_files.sort()
                 log_files = [log_files[-1]]  # Take the most recent one
-                print(f"Reading log file: {log_files}")
                 with open(log_files[0], 'r') as f:
                     lines = f.read().splitlines()
                     if lines:

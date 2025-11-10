@@ -890,7 +890,7 @@ dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, 
 dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
 
 # Dataset status subcommand
-dataset_status_parser = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter,
+dataset_status_parser = dataset_subparsers.add_parser("groups", formatter_class=CustomHelpFormatter,
     help="Show the status of projects in a dataset, grouped by their last log message.",
     parents=[common_parser])
 dataset_status_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
