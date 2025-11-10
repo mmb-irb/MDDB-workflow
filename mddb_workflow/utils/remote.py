@@ -9,9 +9,12 @@ class Remote:
     def __init__(self, database_url: str, accession: str):
         # Save input arguments
         self.database_url = database_url
+        # If the URL already includes /rest/... then clean this part away
+        if '/rest' in self.database_url:
+            self.database_url = self.database_url.split('/rest')[0] + '/'
         self.accession = accession
         # Set the URL
-        self.url = f'{database_url}rest/current/projects/{accession}'
+        self.url = f'{self.database_url}rest/current/projects/{accession}'
         # Set internal variables
         self._project_data = None
         self._available_files = None
@@ -32,7 +35,7 @@ class Remote:
             # Try to provide comprehensive error logs depending on the error
             # If project was not found
             if error.code == 404:
-                raise InputError(f'Remote project "{self.accession}" not found')
+                raise InputError(f'Remote project "{self.accession}" not found in {self.database_url}')
             # If we don't know the error then simply say something went wrong
             raise Exception('Error when downloading project data: ' + self.url, 'with error: ' + str(error))
         except:
