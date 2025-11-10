@@ -234,7 +234,7 @@ def structure_corrector (
             # If we run out of letters there may be some problematic chain configuration
             # In this cases we cannot respect the original chains
             if new_letter == None:
-                warn('No more letters in the alphabel to fill missing chains -> All chains will be assigned from scratch')
+                warn('No more letters in the alphabet to fill missing chains -> All chains will be assigned from scratch')
                 structure.auto_chainer()
             else:
                 warn(f'Some chains are missing -> Unchained regions will be chained as {new_letter}')

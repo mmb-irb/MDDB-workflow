@@ -13,9 +13,7 @@ def lipid_interactions (
     cg_residues: list[int],
     snapshots : int,
     frames_limit: int = 100):
-    """
-        Lipid-protein interactions analysis.
-    """
+    """ Lipid-protein interactions analysis. """
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
 
     # Check if we're dealing with coarse-grain simulations

@@ -5,6 +5,7 @@ import math
 import pytraj
 import MDAnalysis
 import numpy as np
+import networkx as nx
 from bisect import bisect
 
 from mddb_workflow.utils.file import File
@@ -759,7 +760,22 @@ class Residue:
 
     def find_rings (self, max_ring_size : int) -> list[ list[Atom] ]:
         """Find rings in the residue."""
-        return self.structure.find_rings(max_ring_size, selection=self.get_selection())
+        # Create graph and add edges in one pass
+        G = nx.Graph()
+        G.add_edges_from(
+            (atom.index, bonded_atom) 
+            for atom in self.atoms 
+            for bonded_atom in atom.bonds
+        )
+        # Get cycles and convert to atoms in one comprehension
+        cycles = list(nx.simple_cycles(G, max_ring_size))
+        # Create a mapping from structure atom indices to residue-local atom indices
+        residue_atom_indices = {atom.index: i for i, atom in enumerate(self.atoms)}
+        # Return the rings as lists of Atom objects
+        return [
+            [self.atoms[residue_atom_indices[i]] for i in cycle]
+            for cycle in cycles
+        ]
     
     def split (self,
         first_residue_atom_indices : list[int],
@@ -2845,62 +2861,10 @@ class Structure:
 
     def find_rings (self, max_ring_size : int, selection : Optional[Selection] = None) -> list[ list[Atom] ]:
         """Find rings with a maximum specific size or less in the structure and yield them as they are found."""
-        # Make sure the selection does not include rgions without bonds
+        # Make sure the selection does not include regions without bonds
         if selection & self.select_missing_bonds():
             raise RuntimeError('The find rings logic can not be used when we are missing bonds')
-        found_rings = []
-        selected_atom_indices = selection.atom_indices if selection else None
-        # Find rings recursively
-        def find_rings_recursive (atom_path : list[Atom]) -> Generator[ tuple[Atom], None, None ]:
-            # Get the current atom to continue the followup: the last atom
-            current_atom = atom_path[-1] # Note that the list MUST always have at least 1 atom
-            # Get bonded atoms to continue the path
-            followup_atoms = current_atom.get_bonded_atoms()
-            # Hydrogens are discarded since they have only 1 bond and thus they can only lead to a dead end
-            followup_atoms = [ atom for atom in followup_atoms if atom.element != 'H' ]
-            # In case there is a selection, check followup atoms not to be in the selection
-            if selected_atom_indices:
-                followup_atoms = [ atom for atom in followup_atoms if atom.index in selected_atom_indices ]
-            # Remove the previous atom to avoid going back
-            previous_atom = atom_path[-2] if len(atom_path) > 1 else None
-            if previous_atom:
-                # HARDCODE: This is a problem which should be studied and fixed
-                # DANI: I temporatily bypass the problem to make it on time to a meeting
-                if previous_atom not in followup_atoms: return
-                followup_atoms.remove(previous_atom)
-            # Iterate over the following bonded atoms
-            for followup_atom in followup_atoms:
-                # Check if the followup atom is in the path
-                path_index = next(( index for index, atom in enumerate(atom_path) if atom == followup_atom ), None)
-                # If so, we have found a ring
-                if path_index != None:
-                    ring = atom_path[path_index:]
-                    ring.sort(key=lambda x: x.index)
-                    yield tuple(ring)
-                    continue
-                # If the ring size is reached, we can not continue
-                if len(atom_path) == max_ring_size: continue
-                # Otherwise, keep searching
-                new_path = atom_path + [followup_atom]
-                for ring in find_rings_recursive(atom_path=new_path):
-                    yield ring
-        # Find a starting atom and run the recursive logic
-        candidate_atom_indices = selected_atom_indices if selected_atom_indices else range(self.atom_count)
-        for candidate_atom_index in candidate_atom_indices:
-            candidate_atom = self.atoms[candidate_atom_index]
-            # It must be heavy atom
-            if len(candidate_atom.bonds) < 2: continue
-            # It must not be a dead end already
-            bonded_atoms = candidate_atom.get_bonded_atoms()
-            bonded_atoms = [ atom for atom in bonded_atoms if len(atom.bonds) >= 2 ]
-            # In case there is a selection, check followup atoms not to be in the selection
-            if selected_atom_indices:
-                bonded_atoms = [ atom for atom in bonded_atoms if atom.index in selected_atom_indices ]
-            for ring in find_rings_recursive(atom_path=[candidate_atom]):
-                found_rings.append(ring)
-        # Get unique rings
-        unique_rings = set(found_rings)
-        return list(unique_rings)
+
     
     def get_selection_outer_bonds (self, selection : Selection) -> list[int]:
         """Given an atom selection, get all bonds between these atoms and any other atom in the structure.
