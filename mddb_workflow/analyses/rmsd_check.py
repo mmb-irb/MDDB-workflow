@@ -157,7 +157,7 @@ def check_trajectory_integrity (
                 # If we are no long bypassing frist frames then outliers mean the test has failed
                 # But don't kill the check just yet
                 if outliers_count < 4:
-                    print(f' FAIL: Sudden RMSD jump if fragment "{fragment_name}" between frames {i} and {i+1} (z score = {round_to_hundredths(z_score)})')
+                    print(f' FAIL: Sudden RMSD jump in fragment "{fragment_name}" between frames {i} and {i+1} (z score = {round_to_hundredths(z_score)})')
                 if outliers_count == 4:
                     print(' etc...')
                 outliers_count += 1
