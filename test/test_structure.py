@@ -64,7 +64,7 @@ class TestStructure:
         """Test chain-related functions in the project"""
         chain: structures.Chain = structure.chains[0]
         print(chain)
-        chain.set_residues(structure.residues[:5])
+        chain.set_residues(structure.residues)
         chain.classification
         chain.set_classification('protein')
         chain.get_selection()
