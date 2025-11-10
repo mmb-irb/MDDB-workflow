@@ -938,6 +938,9 @@ class Chain:
                 raise ValueError(f'Residue {new_residue} is not set in the structure')
             new_residue_indices.append(new_residue_index)
         self.set_residue_indices(new_residue_indices)
+        # Set the new residues chain index to this chain index
+        for residue in new_residues:
+            residue.chain_index = self.index
     residues: list['Residue'] = property(get_residues, set_residues, None, "The residues in this chain")
 
     def add_residue (self, residue : 'Residue'):
