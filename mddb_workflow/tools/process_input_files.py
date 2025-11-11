@@ -471,15 +471,3 @@ def process_input_files (
         # Note that a broken symlink does not 'exists'
         if removable_file.exists or removable_file.is_symlink():
             removable_file.remove()
-
-    # We must leave something in the directory
-    # Otherwise the task will find out it is empty and will delete it
-    # And we don't want to delete it or it will be done again in the next run
-    # To solve this leave some symbolic file
-    if all(self.register.tests.values()):
-        manifest_filepath = f'{output_directory}/manifest.txt'
-        with open(manifest_filepath, 'w') as file:
-            file.write('Input files were processed sucessfully.\n' +
-                'Intermediate files were removed to save space.\n'
-                'Please do not remove this file\n')
-            

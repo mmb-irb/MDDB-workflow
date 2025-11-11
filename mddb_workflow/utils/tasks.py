@@ -5,7 +5,7 @@ from inspect import getfullargspec
 import time
 
 from mddb_workflow.utils.arg_cksum import get_cksum_id
-from mddb_workflow.utils.auxiliar import is_directory_empty, safe_getattr
+from mddb_workflow.utils.auxiliar import safe_getattr
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
@@ -163,7 +163,7 @@ class Task:
         if writes_output_dir:
             # Set the output directory path
             incomplete_output_directory = parent.pathify(INCOMPLETE_PREFIX + self.flag)
-            final_output_directory = incomplete_output_directory.replace(INCOMPLETE_PREFIX, '')
+            final_output_directory = parent.pathify(self.flag)
             # Add it to the processed args
             processed_args[OUTPUT_DIRECTORY_ARG] = incomplete_output_directory
             # Remove the expected argument from the list
@@ -255,11 +255,13 @@ class Task:
         if self.use_cache: parent.cache.update(self.cache_output_key, cache_output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
-        # As a brief cleanup, if the output directory is empty at the end, then remove it
-        # Otheriwse, change the incomplete directory name to its final name
+        # Change the incomplete directory name to its final name
+        # We do not remove the directory if it is empty anymore
+        # The empty directory stands as a proof that the task was run successfully
+        # Thus its existance prevents the task to be run again further
+        # Note that some tasks clean their own intermediate steps to save disk (e.g. inpro)
         if writes_output_dir and exists(incomplete_output_directory):
-            if is_directory_empty(incomplete_output_directory): rmtree(incomplete_output_directory)
-            else: rename(incomplete_output_directory, final_output_directory)
+            rename(incomplete_output_directory, final_output_directory)
         # Now return the function result
         return output
 
