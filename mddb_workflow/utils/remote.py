@@ -23,7 +23,7 @@ class Remote:
 
     # Get project data
     # This is only used to make sure the project exists by now
-    def get_project_data(self):
+    def get_project_data (self):
         # Return the internal value if we already have it
         if self._project_data != None:
             return self._project_data
@@ -40,6 +40,11 @@ class Remote:
             raise Exception('Error when downloading project data: ' + self.url, 'with error: ' + str(error))
         except:
             raise Exception('Something went wrong when requesting project data: ' + self.url, 'with error: ' + str(error))
+
+    # Number of snapshots in the remote trajectory
+    def get_snaphsots (self):
+        return self._project_data['metadata']['mdFrames']
+    snapshots = property(get_snaphsots, None, None, "Number of snapshots in the remote trajectory (read only)")
 
     # Get available files in the remove project
     def get_available_files (self):

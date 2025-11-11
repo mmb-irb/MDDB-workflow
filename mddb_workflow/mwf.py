@@ -52,6 +52,7 @@ from mddb_workflow.tools.remove_trash import remove_trash
 from mddb_workflow.tools.get_screenshot import get_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files
 from mddb_workflow.tools.provenance import produce_provenance
+from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
 # Import local analyses
 from mddb_workflow.analyses.rmsds import rmsds
@@ -432,7 +433,12 @@ class MD:
         for trajectory_file in self._input_trajectory_files:
             # If this is the main trajectory (the usual one) then use the dedicated endpoint
             if trajectory_file.filename == TRAJECTORY_FILENAME:
-                frame_selection = f'1:{self.project.sample_trajectory}:1' if self.project.sample_trajectory else None
+                frame_selection = None
+                if self.project.sample_trajectory:
+                    remote_frames = self.remote.snapshots
+                    maximum_desired_frames = self.project.sample_trajectory
+                    step, final_frames = calculate_frame_step(remote_frames, maximum_desired_frames)
+                    frame_selection = f'1:{remote_frames}:{step}'
                 self.remote.download_trajectory(trajectory_file, frame_selection=frame_selection, format='xtc')
             # Otherwise, download it by its filename
             else:
