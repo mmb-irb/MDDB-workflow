@@ -135,6 +135,35 @@ def add_lipid_references(key_2_data: dict[str, InChIKeyData]) -> set[str]:
     return lipid_inchikeys
 
 
+@lru_cache(maxsize=None)
+def inchikey_2_pubchem(inchikey: str, inchi) -> Optional[str]:
+    """Given an InChIKey, get the PubChem CID."""
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
+    r = requests.get(url)
+    if r.ok:
+        data = r.json()
+        return str(data['IdentifierList']['CID'][0])
+    # Try PubChem standardization service to write things like the bonds from aromatic rings in the same order
+    # You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8
+    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
+    payload = {'inchi': inchi}
+    r = requests.post(url, data=payload)
+    if r.ok:
+        data = r.json()
+        for compound in data['PC_Compounds']:
+            if compound['id']['id']['cid']:
+                return str(compound['id']['id']['cid'])
+    warn(f"Failed to fetch CID for InChIKey {inchikey}: {r.status_code} {r.reason}")
+    return None
+
+
+def add_pubchem_references(key_2_data: dict[str, InChIKeyData]) -> None:
+    """Add PubChem CID information to InChIKeyData objects."""
+    for inchikey, res_data in key_2_data.items():
+        if cid := inchikey_2_pubchem(inchikey, res_data.inchi):
+            res_data.pubchem_cid = cid
+
+
 def get_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
@@ -269,6 +298,8 @@ def get_inchikeys(
 
     # Add lipid-specific data to key_2_data
     lipid_inchikeys = add_lipid_references(key_2_data)
+    # Add PubChem CID data to key_2_data
+    add_pubchem_references(key_2_data)
 
     # Build InChI key references and map from enriched data
     inchikey_references = []
@@ -279,6 +310,7 @@ def get_inchikeys(
             'inchi': res_data.inchi,
             'swisslipids': getattr(res_data, 'swisslipids', None),
             'lipidmaps': getattr(res_data, 'lipidmaps', None),
+            'pubchem_cid': getattr(res_data, 'pubchem_cid', None),
         })
         inchikey_map[inchikey] = {
             'name': list(res_data.resname)[0],
@@ -286,6 +318,7 @@ def get_inchikeys(
             'residue_indices': list(map(int, res_data.resindices)),
             'fragments': res_data.fragments,
             'is_lipid': inchikey in lipid_inchikeys,
+            'pubchem_cid': getattr(res_data, 'pubchem_cid', None),
             'match': {
                 'ref': {'inchikey': inchikey}
             }

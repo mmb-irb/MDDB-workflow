@@ -195,7 +195,7 @@ def prepare_project_metadata (
         'CUSTOMS': input_customs,
         'ORIENTATION': input_orientation,
         'PTM': ptm_names,
-        'MULTIMERIC' : input_multimeric,
+        'MULTIMERIC': input_multimeric,
         'COLLECTIONS': collections,
         'WARNINGS': warnings,
     }
