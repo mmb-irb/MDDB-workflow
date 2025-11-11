@@ -546,12 +546,12 @@ inputs_parser = subparsers.add_parser("inputs",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser]
 )
-
 # Chose the editor in advance
 inputs_parser.add_argument(
     "-ed", "--editor",
     choices=[*AVAILABLE_TEXT_EDITORS.values(), 'none'],
     help="Set the text editor to modify the inputs file")
+
 
 # The convert command
 convert_parser = subparsers.add_parser("convert",
@@ -568,85 +568,59 @@ convert_parser_args = [
 for flags, kwargs in convert_parser_args:
     convert_parser.add_argument(*flags, **kwargs)
 
+
 # The filter command
 filter_parser = subparsers.add_parser("filter",
     help="Filter atoms in a structure and/or a trajectory\n",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
+filter_parser_args = [
+    (["-is", "--input_structure"], {'required': True, 'help': "Path to input structure file"}),
+    (["-os", "--output_structure"], {'help': "Path to output structure file"}),
+    (["-it", "--input_trajectory"], {'help': "Path to input trajectory file"}),
+    (["-ot", "--output_trajectory"], {'help': "Path to output trajectory file"}),
+    (["-sel", "--selection_string"], {'help': "Atom selection"}),
+    (["-syn", "--selection_syntax"], {'default': 'vmd', 'help': "Atom selection syntax (vmd by default)"}),
+]
+for flags, kwargs in filter_parser_args:
+    filter_parser.add_argument(*flags, **kwargs)
 
-filter_parser.add_argument(
-    "-is", "--input_structure", required=True,
-    help="Path to input structure file")
-filter_parser.add_argument(
-    "-os", "--output_structure",
-    help="Path to output structure file")
-filter_parser.add_argument(
-    "-it", "--input_trajectory",
-    help="Path to input trajectory file")
-filter_parser.add_argument(
-    "-ot", "--output_trajectory",
-    help="Path to output trajectory file")
-filter_parser.add_argument(
-    "-sel", "--selection_string",
-    help="Atom selection")
-filter_parser.add_argument(
-    "-syn", "--selection_syntax", default='vmd',
-    help="Atom selection syntax (vmd by default)")
 
 # The subset command
 subset_parser = subparsers.add_parser("subset",
     help="Get a subset of frames from the current trajectory",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
-subset_parser.add_argument(
-    "-is", "--input_structure", required=True,
-    help="Path to input structure file")
-subset_parser.add_argument(
-    "-it", "--input_trajectory",
-    help="Path to input trajectory file")
-subset_parser.add_argument(
-    "-ot", "--output_trajectory",
-    help="Path to output trajectory file")
-subset_parser.add_argument(
-    "-start", "--start", type=int, default=0,
-    help="Start frame (0-based)")
-subset_parser.add_argument(
-    "-end", "--end", type=int, default=None,
-    help="End frame (0-based)")
-subset_parser.add_argument(
-    "-step", "--step", type=int, default=1,
-    help="Frame step")
-subset_parser.add_argument(
-    "-skip", "--skip", nargs='*', type=int, default=[],
-    help="Frames to be skipped (0-based)")
-subset_parser.add_argument(
-    "-fr", "--frames", nargs='*', type=int, default=[],
-    help="Frames to be returned (0-based). Input frame order is ignored as original frame order is conserved.")
+subset_parser_args = [
+    (["-is", "--input_structure"], {'required': True, 'help': "Path to input structure file"}),
+    (["-it", "--input_trajectory"], {'help': "Path to input trajectory file"}),
+    (["-ot", "--output_trajectory"], {'help': "Path to output trajectory file"}),
+    (["-start", "--start"], {'type': int, 'default': 0, 'help': "Start frame (0-based)"}),
+    (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based)"}),
+    (["-step", "--step"], {'type': int, 'default': 1, 'help': "Frame step"}),
+    (["-skip", "--skip"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be skipped (0-based)"}),
+    (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be returned (0-based). Input frame order is ignored as original frame order is conserved."}),
+]
+for flags, kwargs in subset_parser_args:
+    subset_parser.add_argument(*flags, **kwargs)
+
 
 # The chainer command
 chainer_parser = subparsers.add_parser("chainer",
     help="Edit structure (pdb) chains",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
-chainer_parser.add_argument(
-    "-is", "--input_structure", required=True,
-    help="Path to input structure file")
-chainer_parser.add_argument(
-    "-os", "--output_structure", default='chained.pdb',
-    help="Path to output structure file")
-chainer_parser.add_argument(
-    "-sel", "--selection_string",
-    help="Atom selection (the whole structure by default)")
-chainer_parser.add_argument(
-    "-syn", "--selection_syntax", default='vmd',
-    choices=Structure.SUPPORTED_SELECTION_SYNTAXES,
-    help="Atom selection syntax (VMD syntax by default)")
-chainer_parser.add_argument(
-    "-let", "--letter",
-    help="New chain letter (one letter per fragment by default)")
-chainer_parser.add_argument(
-    "-whfr", "--whole_fragments", type=bool, default=False,
-    help="Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains.")
+chainer_parser_args = [
+    (["-is", "--input_structure"], {'required': True, 'help': "Path to input structure file"}),
+    (["-os", "--output_structure"], {'default': 'chained.pdb', 'help': "Path to output structure file"}),
+    (["-sel", "--selection_string"], {'help': "Atom selection (the whole structure by default)"}),
+    (["-syn", "--selection_syntax"], {'default': 'vmd', 'choices': Structure.SUPPORTED_SELECTION_SYNTAXES, 'help': "Atom selection syntax (VMD syntax by default)"}),
+    (["-let", "--letter"], {'help': "New chain letter (one letter per fragment by default)"}),
+    (["-whfr", "--whole_fragments"], {'type': bool, 'default': False, 'help': "Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains."}),
+]
+for flags, kwargs in chainer_parser_args:
+    chainer_parser.add_argument(*flags, **kwargs)
+
 
 # The NASSA commands
 nassa_parser = subparsers.add_parser("nassa", formatter_class=CustomHelpFormatter,
