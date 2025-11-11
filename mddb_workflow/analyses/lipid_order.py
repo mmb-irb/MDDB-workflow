@@ -14,8 +14,7 @@ def lipid_order(
         cg_residues: list[int],
         snapshots: int,
         frames_limit: int = 100):
-    """
-    Calculate lipid order parameters for membranes.
+    """Calculate lipid order parameters for membranes.
     This function computes the order parameter (S) for lipid acyl chains, defined as:
     S = 0.5*(3*<cos²θ> - 1)
     where θ is the angle between the C-H bond and the membrane normal (z-axis).
@@ -23,12 +22,13 @@ def lipid_order(
     Notes:
     - For non-cholesterol lipids, analyzes all acyl chains separately.
     - For cholesterol, uses carbon atoms bonded to hydrogen.
-    - The order parameter is calculated for each carbon atom in the chain.
+    - The order parameter is calculated for each carbon atom in the chains.
+
     """
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping lipid order analysis')
         return
-    if len(cg_residues)>0:
+    if len(cg_residues) > 0:
         # RUBEN: se puede hacer con gorder pero hace falta topology con bonds
         print('-> Skipping lipid order analysis. Not implemented for CG models')
         return
@@ -37,7 +37,7 @@ def lipid_order(
 
     order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
-    for ref in lipid_map:
+    for ref in lipid_map.values():
         inchikey = ref['match']['ref']['inchikey']
         # Take the first residue of the reference
         res = universe.residues[ref['residue_indices'][0]]
@@ -72,9 +72,9 @@ def lipid_order(
                 n += 1
             order_parameters = 1.5 * \
                 np.array([costheta_sums[C_name].mean()
-                         for C_name in C_names])/n - 0.5
+                         for C_name in C_names]) / n - 0.5
             serrors = 1.5 * np.array([costheta_sums[C_name].std()
-                                     for C_name in C_names])/n
+                                     for C_name in C_names]) / n
             order_parameters_dict[inchikey][str(chain_idx)] = {
                 'atoms': C_names,
                 'avg': order_parameters.tolist(),
@@ -85,22 +85,19 @@ def lipid_order(
 
 
 def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list[list[int]]:
-    """
-    Finds all groups of connected Carbon atoms within a residue, including cyclic structures.
+    """Find all groups of connected Carbon atoms within a residue, including cyclic structures.
 
-    Parameters
-    ----------
-    residue : MDAnalysis.core.groups.Residue
-        The residue to analyze
+    Args:
+    residue (MDAnalysis.core.groups.Residue): The residue to analyze
 
-    Returns
-    -------
-    list
-        A list of lists, where each inner list contains atom indices of 
-        connected Carbon atoms forming a distinct group
+    Returns:
+        list
+            A list of lists, where each inner list contains atom indices of
+            connected Carbon atoms forming a distinct group
+
     """
     def explore_carbon_group(start_atom, visited):
-        """Helper function to explore a connected group of carbons"""
+        """Explore a connected group of carbons."""
         to_visit = [start_atom]
         group = set()
         while to_visit:
@@ -137,15 +134,16 @@ def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list[list[int]]:
 
 
 def find_CH_bonds(universe, lipid_resindices, atom_names):
-    """
-    Find all carbon-hydrogen bonds in a lipid molecule using topology information.
+    """Find all carbon-hydrogen bonds in a lipid molecule using topology information.
 
     Args:
         universe: MDAnalysis Universe object with topology information
-        lipid_resname: Residue name of the lipid (default: 'DPPC')
+        lipid_resindices: List of residue indices corresponding to the lipid
+        atom_names: List of carbon atom names to search for C-H bonds
 
     Returns:
         dict: Dict for each carbon, of tuples containing (carbon_index, hydrogen_index) for each C-H bond
+
     """
     # Get all carbons in the lipid
     carbons = universe.residues[lipid_resindices].atoms.select_atoms(
@@ -178,20 +176,18 @@ def find_CH_bonds(universe, lipid_resindices, atom_names):
 
 
 def natural_sort_key(s):
-    """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)"""
+    """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)."""
     import re
     return [int(text) if text.isdigit() else text.lower()
             for text in re.split('([0-9]+)', s)]
 
 
 def plot_lipid_order(data_filepath: str):
-    """
-    Visualize the lipid order analysis by plotting the order parameters.
+    """Visualize the lipid order analysis by plotting the order parameters.
 
-    Parameters
-    ----------
-    data_filepath : str
-        Path to the JSON file containing the lipid order analysis results.
+    Args:
+        data_filepath (str): Path to the JSON file containing the lipid order analysis results.
+
     """
     import matplotlib.pyplot as plt
 
@@ -212,9 +208,9 @@ def plot_lipid_order(data_filepath: str):
             atom_indices = range(len(avg))
 
             # Plot the order parameters with error bars for each chain
-            eb=plt.errorbar(atom_indices, avg, yerr=std, fmt='o-', label=f'Chain {chain_idx}')
+            eb = plt.errorbar(atom_indices, avg, yerr=std, fmt='o-', label=f'Chain {chain_idx}')
             eb[-1][0].set_linestyle('--')
-        
+
         plt.xlabel('Atom Index')
         plt.ylabel('Order Parameter (S)')
         plt.title(f'Lipid Order Parameters for {inchikey}')

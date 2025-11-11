@@ -7,13 +7,12 @@ from mddb_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
 
 
-def generate_membrane_mapping(lipid_map : list[dict],
-                              structure_file : 'File',
+def generate_membrane_mapping(lipid_map: list[dict],
+                              structure_file: 'File',
                               universe: 'Universe',
                               output_filepath: str,
                               ) -> list[dict]:
-    """
-    Generates a list of residue numbers of membrane components from a given structure and topology file.
+    """Generates a list of residue numbers of membrane components from a given structure and topology file.
     Args:
         structure (Structure): The molecular structure to analyze.
         standard_topology_file (File): The topology file in JSON format.
@@ -46,7 +45,6 @@ def generate_membrane_mapping(lipid_map : list[dict],
         - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
         - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
     """
-
     if not universe: raise RuntimeError('Missing universe')
 
     # Prepare the membrane mapping OBJ/JSON
@@ -61,13 +59,13 @@ def generate_membrane_mapping(lipid_map : list[dict],
     return membrane_map
 
 
-def all_atom_membranes(lipid_map : list[dict],
-                       structure_file : 'File',
+def all_atom_membranes(lipid_map: list[dict],
+                       structure_file: 'File',
                        universe: 'Universe',
                        output_filepath: str,
                        ) -> list[dict]:
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': {}}
-    
+
     if len(lipid_map) == 0:
         # no lipids found in the structure.
         return membrane_map
@@ -75,7 +73,7 @@ def all_atom_membranes(lipid_map : list[dict],
     # Select only the lipids and potential membrane members
     lipid_ridx = []
     glclipid_ridx = []
-    for ref in lipid_map:
+    for ref in lipid_map.values():
         lipid_ridx.extend(ref['residue_indices'])
         if ref['fragments']:
             glclipid_ridx.extend(ref['fragments'])
@@ -103,7 +101,7 @@ def all_atom_membranes(lipid_map : list[dict],
         'disable_logs': True,
         'return_hydrogen': True,
         # Do not copy the input file to the sandbox
-        'disable_sandbox': True, 
+        'disable_sandbox': True,
     }
     output_ndx_path = "tmp_mem_map.ndx"
     print(' Running BioBB FATSLiM Membranes')
@@ -160,26 +158,25 @@ def all_atom_membranes(lipid_map : list[dict],
     return membrane_map
 
 
-def coarse_grain_membranes(structure_file : 'File',
+def coarse_grain_membranes(structure_file: 'File',
                            universe: 'Universe',
                            output_filepath: str,
                            ) -> list[dict]:
-    """
-    Generates membrane mapping for coarse-grained systems using residue names and P atoms as headgroups.
+    """Generates membrane mapping for coarse-grained systems using residue names and P atoms as headgroups.
     """
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': []}
-    
+
     # Find all lipid residues in the system
     lipid_residues = []
     for resname in LIPIDS_RESIDUE_NAMES:
         lipids = universe.select_atoms(f'resname {resname}')
         if len(lipids) > 0:
             lipid_residues.append(resname)
-    
+
     if len(lipid_residues) == 0:
         print("No coarse-grained lipid residues found in the structure.")
         return membrane_map
-    
+
     # Select P atoms (headgroups) from lipid residues
     headgroup_atoms = f'resname {" ".join(lipid_residues)} and name P*'
 
@@ -191,35 +188,35 @@ def coarse_grain_membranes(structure_file : 'File',
         'disable_logs': True,
         'disable_sandbox': True,
     }
-    
+
     output_ndx_path = "tmp_cg_mem_map.ndx"
     print(' Running BioBB FATSLiM Membranes for coarse-grained system')
-    
+
     #with redirect_stdout(None):
     fatslim_membranes(input_top_path=structure_file.absolute_path,
                       output_ndx_path=output_ndx_path,
                       properties=prop)
-    
+
     # Parse the output to get the membrane mapping
     mem_map = parse_index(output_ndx_path)
     os.remove(output_ndx_path)
-    
+
     # Process the membrane mapping
     n_mems = len(mem_map) // 2
     membrane_map['n_mems'] = n_mems
-    
+
     all_lipid_atoms = universe.select_atoms(f'resname {" ".join(lipid_residues)}')
     no_mem_lipids = set(all_lipid_atoms.atoms.indices)
-    
+
     for i in range(n_mems):
         # FATSLiM indexes start at 1, convert to 0-based
         bot_atoms = (np.array(mem_map[f'membrane_{i+1}_leaflet_1']) - 1).tolist()
         top_atoms = (np.array(mem_map[f'membrane_{i+1}_leaflet_2']) - 1).tolist()
-        
+
         # Remove assigned atoms from no_mem_lipids
         no_mem_lipids -= set(bot_atoms)
         no_mem_lipids -= set(top_atoms)
-        
+
         membrane_map['mems'][str(i)] = {
             'leaflets': {
                 'bot': bot_atoms,
@@ -230,13 +227,13 @@ def coarse_grain_membranes(structure_file : 'File',
                 'top': universe.atoms[top_atoms].select_atoms('name P*').indices.tolist(),
             }
         }
-    
+
     membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
-    
+
     # Print results
     no_mem_lipids_str = f'{len(no_mem_lipids)} lipid atoms not assigned to any membrane.' if len(no_mem_lipids) > 0 else ''
     print(f'{n_mems} membrane/s found in coarse-grained system. ' + no_mem_lipids_str)
-    
+
     return membrane_map
 
 
@@ -245,7 +242,7 @@ def display_membrane_mapping(mem_map: str, pdb: str):
         import nglview as nv  # type: ignore
     except ImportError:
         raise ImportError("nglview is required for displaying membrane mapping. Please install it using 'pip install nglview'.")
-    
+
     mem_map = load_json(mem_map)
     top = f"@{','.join(map(str,mem_map['mems']['0']['leaflets']['top']))}"
     bot = f"@{','.join(map(str,mem_map['mems']['0']['leaflets']['bot']))}"

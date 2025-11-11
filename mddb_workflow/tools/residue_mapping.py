@@ -4,7 +4,7 @@ from mddb_workflow.utils.type_hints import *
 def generate_residue_mapping(
     protein_map : list[dict],
     ligand_map : list[dict],
-    lipid_map : list[dict],
+    inchikeys : dict,
     structure : 'Structure',
 ) -> dict:
     """
@@ -18,7 +18,8 @@ def generate_residue_mapping(
 
     # Reformat mapping data to the topology system
     # Add the reference type to each reference object
-    for data in lipid_map:
+    inchikeys = list(inchikeys.values())
+    for data in inchikeys:
         data['type'] = 'inchikey'
     for data in protein_map:
         data['type'] = 'protein'
@@ -34,7 +35,7 @@ def generate_residue_mapping(
     residue_reference_indices = [ None ] * residues_count
     residue_reference_numbers = [ None ] * residues_count
 
-    for data in protein_map + ligand_map + lipid_map:
+    for data in protein_map + ligand_map + inchikeys:
         match = data['match']
         # Get the reference index
         # Note that several matches may belong to the same reference and thus have the same index

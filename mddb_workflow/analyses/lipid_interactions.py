@@ -6,25 +6,25 @@ import numpy as np
 import MDAnalysis
 
 
-def lipid_interactions (
-    universe : 'MDAnalysis.Universe',
-    output_directory : str,
-    lipid_map: list[dict],
+def lipid_interactions(
+    universe: 'MDAnalysis.Universe',
+    output_directory: str,
+    lipid_map: dict,
     cg_residues: list[int],
-    snapshots : int,
+    snapshots: int,
     frames_limit: int = 100):
-    """ Lipid-protein interactions analysis. """
+    """Lipid-protein interactions analysis."""
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
 
     # Check if we're dealing with coarse-grain simulations
     if len(cg_residues) > 0:
         data = cg_lipid_interactions(universe, snapshots, frames_limit)
     elif lipid_map and len(lipid_map) > 0:
-        data = aa_lipid_interactions(universe, snapshots, frames_limit, lipid_map)
+        data = aa_lipid_interactions(universe, snapshots, frames_limit, lipid_map.values())
     else:
         print('-> Skipping lipid-protein interactions analysis')
         return
-    
+
     # Wrap the data in a dictionary
     data = {'data': data}
     save_json(data, output_analysis_filepath)
@@ -44,12 +44,12 @@ def aa_lipid_interactions(universe, snapshots, frames_limit, lipid_map):
     # Only iterate through the frames you need. TODO: parallel frames
     for ts in universe.trajectory[0:snapshots:frame_step]:
         # Select lipid atoms near the protein once
-        lipid_near_prot = universe.select_atoms(f'(around 6 protein) and group lipid_group and not protein', 
+        lipid_near_prot = universe.select_atoms(f'(around 6 protein) and group lipid_group and not protein',
                                                 lipid_group=lipid_group)
         for i, residx in enumerate(protein_residx):
             # Find lipid atoms near a specific residue
             residue_atoms = universe.select_atoms(f'resindex {residx}')
-            lipid_near_res = lipid_near_prot.select_atoms(f'around 6 global group residuegroup', 
+            lipid_near_res = lipid_near_prot.select_atoms(f'around 6 global group residuegroup',
                                                 residuegroup=residue_atoms)
             # Add the count of lipids
             for lipid_residx in lipid_near_res.residues.resindices:
@@ -57,14 +57,14 @@ def aa_lipid_interactions(universe, snapshots, frames_limit, lipid_map):
 
     # Normalize the occupancy arrays by dividing by the number of frames
     ocupancy_arrs /= frame_count
-    
+
     # Save the data
-    data = { 'residue_indices': protein_residx.tolist()}
+    data = {'residue_indices': protein_residx.tolist()}
     for lipid in lipid_map:
         # Convert lipid residue indices to array indices
         lipid_idx = [residx_2_idx[residx] for residx in lipid['residue_indices']]
         data[lipid['match']['ref']['inchikey']] = ocupancy_arrs[:, lipid_idx].sum(1).tolist()
-    
+
     return data
 
 
@@ -76,56 +76,56 @@ def cg_lipid_interactions(universe, snapshots, frames_limit):
         lipids = universe.select_atoms(f'resname {resname}')
         if len(lipids) > 0:
             lipid_residues.append(resname)
-    
+
     if not lipid_residues:
         print('-> No lipid residues found for coarse-grain analysis')
         return {}
-    
+
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
     protein_residx = universe.select_atoms('protein').residues.resindices
     assert len(protein_residx) > 0
-    
+
     # Create occupancy arrays for each lipid type
     lipid_occupancy = {resname: np.zeros(len(protein_residx)) for resname in lipid_residues}
-    
+
     # Iterate through frames
     for ts in universe.trajectory[0:snapshots:frame_step]:
         for i, residx in enumerate(protein_residx):
             residue_atoms = universe.select_atoms(f'resindex {residx}')
-            
+
             # Check interactions with each lipid type
             for resname in lipid_residues:
-                lipids_near_res = universe.select_atoms(f'(around 6 global group residuegroup) and resname {resname}', 
+                lipids_near_res = universe.select_atoms(f'(around 6 global group residuegroup) and resname {resname}',
                                                         residuegroup=residue_atoms)
                 if len(lipids_near_res) > 0:
                     lipid_occupancy[resname][i] += len(lipids_near_res.residues)
-    
+
     # Normalize by frame count
     for resname in lipid_residues:
         lipid_occupancy[resname] /= frame_count
-    
+
     # Save the data in the same format as atomistic analysis
     data = {'residue_indices': protein_residx.tolist()}
     for resname in lipid_residues:
         data[resname] = lipid_occupancy[resname].tolist()
-    
+
     return data
 
 
-def plot_lipid_interactions (output_analysis_filepath: str):
+def plot_lipid_interactions(output_analysis_filepath: str):
     import matplotlib.pyplot as plt
     data = load_json(output_analysis_filepath)['data']
-    
+
     protein_residues = data['residue_indices']
     lipid_keys = [key for key in data.keys() if key != 'residue_indices']
-    
+
     # Create a figure for the plot
     plt.figure(figsize=(10, 6))
-    
+
     for lipid_key in lipid_keys:
         interactions = data[lipid_key]
         plt.plot(protein_residues, interactions, label=lipid_key)
-    
+
     plt.xlabel('Protein Residue Indices')
     plt.ylabel('Interaction Count (Normalized)')
     plt.title('Lipid-Protein Interactions')
