@@ -486,7 +486,7 @@ for flags, kwargs in run_parser_workflow_args:
 # Set a group for the selection options
 run_parser_selection_group = run_parser.add_argument_group('SELECTION OPTIONS')
 run_parser_selection_args = [
-    (['-filter', '--filter_selection'], {'nargs': '?', 'default': False, 'const': True, 'help': project_init_help['filter_selection']}),
+    (['-filt', '--filter_selection'], {'nargs': '?', 'default': False, 'const': True, 'help': project_init_help['filter_selection']}),
     (['-pbc', '--pbc_selection'], {'default': None, 'help': project_init_help['pbc_selection']}),
     (['-cg', '--cg_selection'], {'default': None, 'help': project_init_help['cg_selection']}),
     (['-pcafit', '--pca_fit_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_fit_selection']}),
