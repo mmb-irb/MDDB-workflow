@@ -2131,6 +2131,9 @@ def workflow (
     # This is to protect the user to do something which makes not sense
     if include and exclude:
         raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
+    
+    # Save the directory where the workflow is called from so we can come back at the very end
+    workflow_call_directory = getcwd()
 
     # Make sure the working directory exists
     if not exists(working_directory):
@@ -2257,5 +2260,10 @@ def workflow (
 
     # Remove gromacs backups and other trash files from the project
     remove_trash(project.directory)
+
+    # Return back to the place where the workflow was called originally
+    # This is not important for many applications
+    # But if you call the workflow function from a python script then this is important
+    chdir(workflow_call_directory)
 
     print("Done!")
