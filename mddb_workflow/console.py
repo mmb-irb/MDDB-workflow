@@ -1,4 +1,3 @@
-from pathlib import Path
 from os.path import exists
 from shutil import copyfile
 from subprocess import call
@@ -23,12 +22,13 @@ expected_project_args = set(Project.__init__.__code__.co_varnames)
 test_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/usage.html#tests-and-other-checking-processes'
 task_docs_url = 'https://mddb-workflow.readthedocs.io/en/latest/tasks.html'
 
+
 class CustomHelpFormatter(RawTextHelpFormatter):
-    """ Custom formatter for argparse help text with better organization and spacing. """
-    
+    """Custom formatter for argparse help text with better organization and spacing."""
+
     def __init__(self, prog, indent_increment=2, max_help_position=6, width=None):
         super().__init__(prog, indent_increment, max_help_position, width)
-        
+
     def _get_help_string(self, action):
         import argparse
         help = action.help
@@ -67,16 +67,16 @@ class CustomHelpFormatter(RawTextHelpFormatter):
                     filtered_lines.append(line)
             essential_usage = '\n'.join(filtered_lines)
         return essential_usage
-    
+
     def _format_action_invocation(self, action):
-        """ Format the display of options with choices more cleanly. """
+        """Format the display of options with choices more cleanly."""
         if not action.option_strings:
             # This is a positional argument
             return super()._format_action_invocation(action)
-            
+
         # For options with choices, format them nicely
         opts = ', '.join(action.option_strings)
-        
+
         # Special case for include, exclude, and overwrite
         if action.dest in ['include', 'exclude', 'overwrite']:
             opts = ', '.join(action.option_strings)
@@ -96,8 +96,10 @@ class CustomHelpFormatter(RawTextHelpFormatter):
             else:
                 return f"{opts} {metavar}"
 
+
 class CustomArgumentParser(ArgumentParser):
-    """ This parser extends the ArgumentParser to handle subcommands and errors more gracefully. """
+    """Extends the ArgumentParser to handle subcommands and errors more gracefully."""
+
     def error(self, message):
         # Check for subcommand in sys.argv
         import sys
@@ -108,7 +110,7 @@ class CustomArgumentParser(ArgumentParser):
                           for choice in action.choices]
             if len(sys.argv) > 1 and sys.argv[1] in subcommands:
                 self.subcommand = sys.argv[1]
-            
+
         # Now continue with your existing logic
         if hasattr(self, 'subcommand') and self.subcommand:
             self._print_message(f"{self.prog} {self.subcommand}: error: {message}\n", sys.stderr)
@@ -123,21 +125,20 @@ class CustomArgumentParser(ArgumentParser):
             # Default error behavior for main parser
             self.print_usage(sys.stderr)
             self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
-        sys.exit(2) 
+        sys.exit(2)
+
 
 def parse_docstring_for_help(docstring):
-    """ Parses a docstring to extract help for arguments. """
+    """Parse a docstring to extract help for arguments."""
     if not docstring:
         return {}
-    
+
     docstring = dedent(docstring)
     arg_section_match = re.search(r'Args:\n(.*?)(?=\n\n|\Z)', docstring, re.S)
     if not arg_section_match:
         return {}
 
     arg_section = arg_section_match.group(1)
-    arg_lines = arg_section.strip().split('\n')
-    
     help_dict = {}
     # Regex to find argument name and its full description, including newlines
     arg_blocks = re.findall(r'^\s*([a-zA-Z0-9_]+)\s*\(.*?\):\s*(.*?)(?=\n\s*[a-zA-Z0-9_]+\s*\(|\Z)', arg_section, re.S | re.M)
@@ -148,17 +149,48 @@ def parse_docstring_for_help(docstring):
         for line in help_text.strip().split('\n'):
             # For lines that are part of a list, just rstrip to keep indentation
             if line.lstrip().startswith('-'):
-                lines.append('  '+line.strip())
+                lines.append('  ' + line.strip())
             else:
                 lines.append(line.strip())
         help_dict[arg_name] = '\n'.join(lines)
-        
+
     return help_dict
 
-# Main ---------------------------------------------------------------------------------            
 
-# Function called through argparse
-def main ():
+def pretty_list(availables: list[str]) -> str:
+    """Pretty print a list of available checkings / failures."""
+    final_line = '\n'
+    for available in availables:
+        nice_name = NICE_NAMES.get(available, None)
+        if not nice_name:
+            raise Exception('Flag "' + available + '" has not a defined nice name')
+        final_line += '\n  - ' + available + ': ' + nice_name
+    final_line += f'\nTo know more about each test please visit:\n{test_docs_url}'
+    return final_line
+
+
+class custom (Action):
+    """Custom argparse action to handle the following 2 arguments.
+
+    This is done becuase it is not possible to combine nargs='*' with const
+    https://stackoverflow.com/questions/72803090/argparse-how-to-create-the-equivalent-of-const-with-nargs
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """Handle optional argument values with smart defaults.
+
+        If argument is not passed -> default
+        If argument is passed empty -> const
+        If argument is passed with values -> values
+        """
+        if values:
+            setattr(namespace, self.dest, values)
+        else:
+            setattr(namespace, self.dest, self.const)
+
+
+def main():
+    """Parse the arguments and calls the workflow accordingly."""
     # Parse input arguments from the console
     # The vars function converts the args object to a dictionary
     args = parser.parse_args()
@@ -181,7 +213,7 @@ def main ():
         # Remove arguments not related to this subcommand
         del dict_args['subcommand']
         # Remove common arguments from the dict as well
-        common_args = [ action.dest for action in common_parser._actions ]
+        common_args = [action.dest for action in common_parser._actions]
         for arg in common_args:
             del dict_args[arg]
         # Find out which arguments are for the Project class and which ones are for the workflow
@@ -193,7 +225,7 @@ def main ():
             else:
                 workflow_args[k] = v
         # Call the actual main function
-        workflow(project_parameters = project_args, **workflow_args)
+        workflow(project_parameters=project_args, **workflow_args)
     # If user wants to setup the inputs
     elif subcommand == "inputs":
         # Make a copy of the template in the local directory if there is not an inputs file yet
@@ -222,16 +254,15 @@ def main ():
             print(f"{editor_name} was selected")
             call([editor_command, DEFAULT_INPUTS_FILENAME])
         except ValueError:
-            print(f"No editor was selected")
-        
+            print("No editor was selected")
 
     # In case the convert tool was called
     elif subcommand == 'convert':
         # If no input arguments are passed print help
-        if args.input_structure == None and args.input_trajectories == None:
+        if args.input_structure is None and args.input_trajectories is None:
             convert_parser.print_help()
             return
-        if args.input_trajectories == None:
+        if args.input_trajectories is None:
             args.input_trajectories = []
         # Run the convert command
         convert(
@@ -245,12 +276,12 @@ def main ():
     elif subcommand == 'filter':
         # Run the convert command
         filter_atoms(
-            input_structure_file = File(args.input_structure),
-            output_structure_file = File(args.output_structure),
-            input_trajectory_file = File(args.input_trajectory),
-            output_trajectory_file = File(args.output_trajectory),
-            selection_string = args.selection_string,
-            selection_syntax = args.selection_syntax
+            input_structure_file=File(args.input_structure),
+            output_structure_file=File(args.output_structure),
+            input_trajectory_file=File(args.input_trajectory),
+            output_trajectory_file=File(args.output_trajectory),
+            selection_string=args.selection_string,
+            selection_syntax=args.selection_syntax
         )
         print('There you have it :)')
 
@@ -300,15 +331,15 @@ def main ():
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
-        if args.config == None and args.make_config == False:
+        if args.config is None and args.make_config is False:
             nassa_parser.print_help()
             print('Please provide a configuration file or make one with the -m flag')
             return
         # If the user wants to make a configuration file
         if args.make_config:
-            #print('args.make_config: ', args.make_config)
-            if args.make_config == True or args.make_config == []:
-            # Make a copy of the template in the local directory if there is not an inputs file yet
+            # print('args.make_config: ', args.make_config)
+            if args.make_config is True or args.make_config == []:
+                # Make a copy of the template in the local directory if there is not an inputs file yet
                 if not exists(DEFAULT_NASSA_CONFIG_FILENAME):
                     copyfile(NASSA_TEMPLATE_FILEPATH, DEFAULT_NASSA_CONFIG_FILENAME)
                 # Open a text editor for the user
@@ -318,31 +349,31 @@ def main ():
             # If the user provides a path to the files
             else:
                 generate_nassa_config(
-                    args.make_config, 
+                    args.make_config,
                     args.seq_path,
-                    args.output, 
+                    args.output,
                     args.unit_len,
                     args.n_sequences
                     )
             print('Configuration file created as nassa.json\nNow you can run the analysis with the -c flag.')
-            return 
+            return
         # If the user wants to run the analysis. With the config file an analysis name must be provided, or the all flag must be set
-        if args.config and args.analysis_names == None and args.all == False:
+        if args.config and args.analysis_names is None and args.all is False:
             nassa_parser.print_help()
             print('Please provide an analysis name to run:', ', '.join(NASSA_ANALYSES_LIST))
             return
         # If the user wants to run the helical parameters analysis we must check if the necessary files are provided (structure, topology and trajectory)
         if args.helical_parameters:
             # Also, it is necesary to provide the project directories. Each of the project directories must contain an independent MD
-            if args.proj_directories == None:
+            if args.proj_directories is None:
                 nassa_parser.print_help()
                 print('Please provide a project directory to run the helical parameters analysis with the -pdirs flag')
                 return
-            if args.input_structure_filepath == None:
+            if args.input_structure_filepath is None:
                 raise InputError('Please provide a structure file to run the helical parameters analysis with the -stru flag')
-            elif args.input_trajectory_filepath == None:
+            elif args.input_trajectory_filepath is None:
                 raise InputError('Please provide a trajectory file to run the helical parameters analysis with the -traj flag')
-            elif args.input_topology_filepath == None:
+            elif args.input_topology_filepath is None:
                 raise InputError('Please provide a topology file to run the helical parameters analysis with the -top flag')
             # If the all flag is set, the user must provide the path to the sequences because it is necessary to create the nassa.yml and run the NASSA analysis
             if args.all:
@@ -350,7 +381,7 @@ def main ():
                     raise InputError('Please, if all option is selected provide the path to the sequences (--seq_path)')
             # If all the flags are correctly set, we can run the analysis
             workflow_nassa(
-                config_file_path=None, # The configuration file is not needed in this case because we are going to run the helical parameters analysis so it will be created then
+                config_file_path=None,  # The configuration file is not needed in this case because we are going to run the helical parameters analysis so it will be created then
                 analysis_names=args.analysis_names,
                 overwrite=args.overwrite,
                 overwrite_nassa=args.overwrite_nassa,
@@ -370,23 +401,24 @@ def main ():
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
             dict_args = vars(args)
-            del dict_args['subcommand'] # preguntar Dani ¿?
+            del dict_args['subcommand']  # preguntar Dani ¿?
             # Call the actual main function
             workflow_nassa(
-                    config_file_path = args.config, 
-                    analysis_names = args.analysis_names, 
-                    make_config = args.make_config, 
-                    output =  args.output,
-                    working_directory = args.working_directory,
-                    overwrite = args.overwrite, 
-                    overwrite_nassa = args.overwrite_nassa,
-                    n_sequences = args.n_sequences,
-                    unit_len = args.unit_len,
-                    all= args.all,
+                    config_file_path=args.config,
+                    analysis_names=args.analysis_names,
+                    make_config=args.make_config,
+                    output=args.output,
+                    working_directory=args.working_directory,
+                    overwrite=args.overwrite,
+                    overwrite_nassa=args.overwrite_nassa,
+                    n_sequences=args.n_sequences,
+                    unit_len=args.unit_len,
+                    all=args.all,
                     md_directories=args.md_directories,
                     trust=args.trust,
                     mercy=args.mercy
             )
+
 
 # Define a common parser running in top of all others
 # This arguments declared here are available among all subparsers
@@ -402,8 +434,8 @@ common_parser.add_argument("-nc", "--no_colors", default=False, action='store_tr
 parser = CustomArgumentParser(description="MDDB Workflow")
 subparsers = parser.add_subparsers(help='Name of the subcommand to be used', dest="subcommand")
 
-# Parse Project.__init__ docstring for help texts
 project_init_help = parse_docstring_for_help(Project.__init__.__doc__)
+workflow_help = parse_docstring_for_help(workflow.__doc__)
 
 # Set the run subcommand
 run_parser = subparsers.add_parser("run",
@@ -414,230 +446,98 @@ run_parser = subparsers.add_parser("run",
 
 # Set optional arguments
 run_parser_input_group = run_parser.add_argument_group('INPUT OPTIONS')
-run_parser_input_group.add_argument(
-    "-top", "--input_topology_filepath",
-    default=None, # There is no default since many formats may be possible
-    help=project_init_help['input_topology_filepath'])
-run_parser_input_group.add_argument(
-    "-stru", "--input_structure_filepath",
-    default=None,
-    help=project_init_help['input_structure_filepath'])
-run_parser_input_group.add_argument(
-    "-traj", "--input_trajectory_filepaths",
-    #type=argparse.FileType('r'),
-    nargs='*',
-    default=None,
-    help=project_init_help['input_trajectory_filepaths'])
-run_parser_input_group.add_argument(
-    "-dir", "--working_directory",
-    default='.',
-    help="Directory where the whole workflow is run. Current directory by default.")
-run_parser_input_group.add_argument(
-    "-mdir", "--md_directories",
-    nargs='*',
-    default=None,
-    help=project_init_help['md_directories'])
-run_parser_input_group.add_argument(
-    "-md", "--md_config",
-    action='append',
-    nargs='*',
-    default=None,
-    help=project_init_help['md_config'])
-run_parser_input_group.add_argument(
-    "-proj", "--accession",
-    default=None,
-    help=project_init_help['accession'])
-run_parser_input_group.add_argument(
-    "-url", "--database_url",
-    default=DEFAULT_API_URL,
-    help=project_init_help['database_url'])
-run_parser_input_group.add_argument(
-    "-inp", "--inputs_filepath",
-    default=None,
-    help="Path to inputs file")
-run_parser_input_group.add_argument(
-    "-fin", "--forced_inputs",
-    action='append',
-    nargs='*',
-    default=None,
-    help=project_init_help['forced_inputs'])
-run_parser_input_group.add_argument(
-    "-pop", "--populations_filepath",
-    default=DEFAULT_POPULATIONS_FILENAME,
-    help=project_init_help['populations_filepath'])
-run_parser_input_group.add_argument(
-    "-tpro", "--transitions_filepath",
-    default=DEFAULT_TRANSITIONS_FILENAME,
-    help=project_init_help['transitions_filepath'])
-run_parser_input_group.add_argument(
-    "-ad", "--aiida_data_filepath",
-    default=None,
-    help=project_init_help['aiida_data_filepath'])
+run_parser_input_args = [
+    # There is no default since many formats may be possible
+    (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']}),
+    (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']}),
+    (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']}),
+    (['-dir', '--working_directory'], {'default': '.', 'help': "Directory where the whole workflow is run."}),
+    (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
+    (['-md', '--md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['md_config']}),
+    (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
+    (['-url', '--database_url'], {'default': DEFAULT_API_URL, 'help': project_init_help['database_url']}),
+    (['-inp', '--inputs_filepath'], {'default': None, 'help': "Path to inputs file"}),
+    (['-fin', '--forced_inputs'], {'action': 'append', 'nargs': '*', 'default': None, 'help': project_init_help['forced_inputs']}),
+    (['-pop', '--populations_filepath'], {'default': DEFAULT_POPULATIONS_FILENAME, 'help': project_init_help['populations_filepath']}),
+    (['-tpro', '--transitions_filepath'], {'default': DEFAULT_TRANSITIONS_FILENAME, 'help': project_init_help['transitions_filepath']}),
+    (['-ad', '--aiida_data_filepath'], {'default': None, 'help': project_init_help['aiida_data_filepath']}),
+]
+for flags, kwargs in run_parser_input_args:
+    run_parser_input_group.add_argument(*flags, **kwargs)
+
 # Set a group for the workflow control options
 run_parser_workflow_group = run_parser.add_argument_group('WORKFLOW CONTROL OPTIONS')
-run_parser_workflow_group.add_argument(
-    "-img", "--image",
-    action='store_true',
-    help=project_init_help['aiida_data_filepath'])
-run_parser_workflow_group.add_argument(
-    "-fit", "--fit",
-    action='store_true',
-    help=project_init_help['fit'])
-run_parser_workflow_group.add_argument(
-    "-trans", "--translation",
-    nargs='*',
-    default=[0,0,0],
-    help=project_init_help['translation'])
-run_parser_workflow_group.add_argument(
-    "-d", "--download",
-    action='store_true',
-    help="(Deprecated: use -i download) If passed, only download required files. Then exits.")
-run_parser_workflow_group.add_argument(
-    "-s", "--setup",
-    action='store_true',
-    help="(Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.")
-run_parser_workflow_group.add_argument(
-    "-smp", "--sample_trajectory",
-    type=int,
-    nargs='?',
-    default=None,
-    const=10,
-    metavar='N_FRAMES',
-    help=project_init_help['sample_trajectory'])
-run_parser_workflow_group.add_argument(
-    "-rcut", "--rmsd_cutoff",
-    type=float,
-    default=DEFAULT_RMSD_CUTOFF,
-    help=project_init_help['rmsd_cutoff'])
-run_parser_workflow_group.add_argument(
-    "-icut", "--interaction_cutoff",
-    type=float,
-    default=DEFAULT_INTERACTION_CUTOFF,
-    help=project_init_help['interaction_cutoff'])
-run_parser_workflow_group.add_argument(
-    "-iauto", "--interactions_auto",
-    type=str,
-    nargs='?',
-    const=True,
-    help=project_init_help['interactions_auto'])
-run_parser_workflow_group.add_argument(
-    "-gb", "--guess_bonds",
-    action='store_true',
-    help=project_init_help['guess_bonds'])
-run_parser_workflow_group.add_argument(
-    "-ib", "--ignore_bonds",
-    action='store_true',
-    help=project_init_help['ignore_bonds'])
+run_parser_workflow_args = [
+    (['-img', '--image'], {'action': 'store_true', 'help': project_init_help['image']}),
+    (['-fit', '--fit'], {'action': 'store_true', 'help': project_init_help['fit']}),
+    (['-trans', '--translation'], {'nargs': '*', 'default': [0, 0, 0], 'help': project_init_help['translation']}),
+    (['-d', '--download'], {'action': 'store_true', 'help': workflow_help['download']}),
+    (['-s', '--setup'], {'action': 'store_true', 'help': workflow_help['setup']}),
+    (['-smp', '--sample_trajectory'], {'type': int, 'nargs': '?', 'default': None, 'const': 10, 'metavar': 'N_FRAMES', 'help': project_init_help['sample_trajectory']}),
+    (['-rcut', '--rmsd_cutoff'], {'type': float, 'default': DEFAULT_RMSD_CUTOFF, 'help': project_init_help['rmsd_cutoff']}),
+    (['-icut', '--interaction_cutoff'], {'type': float, 'default': DEFAULT_INTERACTION_CUTOFF, 'help': project_init_help['interaction_cutoff']}),
+    (['-iauto', '--interactions_auto'], {'type': str, 'nargs': '?', 'const': True, 'help': project_init_help['interactions_auto']}),
+    (['-gb', '--guess_bonds'], {'action': 'store_true', 'help': project_init_help['guess_bonds']}),
+    (['-ib', '--ignore_bonds'], {'action': 'store_true', 'help': project_init_help['ignore_bonds']}),
+]
+for flags, kwargs in run_parser_workflow_args:
+    run_parser_workflow_group.add_argument(*flags, **kwargs)
 
 # Set a group for the selection options
 run_parser_selection_group = run_parser.add_argument_group('SELECTION OPTIONS')
-run_parser_selection_group.add_argument(
-    "-filt", "--filter_selection",
-    nargs='?',
-    default=False,
-    const=True,
-    help=project_init_help['filter_selection'])
-run_parser_selection_group.add_argument(
-    "-pbc", "--pbc_selection",
-    default=None,
-    help=project_init_help['pbc_selection'])
-run_parser_selection_group.add_argument(
-    "-cg", "--cg_selection",
-    default=None,
-    help=project_init_help['cg_selection'])
-run_parser_selection_group.add_argument(
-    "-pcafit", "--pca_fit_selection",
-    default=PROTEIN_AND_NUCLEIC_BACKBONE,
-    help=project_init_help['pca_fit_selection'])
-run_parser_selection_group.add_argument(
-    "-pcana", "--pca_analysis_selection",
-    default=PROTEIN_AND_NUCLEIC_BACKBONE,
-    help=project_init_help['pca_analysis_selection'])
+run_parser_selection_args = [
+    (['-filter', '--filter_selection'], {'nargs': '?', 'default': False, 'const': True, 'help': project_init_help['filter_selection']}),
+    (['-pbc', '--pbc_selection'], {'default': None, 'help': project_init_help['pbc_selection']}),
+    (['-cg', '--cg_selection'], {'default': None, 'help': project_init_help['cg_selection']}),
+    (['-pcafit', '--pca_fit_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_fit_selection']}),
+    (['-pcana', '--pca_analysis_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_analysis_selection']}),
+]
+for flags, kwargs in run_parser_selection_args:
+    run_parser_selection_group.add_argument(*flags, **kwargs)
 
-
-# Set a custom argparse action to handle the following 2 arguments
-# This is done becuase it is not possible to combine nargs='*' with const
-# https://stackoverflow.com/questions/72803090/argparse-how-to-create-the-equivalent-of-const-with-nargs
-class custom (Action):
-    # If argument is not passed -> default
-    # If argument is passed empty -> const
-    # If argument is passed with values -> values
-    def __call__(self, parser, namespace, values, option_string=None):
-        if values:
-            setattr(namespace, self.dest, values)
-        else:
-            setattr(namespace, self.dest, self.const)
-
-# Set a function to pretty print a list of available checkings / failures
-def pretty_list (availables : list[str]) -> str:
-    final_line = 'Available protocols:'
-    for available in availables:
-        nice_name = NICE_NAMES.get(available, None)
-        if not nice_name:
-            raise Exception('Flag "' + available + '" has not a defined nice name')
-        final_line += '\n  - ' + available + ' -> ' +  nice_name
-    final_line += f'\nTo know more about each test please visit:\n{test_docs_url}'
-    return final_line
-
+# Set a group with all input checking options
 run_parser_checks_group = run_parser.add_argument_group('INPUT CHECKS OPTIONS', description=f"For more information about each check please visit:\n{test_docs_url}")
-run_parser_checks_group.add_argument(
-    "-t", "--trust",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=AVAILABLE_CHECKINGS,
-    choices=AVAILABLE_CHECKINGS,
-    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone. " + pretty_list(AVAILABLE_CHECKINGS)
-)
-run_parser_checks_group.add_argument(
-    "-m", "--mercy",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=AVAILABLE_FAILURES,
-    choices=AVAILABLE_FAILURES,
-    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow. "
-        "Note that all checkings are allowed to fail if the argument is passed alone. " + pretty_list(AVAILABLE_FAILURES))
-)
-run_parser_checks_group.add_argument(
-    "-f", "--faith",
-    action='store_true',
-    default=False,
-    help=("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
-        "WARNING: Do not use this flag if you don't know what you are doing.\n"
-        "This may lead to several silent errors.")
-)
+run_parser_checks_args = [
+    (['-t', '--trust'], {'default': [], 'nargs': '*', 'action': custom, 'const': AVAILABLE_CHECKINGS, 'choices': AVAILABLE_CHECKINGS,
+      'help': ("If passed, do not run the specified checking. Note that all checkings are skipped if passed alone. "
+               "Available checkings:" + pretty_list(AVAILABLE_CHECKINGS))}),
+    (['-m', '--mercy'], {'default': [], 'nargs': '*', 'action': custom, 'const': AVAILABLE_FAILURES, 'choices': AVAILABLE_FAILURES,
+     'help': ("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow. "
+              "Note that all checkings are allowed to fail if the argument is passed alone. "
+              "Available checkings:" + pretty_list(AVAILABLE_FAILURES))}),
+    (['-f', '--faith'], {'default': False, 'action': 'store_true',
+     'help': ("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
+              "WARNING: Do not use this flag if you don't know what you are doing.\n"
+              "This may lead to several silent errors.")}),
+]
+for flags, kwargs in run_parser_checks_args:
+    run_parser_checks_group.add_argument(*flags, **kwargs)
 
 # Set a list with the alias of all requestable dependencies
 choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))
+task_groups = [
+  "download: Check/download input files (already ran with analyses)",
+  "setup: Process and test input files (already ran with analyses)",
+  "meta: Run project and MD metadata analyses",
+  "network: Run dependencies which require internet connection",
+  "minimal: Run dependencies required by the web client to work",
+  "interdeps: Run interactions and all its dependent analyses",
+  "membs: Run all membrane-related analyses",
+]
+assert len(DEPENDENCY_FLAGS.keys()) == len(task_groups), "The number of dependency flags and task groups must be the same"
 
-run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS', description=f"Available tasks: {choices}\nFor more information about each task, please visit:\n{task_docs_url}")
-run_parser_analysis_group.add_argument(
-    "-i", "--include",
-    nargs='*',
-    choices=choices,
-    help="""Set the unique analyses or tools to be run. All other steps will be skipped. There are also some additional flags to define a preconfigured group of dependencies:
-  - download: Check/download input files (already ran with analyses)
-  - setup: Process and test input files (already ran with analyses)
-  - network: Run dependencies which require internet connection
-  - minimal: Run dependencies required by the web client to work
-  - interdeps: Run interactions and all its dependent analyses""")
-run_parser_analysis_group.add_argument(
-    "-e", "--exclude",
-    nargs='*',
-    choices=choices,
-    help=("Set the analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway."))
-run_parser_analysis_group.add_argument(
-    "-ow", "--overwrite",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=True,
-    choices=choices,
-    help=("Set the output files to be overwritten thus re-runing its corresponding analysis or tool. Use this flag alone to overwrite everything."))
+run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS',
+    description=f"Available tasks: {choices}\nFor more information about each task, please visit:\n{task_docs_url}")
+run_parser_analysis_args = [
+    (['-i', '--include'], {'nargs': '*', 'choices': choices,
+      'help': ("Set the unique analyses or tools to be run. All other steps will be skipped.\n"
+               "There are also some additional flags to define a preconfigured group of dependencies:"
+               + '\n  - ' + '\n  - '.join(task_groups))}),
+    (['-e', '--exclude'], {'nargs': '*', 'choices': choices, 'help': workflow_help['exclude']}),
+    (['-ow', '--overwrite'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'choices': choices, 'help': workflow_help['overwrite']}),
+]
+for flags, kwargs in run_parser_analysis_args:
+    run_parser_analysis_group.add_argument(*flags, **kwargs)
 
 
 # Add a new to command to aid in the inputs file setup
@@ -659,24 +559,21 @@ convert_parser = subparsers.add_parser("convert",
         "If several input trajectories are passed they will be merged previously",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
-convert_parser.add_argument(
-    "-is", "--input_structure",
-    help="Path to input structure file")
-convert_parser.add_argument(
-    "-os", "--output_structure",
-    help="Path to output structure file")
-convert_parser.add_argument(
-    "-it", "--input_trajectories", nargs='*',
-    help="Path to input trajectory file or same format files.")
-convert_parser.add_argument(
-    "-ot", "--output_trajectory",
-    help="Path to output trajectory file")
+convert_parser_args = [
+    (['-is', '--input_structure'], {'help': "Path to input structure file"}),
+    (['-os', '--output_structure'], {'help': "Path to output structure file"}),
+    (['-it', '--input_trajectories'], {'nargs': '*', 'help': "Path to input trajectory file or same format files."}),
+    (['-ot', '--output_trajectory'], {'help': "Path to output trajectory file"}),
+]
+for flags, kwargs in convert_parser_args:
+    convert_parser.add_argument(*flags, **kwargs)
 
 # The filter command
 filter_parser = subparsers.add_parser("filter",
     help="Filter atoms in a structure and/or a trajectory\n",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
+
 filter_parser.add_argument(
     "-is", "--input_structure", required=True,
     help="Path to input structure file")
@@ -751,7 +648,7 @@ chainer_parser.add_argument(
     "-whfr", "--whole_fragments", type=bool, default=False,
     help="Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains.")
 
-# The NASSA commands 
+# The NASSA commands
 nassa_parser = subparsers.add_parser("nassa", formatter_class=CustomHelpFormatter,
     help="Run and set the configuration of the NASSA analysis",
     parents=[common_parser])
@@ -759,13 +656,13 @@ nassa_parser.add_argument(
     "-c", "--config",
     help="Configuration file for the NASSA analysis")
 nassa_parser.add_argument(
-    "-n", "--analysis_names", 
+    "-n", "--analysis_names",
     nargs='*',
-    default=None, 
+    default=None,
     help="Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST))
 nassa_parser.add_argument(
     "-w", "--make_config",
-    #type=str,
+    # type=str,
     nargs='*',
     default=None,
     # const=True,
@@ -838,7 +735,7 @@ nassa_parser.add_argument(
         "If this value is not passed then the standard trajectory file path is used as input by default"))
 nassa_parser.add_argument(
     "-top", "--input_topology_filepath",
-    default=None, # There is no default since many formats may be possible
+    default=None,  # There is no default since many formats may be possible
     help="Path to input topology file. It is relative to the project directory.")
 nassa_parser.add_argument(
     "-mdir", "--md_directories",
@@ -854,7 +751,7 @@ nassa_parser.add_argument(
     action=custom,
     const=AVAILABLE_CHECKINGS,
     choices=AVAILABLE_CHECKINGS,
-    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.\n" + pretty_list(AVAILABLE_CHECKINGS)
+    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.  Available checkings:" + pretty_list(AVAILABLE_CHECKINGS)
 )
 nassa_parser.add_argument(
     "-m", "--mercy",
@@ -865,7 +762,7 @@ nassa_parser.add_argument(
     const=AVAILABLE_FAILURES,
     choices=AVAILABLE_FAILURES,
     help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
-        "Note that all checkings are allowed to fail if the argument is passed alone.\n" + pretty_list(AVAILABLE_FAILURES))
+        "Note that all checkings are allowed to fail if the argument is passed alone. Available checkings:" + pretty_list(AVAILABLE_FAILURES))
 )
 nassa_parser.add_argument(
     "-dup", "--duplicates",
@@ -881,7 +778,7 @@ dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', he
 
 # Dataset run subcommand
 dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
-    help="Run the workflow for a dataset of MDDB projects.",
+help="Run the workflow for a dataset of MDDB projects.",
     parents=[common_parser])
 dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
 dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
