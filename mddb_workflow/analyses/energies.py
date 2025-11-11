@@ -316,7 +316,7 @@ def energies (
         # Set the cmip output filename, which is to be read rigth after it is generated
         cmip_output_file = File(output_directory + '/cmip_output.pdb')
         # Run cmip
-        cmip_logs = run([
+        cmip_process = run([
             "cmip",
             "-i",
             cmip_inputs.path,
@@ -330,7 +330,14 @@ def energies (
             cmip_output_file.path,
             "-rst",
             restart_file.path,
-        ], stdout=PIPE, stderr=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE)
+        cmip_logs = cmip_process.stdout.decode()
+        # If the output does note exist at this poin then it means something went wrong with CMIP
+        if not exists(cmip_output_file.path):
+            print(cmip_logs)
+            cmip_error_logs = cmip_process.stderr.decode()
+            print(cmip_error_logs)
+            raise RuntimeError('Something went wrong with CMIP!')
         # Mine the electrostatic (es) and Van der Walls (vdw) energies for each atom
         # Group the results by atom adding their values
         atom_energies = []
