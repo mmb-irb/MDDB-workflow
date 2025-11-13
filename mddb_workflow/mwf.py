@@ -2163,7 +2163,7 @@ def workflow(
         setup (bool): (Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.
         include (list[str] | None): List of tasks to include.
         exclude (list[str] | None): List of analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway.
-        overwrite (list[str] | bool | None): List of output files to be overwritten thus re-running its corresponding analysis or tool. Use this flag alone to overwrite everything.
+        overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
 
     """
     # Check there are not input errors

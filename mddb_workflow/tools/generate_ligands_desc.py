@@ -1,12 +1,10 @@
 import re
 import os
 import json
-import requests
 from rdkit import Chem
-from functools import lru_cache
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
-from mddb_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data, warn
+from mddb_workflow.utils.auxiliar import InputError, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.structures import Structure
 from urllib.request import Request, urlopen
@@ -15,7 +13,7 @@ from urllib.error import HTTPError, URLError
 
 
 def drugbank_2_smiles(drugbank_id: str) -> Optional[str]:
-    # Request Drugbank
+    """Given a DrugBank ID, use the uniprot API to request its SMILES representation."""
     request_url = Request(
         url=f'https://go.drugbank.com/structures/small_molecule_drugs/{drugbank_id}.smiles',
         headers={'User-Agent': 'Mozilla/5.0'}
@@ -33,15 +31,12 @@ def drugbank_2_smiles(drugbank_id: str) -> Optional[str]:
             raise ValueError('Something went wrong with the Drugbank request (error ' + str(error.code) + ')')
     # This error may occur if there is no internet connection
     except URLError as error:
-        print('Error when requesting ' + request_url)
-        raise ValueError('Something went wrong with the MDposit request')
-
+        raise ValueError('Something went wrong with the MDposit request' + str(error.reason))
     return smiles
 
 
 def chembl_2_smiles(chembl_id: str) -> Optional[str]:
     """Given a ChemBL ID, use the uniprot API to request its data and then mine what is needed for the database."""
-    # Request ChemBL
     parsed_response = None
     request_url = Request(
         url=f'https://www.ebi.ac.uk/chembl/interface_api/es_proxy/es_data/get_es_document/chembl_molecule/{chembl_id}',
@@ -51,7 +46,7 @@ def chembl_2_smiles(chembl_id: str) -> Optional[str]:
         with urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
             smiles = parsed_response['_source']['molecule_structures']['canonical_smiles']
-            pubchem_id = parsed_response['_source']['_metadata']['unichem'][8]['id']
+            # pubchem_id = parsed_response['_source']['_metadata']['unichem'][8]['id']
     # If the accession is not found in ChemBL then the id is not valid
     except HTTPError as error:
         if error.code == 404:
@@ -60,7 +55,7 @@ def chembl_2_smiles(chembl_id: str) -> Optional[str]:
         print('Error when requesting ' + request_url)
         raise ValueError('Something went wrong with the ChemBL request (error ' + str(error.code) + ')')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
-    if parsed_response == None:
+    if parsed_response is None:
         print('WARNING: Cannot find ChemBL entry for accession ' + chembl_id)
         return None
     return smiles
@@ -73,7 +68,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{pubchem_id}/JSON/'
     try:
         with urlopen(request_url) as response:
-            #parsed_response = json.loads(response.read().decode("windows-1252"))
+            # parsed_response = json.loads(response.read().decode("windows-1252"))
             parsed_response = json.loads(response.read().decode("utf-8", errors='ignore'))
     # If the accession is not found in PubChem then the id is not valid
     # This may happen with pubchem ids of non-discrete compounds (e.g. 483927498)
@@ -84,38 +79,38 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
         print('Error when requesting ', request_url)
         raise ValueError('Something went wrong with the PubChem request (error ', str(error.code), ')')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
-    if parsed_response == None:
+    if parsed_response is None:
         print('WARNING: Cannot find PubChem entry for accession ' + pubchem_id)
         return None
     # Mine target data: SMILES
     record = parsed_response.get('Record', None)
-    if record == None:
+    if record is None:
         raise RuntimeError('Wrong Pubchem data structure: no record: ' + request_url)
     sections = record.get('Section', None)
-    if sections == None:
+    if sections is None:
         raise RuntimeError('Wrong Pubchem data structure: no sections: ' + request_url)
     names_and_ids_section = next((section for section in sections if section.get('TOCHeading', None) == 'Names and Identifiers'), None)
-    if names_and_ids_section == None:
+    if names_and_ids_section is None:
         raise RuntimeError('Wrong Pubchem data structure: no name and ids section: ' + request_url)
     names_and_ids_subsections = names_and_ids_section.get('Section', None)
-    if names_and_ids_subsections == None:
+    if names_and_ids_subsections is None:
         raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections: ' + request_url)
 
     # Mine the name
     synonims = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Synonyms'), None)
-    if synonims == None:
+    if synonims is None:
         descriptors = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
         descriptors_subsections = descriptors.get('Section', None)
-        if descriptors_subsections == None:
+        if descriptors_subsections is None:
             raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections: ' + request_url)
         depositor_supplied_descriptors = next((s for s in descriptors_subsections if s.get('TOCHeading', None) == 'IUPAC Name'), None)
         name_substance = depositor_supplied_descriptors.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     else:
         synonims_subsections = synonims.get('Section', None)
-        if synonims_subsections == None:
+        if synonims_subsections is None:
             raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections: ' + request_url)
         depositor_supplied_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
-        if depositor_supplied_synonims == None:
+        if depositor_supplied_synonims is None:
             removed_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Removed Synonyms'), None)
             name_substance = removed_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
         else:
@@ -123,16 +118,16 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
 
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
-    if computed_descriptors_subsection == None:
+    if computed_descriptors_subsection is None:
         raise RuntimeError('Wrong Pubchem data structure: no computeed descriptors: ' + request_url)
     canonical_smiles_section = computed_descriptors_subsection.get('Section', None)
-    if canonical_smiles_section == None:
+    if canonical_smiles_section is None:
         raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES section: ' + request_url)
     canonical_smiles = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'Canonical SMILES'), None)
-    if canonical_smiles == None:
+    if canonical_smiles is None:
         # In some cases there is no canonical SMILES but a non-canonical one could exists
         non_canonical_smiles_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'SMILES'), None)
-        if non_canonical_smiles_section == None:
+        if non_canonical_smiles_section is None:
             raise RuntimeError('Wrong Pubchem data structure: no canonical SMILES: ' + request_url)
 
     if canonical_smiles:
@@ -140,15 +135,15 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
     if non_canonical_smiles_section:
         smiles = non_canonical_smiles_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
 
-    if smiles == None:
+    if smiles is None:
         raise RuntimeError('Wrong Pubchem data structure: no SMILES: ' + request_url)
 
     # Mine target data: MOLECULAR FORMULA
     molecular_formula_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Molecular Formula'), None)
-    if molecular_formula_subsection == None:
+    if molecular_formula_subsection is None:
         raise RuntimeError('Wrong Pubchem data structure: no molecular formula section: ' + request_url)
     molecular_formula = molecular_formula_subsection.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
-    if molecular_formula == None:
+    if molecular_formula is None:
         raise RuntimeError('Wrong Pubchem data structure: no molecular formula: ' + request_url)
 
     # Mine target data: PDB ID
@@ -157,7 +152,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
     # If this section is missing then it means this PubChem compound has no PDB id
     if pdb_id_subsection:
         pdb_id_subsections = pdb_id_subsection.get('Section', None)
-        if pdb_id_subsections == None:
+        if pdb_id_subsections is None:
             raise RuntimeError('Wrong Pubchem data structure: no name and ids subsections: ' + request_url)
         bond_structures = next((s for s in pdb_id_subsections if s.get('TOCHeading', None) == 'Protein Bound 3D Structures'), None)
         if bond_structures:
@@ -165,25 +160,25 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
             # If this section is missing then it means this PubChem compound has no PDB id
             if bond_structures_section:
                 ligands_structure = next((s for s in bond_structures_section if s.get('TOCHeading', None) == 'Ligands from Protein Bound 3D Structures'), None)
-                if ligands_structure == None:
+                if ligands_structure is None:
                     raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures section: ' + request_url)
                 ligands_structure_subsections = ligands_structure.get('Section', None)
-                if ligands_structure_subsections == None:
+                if ligands_structure_subsections is None:
                     raise RuntimeError('Wrong Pubchem data structure: no Ligands from Protein Bound 3D Structures subsections: ' + request_url)
                 ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
-                if ligands_pdb == None:
+                if ligands_pdb is None:
                     raise RuntimeError('Wrong Pubchem data structure: no PDBe Ligand Code: ' + request_url)
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
 
     # Mine de INCHI and INCHIKEY
     inchi_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChI'), None)
-    if inchi_section == None:
+    if inchi_section is None:
         raise RuntimeError('Wrong Pubchem data structure: no InChI: ' + request_url)
     if inchi_section:
         inchi = inchi_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
 
     inchikey_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChIKey'), None)
-    if inchikey_section == None:
+    if inchikey_section is None:
         raise RuntimeError('Wrong Pubchem data structure: no InChIKey: ' + request_url)
     if inchikey_section:
         inchikey = inchikey_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
@@ -192,7 +187,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
 
 
 def drugbank_2_pubchem(drugbank_id):
-    # Request Drugbank
+    """Given a DrugBank ID, use the uniprot API to request its PubChem compound ID."""
     request_url = Request(
     url=f'https://go.drugbank.com/drugs/{drugbank_id}',
     headers={
@@ -218,14 +213,12 @@ def drugbank_2_pubchem(drugbank_id):
         raise ValueError(f'Wrong request. Code: {error.code}')
     # This error may occur if there is no internet connection
     except URLError as error:
-        print('Error when requesting ' + request_url)
-        raise ValueError('Something went wrong with the DrugBank request')
-
+        raise ValueError('Something went wrong with the DrugBank request' + str(error.reason))
     return pubchem_id
 
 
 def chembl_2_pubchem(chembl_id):
-    # Request ChemBL
+    """Given a ChemBL ID, use the uniprot API to request its PubChem compound ID."""
     parsed_response = None
     request_url = Request(
          url=f'https://www.ebi.ac.uk/chembl/interface_api/es_proxy/es_data/get_es_document/chembl_molecule/{chembl_id}',
@@ -235,13 +228,13 @@ def chembl_2_pubchem(chembl_id):
         with urlopen(request_url) as response:
             parsed_response = json.loads(response.read().decode("utf-8"))
             unichem = parsed_response['_source']['_metadata']['unichem']
-            if unichem == None:
+            if unichem is None:
                 raise RuntimeError('Wrong Pubchem data structure: no unichem section')
             pubchem_section = next((section for section in unichem if section.get('src_url', None) == "http://pubchem.ncbi.nlm.nih.gov"), None)
-            if pubchem_section == None:
+            if pubchem_section is None:
                 raise RuntimeError('Wrong Pubchem data structure: no pubchem section')
             pubchem_id = pubchem_section.get('id', None)
-            if pubchem_id == None:
+            if pubchem_id is None:
                 raise RuntimeError('Wrong Pubchem data structure: no pubchem ID')
     # If the accession is not found in ChemBL then the id is not valid
     except HTTPError as error:
@@ -251,7 +244,7 @@ def chembl_2_pubchem(chembl_id):
         print('Error when requesting ' + request_url)
         raise ValueError('Something went wrong with the ChemBL request (error ' + str(error.code) + ')')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
-    if parsed_response == None:
+    if parsed_response is None:
         print('WARNING: Cannot find ChemBL entry for accession ' + chembl_id)
         return None
 
@@ -281,17 +274,16 @@ def obtain_mordred_morgan_descriptors(smiles: str) -> tuple:
         descriptors.PathCount,  # Conteo de caminos moleculares
     ], ignore_3D=True)
 
-
     # Calculate Mordred results
     mordred_results = calc(mol).drop_missing().asdict()
 
-    ######## MORGAN FINGERPRINT ###########
+    # MORGAN FINGERPRINT
     morgan_fp_gen = Chem.rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
     ao = Chem.rdFingerprintGenerator.AdditionalOutput()
     ao.AllocateAtomCounts()
     ao.AllocateAtomToBits()
     ao.AllocateBitInfoMap()
-    fp = morgan_fp_gen.GetFingerprint(mol,additionalOutput=ao)
+    fp = morgan_fp_gen.GetFingerprint(mol, additionalOutput=ao)
     morgan_fp_bit_array = list(fp)
     morgan_highlight_atoms = {}
     for bit, atoms in ao.GetBitInfoMap().items():
@@ -304,7 +296,7 @@ def check_matched_ligand(ligand: dict, ligand_data: dict, cache: 'Cache') -> boo
     """Check the cache to see if the ligand has already been matched or not, if not the ligand is skipped."""
     # The pubchem id could be in the ligands data or the ligand input
     pubchem_id_1 = ligand.get('pubchem', None)
-    if ligand_data != None:
+    if ligand_data is not None:
         pubchem_id_2 = ligand_data.get('pubchem', None)
     else:
         pubchem_id_2 = None
@@ -340,7 +332,7 @@ def generate_ligand_mapping(
     for pdb_id in pdb_ids:
         # Check we have cached this specific pdb
         pubchem_ids_from_pdb = pdb_2_pubchem_cache.get(pdb_id, None)
-        if pubchem_ids_from_pdb != None:
+        if pubchem_ids_from_pdb is not None:
             print(f' Retriving from cache PubChem ids for PDB id {pdb_id}: ')
             if len(pubchem_ids_from_pdb) > 0:
                 print('  PubChem ids: ' + ', '.join(pubchem_ids_from_pdb))
@@ -348,7 +340,7 @@ def generate_ligand_mapping(
                 print('  This PDB id has no PubChem ids')
 
         # If we had no cached pdb 2 pubchem then ask for them
-        if pubchem_ids_from_pdb == None:
+        if pubchem_ids_from_pdb is None:
             pubchem_ids_from_pdb = pdb_2_pubchem(pdb_id)
             # Save the result in the cache object so it is saved to cache later
             pdb_2_pubchem_cache[pdb_id] = pubchem_ids_from_pdb
@@ -382,18 +374,18 @@ def generate_ligand_mapping(
     # Save the maps of every ligand
     ligand_maps = []
     # Get cached ligand data
-    # AGUS: esto lo creamos por alguna razón para que funcione sin internet (en el cluster) pero realmente
-    # AGUS: llena el cache con datos que no son necesarios porque toda esa info está en el ligand_references.json
-    #ligand_data_cache = cache.retrieve(LIGANDS_DATA, {})
+    # AGUS: esto lo creamos por alguna razón para que funcione sin internet (en el cluster) pero realmente
+    # AGUS: llena el cache con datos que no son necesarios porque toda esa info está en el ligand_references.json
+    # ligand_data_cache = cache.retrieve(LIGANDS_DATA, {})
     # Iterate input ligands
     for ligand in ligands:
         # Set the pubchem id which may be assigned in different steps
         pubchem_id = None
         # If input ligand is not a dict but a single int/string then handle it
-        if type(ligand) == int:
+        if type(ligand) is int:
             print(f'A ligand number ID has been identified {ligand}, assuming that is a PubChem ID...')
             ligand = {'pubchem': str(ligand)}
-        elif type(ligand) == str:
+        elif type(ligand) is str:
             raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
         # Check if we already have this ligand data
         ligand_data = obtain_ligand_data_from_file(json_ligands_data, ligand)
@@ -436,8 +428,8 @@ def generate_ligand_mapping(
                 continue
         # Add it to the list of visited formulas
         visited_formulas.append(formula)
-        # If the user defined a ligand name, it will be respectedand added to the metadata
-        # if there isn't a defined name, it will be mined from PubChem
+        # If the user defined a ligand name, it will be respected and added to the metadata
+        # If there isn't a defined name, it will be mined from PubChem
         user_forced_ligand_name = ligand.get('name', None)
         # Map structure residues with the current ligand
         # If the user forced the residues then use them
@@ -466,7 +458,7 @@ def generate_ligand_mapping(
             # Otherwise simply remove it from the final ligand references file and the forwarded maps
             ligands_data.pop()
             ligand_maps.pop()
-            # Update the cache with the pubchem id of the ligands that didn't match
+            # Update the cache with the pubchem id of the ligands that didn't match
             not_matched_pubchems = cache.retrieve(NOT_MATCHED_LIGANDS, [])
             not_matched_pubchems.append(ligand_map['name'])
             cache.update(NOT_MATCHED_LIGANDS, not_matched_pubchems)
@@ -482,8 +474,8 @@ def generate_ligand_mapping(
     # At this point maybe some ligands in the structure may not match because they have not been included by either the author or the user. Alternatively, the authors may have added them
     # So those "ligands" are residues that are not matched to any ligand in the structure and the analyses will not run
     # LORE AGUS: en el dataset de MDBind (cineca) hay muchas simulaciones con ligandos modificados (incluso solo un átomo) y no matchean
-    # LORE AGUS: con los que están en el PDB, por lo que no se hace ningún análisis sobre estos (y se debería)
-    # LORE AGUS: ahora se intenta buscar su pubchem ID para extraer la información a partir del inchikey (da menos problemas que el smiles) y se hacen los análisis pertinentes.
+    # LORE AGUS: con los que están en el PDB, por lo que no se hace ningún análisis sobre estos (y se debería)
+    # LORE AGUS: ahora se intenta buscar su pubchem ID para extraer la información a partir del inchikey (da menos problemas que el smiles) y se hacen los análisis pertinentes.
     # AGUS: si no se puede extraer información de estos porque el inchikey no funciona, se muestra la información más básica posible y se genera una referencia vacía (será problemático)
     residx_2_inchikey = {resid: inchikey
                          for inchikey, data in inchikeys.items()
@@ -517,9 +509,8 @@ def generate_ligand_mapping(
         inchikey = residx_2_inchikey[residue.index]
         # If the InChIKey is not None then try to obtain the PubChem CID
         if inchikey:
-            inchi = inchikeys[inchikey]['inchi']
             ligand_data['inchikey'] = inchikey
-            if cid := inchikey_2_pubchem(inchikey, inchi):
+            if cid := inchikeys[inchikey]['pubchem_cid']:
                 ligand_data = obtain_ligand_data_from_pubchem({'pubchem': cid})
                 smiles = ligand_data['smiles']
                 mordred_results, morgan_fp_bit_array, morgan_highlight_atoms, mol_block = obtain_mordred_morgan_descriptors(smiles)
@@ -549,6 +540,7 @@ def generate_ligand_mapping(
             print(f' - {ligand_map["name"]}: {residue_count} residue{plural_suffix}')
 
     return ligand_maps
+
 
 # Set the expected ligand data fields
 LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid', 'inchikey'])
@@ -681,18 +673,19 @@ def count_atom_elements(molecular_formula: str) -> dict:
 
 
 def parse_splits(splits: list[str]) -> dict:
-    """This function associates elements in a list
+    """Associates elements in a list.
+
     If a string is followed by a number then they go together.
     If a string has no number then the number is 1 for this specific string.
     """
     parsed = {}
     previous_key = None
     for split in splits:
-        if type(split) == str:
+        if type(split) is str:
             if previous_key:
                 parsed[previous_key] = 1
             previous_key = split
-        elif type(split) == int:
+        elif type(split) is int:
             parsed[previous_key] = split
             previous_key = None
         else:
@@ -709,7 +702,7 @@ def match_ligandsID_to_res(ligand_atom_element_count: dict, residue_atom_element
         del ligand_atom_element_count['H']
     if 'H' in residue_atom_element_count:
         del residue_atom_element_count['H']
-    #shared_items = {k: ligand_atom_element_count[k] for k in ligand_atom_element_count if k in residue_atom_element_count and ligand_atom_element_count[k] == residue_atom_element_count[k]}
+    # shared_items = {k: ligand_atom_element_count[k] for k in ligand_atom_element_count if k in residue_atom_element_count and ligand_atom_element_count[k] == residue_atom_element_count[k]}
     ligand_elements = set(ligand_atom_element_count.keys())
     residue_elements = set(residue_atom_element_count.keys())
 
@@ -717,12 +710,12 @@ def match_ligandsID_to_res(ligand_atom_element_count: dict, residue_atom_element
     # If so, we are done
     different_keys = ligand_elements.symmetric_difference(residue_elements)
     if len(different_keys) > 0:
-    #    print("Elements that are not matching:")
-    #     for atom in different_keys:
-    #         if atom in ligand_atom_element_count:
-    #             print(f"In Pubchem {list(ligand_atom_element_count.keys())[0]} : {atom}: {ligand_atom_element_count[atom]}")
-    #         else:
-    #             print(f"In PDB residue {list(residue_atom_element_count.keys())[0]}: {atom}: {residue_atom_element_count[atom]}")
+        # print("Elements that are not matching:")
+        #     for atom in different_keys:
+        #         if atom in ligand_atom_element_count:
+        #             print(f"In Pubchem {list(ligand_atom_element_count.keys())[0]} : {atom}: {ligand_atom_element_count[atom]}")
+        #         else:
+        #             print(f"In PDB residue {list(residue_atom_element_count.keys())[0]}: {atom}: {residue_atom_element_count[atom]}")
         return False
 
     # Different values
@@ -733,10 +726,10 @@ def match_ligandsID_to_res(ligand_atom_element_count: dict, residue_atom_element
 
     # If the count of elements does not match then stop here
     if len(different_values) > 0:
-    #     Print the differences found between the elements
-    #     print("Number of atoms that are different:")
-    #     for atom in different_values:
-    #         print(f"In Pubchem {list(ligand_atom_element_count.keys())[0]} {atom}: {ligand_atom_element_count[atom]}, In PDB residue {list(pdb_dict.keys())[0]}: {atom}: {residue_atom_element_count[atom]}\n")
+        # # Print the differences found between the elements
+        # print("Number of atoms that are different:")
+        # for atom in different_values:
+        #     print(f"In Pubchem {list(ligand_atom_element_count.keys())[0]} {atom}: {ligand_atom_element_count[atom]}, In PDB residue {list(pdb_dict.keys())[0]}: {atom}: {residue_atom_element_count[atom]}\n")
         return False
 
     return True
@@ -873,11 +866,11 @@ def pdb_ligand_2_pubchem_RAW_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Mine the pubchem id
     compounds = parsed_response['PC_Compounds']
     if len(compounds) != 1:
-        # There could be more than one result
+        # There could be more than one result
         # For example, the case HEM: https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/HEM/json
-        # In this case we picked the first result
+        # In this case we picked the first result
         compound = compounds[0]
-        #raise RuntimeError('We are not having 1 and only 1 result from PubChem: ' + request_url)
+        # raise RuntimeError('We are not having 1 and only 1 result from PubChem: ' + request_url)
     compound = compounds[0]
     id1 = compound['id']
     id2 = id1['id']
@@ -887,7 +880,7 @@ def pdb_ligand_2_pubchem_RAW_RAW(pdb_ligand_id: str) -> Optional[str]:
 
 def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     """Given a PDB id, get all its ligand codes.
-    e.g. 2I3I -> 618, BTB, ZN, EDO, LI
+    e.g. 2I3I -> 618, BTB, ZN, EDO, LI.
     """
     # Set the request query
     query = '''query structure($id: String!) {
@@ -903,13 +896,13 @@ def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     # AGUS: esto es un caso muy concreto que me encontré con el PDB 1N3W
     # AGUS: el ligando en este caso es una 'Biologically Interesting Molecules' y se muestran como 'PRD_'
     prd_code = None
-    if nonpolymers == None:
+    if nonpolymers is None:
         # Get the prd ligand code
         prd_code = pdb_ligand_2_prd(pdb_id)
         if prd_code != None:
             return [prd_code]
 
-    if nonpolymers == None and prd_code == None: return []
+    if nonpolymers is None and prd_code is None: return []
     # Iterate nonpolymer entities to mine each PDB code
     ligand_codes = []
     for nonpolymer in nonpolymers:
@@ -965,23 +958,3 @@ def pdb_2_pubchem(pdb_id: str) -> list[str]:
         pubchem_ids.append(pubchem_id)
 
     return pubchem_ids
-
-
-@lru_cache(maxsize=None)
-def inchikey_2_pubchem(inchikey: str, inchi) -> Optional[str]:
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
-    r = requests.get(url)
-    if r.ok:
-        data = r.json()
-        return data['IdentifierList']['CID'][0]
-    # Try PubChem standardization service to write things like the bonds from aromatic rings in the same order
-    # You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8
-    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-    payload = {'inchi': inchi}
-    r = requests.post(url, data=payload)
-    if r.ok:
-        data = r.json()
-        return data['PC_Compounds'][0]['id']['id']['cid']
-    # RUBEN: esto puede que sea muy extremo pero es para ver si hay errores silenciosos
-    warn(f"Failed to fetch CID for InChIKey {inchikey}: {r.status_code} {r.reason}")
-    return None
