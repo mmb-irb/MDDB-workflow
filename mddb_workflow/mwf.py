@@ -170,8 +170,6 @@ class MD:
             self.register = self.project.register
         else:
             self.register = Register(register_file)
-        # Save also warnings apart since they are to be used as an input for metadata tasks
-        self.warnings = self.register.warnings
 
         # Set a new MD specific cache
         # In case the directory is the project directory itself, use the project cache
@@ -988,6 +986,13 @@ class MD:
 
     run_channels_analysis = Task('channels', 'Membrane channels analysis',
         channels, {'frames_limit': 10})
+    
+    # Set a getter for the warnings
+    # The warnings list should not be reasigned, but it was back in the day
+    # To avoid silent bugs, we read it directly from the register every time
+    def get_warnings (self) -> list:
+        return self.register.warnings
+    warnings = property(get_warnings, None, None, "MD warnings to be written in metadata")
 
 
 class Project:
@@ -1297,8 +1302,6 @@ class Project:
         register_filepath = self.pathify(REGISTER_FILENAME)
         register_file = File(register_filepath)
         self.register = Register(register_file)
-        # Save also warnings apart since they are to be used as an input for metadata tasks
-        self.warnings = self.register.warnings
 
         # Set the cache
         cache_filepath = self.pathify(CACHE_FILENAME)
@@ -2025,6 +2028,13 @@ class Project:
 
     # Provenance data
     produce_provenance = Task('aiidata', 'Produce provenance', produce_provenance)
+
+    # Set a getter for the warnings
+    # The warnings list should not be reasigned, but it was back in the day
+    # To avoid silent bugs, we read it directly from the register every time
+    def get_warnings (self) -> list:
+        return self.register.warnings
+    warnings = property(get_warnings, None, None, "Project warnings to be written in metadata")
 
 
 # AUXILIAR FUNCTIONS ---------------------------------------------------------------------------

@@ -80,7 +80,13 @@ class Register:
 
     def remove_warnings (self, tag : str):
         """ Remove warnings filtered by tag and save the register. """
-        self.warnings = [ warning for warning in self.warnings if warning['tag'] != tag ]
+        # WARNING: Do not declare again the warnings list to remove values
+        # WARNING: i.e. don't do a comprehension list
+        # WARNING: Otherwise if the warnings list is saved somewhere else they will be disconnected
+        while True:
+            target_warning = next((warning for warning in self.warnings if warning['tag'] == tag), None)
+            if not target_warning: break
+            self.warnings.remove(target_warning)
         self.save()
 
     def save (self):
