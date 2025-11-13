@@ -16,6 +16,7 @@ from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
 import requests
+import urllib.request
 from subprocess import run, PIPE
 
 
@@ -321,6 +322,29 @@ def parse_glob (path : str) -> list[str]:
     # If there is glob pattern then parse it
     parsed_filepaths = glob(path)
     return parsed_filepaths
+
+# Return either if the passed string is a URL or not
+def is_url (path : str) -> bool:
+    return path[0:4] == 'http'
+
+# Set the filename of an input file downloaded from an input URL
+# In this scenario we are free to set our own paths or filenames
+# Note that the original name will usually be the very same output filename
+# In order to avoid both filenames being the same we will add a header here
+def url_to_source_filename (url : str) -> str:
+    original_filename = url.split('/')[-1]
+    return 'source_' + original_filename
+
+# Set a function to download files from a specific URL
+def download_file (request_url : str, output_file : 'File'):
+    print(f'Downloading file "{output_file.path}" from {request_url}\n')
+    try:
+        urllib.request.urlretrieve(request_url, output_file.path)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            raise Exception(f'Missing remote file "{output_file.filename}"')
+        # If we don't know the error then simply say something went wrong
+        raise Exception(f'Something went wrong when downloading file "{output_file.filename}" from {request_url}')
 
 # Supported byte sizes
 SUPPORTED_BYTE_SIZES = {

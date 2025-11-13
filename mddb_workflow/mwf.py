@@ -15,8 +15,8 @@ from mddb_workflow.utils.constants import *
 # Import local utils
 from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
-from mddb_workflow.utils.auxiliar import is_glob, parse_glob
-from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version
+from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
+from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -143,11 +143,13 @@ class MD:
         # Priorize the MD directory over the project directory
         self.arg_input_structure_filepath = input_structure_filepath
         self._input_structure_filepath = None
+        self._input_structure_url = None
         # Set the internal variable for the input structure file, to be assigned later
         self._input_structure_file = None
         # Save the input trajectory filepaths
         self.arg_input_trajectory_filepaths = input_trajectory_filepaths
         self._input_trajectory_filepaths = None
+        self._input_trajectory_urls = None
         # Set the internal variable for the input trajectory files, to be assigned later
         self._input_trajectory_files = None
 
@@ -211,6 +213,13 @@ class MD:
             In case it exists in both or none then assume it is relative to MD directory.
             Parse glob notation in the process.
             """
+            # Check if it is a URL
+            if is_url(input_path):
+                self._input_structure_url = input_path
+                # Set the paths for the further download
+                source_filename = url_to_source_filename(input_path)
+                md_relative_filepath = self.pathify(source_filename)
+                return md_relative_filepath
             # Check if it is an absolute path
             if isabs(input_path):
                 abs_glob_parse = parse_glob(input_path)
@@ -293,22 +302,27 @@ class MD:
         # First set the input structure filepath
         input_structure_filepath = self.get_input_structure_filepath()
         # Now set the input structure file
-        self._input_structure_file = File(input_structure_filepath)
+        input_structure_file = File(input_structure_filepath)
+        # If there is a structure URL then we must donwload the structure first
+        input_structure_url = self._input_structure_url
+        if input_structure_url and not input_structure_file.exists:
+            original_filename = input_structure_url.split('/')[-1]
+            # If there is a remote then use it
+            if self.remote:
+                # If the structure filename is the standard structure filename then use the structure endpoint instead
+                if original_filename == STRUCTURE_FILENAME:
+                    self.remote.download_standard_structure(input_structure_file)
+                # Otherwise download the input strucutre file by its filename
+                else:
+                    self.remote.download_file(original_filename, input_structure_file)
+            # Otherwise use the URL as is
+            else:
+                download_file(input_structure_url, input_structure_file)
         # If the file already exists then return it
-        if self._input_structure_file.exists:
+        if input_structure_file.exists:
+            self._input_structure_file = input_structure_file
             return self._input_structure_file
-        # Try to download it
-        # If we do not have the required parameters to download it then we surrender here
-        if not self.remote:
-            raise InputError(f'Missing input structure file "{self._input_structure_file.path}"')
-        # Download the structure
-        # If the structure filename is the standard structure filename then use the structure endpoint instead
-        if self._input_structure_file.filename == STRUCTURE_FILENAME:
-            self.remote.download_standard_structure(self._input_structure_file)
-        # Otherwise download the input strucutre file by its filename
-        else:
-            self.remote.download_file(self._input_structure_file)
-        return self._input_structure_file
+        raise InputError(f'Missing input structure file "{input_structure_file.path}"')
     input_structure_file = property(get_input_structure_file, None, None, "Input structure filename (read only)")
 
     # Input trajectory filename ------------
@@ -332,6 +346,20 @@ class MD:
                 checked_paths = [checked_paths]
             else:
                 raise InputError('Input trajectory filepaths must be a list of strings or a string')
+            # Make sure all or none of the trajectory paths are URLs
+            url_count = sum([is_url(path) for path in checked_paths])
+            if not (url_count == 0 or url_count == len(checked_paths)):
+                raise InputError('All trajectory paths must be paths or URLs. Mixing is not supported')
+            # In case trajectory paths are URLs
+            if url_count > 0:
+                self._input_trajectory_urls = checked_paths
+                # Set the paths for the further download
+                parsed_paths = []
+                for path in checked_paths:
+                    source_filename = url_to_source_filename(path)
+                    md_relative_filepath = self.pathify(source_filename)
+                    parsed_paths.append(md_relative_filepath)
+                return parsed_paths
             # Make sure all or none of the trajectory paths are absolute
             abs_count = sum([isabs(path) for path in checked_paths])
             if not (abs_count == 0 or abs_count == len(checked_paths)):
@@ -418,35 +446,46 @@ class MD:
             return self._input_trajectory_files
         # Otherwise we must set the input trajectory files
         input_trajectory_filepaths = self.get_input_trajectory_filepaths()
-        self._input_trajectory_files = [File(path) for path in input_trajectory_filepaths]
+        input_trajectory_files = [ File(path) for path in input_trajectory_filepaths ]
+        # If there are input trajectory URLs then download the trajectories first
+        input_trajectory_urls = self._input_trajectory_urls
+        if input_trajectory_urls:
+            for trajectory_url, trajectory_file in zip( input_trajectory_urls, input_trajectory_files ):
+                # If the trajectory file already exists then skip it
+                if trajectory_file.exists: continue
+                original_filename = trajectory_url.split('/')[-1]
+                # If there is a remote then use it
+                if self.remote:
+                    # If the trajectory filename is the standard trajectory filename then use the trajectory endpoint instead
+                    if original_filename == TRAJECTORY_FILENAME:
+                        frame_selection = None
+                        if self.project.sample_trajectory:
+                            remote_frames = self.remote.snapshots
+                            maximum_desired_frames = self.project.sample_trajectory
+                            step, final_frames = calculate_frame_step(remote_frames, maximum_desired_frames)
+                            frame_selection = f'1:{remote_frames}:{step}'
+                        self.remote.download_trajectory(trajectory_file, frame_selection=frame_selection, format='xtc')
+                    # Otherwise download the input trajectory file by its filename
+                    else:
+                        if self.project.sample_trajectory:
+                            raise InputError('The "-smp" argument is supported only when asking for the standard trajectory')
+                        self.remote.download_file(original_filename, trajectory_file)
+                # Otherwise use the URL as is
+                else:
+                    if self.project.sample_trajectory:
+                        raise InputError('The "-smp" argument is supported only when using the "-proj" argument')
+                    download_file(trajectory_url, trajectory_file)
         # Find missing trajectory files
         missing_input_trajectory_files = []
-        for trajectory_file in self._input_trajectory_files:
+        for trajectory_file in input_trajectory_files:
             if not trajectory_file.exists:
                 missing_input_trajectory_files.append(trajectory_file)
         # If all files already exists then we are done
         if len(missing_input_trajectory_files) == 0:
+            self._input_trajectory_files = input_trajectory_files
             return self._input_trajectory_files
-        # Try to download the missing files
-        # If we do not have the required parameters to download it then we surrender here
-        if not self.remote:
-            missing_filepaths = [trajectory_file.path for trajectory_file in missing_input_trajectory_files]
-            raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
-        # Download each trajectory file (ususally it will be just one)
-        for trajectory_file in self._input_trajectory_files:
-            # If this is the main trajectory (the usual one) then use the dedicated endpoint
-            if trajectory_file.filename == TRAJECTORY_FILENAME:
-                frame_selection = None
-                if self.project.sample_trajectory:
-                    remote_frames = self.remote.snapshots
-                    maximum_desired_frames = self.project.sample_trajectory
-                    step, final_frames = calculate_frame_step(remote_frames, maximum_desired_frames)
-                    frame_selection = f'1:{remote_frames}:{step}'
-                self.remote.download_trajectory(trajectory_file, frame_selection=frame_selection, format='xtc')
-            # Otherwise, download it by its filename
-            else:
-                self.remote.download_file(trajectory_file)
-        return self._input_trajectory_files
+        missing_filepaths = [trajectory_file.path for trajectory_file in missing_input_trajectory_files]
+        raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
     def get_md_inputs(self) -> dict:
@@ -512,7 +551,7 @@ class MD:
         if target_file.filename not in self.remote.available_files:
             return False
         # Download the file
-        self.remote.download_file(target_file)
+        self.remote.download_file(target_file.filename, target_file)
         return True
 
     def print_tests_summary(self):
@@ -1162,6 +1201,7 @@ class Project:
         self.arg_input_topology_filepath = input_topology_filepath
         self._input_topology_filepath = None
         self._input_topology_file = None
+        self._input_topology_url = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
         self.input_structure_filepath = input_structure_filepath
@@ -1491,7 +1531,11 @@ class Project:
 
         def parse(filepath: str) -> str:
             """Parse possible glob notation."""
-            # If there is no glob pattern then just return the string as is
+            # If it is a URL then set the paths for the further download
+            if is_url(filepath):
+                self._input_topology_url = filepath
+                source_filename = url_to_source_filename(filepath)
+                return source_filename
             if not is_glob(filepath):
                 return filepath
             # If there is glob pattern then parse it
@@ -1547,30 +1591,39 @@ class Project:
             return self._input_topology_file
         # If no input is passed then we check the inputs file
         # Set the file
-        self._input_topology_file = File(input_topology_filepath)
+        input_topology_file = File(input_topology_filepath)
+        # If there is a topology URL then we must donwload the topology first
+        input_topology_url = self._input_topology_url
+        if input_topology_url and not input_topology_file.exists:
+            original_filename = input_topology_url.split('/')[-1]
+            # If there is a remote then use it
+            if self.remote:
+                # If the topology filename is the standard topology filename then use the topology endpoint instead
+                if original_filename == STANDARD_TOPOLOGY_FILENAME:
+                    self.remote.download_standard_topology(input_topology_file)
+                # Otherwise download the input strucutre file by its filename
+                else:
+                    self.remote.download_file(original_filename, input_topology_file)
+                # In case the topology is a '.top' file we consider it is a Gromacs topology
+                # It may come with additional itp files we must download as well
+                if input_topology_file.format == 'top':
+                    # Find available .itp files and download each of them
+                    itp_filenames = [filename for filename in self.remote.available_files if filename[-4:] == '.itp']
+                    for itp_filename in itp_filenames:
+                        itp_filepath = self.pathify(itp_filename)
+                        itp_file = File(itp_filepath)
+                        self.remote.download_file(itp_file.filename, itp_file)
+            # Otherwise use the URL as is
+            else:
+                if input_topology_file.format == 'top':
+                    warn('Automatic download of itp files is not supported without the "-proj" argument.' + \
+                         ' Thus if the topology has associated itp files they will not be downloaded.')
+                download_file(input_topology_url, input_topology_file)
         # If the file already exists then we are done
-        if self._input_topology_file.exists:
+        if input_topology_file.exists:
+            self._input_topology_file = input_topology_file
             return self._input_topology_file
-        # Try to download it
-        # If we do not have the required parameters to download it then we surrender here
-        if not self.remote:
-            raise InputError(f'Missing input topology file "{self._input_topology_file.filename}"')
-        # Otherwise, try to download it using the files endpoint
-        # Note that this is not usually required
-        if self._input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
-            self.remote.download_standard_topology(self._input_topology_file)
-        else:
-            self.remote.download_file(self._input_topology_file)
-        # In case the topology is a '.top' file we consider it is a Gromacs topology
-        # It may come with additional itp files we must download as well
-        if self._input_topology_file.format == 'top':
-            # Find available .itp files and download each of them
-            itp_filenames = [filename for filename in self.remote.available_files if filename[-4:] == '.itp']
-            for itp_filename in itp_filenames:
-                itp_filepath = self.pathify(itp_filename)
-                itp_file = File(itp_filepath)
-                self.remote.download_file(itp_file)
-        return self._input_topology_file
+        raise InputError(f'Missing input topology file "{input_topology_file.filename}"')
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
     def get_input_structure_file(self) -> File:

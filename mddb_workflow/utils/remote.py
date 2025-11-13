@@ -61,17 +61,17 @@ class Remote:
         return self._available_files
     available_files = property(get_available_files, None, None, "Remote available files (read only)")
 
-    def download_file (self, output_file : 'File'):
+    def download_file (self, target_filename : str, output_file : 'File'):
         """Download a specific file from the project/files endpoint."""
-        request_url = f'{self.url}/files/{output_file.filename}'
-        print(f'Downloading file "{output_file.filename}" ({output_file.path})\n')
+        request_url = f'{self.url}/files/{target_filename}'
+        print(f'Downloading file "{target_filename}" in {output_file.path}\n')
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except urllib.error.HTTPError as error:
             if error.code == 404:
-                raise Exception(f'Missing remote file "{output_file.filename}"')
+                raise Exception(f'Missing remote file "{target_filename}"')
             # If we don't know the error then simply say something went wrong
-            raise Exception(f'Something went wrong when downloading file "{output_file.filename}": ' + request_url)
+            raise Exception(f'Something went wrong when downloading file "{target_filename}" in {request_url}')
 
     # Download the project standard topology
     def download_standard_topology (self, output_file : 'File'):
