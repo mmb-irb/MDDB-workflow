@@ -3,6 +3,7 @@
 from mddb_workflow import __path__
 from mddb_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import YELLOW_HEADER, COLOR_END
+from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 
 import os
 from os.path import isfile, exists
@@ -345,6 +346,11 @@ def download_file (request_url : str, output_file : 'File'):
             raise Exception(f'Missing remote file "{output_file.filename}"')
         # If we don't know the error then simply say something went wrong
         raise Exception(f'Something went wrong when downloading file "{output_file.filename}" from {request_url}')
+
+# Check if a file is a standard topology
+# Note that the filename may include the source header
+def is_standard_topology (file : 'File') -> bool:
+    return file.filename.endswith(STANDARD_TOPOLOGY_FILENAME)
 
 # Supported byte sizes
 SUPPORTED_BYTE_SIZES = {

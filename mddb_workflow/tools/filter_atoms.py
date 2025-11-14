@@ -4,9 +4,9 @@ import json
 
 import pytraj as pt
 
-from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter, pdb_filter
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_charges import get_raw_charges
@@ -127,7 +127,7 @@ def filter_atoms (
             else:
                 filtered_topology_atoms_count = topology_atoms_count
         # Standard topology
-        elif input_topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+        elif is_standard_topology(input_topology_file):
             standard_topology = None
             with open(input_topology_file.path, 'r') as file:
                 standard_topology = json.load(file)

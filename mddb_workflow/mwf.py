@@ -17,6 +17,7 @@ from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
+from mddb_workflow.utils.auxiliar import is_standard_topology
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -286,7 +287,7 @@ class MD:
         # Note that topology input filepath must exist and an input error will raise otherwise
         # However if we are using the standard topology file we can not extract the PDB from it (yet)
         if self.project.input_topology_file != MISSING_TOPOLOGY and \
-        self.project.input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME:
+            not is_standard_topology(self.project.input_topology_file):
             return self.project.input_topology_file.path
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')

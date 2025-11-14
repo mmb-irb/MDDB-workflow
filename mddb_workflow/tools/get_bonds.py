@@ -1,7 +1,7 @@
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
-from mddb_workflow.utils.auxiliar import load_json, warn, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import load_json, warn, MISSING_TOPOLOGY, is_standard_topology
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
-from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, MISSING_BONDS_FLAG
+from mddb_workflow.utils.constants import MISSING_BONDS_FLAG
 from mddb_workflow.utils.vmd_spells import get_covalent_bonds
 from mddb_workflow.utils.gmx_spells import get_tpr_bonds as get_tpr_bonds_gromacs
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count
@@ -182,7 +182,7 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ 
         return None
     print('Mining atom bonds from topology file')
     # If we have the standard topology then get bonds from it
-    if bonds_source_file.filename == STANDARD_TOPOLOGY_FILENAME:
+    if is_standard_topology(bonds_source_file):
         print(f' Bonds in the "{bonds_source_file.filename}" file will be used')
         standard_topology = load_json(bonds_source_file.path)
         standard_atom_bonds = standard_topology.get('atom_bonds', None)

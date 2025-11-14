@@ -2,8 +2,8 @@ import pytraj as pt
 
 from json import load
 
-from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, MISSING_CHARGES, load_json
-from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, RAW_CHARGES_FILENAME
+from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, is_standard_topology, MISSING_CHARGES, load_json
+from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.gmx_spells import get_tpr_charges as get_tpr_charges_gromacs
 from mddb_workflow.utils.type_hints import *
 
@@ -32,7 +32,7 @@ def get_charges (topology_file : Union['File', Exception],
     print(f' Charges in the "{topology_file.path}" file will be used')
     charges = None
     # If we have the standard topology then get charges from it
-    if topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+    if is_standard_topology(topology_file):
         with open(topology_file.path, 'r') as file:
             standard_topology = load(file)
             charges = standard_topology['atom_charges']

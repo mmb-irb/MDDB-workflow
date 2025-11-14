@@ -1,5 +1,5 @@
 from mddb_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json, MISSING_TOPOLOGY
-from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
+from mddb_workflow.utils.auxiliar import is_standard_topology
 from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame
 from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
 from mddb_workflow.utils.vmd_spells import vmd_to_pdb
@@ -53,7 +53,7 @@ def check_inputs (
     trajectory_sample = input_trajectory_files[0]
 
     # Check input files are supported by the workflow
-    if input_topology_file != MISSING_TOPOLOGY and input_topology_file.filename != STANDARD_TOPOLOGY_FILENAME and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
+    if input_topology_file != MISSING_TOPOLOGY and not is_standard_topology(input_topology_file) and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
         if input_topology_file.format in { 'pdb', 'gro' }:
             raise InputError('A structure file is not supported as topology anymore. If there is no topology then use the argument "-top no"')
         raise InputError(f'Topology {input_topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
@@ -123,7 +123,7 @@ def check_inputs (
             return None, None
         # If it is our standard topology then simply count the atom names
         # Get trajectory atoms using the structure instead
-        if topology_file.filename == STANDARD_TOPOLOGY_FILENAME:
+        if is_standard_topology(topology_file):
             # Parse the json and count atoms
             parsed_topology = load_json(topology_file.path)
             topology_atom_count = len(parsed_topology['atom_names'])
