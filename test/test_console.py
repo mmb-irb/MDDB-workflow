@@ -173,7 +173,7 @@ class TestNassa:
 
     def test_nassa_helical(self, test_data_dir: str):
         os.chdir(os.path.join(test_data_dir, 'output'))
-        command = "mwf nassa -hp -stru *.prmtop -traj *.xtc -top *.prmtop  -pdirs seq001-1 -mdir replica_1 -m"
+        command = "mwf nassa -hp -stru source_topology.prmtop -traj *.xtc -top source_topology.prmtop  -pdirs seq001-1 -mdir replica_1 -m"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         assert result.returncode == 0
 
