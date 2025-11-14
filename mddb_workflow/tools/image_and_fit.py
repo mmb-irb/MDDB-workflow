@@ -81,7 +81,7 @@ def image_and_fit (
     nucleic_selection = structure.select_nucleic()
     custom_selection = protein_selection + nucleic_selection
     if not custom_selection:
-        raise SystemExit(f'The default selection to center (protein or nucleic) is empty. Please image your simulation manually.')
+        raise InputError(f'The default selection to center (protein or nucleic) is empty. Please image your simulation manually.')
     # Exclude PBC residues from this custom selection
     custom_selection -= pbc_selection
     # Convert both selections to a single ndx file which gromacs can read

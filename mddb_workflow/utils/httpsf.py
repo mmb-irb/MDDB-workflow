@@ -36,7 +36,7 @@ class FileHandler(Operations):
         # This double function is to avoid overwritting the same function every time
         def create_whistleblower (name : str):
             def whistleblower (*args):
-                raise SystemExit('FUSE function not implemented: ' + name)
+                raise RuntimeError('FUSE function not implemented: ' + name)
             return whistleblower
         for function_name in not_implememnted_fuse_functions:
             if hasattr(self, function_name):

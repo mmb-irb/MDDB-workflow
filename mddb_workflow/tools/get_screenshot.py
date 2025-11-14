@@ -5,7 +5,7 @@ from PIL import Image
 import math
 import numpy as np
 
-from mddb_workflow.utils.auxiliar import ToolError
+from mddb_workflow.utils.auxiliar import ToolError, InputError
 from mddb_workflow.utils.type_hints import *
 
 # The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon. 
@@ -36,7 +36,7 @@ def get_screenshot (
     Returns the rotation values used to take the photo so they can be saved and reused."""
     # Check the output screenshot file extension is JPG
     if output_filepath.split('.')[-1] != 'jpg':
-        raise SystemExit('You must provide a .jpg file name!')
+        raise InputError('You must provide a .jpg file name!')
     
     # Produce a PDB file to feed VMD
     structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)
@@ -413,7 +413,7 @@ def get_screenshot (
         print(logs)
         error_logs = process.stderr.decode()
         print(error_logs)
-        raise SystemExit('Something went wrong with VMD while taking the screenshot')
+        raise ToolError('Something went wrong with VMD while taking the screenshot')
 
     im = Image.open(AUXILIAR_TGA_FILENAME)
     # converting to jpg

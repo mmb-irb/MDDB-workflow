@@ -5,7 +5,7 @@ from subprocess import run, PIPE, Popen
 from re import search
 from time import time
 
-from mddb_workflow.utils.auxiliar import load_json
+from mddb_workflow.utils.auxiliar import load_json, ToolError
 from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
@@ -85,7 +85,7 @@ def run_gromacs(
             # Recreate the exact command
             final_command = f'{GROMACS_EXECUTABLE} {command}'
             if user_input: final_command += f' (with user input "{user_input}")'
-            raise SystemExit(f'Something went wrong with Gromacs while running "{GROMACS_EXECUTABLE} {command}"')
+            raise ToolError(f'Something went wrong with Gromacs while running "{GROMACS_EXECUTABLE} {command}"')
     
     # If all was good then show final logs but only if it was requested
     if show_output_logs: print(output_logs)

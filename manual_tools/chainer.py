@@ -2,6 +2,8 @@ import sys
 import os
 from subprocess import run, PIPE
 
+from mddb_workflow.utils.auxiliar import InputError
+
 # DANI: This is deprecared
 
 # This tool allows you to set the chain of all atoms in a selection
@@ -28,7 +30,7 @@ else:
 
 # Check the file exists
 if not os.path.exists(input_pdb_filename):
-    raise SystemExit('ERROR: The file does not exist')
+    raise InputError(f'The file {input_pdb_filename} does not exist')
 
 # Set he path to a script with all commands needed for vmd to parse the topology file
 commands_filename = '.commands.vmd'

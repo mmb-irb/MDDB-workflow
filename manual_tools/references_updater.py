@@ -6,7 +6,7 @@ from mddb_workflow.utils.file import File
 from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references 
 from mddb_workflow.tools.generate_map import get_uniprot_reference
 from mddb_workflow.tools.chains import request_interpsocan, get_interproscan_results
-from mddb_workflow.utils.auxiliar import save_json
+from mddb_workflow.utils.auxiliar import save_json, InputError
 
 # Set the database API URL
 database_api_url = 'https://irb.mddbr.eu/api/rest/current/'
@@ -34,7 +34,7 @@ def updater(ref_type = 'proteins'):
     references_filename = reference_filenames[ref_type]
     if exists(references_filename):
     # In case there is a references.json in the current directory already abort
-        raise SystemExit('File ' + references_filename + ' already exists')
+        raise InputError(f'File {references_filename} already exists')
     # Request the options
     options_url = database_api_url + 'projects/options?projection=' + metafields[ref_type]
     with urllib.request.urlopen(options_url) as response:

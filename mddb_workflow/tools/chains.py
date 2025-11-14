@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, protein_residue_name_to_letter
+from mddb_workflow.utils.auxiliar import RemoteServiceError
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
@@ -67,7 +68,7 @@ def check_interproscan_result (jobid : str) -> dict:
             print(f' Not found')
             return None
         elif error.code == 503:
-            raise SystemExit('InterProScan Service unavailable. Please try again later.')
+            raise RemoteServiceError('InterProScan Service unavailable. Please try again later.')
         else:
             raise ValueError('Something went wrong with the InterProScan results request: ' + request_url)
     return parsed_response

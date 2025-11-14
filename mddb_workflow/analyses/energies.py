@@ -26,6 +26,7 @@ from subprocess import run, PIPE
 
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
 from mddb_workflow.utils.auxiliar import load_json, save_json, warn, numerate_filename, get_analysis_name
+from mddb_workflow.utils.auxiliar import ForcedStop
 from mddb_workflow.utils.constants import OUTPUT_ENERGIES_FILENAME
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import CMIP_INPUTS_CHECKONLY_SOURCE, CMIP_INPUTS_SOURCE
@@ -351,7 +352,7 @@ def energies (
                 else:
                     for line in cmip_logs:
                         print(line)
-                raise SystemExit('ERROR: Something went wrong with CMIP!')
+                raise RuntimeError('Something went wrong with CMIP!')
             # Mine energies line by line (i.e. atom by atom)
             for line in lines:
                 # WARNING: This works most times but there is an exception
@@ -462,7 +463,7 @@ def energies (
                         '# Sum both energies and compare\n'
                         f'python {debug_script_filename} {debug_output_1} {debug_output_2}\n'
                     )
-                raise SystemExit(' READY TO DEBUG -> Please go to the corresponding replica "energies" directory and follow the README instructions')
+                raise ForcedStop(' READY TO DEBUG -> Please go to the corresponding replica "energies" directory and follow the README instructions')
 
             # Run the CMIP software to get the desired energies
             print(f'  Calculating energies for {agent1_name} as guest and {agent2_name} as host')
@@ -618,8 +619,7 @@ def set_cmip_elements (structure : 'Structure'):
             elif bonded_atom_element == 'N' or bonded_atom_element == 'S':
                 element = 'HN'
             else:
-                raise SystemExit(
-                    'ERROR: Hydrogen bonded to not supported heavy atom: ' + bonded_atom_element)
+                raise RuntimeError(f'Hydrogen bonded to not supported heavy atom: {bonded_atom_element}')
         atom.element = element
 
 # Set residue names with no endings
@@ -672,8 +672,7 @@ def mine_cmip_output (logs):
     if center == () or density == () or units == ():
         for line in logs:
             print(line)
-        print('WARNING: CMIP output mining failed')
-        raise SystemExit('ERROR: Something was wrong with CMIP')
+        raise RuntimeError('CMIP output mining failed')
     return center, density, units
 
 # This function is used to create new grid parameters

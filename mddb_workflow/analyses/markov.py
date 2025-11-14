@@ -29,7 +29,7 @@ def markov (
     parsed_selection = structure.select(rmsd_selection, syntax='vmd')
     # If there is nothing to check then warn the user and stop here
     if not parsed_selection:
-        raise SystemExit('There are not atoms to be analyzed for the RMSD matrix')
+        raise RuntimeError('There are not atoms to be analyzed for the RMSD matrix')
 
     # Get the numbers of frames with highest populations
     population_per_frames = [ (population, frame) for frame, population in enumerate(populations) ]

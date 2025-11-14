@@ -9,6 +9,7 @@ import pytraj as pt
 
 from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, warn
+from mddb_workflow.utils.auxiliar import ToolError
 from mddb_workflow.utils.constants import OUTPUT_RMSD_PAIRWISE_FILENAME
 from mddb_workflow.utils.type_hints import *
 
@@ -74,7 +75,7 @@ def rmsd_pairwise(
         # Convert data to a normal list, since numpy ndarrays are not json serializable
         data = data.tolist()
         # In case there is no data we stop here
-        if len(data) == 0: raise SystemExit('Something went wrong with pytraj')
+        if len(data) == 0: raise ToolError('Something went wrong with pytraj')
         # Write the overall analysis output data to disk
         save_json({
             'name': 'Overall',

@@ -1,5 +1,6 @@
 from inspect import getfullargspec
 
+from mddb_workflow.utils.auxiliar import InputError
 from mddb_workflow.utils.formats import get_format_set_suitable_function
 from mddb_workflow.utils.pyt_spells import get_frames_count
 from mddb_workflow.utils.gmx_spells import get_trajectory_subset as gmx_get_trajectory_subset
@@ -27,15 +28,15 @@ def get_trajectory_subset (
     # How step and skip are combined is not intuitive and it could be missleading
     # For this reason both arguments are not allowed together
     if step and step != 1 and skip and len(skip) > 0:
-        raise SystemExit("Arguments 'step' and 'skip' are not allowed together. Please do it in 2 separated calls.")
+        raise InputError("Arguments 'step' and 'skip' are not allowed together. Please do it in 2 separated calls.")
 
     # End must be grater than start
     if end != None and end < start:
-        raise SystemExit('End frame must be posterior to start frame')
+        raise InputError('End frame must be posterior to start frame')
 
     # We need an output trajectory filename
     if not output_trajectory_file:
-        raise SystemExit('Missing output trajectory filename')
+        raise InputError('Missing output trajectory filename')
 
     # In case the frames argument is passed
     if frames and len(frames) > 0:
@@ -62,7 +63,7 @@ def get_trajectory_subset (
         available_request_format_sets=[format_set],
     ), None)
     if not suitables:
-        raise SystemExit('There is no subset function which supports the requested formats')
+        raise InputError('There is no subset function which supports the requested formats')
     suitable_function, formats = suitables
     # Call the subset function
     # Check if the subset function requires the input structure argument before

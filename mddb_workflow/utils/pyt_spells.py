@@ -2,7 +2,7 @@ import pytraj as pyt
 import math
 from packaging.version import Version
 
-from mddb_workflow.utils.auxiliar import InputError
+from mddb_workflow.utils.auxiliar import InputError, ToolError
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
@@ -19,7 +19,7 @@ def get_pytraj_trajectory (
 
     # Topology is mandatory to setup the pytraj trajectory
     if not input_topology_filename:
-        raise SystemExit('Missing topology file to setup PyTraj trajectory')
+        raise InputError('Missing topology file to setup PyTraj trajectory')
     
     # Set the pytraj trayectory and get the number of frames
     # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atoms later
@@ -132,7 +132,7 @@ def filter_topology (
     # Check the output file exists at this point
     # If not then it means something went wrong with gromacs
     if not output_structure_file.exists:
-        raise SystemExit('Something went wrong with PyTraj')
+        raise ToolError('Something went wrong with PyTraj')
 
 
 filter_topology.format_sets = [

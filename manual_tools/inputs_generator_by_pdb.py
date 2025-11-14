@@ -1,6 +1,6 @@
 from sys import argv
 
-from mddb_workflow.utils.auxiliar import load_yaml, save_yaml
+from mddb_workflow.utils.auxiliar import load_yaml, save_yaml, InputError
 
 # Read a reference inputs file
 reference_inputs_path = 'inputs.yaml'
@@ -8,7 +8,7 @@ reference_inputs = load_yaml(reference_inputs_path)
 
 # Get the directories where this logic is to be run
 if len(argv) < 2:
-    raise SystemExit('Missing target directories')
+    raise InputError('Missing target directories')
 
 # Iterate target directories
 for directory in argv[1:]:

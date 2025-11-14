@@ -2,7 +2,7 @@ from sys import argv
 
 # Make sure the target filename was passed and there are no additional arguments
 if len(argv) < 2:
-    raise SystemExit('This script expects arguments: the target filepaths\n'
+    raise Exception('This script expects arguments: the target filepaths\n'
         'e.g. python get_energies_sum.py target_1.cmip.pdb target_2.cmip.pdb')
 
 # Get target filepaths from user arguments
@@ -50,4 +50,4 @@ for target_filepath in target_filepaths:
     try:
         mine_cmip_output(target_filepath)
     except:
-        raise SystemExit(f'Failed to mine {target_filepath}. Are you sure this is a CMIP output file?')
+        raise Exception(f'Failed to mine {target_filepath}. Are you sure this is a CMIP output file?')

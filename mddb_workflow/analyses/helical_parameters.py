@@ -9,7 +9,7 @@ import glob
 from struct import pack
 import re
 from warnings import warn
-from mddb_workflow.utils.auxiliar import save_json, store_binary_data
+from mddb_workflow.utils.auxiliar import save_json, InputError, EnvironmentError, ToolError
 from mddb_workflow.utils.constants import OUTPUT_HELICAL_PARAMETERS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
@@ -144,12 +144,12 @@ def helical_parameters (
 
     # Check curves is installed
     if not exists(curves_path):
-        raise SystemExit(' Cannot find curves path. Is Curves+ installed?')
+        raise EnvironmentError(' Cannot find curves path. Is Curves+ installed?')
 
     # Get the sequence from the selected chains
     chain_indices = structure.get_selection_chain_indices(selection)
     if len(chain_indices) != 2:
-        raise SystemExit('We have a different number of chains than 2. Is this canonical B-DNA? Make sure every strand has an independent chain')
+        raise InputError('We have a different number of chains than 2. Is this canonical B-DNA? Make sure every strand has an independent chain')
     sequences = []
     residue_index_ranges = []
     for c, chain_index in enumerate(chain_indices):
@@ -255,7 +255,7 @@ def hydrogen_bonds(
 
     # Check if the output file was created
     if not os.path.exists(output_dat_file):
-        raise SystemExit(f"Error: {output_dat_file} was not created. Check the cpptraj command and input files.")
+        raise ToolError(f"Error: {output_dat_file} was not created. Check the cpptraj command and input files.")
 
     # Renumber the dat file because the first line is repeated
     # AGUS: con esto tuvimos muchos problemas en el proyecto de ABCix y al final optamos por eliminar la primera línea y renumerar todo 
@@ -403,7 +403,7 @@ def terminal_execution(
     
     # If output has not been generated then warn the user
     if not os.path.exists('test.cda'):
-        raise SystemExit('Something went wrong with Curves+ software')
+        raise ToolError('Something went wrong with Curves+ software')
     # Change the file name as Canals just take the name of the .cda file to differentiate between .lis and .cda
     move("test.cda","cinput.cda")
     # We have set up level1 and level2 to 0 as if lev1=lev2=0, lev1 is set to 1 and lev2 is set to the length of the oligmer
@@ -435,7 +435,7 @@ def terminal_execution(
 
     # If output has not been generated then warn the user
     if not os.path.exists('canal_output_phaseC.ser'):
-        raise SystemExit('Something went wrong with Canals software')
+        raise ToolError('Something went wrong with Canals software')
 
 def send_files(sequence: str, frames_limit: int, output_directory: str):
     files_averages = []

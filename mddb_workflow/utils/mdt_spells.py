@@ -1,11 +1,11 @@
 import os
 from os.path import exists, getsize
 from subprocess import run, PIPE
-from typing import List
 
 import mdtraj as mdt
 import numpy as np
 
+from mddb_workflow.utils.auxiliar import ToolError, InputError
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.gmx_spells import merge_xtc_files
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
@@ -41,7 +41,7 @@ def merge_and_convert_trajectories (
     # If output has not been generated then warn the user
     if not exists(output_trajectory_filename) or getsize(output_trajectory_filename) == 0:
         print(error_logs)
-        raise SystemExit('Something went wrong with MDTraj')
+        raise ToolError('Something went wrong with MDTraj')
         
 # NEVER FORGET: mdconvert does not handle mdcrd format
 mdconvert_supported_formats = {'dcd', 'xtc', 'trr', 'nc', 'h5', 'binpos'}
@@ -67,11 +67,11 @@ def merge_and_convert_trajectories_alternative (
 
     # Assert we have input values
     if not input_structure_filename:
-        raise SystemExit('ERROR: Missing input structure filenames')
+        raise InputError('Missing input structure filenames')
     if not input_trajectory_filenames:
-        raise SystemExit('ERROR: Missing input trajectory filenames')
+        raise InputError('Missing input trajectory filenames')
     if not output_trajectory_filename:
-        raise SystemExit('ERROR: Missing output trajectory filename')
+        raise InputError('Missing output trajectory filename')
 
     # Load the topology, which is used further
     topology = mdt.load_topology(input_structure_filename)
@@ -86,7 +86,7 @@ def merge_and_convert_trajectories_alternative (
     # If the output trajectory file already exists at this point then we must stop here
     # The raw trjcat implementation will not join things to the end of it
     if exists(output_trajectory_filename):
-        raise SystemExit('The output file already exists and overwrite is not supported for this functionality')
+        raise InputError('The output file already exists and overwrite is not supported for this functionality')
     # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
     print()
     # Iterate over the different input trajectory filenames
@@ -192,7 +192,7 @@ def get_trajectory_subset (
                 break
         # If we have nothing at this point then it means our start is out of the frames range
         if not reduced_trajectory:
-            raise SystemExit('None of the selected frames are in range of the trajectory frames number')
+            raise InputError('None of the selected frames are in range of the trajectory frames number')
         # Get further chunks/frames
         for frame, chunk in enumerate(trajectory, first_frame + 1):
             if frame in selected_frames:
@@ -212,7 +212,7 @@ def get_trajectory_subset (
         # If we have nothing at this point then it means our start is out of the frames range
         if not reduced_trajectory:
             frame_count += 1
-            raise SystemExit('The trajectory has ' + str(frame_count) + ' frames so we can not start at frame ' + str(start))
+            raise InputError(f'The trajectory has {frame_count} frames so we can not start at frame {start}')
         # Get further chunks
         for i, chunk in enumerate(trajectory, 1): # Start the count at 1
             frame = start + i
@@ -359,7 +359,7 @@ def sort_trajectory_atoms (
     # If the output trajectory file already exists at this point then we must stop here
     # The raw trjcat implementation will not join things to the end of it
     if output_trajectory_file.exists:
-        raise SystemExit('The output file already exists and overwrite is not supported for this functionality')
+        raise InputError('The output file already exists and overwrite is not supported for this functionality')
 
     # Load the trajectory frame by frame
     trajectory = mdt.iterload(input_trajectory_file.path, top=input_structure_file.path, chunk=1)

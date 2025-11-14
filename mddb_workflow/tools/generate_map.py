@@ -101,8 +101,8 @@ def generate_protein_mapping (
     strict_references = type(input_protein_references) == dict
     # Check the "no referable" flag not to be passed when references are not strict
     if not strict_references and NO_REFERABLE_FLAG in input_protein_references:
-        raise SystemExit('WRONG INPUT: The "no referable" flag cannot be passed in a list.' \
-            ' You must use a chain keys dictionary (e.g. {"A":"' + NO_REFERABLE_FLAG + '"})')
+        raise InputError(' The "no referable" flag cannot be passed in a list.' \
+            f' You must use a chain keys dictionary (e.g. {"A":"{NO_REFERABLE_FLAG}"})')
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
@@ -178,7 +178,7 @@ def generate_protein_mapping (
                     align_results = align(reference_sequence, chain_data['sequence'])
                     # The align must match or we stop here and warn the user
                     if not align_results:
-                        raise SystemExit(f'Forced reference {chain} -> {forced_reference} does not match in sequence')
+                        raise InputError(f'Forced reference {chain} -> {forced_reference} does not match in sequence')
                     sequence_map, align_score = align_results
                     reference = references[forced_reference]
                     chain_data['match'] = { 'ref': reference, 'map': sequence_map, 'score': align_score }
@@ -350,7 +350,7 @@ def generate_protein_mapping (
     # If not, kill the process unless mercy was given
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
-        raise SystemExit('BLAST failed to find a matching reference sequence for at least one protein sequence. See the warnings above.\n' + \
+        raise InputError('BLAST failed to find a matching reference sequence for at least one protein sequence. See the warnings above.\n' + \
             ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file.\n' + \
             ' If your system has exotic proteins whose sequences are not found in the Swiss-Prot database you may force non-curated UniProt ids.\n' + \
             ' If your system has very exotic proteins whose sequence are not in UniProt you can use the "--mercy refseq" flag to skip this error.')
@@ -475,7 +475,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
         # Get the current residue of the new sequence
         equivalent_letter = new_sequence[aligned_index]
         if not letter == equivalent_letter:
-            raise SystemExit(f'Something was wrong at position {l} :S')
+            raise RuntimeError(f'Something was wrong at position {l} :S')
         # 'X' residues cannot be mapped since reference sequences should never have any 'X'
         if letter == 'X':
             aligned_mapping.append(None)
@@ -830,7 +830,7 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         covid_spike_reference_index = reference_ids.index(covid_spike_reference_id)
         sample_residue_index = next((residue_index for residue_index, reference_index in enumerate(residue_reference_indices) if reference_index == covid_spike_reference_index), None)
         if sample_residue_index == None:
-            raise SystemExit('Failed to find residue belonging to SARS-CoV-2 variant') 
+            raise RuntimeError('Failed to find residue belonging to SARS-CoV-2 variant') 
         sample_chain_sequence = structure.residues[sample_residue_index].chain.get_sequence()
         # Align the sample chain sequence against all variants to find the best match
         highest_score = 0
@@ -846,7 +846,7 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
                 variant = variant_name
         # At this point there should be a result
         if not variant:
-            raise SystemExit('Something went wrong trying to find the SARS-CoV-2 variant')
+            raise RuntimeError('Something went wrong trying to find the SARS-CoV-2 variant')
         print(f'It is {variant}')
     # Set which reference domains are present in the structure
     domains = []
@@ -871,7 +871,7 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         # Get the reference data for the current reference uniprot id
         reference_data = references_data.get(reference_id, None)
         if not reference_data:
-            raise SystemExit(reference_id + ' is not in the references data file')
+            raise RuntimeError(reference_id + ' is not in the references data file')
         # Iterate over data domains
         for domain in reference_data['domains']:
             selection = domain['selection']

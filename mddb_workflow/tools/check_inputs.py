@@ -1,4 +1,5 @@
-from mddb_workflow.utils.auxiliar import InputError, warn, CaptureOutput, load_json, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import InputError, ToolError
+from mddb_workflow.utils.auxiliar import warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import is_standard_topology
 from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame
 from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
@@ -155,7 +156,7 @@ def check_inputs (
                 # Otherwise just print the whole error logs and stop here anyway
                 print(output_logs)
                 print(error_logs)
-                raise SystemExit('Something went wrong with GROMACS during the checking')
+                raise ToolError('Something went wrong with GROMACS during the checking')
             # If we had an output then it means both topology and trajectory match in the number of atoms
             # Cleanup the file we just created and proceed
             output_sample_gro_file.remove()

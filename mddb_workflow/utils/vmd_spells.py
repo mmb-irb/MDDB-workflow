@@ -9,7 +9,7 @@ from subprocess import run, PIPE, STDOUT
 
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.utils.auxiliar import warn
+from mddb_workflow.utils.auxiliar import warn, ToolError, InputError
 
 # Set characters to be escaped since they have a meaning in TCL
 TCL_RESERVED_CHARACTERS = ['"','[',']']
@@ -82,7 +82,7 @@ def vmd_to_pdb (
         print(output_logs)
         error_logs = vmd_process.stderr.decode()
         print(error_logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD')
 
     os.remove(commands_filename)
 # Set function supported formats
@@ -134,7 +134,7 @@ def chainer (
 
     # Check the file exists
     if not exists(input_pdb_filename):
-        raise SystemExit('ERROR: The file does not exist')
+        raise InputError(f'The file {input_pdb_filename} does not exist')
        
     with open(commands_filename, "w") as file:
         # Select the specified atoms and set the specified chain
@@ -176,7 +176,7 @@ def chainer (
     # If the expected output file was not generated then stop here and warn the user
     if not exists(output_pdb_filename):
         print(logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD')
 
     # Remove the vmd commands file
     os.remove(commands_filename)
@@ -226,7 +226,7 @@ def merge_and_convert_trajectories (
     # If the expected output file was not generated then stop here and warn the user
     if not exists(output_trajectory_filename):
         print(logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD')
 
     # Remove the vmd commands file
     os.remove(commands_filename)
@@ -287,7 +287,7 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
     # If the expected output file was not generated then stop here and warn the user
     if not exists(atom_indices_filename):
         print(logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD')
 
     # Read the VMD output
     with open(atom_indices_filename, 'r') as file:
@@ -337,7 +337,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
     # If the output file is missing at this point then it means something went wrong
     if not exists(output_bonds_file):
         print(logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD')
     
     # Read the VMD output
     with open(output_bonds_file, 'r') as file:
@@ -438,7 +438,7 @@ def get_covalent_bonds_between (
     # If the expected output file was not generated then stop here and warn the user
     if not exists(output_index_1_file) or not exists(output_bonds_file) or not exists(output_index_2_file):
         print(logs)
-        raise SystemExit('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD')
     
     # Read the VMD output
     with open(output_index_1_file, 'r') as file:
@@ -631,7 +631,7 @@ def get_interface_atom_indices (
     for output_file in expected_output_files:
         if not os.path.exists(output_file):
             print(logs)
-            raise SystemExit('Something went wrong with VMD')
+            raise ToolError('Something went wrong with VMD')
     
     # Set a function to read the VMD output and parse the atom indices string to an array of integers
     def process_vmd_output (output_filename : str) -> list[int]:

@@ -53,7 +53,7 @@ def get_format_set_suitable_function (
             for function_format_set in function.format_sets:
                 # Check format keys are compatible
                 if not check_format_sets_compability(request_format_set, function_format_set):
-                    raise SystemExit('Format keys are not compatible with function ' + str(function.__name__))
+                    raise RuntimeError(f'Format keys are not compatible with function {function.__name__}')
                 # Check the function inputs to be fulfilled by the request inputs
                 required_inputs = function_format_set.get('inputs', None)
                 available_inputs = request_format_set.get('inputs', None)

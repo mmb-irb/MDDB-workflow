@@ -38,12 +38,20 @@ class InputError (QuietException):
 class TestFailure (QuietException):
     pass
 
+# Set a custom quite exception for when the problem is not in the code but in the environment
+class EnvironmentError (QuietException):
+    pass
+
 # Set a custom quite exception for when the problem comes from a third party dependency
 class ToolError (QuietException):
     pass
 
 # Set a custom quite exception for when the problem comes from a remote service
 class RemoteServiceError (QuietException):
+    pass
+
+# Set a custom quite exception for when we stop the workflow in purpose
+class ForcedStop (QuietException):
     pass
 
 # Set a no referable exception for PDB synthetic constructs or chimeric entities
