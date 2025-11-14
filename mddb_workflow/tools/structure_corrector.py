@@ -235,6 +235,11 @@ def structure_corrector (
             # In this cases we cannot respect the original chains
             if new_letter == None:
                 warn('No more letters in the alphabet to fill missing chains -> All chains will be assigned from scratch')
+                # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
+                # Note that we rely in fragments (and thus in bonds) to guess chains
+                if structure.is_missing_any_bonds():
+                    raise InputError('We cannot guess chains with bonds guessed from coarse grain.\n'
+                        ' Please either provide a topology including bonds or set chains in the structure PDB file.')
                 structure.auto_chainer()
             else:
                 warn(f'Some chains are missing -> Unchained regions will be chained as {new_letter}')
