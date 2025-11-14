@@ -489,7 +489,7 @@ STEROID_RESIDUE_NAMES = { "CHL", "CHL1", "CHOL", "DCHOL" }
 LIPIDS_RESIDUE_NAMES = FATTY_RESIDUE_NAMES.union(STEROID_RESIDUE_NAMES)
 
 # Set typical residue names to guess what residues are
-STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4'}
+STANDARD_SOLVENT_RESIDUE_NAMES = {'SOL', 'WAT', 'HOH', 'TIP', 'TP3', 'SWM4', 'W'}
 # WARNING: Note that standard names also include + and - symbols
 # Use functions such as Structure.select_counter_ions instead of checking if the set includes a name
 STANDARD_COUNTER_CATION_ATOM_NAMES = {'K', 'NA', 'SOD', 'POT'}
