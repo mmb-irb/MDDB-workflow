@@ -85,7 +85,8 @@ def rgyr (
                 'max': max(raw_rgyr_data['rgyrz']),
                 'data': raw_rgyr_data['rgyrz']
             }
-        }
+        },
+        'version': '0.0.1',
     }
 
     # Export formatted data to a json file
