@@ -47,7 +47,7 @@ def rgyr (
     
     # Run Gromacs
     run_gromacs(f'gyrate -s {structure_file.path} -f {reduced_trajectory_filepath} \
-        -o {rgyr_data_filename} -n {ndx_filename}', user_input = selection_name)
+        -o {rgyr_data_filename} -n {ndx_filename} -mode geometry', user_input = selection_name)
 
     # Read the output file and parse it
     raw_rgyr_data = xvg_parse(rgyr_data_filename, ['times', 'rgyr', 'rgyrx', 'rgyry', 'rgyrz'])
