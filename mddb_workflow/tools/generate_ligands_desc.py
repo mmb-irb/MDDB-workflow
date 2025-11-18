@@ -521,10 +521,11 @@ def generate_ligand_mapping(
                 ligand_data['mol_block'] = mol_block
                 ligand_data['pubchem'] = cid
                 ligand_map['match']['ref']['pubchem'] = str(cid)
-        # Add the ligand data to the list of ligands data
-        ligands_data.append(ligand_data)
-        # Add the ligand map to the list of ligand maps
-        ligand_maps.append(ligand_map)
+        if ligand_data.get('pubchem'):
+            # Add the ligand data to the list of ligands data
+            ligands_data.append(ligand_data)
+            # Add the ligand map to the list of ligand maps
+            ligand_maps.append(ligand_map)
 
     # Export ligands to a file
     save_json(ligands_data, output_filepath)
@@ -757,9 +758,12 @@ def map_ligand_residues(structure: 'Structure', ligand_data: dict) -> dict:
 
 
 def smiles_2_pubchem(smiles: str) -> Optional[str]:
-    """Given a smiles, get the pubchem id. e.g.
+    """Given a smiles, get the pubchem id.
+
+    Examples:
     - CC1=C(C=NC=C1)NC(=O)CC2=CC(=CC(=C2)Cl)OC -> 154876006
     - O=C4N3C(C(=O)Nc2cc(nn2c1ccccc1)C)C(SC3CC=CC4NC(=O)C(NC)C)(C)C -> None
+
     """
     # Set the request URL
     request_url = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/JSON'
@@ -900,7 +904,7 @@ def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     if nonpolymers is None:
         # Get the prd ligand code
         prd_code = pdb_ligand_2_prd(pdb_id)
-        if prd_code != None:
+        if prd_code is not None:
             return [prd_code]
 
     if nonpolymers is None and prd_code is None: return []
