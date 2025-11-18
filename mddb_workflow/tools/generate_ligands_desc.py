@@ -506,7 +506,8 @@ def generate_ligand_mapping(
             'match': {'ref': {'pubchem': None}}
         }
 
-        inchikey = residx_2_inchikey[residue.index]
+        inchikey = residx_2_inchikey.get(residue.index, None)
+
         # If the InChIKey is not None then try to obtain the PubChem CID
         if inchikey:
             ligand_data['inchikey'] = inchikey
