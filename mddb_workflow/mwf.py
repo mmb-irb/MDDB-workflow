@@ -154,10 +154,6 @@ class MD:
         # Set the internal variable for the input trajectory files, to be assigned later
         self._input_trajectory_files = None
 
-        # Processed structure and trajectory files
-        self._structure_file = None
-        self._trajectory_file = None
-
         # Other values which may be found/calculated on demand
         self._md_inputs = None
         self._structure = None
@@ -602,63 +598,27 @@ class MD:
 
     # Processed files ----------------------------------------------------
 
+    def get_topology_filepath(self) -> str:
+        """Get the processed topology file path."""
+        return self.project.get_topology_filepath()
+    topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
+
     # Run the actual processing to generate output processed files out of input raw files
     # And by "files" I mean structure, trajectory and topology
-    input_files_processing = Task('inpro', 'Input files processing', process_input_files)
-
-    def get_structure_file(self) -> str:
-        """Get the processed structure file."""
-        # If we have a stored value then return it
-        # This means we already found or generated this file
-        if self._structure_file:
-            return self._structure_file
-        # Set the file
-        structure_filepath = self.pathify(STRUCTURE_FILENAME)
-        self._structure_file = File(structure_filepath)
-        # If the faith flag was passed then simply make sure the input file makes sense
-        if self.project.faith:
-            if self.input_structure_file != self._structure_file:
-                raise InputError('Input structure file is not equal to output structure file but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            if not self.input_structure_file.exists:
-                raise InputError('Input structure file does not exist but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            return self._structure_file
-        # Run the processing logic
-        self.input_files_processing(self)
-        # Now that the file is sure to exist we return it
-        return self._structure_file
+    input_files_processing = Task('inpro', 'Input files processing', process_input_files,
+        output_filenames={
+            'output_topology_filepath': get_topology_filepath,
+            'output_structure_filepath': STRUCTURE_FILENAME,
+            'output_trajectory_filepath': TRAJECTORY_FILENAME,
+        })
+    
+    # Output main files
+    get_structure_file = input_files_processing.get_output_file_getter('output_structure_filepath')
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
-
-    def get_trajectory_file(self) -> str:
-        """Get the processed trajectory file."""
-        # If we have a stored value then return it
-        # This means we already found or generated this file
-        if self._trajectory_file:
-            return self._trajectory_file
-        # If the file already exists then we are done
-        trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
-        self._trajectory_file = File(trajectory_filepath)
-        # If the faith flag was passed then simply make sure the input file makes sense
-        if self.project.faith:
-            if len(self.input_trajectory_files) > 1:
-                raise InputError('Several input trajectory files but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            sample = self.input_trajectory_files[0]
-            if sample != self._trajectory_file:
-                raise InputError('Input trajectory file is not equal to output trajectory file but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            if not self._trajectory_file.exists:
-                raise InputError('Input trajectory file does not exist but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            return self._trajectory_file
-        # Run the processing logic
-        self.input_files_processing(self)
-        # Now that the file is sure to exist we return it
-        return self._trajectory_file
+    get_trajectory_file = input_files_processing.get_output_file_getter('output_trajectory_filepath')
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
-    def get_topology_file(self) -> str:
+    def get_topology_file(self) -> 'File':
         """Get the processed topology from the project."""
         return self.project.get_topology_file()
     topology_file = property(get_topology_file, None, None,
@@ -703,19 +663,19 @@ class MD:
 
     # First frame PDB file
     get_first_frame = Task('firstframe', 'Get first frame structure',
-        get_first_frame, output_filename=FIRST_FRAME_FILENAME)
-    get_first_frame_file = get_first_frame.get_output_file
+        get_first_frame, output_filenames={'output_filepath':FIRST_FRAME_FILENAME})
+    get_first_frame_file = get_first_frame.get_output_file_getter('output_filepath')
     first_frame_file = property(get_first_frame_file, None, None, "First frame (read only)")
 
     # Average structure filename
     get_average_structure = Task('average', 'Get average structure',
-        get_average_structure, output_filename=AVERAGE_STRUCTURE_FILENAME)
-    get_average_structure_file = get_average_structure.get_output_file
+        get_average_structure, output_filenames={'output_filepath':AVERAGE_STRUCTURE_FILENAME})
+    get_average_structure_file = get_average_structure.get_output_file_getter('output_filepath')
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
     # Produce the MD metadata file to be uploaded to the database
     prepare_metadata = Task('mdmeta', 'Prepare MD metadata',
-        generate_md_metadata, output_filename=OUTPUT_METADATA_FILENAME)
+        generate_md_metadata, output_filenames={'output_filepath':OUTPUT_METADATA_FILENAME})
 
     # The processed interactions
     get_processed_interactions = Task('inter', 'Interactions processing',
@@ -1236,7 +1196,6 @@ class Project:
         # Set the processed topology filepath, which depends on the input topology filename
         # Note that this file is different from the standard topology, although it may be standard as well
         self._topology_filepath = None
-        self._topology_file = None
 
         # Set the standard topology file
         self._standard_topology_file = None
@@ -1863,35 +1822,17 @@ class Project:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
-    def get_topology_file(self) -> str:
-        """Get the processed topology file."""
-        # If we have a stored value then return it
-        # This means we already found or generated this file
-        if self._topology_file is not None:
-            return self._topology_file
-        # If the file already exists then we are done
-        self._topology_file = File(self.topology_filepath) if self.topology_filepath is not None else MISSING_TOPOLOGY
-        # If the faith flag was passed then simply make sure the input file makes sense
-        if self.faith:
-            if self.input_topology_file != self._topology_file:
-                raise InputError('Input topology file is not equal to output topology file but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            if not self.input_topology_file.exists:
-                raise InputError('Input topology file does not exist but the "faith" flag was used.\n'
-                    '  Please refrain from using the faith argument (-f) if you ignore its effect.')
-            return self._topology_file
-        # Run the processing logic
-        self.reference_md.input_files_processing(self.reference_md)
-        # Now that the file is sure to exist we return it
-        return self._topology_file
+    def get_topology_file(self) -> 'File':
+        getter = self.reference_md.input_files_processing.get_output_file_getter('output_topology_filepath')
+        return getter(self.reference_md)
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
 
-    def get_structure_file(self) -> str:
+    def get_structure_file(self) -> 'File':
         """Get the processed structure from the reference MD."""
         return self.reference_md.structure_file
     structure_file = property(get_structure_file, None, None, "Structure filename from the reference MD (read only)")
 
-    def get_trajectory_file(self) -> str:
+    def get_trajectory_file(self) -> 'File':
         """Get the processed trajectory from the reference MD."""
         return self.reference_md.trajectory_file
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory filename from the reference MD (read only)")
@@ -1950,7 +1891,7 @@ class Project:
 
     # InChI keys
     get_inchi_keys = Task('inchikeys', 'Getting InChI keys',
-        get_inchikeys, output_filename=INCHIKEY_REFERENCES_FILENAME)
+        get_inchikeys, output_filenames={'output_filepath':INCHIKEY_REFERENCES_FILENAME})
     inchikeys = property(get_inchi_keys, None, None, "InChI keys (read only)")
 
     def get_topology_reader(self) -> 'Topology':
@@ -2022,29 +1963,29 @@ class Project:
 
     # Prepare the PDB references file to be uploaded to the database
     get_pdb_references = Task('pdbs', 'Prepare PDB references',
-        prepare_pdb_references, output_filename=PDB_REFERENCES_FILENAME)
-    pdb_references_file = get_pdb_references.get_output_file
+        prepare_pdb_references, output_filenames={'output_filepath':PDB_REFERENCES_FILENAME})
+    pdb_references_file = get_pdb_references.get_output_file_getter('output_filepath')
 
     # Map the structure aminoacids sequences against the Uniprot reference sequences
     get_protein_map = Task('protmap', 'Protein residues mapping',
-        generate_protein_mapping, output_filename=PROTEIN_REFERENCES_FILENAME)
+        generate_protein_mapping, output_filenames={'output_filepath':PROTEIN_REFERENCES_FILENAME})
     protein_map = property(get_protein_map, None, None, "Protein residues mapping (read only)")
 
     # Define the output file of the protein mapping including protein references
-    get_protein_references_file = get_protein_map.get_output_file
+    get_protein_references_file = get_protein_map.get_output_file_getter('output_filepath')
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
     # Get chain references
     get_chain_references = Task('chains', 'Chain references',
-        prepare_chain_references, output_filename=OUTPUT_CHAINS_FILENAME)
+        prepare_chain_references, output_filenames={'output_filepath':OUTPUT_CHAINS_FILENAME})
 
     # Get the ligand residues mapping
     get_ligand_map = Task('ligmap', 'Ligand residues mapping',
-        generate_ligand_mapping, output_filename=LIGAND_REFERENCES_FILENAME)
+        generate_ligand_mapping, output_filenames={'output_filepath':LIGAND_REFERENCES_FILENAME})
     ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
 
     # Define the output file of the ligand mapping including ligand references
-    get_ligand_references_file = get_ligand_map.get_output_file
+    get_ligand_references_file = get_ligand_map.get_output_file_getter('output_filepath')
     ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
 
     # Get the lipid references
@@ -2052,12 +1993,12 @@ class Project:
     lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
 
     # Define the output file of the lipid mapping including lipid references
-    get_lipid_references_file = get_lipid_map.get_output_file
+    get_lipid_references_file = get_lipid_map.get_output_file_getter('output_filepath')
     lipid_references_file = property(get_lipid_references_file, None, None, "File including lipid references data mined from PubChem (read only)")
 
     # Get mapping of residues in the membrane
-    get_membrane_map = Task('memmap', 'Membrane mapping',
-        generate_membrane_mapping, output_filename=MEMBRANE_MAPPING_FILENAME)
+    get_membrane_map = Task('memmap', 'Membrane mapping', generate_membrane_mapping,
+        output_filenames={'output_filepath':MEMBRANE_MAPPING_FILENAME})
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
     # Build the residue map from both proteins and ligands maps
@@ -2067,17 +2008,17 @@ class Project:
 
     # Prepare the project metadata file to be upload to the database
     prepare_metadata = Task('pmeta', 'Prepare project metadata',
-        prepare_project_metadata, output_filename=OUTPUT_METADATA_FILENAME)
+        prepare_project_metadata, output_filenames={'output_filepath':OUTPUT_METADATA_FILENAME})
 
     # Prepare the standard topology file to be uploaded to the database
     prepare_standard_topology = Task('stopology', 'Standard topology file',
-        generate_topology, output_filename=STANDARD_TOPOLOGY_FILENAME)
-    get_standard_topology_file = prepare_standard_topology.get_output_file
+        generate_topology, output_filenames={'output_filepath':STANDARD_TOPOLOGY_FILENAME})
+    get_standard_topology_file = prepare_standard_topology.get_output_file_getter('output_filepath')
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
     # Get a screenshot of the system
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
-        get_screenshot, output_filename=OUTPUT_SCREENSHOT_FILENAME)
+        get_screenshot, output_filenames={'output_filepath':OUTPUT_SCREENSHOT_FILENAME})
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
     # Provenance data

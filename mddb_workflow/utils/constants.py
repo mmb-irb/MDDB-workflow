@@ -216,6 +216,7 @@ REFERENCE_SEQUENCE_FLAG = 'refseq'
 STABLE_INTERACTIONS_FLAG = 'interact'
 LIGANDS_MATCH_FLAG = 'ligands'
 CHAINS_ANALYSIS = 'chains'
+FAITH_BYPASS = 'faith'
 
 # State all the available checkings, which may be trusted
 AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG ]

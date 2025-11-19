@@ -1,10 +1,10 @@
 from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, warn
-from mddb_workflow.utils.constants import STRUCTURE_FILENAME, TRAJECTORY_FILENAME
 from mddb_workflow.utils.constants import CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY
 from mddb_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED_TRAJECTORY
 from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECTORY
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SNAPSHOTS_FLAG
+from mddb_workflow.utils.constants import FAITH_BYPASS
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.pyt_spells import get_frames_count
@@ -49,7 +49,9 @@ def process_input_files (
     input_topology_file : 'File',
     # Output
     output_directory : str,
-    topology_filepath : str,
+    output_topology_filepath : str,
+    output_structure_filepath : str,
+    output_trajectory_filepath : str,
     # Processing parameters
     filter_selection : str,
     image : bool,
@@ -61,6 +63,8 @@ def process_input_files (
     # Get the task which is calling this function
     # Thus we may know which inputs have changed compared to previous runs
     task : 'Task',
+    # The faith argument
+    faith : bool,
 ):
     """ Process input files to generate the processed files.
     This process corrects and standarizes the topology, the trajectory and the structure. """
@@ -77,12 +81,22 @@ def process_input_files (
 
     # Set the output filepaths
     # Note that these outputs aim for the MD directory, not for the task directory
-    output_structure_filepath = self.pathify(STRUCTURE_FILENAME)
     output_structure_file = File(output_structure_filepath)
-    output_trajectory_filepath = self.pathify(TRAJECTORY_FILENAME)
     output_trajectory_file = File(output_trajectory_filepath)
-    output_topology_filepath = topology_filepath
     output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
+
+    # If the faith argument was passed then set input files as output files and exit
+    if faith:
+        self.register.add_warning(FAITH_BYPASS, 'All processing steps and tests were skipped')
+        if output_structure_file.exists: output_structure_file.remove()
+        output_structure_file.set_symlink_to(input_structure_file)
+        if output_trajectory_file.exists: output_trajectory_file.remove()
+        output_trajectory_file.set_symlink_to(input_trajectory_files[0])
+        if output_topology_file != MISSING_TOPOLOGY:
+            if output_topology_file.exists: output_topology_file.remove()
+            output_topology_file.set_symlink_to(input_topology_file)
+        return
+    self.register.remove_warnings(FAITH_BYPASS)
 
     # --- TOPOLOGY FORMAT ASSUMTION ---------------------------------------------------------
 
@@ -445,10 +459,7 @@ def process_input_files (
             'Avoid relying in atom distances or elements to avoid this problem.')
 
     # --- RUNNING FINAL TESTS ------------------------------------------------------------
-
-    # Note that some tests have been run already
-    # e.g. stable bonds is run in the structure corrector function
-
+    
     # Note that tests here do not modify any file
 
     # Check the trajectory has not sudden jumps
