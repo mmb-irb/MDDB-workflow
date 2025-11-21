@@ -16,7 +16,7 @@ dependencies:
   # Fpocket is used for the pockets analysis
   - fpocket
   # Gromacs is used for several processing and analysis steps
-  - bioconda::gromacs_mddb
+  - bioconda::gromacs_mddb=2025.3=h61c8354_1
   # MDanalysis is used for some processing steps
   - mdanalysis
   # MDtraj is used for several processing and analysis steps
