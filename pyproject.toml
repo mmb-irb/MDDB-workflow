@@ -36,7 +36,7 @@ filterwarnings = [
     "ignore::DeprecationWarning",
 ]
 testpaths = ["test"]
-addopts = "-rsx -v --durations=0"
+addopts = "-rsx -v --durations=10"
 
 [tool.conda-deny]
 safe-licenses = [
