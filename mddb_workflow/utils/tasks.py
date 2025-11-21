@@ -222,7 +222,7 @@ class Task:
         existing_final_output = writes_output_dir and exists(final_output_directory)
         # If the output file already exists then it also means the task was done in a previous run
         existing_output_files = writes_output_file and \
-            all( exists(output_filepath) for output_filepath in output_filepaths.values() )
+            all( output_filepath == None or exists(output_filepath) for output_filepath in output_filepaths.values() )
         # If we already have a cached output result
         existing_output_data = output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
