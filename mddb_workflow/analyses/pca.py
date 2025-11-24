@@ -78,9 +78,10 @@ def pca (
 
     # Get eigenvalues
     # Multiply values by 100 since values are in namometers (squared) and we want Ångstroms
-    eigenvalues = [ ev * 100 for ev in pca.explained_variance_ ]
+    raw_eigenvalues = pca.explained_variance_
+    eigenvalues = [ ev * 100 for ev in raw_eigenvalues ]
     # Get eigenvectors
-    eigenvectors = [ [ float(v) for v in eigenvector ] for eigenvector in pca.components_ ]
+    raw_eigenvectors = pca.components_
 
     # Get the mean structure coordinates
     mean = pca.mean_.flatten()
@@ -94,11 +95,10 @@ def pca (
     projections = []
     cutoff = total / 100
     for i, value in enumerate(eigenvalues):
-        if value < cutoff:
-            break
+        if value < cutoff: break
         # This logic was copied from here:
         # https://userguide.mdanalysis.org/stable/examples/analysis/reduced_dimensions/pca.html
-        eigenvector = eigenvectors[i]
+        eigenvector = [ float(v) for v in raw_eigenvectors[i] ]
         frame_projections = transformed[i]
         offset = np.outer(frame_projections, eigenvector)
         trajectory_projection = mean + offset
