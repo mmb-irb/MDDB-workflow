@@ -2,6 +2,7 @@ import urllib.request
 import json
 from tqdm import tqdm
 from mddb_workflow.utils.auxiliar import load_json, save_json, InputError
+from mddb_workflow.utils.constants import INCOMPLETE_PREFIX
 from mddb_workflow.utils.type_hints import *
 
 
@@ -117,12 +118,19 @@ class Remote:
                 request_url += '?' + '&'.join(arguments)
         # Send the request
         print(f'Downloading main trajectory ({output_file.path})')
+        # Create a temporal file to download the trajectory
+        # Thus if the download is interrupted we will know the trajectory is incomplete
+        incomplete_trajectory = output_file.get_prefixed_file(INCOMPLETE_PREFIX)
+        # If we have a previous incomplete trajectory then remove it
+        if incomplete_trajectory.exists: incomplete_trajectory.remove()
         try:
             with tqdm(unit = 'B', unit_scale = True, unit_divisor = 1024, 
                       miniters = 1, desc = ' Progress', leave=False) as t:
-                urllib.request.urlretrieve(request_url, output_file.path, reporthook = my_hook(t))
+                urllib.request.urlretrieve(request_url, incomplete_trajectory.path, reporthook = my_hook(t))
         except Exception as error:
             raise Exception('Something went wrong when downloading the main trajectory: ' + request_url, 'with error: ' + str(error))
+        # Once the trajectory is fully downloaded we change its filename
+        incomplete_trajectory.rename_to(output_file)
 
     # Download the inputs file
     def download_inputs_file (self, output_file : 'File'):
