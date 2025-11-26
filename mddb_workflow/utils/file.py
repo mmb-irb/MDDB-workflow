@@ -16,16 +16,16 @@ class File:
     Absolute paths are used in runtime.
     Relative paths are used to store paths.
     """
-    def __init__ (self, relative_or_basolute_path : Optional[str]):
+    def __init__ (self, relative_or_basolute_path : str):
+        # If there is no path then complain
+        if not relative_or_basolute_path:
+            raise RuntimeError('Declared file with no path')
         # Declare all attributes as none by default
         self.absolute_path = self.relative_path = self.path = None
         self.basepath = self.filename = None
         self.extension = None
         self.extensionless_filename = None
         self.extensionless_filepath = None
-        # If there is no path then leave everything as none
-        if not relative_or_basolute_path:
-            return
         # If input path is absolute
         if isabs(relative_or_basolute_path[0]):
             self.absolute_path = relative_or_basolute_path
