@@ -62,6 +62,19 @@ def pca (
     mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=structure_file.path)
     # Fit the trajectory according to the specified fit selection
     mdtraj_trajectory.superpose(mdtraj_trajectory, frame=0, atom_indices=parsed_fit_selection.atom_indices)
+    # Check if all coordinates got identical
+    # This is a MDtraj bug which may appear with wide spaced systems
+    # https://github.com/mdtraj/mdtraj/issues/2108
+    coordinates_sample = set([ tuple(coord) for coord in mdtraj_trajectory.xyz[0][0:5] ])
+    if len(coordinates_sample) == 1:
+        warn('There was a problem with MDtraj due to your system being too wide spaced. Attempting to fix...')
+        del mdtraj_trajectory
+        # Load the trajectory again
+        mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=structure_file.path)
+        # Divide all coordinates by 10 before superposing and then multiply by 10 back
+        mdtraj_trajectory._xyz /= 10
+        mdtraj_trajectory.superpose(mdtraj_trajectory, frame=0, atom_indices=parsed_fit_selection.atom_indices)
+        mdtraj_trajectory._xyz *= 10
     # Filter the atoms to be analized
     atom_indices = parsed_analysis_selection.atom_indices
     mdtraj_trajectory = mdtraj_trajectory.atom_slice(atom_indices=atom_indices)
