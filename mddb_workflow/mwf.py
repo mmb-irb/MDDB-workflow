@@ -1802,10 +1802,9 @@ class Project:
         Note that topology formats are conserved.
         """
         if self.input_topology_file == MISSING_TOPOLOGY:
-            return None
+            return MISSING_TOPOLOGY
         filename = self.input_topology_file.filename
-        if not filename:
-            return None
+        if not filename: raise RuntimeError('Unnamed file?')
         if filename == RAW_CHARGES_FILENAME:
             return filename
         standard_format = self.input_topology_file.format
@@ -1818,7 +1817,10 @@ class Project:
             return self._topology_filepath
         # Otherwise we must find it
         inherited_filename = self.inherit_topology_filename()
-        self._topology_filepath = self.pathify(inherited_filename) if inherited_filename else None
+        if inherited_filename == MISSING_TOPOLOGY:
+            self._topology_filepath = MISSING_TOPOLOGY
+        else:
+            self._topology_filepath = self.pathify(inherited_filename)
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
