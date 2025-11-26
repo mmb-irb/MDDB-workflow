@@ -163,6 +163,9 @@ class Task:
                 # DANI: En este caso la topology ya viene con el path relativo a proyecto
                 # DANI: No hay que hacerlo relativo a MD
                 output_filepath = output_filename(parent)
+                # If the output filepath is actually an exception then consider no output file is expected
+                # This may be for instance a MISSING_TOPOLGY exception
+                if type(output_filepath) == Exception: output_filepath = None
             else: raise RuntimeError(f'Unexpected output filename type "{type(output_filename)}"')
             # Set the output file path
             output_filepaths[argument] = output_filepath
@@ -231,7 +234,7 @@ class Task:
             if existing_final_output: rmtree(final_output_directory)
             if existing_output_files:
                 for output_filepath in output_filepaths.values():
-                    if exists(output_filepath): remove(output_filepath)
+                    if output_filepath != None and exists(output_filepath): remove(output_filepath)
             if existing_output_data: parent.cache.delete(self.cache_output_key)
         # If already existing output is not to be overwritten then check if it is already what we need
         else:
