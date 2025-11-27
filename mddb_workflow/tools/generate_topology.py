@@ -8,7 +8,7 @@ def generate_topology (
     residue_map : dict,
     pbc_residues : list[int],
     cg_residues : list[int],
-    output_filepath : str
+    output_file : 'File'
 ):
     """ Prepare the standard topology file to be uploaded to the database. """
 
@@ -86,4 +86,4 @@ def generate_topology (
         'pbc_residues': pbc_residues,
         'cg_residues': cg_residues,
     }
-    save_json(topology, output_filepath)
+    save_json(topology, output_file.path)

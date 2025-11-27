@@ -6,7 +6,7 @@ from mddb_workflow.utils.type_hints import *
 def get_first_frame (
     structure_file : 'File',
     trajectory_file : 'File',
-    output_filepath : str
+    output_file : 'File',
     ):
     """Get the trajectory first frame in PDB format using Gromacs."""
-    get_first_frame_gmx(structure_file.path, trajectory_file.path, output_filepath)
+    get_first_frame_gmx(structure_file.path, trajectory_file.path, output_file.path)

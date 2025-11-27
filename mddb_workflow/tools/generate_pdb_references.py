@@ -2,14 +2,11 @@ import json
 import urllib.request
 
 from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, request_pdb_data
-from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
 
-def prepare_pdb_references (pdb_ids : list[str], output_filepath : str):
+def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
     """Prepare the PDB references json file to be uploaded to the database."""
-    # Set the output file
-    pdb_references_file = File(output_filepath)
     # If we already have PDB references then load them
     previous_pdb_references = {}
     if pdb_references_file.exists:

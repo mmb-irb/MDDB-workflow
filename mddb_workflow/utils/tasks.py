@@ -1,4 +1,4 @@
-from os import rename, remove, mkdir
+from os import rename, mkdir
 from os.path import exists
 from shutil import rmtree
 from inspect import getfullargspec
@@ -80,9 +80,9 @@ class Task:
         self.debug = debug
         # Set the key used to store and retireve data in the parent and cache
         self.parent_output_key = f'_{self.flag}_task_output'
-        self.parent_output_filepath_keys = {}
+        self.parent_output_file_keys = {}
         for argument in self.output_filenames.keys():
-            self.parent_output_filepath_keys[argument] = f'{self.flag}_task_{argument}'
+            self.parent_output_file_keys[argument] = f'{self.flag}_task_{argument}'
         self.cache_output_key = f'{self.flag}_task_output'
         self.cache_arg_cksums = f'{self.flag}_task_arg_cksums'
         # Para el arg_cksum
@@ -94,12 +94,12 @@ class Task:
         return safe_getattr(parent, self.parent_output_key, MISSING_VALUE_EXCEPTION)
     def _set_parent_output (self, parent, new_output):
         return setattr(parent, self.parent_output_key, new_output)
-    def _get_parent_output_filepath (self, parent, argument):
-        parent_output_filepath_key = self.parent_output_filepath_keys[argument]
-        return safe_getattr(parent, parent_output_filepath_key, MISSING_VALUE_EXCEPTION)
-    def _set_parent_output_filepath (self, parent, argument, new_filepath):
-        parent_output_filepath_key = self.parent_output_filepath_keys[argument]
-        return setattr(parent, parent_output_filepath_key, new_filepath)
+    def _get_parent_output_file (self, parent, argument):
+        parent_output_file_key = self.parent_output_file_keys[argument]
+        return safe_getattr(parent, parent_output_file_key, MISSING_VALUE_EXCEPTION)
+    def _set_parent_output_file (self, parent, argument, new_file : 'File'):
+        parent_output_file_key = self.parent_output_file_keys[argument]
+        return setattr(parent, parent_output_file_key, new_file)
     # Get the task output, running the task if necessary
     def get_output (self, parent):
         # If we already have a value stored from this run then return it
@@ -108,26 +108,18 @@ class Task:
         # Otherwise run the task and return the output
         return self(parent)
     output = property(get_output, None, None, "Task output (read only)")
-    # Asking for the output file or filepath implies running the Task, then returning the file/filepath
+    # Asking for the an output file implies running the Task, then returning the file
     # The argument must be specified, meaning the name of the output argument in the task function
-    def get_output_filepath_getter (self, argument) -> Callable:
-        def get_output_filepath (parent) -> str:
-            # If we already have a filepath stored from this run then return it
-            filepath = self._get_parent_output_filepath(parent, argument)
-            if filepath != MISSING_VALUE_EXCEPTION: return filepath
-            # Otherwise run the task and return the filepath
-            self(parent)
-            filepath = self._get_parent_output_filepath(parent, argument)
-            if filepath != MISSING_VALUE_EXCEPTION: return filepath
-            raise ValueError(f'Task {self.flag} has no output filepath after running')
-        return get_output_filepath
-    # output_filepath = property(get_output_filepath, None, None, "Task output filepath (read only)")
     def get_output_file_getter (self, argument) -> Callable:
-        def get_output_file (parent) -> File:
-            get_output_filepath = self.get_output_filepath_getter(argument)
-            filepath = get_output_filepath(parent)
-            if type(filepath) == Exception: return filepath
-            return File(filepath)
+        def get_output_file (parent) -> 'File':
+            # If we already have a file stored from this run then return it
+            file = self._get_parent_output_file(parent, argument)
+            if file != MISSING_VALUE_EXCEPTION: return file
+            # Otherwise run the task and return the file
+            self(parent)
+            file = self._get_parent_output_file(parent, argument)
+            if file != MISSING_VALUE_EXCEPTION: return file
+            raise ValueError(f'Task {self.flag} has no output file after running')
         return get_output_file
     # output_file = property(get_output_file, None, None, "Task output file (read only)")
 
@@ -136,6 +128,9 @@ class Task:
 
     # When a task is called
     def __call__(self, parent: Union['Project', 'MD']):
+        return self._run(parent)
+
+    def _run (self, parent: Union['Project', 'MD']):
         # First of all check if this task has been already done in this very run
         # If so then return the stored vale
         output = self._get_parent_output(parent)
@@ -150,7 +145,7 @@ class Task:
         default_arguments = set(expected_arguments[::-1][:n_default_arguments])
         # If output_filenames are among the expected arguments then set them here
         writes_output_file = len(self.output_filenames) > 0
-        output_filepaths = {}
+        output_files = {}
         for argument, output_filename in self.output_filenames.items():
             # Make sure the declared output filename is expected
             if argument not in expected_arguments:
@@ -165,11 +160,12 @@ class Task:
                 # DANI: No hay que hacerlo relativo a MD
                 output_filepath = output_filename(parent)
             else: raise RuntimeError(f'Unexpected output filename type "{type(output_filename)}"')
-            # Set the output file path
-            output_filepaths[argument] = output_filepath
-            self._set_parent_output_filepath(parent, argument, output_filepath)
+            # Set the output file
+            output_file = File(output_filepath)
+            output_files[argument] = output_file
+            self._set_parent_output_file(parent, argument, output_file)
             # Add it to the processed args
-            processed_args[argument] = output_filepath
+            processed_args[argument] = output_file
             # Remove the expected argument from the list
             expected_arguments.remove(argument)
         # If one of the expected arguments is the output_directory then set it here
@@ -191,7 +187,7 @@ class Task:
         # Iterate the reamining expected arguments
         for arg in expected_arguments:
             # First find the argument among the parent properties
-            arg_value = self.find_arg_value(arg, parent, default_arguments)
+            arg_value = self._find_arg_value(arg, parent, default_arguments)
             if arg_value == MISSING_ARGUMENT_EXCEPTION: continue
             # Add the processed argument
             processed_args[arg] = arg_value
@@ -210,7 +206,7 @@ class Task:
         # Get the list of inputs which have changed compared to a previous run
         # WARNING: Always get changed inputs, since this function updates the cache
         # If had_cache is false then it means this is the first time the task is ever done
-        changed_inputs, had_cache, cache_cksums = self.get_changed_inputs(parent, processed_args)
+        changed_inputs, had_cache, cache_cksums = self._get_changed_inputs(parent, processed_args)
         any_input_changed = len(changed_inputs) > 0
         # Update the cache inputs
         parent.cache.update(self.cache_arg_cksums, cache_cksums)
@@ -223,8 +219,8 @@ class Task:
         existing_final_output = writes_output_dir and exists(final_output_directory)
         # If the output file already exists then it also means the task was done in a previous run
         existing_output_files = writes_output_file and \
-            all( output_filepath == None or type(output_filepath) == Exception or exists(output_filepath)
-                 for output_filepath in output_filepaths.values() )
+            all( output_file== None or type(output_file) == Exception or output_file.exists
+                 for output_file in output_files.values() )
         # If we already have a cached output result
         existing_output_data = output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
@@ -232,9 +228,9 @@ class Task:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
             if existing_final_output: rmtree(final_output_directory)
             if existing_output_files:
-                for output_filepath in output_filepaths.values():
-                    if output_filepath == None or type(output_filepath) == Exception: continue
-                    if exists(output_filepath): remove(output_filepath)
+                for output_file in output_files.values():
+                    if output_file == None or type(output_file) == Exception: continue
+                    if output_file.exists: output_file.remove()
             if existing_output_data: parent.cache.delete(self.cache_output_key)
         # If already existing output is not to be overwritten then check if it is already what we need
         else:
@@ -243,6 +239,9 @@ class Task:
             satisfied_output = (not writes_output_dir or existing_final_output) \
                 and (not writes_output_file or existing_output_files) \
                 and existing_output_data
+            if self.debug:
+                print(f'existing_output_data: {existing_output_data}')
+                print(f'output: {output}')
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
@@ -290,7 +289,7 @@ class Task:
         # Now return the function result
         return output
 
-    def find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
+    def _find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
         """ Find argument values, thus running any dependency if necessary. """
         # Word 'task' is reserved for getting the task itself
         if arg == 'task': return self
@@ -315,9 +314,10 @@ class Task:
         # You may have forgotten the additional argument in the task args
         raise RuntimeError(f'Function "{self.func.__name__}" from task "{self.flag}" expects argument "{arg}" but it is missing')
     
-    def get_changed_inputs (self,
+    def _get_changed_inputs (self,
         parent : Union['Project', 'MD'],
-        processed_args : dict) -> tuple[ list[str], bool ]:
+        processed_args : dict,
+    ) -> tuple[ list[str], bool, dict ]:
         """ Find out if input arguments changed regarding the last run. """
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
@@ -327,9 +327,10 @@ class Task:
         # Keep a list with arguments which have changed
         unmatched_arguments = []
         for arg_name, arg_value in processed_args.items():
-            # Skip the output directory argument
-            # Changes in this argument are not actual changes
+            # Skip the output directory argument and an output filename arguments
+            # Changes in these arguments are not actual "input" changes
             if arg_name == OUTPUT_DIRECTORY_ARG: continue
+            if arg_name in self.output_filenames: continue
             # Get the cksum from the new argument value
             new_cksum = get_cksum_id(arg_value)
             # Retrieve the cksum from the old argument value
@@ -346,3 +347,20 @@ class Task:
                 # Update the references
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
+    
+    def prefill (self, parent, output, inputs):
+        """ Assign an output value to a task thus marking it as already run. 
+            This function is used in a very specific scenario:
+            Tasks which generate no output files/directory inside the 'inpro' task.
+        """
+        # Save the task output in the parent instance
+        self._set_parent_output(parent, output)
+        # Update cache output unless it is marked to not save it
+        if self.use_cache: parent.cache.update(self.cache_output_key, output)
+        # Save input cksums to avoid repeating this task in future runs
+        # Get the list of inputs which have changed compared to a previous run
+        # WARNING: Always get changed inputs, since this function updates the cache
+        # If had_cache is false then it means this is the first time the task is ever done
+        changed_inputs, had_cache, cache_cksums = self._get_changed_inputs(parent, inputs)
+        # Update the cache inputs
+        parent.cache.update(self.cache_arg_cksums, cache_cksums)

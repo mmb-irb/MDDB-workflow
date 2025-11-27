@@ -387,7 +387,7 @@ class MD:
             # Check we successfully defined some trajectory file
             if len(md_parsed_paths) > 0:
                 # If so, check at least one of the files do actually exist
-                if any([File(path).exists for path in md_parsed_paths]):
+                if any([exists(path) for path in md_parsed_paths]):
                     return md_parsed_paths
             # If no trajectory files where found then asume they are relative to the project
             # Get paths relative to the project directory
@@ -397,7 +397,7 @@ class MD:
             # Check we successfully defined some trajectory file
             if len(project_parsed_paths) > 0:
                 # If so, check at least one of the files do actually exist
-                if any([File(path).exists for path in project_parsed_paths]):
+                if any([exists(path) for path in project_parsed_paths]):
                     return project_parsed_paths
             # At this point we can conclude the input trajectory file does not exist
             # If we have no paths at all then it means a glob pattern was passed and it didn't match
@@ -608,15 +608,15 @@ class MD:
     # And by "files" I mean structure, trajectory and topology
     input_files_processing = Task('inpro', 'Input files processing', process_input_files,
         output_filenames={
-            'output_topology_filepath': get_topology_filepath,
-            'output_structure_filepath': STRUCTURE_FILENAME,
-            'output_trajectory_filepath': TRAJECTORY_FILENAME,
+            'output_topology_file': get_topology_filepath,
+            'output_structure_file': STRUCTURE_FILENAME,
+            'output_trajectory_file': TRAJECTORY_FILENAME,
         })
 
     # Output main files
-    get_structure_file = input_files_processing.get_output_file_getter('output_structure_filepath')
+    get_structure_file = input_files_processing.get_output_file_getter('output_structure_file')
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
-    get_trajectory_file = input_files_processing.get_output_file_getter('output_trajectory_filepath')
+    get_trajectory_file = input_files_processing.get_output_file_getter('output_trajectory_file')
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
 
     def get_topology_file(self) -> 'File':
@@ -664,19 +664,19 @@ class MD:
 
     # First frame PDB file
     get_first_frame = Task('firstframe', 'Get first frame structure',
-        get_first_frame, output_filenames={'output_filepath': FIRST_FRAME_FILENAME})
-    get_first_frame_file = get_first_frame.get_output_file_getter('output_filepath')
+        get_first_frame, output_filenames={'output_file': FIRST_FRAME_FILENAME})
+    get_first_frame_file = get_first_frame.get_output_file_getter('output_file')
     first_frame_file = property(get_first_frame_file, None, None, "First frame (read only)")
 
     # Average structure filename
     get_average_structure = Task('average', 'Get average structure',
-        get_average_structure, output_filenames={'output_filepath': AVERAGE_STRUCTURE_FILENAME})
-    get_average_structure_file = get_average_structure.get_output_file_getter('output_filepath')
+        get_average_structure, output_filenames={'output_file': AVERAGE_STRUCTURE_FILENAME})
+    get_average_structure_file = get_average_structure.get_output_file_getter('output_file')
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
     # Produce the MD metadata file to be uploaded to the database
     prepare_metadata = Task('mdmeta', 'Prepare MD metadata',
-        generate_md_metadata, output_filenames={'output_filepath': OUTPUT_METADATA_FILENAME})
+        generate_md_metadata, output_filenames={'output_file': OUTPUT_METADATA_FILENAME})
 
     # The processed interactions
     get_processed_interactions = Task('inter', 'Interactions processing',
@@ -1155,9 +1155,8 @@ class Project:
         # Otherwise guess the inputs file using the accepted filenames
         else:
             for filename in ACCEPTED_INPUT_FILENAMES:
-                inputs_file = File(filename)
-                if inputs_file.exists:
-                    self._inputs_file = inputs_file
+                if exists(filename):
+                    self._inputs_file = File(filename)
                     break
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
@@ -1829,7 +1828,7 @@ class Project:
 
     def get_topology_file(self) -> 'File':
         """Get the processed topology from the reference MD."""
-        getter = self.reference_md.input_files_processing.get_output_file_getter('output_topology_filepath')
+        getter = self.reference_md.input_files_processing.get_output_file_getter('output_topology_file')
         return getter(self.reference_md)
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
 
@@ -1964,20 +1963,20 @@ class Project:
 
     # Prepare the PDB references file to be uploaded to the database
     get_pdb_references = Task('pdbs', 'Prepare PDB references',
-        prepare_pdb_references, output_filenames={'output_filepath': PDB_REFERENCES_FILENAME})
-    pdb_references_file = get_pdb_references.get_output_file_getter('output_filepath')
+        prepare_pdb_references, output_filenames={'pdb_references_file': PDB_REFERENCES_FILENAME})
+    pdb_references_file = get_pdb_references.get_output_file_getter('pdb_references_file')
 
     # Map the structure aminoacids sequences against the Uniprot reference sequences
-    get_protein_map = Task('protmap', 'Protein residues mapping',
-        generate_protein_mapping, output_filenames={'output_filepath': PROTEIN_REFERENCES_FILENAME})
+    get_protein_map = Task('protmap', 'Protein residues mapping', generate_protein_mapping,
+        output_filenames={'protein_references_file': PROTEIN_REFERENCES_FILENAME})
     protein_map = property(get_protein_map, None, None, "Protein residues mapping (read only)")
 
     # Define the output file of the protein mapping including protein references
-    get_protein_references_file = get_protein_map.get_output_file_getter('output_filepath')
+    get_protein_references_file = get_protein_map.get_output_file_getter('protein_references_file')
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
-    get_chain_references = Task('chains', 'Chain references',
-        prepare_chain_references, output_filenames={'output_filepath': OUTPUT_CHAINS_FILENAME})
+    get_chain_references = Task('chains', 'Chain references', prepare_chain_references,
+        output_filenames={'chains_references_file': OUTPUT_CHAINS_FILENAME})
 
     get_inchikeys = Task('inchikeys', 'InChI keys residues mapping', generate_inchikeys)
     inchikeys = property(get_inchikeys, None, None, "InChI keys (read only)")
@@ -1986,14 +1985,14 @@ class Project:
     lipid_references = property(get_lipid_references, None, None, "Lipid references (read only)")
 
     get_membrane_map = Task('memmap', 'Membrane residues mapping', generate_membrane_mapping,
-        output_filenames={'output_filepath': MEMBRANE_MAPPING_FILENAME})
+        output_filenames={'output_file': MEMBRANE_MAPPING_FILENAME})
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
 
     get_ligand_references = Task('ligmap', 'Ligand residues mapping', generate_ligand_references)
     ligand_references = property(get_ligand_references, None, None, "Ligand references (read only)")
 
     get_inchi_references = Task('inchimap', 'InChI references', generate_inchi_references,
-        output_filenames={'output_filepath': INCHIKEY_REFERENCES_FILENAME})
+        output_filenames={'output_file': INCHIKEY_REFERENCES_FILENAME})
     inchikey_map = property(get_inchi_references, None, None, "InChI references (read only)")
 
     # Build the residue map from both proteins and ligands maps
@@ -2003,17 +2002,17 @@ class Project:
 
     # Prepare the project metadata file to be upload to the database
     prepare_metadata = Task('pmeta', 'Prepare project metadata',
-        prepare_project_metadata, output_filenames={'output_filepath': OUTPUT_METADATA_FILENAME})
+        prepare_project_metadata, output_filenames={'output_file': OUTPUT_METADATA_FILENAME})
 
     # Prepare the standard topology file to be uploaded to the database
     prepare_standard_topology = Task('stopology', 'Standard topology file',
-        generate_topology, output_filenames={'output_filepath': STANDARD_TOPOLOGY_FILENAME})
-    get_standard_topology_file = prepare_standard_topology.get_output_file_getter('output_filepath')
+        generate_topology, output_filenames={'output_file': STANDARD_TOPOLOGY_FILENAME})
+    get_standard_topology_file = prepare_standard_topology.get_output_file_getter('output_file')
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
     # Get a screenshot of the system
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
-        get_screenshot, output_filenames={'output_filepath': OUTPUT_SCREENSHOT_FILENAME})
+        get_screenshot, output_filenames={'output_file': OUTPUT_SCREENSHOT_FILENAME})
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
     # Provenance data

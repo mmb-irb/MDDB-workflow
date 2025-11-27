@@ -12,7 +12,7 @@ METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "se
 def prepare_project_metadata (
     structure_file : 'File',
     trajectory_file : 'File',
-    output_filepath : str,
+    output_file : 'File',
     structure : 'Structure',
     residue_map : dict,
     protein_references_file : 'File',
@@ -230,7 +230,7 @@ def prepare_project_metadata (
             metadata['CV19_VARIANT'] = cv19_variant
     
     # Write metadata to a file
-    save_json(metadata, output_filepath)
+    save_json(metadata, output_file.path)
 
 metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
     'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES', 
@@ -247,7 +247,7 @@ def generate_md_metadata (
     snapshots : int,
     reference_frame : int,
     warnings : dict,
-    output_filepath : str
+    output_file : 'File'
     ):
     """Produce the MD metadata file to be uploaded to the database."""
 
@@ -286,4 +286,4 @@ def generate_md_metadata (
         md_metadata['metadata'] = metadata
 
     # Write metadata to a file
-    save_json(md_metadata, output_filepath)
+    save_json(md_metadata, output_file.path)

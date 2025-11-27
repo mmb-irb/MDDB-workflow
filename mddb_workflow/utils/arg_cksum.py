@@ -37,7 +37,7 @@ def get_cksum_id (value) -> Optional[int | float | str]:
         standard = list(value).sort()
         return get_cksum_id(standard)
     # For files use file last modification time and size
-    if isinstance(value, File): return value.get_cksum()
+    if isinstance(value, File): return value.get_cksum(unsafe=True)
     # For the parsed structure
     if isinstance(value, Structure):
         pdb_content = value.generate_pdb()

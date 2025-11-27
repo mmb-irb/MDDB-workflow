@@ -49,9 +49,9 @@ def process_input_files (
     input_topology_file : 'File',
     # Output
     output_directory : str,
-    output_topology_filepath : str,
-    output_structure_filepath : str,
-    output_trajectory_filepath : str,
+    output_topology_file : 'File',
+    output_structure_file : 'File',
+    output_trajectory_file : 'File',
     # Processing parameters
     filter_selection : str,
     image : bool,
@@ -78,15 +78,6 @@ def process_input_files (
     input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
     if len(input_trajectory_formats) > 1:
         raise InputError('All input trajectory files must have the same format')
-
-    # Set the output filepaths
-    # Note that these outputs aim for the MD directory, not for the task directory
-    output_structure_file = File(output_structure_filepath)
-    output_trajectory_file = File(output_trajectory_filepath)
-    if not output_topology_filepath or output_topology_filepath == MISSING_TOPOLOGY:
-        output_topology_file = MISSING_TOPOLOGY
-    else:
-        output_topology_file = File(output_topology_filepath)
 
     # If the faith argument was passed then set input files as output files and exit
     if faith:
@@ -136,21 +127,21 @@ def process_input_files (
     # Set the output format for the already converted structure
     input_structure_format = input_structure_file.format
     output_structure_format = output_structure_file.format
-    converted_structure_filepath = f'{output_directory}/{CONVERTED_STRUCTURE}'
+    # Set the output file for the already converted structure
     # If input structure already matches the output format then avoid the renaming
     if input_structure_format == output_structure_format:
-        converted_structure_filepath = input_structure_file.path
-    # Set the output file for the already converted structure
-    converted_structure_file = File(converted_structure_filepath)
+        converted_structure_file = input_structure_file
+    else:
+        converted_structure_file = File(f'{output_directory}/{CONVERTED_STRUCTURE}')
     # Set the output format for the already converted trajectory
     input_trajectories_format = list(input_trajectory_formats)[0]
     output_trajectory_format = output_trajectory_file.format
     # Set the output file for the already converted trajectory
-    converted_trajectory_filepath = f'{output_directory}/{CONVERTED_TRAJECTORY}'
     # If input trajectory already matches the output format and is unique then avoid the renaming
     if input_trajectories_format == output_trajectory_format and len(input_trajectory_files) == 1:
-        converted_trajectory_filepath = input_trajectory_files[0].path
-    converted_trajectory_file = File(converted_trajectory_filepath)
+        converted_trajectory_file = input_trajectory_files[0]
+    else:
+        converted_trajectory_file = File(f'{output_directory}/{CONVERTED_TRAJECTORY}')
     # Join all input trajectory paths
     input_trajectory_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
 
@@ -200,15 +191,13 @@ def process_input_files (
     must_filter = bool(filter_selection)
 
     # Set output filenames for the already filtered structure and trajectory
+    if must_filter:
+        filtered_structure_file = File(f'{output_directory}/{FILTERED_STRUCTURE}')
+        filtered_trajectory_file = File(f'{output_directory}/{FILTERED_TRAJECTORY}')
+    else:
+        filtered_structure_file = converted_structure_file
+        filtered_trajectory_file = converted_trajectory_file
     # Note that this is the only step affecting topology and thus here we output the definitive topology
-    filtered_structure_filepath = f'{output_directory}/{FILTERED_STRUCTURE}'
-    if not must_filter:
-        filtered_structure_filepath = converted_structure_filepath
-    filtered_structure_file = File(filtered_structure_filepath)
-    filtered_trajectory_filepath = f'{output_directory}/{FILTERED_TRAJECTORY}'
-    if not must_filter:
-        filtered_trajectory_filepath = converted_trajectory_filepath
-    filtered_trajectory_file = File(filtered_trajectory_filepath)
     filtered_topology_file = output_topology_file if must_filter else input_topology_file
 
     # Set an intermeidate file for the trajectory while it is being filtered
@@ -275,14 +264,12 @@ def process_input_files (
     must_image = image or fit
 
     # Set output filenames for the already filtered structure and trajectory
-    imaged_structure_filepath = f'{output_directory}/{IMAGED_STRUCTURE}'
-    if not must_image:
-        imaged_structure_filepath = filtered_structure_filepath
-    imaged_structure_file = File(imaged_structure_filepath)
-    imaged_trajectory_filepath = f'{output_directory}/{IMAGED_TRAJECTORY}'
-    if not must_image:
-        imaged_trajectory_filepath = filtered_trajectory_filepath
-    imaged_trajectory_file = File(imaged_trajectory_filepath)
+    if must_image:
+        imaged_structure_file = File(f'{output_directory}/{IMAGED_STRUCTURE}')
+        imaged_trajectory_file = File(f'{output_directory}/{IMAGED_TRAJECTORY}')
+    else:
+        imaged_structure_file = filtered_structure_file
+        imaged_trajectory_file = filtered_trajectory_file
 
     # Set an intermeidate file for the trajectory while it is being imaged
     # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while imaging
@@ -350,8 +337,11 @@ def process_input_files (
     # Calculate the new value
     if snapshots == None:
         snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
-    # Update the MD snapshots value
-    self.get_snapshots._set_parent_output(self, snapshots)
+    # Update the MD task snapshots value
+    self.get_snapshots.prefill(self, snapshots, {
+        'structure_file': imaged_structure_file,
+        'trajectory_file' : imaged_trajectory_file
+    })
     # Save the snapshots value in the cache as well
     self.cache.update(SNAPSHOTS_FLAG, snapshots)
 
@@ -360,7 +350,9 @@ def process_input_files (
     # In such case, bonds and charges must be resorted as well and saved apart to keep values coherent
     # Bonds are calculated during the structure corrector but atom charges must be extracted no
     charges = get_charges(filtered_topology_file)
-    self.project.get_charges._set_parent_output(self.project, charges)
+    self.project.get_charges.prefill(self.project, charges, {
+        'topology_file': filtered_topology_file
+    })
 
     print(' * Correcting structure')
 

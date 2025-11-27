@@ -25,7 +25,7 @@ debug = False
 # 
 def get_screenshot (
     structure : 'Structure',
-    output_filepath : str,
+    output_file : 'File',
     # You may pass the camera rotation, translation and zoom parameters so they are not calculated again
     # This is useful to keep screenshots coherent between different clusters/markov states
     # Note that a slight movement in the molecule may make the rotation logic here use a different angle
@@ -35,7 +35,7 @@ def get_screenshot (
     """ Obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database.
     Returns the rotation values used to take the photo so they can be saved and reused."""
     # Check the output screenshot file extension is JPG
-    if output_filepath.split('.')[-1] != 'jpg':
+    if output_file.format != 'jpg':
         raise InputError('You must provide a .jpg file name!')
     
     # Produce a PDB file to feed VMD
@@ -419,7 +419,7 @@ def get_screenshot (
     # converting to jpg
     rgb_im = im.convert("RGB")
     # exporting the image
-    rgb_im.save(output_filepath)
+    rgb_im.save(output_file.path)
 
     # Remove trash files
     trash_files = [ AUXILIAR_PDB_FILENAME, commands_filename_1, commands_filename_2, AUXILIAR_TGA_FILENAME, center_filename ]

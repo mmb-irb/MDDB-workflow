@@ -48,3 +48,5 @@ dependencies:
   - plotext
   # For dataset templates
   - jinja2
+  # To compare file content between runs thus telling if the inputs have changed
+  - python-xxhash

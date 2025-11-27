@@ -12,7 +12,7 @@ def generate_membrane_mapping(
     lipid_references: dict[str, dict],
     structure_file: 'File',
     universe: 'Universe',
-    output_filepath: str,
+    output_file: 'File',
 ) -> dict:
     """Generate a list of residue numbers of membrane components from a given structure and topology file.
 
@@ -21,7 +21,7 @@ def generate_membrane_mapping(
         lipid_references: Dictionary mapping InChI keys to lipid database references.
         structure_file: File object representing the structure file (e.g., PDB, GRO).
         universe: MDAnalysis Universe object containing the structure and topology.
-        output_filepath: Path to save the output JSON file containing membrane mapping.
+        output_file: Output JSON file to save membrane mapping.
 
     Returns:
         dict: A dictionary containing the membrane mapping.
@@ -47,7 +47,7 @@ def generate_membrane_mapping(
     else:
         membrane_map = all_atom_membranes(lipid_map, structure_file, universe)
     if membrane_map['n_mems'] > 0:
-        save_json(membrane_map, output_filepath)
+        save_json(membrane_map, output_file.path)
     return membrane_map
 
 

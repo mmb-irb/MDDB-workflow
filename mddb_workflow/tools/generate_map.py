@@ -74,7 +74,7 @@ def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
 def generate_protein_mapping (
     structure : 'Structure',
-    output_filepath : str,
+    protein_references_file : 'File',
     database_url : str,
     cache : 'Cache',
     register : dict,
@@ -83,9 +83,6 @@ def generate_protein_mapping (
     pdb_ids : list[str] = [],
 ) -> dict:
     """ Map the structure aminoacids sequences against the Uniprot reference sequences. """
-    # Set the output file
-    protein_references_file = File(output_filepath)
-
     # Remove previous warnings, if any
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict

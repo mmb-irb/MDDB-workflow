@@ -8,7 +8,6 @@ from urllib.error import HTTPError
 
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, protein_residue_name_to_letter
 from mddb_workflow.utils.auxiliar import RemoteServiceError
-from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
 # Set analysis version
@@ -133,14 +132,12 @@ def import_chains (chains_references_file : 'File') -> dict:
 
 def prepare_chain_references (
     structure : 'Structure',
-    output_filepath : 'File',
+    chains_references_file : 'File',
     database_url : str,
 ):
     """Define the main function that will be called from the main script.
     This function will get the parsed chains from the structure and request the InterProScan service
     to obtain the data for each chain."""
-    # Set the chain references output file
-    chains_references_file = File(output_filepath)
 
     # Obtain the protein parsed chains from the structure
     protein_parsed_chains = get_protein_parsed_chains(structure)

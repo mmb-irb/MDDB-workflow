@@ -2,6 +2,7 @@ from os import remove
 from mddb_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
 from mddb_workflow.tools.get_bonds import get_excluded_atoms_selection
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frame
+from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
@@ -122,7 +123,17 @@ def structure_corrector (
             structure = structure,
             pbc_selection = pbc_selection
         )
-        MD.get_reference_frame._set_parent_output(MD, bonds_reference_frame)
+        # Update the task output so it does not have to be repeated further
+        # IMPORTANT: Note that this is not always run, but only when default structure bonds are wrong
+        # IMPORTANT: Thus it is NORMAL when the reference frame is calculated further in the workflow
+        MD.get_reference_frame.prefill(MD, bonds_reference_frame, {
+            'structure_file': output_structure_file,
+            'trajectory_file': input_trajectory_file,
+            'snapshots': snapshots,
+            'reference_bonds': safe_bonds,
+            'structure': structure,
+            'pbc_selection': pbc_selection
+        })
         # If there is no reference frame then stop here since there must be a problem
         if bonds_reference_frame == None:
             print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
@@ -150,7 +161,17 @@ def structure_corrector (
     check_stable_bonds()
 
     # Write safe bonds back to the MD
-    MD.project.get_reference_bonds._set_parent_output(MD.project, safe_bonds)
+    MD.project.get_reference_bonds.prefill(MD.project, safe_bonds, {
+        'topology_file': input_topology_file,
+        'structure_file': output_structure_file,
+        'trajectory_file': input_trajectory_file,
+        'must_check_stable_bonds': must_check_stable_bonds,
+        'snapshots': snapshots,
+        'structure': structure,
+        'register': register,
+        'guess_bonds': guess_bonds,
+        'ignore_bonds': ignore_bonds,
+    })
 
     # ------------------------------------------------------------------------------------------
     # Incoherent residue bonds ---------------------------------------------------------------
@@ -365,9 +386,13 @@ def structure_corrector (
             # Bonds are already resorted
             save_json(safe_bonds, MD.project.resorted_bonds_file.path, indent=4)
             # Charges are to be resorted
-            charges = MD.project.get_charges._get_parent_output(MD.project)
+            # DANI: Esto no se prueba desde hace tiempo y ha sufrido cambios
+            # DANI: Debería funcionar pero puede tener algun bug
+            charges = get_charges(input_topology_file)
             resorted_charges = [ charges[index] for index in structure.new_atom_order ]
-            MD.project.get_charges._set_parent_output(MD.project, resorted_charges)
+            MD.project.get_charges.prefill(MD.project, resorted_charges, {
+                'topology_file': input_topology_file
+            })
             save_json(resorted_charges, MD.project.resorted_charges_file.path, indent=4)
             print('Sorting trajectory coordinates to fit the new structure atom sort...')
             structure.trajectory_atom_sorter(output_structure_file, input_trajectory_file, output_trajectory_file)

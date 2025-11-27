@@ -163,7 +163,7 @@ def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepa
     return None
     
 # This process is carried by pytraj, since the Gromacs average may be displaced
-def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_filepath : str):
+def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_file : 'File'):
     """Get an average structure from a trajectory."""
     # Iterload the trajectory to pytraj
     pytraj_trajectory = get_pytraj_trajectory(structure_file.path, trajectory_file.path)
@@ -177,4 +177,4 @@ def get_average_structure (structure_file : 'File', trajectory_file : 'File', ou
     # Then add the average frame and write it to 'xtc' format
     average = pyt.Trajectory(top=pytraj_trajectory.top)
     average.append(average_frame)
-    pyt.write_traj(output_filepath, average, overwrite=True)
+    pyt.write_traj(output_file.path, average, overwrite=True)

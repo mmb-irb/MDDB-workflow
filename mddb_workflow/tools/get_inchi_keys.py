@@ -249,7 +249,7 @@ def generate_inchi_references(
     inchikeys: dict[str, 'InChIKeyData'],
     lipid_references: dict[str, dict],
     ligand_references: dict[str, dict],
-    output_filepath: str,
+    output_file: 'File',
 ) -> list[dict]:
     """Generate InChI references for the database."""
     inchikey_references = []
@@ -283,5 +283,5 @@ def generate_inchi_references(
                 'ref': {'inchikey': inchikey}
             }
         })
-    save_json(inchikey_references, output_filepath)
+    save_json(inchikey_references, output_file.path)
     return inchikey_map

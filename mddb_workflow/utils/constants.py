@@ -289,7 +289,9 @@ EXTENSION_FORMATS = {
     'yml': 'yaml',
     'npy': 'npy',
     'in': 'txt',
-    'h5': 'h5'
+    'h5': 'h5',
+    'jpg': 'jpg',
+    'jpeg': 'jpg',
 }
 
 # Topology and trajectory file formats supported by PyTraj
