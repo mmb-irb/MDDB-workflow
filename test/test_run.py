@@ -78,20 +78,12 @@ class TestRunFlags:
         )
 
         sys.argv = [
-            'mddb_workflow',
-            'run',
-            '-dir',
-            working_directory,
-            '-stru',
-            'raw_structure.pdb',
-            '-traj',
-            'raw_trajectory.xtc',
-            '-top',
-            'no',
-            '-i',
-            'setup',
-            'rmsds',
-            'protmap',
+            'mddb_workflow', 'run',
+            '-dir', working_directory,
+            '-stru', 'raw_structure.pdb',
+            '-traj', 'raw_trajectory.xtc',
+            '-top', 'no',
+            '-i', 'setup', 'rmsds', 'protmap',
         ]
         main()
         # Change back to the original directory
@@ -101,30 +93,19 @@ class TestRunFlags:
         """Test the workflow without no inputs yaml."""
         working_directory = os.path.join(test_data_dir, 'output/test_no_inputs')
         # Remove the directory if it already exists to ensure a clean state
-        if os.path.exists(working_directory):
-            shutil.rmtree(working_directory)
-        # Copy the inputs from raw_project
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
             working_directory,
-            ignore=shutil.ignore_patterns('inputs.yaml'),
-            dirs_exist_ok=True,
+            dirs_exist_ok=True
         )
 
         sys.argv = [
             'mddb_workflow',
             'run',
-            '-dir',
-            working_directory,
-            '-top',
-            'topology.tpr',
-            '-md',
-            'replica_1',
-            'raw_structure.pdb',
-            'raw_trajectory.xtc',
-            '-i',
-            'setup',
-            'rmsds',
+            '-dir', working_directory,
+            '-top', 'topology.tpr',
+            '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
+            '-i', 'setup', 'rmsds',
         ]
 
         with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
@@ -134,24 +115,31 @@ class TestRunFlags:
 
     def test_no_internet(self, test_data_dir: str, monkeypatch):
         """Test the workflow with no internet connection."""
-        pytest.skip('Skipping test (not implemented yet).')
 
         def raise_connection_error(*args, **kwargs):
             raise requests.exceptions.ConnectionError('No internet connection')
 
         monkeypatch.setattr(requests, 'get', raise_connection_error)
 
-        working_directory = os.path.join(test_data_dir, 'output/A0001')
-        # working_directory = os.path.join(test_data_dir, 'output/test_no_internet')
-        # if os.path.exists(working_directory):
-        #     shutil.rmtree(working_directory)
-        # os.makedirs(working_directory)
+        working_directory = os.path.join(test_data_dir, 'output/test_no_internet')
+        # Remove the directory if it already exists to ensure a clean state
+        if os.path.exists(working_directory):
+            shutil.rmtree(working_directory)
+        # Copy the inputs from raw_project
+        shutil.copytree(
+            os.path.join(test_data_dir, 'input/raw_project'),
+            working_directory,
+            dirs_exist_ok=True,
+        )
 
-        sys.argv = ['mddb_workflow', 'run', '-dir', working_directory, '-e', 'network']
+        sys.argv = [
+            'mddb_workflow', 'run',
+            '-dir', working_directory,
+            '-top', 'topology.tpr',
+            '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
+            '-e', 'network', 'interdeps', 'membs', 'clusters', 'pockets',]
 
-        with pytest.raises(requests.exceptions.ConnectionError):
-            main()
-
+        main()
         os.chdir(test_data_dir)
 
 
