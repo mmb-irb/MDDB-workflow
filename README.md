@@ -36,8 +36,13 @@ At this point your environment is ready to use and it includes the `mwf` command
 
 ## Installation in HPC
 
-In HPC clusters running conda and having internet may be a problem.
-For those cases there is a a library called 'conda-pack' which allows to run a local lite conda version.
+In HPC clusters running conda to install the dependencies cannot be possible in cases where you have no internet access. For this cases you can follow the next steps to install the workflow in your remote machine.
+
+When running the workflow, do not forget to exclude the tasks that need internet accesion by using the flag `-i network`.
+
+### Using conda-pack
+
+Using `conda-pack`, you can create a portable conda environment that can be transferred and deployed on remote machines.
 
 First install conda-pack in any environment in your local machine:
 
@@ -80,6 +85,23 @@ python -m pip install --no-build-isolation --no-index --no-deps -e .
 ```
 
 At this point your environment is ready to use and it includes the `mwf` command. From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
+
+### Using containers
+Alternatively, you can use containerized versions of the workflow, which bundle all dependencies and the workflow itself into a portable image.
+
+First, pull or build the container image on your local machine, then transfer it to the HPC cluster where you can run the workflow without requiring conda installations.
+
+``` shell
+# Using docker
+docker save -o mddb_wf.tar ghcr.io/mmb-irb/mddb_wf
+scp mddb_wf.tar <remote>:<path>
+docker run -v $PWD:/data -w /data ghcr.io/mmb-irb/mddb_wf mwf run
+
+# Using singularity
+singularity pull --name mddb_wf.sif docker://ghcr.io/mmb-irb/mddb_wf:latest
+scp mddb_wf.sif <remote>:<path>
+singularity run -H $PWD -C mddb_wf.sif mwf run
+```
 
 ## Usage
 
