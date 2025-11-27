@@ -202,7 +202,6 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 # Set register cache flags
 SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
-NOT_MATCHED_LIGANDS = 'notmatchedligands'
 
 # Set the different test and warning flags
 MISSING_BONDS_FLAG = 'nobonds'
@@ -253,7 +252,7 @@ NICE_NAMES = {
     CORRECT_ELEMENTS: 'Correct elements',
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable',
-    LIGANDS_MATCH_FLAG : 'Ligands matched residues',
+    LIGANDS_MATCH_FLAG: 'Ligands matched residues',
     CHAINS_ANALYSIS: 'Chains analysis'
 }
 

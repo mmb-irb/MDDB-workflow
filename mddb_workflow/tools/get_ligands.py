@@ -3,7 +3,7 @@ import json
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
-from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, NOT_MATCHED_LIGANDS
+from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM
 from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn
 from mddb_workflow.utils.type_hints import *
 from urllib.request import urlopen
@@ -230,7 +230,7 @@ def generate_ligand_references(
         matched_inchikey = auto_inchikeys[ref_idx]
         tc = similarity_matrix[input_idx, ref_idx]
 
-        if tc < 0.6 and LIGANDS_MATCH_FLAG not in mercy:
+        if tc < 0.6:
             warn(f'Ligand "{input_data.get("name", input_data["inchikey"])}" input selection has Tanimoto coefficient {tc:.3f} '
                  f'which is below the threshold of 0.6 when compared to the matched fragment (InChIKey: {matched_inchikey}).')
 
@@ -241,9 +241,15 @@ def generate_ligand_references(
 
     # Merge remaining automatic references into ligand_references
     ligand_references.update(automatic_references)
-    for k, v in ligand_references.items():
-        if 'pubchem' not in v:
-            warn(f'Ligand {inchikeys[k].molname} with InChIKey {k} could not be matched to any PubChem ID.')
+    not_matched_ligands = [(inchikeys[k].molname, inchikeys[k].resindices)
+                           for k, v in ligand_references.items()
+                           if 'pubchem' not in v]
+    if not_matched_ligands:
+        for k, v in not_matched_ligands:
+            warn(f'Ligand {inchikeys[k].molname} could not be matched to any PubChem ID. Residues: {v}')
+        if LIGANDS_MATCH_FLAG not in mercy:
+            raise InputError('Provide PubChem IDs for all ligands, a PDB code where it is '
+                             f'present or use the flag -m {LIGANDS_MATCH_FLAG} to bypass this check.')
 
     if not ligand_references:
         print('No ligands were matched')
