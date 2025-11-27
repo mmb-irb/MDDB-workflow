@@ -1116,7 +1116,7 @@ class Structure:
 
     def find_fragments (self,
         selection : Optional['Selection'] = None,
-        exclude_disulfide : bool = True,
+        coherent : bool = True,
         atom_bonds : Optional[list[list[int]]] = None,
     ) -> Generator['Selection', None, None]:
         """Find fragments in a selection of atoms. A fragment is a selection of
@@ -1126,42 +1126,34 @@ class Structure:
         match the structure fragments. A selection including 2 separated regions of a 
         structure fragment will yield 2 fragments.
 
-        For convenience, protein disulfide bonds are not considered in this logic by default.
+        For convenience, bonds between non-consecutive residues are excluded from this logic.
+        This is useful to ignore disulfide bonds.
+        May also help to properly find chains in CG simulations where chains may be bonded.
         """
         # If there is no selection we consider all atoms
         if not selection: selection = self.select_all()
         # Get/Find covalent bonds between atoms in a new object avoid further corruption (deletion) of the original list
         safe_bonds = atom_bonds if atom_bonds else self.bonds
         atom_indexed_covalent_bonds = { atom_index: [ *safe_bonds[atom_index] ] for atom_index in selection.atom_indices }
-        # Exclude disulfide bonds from 
-        if exclude_disulfide:
-            # First search for protein disulfide bonds
-            excluded = set()
-            # Iterate atom bonds
-            for atom_index, bonds in atom_indexed_covalent_bonds.items():
-                # Get the actual atom
+        # Ignore bonds from non-consecutive residues
+        if coherent:
+            for atom_index, bonded_atom_indices in atom_indexed_covalent_bonds.items():
                 atom = self.atoms[atom_index]
-                # If it is not sulfur then continue
-                if atom.element != 'S': continue
-                # Iterate bonded atoms
-                for bonded_atom_index in bonds:
-                    # Bonds with atoms out of the selection are not considered
-                    if bonded_atom_index not in atom_indexed_covalent_bonds: continue
-                    # Get the bonded atom
+                residue_index = atom.residue_index
+                consecutive_residue_index = residue_index + 1
+                self_bonded_atoms = []
+                consecutive_bonded_atoms = []
+                for bonded_atom_index in bonded_atom_indices:
                     bonded_atom = self.atoms[bonded_atom_index]
-                    if bonded_atom.element != 'S': continue
-                    # We found a disulfide bond here
-                    # Make sure this is protein
-                    if atom.residue.classification != 'protein': continue
-                    if bonded_atom.residue.classification != 'protein': continue
-                    # We found a protein disulfide bond, we must exclude it
-                    bond = tuple(sorted([atom_index, bonded_atom_index]))
-                    excluded.add(bond)
-            # Now remove the corresponding bonds
-            for bond in excluded:
-                first_atom_index, second_atom_index = bond
-                atom_indexed_covalent_bonds[first_atom_index].remove(second_atom_index)
-                atom_indexed_covalent_bonds[second_atom_index].remove(first_atom_index)
+                    bonded_residue_index = bonded_atom.residue_index
+                    if bonded_residue_index == residue_index:
+                        self_bonded_atoms.append(bonded_atom_index)
+                        continue
+                    if bonded_residue_index == consecutive_residue_index:
+                        consecutive_bonded_atoms.append(bonded_atom_index)
+                        continue
+                new_bonded_atoms = self_bonded_atoms + consecutive_bonded_atoms
+                atom_indexed_covalent_bonds[atom_index] = new_bonded_atoms
         # Group the connected atoms in "fragments"
         while len(atom_indexed_covalent_bonds) > 0:
             start_atom_index, bonds = next(iter(atom_indexed_covalent_bonds.items()))
@@ -1173,8 +1165,7 @@ class Structure:
                 bonds.remove(next_atom_index)
                 next_bonds = atom_indexed_covalent_bonds.get(next_atom_index, None)
                 # If this atom is out of the selection then skip it
-                if next_bonds == None:
-                    continue
+                if next_bonds == None: continue
                 next_new_bonds = [ bond for bond in next_bonds if bond not in fragment_atom_indices + bonds ]
                 bonds += next_new_bonds
                 fragment_atom_indices.append(next_atom_index)

@@ -412,8 +412,15 @@ def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
     """ Get tpr atom bonds. """
     # Read and parse the TPR
     parsed_tpr = read_and_parse_tpr(tpr_filepath)
-    # Get the bonds only
-    tpr_bonds = parsed_tpr['gromacs-topology']['bond']['value']
+    topology = parsed_tpr['gromacs-topology']
+    # Get the actual bonds
+    tpr_bonds = topology['bond']['value']
+    # Get VSITEN bond-like annotations
+    # These are not actual bonds, but some CG models such as Martini use them as such
+    # If not consider, some beads may remain non-bonded to anything thus breaking our logic
+    # DANI: I check for the field to exist just to support old versions of the tool
+    virtuals = topology.get('virtual_site_n', None)
+    if virtuals: tpr_bonds += virtuals['value']
     return tpr_bonds
 
 

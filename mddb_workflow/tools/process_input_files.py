@@ -83,7 +83,10 @@ def process_input_files (
     # Note that these outputs aim for the MD directory, not for the task directory
     output_structure_file = File(output_structure_filepath)
     output_trajectory_file = File(output_trajectory_filepath)
-    output_topology_file = File(output_topology_filepath) if output_topology_filepath else MISSING_TOPOLOGY
+    if not output_topology_filepath or output_topology_filepath == MISSING_TOPOLOGY:
+        output_topology_file = MISSING_TOPOLOGY
+    else:
+        output_topology_file = File(output_topology_filepath)
 
     # If the faith argument was passed then set input files as output files and exit
     if faith:

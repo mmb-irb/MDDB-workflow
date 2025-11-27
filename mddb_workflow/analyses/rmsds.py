@@ -46,14 +46,19 @@ def rmsds(
         for default_selection_name, default_selection in default_selections.items():
             if default_selection == selection: del selections[default_selection_name]
 
+    # If there is anything left apart from proteins, nucleic acids and ligands then select it
+    missing_regions = structure.select_all()
+    for selection in selections.values():
+        missing_regions -= selection
+    if missing_regions: selections['other'] = missing_regions
+
     # Remove PBC residues from parsed selections
     non_pbc_selections = {}
     for selection_name, selection in selections.items():
         # Substract PBC atoms
         non_pbc_selection = selection - pbc_selection
         # If selection after substracting pbc atoms becomes empty then discard it
-        if not non_pbc_selection:
-            continue
+        if not non_pbc_selection: continue
         # Add the the filtered selection to the dict
         non_pbc_selections[selection_name] = non_pbc_selection
 

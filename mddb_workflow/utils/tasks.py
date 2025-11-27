@@ -126,6 +126,7 @@ class Task:
         def get_output_file (parent) -> File:
             get_output_filepath = self.get_output_filepath_getter(argument)
             filepath = get_output_filepath(parent)
+            if type(filepath) == Exception: return filepath
             return File(filepath)
         return get_output_file
     # output_file = property(get_output_file, None, None, "Task output file (read only)")
@@ -222,7 +223,8 @@ class Task:
         existing_final_output = writes_output_dir and exists(final_output_directory)
         # If the output file already exists then it also means the task was done in a previous run
         existing_output_files = writes_output_file and \
-            all( exists(output_filepath) for output_filepath in output_filepaths.values() )
+            all( output_filepath == None or type(output_filepath) == Exception or exists(output_filepath)
+                 for output_filepath in output_filepaths.values() )
         # If we already have a cached output result
         existing_output_data = output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
@@ -231,6 +233,7 @@ class Task:
             if existing_final_output: rmtree(final_output_directory)
             if existing_output_files:
                 for output_filepath in output_filepaths.values():
+                    if output_filepath == None or type(output_filepath) == Exception: continue
                     if exists(output_filepath): remove(output_filepath)
             if existing_output_data: parent.cache.delete(self.cache_output_key)
         # If already existing output is not to be overwritten then check if it is already what we need
