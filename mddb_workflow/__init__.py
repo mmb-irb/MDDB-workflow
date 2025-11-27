@@ -1,5 +1,9 @@
 import os
 import subprocess
+from rdkit import RDLogger
+# Mute RDKit warnings
+lg = RDLogger.logger()
+lg.setLevel(RDLogger.ERROR)
 
 name = "mddb_workflow"
 __all__ = ["resources", "tools", "utils"]
