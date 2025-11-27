@@ -116,7 +116,7 @@ Note that this process will also generate some additional files such as '`metada
 If you want to run only a few specific analyses or exclude some analyses you can use the include (``-i``) and exclude (``-e``) arguments.
 To see all available tasks and what they do, go to :doc:`tasks page </tasks>`.
 
-After running them, one folder is generated for each task, generating `mda.*.json` files for analyses and `mdf.*` for binaries.
+After running them, one folder is generated for each task, generating `mda.*.json` files for analyses and `mdf.*` for other types of files to be uploaded as they are.
 Once you are done with this process is time to load your files to the database.
 To do so, you must head to the |loader|.
 

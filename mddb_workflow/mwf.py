@@ -1689,7 +1689,7 @@ class Project:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
 
     # Then set getters for every value in the inputs file
-    def get_input(self, name: str) -> any:
+    def get_input(self, name: str) -> Any:
         """Get a specific 'input' value."""
         # Check if the value of this input was forced from command line
         if name in self.forced_inputs:
