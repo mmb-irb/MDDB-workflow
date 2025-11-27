@@ -146,8 +146,6 @@ REFERENCE_LABELS = {
 PDB_REFERENCES_FILENAME = 'pdb_references.json'
 # Set the protein references filename
 PROTEIN_REFERENCES_FILENAME = 'protein_references.json'
-# Set the ligand references filename
-LIGAND_REFERENCES_FILENAME = 'ligand_references.json'
 # Set the InChIKey references filename
 INCHIKEY_REFERENCES_FILENAME = 'inchikey_references.json'
 

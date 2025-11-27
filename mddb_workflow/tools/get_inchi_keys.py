@@ -1,174 +1,125 @@
-import requests
 import MDAnalysis
 import multiprocessing
-from rdkit import Chem
-from functools import lru_cache
 from dataclasses import dataclass, field
+from mddb_workflow.tools.generate_ligands_desc import pubchem_standardization
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import save_json, warn
+from mddb_workflow.utils.auxiliar import warn, save_json
 from mddb_workflow.utils.type_hints import *
+from rdkit import Chem
+from rdkit.Chem.MolStandardize import rdMolStandardize
+from rdkit.Chem.rdDetermineBonds import DetermineBondOrders
+from MDAnalysis.converters.RDKitInferring import MDAnalysisInferrer
 
 
 @dataclass
 class InChIKeyData:
-    """Data structure for InChI key information."""
+    """Data structure for InChI key information.
+
+    Attributes:
+        inchi (str): The InChI string for the residue.
+        resindices (list[int]): List of all residue indices with this InChI key.
+        fragments (list[list[int]]): Lists of residue indices that are connected as a single group.
+        resnames (set[str]): Set of residue names associated with this InChI key.
+        molname (str): Representative molecule name for this InChI key.
+        moltype (Literal['residue', 'fragment']): Type of the molecule.
+        classification (set): Set of residue classifications for this InChI key.
+        frag_len (int): Length of the fragments. 1 if no fragments are present.
+        references (dict): Additional database references related to this InChI key.
+
+    """
     inchi: str
     resindices: list[int] = field(default_factory=list)
     fragments: list[list[int]] = field(default_factory=list)
-    resname: set[str] = field(default_factory=set)
+    resnames: set[str] = field(default_factory=set)
+    molname: str = ''
+    moltype: Literal['residue', 'fragment'] = 'residue'
     classification: set = field(default_factory=set)
     frag_len: int = 1
+    references: dict = field(default_factory=dict)
+
+    @classmethod
+    def load_cache(cls, cache_dict: dict[dict | None]) -> dict[str, 'InChIKeyData']:
+        """Load data from cache by converting dictionaries to InChIKeyData objects."""
+        if len(cache_dict) > 0 and isinstance(next(iter(cache_dict.values())), dict):
+            inchikeys = {}
+            for inchikey, data in cache_dict.items():
+                inchidata = cls(inchi=data['inchi'])
+                for key, value in data.items():
+                    setattr(inchidata, key, value)
+                inchikeys[inchikey] = inchidata
+            return inchikeys
+        else:
+            return cache_dict
+
+
+def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
+    """Check if the given MDAnalysis AtomGroup corresponds to a ferroheme molecule."""
+    # Create a copy of the universe to remove the bonds safely
+    resatoms = MDAnalysis.Merge(mda_atoms)
+    resatoms.delete_bonds(resatoms.select_atoms('element Fe').bonds)
+    # Convert to basic RDKit molecule (no bond order nor formal charges)
+    mol = resatoms.select_atoms('not element Fe').convert_to.rdkit(inferrer=None)
+    # Add hydrogen to first two nitrogens in exchange
+    # for the removed Fe bonds. Which N to does not matter
+    # as we standardize later
+    mol_editable = Chem.RWMol(mol)
+    n_atoms = [at for at in mol_editable.GetAtoms() if at.GetSymbol() == 'N']
+    for n_atom in n_atoms[:2]:
+        # Add H atom bonding to N
+        h_idx = mol_editable.AddAtom(Chem.Atom('H'))
+        mol_editable.AddBond(n_atom.GetIdx(), h_idx, Chem.BondType.SINGLE)
+    # Convert back to regular molecule
+    mol_with_h = mol_editable.GetMol()
+    # rdDepictor.Compute2DCoords(mol_with_h)  # Optional: compute 2D coordinates for visualization
+    # Use MDAnalysisInferrer to get formal charge of the molecule
+    mol_mda = MDAnalysisInferrer()(mol)
+    formal_charge = Chem.GetFormalCharge(mol_mda)
+    DetermineBondOrders(mol_with_h, charge=formal_charge, maxIterations=1000)
+    unch_mol = rdMolStandardize.ChargeParent(mol_with_h)
+    inchi = Chem.MolToInchi(unch_mol)
+    standar_cid = pubchem_standardization(inchi)
+    return standar_cid[0]['pubchem'] == '4971'  # CID for ferroheme without Fe
 
 
 def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str, int]:
     """Process a single residue to get its InChI key and related information."""
     resatoms, resindices = task
     # Convert to RDKIT and get InChI data
-    res_RD = resatoms.convert_to.rdkit()
-    # Calculate InChI key and string
-    inchikey = Chem.MolToInchiKey(res_RD)
-    # rdinchi.MolToInchi so it doesnt print the warnings
-    inchi, retcode, message, logs, aux = Chem.rdinchi.MolToInchi(res_RD)
+    res_RD = resatoms.convert_to.rdkit(force=True)
+    if 'Fe' in set(resatoms.atoms.elements) and len(resatoms.atoms) > 1:
+        # Metallo proteins are not well handled by RDKit/InChI so we hardcode
+        # the InChI key for ferroheme that is the only case we have found
+        if is_ferroheme(resatoms):
+            inchikey = 'KABFMIBPWCXCRK-UHFFFAOYSA-L'
+            inchi = 'InChI=1S/C34H34N4O4.Fe/c1-7-21-17(3)25-13-26-19(5)23(9-11-33(39)40)31(37-26)16-32-24(10-12-34(41)42)20(6)28(38-32)15-30-22(8-2)18(4)27(36-30)14-29(21)35-25;/h7-8,13-16H,1-2,9-12H2,3-6H3,(H4,35,36,37,38,39,40,41,42);/q;+2/p-2'
+        else:
+            raise NotImplementedError('Non-ferroheme residues with Fe are not supported.')
+    else:
+        formal_charge = (int(resatoms.atoms.charges.sum().round())
+                         if hasattr(resatoms.atoms, 'charges')
+                         else None)
+        # For charged residues, DetermineBondOrders is better as we
+        # can set the formal charge on the molecule. Step needed for A026E
+        # If MDAnalysisInferrer infers the correct formal charge, we skip this step
+        if formal_charge and Chem.GetFormalCharge(res_RD) != formal_charge:
+            # Try/except because DetermineBondOrders can fail
+            try:
+                res_RD_copy = Chem.Mol(res_RD)
+                DetermineBondOrders(res_RD_copy, charge=formal_charge)
+                res_RD = res_RD_copy
+            except Exception:
+                pass
+        # Calculate InChI key and string
+        inchikey = Chem.MolToInchiKey(res_RD)
+        # rdinchi.MolToInchi so it doesnt print the warnings
+        inchi, retcode, message, logs, aux = Chem.rdinchi.MolToInchi(res_RD)
     return (inchikey, inchi, resindices)
 
 
-@lru_cache(maxsize=None)
-def is_in_LIPID_MAPS(inchikey, only_first_layer=False) -> dict:
-    """Search the InChI keys in LIPID MAPS."""
-    headers = {'accept': 'json'}
-    # https://www.lipidmaps.org/resources/rest
-    # Output item = physchem, is the only one that returns data for the inchi key
-    # for only the two first layers (main and atom connection)
-    # To see InChIKey layers:
-    # https://www.inchi-trust.org/about-the-inchi-standard/
-    # Or https://www.rhea-db.org/help/inchi-inchikey#What_is_an_InChIKey_
-    key = inchikey[:14] if only_first_layer else inchikey
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        js = response.json()
-        if js != []:
-            return js
-        else:
-            return False
-    else:
-        print(f"Error for {inchikey}: {response.status_code}")
-
-
-def get_swisslipids_info(entity_id) -> dict:
-    """Get information about a SwissLipids entry."""
-    headers = {'accept': 'json'}
-    url = f"https://www.swisslipids.org/api/index.php/entity/{entity_id}"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return False
-
-
-@lru_cache(maxsize=None)
-def is_in_swisslipids(inchikey, only_first_layer=False) -> dict:
-    """Search the InChI keys in SwissLipids.
-    Documentation: https://www.swisslipids.org/#/api.
-    """
-    key = inchikey[:14] if only_first_layer else inchikey
-    headers = {'accept': 'json'}
-    url = f"https://www.swisslipids.org/api/index.php/search?term={key}"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        data = response.json()[0]
-        detailed_data = get_swisslipids_info(data['entity_id'])
-        data['synonyms'] = detailed_data.get('synonyms', [])
-        return data
-    else:
-        return False
-
-
-def add_lipid_references(key_2_data: dict[str, InChIKeyData]) -> set[str]:
-    """Add lipid-specific database information to InChIKeyData objects.
-
-    This function queries SwissLipids and LIPID MAPS databases for each InChI key
-    and adds the results directly to the InChIKeyData objects. It also performs
-    quality checks on lipid classifications.
-
-    Args:
-        key_2_data: Dictionary mapping InChI keys to InChIKeyData objects (modified in-place).
-
-    Returns:
-        set: Set of InChI keys that were identified as lipids.
-
-    """
-    # Check internet connection
-    try:
-        is_in_swisslipids('test')
-    except Exception as e:
-        warn(f'There was a problem connecting to the SwissLipids database: {e}')
-        return set()
-
-    lipid_inchikeys = set()
-
-    for inchikey, res_data in key_2_data.items():
-        # If we dont find it, we try without stereochemistry
-        SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
-        LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
-
-        # Add lipid database data to InChIKeyData
-        if SL_data or LM_data:
-            res_data.swisslipids = SL_data
-            res_data.lipidmaps = LM_data
-            lipid_inchikeys.add(inchikey)
-
-            # QUALITY CHECKS
-            clasi = res_data.classification
-            # If the residue is a lipid, we check if it is classified as fatty/steroid
-            if all('fatty' not in classes for classes in clasi) and \
-                all('steroid' not in classes for classes in clasi):
-                warn(f'The residue {str(res_data.resname)} is classified as {clasi}, '
-                     f'but the InChIKey "{inchikey}" is a lipid.')
-        else:
-            # If the InChIKey is not in SwissLipids or LIPID MAPS, check classification
-            if any('fatty' in classes for classes in res_data.classification):
-                warn(f'The InChIKey {inchikey} of {str(res_data.resname)} is '
-                     f'classified as fatty but is not a lipid.\n'
-                     f'Resindices: {str(res_data.resindices)}')
-
-    return lipid_inchikeys
-
-
-@lru_cache(maxsize=None)
-def inchikey_2_pubchem(inchikey: str, inchi) -> Optional[str]:
-    """Given an InChIKey, get the PubChem CID."""
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
-    r = requests.get(url)
-    if r.ok:
-        data = r.json()
-        return str(data['IdentifierList']['CID'][0])
-    # Try PubChem standardization service to write things like the bonds from aromatic rings in the same order
-    # You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8
-    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-    payload = {'inchi': inchi}
-    r = requests.post(url, data=payload)
-    if r.ok:
-        data = r.json()
-        for compound in data['PC_Compounds']:
-            if compound['id']['id']['cid']:
-                return str(compound['id']['id']['cid'])
-    warn(f"Failed to fetch CID for InChIKey {inchikey}: {r.status_code} {r.reason}")
-    return None
-
-
-def add_pubchem_references(key_2_data: dict[str, InChIKeyData]) -> None:
-    """Add PubChem CID information to InChIKeyData objects."""
-    for inchikey, res_data in key_2_data.items():
-        if cid := inchikey_2_pubchem(inchikey, res_data.inchi):
-            res_data.pubchem_cid = cid
-
-
-def get_inchikeys(
+def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
-    output_filepath: str,
-) -> dict:
+) -> dict[str, InChIKeyData]:
     """Generate a dictionary mapping InChI keys to residue information for non-standard residues.
 
     This function uses MDAnalysis to parse the input structure and topology files and identifies
@@ -180,16 +131,9 @@ def get_inchikeys(
     Args:
         universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
-        output_filepath (str): Path to save the output JSON file containing InChI key references.
 
     Returns:
-        dict: A dictionary where keys are InChI keys and values are dictionaries containing:
-            - 'inchi' (str): The InChI string for the residue
-            - 'resindices' (list): A list of all residue indices with this InChI key
-            - 'fragments' (list[list]): Lists of residue indices that are connected as a single group
-            - 'frag_len' (int): Length of the fragments. 1 if no fragments are present.
-            - 'resname' (set): Set of residue names associated with this InChI key
-            - 'classification' (set): Set of residue classifications for this InChI key
+        dict: A dictionary mapping InChI keys to InChIKeyData objects.
 
     Notes:
         The function also performs consistency checks, warning if multiple residue names
@@ -215,8 +159,9 @@ def get_inchikeys(
         # Continue to the next fragment if any of its
         # residues are of a disallowed classification
         classes = {residues[resindex].classification for resindex in resindices}
-        if (classes.intersection({'ion', 'solvent'}) or
+        if (classes.intersection({'solvent'}) or
             (classes.intersection({'dna', 'rna', 'protein'}) and len(resindices) > 1)):
+            # print(f'Skipping fragment {i} with classes {classes} and residues {resindices}')
             continue
 
         # Select residues atoms with MDAnalysis
@@ -237,17 +182,17 @@ def get_inchikeys(
         results = pool.map(residue_to_inchi, tasks)
 
     # 2) Process results and build dictionaries
-    key_2_data: dict[str, InChIKeyData] = {}  # To see if different name for same residue
+    inchikeys: dict[str, InChIKeyData] = {}  # To see if different name for same residue
     name_2_key = {}  # To see if different residues under same name
     for (inchikey, inchi, resindices) in results:
         # Get or create the entry for this InChI key
-        data = key_2_data.setdefault(inchikey, InChIKeyData(inchi=inchi))
+        data = inchikeys.setdefault(inchikey, InChIKeyData(inchi=inchi))
 
         # Add residue index to the list
         data.resindices.extend(resindices)
         # Add residue name to the list. For multi residues we join the names
-        resname = '-'.join(sorted([residues[index].name for index in resindices]))
-        data.resname.add(resname)
+        resnames = '-'.join(sorted([residues[index].name for index in resindices]))
+        data.resnames.add(resnames)
         # Add residue class to the list
         if len(resindices) > 1:
             classes = tuple(set([residues[index].classification for index in resindices]))
@@ -258,76 +203,85 @@ def get_inchikeys(
         else:
             data.classification.add(residues[resindices[0]].classification)
 
-        # Incorrect residue name, estereoisomers, lose of atoms...
-        name_2_key.setdefault(resname, []).append(inchikey)
+        # Incorrect residue name, stereoisomers, loss of atoms...
+        name_2_key.setdefault(resnames, []).append(inchikey)
 
     # 3) Check data coherence
-    for inchikey, data in key_2_data.items():
+    for inchikey, data in inchikeys.items():
         # Check if there are multiple names for the same InChI key
-        if len(data.resname) > 1:
-            warn('Same residue with different names:\n'
-                f'{inchikey} -> {str(data.resname)}')
+        if len(data.resnames) > 1:
+            warn(f'Same residue with different names:\n {inchikey} -> {str(data.resnames)}')
+        data.molname = list(data.resnames)[0]  # Just pick one name
         # Check if there are multiple classifications for the same InChI key
         if len(data.classification) > 1:
             warn('Same residue with different classifications:\n'
-                 f'{inchikey} + -> {str(data.classification)} for names {str(data.resname)}')
+                 f'{inchikey} + -> {str(data.classification)} for names {str(data.resnames)}')
         # Check if there are multiple fragments length for the same InChI key
         if len(data.fragments) == 0:
             data.frag_len = 1
         else:
-            frag_len = len(set([len(fragment) for fragment in data.fragments]))
-            assert frag_len == 1, \
-                f'Fragments of different lengths for InChI key {inchikey}: {str(frag_len)}'
-            data.frag_len = frag_len
+            data.moltype = 'fragment'
+            frag_lens = set([len(fragment) for fragment in data.fragments])
+            assert len(frag_lens) == 1, \
+                f'Fragments of different lengths for InChI key {inchikey}: {str(frag_lens)}'
+            data.frag_len = frag_lens.pop()
 
     # Check if there are multiple InChI keys for the same name
-    for name, inchikeys in name_2_key.items():
-        inchikeys = list(set(inchikeys))
-        if len(inchikeys) < 2: continue
+    for name, keys in name_2_key.items():
+        keys = list(set(keys))
+        if len(keys) < 2: continue
         counts = {}
         # Count the number of fragments
-        for key in inchikeys:
+        for key in keys:
             # If there are not fragments, we use the number of residues
-            counts[key] = (key_2_data[key].frag_len
-                           if key_2_data[key].frag_len > 1
-                           else len(key_2_data[key].resindices))
+            counts[key] = (inchikeys[key].frag_len
+                           if inchikeys[key].frag_len > 1
+                           else len(inchikeys[key].resindices))
         # Format the counts for printing
-        key_counts = '\n'.join([f'\t{key}: {counts[key]: >4}' for key in inchikeys])
+        key_counts = '\n'.join([f'\t{k}: {c: >4}' for k, c in counts.items()])
         warn(f'The fragment {name} has more than one InChi key:\n'
                 f'{key_counts}')
 
-    # Add lipid-specific data to key_2_data
-    lipid_inchikeys = add_lipid_references(key_2_data)
-    # Add PubChem CID data to key_2_data
-    add_pubchem_references(key_2_data)
+    return inchikeys
 
-    # Build InChI key references and map from enriched data
+
+def generate_inchi_references(
+    inchikeys: dict[str, 'InChIKeyData'],
+    lipid_references: dict[str, dict],
+    ligand_references: dict[str, dict],
+    output_filepath: str,
+) -> list[dict]:
+    """Generate InChI references for the database."""
     inchikey_references = []
-    inchikey_map = {}
-    for inchikey, res_data in key_2_data.items():
+    inchikey_map = []
+    for inchikey, res_data in inchikeys.items():
+        # If there is force ligands, the inchikey may have changed
+        ref_inchikey = ligand_references.get(inchikey, {}).get('inchikey', inchikey)
+        ref_inchi = ligand_references.get(inchikey, {}).get('inchi', res_data.inchi)
         inchikey_references.append({
-            'inchikey': inchikey,
-            'inchi': res_data.inchi,
-            'swisslipids': getattr(res_data, 'swisslipids', None),
-            'lipidmaps': getattr(res_data, 'lipidmaps', None),
-            'pubchem_cid': getattr(res_data, 'pubchem_cid', None),
+            'inchikey': ref_inchikey,
+            'inchi': ref_inchi,
+            'swisslipids': lipid_references.get(inchikey, {}).get('swisslipids', {}),
+            'lipidmaps': lipid_references.get(inchikey, {}).get('lipidmaps', {}),
+            'pubchem': ligand_references.get(inchikey, {}),
         })
-        inchikey_map[inchikey] = {
-            'name': list(res_data.resname)[0],
-            'inchi': res_data.inchi,
-            'residue_indices': list(map(int, res_data.resindices)),
-            'fragments': res_data.fragments,
-            'is_lipid': inchikey in lipid_inchikeys,
-            'pubchem_cid': getattr(res_data, 'pubchem_cid', None),
+        # Sort dictionary entries for consistency when uploading to database
+        for k, v in inchikey_references[-1].items():
+            if type(v) is dict:
+                inchikey_references[-1][k] = dict(sorted(v.items()))
+
+        # Get residue indices from ligand forced selections if available
+        resindices = ligand_references.get(inchikey, {}).get('resindices', list(map(int, res_data.resindices)))
+        inchikey_map.append({
+            'inchikey': ref_inchikey,
+            # 'name': list(res_data.resnames)[0],
+            # 'inchi': ref_inchi,
+            # 'fragments': res_data.fragments,
+            'residue_indices': resindices,
+            'is_lipid': inchikey in ligand_references,
             'match': {
                 'ref': {'inchikey': inchikey}
             }
-        }
-
+        })
     save_json(inchikey_references, output_filepath)
     return inchikey_map
-
-
-def generate_lipid_mapping(inchikeys: dict) -> dict:
-    """Generate a mapping of lipid InChI keys."""
-    return {key: value for key, value in inchikeys.items() if value.get('is_lipid') is True}

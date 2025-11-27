@@ -5,7 +5,7 @@
 # DANI: e.g. intentas importar structures, quien a su vez intenta importar los type hints
 
 from pytraj import TrajectoryIterator
-from typing import TYPE_CHECKING, Callable, Optional, Union, Generator
+from typing import TYPE_CHECKING, Callable, Optional, Union, Generator, Literal
 Coords = tuple[float, float, float]
 
 if TYPE_CHECKING:
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from mddb_workflow.utils.register import Register
     from mddb_workflow.utils.cache import Cache
     from mddb_workflow.utils.file import File
+    from mddb_workflow.tools.get_inchi_keys import InChIKeyData
     from mddb_workflow.utils.selections import Selection
     from mddb_workflow.mwf import Task, MD, Project
     from MDAnalysis import Universe

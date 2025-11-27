@@ -4,6 +4,7 @@ from mddb_workflow import __path__
 from mddb_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
+from mddb_workflow.utils.type_hints import *
 
 import os
 from os.path import isfile, exists
@@ -12,14 +13,13 @@ import sys
 import json
 import yaml
 from glob import glob
-from typing import Optional, Generator, Callable
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
 import requests
 import urllib.request
 from subprocess import run, PIPE
-
+from dataclasses import asdict, is_dataclass
 
 # Check if a module has been imported
 def is_imported (module_name : str) -> bool:
@@ -117,15 +117,15 @@ OBJECT_TYPES = { dict, list, tuple }
 def recursive_transformer (target_object : dict | list | tuple, transformer : Optional[Callable] = None) -> dict | list | tuple:
     object_type = type(target_object)
     # Get a starting object and entries iterator depending on the object type
-    if object_type == dict:
+    if object_type is dict:
         clone = {}
         entries = target_object.items()
-    elif object_type == list or object_type == tuple:
+    elif object_type is list or object_type is tuple:
         # Note that if it is a tuple we make a list anyway and we convert it to tuple at the end
         # WARNING: Note that tuples do not support reassigning items
         clone = [ None for i in range(len(target_object)) ]
         entries = enumerate(target_object)
-    else: ValueError(f'The recuersive cloner should only be applied to object and lists, not to {object_type}')
+    else: ValueError(f'The recursive cloner should only be applied to object and lists, not to {object_type}')
     # Iterate the different entries in the object
     for index_or_key, value in entries:
         # Get he value type
@@ -147,6 +147,12 @@ def json_serializer (object : dict | list | tuple) -> dict | list | tuple:
         # If we have exceptions then convert them to text with an appropiate header
         if type(value) == Exception:
             return f'{EXCEPTION_HEADER}{value}'
+        # This must be done before the set check because asdict() will create dicts with sets inside
+        if is_dataclass(value) and not isinstance(value, type):
+            dict_value = asdict(value)
+            return recursive_transformer(dict_value, serializer)
+        if isinstance(value, set):
+            return list(value)
         # If the type is not among the ones we check then assume it is already serializable
         return value
     object_clone = recursive_transformer(object, serializer)

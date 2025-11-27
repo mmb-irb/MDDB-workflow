@@ -8,6 +8,7 @@ from mddb_workflow.utils.type_hints import *
 # Input fields + interaction type
 METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "selection_2", "type" }
 
+
 def prepare_project_metadata (
     structure_file : 'File',
     trajectory_file : 'File',
@@ -16,7 +17,7 @@ def prepare_project_metadata (
     residue_map : dict,
     protein_references_file : 'File',
     pdb_ids : list[str],
-    ligand_map : dict,
+    ligand_references : dict,
     input_protein_references : list[str] | dict,
     input_ligands : list[dict],
     interactions : list[dict],
@@ -85,7 +86,7 @@ def prepare_project_metadata (
 
     # Get ligand names if any
     forced_ligand_names = {
-        lig['name']: lig['forced_name'] for lig in ligand_map if lig.get('forced_name', False) }
+        lig['name']: lig['forced_name'] for lig in ligand_references if lig.get('forced_name', False) }
     if len(forced_ligand_names) == 0:
         forced_ligand_names = None
 
@@ -160,7 +161,8 @@ def prepare_project_metadata (
         'FORCED_REFERENCES': input_protein_references,
         'REFERENCES': protein_references,
         'INPUT_LIGANDS': input_ligands,
-        'LIGANDS': ligand_references,
+        # TODO: Ligands are now inchikeys only, remove after checking it does not break the client removing this
+        'LIGANDS': [],
         'LIGANDNAMES': forced_ligand_names,
         'INCHIKEYS': inchikey_references,
         'PROTSEQ': sequence_metadata['protein_sequences'],
