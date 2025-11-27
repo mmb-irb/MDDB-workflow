@@ -41,7 +41,7 @@ from mddb_workflow.tools.generate_map import generate_protein_mapping
 from mddb_workflow.tools.get_inchi_keys import generate_inchikeys, generate_inchi_references
 from mddb_workflow.tools.get_lipids import generate_lipid_references
 from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping
-from mddb_workflow.tools.generate_ligands_desc import generate_ligand_references
+from mddb_workflow.tools.get_ligands import generate_ligand_references
 from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 from mddb_workflow.tools.generate_topology import generate_topology
 from mddb_workflow.tools.get_charges import get_charges

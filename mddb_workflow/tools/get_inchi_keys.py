@@ -1,7 +1,7 @@
 import MDAnalysis
 import multiprocessing
 from dataclasses import dataclass, field
-from mddb_workflow.tools.generate_ligands_desc import pubchem_standardization
+from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import warn, save_json
 from mddb_workflow.utils.type_hints import *
