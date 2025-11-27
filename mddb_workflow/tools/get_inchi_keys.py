@@ -274,7 +274,7 @@ def generate_inchi_references(
         resindices = ligand_references.get(inchikey, {}).get('resindices', list(map(int, res_data.resindices)))
         inchikey_map.append({
             'inchikey': ref_inchikey,
-            # 'name': list(res_data.resnames)[0],
+            'name': list(res_data.resnames)[0],  # For rmsds
             # 'inchi': ref_inchi,
             # 'fragments': res_data.fragments,
             'residue_indices': resindices,

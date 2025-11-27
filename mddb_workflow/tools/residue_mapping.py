@@ -10,10 +10,6 @@ def generate_residue_mapping(
     """Build the residue map from both proteins and ligands maps.
 
     This is formatted as both the standard topology and metadata generators expect them.
-    Task: resmap
-    Args:
-        ligand_map = { 'name': pubchem_id, 'residue_indices': residue_indices, 'match': { 'ref': { 'pubchem': pubchem_id } } }
-
     """
     # Reformat mapping data to the topology system
     # Add the reference type to each reference object
