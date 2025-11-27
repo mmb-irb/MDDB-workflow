@@ -16,7 +16,7 @@ def rmsds(
     snapshots : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
-    ligand_map : list[dict],
+    inchikey_map : list[dict],
     frames_limit : int = 5000,
     ):
     """Run multiple RMSD analyses. One with each reference (first frame, average structure) 
@@ -34,7 +34,8 @@ def rmsds(
     selections = { **default_selections }
 
     # If there is a ligand map then parse them to selections as well
-    for ligand in ligand_map:
+    for ligand in inchikey_map:
+        if ligand['is_lipid']: continue
         selection_name = 'ligand ' + ligand['name']
         selection = structure.select_residue_indices(ligand['residue_indices'])
         # If the ligand has less than 3 atoms then gromacs can not fit it so it will fail

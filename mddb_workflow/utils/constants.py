@@ -146,8 +146,6 @@ REFERENCE_LABELS = {
 PDB_REFERENCES_FILENAME = 'pdb_references.json'
 # Set the protein references filename
 PROTEIN_REFERENCES_FILENAME = 'protein_references.json'
-# Set the ligand references filename
-LIGAND_REFERENCES_FILENAME = 'ligand_references.json'
 # Set the InChIKey references filename
 INCHIKEY_REFERENCES_FILENAME = 'inchikey_references.json'
 
@@ -204,7 +202,6 @@ DEFAULT_INTERACTION_CUTOFF = 0.1
 # Set register cache flags
 SNAPSHOTS_FLAG = 'snapshots'
 PDB_TO_PUBCHEM = 'pdb2pubchem'
-NOT_MATCHED_LIGANDS = 'notmatchedligands'
 
 # Set the different test and warning flags
 MISSING_BONDS_FLAG = 'nobonds'
@@ -255,7 +252,7 @@ NICE_NAMES = {
     CORRECT_ELEMENTS: 'Correct elements',
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable',
-    LIGANDS_MATCH_FLAG : 'Ligands matched residues',
+    LIGANDS_MATCH_FLAG: 'Ligands matched residues',
     CHAINS_ANALYSIS: 'Chains analysis'
 }
 

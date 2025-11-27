@@ -1,30 +1,22 @@
 from mddb_workflow.utils.constants import NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from mddb_workflow.utils.type_hints import *
 
+
 def generate_residue_mapping(
-    protein_map : list[dict],
-    ligand_map : list[dict],
-    inchikeys : dict,
-    structure : 'Structure',
+    protein_map: list[dict],
+    inchikey_map: list[dict],
+    structure: 'Structure',
 ) -> dict:
-    """
-    Build the residue map from both proteins and ligands maps.
+    """Build the residue map from both proteins and ligands maps.
+
     This is formatted as both the standard topology and metadata generators expect them.
-    Task: resmap
-    Args:
-        ligand_map = { 'name': pubchem_id, 'residue_indices': residue_indices, 'match': { 'ref': { 'pubchem': pubchem_id } } }
-
     """
-
     # Reformat mapping data to the topology system
     # Add the reference type to each reference object
-    inchikeys = list(inchikeys.values())
-    for data in inchikeys:
+    for data in inchikey_map:
         data['type'] = 'inchikey'
     for data in protein_map:
         data['type'] = 'protein'
-    for data in ligand_map:
-        data['type'] = 'ligand'
 
     # Get the count of residues from the structure
     residues_count = len(structure.residues)
@@ -32,16 +24,19 @@ def generate_residue_mapping(
     # Now format data
     reference_ids = []
     reference_types = []
-    residue_reference_indices = [ None ] * residues_count
-    residue_reference_numbers = [ None ] * residues_count
+    residue_reference_indices = [None] * residues_count
+    residue_reference_numbers = [None] * residues_count
 
-    for data in protein_map + ligand_map + inchikeys:
-        match = data['match']
-        # Get the reference index
-        # Note that several matches may belong to the same reference and thus have the same index
-        reference = match['ref']
+    for data in protein_map + inchikey_map:
+        if data['type'] == 'protein':
+            match = data['match']
+            # Get the reference index
+            # Note that several matches may belong to the same reference and thus have the same index
+            reference = match['ref']
+        else:
+            reference = data.get('inchikey', None)
         # If reference is missing at this point then it means we failed to find a matching reference
-        if reference == None:
+        if reference is None:
             continue
         # If we have the "no referable" flag
         if reference == NO_REFERABLE_FLAG:
@@ -67,10 +62,8 @@ def generate_residue_mapping(
         reference_id = None
         if reference_type == 'protein':
             reference_id = reference['uniprot']
-        elif reference_type == 'ligand':
-            reference_id = reference['pubchem']
         elif reference_type == 'inchikey':
-            reference_id = reference['inchikey']
+            reference_id = reference
         else:
             raise ValueError('Not supported type ' + reference_type)
         # If we have a regular reference id (i.e. not a no referable / not found flag)
@@ -82,11 +75,11 @@ def generate_residue_mapping(
         # Note that ligands do not have any residue reference numbering
         if reference_type == 'protein':
             for residue_index, residue_number in zip(data['residue_indices'], match['map']):
-                if residue_number == None:
+                if residue_number is None:
                     continue
                 residue_reference_indices[residue_index] = reference_index
                 residue_reference_numbers[residue_index] = residue_number
-        if reference_type in ['ligand','inchikey']:
+        if reference_type in ['inchikey']:
             for residue_index in data['residue_indices']:
                 residue_reference_indices[int(residue_index)] = reference_index
 
@@ -102,6 +95,6 @@ def generate_residue_mapping(
         'reference_types': reference_types,
         'residue_reference_indices': residue_reference_indices,
         'residue_reference_numbers': residue_reference_numbers
-    }    
+    }
 
     return residue_map

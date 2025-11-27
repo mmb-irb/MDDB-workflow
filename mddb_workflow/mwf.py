@@ -35,15 +35,16 @@ from mddb_workflow.tools.get_first_frame import get_first_frame
 from mddb_workflow.tools.get_bonds import find_safe_bonds, get_bonds_reference_frame
 from mddb_workflow.tools.process_interactions import process_interactions
 from mddb_workflow.tools.generate_metadata import prepare_project_metadata, generate_md_metadata
-from mddb_workflow.tools.generate_ligands_desc import generate_ligand_mapping
 from mddb_workflow.tools.chains import prepare_chain_references
 from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references
-from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 from mddb_workflow.tools.generate_map import generate_protein_mapping
-from mddb_workflow.tools.generate_membrane_mapping import generate_membrane_mapping
+from mddb_workflow.tools.get_inchi_keys import generate_inchikeys, generate_inchi_references
+from mddb_workflow.tools.get_lipids import generate_lipid_references
+from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping
+from mddb_workflow.tools.get_ligands import generate_ligand_references
+from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 from mddb_workflow.tools.generate_topology import generate_topology
 from mddb_workflow.tools.get_charges import get_charges
-from mddb_workflow.tools.get_inchi_keys import get_inchikeys, generate_lipid_mapping
 from mddb_workflow.tools.remove_trash import remove_trash
 from mddb_workflow.tools.get_screenshot import get_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files
@@ -443,11 +444,11 @@ class MD:
             return self._input_trajectory_files
         # Otherwise we must set the input trajectory files
         input_trajectory_filepaths = self.get_input_trajectory_filepaths()
-        input_trajectory_files = [ File(path) for path in input_trajectory_filepaths ]
+        input_trajectory_files = [File(path) for path in input_trajectory_filepaths]
         # If there are input trajectory URLs then download the trajectories first
         input_trajectory_urls = self._input_trajectory_urls
         if input_trajectory_urls:
-            for trajectory_url, trajectory_file in zip( input_trajectory_urls, input_trajectory_files ):
+            for trajectory_url, trajectory_file in zip(input_trajectory_urls, input_trajectory_files):
                 # If the trajectory file already exists then skip it
                 if trajectory_file.exists: continue
                 original_filename = trajectory_url.split('/')[-1]
@@ -611,7 +612,7 @@ class MD:
             'output_structure_filepath': STRUCTURE_FILENAME,
             'output_trajectory_filepath': TRAJECTORY_FILENAME,
         })
-    
+
     # Output main files
     get_structure_file = input_files_processing.get_output_file_getter('output_structure_filepath')
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
@@ -663,19 +664,19 @@ class MD:
 
     # First frame PDB file
     get_first_frame = Task('firstframe', 'Get first frame structure',
-        get_first_frame, output_filenames={'output_filepath':FIRST_FRAME_FILENAME})
+        get_first_frame, output_filenames={'output_filepath': FIRST_FRAME_FILENAME})
     get_first_frame_file = get_first_frame.get_output_file_getter('output_filepath')
     first_frame_file = property(get_first_frame_file, None, None, "First frame (read only)")
 
     # Average structure filename
     get_average_structure = Task('average', 'Get average structure',
-        get_average_structure, output_filenames={'output_filepath':AVERAGE_STRUCTURE_FILENAME})
+        get_average_structure, output_filenames={'output_filepath': AVERAGE_STRUCTURE_FILENAME})
     get_average_structure_file = get_average_structure.get_output_file_getter('output_filepath')
     average_structure_file = property(get_average_structure_file, None, None, "Average structure filename (read only)")
 
     # Produce the MD metadata file to be uploaded to the database
     prepare_metadata = Task('mdmeta', 'Prepare MD metadata',
-        generate_md_metadata, output_filenames={'output_filepath':OUTPUT_METADATA_FILENAME})
+        generate_md_metadata, output_filenames={'output_filepath': OUTPUT_METADATA_FILENAME})
 
     # The processed interactions
     get_processed_interactions = Task('inter', 'Interactions processing',
@@ -986,11 +987,13 @@ class MD:
 
     run_channels_analysis = Task('channels', 'Membrane channels analysis',
         channels, {'frames_limit': 10})
-    
-    # Set a getter for the warnings
-    # The warnings list should not be reasigned, but it was back in the day
-    # To avoid silent bugs, we read it directly from the register every time
-    def get_warnings (self) -> list:
+
+    def get_warnings(self) -> list:
+        """Get the warnings.
+
+        The warnings list should not be reasigned, but it was back in the day.
+        To avoid silent bugs, we read it directly from the register every time.
+        """
         return self.register.warnings
     warnings = property(get_warnings, None, None, "MD warnings to be written in metadata")
 
@@ -1576,7 +1579,7 @@ class Project:
             # Otherwise use the URL as is
             else:
                 if input_topology_file.format == 'top':
-                    warn('Automatic download of itp files is not supported without the "-proj" argument.' + \
+                    warn('Automatic download of itp files is not supported without the "-proj" argument.' +
                          ' Thus if the topology has associated itp files they will not be downloaded.')
                 download_file(input_topology_url, input_topology_file)
         # If the file already exists then we are done
@@ -1686,7 +1689,7 @@ class Project:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
 
     # Then set getters for every value in the inputs file
-    def get_input(self, name: str):
+    def get_input(self, name: str) -> any:
         """Get a specific 'input' value."""
         # Check if the value of this input was forced from command line
         if name in self.forced_inputs:
@@ -1706,7 +1709,7 @@ class Project:
         """Set a function to get a specific 'input' value by its key/name.
         Note that we return the property without calling the getter.
         """
-        def getter(self):
+        def getter(self: 'Project'):
             return self.get_input(name)
         return property(getter, doc=doc)
 
@@ -1825,6 +1828,7 @@ class Project:
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
     def get_topology_file(self) -> 'File':
+        """Get the processed topology from the reference MD."""
         getter = self.reference_md.input_files_processing.get_output_file_getter('output_topology_filepath')
         return getter(self.reference_md)
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
@@ -1890,11 +1894,6 @@ class Project:
     # Atom charges
     get_charges = Task('charges', 'Getting atom charges', get_charges)
     charges = property(get_charges, None, None, "Atom charges (read only)")
-
-    # InChI keys
-    get_inchi_keys = Task('inchikeys', 'Getting InChI keys',
-        get_inchikeys, output_filenames={'output_filepath':INCHIKEY_REFERENCES_FILENAME})
-    inchikeys = property(get_inchi_keys, None, None, "InChI keys (read only)")
 
     def get_topology_reader(self) -> 'Topology':
         """Get the topology data reader."""
@@ -1965,43 +1964,37 @@ class Project:
 
     # Prepare the PDB references file to be uploaded to the database
     get_pdb_references = Task('pdbs', 'Prepare PDB references',
-        prepare_pdb_references, output_filenames={'output_filepath':PDB_REFERENCES_FILENAME})
+        prepare_pdb_references, output_filenames={'output_filepath': PDB_REFERENCES_FILENAME})
     pdb_references_file = get_pdb_references.get_output_file_getter('output_filepath')
 
     # Map the structure aminoacids sequences against the Uniprot reference sequences
     get_protein_map = Task('protmap', 'Protein residues mapping',
-        generate_protein_mapping, output_filenames={'output_filepath':PROTEIN_REFERENCES_FILENAME})
+        generate_protein_mapping, output_filenames={'output_filepath': PROTEIN_REFERENCES_FILENAME})
     protein_map = property(get_protein_map, None, None, "Protein residues mapping (read only)")
 
     # Define the output file of the protein mapping including protein references
     get_protein_references_file = get_protein_map.get_output_file_getter('output_filepath')
     protein_references_file = property(get_protein_references_file, None, None, "File including protein refereces data mined from UniProt (read only)")
 
-    # Get chain references
     get_chain_references = Task('chains', 'Chain references',
-        prepare_chain_references, output_filenames={'output_filepath':OUTPUT_CHAINS_FILENAME})
+        prepare_chain_references, output_filenames={'output_filepath': OUTPUT_CHAINS_FILENAME})
 
-    # Get the ligand residues mapping
-    get_ligand_map = Task('ligmap', 'Ligand residues mapping',
-        generate_ligand_mapping, output_filenames={'output_filepath':LIGAND_REFERENCES_FILENAME})
-    ligand_map = property(get_ligand_map, None, None, "Ligand references (read only)")
+    get_inchikeys = Task('inchikeys', 'InChI keys residues mapping', generate_inchikeys)
+    inchikeys = property(get_inchikeys, None, None, "InChI keys (read only)")
 
-    # Define the output file of the ligand mapping including ligand references
-    get_ligand_references_file = get_ligand_map.get_output_file_getter('output_filepath')
-    ligand_references_file = property(get_ligand_references_file, None, None, "File including ligand refereces data mined from PubChem (read only)")
+    get_lipid_references = Task('lipmap', 'Lipid references', generate_lipid_references)
+    lipid_references = property(get_lipid_references, None, None, "Lipid references (read only)")
 
-    # Get the lipid references
-    get_lipid_map = Task('lipmap', 'Lipid mapping', generate_lipid_mapping)
-    lipid_map = property(get_lipid_map, None, None, "Lipid mapping (read only)")
-
-    # Define the output file of the lipid mapping including lipid references
-    get_lipid_references_file = get_lipid_map.get_output_file_getter('output_filepath')
-    lipid_references_file = property(get_lipid_references_file, None, None, "File including lipid references data mined from PubChem (read only)")
-
-    # Get mapping of residues in the membrane
-    get_membrane_map = Task('memmap', 'Membrane mapping', generate_membrane_mapping,
-        output_filenames={'output_filepath':MEMBRANE_MAPPING_FILENAME})
+    get_membrane_map = Task('memmap', 'Membrane residues mapping', generate_membrane_mapping,
+        output_filenames={'output_filepath': MEMBRANE_MAPPING_FILENAME})
     membrane_map = property(get_membrane_map, None, None, "Membrane mapping (read only)")
+
+    get_ligand_references = Task('ligmap', 'Ligand residues mapping', generate_ligand_references)
+    ligand_references = property(get_ligand_references, None, None, "Ligand references (read only)")
+
+    get_inchi_references = Task('inchimap', 'InChI references', generate_inchi_references,
+        output_filenames={'output_filepath': INCHIKEY_REFERENCES_FILENAME})
+    inchikey_map = property(get_inchi_references, None, None, "InChI references (read only)")
 
     # Build the residue map from both proteins and ligands maps
     # This is formatted as both the standard topology and metadata producers expect them
@@ -2010,26 +2003,28 @@ class Project:
 
     # Prepare the project metadata file to be upload to the database
     prepare_metadata = Task('pmeta', 'Prepare project metadata',
-        prepare_project_metadata, output_filenames={'output_filepath':OUTPUT_METADATA_FILENAME})
+        prepare_project_metadata, output_filenames={'output_filepath': OUTPUT_METADATA_FILENAME})
 
     # Prepare the standard topology file to be uploaded to the database
     prepare_standard_topology = Task('stopology', 'Standard topology file',
-        generate_topology, output_filenames={'output_filepath':STANDARD_TOPOLOGY_FILENAME})
+        generate_topology, output_filenames={'output_filepath': STANDARD_TOPOLOGY_FILENAME})
     get_standard_topology_file = prepare_standard_topology.get_output_file_getter('output_filepath')
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 
     # Get a screenshot of the system
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
-        get_screenshot, output_filenames={'output_filepath':OUTPUT_SCREENSHOT_FILENAME})
+        get_screenshot, output_filenames={'output_filepath': OUTPUT_SCREENSHOT_FILENAME})
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
     # Provenance data
     produce_provenance = Task('aiidata', 'Produce provenance', produce_provenance)
 
-    # Set a getter for the warnings
-    # The warnings list should not be reasigned, but it was back in the day
-    # To avoid silent bugs, we read it directly from the register every time
-    def get_warnings (self) -> list:
+    def get_warnings(self) -> list:
+        """Get the warnings.
+
+        The warnings list should not be reasigned, but it was back in the day.
+        To avoid silent bugs, we read it directly from the register every time.
+        """
         return self.register.warnings
     warnings = property(get_warnings, None, None, "Project warnings to be written in metadata")
 
@@ -2145,10 +2140,8 @@ def workflow(
     working_directory: str = '.',
     download: bool = False,
     setup: bool = False,
-    # Run only specific analyses/processes
     include: Optional[list[str]] = None,
     exclude: Optional[list[str]] = None,
-    # Overwrite already existing output files
     overwrite: Optional[list[str] | bool] = None,
 ):
     """Run the MDDB workflow.
@@ -2158,7 +2151,7 @@ def workflow(
         working_directory (str): Working directory where the project is located.
         download (bool): (Deprecated: use -i download) If passed, only download required files. Then exits.
         setup (bool): (Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.
-        include (list[str] | None): List of tasks to include.
+        include (list[str] | None): Set the unique analyses or tools to be run. All other steps will be skipped.
         exclude (list[str] | None): List of analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway.
         overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
 

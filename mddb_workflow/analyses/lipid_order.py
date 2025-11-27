@@ -10,7 +10,7 @@ def lipid_order(
         universe: 'MDAnalysis.Universe',
         output_directory: str,
         membrane_map: dict,
-        lipid_map: dict,
+        inchikey_map: list[dict],
         cg_residues: list[int],
         snapshots: int,
         frames_limit: int = 100):
@@ -37,7 +37,8 @@ def lipid_order(
 
     order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
-    for ref in lipid_map.values():
+    for ref in inchikey_map:
+        if not ref['is_lipid']: continue
         inchikey = ref['match']['ref']['inchikey']
         # Take the first residue of the reference
         res = universe.residues[ref['residue_indices'][0]]
