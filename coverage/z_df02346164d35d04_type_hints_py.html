@@ -4,14 +4,14 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Coverage for mddb_workflow/utils/type_hints.py: 100%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
-    <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
-    <script src="coverage_html_cb_6fb7b396.js" defer></script>
+    <link rel="stylesheet" href="style_cb_8432e98f.css" type="text/css">
+    <script src="coverage_html_cb_bcae5fc4.js" defer></script>
 </head>
 <body class="pyfile">
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>mddb_workflow/utils/type_hints.py</b>:
+            <span class="text">Coverage for </span><b>mddb_workflow&#8201;/&#8201;utils&#8201;/&#8201;type_hints.py</b>:
             <span class="pc_cov">100%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -57,15 +57,15 @@
             <span class="text">3 statements &nbsp;</span>
             <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">3<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">0<span class="text"> missing</span></button>
-            <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">8<span class="text"> excluded</span></button>
+            <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">9<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
             <a id="prevFileLink" class="nav" href="z_df02346164d35d04_topologies_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_df02346164d35d04_vmd_spells_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -87,7 +87,7 @@
     <p class="pln"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="com"># DANI: e.g. intentas importar structures, quien a su vez intenta importar los type hints</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="key">from</span> <span class="nam">pytraj</span> <span class="key">import</span> <span class="nam">TrajectoryIterator</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">typing</span> <span class="key">import</span> <span class="nam">TYPE_CHECKING</span><span class="op">,</span> <span class="nam">Callable</span><span class="op">,</span> <span class="nam">Optional</span><span class="op">,</span> <span class="nam">Union</span><span class="op">,</span> <span class="nam">Generator</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">typing</span> <span class="key">import</span> <span class="nam">TYPE_CHECKING</span><span class="op">,</span> <span class="nam">Callable</span><span class="op">,</span> <span class="nam">Optional</span><span class="op">,</span> <span class="nam">Union</span><span class="op">,</span> <span class="nam">Generator</span><span class="op">,</span> <span class="nam">Literal</span><span class="op">,</span> <span class="nam">Any</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="nam">Coords</span> <span class="op">=</span> <span class="nam">tuple</span><span class="op">[</span><span class="nam">float</span><span class="op">,</span> <span class="nam">float</span><span class="op">,</span> <span class="nam">float</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="key">if</span> <span class="nam">TYPE_CHECKING</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -95,9 +95,10 @@
     <p class="exc show_exc"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">register</span> <span class="key">import</span> <span class="nam">Register</span>&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">cache</span> <span class="key">import</span> <span class="nam">Cache</span>&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">file</span> <span class="key">import</span> <span class="nam">File</span>&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">selections</span> <span class="key">import</span> <span class="nam">Selection</span>&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">mwf</span> <span class="key">import</span> <span class="nam">Task</span><span class="op">,</span> <span class="nam">MD</span><span class="op">,</span> <span class="nam">Project</span>&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t">    <span class="key">from</span> <span class="nam">MDAnalysis</span> <span class="key">import</span> <span class="nam">Universe</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">tools</span><span class="op">.</span><span class="nam">get_inchi_keys</span> <span class="key">import</span> <span class="nam">InChIKeyData</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">selections</span> <span class="key">import</span> <span class="nam">Selection</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t">    <span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">mwf</span> <span class="key">import</span> <span class="nam">Task</span><span class="op">,</span> <span class="nam">MD</span><span class="op">,</span> <span class="nam">Project</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t">    <span class="key">from</span> <span class="nam">MDAnalysis</span> <span class="key">import</span> <span class="nam">Universe</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -106,8 +107,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_df02346164d35d04_vmd_spells_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
     </div>
 </footer>

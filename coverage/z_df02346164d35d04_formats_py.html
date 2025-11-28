@@ -4,14 +4,14 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Coverage for mddb_workflow/utils/formats.py: 75%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
-    <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
-    <script src="coverage_html_cb_6fb7b396.js" defer></script>
+    <link rel="stylesheet" href="style_cb_8432e98f.css" type="text/css">
+    <script src="coverage_html_cb_bcae5fc4.js" defer></script>
 </head>
 <body class="pyfile">
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>mddb_workflow/utils/formats.py</b>:
+            <span class="text">Coverage for </span><b>mddb_workflow&#8201;/&#8201;utils&#8201;/&#8201;formats.py</b>:
             <span class="pc_cov">75%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_df02346164d35d04_gmx_spells_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -135,7 +135,7 @@
     <p class="run"><span class="n"><a id="t53" href="#t53">53</a></span><span class="t">            <span class="key">for</span> <span class="nam">function_format_set</span> <span class="key">in</span> <span class="nam">function</span><span class="op">.</span><span class="nam">format_sets</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t54" href="#t54">54</a></span><span class="t">                <span class="com"># Check format keys are compatible</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t">                <span class="key">if</span> <span class="key">not</span> <span class="nam">check_format_sets_compability</span><span class="op">(</span><span class="nam">request_format_set</span><span class="op">,</span> <span class="nam">function_format_set</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">                    <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'Format keys are not compatible with function '</span> <span class="op">+</span> <span class="nam">str</span><span class="op">(</span><span class="nam">function</span><span class="op">.</span><span class="nam">__name__</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">                    <span class="key">raise</span> <span class="nam">RuntimeError</span><span class="op">(</span><span class="str">f'Format keys are not compatible with function {function.__name__}'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t57" href="#t57">57</a></span><span class="t">                <span class="com"># Check the function inputs to be fulfilled by the request inputs</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t">                <span class="nam">required_inputs</span> <span class="op">=</span> <span class="nam">function_format_set</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">'inputs'</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">                <span class="nam">available_inputs</span> <span class="op">=</span> <span class="nam">request_format_set</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">'inputs'</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -482,8 +482,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_df02346164d35d04_gmx_spells_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
     </div>
 </footer>

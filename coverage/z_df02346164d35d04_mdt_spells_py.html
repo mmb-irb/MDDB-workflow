@@ -4,14 +4,14 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Coverage for mddb_workflow/utils/mdt_spells.py: 21%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
-    <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
-    <script src="coverage_html_cb_6fb7b396.js" defer></script>
+    <link rel="stylesheet" href="style_cb_8432e98f.css" type="text/css">
+    <script src="coverage_html_cb_bcae5fc4.js" defer></script>
 </head>
 <body class="pyfile">
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>mddb_workflow/utils/mdt_spells.py</b>:
+            <span class="text">Coverage for </span><b>mddb_workflow&#8201;/&#8201;utils&#8201;/&#8201;mdt_spells.py</b>:
             <span class="pc_cov">21%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_df02346164d35d04_nassa_file_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -83,11 +83,11 @@
     <p class="run"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="key">import</span> <span class="nam">os</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t"><span class="key">from</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span> <span class="key">import</span> <span class="nam">exists</span><span class="op">,</span> <span class="nam">getsize</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="key">from</span> <span class="nam">subprocess</span> <span class="key">import</span> <span class="nam">run</span><span class="op">,</span> <span class="nam">PIPE</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="key">from</span> <span class="nam">typing</span> <span class="key">import</span> <span class="nam">List</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="key">import</span> <span class="nam">mdtraj</span> <span class="key">as</span> <span class="nam">mdt</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="key">import</span> <span class="nam">numpy</span> <span class="key">as</span> <span class="nam">np</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="key">import</span> <span class="nam">mdtraj</span> <span class="key">as</span> <span class="nam">mdt</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="key">import</span> <span class="nam">numpy</span> <span class="key">as</span> <span class="nam">np</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">auxiliar</span> <span class="key">import</span> <span class="nam">ToolError</span><span class="op">,</span> <span class="nam">InputError</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">file</span> <span class="key">import</span> <span class="nam">File</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">gmx_spells</span> <span class="key">import</span> <span class="nam">merge_xtc_files</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">constants</span> <span class="key">import</span> <span class="nam">GREY_HEADER</span><span class="op">,</span> <span class="nam">COLOR_END</span>&nbsp;</span><span class="r"></span></p>
@@ -123,7 +123,7 @@
     <p class="pln"><span class="n"><a id="t41" href="#t41">41</a></span><span class="t">    <span class="com"># If output has not been generated then warn the user</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t42" href="#t42">42</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">exists</span><span class="op">(</span><span class="nam">output_trajectory_filename</span><span class="op">)</span> <span class="key">or</span> <span class="nam">getsize</span><span class="op">(</span><span class="nam">output_trajectory_filename</span><span class="op">)</span> <span class="op">==</span> <span class="num">0</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t43" href="#t43">43</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="nam">error_logs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t44" href="#t44">44</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'Something went wrong with MDTraj'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t44" href="#t44">44</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ToolError</span><span class="op">(</span><span class="str">'Something went wrong with MDTraj'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t45" href="#t45">45</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t46" href="#t46">46</a></span><span class="t"><span class="com"># NEVER FORGET: mdconvert does not handle mdcrd format</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t47" href="#t47">47</a></span><span class="t"><span class="nam">mdconvert_supported_formats</span> <span class="op">=</span> <span class="op">{</span><span class="str">'dcd'</span><span class="op">,</span> <span class="str">'xtc'</span><span class="op">,</span> <span class="str">'trr'</span><span class="op">,</span> <span class="str">'nc'</span><span class="op">,</span> <span class="str">'h5'</span><span class="op">,</span> <span class="str">'binpos'</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
@@ -149,11 +149,11 @@
     <p class="pln"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t">    <span class="com"># Assert we have input values</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">input_structure_filename</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'ERROR: Missing input structure filenames'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'Missing input structure filenames'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">input_trajectory_filenames</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'ERROR: Missing input trajectory filenames'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'Missing input trajectory filenames'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">output_trajectory_filename</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'ERROR: Missing output trajectory filename'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'Missing output trajectory filename'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t76" href="#t76">76</a></span><span class="t">    <span class="com"># Load the topology, which is used further</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t77" href="#t77">77</a></span><span class="t">    <span class="nam">topology</span> <span class="op">=</span> <span class="nam">mdt</span><span class="op">.</span><span class="nam">load_topology</span><span class="op">(</span><span class="nam">input_structure_filename</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -168,7 +168,7 @@
     <p class="pln"><span class="n"><a id="t86" href="#t86">86</a></span><span class="t">    <span class="com"># If the output trajectory file already exists at this point then we must stop here</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t">    <span class="com"># The raw trjcat implementation will not join things to the end of it</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">    <span class="key">if</span> <span class="nam">exists</span><span class="op">(</span><span class="nam">output_trajectory_filename</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'The output file already exists and overwrite is not supported for this functionality'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'The output file already exists and overwrite is not supported for this functionality'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">    <span class="com"># Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">    <span class="nam">print</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">    <span class="com"># Iterate over the different input trajectory filenames</span>&nbsp;</span><span class="r"></span></p>
@@ -274,7 +274,7 @@
     <p class="mis show_mis"><span class="n"><a id="t192" href="#t192">192</a></span><span class="t">                <span class="key">break</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t193" href="#t193">193</a></span><span class="t">        <span class="com"># If we have nothing at this point then it means our start is out of the frames range</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t194" href="#t194">194</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">reduced_trajectory</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t195" href="#t195">195</a></span><span class="t">            <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'None of the selected frames are in range of the trajectory frames number'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t195" href="#t195">195</a></span><span class="t">            <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'None of the selected frames are in range of the trajectory frames number'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t196" href="#t196">196</a></span><span class="t">        <span class="com"># Get further chunks/frames</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t197" href="#t197">197</a></span><span class="t">        <span class="key">for</span> <span class="nam">frame</span><span class="op">,</span> <span class="nam">chunk</span> <span class="key">in</span> <span class="nam">enumerate</span><span class="op">(</span><span class="nam">trajectory</span><span class="op">,</span> <span class="nam">first_frame</span> <span class="op">+</span> <span class="num">1</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t198" href="#t198">198</a></span><span class="t">            <span class="key">if</span> <span class="nam">frame</span> <span class="key">in</span> <span class="nam">selected_frames</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -294,7 +294,7 @@
     <p class="pln"><span class="n"><a id="t212" href="#t212">212</a></span><span class="t">        <span class="com"># If we have nothing at this point then it means our start is out of the frames range</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t213" href="#t213">213</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">reduced_trajectory</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t214" href="#t214">214</a></span><span class="t">            <span class="nam">frame_count</span> <span class="op">+=</span> <span class="num">1</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t215" href="#t215">215</a></span><span class="t">            <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'The trajectory has '</span> <span class="op">+</span> <span class="nam">str</span><span class="op">(</span><span class="nam">frame_count</span><span class="op">)</span> <span class="op">+</span> <span class="str">' frames so we can not start at frame '</span> <span class="op">+</span> <span class="nam">str</span><span class="op">(</span><span class="nam">start</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t215" href="#t215">215</a></span><span class="t">            <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">f'The trajectory has {frame_count} frames so we can not start at frame {start}'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">        <span class="com"># Get further chunks</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">        <span class="key">for</span> <span class="nam">i</span><span class="op">,</span> <span class="nam">chunk</span> <span class="key">in</span> <span class="nam">enumerate</span><span class="op">(</span><span class="nam">trajectory</span><span class="op">,</span> <span class="num">1</span><span class="op">)</span><span class="op">:</span> <span class="com"># Start the count at 1</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">            <span class="nam">frame</span> <span class="op">=</span> <span class="nam">start</span> <span class="op">+</span> <span class="nam">i</span>&nbsp;</span><span class="r"></span></p>
@@ -441,7 +441,7 @@
     <p class="pln"><span class="n"><a id="t359" href="#t359">359</a></span><span class="t">    <span class="com"># If the output trajectory file already exists at this point then we must stop here</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t360" href="#t360">360</a></span><span class="t">    <span class="com"># The raw trjcat implementation will not join things to the end of it</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t361" href="#t361">361</a></span><span class="t">    <span class="key">if</span> <span class="nam">output_trajectory_file</span><span class="op">.</span><span class="nam">exists</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t362" href="#t362">362</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'The output file already exists and overwrite is not supported for this functionality'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t362" href="#t362">362</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'The output file already exists and overwrite is not supported for this functionality'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t363" href="#t363">363</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t364" href="#t364">364</a></span><span class="t">    <span class="com"># Load the trajectory frame by frame</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t365" href="#t365">365</a></span><span class="t">    <span class="nam">trajectory</span> <span class="op">=</span> <span class="nam">mdt</span><span class="op">.</span><span class="nam">iterload</span><span class="op">(</span><span class="nam">input_trajectory_file</span><span class="op">.</span><span class="nam">path</span><span class="op">,</span> <span class="nam">top</span><span class="op">=</span><span class="nam">input_structure_file</span><span class="op">.</span><span class="nam">path</span><span class="op">,</span> <span class="nam">chunk</span><span class="op">=</span><span class="num">1</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -484,8 +484,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_df02346164d35d04_nassa_file_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
     </div>
 </footer>

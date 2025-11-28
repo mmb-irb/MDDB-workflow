@@ -4,14 +4,14 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Coverage for mddb_workflow/analyses/helical_parameters.py: 88%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
-    <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
-    <script src="coverage_html_cb_6fb7b396.js" defer></script>
+    <link rel="stylesheet" href="style_cb_8432e98f.css" type="text/css">
+    <script src="coverage_html_cb_bcae5fc4.js" defer></script>
 </head>
 <body class="pyfile">
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>mddb_workflow/analyses/helical_parameters.py</b>:
+            <span class="text">Coverage for </span><b>mddb_workflow&#8201;/&#8201;analyses&#8201;/&#8201;helical_parameters.py</b>:
             <span class="pc_cov">88%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_a9828aef9944aa3b_hydrogen_bonds_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -91,7 +91,7 @@
     <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="key">from</span> <span class="nam">struct</span> <span class="key">import</span> <span class="nam">pack</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t"><span class="key">import</span> <span class="nam">re</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="key">from</span> <span class="nam">warnings</span> <span class="key">import</span> <span class="nam">warn</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">auxiliar</span> <span class="key">import</span> <span class="nam">save_json</span><span class="op">,</span> <span class="nam">store_binary_data</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">auxiliar</span> <span class="key">import</span> <span class="nam">save_json</span><span class="op">,</span> <span class="nam">InputError</span><span class="op">,</span> <span class="nam">EnvironmentError</span><span class="op">,</span> <span class="nam">ToolError</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">constants</span> <span class="key">import</span> <span class="nam">OUTPUT_HELICAL_PARAMETERS_FILENAME</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">type_hints</span> <span class="key">import</span> <span class="op">*</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -226,12 +226,12 @@
     <p class="pln"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t145" href="#t145">145</a></span><span class="t">    <span class="com"># Check curves is installed</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t146" href="#t146">146</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">exists</span><span class="op">(</span><span class="nam">curves_path</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">' Cannot find curves path. Is Curves+ installed?'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t">        <span class="key">raise</span> <span class="nam">EnvironmentError</span><span class="op">(</span><span class="str">' Cannot find curves path. Is Curves+ installed?'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t148" href="#t148">148</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">    <span class="com"># Get the sequence from the selected chains</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">    <span class="nam">chain_indices</span> <span class="op">=</span> <span class="nam">structure</span><span class="op">.</span><span class="nam">get_selection_chain_indices</span><span class="op">(</span><span class="nam">selection</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">    <span class="key">if</span> <span class="nam">len</span><span class="op">(</span><span class="nam">chain_indices</span><span class="op">)</span> <span class="op">!=</span> <span class="num">2</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'We have a different number of chains than 2. Is this canonical B-DNA? Make sure every strand has an independent chain'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'We have a different number of chains than 2. Is this canonical B-DNA? Make sure every strand has an independent chain'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">    <span class="nam">sequences</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">    <span class="nam">residue_index_ranges</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t155" href="#t155">155</a></span><span class="t">    <span class="key">for</span> <span class="nam">c</span><span class="op">,</span> <span class="nam">chain_index</span> <span class="key">in</span> <span class="nam">enumerate</span><span class="op">(</span><span class="nam">chain_indices</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -337,7 +337,7 @@
     <p class="pln"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">    <span class="com"># Check if the output file was created</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">exists</span><span class="op">(</span><span class="nam">output_dat_file</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">f"Error: {output_dat_file} was not created. Check the cpptraj command and input files."</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ToolError</span><span class="op">(</span><span class="str">f"Error: {output_dat_file} was not created. Check the cpptraj command and input files."</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">    <span class="com"># Renumber the dat file because the first line is repeated</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t261" href="#t261">261</a></span><span class="t">    <span class="com"># AGUS: con esto tuvimos muchos problemas en el proyecto de ABCix y al final optamos por eliminar la primera l&#237;nea y renumerar todo </span>&nbsp;</span><span class="r"></span></p>
@@ -485,7 +485,7 @@
     <p class="pln"><span class="n"><a id="t403" href="#t403">403</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t404" href="#t404">404</a></span><span class="t">    <span class="com"># If output has not been generated then warn the user</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t405" href="#t405">405</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">exists</span><span class="op">(</span><span class="str">'test.cda'</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t406" href="#t406">406</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'Something went wrong with Curves+ software'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t406" href="#t406">406</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ToolError</span><span class="op">(</span><span class="str">'Something went wrong with Curves+ software'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t407" href="#t407">407</a></span><span class="t">    <span class="com"># Change the file name as Canals just take the name of the .cda file to differentiate between .lis and .cda</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t408" href="#t408">408</a></span><span class="t">    <span class="nam">move</span><span class="op">(</span><span class="str">"test.cda"</span><span class="op">,</span><span class="str">"cinput.cda"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t409" href="#t409">409</a></span><span class="t">    <span class="com"># We have set up level1 and level2 to 0 as if lev1=lev2=0, lev1 is set to 1 and lev2 is set to the length of the oligmer</span>&nbsp;</span><span class="r"></span></p>
@@ -517,7 +517,7 @@
     <p class="pln"><span class="n"><a id="t435" href="#t435">435</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t436" href="#t436">436</a></span><span class="t">    <span class="com"># If output has not been generated then warn the user</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t437" href="#t437">437</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">exists</span><span class="op">(</span><span class="str">'canal_output_phaseC.ser'</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t438" href="#t438">438</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'Something went wrong with Canals software'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t438" href="#t438">438</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ToolError</span><span class="op">(</span><span class="str">'Something went wrong with Canals software'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t439" href="#t439">439</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t440" href="#t440">440</a></span><span class="t"><span class="key">def</span> <span class="nam">send_files</span><span class="op">(</span><span class="nam">sequence</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">frames_limit</span><span class="op">:</span> <span class="nam">int</span><span class="op">,</span> <span class="nam">output_directory</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t441" href="#t441">441</a></span><span class="t">    <span class="nam">files_averages</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -1180,8 +1180,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_a9828aef9944aa3b_hydrogen_bonds_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
     </div>
 </footer>

@@ -4,14 +4,14 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Coverage for mddb_workflow/tools/get_screenshot.py: 87%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
-    <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
-    <script src="coverage_html_cb_6fb7b396.js" defer></script>
+    <link rel="stylesheet" href="style_cb_8432e98f.css" type="text/css">
+    <script src="coverage_html_cb_bcae5fc4.js" defer></script>
 </head>
 <body class="pyfile">
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>mddb_workflow/tools/get_screenshot.py</b>:
+            <span class="text">Coverage for </span><b>mddb_workflow&#8201;/&#8201;tools&#8201;/&#8201;get_screenshot.py</b>:
             <span class="pc_cov">87%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_ed5f3d4d315201ee_guess_and_filter_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -87,7 +87,7 @@
     <p class="run"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="key">import</span> <span class="nam">math</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="key">import</span> <span class="nam">numpy</span> <span class="key">as</span> <span class="nam">np</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">auxiliar</span> <span class="key">import</span> <span class="nam">ToolError</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">auxiliar</span> <span class="key">import</span> <span class="nam">ToolError</span><span class="op">,</span> <span class="nam">InputError</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="key">from</span> <span class="nam">mddb_workflow</span><span class="op">.</span><span class="nam">utils</span><span class="op">.</span><span class="nam">type_hints</span> <span class="key">import</span> <span class="op">*</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="com"># The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon. </span>&nbsp;</span><span class="r"></span></p>
@@ -118,7 +118,7 @@
     <p class="pln"><span class="n"><a id="t36" href="#t36">36</a></span><span class="t"><span class="str">    Returns the rotation values used to take the photo so they can be saved and reused."""</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t37" href="#t37">37</a></span><span class="t">    <span class="com"># Check the output screenshot file extension is JPG</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t38" href="#t38">38</a></span><span class="t">    <span class="key">if</span> <span class="nam">output_filepath</span><span class="op">.</span><span class="nam">split</span><span class="op">(</span><span class="str">'.'</span><span class="op">)</span><span class="op">[</span><span class="op">-</span><span class="num">1</span><span class="op">]</span> <span class="op">!=</span> <span class="str">'jpg'</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t39" href="#t39">39</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'You must provide a .jpg file name!'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t39" href="#t39">39</a></span><span class="t">        <span class="key">raise</span> <span class="nam">InputError</span><span class="op">(</span><span class="str">'You must provide a .jpg file name!'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t40" href="#t40">40</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t41" href="#t41">41</a></span><span class="t">    <span class="com"># Produce a PDB file to feed VMD</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t42" href="#t42">42</a></span><span class="t">    <span class="nam">structure</span><span class="op">.</span><span class="nam">generate_pdb_file</span><span class="op">(</span><span class="nam">AUXILIAR_PDB_FILENAME</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -495,7 +495,7 @@
     <p class="mis show_mis"><span class="n"><a id="t413" href="#t413">413</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="nam">logs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t414" href="#t414">414</a></span><span class="t">        <span class="nam">error_logs</span> <span class="op">=</span> <span class="nam">process</span><span class="op">.</span><span class="nam">stderr</span><span class="op">.</span><span class="nam">decode</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t415" href="#t415">415</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="nam">error_logs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t416" href="#t416">416</a></span><span class="t">        <span class="key">raise</span> <span class="nam">SystemExit</span><span class="op">(</span><span class="str">'Something went wrong with VMD while taking the screenshot'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t416" href="#t416">416</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ToolError</span><span class="op">(</span><span class="str">'Something went wrong with VMD while taking the screenshot'</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t417" href="#t417">417</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t418" href="#t418">418</a></span><span class="t">    <span class="nam">im</span> <span class="op">=</span> <span class="nam">Image</span><span class="op">.</span><span class="nam">open</span><span class="op">(</span><span class="nam">AUXILIAR_TGA_FILENAME</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t419" href="#t419">419</a></span><span class="t">    <span class="com"># converting to jpg</span>&nbsp;</span><span class="r"></span></p>
@@ -563,8 +563,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_ed5f3d4d315201ee_guess_and_filter_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-29 15:48 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
+            created at 2025-11-28 09:56 +0000
         </p>
     </div>
 </footer>
