@@ -29,7 +29,6 @@ jobs:
 
   test-pat-token:
     runs-on: ubuntu-latest
-    if: ${{ secrets.PAT_TOKEN != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
