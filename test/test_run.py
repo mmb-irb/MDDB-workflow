@@ -96,6 +96,7 @@ class TestRunFlags:
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
             working_directory,
+            ignore=shutil.ignore_patterns('inputs.yaml'),
             dirs_exist_ok=True
         )
 
