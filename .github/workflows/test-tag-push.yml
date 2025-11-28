@@ -10,25 +10,6 @@ permissions:
   contents: write
 
 jobs:
-  test-default-token:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Test push with GITHUB_TOKEN
-        run: |
-          TAG_NAME="test-v0.0.1-default-$(date +%s)"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a $TAG_NAME -m "Test tag with default GITHUB_TOKEN"
-          git push origin $TAG_NAME
-          echo "Created tag: $TAG_NAME"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   test-pat-token:
     runs-on: ubuntu-latest
     steps:
