@@ -1,0 +1,46 @@
+name: Test Tag Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name to create (e.g., test-v1.0.0)'
+        required: true
+        default: 'test-v0.0.1'
+
+jobs:
+  test-default-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test push with GITHUB_TOKEN
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag_name }}-default"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a $TAG_NAME -m "Test tag with default GITHUB_TOKEN"
+          git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-pat-token:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.PAT_TOKEN != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Test push with PAT
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag_name }}-pat"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a $TAG_NAME -m "Test tag with PAT"
+          git push origin $TAG_NAME

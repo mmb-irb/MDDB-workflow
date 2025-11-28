@@ -1,0 +1,24 @@
+name: Test Tag Triggered
+
+on:
+  push:
+    tags:
+      - 'test-v*'
+
+jobs:
+  verify-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show tag information
+        run: |
+          echo "This workflow was triggered by tag: ${{ github.ref_name }}"
+          echo "Tag ref: ${{ github.ref }}"
+          echo "Event name: ${{ github.event_name }}"
+          
+      - name: Send notification
+        run: |
+          echo "✅ Tag trigger test SUCCESSFUL!"
+          echo "The tag ${{ github.ref_name }} successfully triggered this workflow."
