@@ -274,12 +274,16 @@ def main():
 
     # In case the filter tool was called
     elif subcommand == 'filter':
+        input_structure_file = File(args.input_structure) if args.input_structure else None
+        output_structure_file = File(args.output_structure) if args.output_structure else None
+        input_trajectory_file = File(args.input_trajectory) if args.input_trajectory else None
+        output_trajectory_file = File(args.output_trajectory) if args.output_trajectory else None
         # Run the convert command
         filter_atoms(
-            input_structure_file=File(args.input_structure),
-            output_structure_file=File(args.output_structure),
-            input_trajectory_file=File(args.input_trajectory),
-            output_trajectory_file=File(args.output_trajectory),
+            input_structure_file=input_structure_file,
+            output_structure_file=output_structure_file,
+            input_trajectory_file=input_trajectory_file,
+            output_trajectory_file=output_trajectory_file,
             selection_string=args.selection_string,
             selection_syntax=args.selection_syntax
         )
@@ -593,7 +597,7 @@ subset_parser = subparsers.add_parser("subset",
     parents=[common_parser])
 subset_parser_args = [
     (["-is", "--input_structure"], {'required': True, 'help': "Path to input structure file"}),
-    (["-it", "--input_trajectory"], {'help': "Path to input trajectory file"}),
+    (["-it", "--input_trajectory"], {'required': True, 'help': "Path to input trajectory file"}),
     (["-ot", "--output_trajectory"], {'help': "Path to output trajectory file"}),
     (["-start", "--start"], {'type': int, 'default': 0, 'help': "Start frame (0-based)"}),
     (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based)"}),
