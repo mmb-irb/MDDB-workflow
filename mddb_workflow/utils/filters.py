@@ -109,10 +109,11 @@ def filter_atoms (
         # Note than given the nature of this logic we may encounter a function which converts the file format
         # This function is not intended for that but this is not a problem either
         # If the user specifies different input/output formats and the function can do it then go ahead
+        input_trajectory_format = input_trajectory_file.format if input_trajectory_file else None
         request_format_set = {
             'inputs': {
                 'input_structure_file': { input_structure_file.format },
-                'input_trajectory_file': { input_trajectory_file.format }
+                'input_trajectory_file': { input_trajectory_format }
             },
             'outputs': {
                 'output_structure_file': { output_structure_file.format }
