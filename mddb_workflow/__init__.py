@@ -8,6 +8,12 @@ lg.setLevel(RDLogger.ERROR)
 name = "mddb_workflow"
 __all__ = ["resources", "tools", "utils"]
 
+try:
+    from importlib.metadata import version
+    __version__ = version("mddb_workflow")
+except Exception:
+    __version__ = "unknown"
+
 # Workaround to fix ReadTheDocs build issue with conda environments
 # when fix_gromacs_masses and helical_parameters are called.
 if "CONDA_PREFIX" not in os.environ:

@@ -1,6 +1,6 @@
 # Auxiliar generic functions and classes used along the workflow
 
-from mddb_workflow import __path__
+from mddb_workflow import __path__, __version__
 from mddb_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import YELLOW_HEADER, COLOR_END
 from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
@@ -21,55 +21,68 @@ import urllib.request
 from subprocess import run, PIPE
 from dataclasses import asdict, is_dataclass
 
-# Check if a module has been imported
-def is_imported (module_name : str) -> bool:
+
+def is_imported(module_name: str) -> bool:
+    """Check if a module has been imported."""
     return module_name in sys.modules
 
-# Set custom exception which is not to print traceback
-# They are used when the problem is not in our code
+
 class QuietException (Exception):
+    """Exception which is not to print traceback.
+    They are used when the problem is not in our code.
+    """
     pass
 
-# Set a custom quite exception for when user input is wrong
+
 class InputError (QuietException):
+    """Quite exception for when user input is wrong."""
     pass
 
-# Set a custom quite exception for when MD data has not passed a quality check test
+
 class TestFailure (QuietException):
+    """Quite exception for when MD data has not passed a quality check test."""
     pass
 
-# Set a custom quite exception for when the problem is not in the code but in the environment
+
 class EnvironmentError (QuietException):
+    """Quite exception for when the problem is not in the code but in the environment."""
     pass
 
-# Set a custom quite exception for when the problem comes from a third party dependency
+
 class ToolError (QuietException):
+    """Quite exception for when the problem comes from a third party dependency."""
     pass
 
-# Set a custom quite exception for when the problem comes from a remote service
+
 class RemoteServiceError (QuietException):
+    """Quite exception for when the problem comes from a remote service."""
     pass
 
-# Set a custom quite exception for when we stop the workflow in purpose
+
 class ForcedStop (QuietException):
+    """Quite exception for when we stop the workflow in purpose."""
     pass
 
-# Set a no referable exception for PDB synthetic constructs or chimeric entities
+
 class NoReferableException (Exception):
-    def __str__ (self): return f'No referable sequence {self.sequence}'
-    def __repr__ (self): return self.__str__()
-    def get_sequence (self) -> str:
+    """No referable exception for PDB synthetic constructs or chimeric entities."""
+    def __str__(self): return f'No referable sequence {self.sequence}'
+    def __repr__(self): return self.__str__()
+    def get_sequence(self) -> str:
         return self.args[0]
     sequence = property(get_sequence, None, None, 'Aminoacids sequence')
 
-# Set a custom exception handler where our input error exception has a quiet behaviour
-def custom_excepthook (exception_class, message, traceback):
+
+def custom_excepthook(exception_class, message, traceback):
+    """Handle a custom exception where our input error exception has a quiet behaviour."""
     # Quite behaviour if it is our input error exception
     if QuietException in exception_class.__bases__:
         print('{0}: {1}'.format(exception_class.__name__, message))  # Only print Error Type and Message
         return
     # Default behaviour otherwise
     sys.__excepthook__(exception_class, message, traceback)
+
+
 sys.excepthook = custom_excepthook
 
 # Set a special exceptions for when the topology is missing
@@ -79,42 +92,55 @@ MISSING_BONDS = Exception('Missing atom bonds')
 JSON_SERIALIZABLE_MISSING_BONDS = 'MB'
 
 # Keep all exceptions in a set
-STANDARD_EXCEPTIONS = { MISSING_TOPOLOGY, MISSING_CHARGES, MISSING_BONDS }
+STANDARD_EXCEPTIONS = {MISSING_TOPOLOGY, MISSING_CHARGES, MISSING_BONDS}
 
 # Set a function to get the next letter from an input letter in alphabetic order
 # Return None if we run out of letters
-letters = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' }
-def get_new_letter(current_letters : set) -> Optional[str]:
+letters = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'}
+
+
+def get_new_letter(current_letters: set) -> Optional[str]:
     return next((letter for letter in letters if letter not in current_letters), None)
 
-# Given a list or set of names, return a set with all case-posibilites:
-# All upper case
-# All lower case
-# First upper case and the rest lower case
-def all_cases (names : list[str] | set[str]) -> set[str]:
+
+def all_cases(names: list[str] | set[str]) -> set[str]:
+    """Given a list or set of names.
+
+    Return a set with all case-posibilites:
+    - All upper case
+    - All lower case
+    - First upper case and the rest lower case
+
+    """
     all_names = []
     for name in names:
         all_upper = name.upper()
         all_lower = name.lower()
         one_upper = name[0].upper() + name[1:].lower()
-        all_names += [ all_upper, all_lower, one_upper ]
+        all_names += [all_upper, all_lower, one_upper]
     return set(all_names)
 
-# Given a residue name, return its single letter
-def residue_name_to_letter (residue_name : str) -> str:
+
+def residue_name_to_letter(residue_name: str) -> str:
+    """Given a residue name, return its single letter."""
     return RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
-# Given a protein residue name, return its single letter
-def protein_residue_name_to_letter (residue_name : str) -> str:
+
+def protein_residue_name_to_letter(residue_name: str) -> str:
+    """Given a protein residue name, return its single letter."""
     return PROTEIN_RESIDUE_NAME_LETTERS.get(residue_name, 'X')
 
-# Set a recursive transformer for nested dicts and lists
-# Note that a new object is created to prevent mutating the original
-# If no transformer function is passed then it becomes a recursive cloner
-# WARNING: the transformer function could mutate some types of the original object if not done properly
-OBJECT_TYPES = { dict, list, tuple }
-def recursive_transformer (target_object : dict | list | tuple, transformer : Optional[Callable] = None) -> dict | list | tuple:
+
+OBJECT_TYPES = {dict, list, tuple}
+
+
+def recursive_transformer(target_object: dict | list | tuple, transformer: Optional[Callable] = None) -> dict | list | tuple:
+    """Recursive transformer for nested dicts and lists.
+    Note that a new object is created to prevent mutating the original.
+    If no transformer function is passed then it becomes a recursive cloner.
+    WARNING: the transformer function could mutate some types of the original object if not done properly.
+    """
     object_type = type(target_object)
     # Get a starting object and entries iterator depending on the object type
     if object_type is dict:
@@ -123,7 +149,7 @@ def recursive_transformer (target_object : dict | list | tuple, transformer : Op
     elif object_type is list or object_type is tuple:
         # Note that if it is a tuple we make a list anyway and we convert it to tuple at the end
         # WARNING: Note that tuples do not support reassigning items
-        clone = [ None for i in range(len(target_object)) ]
+        clone = [None for i in range(len(target_object))]
         entries = enumerate(target_object)
     else: ValueError(f'The recursive cloner should only be applied to object and lists, not to {object_type}')
     # Iterate the different entries in the object
@@ -138,14 +164,17 @@ def recursive_transformer (target_object : dict | list | tuple, transformer : Op
     if object_type == tuple: clone = tuple(clone)
     return clone
 
+
 # Set some headers for the serializer
 EXCEPTION_HEADER = 'Exception: '
-# Set a standard JSON serializer/unserializer to support additonal types
+
+
 # LORE: This was originally intended to support exceptions in the cache
-def json_serializer (object : dict | list | tuple) -> dict | list | tuple:
-    def serializer (value):
+def json_serializer(object: dict | list | tuple) -> dict | list | tuple:
+    """Serialize a standard JSON with support for additional types."""
+    def serializer(value):
         # If we have exceptions then convert them to text with an appropiate header
-        if type(value) == Exception:
+        if type(value) is Exception:
             return f'{EXCEPTION_HEADER}{value}'
         # This must be done before the set check because asdict() will create dicts with sets inside
         if is_dataclass(value) and not isinstance(value, type):
@@ -157,15 +186,18 @@ def json_serializer (object : dict | list | tuple) -> dict | list | tuple:
         return value
     object_clone = recursive_transformer(object, serializer)
     return object_clone
-def json_deserializer (object : dict | list | tuple) -> dict | list | tuple:
-    def deserializer (value):
+
+
+def json_deserializer(object: dict | list | tuple) -> dict | list | tuple:
+    """Deserialize a standard JSON with support for additional types."""
+    def deserializer(value):
         # Check if there is any value which was adapted to become JSON serialized and restore it
-        if type(value) == str and value[0:11] == EXCEPTION_HEADER:
+        if type(value) is str and value[0:11] == EXCEPTION_HEADER:
             # WARNING: Do not declare new exceptions here but use the constant ones
             # WARNING: Otherwise further equality comparisions will fail
             exception_message = value[11:]
             standard_exception = next((exception for exception in STANDARD_EXCEPTIONS if str(exception) == exception_message), None)
-            if standard_exception == None:
+            if standard_exception is None:
                 raise ValueError(f'Exception "{exception_message}" is not among standard exceptions')
             return standard_exception
         # If the type is not among the ones we check then assume it is already deserialized
@@ -173,8 +205,9 @@ def json_deserializer (object : dict | list | tuple) -> dict | list | tuple:
     object_clone = recursive_transformer(object, deserializer)
     return object_clone
 
-# Set a JSON loader with additional logic to better handle problems
-def load_json (filepath : str, replaces : Optional[list[tuple]] = []) -> dict: 
+
+def load_json(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
+    """Load a JSON with additional logic to better handle problems."""
     try:
         with open(filepath, 'r') as file:
             content = file.read()
@@ -190,8 +223,9 @@ def load_json (filepath : str, replaces : Optional[list[tuple]] = []) -> dict:
     except Exception as error:
         raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
 
-# Set a JSON saver with additional logic to better handle problems
-def save_json (content, filepath : str, indent : Optional[int] = None):
+
+def save_json(content, filepath: str, indent: Optional[int] = None):
+    """Save a JSON with additional logic to better handle problems."""
     try:
         with open(filepath, 'w') as file:
             serialized_content = json_serializer(content)
@@ -201,11 +235,13 @@ def save_json (content, filepath : str, indent : Optional[int] = None):
         os.rename(filepath, filepath + '.wrong')
         raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
-# Set a YAML loader with additional logic to better handle problems
-# The argument replaces allows to replace file content before beeing processed
-# Every replace is a tuple whith two values: the target and the replacement
+
 # DANI: Por algún motivo yaml.load también funciona con archivos en formato JSON
-def load_yaml (filepath : str, replaces : Optional[list[tuple]] = []) -> dict:
+def load_yaml(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
+    """Load a YAML with additional logic to better handle problems.
+    The argument replaces allows to replace file content before beeing processed.
+    Every replace is a tuple whith two values: the target and the replacement.
+    """
     try:
         with open(filepath, 'r') as file:
             content = file.read()
@@ -218,44 +254,57 @@ def load_yaml (filepath : str, replaces : Optional[list[tuple]] = []) -> dict:
         warn(str(error).replace('\n', ' '))
         raise InputError('Something went wrong when loading YAML file ' + filepath)
 
-# Set a YAML saver with additional logic to better handle problems
-def save_yaml (content, filepath : str):
+
+def save_yaml(content, filepath: str):
+    """Save a YAML with additional logic to better handle problems."""
     with open(filepath, 'w') as file:
         yaml.dump(content, file)
+
 
 # Set a few constants to erase previou logs in the terminal
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 
-# Set a function to remove previous line
-def delete_previous_log ():
+
+def delete_previous_log():
+    """Remove previous line in the terminal."""
     print(ERASE_PREVIOUS_LINES)
 
-# Set a function to reprint in the same line
-def reprint (text : str):
+
+def reprint(text: str):
+    """Reprint text in the same line in the terminal."""
     delete_previous_log()
     print(text)
 
-# Set a function to print a messahe with a colored warning header
-def warn (message : str):
+
+def warn(message: str):
+    """Print a message with a colored warning header."""
     print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
 
-# Get the mean/average of a list of values
-def mean(values : list[float]) -> float:
+
+def mean(values: list[float]) -> float:
+    """Get the mean/average of a list of values."""
     return sum(values) / len(values)
 
-# Round a number to hundredths
-def round_to_hundredths (number : float) -> float:
+
+def round_to_hundredths(number: float) -> float:
+    """Round a number to hundredths."""
     return round(number * 100) / 100
 
-# Round a number to hundredths
-def round_to_thousandths (number : float) -> float:
+
+def round_to_thousandths(number: float) -> float:
+    """Round a number to thousandths."""
     return round(number * 1000) / 1000
 
-# Given a list with numbers,  create a string where number in a row are represented rangedly
-# e.g. [1, 3, 5, 6, 7, 8] => "1, 3, 5-8"
-def ranger (numbers : list[int]) -> str:
+
+def ranger(numbers: list[int]) -> str:
+    """Given a list with numbers, create a string where number in a row are represented rangedly.
+
+    Example:
+        [1, 3, 5, 6, 7, 8] => "1, 3, 5-8"
+
+    """
     # Remove duplicates and sort numbers
     sorted_numbers = sorted(list(set(numbers)))
     # Get the number of numbers in the list
@@ -296,26 +345,37 @@ def ranger (numbers : list[int]) -> str:
     # Remove the first coma before returning the ranged string
     return ranged[1:]
 
-# Set a special iteration system
-# Return one value of the array and a new array with all other values for each value
-def otherwise (values : list) -> Generator[tuple, None, None]:
+
+def otherwise(values: list) -> Generator[tuple, None, None]:
+    """Set a special iteration system.
+    Return one value of the array and a new array with all other values for each value.
+    """
     for v, value in enumerate(values):
         others = values[0:v] + values[v+1:]
         yield value, others
 
+
 # List files in a directory
-def list_files (directory : str) -> list[str]:
+def list_files(directory: str) -> list[str]:
+    """List files in a directory."""
     return [f for f in os.listdir(directory) if isfile(f'{directory}/{f}')]
 
+
 # Check if a directory is empty
-def is_directory_empty (directory : str) -> bool:
+def is_directory_empty(directory: str) -> bool:
+    """Check if a directory is empty."""
     return len(os.listdir(directory)) == 0
 
-# Set a function to check if a string has patterns to be parsed by a glob function
-# Note that this is not trivial, but this function should be good enough for our case
-# https://stackoverflow.com/questions/42283009/check-if-string-is-a-glob-pattern
+
 GLOB_CHARACTERS = ['*', '?', '[']
-def is_glob (path : str) -> bool:
+
+
+def is_glob(path: str) -> bool:
+    """Check if a string has patterns to be parsed by a glob function.
+
+    Note that this is not trivial, but this function should be good enough for our case.
+    https://stackoverflow.com/questions/42283009/check-if-string-is-a-glob-pattern
+    """
     # Find unescaped glob characters
     for c, character in enumerate(path):
         if character not in GLOB_CHARACTERS:
@@ -327,31 +387,39 @@ def is_glob (path : str) -> bool:
             return True
     return False
 
-# Parse a glob path into one or several results
-# If the path has no glob characters then return it as it is
-# Otherwise make sure
-def parse_glob (path : str) -> list[str]:
+
+def parse_glob(path: str) -> list[str]:
+    """Parse a glob path into one or several results.
+
+    If the path has no glob characters then return it as it is.
+    Otherwise parse the glob pattern.
+    """
     # If there is no glob pattern then just return the string as is
     if not is_glob(path):
-        return [ path ]
+        return [path]
     # If there is glob pattern then parse it
     parsed_filepaths = glob(path)
     return parsed_filepaths
 
-# Return either if the passed string is a URL or not
-def is_url (path : str) -> bool:
+
+def is_url(path: str) -> bool:
+    """Return whether the passed string is a URL or not."""
     return path[0:4] == 'http'
 
-# Set the filename of an input file downloaded from an input URL
-# In this scenario we are free to set our own paths or filenames
-# Note that the original name will usually be the very same output filename
-# In order to avoid both filenames being the same we will add a header here
-def url_to_source_filename (url : str) -> str:
+
+def url_to_source_filename(url: str) -> str:
+    """Set the filename of an input file downloaded from an input URL.
+
+    In this scenario we are free to set our own paths or filenames.
+    Note that the original name will usually be the very same output filename.
+    In order to avoid both filenames being the same we will add a header here.
+    """
     original_filename = url.split('/')[-1]
     return 'source_' + original_filename
 
-# Set a function to download files from a specific URL
-def download_file (request_url : str, output_file : 'File'):
+
+def download_file(request_url: str, output_file: 'File'):
+    """Download files from a specific URL."""
     print(f'Downloading file "{output_file.path}" from {request_url}\n')
     try:
         urllib.request.urlretrieve(request_url, output_file.path)
@@ -361,10 +429,13 @@ def download_file (request_url : str, output_file : 'File'):
         # If we don't know the error then simply say something went wrong
         raise Exception(f'Something went wrong when downloading file "{output_file.filename}" from {request_url}')
 
-# Check if a file is a standard topology
-# Note that the filename may include the source header
-def is_standard_topology (file : 'File') -> bool:
+
+def is_standard_topology(file: 'File') -> bool:
+    """Check if a file is a standard topology.
+    Note that the filename may include the source header.
+    """
     return file.filename.endswith(STANDARD_TOPOLOGY_FILENAME)
+
 
 # Supported byte sizes
 SUPPORTED_BYTE_SIZES = {
@@ -373,9 +444,16 @@ SUPPORTED_BYTE_SIZES = {
     8: 'd'
 }
 
-# Data is a list of numeric values
-# Bit size is the number of bits for each value in data to be occupied
-def store_binary_data (data : list[float], byte_size : int, filepath : str):
+
+def store_binary_data(data: list[float], byte_size: int, filepath: str):
+    """Store binary data to a file.
+
+    Args:
+        data: A list of numeric values
+        byte_size: The number of bytes for each value in data to be occupied
+        filepath: The output file path
+
+    """
     # Check bit size to make sense
     letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
     if not letter:
@@ -390,11 +468,14 @@ def store_binary_data (data : list[float], byte_size : int, filepath : str):
             value = float(value)
             file.write(pack(byte_flag, value))
 
-# Capture all stdout or stderr within a code region even if it comes from another non-python threaded process
-# https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
+
 class CaptureOutput (object):
+    """Capture all stdout or stderr within a code region even if it comes from another non-python threaded process.
+
+    https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
+    """
     escape_char = "\b"
-    def __init__(self, stream : str = 'stdout'):
+    def __init__(self, stream: str = 'stdout'):
         # Get sys stdout or stderr
         if not hasattr(sys, stream):
             raise ValueError(f'Unknown stream "{stream}". Expected stream value is "stdout" or "stderr"')
@@ -426,16 +507,19 @@ class CaptureOutput (object):
         os.close(self.streamfd)
     def readOutput(self):
         while True:
-            char = os.read(self.pipe_out,1).decode(self.original_stream.encoding)
+            char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
             if not char or self.escape_char in char:
                 break
             self.captured_text += char
 
-# Set a function to request data to the PDB GraphQL API
-# Note that this function may be used for either PDB ids or PDB molecule ids, depending on the query
-# The query parameter may be constructed using the following page:
-# https://data.rcsb.org/graphql/index.html
-def request_pdb_data (pdb_id : str, query : str) -> dict:
+
+def request_pdb_data(pdb_id: str, query: str) -> dict:
+    """Request data to the PDB GraphQL API.
+
+    Note that this function may be used for either PDB ids or PDB molecule ids, depending on the query.
+    The query parameter may be constructed using the following page:
+    https://data.rcsb.org/graphql/index.html
+    """
     # Make sure the PDB id is valid as we set the correct key to mine the response data
     if len(pdb_id) == 4: data_key = 'entry'
     elif len(pdb_id) < 4 or len(pdb_id) > 4: data_key = 'chem_comp'
@@ -445,7 +529,7 @@ def request_pdb_data (pdb_id : str, query : str) -> dict:
     # Set the POST data
     post_data = {
         "query": query,
-        "variables": { "id": pdb_id }
+        "variables": {"id": pdb_id}
     }
     # Send the request
     try:
@@ -454,7 +538,7 @@ def request_pdb_data (pdb_id : str, query : str) -> dict:
         raise ConnectionError('No internet connection :(') from None
     # Get the response
     parsed_response = json.loads(response.text)['data'][data_key]
-    if parsed_response == None:
+    if parsed_response is None:
         new_pdb_id = request_replaced_pdb(pdb_id)
         if new_pdb_id:
             parsed_response = request_pdb_data(new_pdb_id, query)
@@ -462,10 +546,13 @@ def request_pdb_data (pdb_id : str, query : str) -> dict:
             print(f'PDB id {pdb_id} not found')
     return parsed_response
 
-# Use the RCSB REST API to get the replaced PDB id
-# This is useful when the PDB is obsolete and has been replaced
+
 def request_replaced_pdb(pdb_id):
-    query_url = 'https://data.rcsb.org/rest/v1/holdings/removed/'+pdb_id
+    """Use the RCSB REST API to get the replaced PDB id.
+
+    This is useful when the PDB is obsolete and has been replaced.
+    """
+    query_url = 'https://data.rcsb.org/rest/v1/holdings/removed/' + pdb_id
     response = requests.get(query_url, headers={'Content-Type': 'application/json'})
     # Check if the response is OK
     if response.status_code == 200:
@@ -477,29 +564,41 @@ def request_replaced_pdb(pdb_id):
     else:
         return None
 
-# Given a filename, set a sufix number on it, right before the extension
-# Set also the number of zeros to fill the name
-def numerate_filename (filename : str, number : int, zeros : int = 2, separator : str = '_') -> str:
+
+def numerate_filename(filename: str, number: int, zeros: int = 2, separator: str = '_') -> str:
+    """Given a filename, set a suffix number on it, right before the extension.
+
+    Args:
+        filename: The original filename
+        number: The number to add as suffix
+        zeros: The number of zeros to fill the name
+        separator: The separator between filename and number
+
+    """
     splits = filename.split('.')
     sufix = separator + str(number).zfill(zeros)
     return '.'.join(splits[0:-1]) + sufix + '.' + splits[-1]
 
-# Given a filename, set a sufix including '*', right before the extension
-# This should match all filenames obtanied through the numerate_filename function when used in bash
-def glob_filename (filename : str, separator : str = '_') -> str:
+
+def glob_filename(filename: str, separator: str = '_') -> str:
+    """Given a filename, set a suffix including '*', right before the extension.
+    This should match all filenames obtained through the numerate_filename function when used in bash.
+    """
     splits = filename.split('.')
     sufix = separator + '*'
     return '.'.join(splits[0:-1]) + sufix + '.' + splits[-1]
 
-# Delete all files matched by the glob_filename function
-def purge_glob (filename : str):
+
+def purge_glob(filename: str):
+    """Delete all files matched by the glob_filename function."""
     glob_pattern = glob_filename(filename)
     existing_outputs = glob(glob_pattern)
     for existing_output in existing_outputs:
         if exists(existing_output): os.remove(existing_output)
 
-# Given a filename with the the pattern 'mda.xxxx.json', get the 'xxxx' out of it
-def get_analysis_name (filename : str) -> str:
+
+def get_analysis_name(filename: str) -> str:
+    """Given a filename with the pattern 'mda.xxxx.json', get the 'xxxx' out of it."""
     name_search = re.search(r'/mda.([A-Za-z0-9_-]*).json$', filename)
     if not name_search:
         raise ValueError(f'Wrong expected format in filename {filename}')
@@ -507,60 +606,69 @@ def get_analysis_name (filename : str) -> str:
     # Every '_' is replaced by '-' so we must keep the analysis name coherent or the web client will not find it
     return name_search[1].replace('_', '-')
 
-# Use a safe alternative to hasattr/getattr
+
 # DANI: Do not use getattr with a default argument or hasattr
 # DANI: If you do, you will loose any further AtributeError(s)
 # DANI: Thus you will have very silent errors every time you have a silly typo
 # DANI: This is a python itself unresolved error https://bugs.python.org/issue39865
-def safe_hasattr (instance, attribute_name : str) -> bool:
+def safe_hasattr(instance, attribute_name: str) -> bool:
+    """Use a safe alternative to hasattr."""
     return attribute_name in set(dir(instance))
-def safe_getattr (instance, attribute_name : str, default):
+
+
+def safe_getattr(instance, attribute_name: str, default):
+    """Use a safe alternative to getattr."""
     if not safe_hasattr(instance, attribute_name): return default
     return getattr(instance, attribute_name)
-    
-# Function to read and write a dict nested value with using a single combined key
 
-# Read a value in a nested dictionary and return the placeholder if any key in the path does not exist
-def read_ndict (nested_dict : dict, nested_key : str, placeholder = KeyError('Missing nested key')):
+
+def read_ndict(nested_dict: dict, nested_key: str, placeholder=KeyError('Missing nested key')):
+    """Read a value in a nested dictionary using a single combined key.
+    Return the placeholder if any key in the path does not exist.
+    """
     keys = nested_key.split('.')
     value = nested_dict
     for key in keys:
         # support list indices
         if key.isdigit():
-            if type(value) != list: return placeholder
+            if type(value) is not list: return placeholder
             index = int(key)
             value = value[index]
         # support dict keys
         else:
-            if type(value) != dict: return placeholder
+            if type(value) is not dict: return placeholder
             value = value.get(key, placeholder)
             if value == placeholder: return placeholder
     return value
 
-# Write a value in a nested dictionary and raise an error if any key in the path s missing
-def write_ndict (nested_dict : dict, nested_key : str, value):
+
+def write_ndict(nested_dict: dict, nested_key: str, value):
+    """Write a value in a nested dictionary using a single combined key.
+    Raise an error if any key in the path is missing.
+    """
     keys = nested_key.split('.')
     nested_keys = keys[0:-1]
     next_target = nested_dict
     for k, key in enumerate(nested_keys):
         # support list indices
         if key.isdigit():
-            if type(next_target) != list:
+            if type(next_target) is not list:
                 raise ValueError(f'{".".join(nested_keys[0:k])} should be a list, but it is {next_target}')
             index = int(key)
             next_target = next_target[index]
         # support dict keys
         else:
-            if type(next_target) != dict:
+            if type(next_target) is not dict:
                 raise ValueError(f'{".".join(nested_keys[0:k])} should be a dict, but it is {next_target}')
             missing_key_error = KeyError(f'Missing nested key {key}')
             next_target = next_target.get(key, missing_key_error)
             if next_target == missing_key_error: raise missing_key_error
     field = keys[-1]
     next_target[field] = value
-    
-# Get the current git version
-def get_git_version () -> str:
+
+
+def get_git_version() -> str:
+    """Get the current git version."""
     git_command = f"git -C {__path__[0]} describe"
     process = run(git_command, shell=True, stdout=PIPE)
-    return process.stdout.decode().replace('\n','')
+    return process.stdout.decode().replace('\n', '') or __version__
