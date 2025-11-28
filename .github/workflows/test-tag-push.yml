@@ -25,5 +25,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a $TAG_NAME -m "Test tag with PAT"
           git push origin $TAG_NAME
-          echo "Created tag: $TAG_NAME"Test tag with PAT"
-          git push origin $TAG_NAME
+          echo "Created tag: $TAG_NAME"
