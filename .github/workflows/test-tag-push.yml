@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/test-tag-push.yml'
 
+permissions:
+  contents: write
+
 jobs:
   test-default-token:
     runs-on: ubuntu-latest
