@@ -74,7 +74,7 @@ When ready to make a new release, follow these steps:
 
 0. Update the version number in `pyproject.toml`.
 
-1. Merge the master branch into the release branch. Add [skip tests] to the commit message to skip the CI tests:
+1. Merge the master branch into the release branch. Add `[skip tests]` to the commit message to skip the CI tests:
 
 ```shell
 git branch -D release # Remove old release branch if exists
