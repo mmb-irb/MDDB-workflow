@@ -38,9 +38,9 @@ class Remote:
             if error.code == 404:
                 raise InputError(f'Remote project "{self.accession}" not found in {self.database_url}')
             # If we don't know the error then simply say something went wrong
-            raise Exception('Error when downloading project data: ' + self.url, 'with error: ' + str(error))
+            raise Exception(f'Error when downloading project data: {self.url} with error: {error}')
         except:
-            raise Exception('Something went wrong when requesting project data: ' + self.url, 'with error: ' + str(error))
+            raise Exception(f'Something went wrong when requesting project data: {self.url}')
 
     # Number of snapshots in the remote trajectory
     def get_snaphsots (self):
@@ -58,7 +58,7 @@ class Remote:
             response = urllib.request.urlopen(request_url)
             self._available_files = json.loads(response.read())
         except:
-            raise Exception('Something went wrong when requesting available files: ' + request_url)
+            raise Exception(f'Something went wrong when requesting available files: {request_url}')
         return self._available_files
     available_files = property(get_available_files, None, None, "Remote available files (read only)")
 
@@ -81,7 +81,7 @@ class Remote:
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except Exception as error:
-            raise Exception('Something went wrong when downloading the standard topology: ' + request_url, 'with error: ' + str(error))
+            raise Exception(f'Something went wrong when downloading the standard topology: {request_url} with error: {error}')
 
     # Download the standard structure
     def download_standard_structure (self, output_file : 'File'):
@@ -90,7 +90,7 @@ class Remote:
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except Exception as error:
-            raise Exception('Something went wrong when downloading the standard structure: ' + request_url, 'with error: ' + str(error))
+            raise Exception(f'Something went wrong when downloading the standard structure: {request_url} with error: {error}')
 
     # Download the main trajectory
     def download_trajectory (self,
@@ -128,7 +128,7 @@ class Remote:
                       miniters = 1, desc = ' Progress', leave=False) as t:
                 urllib.request.urlretrieve(request_url, incomplete_trajectory.path, reporthook = my_hook(t))
         except Exception as error:
-            raise Exception('Something went wrong when downloading the main trajectory: ' + request_url, 'with error: ' + str(error))
+            raise Exception(f'Something went wrong when downloading the main trajectory: {request_url} with error: {error}')
         # Once the trajectory is fully downloaded we change its filename
         incomplete_trajectory.rename_to(output_file)
 
@@ -144,7 +144,7 @@ class Remote:
         try:
             urllib.request.urlretrieve(request_url, output_file.path)
         except:
-            raise Exception('Something went wrong when downloading the inputs file: ' + request_url)
+            raise Exception(f'Something went wrong when downloading the inputs file: {request_url}')
         # If this is a json file then rewrite the inputs file in a pretty formatted way (with indentation)
         if is_json:
             file_content = load_json(output_file.path)
@@ -160,7 +160,7 @@ class Remote:
             file_content = load_json(output_file.path)
             save_json(file_content, output_file.path, indent=4)
         except Exception as error:
-            raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url}', 'with error: ' + str(error))
+            raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url} with error: {error}')
 
 # from https://gist.github.com/leimao/37ff6e990b3226c2c9670a2cd1e4a6f5
 def my_hook(t):
