@@ -161,7 +161,11 @@ class Task:
                 output_filepath = output_filename(parent)
             else: raise RuntimeError(f'Unexpected output filename type "{type(output_filename)}"')
             # Set the output file
-            output_file = File(output_filepath)
+            if type(output_filename) == str:
+                output_file = File(output_filepath)
+            elif type(output_filepath) == Exception:
+                output_file = output_filepath
+            else: raise RuntimeError(f'Unexpected output filepath type "{type(output_filepath)}"')
             output_files[argument] = output_file
             self._set_parent_output_file(parent, argument, output_file)
             # Add it to the processed args
