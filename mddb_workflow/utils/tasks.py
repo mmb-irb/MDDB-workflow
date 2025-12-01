@@ -161,7 +161,7 @@ class Task:
                 output_filepath = output_filename(parent)
             else: raise RuntimeError(f'Unexpected output filename type "{type(output_filename)}"')
             # Set the output file
-            if type(output_filename) == str:
+            if type(output_filepath) == str:
                 output_file = File(output_filepath)
             elif type(output_filepath) == Exception:
                 output_file = output_filepath
