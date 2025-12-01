@@ -3,6 +3,7 @@ import mdtraj as mdt
 from mddb_workflow.tools.get_screenshot import get_screenshot
 from mddb_workflow.utils.auxiliar import save_json
 from mddb_workflow.utils.constants import OUTPUT_MARKOV_FILENAME, PROTEIN_AND_NUCLEIC
+from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
 def markov (
@@ -91,9 +92,10 @@ def markov (
         # Update the reference structure coordinates
         reference_structure.set_new_coordinates(coordinates)
         # Set the screenshot filename
-        screenshot_filename = f'markov_screenshot_{str(i).zfill(2)}.jpg'
+        screenshot_filepath = f'{output_directory}/markov_screenshot_{str(i).zfill(2)}.jpg'
+        screenshot_file = File(screenshot_filepath)
         # Generate the screenshot
-        screenshot_parameters = get_screenshot(reference_structure, screenshot_filename, parameters=screenshot_parameters)
+        screenshot_parameters = get_screenshot(reference_structure, screenshot_file, parameters=screenshot_parameters)
     # Export the analysis data to a json file
     data = {
         'frames': highest_population_frames,

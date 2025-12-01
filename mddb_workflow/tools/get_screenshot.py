@@ -36,7 +36,8 @@ def get_screenshot (
     Returns the rotation values used to take the photo so they can be saved and reused."""
     # Check the output screenshot file extension is JPG
     if output_file.format != 'jpg':
-        raise InputError('You must provide a .jpg file name!')
+        print(output_file)
+        raise InputError(f'You must provide a .jpg file name. {output_file.format} format is not supported')
     
     # Produce a PDB file to feed VMD
     structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)

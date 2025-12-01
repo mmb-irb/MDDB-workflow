@@ -223,10 +223,11 @@ def clusters_analysis (
             # coordinates.save(AUXILIAR_PDB_FILENAME)
             auxiliar_structure.set_new_coordinates(coordinates)
             # Set the screenshot filename from the input template
-            screenshot_filename = output_screenshot_filepath.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
+            screenshot_filepath = output_screenshot_filepath.replace('*', str(r).zfill(2)).replace('??', str(c).zfill(2))
+            screenshot_file = File(screenshot_filepath)
             # Generate the screenshot
             reprint(f' Generating cluster screenshot {c+1}/{n_clusters}')
-            screenshot_parameters = get_screenshot(auxiliar_structure, screenshot_filename,
+            screenshot_parameters = get_screenshot(auxiliar_structure, screenshot_file,
                 parameters=screenshot_parameters)
 
         # Set the output clusters which include all frames in the cluster and the main or more representative frame
