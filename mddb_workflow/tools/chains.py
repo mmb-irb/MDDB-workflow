@@ -72,28 +72,6 @@ def check_interproscan_result (jobid : str) -> dict:
             raise ValueError('Something went wrong with the InterProScan results request: ' + request_url)
     return parsed_response
 
-# Check if the required sequence is already in the MDDB database
-def check_sequence_in_mddb (sequence : str, database_url : str) -> dict:
-    # Request PubChem
-    request_url = f'{database_url}rest/v1/references/chains/{sequence}'
-    parsed_response = None
-    try:
-        with urlopen(request_url) as response:
-            #parsed_response = json.loads(response.read().decode("windows-1252"))
-            parsed_response = json.loads(response.read().decode("utf-8", errors='ignore'))
-    # If the accession is not found in PubChem then the id is not valid
-    # This may happen with pubchem ids of non-discrete compounds (e.g. 483927498)
-    except HTTPError as error:
-        if error.code == 404:
-            return None
-        elif error.code == 503:
-            print('MDDB Service unavailable. Please try again later.')
-            return None
-        print('Error when requesting ', request_url)
-        return None
-    return parsed_response
-
-
 # Get the parsed chains from the structure
 def get_protein_parsed_chains (structure : 'Structure') -> list:
     parsed_chains = []
@@ -133,7 +111,7 @@ def import_chains (chains_references_file : 'File') -> dict:
 def prepare_chain_references (
     structure : 'Structure',
     chains_references_file : 'File',
-    database_url : str,
+    database : 'Database',
 ):
     """Define the main function that will be called from the main script.
     This function will get the parsed chains from the structure and request the InterProScan service
@@ -162,7 +140,7 @@ def prepare_chain_references (
         chain_data = next((data for data in chains_data if data['sequence'] == sequence), None)
         # If we have no previous chain data then check if the sequence is already in the MDDB database
         if chain_data == None:
-            chain_data = check_sequence_in_mddb(sequence, database_url)
+            chain_data = database.get_reference_data('chains', sequence)
             if chain_data is not None:
                 chains_data.append(chain_data)
                 # Save the chains data at this point

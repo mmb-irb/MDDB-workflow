@@ -6,6 +6,7 @@ from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
+from mddb_workflow.utils.database import Database
 from mddb_workflow.utils.mda_spells import get_mda_universe_cksum
 from mddb_workflow.utils.type_hints import *
 
@@ -51,6 +52,7 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     # Otherwise, the content will be not compared between runs (e.g. warnings in the register)
     if isinstance(value, Register): return True
     if isinstance(value, Cache): return True
+    if isinstance(value, Database): return str(value)
     if safe_hasattr(value, '__class__'):
         if value.__class__.__name__ == 'Project': return True
         if value.__class__.__name__ == 'MD': return True

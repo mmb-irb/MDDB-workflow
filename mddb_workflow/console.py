@@ -513,6 +513,9 @@ run_parser_checks_args = [
      'help': ("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
               "WARNING: Do not use this flag if you don't know what you are doing.\n"
               "This may lead to several silent errors.")}),
+    (['-sl', '--ssleep'], {'default': False, 'action': 'store_true',
+     'help': ("Use this flag to skip SSL certificate authentication.\n"
+              "WARNING: Do not use this flag if you don't trust the data source.")}),
 ]
 for flags, kwargs in run_parser_checks_args:
     run_parser_checks_group.add_argument(*flags, **kwargs)

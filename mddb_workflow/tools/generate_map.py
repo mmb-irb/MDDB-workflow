@@ -75,7 +75,7 @@ def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
 def generate_protein_mapping (
     structure : 'Structure',
     protein_references_file : 'File',
-    database_url : str,
+    database : 'Database',
     cache : 'Cache',
     register : dict,
     mercy : list[str] = [],
@@ -111,7 +111,7 @@ def generate_protein_mapping (
         reference = references.get(uniprot_accession, None)
         if reference:
             return reference, True
-        reference = get_mdposit_reference(uniprot_accession, database_url)
+        reference = database.get_reference_data('proteins', uniprot_accession)
         if reference:
             return reference, True
         reference = get_uniprot_reference(uniprot_accession)
@@ -525,35 +525,6 @@ def blast (sequence : str, cache : Optional['Cache'] = None) -> Optional[str]:
         cached_blasts[sequence] = accession
         cached_blasts = cache.update('blasts', cached_blasts)
     return accession
-
-# Given a uniprot accession, use the MDposit API to request its data in case it is already in the database
-# If the reference is not found or there is any error then return None and keep going, we do not really need this
-def get_mdposit_reference (uniprot_accession : str, database_url : str) -> Optional[dict]:
-    # Request MDposit
-    request_url = f'{database_url}rest/v1/references/{uniprot_accession}'
-    try:
-        with urllib.request.urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the database then we stop here
-    except urllib.error.HTTPError as error:
-        # If the uniprot accession is not yet in the MDposit references then return None
-        if error.code == 404:
-            return None
-        else:
-            warn(f'Something went wrong with the MDposit request {request_url} (error {error.code})')
-            warn(f'Protein reference {uniprot_accession} will be made again even if it exists')
-            return None
-    # This error may occur if there is no internet connection
-    except urllib.error.URLError as error:
-        # The error variable as is do not work properly
-        # Its 'errno' value is None (at least for tiemout errors)
-        actual_error = error.args[0]
-        if actual_error.errno == 110:
-            print('Timeout error when requesting MDposit. Is the node fallen?')
-        warn('Something went wrong with the MDposit request ' + request_url)
-        warn(f'Protein reference {uniprot_accession} will be made again even if it exists')
-        return None
-    return parsed_response
 
 # Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database
 def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
