@@ -8,6 +8,7 @@ from mddb_workflow.utils.auxiliar import round_to_thousandths, save_json, otherw
 from mddb_workflow.utils.auxiliar import numerate_filename, get_analysis_name
 from mddb_workflow.utils.auxiliar import reprint, delete_previous_log
 from mddb_workflow.utils.constants import OUTPUT_CLUSTERS_FILENAME, OUTPUT_CLUSTER_SCREENSHOT_FILENAMES
+from mddb_workflow.utils.file import File
 from mddb_workflow.tools.get_screenshot import get_screenshot
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.utils.type_hints import *
@@ -134,6 +135,8 @@ def clusters_analysis (
         # Set the difference between the minimum and maximum to determine the cutoffs step
         rmsd_difference = maximum_rmsd - minimum_rmsd
         rmsd_step = rmsd_difference / n_steps
+        # Since we are then rounding to thousands we make sure a cutoff won't be repeated twice
+        if rmsd_step < 0.001: rmsd_step = 0.001
 
         # Set the initial RMSD cutoff
         cutoff = round_to_thousandths(minimum_rmsd + rmsd_difference / 2)
