@@ -1,5 +1,8 @@
 import subprocess
-import os, sys, shutil, pytest
+import pytest
+import shutil
+import sys
+import os
 from io import StringIO
 from unittest.mock import patch
 from mddb_workflow.console import parser, main
@@ -100,6 +103,7 @@ class TestSubcommands:
         os.chdir(test_data_dir)
 
     def test_inputs(self, test_data_dir: str):
+        """Test that the inputs subcommand creates an inputs.yaml file."""
         # We change the directory because the inputs command expects to be run in the output directory
         # TODO add a flag to specify the input directory
         cwd = os.getcwd()
@@ -110,7 +114,7 @@ class TestSubcommands:
         assert os.path.exists(f'{test_data_dir}/output/inputs.yaml')
 
     def clean_run_assert(self, test_data_dir: str, outputs: list = [], args: list = []):
-        """Wrapper for subcommand tests"""
+        """Run a command and assert outputs are created."""
         os.makedirs(f'{test_data_dir}/output/subcommand', exist_ok=True)
         # Ensure the outputs are removed before running the command
         for output in outputs:
@@ -124,7 +128,7 @@ class TestSubcommands:
             assert os.path.exists(output)
 
     def test_convert(self, test_data_dir: str):
-        """Test that the convert subcommand can be executed without errors"""
+        """Test that the convert subcommand can be executed without errors."""
         outputs = [f'{test_data_dir}/output/subcommand/converted.gro',
                    f'{test_data_dir}/output/subcommand/converted.xtc']
         args = ['mddb_workflow', 'convert',
@@ -134,7 +138,7 @@ class TestSubcommands:
         self.clean_run_assert(test_data_dir, outputs, args)
 
     def test_filter(self, test_data_dir: str):
-        """Test that the filter subcommand can be executed without errors"""
+        """Test that the filter subcommand can be executed without errors."""
         outputs = [f'{test_data_dir}/output/subcommand/filtered.pdb',
                    f'{test_data_dir}/output/subcommand/filtered.xtc']
         args = ['mddb_workflow', 'filter',
@@ -144,6 +148,7 @@ class TestSubcommands:
         self.clean_run_assert(test_data_dir, outputs, args)
 
     def test_subset(self, test_data_dir: str):
+        """Test that the subset subcommand can be executed without errors."""
         outputs = [f'{test_data_dir}/output/subcommand/subset.xtc']
         args = ['mddb_workflow', 'subset',
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
@@ -152,6 +157,7 @@ class TestSubcommands:
         self.clean_run_assert(test_data_dir, outputs, args)
 
     def test_chainer(self, test_data_dir: str):
+        """Test that the chainer subcommand can be executed without errors."""
         outputs = [f'{test_data_dir}/output/subcommand/chained.pdb']
         args = ['mddb_workflow', 'chainer',
                 '-is', f'{test_data_dir}/input/raw_project/raw_structure.pdb',
@@ -164,6 +170,7 @@ class TestSubcommands:
 
 @pytest.mark.release
 class TestNassa:
+    """Test the nassa subcommand of the console interface."""
     @pytest.fixture(scope="class")
     def test_accession(self):
         """Override the default accession for this test."""
@@ -171,9 +178,11 @@ class TestNassa:
 
     @pytest.mark.CI
     def test_helical(self, project: 'Project'):
+        """Test the helical analysis functionality."""
         project.mds[0].run_helical_analysis(project)
 
     def test_nassa_helical(self, test_data_dir: str):
+        """Runs helical analysis using nassa subcommand."""
         os.chdir(os.path.join(test_data_dir, 'output'))
         command = "mwf nassa -hp -stru source_topology.prmtop -traj source_trajectory.xtc -top source_topology.prmtop -pdirs seq001-1 -mdir replica_1 -m"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)

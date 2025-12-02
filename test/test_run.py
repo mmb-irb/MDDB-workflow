@@ -22,6 +22,7 @@ class TestRunAll:
 
     @pytest.fixture(scope='class', params=['A0001', 'A01IP', 'A01V7'])
     def test_accession(self, request):
+        """Fixture to provide different test accessions."""
         return request.param
 
     # Arguments to reduce long test execution time

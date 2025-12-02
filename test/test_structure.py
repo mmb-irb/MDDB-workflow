@@ -7,13 +7,13 @@ from mddb_workflow.utils.type_hints import *
 @pytest.mark.CI
 @pytest.mark.release
 class TestStructure:
-    """Test structure-related functionalities"""
+    """Test structure-related functionalities."""
 
     @pytest.mark.parametrize(
             "structure_file",
             ["A0001.pdb", "A0001.prmtop", "A0224.tpr", "3rbn.cif"])
     def test_load_structure(self, structure_file: str, test_data_dir: str):
-        """Test loading a structure from a file"""
+        """Test loading a structure from a file."""
         structure_path = os.path.join(test_data_dir, 'input/raw_structures', structure_file)
         structure = structures.Structure.from_file(structure_path)
         assert structure is not None, "Failed to load the structure"
@@ -25,13 +25,13 @@ class TestStructure:
         structure.check_repeated_atoms(fix_atoms=True, display_summary=True), "Structure should not have repeated atoms"
         structure.check_repeated_residues(fix_residues=True, display_summary=True), "Structure should not have repeated residues"
         structure.auto_chainer()
-        
+
         # prmtop has no coords
         # MDAnalysis does not read coordinates from tpr:
         # https://userguide.mdanalysis.org/stable/formats/reference/tpr.html#tpr-gromacs-run-topology-files
         if not structure_file.endswith('.prmtop') and not structure_file.endswith('.tpr'):
             structure.filter('protein')
-    
+
     @pytest.fixture(scope="function")
     def structure(self, test_data_dir: str):
         """Fixture to load a sample structure for testing."""
@@ -40,7 +40,7 @@ class TestStructure:
         return structure
 
     def test_structure_functions(self, structure: 'Structure'):
-        """Test structure-related functions in the project"""
+        """Test structure-related functions in the project."""
         print(structure)
         structure.display_summary()
         sel = structure.select('resname ARG')
@@ -53,7 +53,7 @@ class TestStructure:
         structure.select_pbc_guess()
 
         # Make a repeated residue
-        structure.residues.extend([structure.residues[-1],structure.residues[0]])
+        structure.residues.extend([structure.residues[-1], structure.residues[0]])
         structure.check_repeated_residues(fix_residues=True, display_summary=True)
 
         # Make a repeated chain
@@ -61,7 +61,7 @@ class TestStructure:
         structure.check_repeated_chains(fix_chains=True, display_summary=True)
 
     def test_chain_functions(self, structure: 'Structure'):
-        """Test chain-related functions in the project"""
+        """Test chain-related functions in the project."""
         chain: structures.Chain = structure.chains[0]
         print(chain)
         chain.set_residues(structure.residues)
@@ -71,12 +71,12 @@ class TestStructure:
         chain.has_cg()
 
     def test_residue_functions(self, structure: 'Structure'):
-        """Test residue-related functions in the project"""
+        """Test residue-related functions in the project."""
         res: 'Residue' = structure.residues[0]
         print(res)
-        res.split([0,1],list(set(res.atom_indices))[2:])
-        residue_atom_names = list(set([ atom.name for atom in res.atoms ]))
-        res.split_by_atom_names(residue_atom_names[:2],residue_atom_names[2:])
+        res.split([0, 1], list(set(res.atom_indices))[2:])
+        residue_atom_names = list(set([atom.name for atom in res.atoms]))
+        res.split_by_atom_names(residue_atom_names[:2], residue_atom_names[2:])
         res.get_formula()
         res.get_classification_by_name()
         res.is_bonded_with_residue(res)
@@ -84,7 +84,7 @@ class TestStructure:
         res.set_atoms(structure.atoms[:5])
 
     def test_atom_functions(self, structure: 'Structure'):
-        """Test atom-related functions in the project"""
+        """Test atom-related functions in the project."""
         atoms: list['Atom'] = structure.atoms[:5]
         atom1, atom2, atom3, atom4 = atoms[:4]
         print(atom1)
