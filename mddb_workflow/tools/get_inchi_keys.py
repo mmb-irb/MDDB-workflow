@@ -278,7 +278,7 @@ def generate_inchi_references(
             # 'inchi': ref_inchi,
             # 'fragments': res_data.fragments,
             'residue_indices': resindices,
-            'is_lipid': inchikey in ligand_references,
+            'is_lipid': inchikey in lipid_references,
             'match': {
                 'ref': {'inchikey': inchikey}
             }
