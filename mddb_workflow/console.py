@@ -14,6 +14,7 @@ from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.auxiliar import InputError
 from mddb_workflow.utils.nassa_file import generate_nassa_config
 from mddb_workflow.tools.conversions import convert
+from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
@@ -452,9 +453,9 @@ run_parser = subparsers.add_parser("run",
 run_parser_input_group = run_parser.add_argument_group('INPUT OPTIONS')
 run_parser_input_args = [
     # There is no default since many formats may be possible
-    (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']}),
-    (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']}),
-    (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']}),
+    (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']+f'\nSupported formats: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}.'}),
+    (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']+f'\nSupported formats: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}.'}),
+    (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']+f'\nSupported formats: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}.'}),
     (['-dir', '--working_directory'], {'default': '.', 'help': "Directory where the whole workflow is run."}),
     (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
     (['-md', '--md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['md_config']}),

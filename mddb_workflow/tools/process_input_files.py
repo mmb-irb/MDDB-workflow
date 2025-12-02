@@ -58,7 +58,7 @@ def process_input_files (
     fit : bool,
     translation : tuple,
     # Make sure the MD is used only to set values or use its functions, but not to get values
-    # Values msut be passed separatedly as inputs so the taks can identify when inputs change
+    # Values must be passed separately as inputs so the task can identify when inputs change
     self : 'MD',
     # Get the task which is calling this function
     # Thus we may know which inputs have changed compared to previous runs
@@ -101,13 +101,13 @@ def process_input_files (
     input_trajectories_format = list(input_trajectory_formats)[0]
     if is_amber_top(input_topology_file):
         # Creating a topology symlink/copy with the correct extension
-        warn(f'Topology is .top but the trajectory is from Amber. It is assumed the topology is .prmtop')
+        warn('Topology is .top but the trajectory is from Amber. It is assumed the topology is .prmtop')
         reformatted_topology_file = input_topology_file.reformat('prmtop')
-        output_topology_file.path = output_topology_file.extensionless_filepath+'.prmtop'
+        output_topology_file.path = output_topology_file.extensionless_filepath + '.prmtop'
         if input_structure_file == input_topology_file:
             input_structure_file = reformatted_topology_file
         input_topology_file = reformatted_topology_file
-        
+
     # --- FIRST CHECK -----------------------------------------------------------------------
 
     # Check input files match in number of atoms
@@ -286,7 +286,7 @@ def process_input_files (
     # Note that for this step the filter parameters is also important
     previous_imaged_parameters = self.cache.retrieve(IMAGED)
     same_imaged_parameters = previous_imaged_parameters == [image, fit, *translation]
-    
+
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
     # Fit the trajectory by removing the translation and rotation if it is required
@@ -454,7 +454,7 @@ def process_input_files (
             'Avoid relying in atom distances or elements to avoid this problem.')
 
     # --- RUNNING FINAL TESTS ------------------------------------------------------------
-    
+
     # Note that tests here do not modify any file
 
     # Check the trajectory has not sudden jumps
@@ -465,7 +465,7 @@ def process_input_files (
 
     # Issue some warnings if failed or never run tests are skipped
     self._issue_required_test_warnings()
-        
+
     # --- Cleanup intermediate files
 
     # Set a list of input files to NOT be removed

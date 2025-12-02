@@ -39,13 +39,11 @@ def check_inputs (
     input_structure_file : 'File',
     input_trajectory_files : list['File'],
     input_topology_file : Union['File', Exception]) -> dict:
-    """
-    Check input files coherence and integrity.
+    """Check input files coherence and integrity.
     If there is any problem then raises an input error.
     Some exceptional problems may be fixed from here.
     In these cases, both the exception and the modified file are returned in a final dict.
     """
-
     # Set the exceptions dict to be returned at the end
     exceptions = {}
     

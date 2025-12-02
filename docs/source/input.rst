@@ -670,6 +670,32 @@ Directories for every MD in the project.
 Input file paths for topology, trajectory and structure.
 Note that all these values may be specified thorugh command line as well.
 
+.. note::
+ These files have been passed to the workflow through command line traditionally.
+
+.. note::
+ Now the inputs file also provides this option.
+
+
+
+``input_topology_filepath``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each projects contain one and only one topology
+Exceptionally a structure may be used instead of a topology if the topology is missing
+To do so, set 'input_topology_filepath: no' and pass the input_structure_filepath argument
+
+``input_structure_filepath``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The input structure file is optional (except when the topology is missing)
+
+``input_trajectory_filepaths``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can set input trajectory filepath generic for the whole project here.
+However it makes more sense setting this value separatedly for each MD.
+
 ``mds``
 ~~~~~~~
 
@@ -686,9 +712,11 @@ MDs may include additional metadata to overwrite the project metadata for a spec
 	mds:
 	  - name: replica 310 K
 	  mdir: replica_1
+	  input_trajectory_filepaths: my_raw_trajectory_1.nc
 	  temp: 310
 	  - name: replica 311 K
 	  mdir: replica_2
+	  input_trajectory_filepaths: my_raw_trajectory_2.nc
 	  temp: 311
 
 ``mdref``
@@ -702,21 +730,4 @@ If there is not an MD which is more important than others then simply set the fi
 ::
 
 	mdref: 0
-
-``input_topology_filepath``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Input topology, trajectory and structure files.
-
-
-.. note::
- These files have been passed to the workflow through command line traditionally. Now the inputs file also provides this option.
-
-
-
-``input_structure_filepath``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``input_trajectory_filepaths``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

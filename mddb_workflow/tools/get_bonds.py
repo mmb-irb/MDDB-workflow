@@ -33,7 +33,7 @@ def do_bonds_match (
     atoms : Optional[ list['Atom'] ] = None,
     counter_list : Optional[ list[int] ] = None
 ) -> bool:
-    """ Check if two sets of bonds match perfectly. """
+    """Check if two sets of bonds match perfectly."""
     # If the number of atoms in both lists is not matching then there is something very wrong
     if len(bonds_1) != len(bonds_2):
         raise ValueError(f'The number of atoms is not matching in both bond lists ({len(bonds_1)} and {len(bonds_2)})')
@@ -261,10 +261,11 @@ def find_safe_bonds (
     # Optional file with bonds sorted according a new atom order
     resorted_bonds_file : Optional['File'] = None
 ) -> list[list[int]]:
-    """ Find reference safe bonds in the system.
+    """Find reference safe bonds in the system.
     First try to mine bonds from a topology files.
     If the mining fails then search for the most stable bonds.
-    If we trust in stable bonds then simply return the structure bonds. """
+    If we trust in stable bonds then simply return the structure bonds.
+    """
     # If bonds are to be ignored then set all bonds as missing bonds already
     register.remove_warnings(MISSING_BONDS_FLAG)
     if ignore_bonds:

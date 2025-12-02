@@ -25,6 +25,8 @@ Note that here we have 2 independent replicas sharing common topology. The secon
    In order to keep your trajectories safe we recommend making a copy or using symlinks as workflow inputs. e.g. ``ln -s ~/my_data/my_trajectory.nc raw_trajectory.nc``.
    Note that the workflow may generate output files where it is run. Thus it may overwrite a file already present in a directory if its name matches an output file name.
 
+Supported formats: **trajectory** (|trajectory_formats|), **topology** (|topology_formats|), **structure** (|structure_formats|).
+
 Processing input files
 -----------------------
 

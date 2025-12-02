@@ -1051,7 +1051,6 @@ class Project:
                 Path to a file with inputs for metadata, simulation parameters and analysis config.
             input_topology_filepath (Optional[str]):
                 Path to input topology file relative to the project directory.
-                Multiple formats accepted; default is our parsed JSON topology.
             input_structure_filepath (Optional[str]):
                 Path to input structure file. It may be relative to the project or to each MD directory.
                 If this value is not passed then the standard structure file is used as input by default.
@@ -1488,9 +1487,10 @@ class Project:
         If the input topology filepath is a 'no' flag then we consider there is no topology at all
         So far we extract atom charges and atom bonds from the topology file
         In this scenario we can keep working but there are some consecuences:
-          1. Analysis using atom charges such as 'energies' will be skipped
-          2. The standard topology file will not include atom charges
-          3. Bonds will be guessed
+
+            1. Analysis using atom charges such as 'energies' will be skipped
+            2. The standard topology file will not include atom charges
+            3. Bonds will be guessed
         """
         # If we already have an internal value calculated then return it
         if self._input_topology_filepath is not None:

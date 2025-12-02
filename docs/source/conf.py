@@ -2,8 +2,10 @@ import os
 import sys
 import inspect
 
-# Add the path to your project's root directory
-sys.path.insert(0, os.path.abspath('../../')) # Adjust this path if your 'my_package' is elsewhere
+# Add the path to mddb_workflow location
+sys.path.insert(0, os.path.abspath('../../'))  #
+sys.path.insert(0, os.path.abspath('../scripts'))
+
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -32,6 +34,7 @@ extensions = [
     'myst_parser',              # For Markdown support
     'sphinx.ext.linkcode',      # For linking to source code
     'nbsphinx',                 # For Jupyter Notebook support
+    'format_substitutions',
 ]
 
 # Napoleon settings
@@ -41,14 +44,17 @@ napoleon_numpy_docstring = False
 # Source suffix (this is for input files, still RST if that's what you're writing)
 source_suffix = '.rst'
 
+
 def setup(app):
     app.add_css_file('custom.css')
+
+
 # Add the ReadTheDocs theme
 html_theme = 'sphinx_rtd_theme'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-html_favicon
 html_favicon = '_static/MDDB_favicon.png'
 html_logo = '_static/MDDB_Logo_colour.png'
-html_theme_options = {'style_nav_header_background': "#FFFFFF",}
+html_theme_options = {'style_nav_header_background': "#FFFFFF", }
 html_static_path = ['_static']
 html_context = {
     'display_github': True,
@@ -57,8 +63,9 @@ html_context = {
     'github_version': 'master/docs/source/',
 }
 
-# Use to get links to source code in the documentation
+
 def linkcode_resolve(domain, info):
+    """Get links to source code in the documentation."""
     if domain != 'py':
         return None
     if not info['module']:
@@ -82,12 +89,12 @@ def linkcode_resolve(domain, info):
         source_file = inspect.getsourcefile(obj)
         if source_file is None:
             return None
-            
+
         # Get the path relative to the project root
         # This works both locally and on ReadTheDocs
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
         filepath = os.path.relpath(source_file, start=project_root)
-        
+
         lineno = inspect.getsourcelines(obj)[1]
     except (TypeError, OSError):
         return None

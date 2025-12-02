@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import re
-import os
 from pathlib import Path
 
 
@@ -19,7 +18,8 @@ def replace_special_markers(text):
         text = text.replace(
             "DANI:", "\n.. tip::\n").strip() + "\n\n"
     return text
-        
+
+
 def extract_yaml_documentation(yaml_file_path):
     """Extract documentation from YAML file comments."""
     with open(yaml_file_path, 'r') as f:
@@ -64,7 +64,7 @@ def extract_yaml_documentation(yaml_file_path):
             while i < len(lines):
                 line = lines[i]
                 i += 1
-                if not line.strip(): # Stop on blank line
+                if not line.strip():  # Stop on blank line
                     break
                 section_overview.append(line.strip('# \n'))
 
@@ -171,7 +171,7 @@ def extract_yaml_documentation(yaml_file_path):
                         rst_content += "::\n\n\t" + example_text.replace("\n", "\n\t") + "\n\n"
                     else:
                         rst_content += description_text + "\n\n"
-                
+
                 if field_value:
                     rst_content += f"Default: ``{field_value}``\n\n"
 

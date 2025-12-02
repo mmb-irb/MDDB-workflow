@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-import re
 import sys
-import os
 import inspect
 from pathlib import Path
 from mddb_workflow.mwf import project_requestables, md_requestables, DEPENDENCY_FLAGS, Task
@@ -19,18 +17,18 @@ def clean_docstring(docstring):
     """
     if not docstring:
         return ""
-    
+
     # Remove leading/trailing whitespace and normalize internal whitespace
     lines = docstring.strip().split('\n')
-    
+
     # Remove common leading whitespace from all lines after the first
     if len(lines) > 1:
-        leading_spaces = min(len(line) - len(line.lstrip()) 
+        leading_spaces = min(len(line) - len(line.lstrip())
                             for line in lines[1:] if line.strip())
         for i in range(1, len(lines)):
             if lines[i]:
                 lines[i] = lines[i][leading_spaces:] if leading_spaces <= len(lines[i]) else lines[i]
-    
+
     # Remove Args, Returns, Raises sections
     new_lines = []
     skip_section = False
@@ -62,6 +60,7 @@ def get_github_link(func):
     except (OSError, ValueError):
         return None
 
+
 def generate_task_docs():
     """Generate documentation for all tasks in requestables."""
     # Start building the RST content
@@ -70,7 +69,6 @@ def generate_task_docs():
     rst_content += "==================\n\n"
     rst_content += "This page documents the available tasks in the MDDB Workflow system.\n"
     rst_content += "These tasks can be specified with the ``-i`` (include) or ``-e`` (exclude) flags.\n\n"
-    
 
     # Document project-level tasks
     rst_content += "Project Tasks\n"
@@ -80,21 +78,21 @@ def generate_task_docs():
         func = project_requestables[task_name]
         # Get the actual function if it's a Task object
         if isinstance(func, Task):
-            func = func.func  
+            func = func.func
         rst_content += f"* ``{task_name}``"
         rst_content += f" `[source] <{get_github_link(func)}>`__"
-        rst_content += f": {clean_docstring(func.__doc__)}"        
+        rst_content += f": {clean_docstring(func.__doc__)}"
         rst_content += "\n\n"
-    
+
     # Document MD-level tasks
     rst_content += "MD Tasks\n"
     rst_content += "-----------\n\n"
     rst_content += "These tasks are executed for each MD in the project:\n\n"
-    
+
     # Categorize MD tasks
     md_file_tasks = []
     md_analysis_tasks = []
-    
+
     for task_name in md_requestables:
         func = md_requestables[task_name]
         # Heuristic: file tasks are usually in input_files or processed_files
@@ -102,57 +100,60 @@ def generate_task_docs():
             md_file_tasks.append(task_name)
         else:
             md_analysis_tasks.append(task_name)
-    
+
     # First document input and processed files
     if md_file_tasks:
         rst_content += "Files\n"
         rst_content += "~~~~~~~~\n\n"
-        
+
         for task_name in sorted(md_file_tasks):
             func = md_requestables[task_name]
             if isinstance(func, Task):
-                func = func.func  
+                func = func.func
             rst_content += f"* ``{task_name}``"
             rst_content += f" `[source] <{get_github_link(func)}>`__"
             rst_content += f": {clean_docstring(func.__doc__)}"
             rst_content += "\n\n"
-    
+
     # Then document analyses
     if md_analysis_tasks:
         rst_content += "Analyses\n"
         rst_content += "~~~~~~~~~~~~~~\n\n"
-        
+
         for task_name in sorted(md_analysis_tasks):
             func = md_requestables[task_name]
             if isinstance(func, Task):
-                func = func.func    
+                func = func.func
             rst_content += f"* ``{task_name}``"
             rst_content += f" `[source] <{get_github_link(func)}>`__"
             rst_content += f": {clean_docstring(func.__doc__)}"
             rst_content += "\n\n"
-    
+
     # Document dependency flag groups
     rst_content += "Task Groups\n"
     rst_content += "-------------\n\n"
     rst_content += "These are predefined groups of tasks that can be specified with a single flag.\n\n"
-    
+
     for flag, tasks in DEPENDENCY_FLAGS.items():
         rst_content += f"* ``{flag}``: {', '.join([f'``{t}``' for t in tasks])}.\n\n"
-    
+
     return rst_content
 
+
 def main():
+    """Generate task documentation."""
     print("Generating task documentation...")
     output_rst = repo_root / 'docs' / 'source' / 'tasks.rst'
-    
+
     # Generate the documentation
     rst_content = generate_task_docs()
-    
+
     # Write to RST file
     with open(output_rst, 'w') as f:
         f.write(rst_content)
-    
+
     print(f"Task documentation generated: {output_rst}")
+
 
 if __name__ == "__main__":
     main()
