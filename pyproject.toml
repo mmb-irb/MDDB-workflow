@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mddb_workflow"
-version = "0.1.7"
+version = "0.1.8"
 requires-python = ">=3.11.0"
 
 [project.optional-dependencies]
@@ -40,9 +40,18 @@ addopts = "-rsx -v --durations=10"
 
 [tool.ruff.lint]
 # E,W: pycodestyle, F: pyflakes, D: pydocstyle
-select = ["W"]
-ignore = ["W605"]
-fixable = ["W"]
+select = ["D", "E", "F", "W"] 
+ignore = ["E501", "F403", "F405", "E226", "E701", "E702", "D204", "D205", "D100"]
+fixable = ["D202", "D209", "D210", "D212", "D413", "E251", "E261", "E711",
+ "E201", "E202", "E203", "E211", "E225", "E231", "E302", "E305", "W"]
+preview = true
+[tool.ruff.format]
+quote-style = "single"
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
+
+[tool.pyrefly]
+project-includes = ["mddb_workflow/**"]
 
 [tool.conda-deny]
 safe-licenses = [

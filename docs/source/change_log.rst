@@ -7,6 +7,25 @@ All notable changes to this project will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.8] - 2025-12-03
+=====================
+
+Added
+-----
+- Add ``--ssleep`` flag to skip SSL certificate authentication
+
+Changed
+-------
+- Update mordred dependency
+- Update biobb_mem to 5.1.2
+- Add ``n_jobs`` option to dataset command
+- Add ignore option for dataset config directories
+
+Fixed
+-----
+ - Fix clustering cutoff when low RMSD difference
+
+
 [0.1.7] - 2025-11-28
 =====================
 
