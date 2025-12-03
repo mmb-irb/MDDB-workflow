@@ -21,23 +21,23 @@ MISSING_VALUE_EXCEPTION = Exception('Missing value')
 OUTPUT_DIRECTORY_ARG = 'output_directory'
 
 class Task:
-    """ Descriptor class to handle a generic task.
+    """Descriptor class to handle a generic task.
     It implements lazy properties, caching and overwriting.
 
     Since its properties are static, results are stored in the parent object
-    (MD/Project), or otherwise all MDs would share the same task values. """
+    (MD/Project), or otherwise all MDs would share the same task values.
+    """
 
-    def __init__ (self,
-        flag : str,
-        name : str,
-        func : Callable,
-        args : dict = {},
-        output_filenames : dict = {},
-        use_cache : bool = True,
-        debug : bool = False,
+    def __init__(self,
+        flag: str,
+        name: str,
+        func: Callable,
+        args: dict = {},
+        output_filenames: dict[str | Callable[[], str]] = {},
+        use_cache: bool = True,
+        debug: bool = False,
     ):
-        """
-        Initialize the Task object.
+        """Initialize the Task object.
 
         Args:
             flag (str):
@@ -69,6 +69,7 @@ class Task:
 
             debug (bool, optional):
                 If the task is run in debug mode, producing more output logs. Defaults to False.
+
         """
         # Save input arguments
         self.flag = flag
@@ -83,25 +84,25 @@ class Task:
         self.parent_output_file_keys = {}
         for argument in self.output_filenames.keys():
             self.parent_output_file_keys[argument] = f'{self.flag}_task_{argument}'
-        self.cache_output_key = f'{self.flag}_task_output'
         self.cache_arg_cksums = f'{self.flag}_task_arg_cksums'
+        self.cache_output_key = f'{self.flag}_task_output'
         # Para el arg_cksum
         self.__name__ = self.flag
 
     # Set internal functions to handle parent saved output
     # This output is not saved in the task itself, but in the parent, because the task is static
-    def _get_parent_output (self, parent):
+    def _get_parent_output(self, parent):
         return safe_getattr(parent, self.parent_output_key, MISSING_VALUE_EXCEPTION)
-    def _set_parent_output (self, parent, new_output):
+    def _set_parent_output(self, parent, new_output):
         return setattr(parent, self.parent_output_key, new_output)
-    def _get_parent_output_file (self, parent, argument):
+    def _get_parent_output_file(self, parent, argument):
         parent_output_file_key = self.parent_output_file_keys[argument]
         return safe_getattr(parent, parent_output_file_key, MISSING_VALUE_EXCEPTION)
-    def _set_parent_output_file (self, parent, argument, new_file : 'File'):
+    def _set_parent_output_file(self, parent, argument, new_file: 'File'):
         parent_output_file_key = self.parent_output_file_keys[argument]
         return setattr(parent, parent_output_file_key, new_file)
-    # Get the task output, running the task if necessary
-    def get_output (self, parent):
+    def get_output(self, parent):
+        """Get the task output, running the task if necessary."""
         # If we already have a value stored from this run then return it
         output = self._get_parent_output(parent)
         if output != MISSING_VALUE_EXCEPTION: return output
@@ -110,8 +111,8 @@ class Task:
     output = property(get_output, None, None, "Task output (read only)")
     # Asking for the an output file implies running the Task, then returning the file
     # The argument must be specified, meaning the name of the output argument in the task function
-    def get_output_file_getter (self, argument) -> Callable:
-        def get_output_file (parent) -> 'File':
+    def get_output_file_getter(self, argument) -> Callable:
+        def get_output_file(parent) -> 'File':
             # If we already have a file stored from this run then return it
             file = self._get_parent_output_file(parent, argument)
             if file != MISSING_VALUE_EXCEPTION: return file
@@ -123,11 +124,12 @@ class Task:
         return get_output_file
     # output_file = property(get_output_file, None, None, "Task output file (read only)")
 
-    # When the task is printed, show the flag
-    def __repr__ (self): return f'<Task ({self.flag})>'
+    def __repr__(self):
+        """Represent the Task object with its flag."""
+        return f'<Task ({self.flag})>'
 
-    # When a task is called
     def __call__(self, parent: Union['Project', 'MD']):
+        """Call the task, running it if necessary."""
         return self._run(parent)
 
     def _run (self, parent: Union['Project', 'MD']):
@@ -290,11 +292,10 @@ class Task:
         # Note that some tasks clean their own intermediate steps to save disk (e.g. inpro)
         if writes_output_dir and exists(incomplete_output_directory):
             rename(incomplete_output_directory, final_output_directory)
-        # Now return the function result
         return output
 
-    def _find_arg_value (self, arg : str, parent : Union['Project', 'MD'], default_arguments : set):
-        """ Find argument values, thus running any dependency if necessary. """
+    def _find_arg_value(self, arg: str, parent: Union['Project', 'MD'], default_arguments: set):
+        """Find argument values, thus running any dependency if necessary."""
         # Word 'task' is reserved for getting the task itself
         if arg == 'task': return self
         # Word 'self' is reserved for getting the caller Project/MD
@@ -317,12 +318,12 @@ class Task:
         # If the argument is still missing then you programmed the function wrongly or...
         # You may have forgotten the additional argument in the task args
         raise RuntimeError(f'Function "{self.func.__name__}" from task "{self.flag}" expects argument "{arg}" but it is missing')
-    
-    def _get_changed_inputs (self,
-        parent : Union['Project', 'MD'],
-        processed_args : dict,
-    ) -> tuple[ list[str], bool, dict ]:
-        """ Find out if input arguments changed regarding the last run. """
+
+    def _get_changed_inputs(self,
+        parent: Union['Project', 'MD'],
+        processed_args: dict,
+    ) -> tuple[list[str], bool, dict]:
+        """Find out if input arguments changed regarding the last run."""
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
         had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
@@ -351,11 +352,11 @@ class Task:
                 # Update the references
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
-    
-    def prefill (self, parent, output, inputs):
-        """ Assign an output value to a task thus marking it as already run. 
-            This function is used in a very specific scenario:
-            Tasks which generate no output files/directory inside the 'inpro' task.
+
+    def prefill(self, parent, output, inputs):
+        """Assign an output value to a task thus marking it as already run.
+        This function is used in a very specific scenario:
+        Tasks which generate no output files/directory inside the 'inpro' task.
         """
         # Save the task output in the parent instance
         self._set_parent_output(parent, output)
