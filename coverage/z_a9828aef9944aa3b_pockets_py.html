@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_a9828aef9944aa3b_rgyr_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -81,23 +81,23 @@
 </header>
 <main id="source">
     <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="com"># Pockets analysis</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t"><span class="com"># </span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="com"># The pockets analysis is carried by the 'Fpocket' software. Fpocket is a fast open source protein </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t"><span class="com">#</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="com"># The pockets analysis is carried by the 'Fpocket' software. Fpocket is a fast open source protein</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="com"># pocket (cavity) detection algorithm based on Voronoi tessellation.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="com">#</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="com"># The analysis is performed over 100 frames selected along the trajectory. First of all, an 'MDpocket'</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="com"># analysis is run over these frames thus generating an output grid file. This grid contains a measure </span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="com"># of frequency of how many times the pocket was open during the trajectory. The most stable and wide </span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="com"># pockets are selected from this grid and then analyzed again with MDpocket individually. This second </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t"><span class="com"># analysis is run over these frames thus generating an output grid file. This grid contains a measure</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="com"># of frequency of how many times the pocket was open during the trajectory. The most stable and wide</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="com"># pockets are selected from this grid and then analyzed again with MDpocket individually. This second</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t"><span class="com"># run returns dynamic data of the pocket volume and drugability score, among others.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="com">#</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t"><span class="com"># Vincent Le Guilloux, Peter Schmidtke and Pierre Tuffery, &#8220;Fpocket: An open source platform for ligand </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t"><span class="com"># Vincent Le Guilloux, Peter Schmidtke and Pierre Tuffery, &#8220;Fpocket: An open source platform for ligand</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t"><span class="com"># pocket detection&#8221;, BMC Bioinformatics 2009, 10:168</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="com">#</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="com"># Peter Schmidtke &amp; Xavier Barril &#8220;Understanding and predicting druggability. A high-throughput method </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="com"># Peter Schmidtke &amp; Xavier Barril &#8220;Understanding and predicting druggability. A high-throughput method</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="com"># for detection of drug binding sites.&#8221;, J Med Chem, 2010, 53(15):5858-67</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t"><span class="com">#</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="com"># Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, &#8220;MDpocket: open-source cavity detection </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="com"># Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, &#8220;MDpocket: open-source cavity detection</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="com"># and characterization on molecular dynamics trajectories.&#8221;, Bioinformatics. 2011 Dec 1;27(23):3276-85</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t"><span class="key">from</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span> <span class="key">import</span> <span class="nam">exists</span><span class="op">,</span> <span class="nam">getsize</span><span class="op">,</span> <span class="nam">split</span>&nbsp;</span><span class="r"></span></p>
@@ -613,7 +613,7 @@
             <a class="nav" href="z_a9828aef9944aa3b_rgyr_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
     </div>
 </footer>

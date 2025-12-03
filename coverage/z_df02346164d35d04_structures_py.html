@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_df02346164d35d04_subsets_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1204,8 +1204,8 @@
     <p class="pln"><span class="n"><a id="t1122" href="#t1122">1122</a></span><span class="t">        <span class="str">"""Find fragments in a selection of atoms. A fragment is a selection of</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1123" href="#t1123">1123</a></span><span class="t"><span class="str">        covalently bonded atoms. All atoms are searched if no selection is provided.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1124" href="#t1124">1124</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1125" href="#t1125">1125</a></span><span class="t"><span class="str">        WARNING: Note that fragments generated from a specific selection may not </span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1126" href="#t1126">1126</a></span><span class="t"><span class="str">        match the structure fragments. A selection including 2 separated regions of a </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1125" href="#t1125">1125</a></span><span class="t"><span class="str">        WARNING: Note that fragments generated from a specific selection may not</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1126" href="#t1126">1126</a></span><span class="t"><span class="str">        match the structure fragments. A selection including 2 separated regions of a</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1127" href="#t1127">1127</a></span><span class="t"><span class="str">        structure fragment will yield 2 fragments.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1128" href="#t1128">1128</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1129" href="#t1129">1129</a></span><span class="t"><span class="str">        For convenience, bonds between non-consecutive residues are excluded from this logic.</span>&nbsp;</span><span class="r"></span></p>
@@ -2004,7 +2004,7 @@
     <p class="pln"><span class="n"><a id="t1922" href="#t1922">1922</a></span><span class="t"><span class="str">        Rules are:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1923" href="#t1923">1923</a></span><span class="t"><span class="str">          1. Residues must be protein (i.e. must contain C, CA, N and O atoms) or nucleic (P, OP1, OP2, O3', C3', C4', C5', O5')</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1924" href="#t1924">1924</a></span><span class="t"><span class="str">          2. There must be at least 3 covalently bonded residues</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1925" href="#t1925">1925</a></span><span class="t"><span class="str">    </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1925" href="#t1925">1925</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1926" href="#t1926">1926</a></span><span class="t"><span class="str">        It does not matter their chain, numeration or even index order as long as they are bonded.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1927" href="#t1927">1927</a></span><span class="t"><span class="str">        * Note that we can represent cartoon while we display one residue alone, but it must be connected anyway.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1928" href="#t1928">1928</a></span><span class="t"><span class="str">        Also, we have the option to include terminals in the cartoon selection although they are not representable.</span>&nbsp;</span><span class="r"></span></p>
@@ -2279,7 +2279,7 @@
     <p class="run"><span class="n"><a id="t2197" href="#t2197">2197</a></span><span class="t">    <span class="key">def</span> <span class="nam">set_selection_chain_name</span> <span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">selection</span> <span class="op">:</span> <span class="str">'Selection'</span><span class="op">,</span> <span class="nam">letter</span> <span class="op">:</span> <span class="nam">str</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2198" href="#t2198">2198</a></span><span class="t">        <span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2199" href="#t2199">2199</a></span><span class="t"><span class="str">        Given an atom selection, set the chain for all these atoms.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2200" href="#t2200">2200</a></span><span class="t"><span class="str">        Note that the chain is changed in every whole residue, no </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2200" href="#t2200">2200</a></span><span class="t"><span class="str">        Note that the chain is changed in every whole residue, no</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2201" href="#t2201">2201</a></span><span class="t"><span class="str">        matter if only one atom was selected.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2202" href="#t2202">2202</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2203" href="#t2203">2203</a></span><span class="t">        <span class="com"># Find if the letter belongs to an already existing chain</span>&nbsp;</span><span class="r"></span></p>
@@ -2290,8 +2290,8 @@
     <p class="pln"><span class="n"><a id="t2208" href="#t2208">2208</a></span><span class="t">        <span class="com"># Get the selection residue indices</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2209" href="#t2209">2209</a></span><span class="t">        <span class="nam">selection_residue_indices</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">get_selection_residue_indices</span><span class="op">(</span><span class="nam">selection</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2210" href="#t2210">2210</a></span><span class="t">        <span class="com"># Set the chain index of every residue to the new chain</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2211" href="#t2211">2211</a></span><span class="t">        <span class="com"># WARNING: </span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2212" href="#t2212">2212</a></span><span class="t">        <span class="com">#   This may have to be done atom by atom but we forgot why so we change </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2211" href="#t2211">2211</a></span><span class="t">        <span class="com"># WARNING:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2212" href="#t2212">2212</a></span><span class="t">        <span class="com">#   This may have to be done atom by atom but we forgot why so we change</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2213" href="#t2213">2213</a></span><span class="t">        <span class="com">#   it so see what was the problem. Doing it atom by atom is not efficient</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2214" href="#t2214">2214</a></span><span class="t">        <span class="com">#   and was causing a bug where residues with same number could change their name</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2215" href="#t2215">2215</a></span><span class="t">        <span class="com">#   to that of the first residue found with that number.</span>&nbsp;</span><span class="r"></span></p>
@@ -2325,7 +2325,7 @@
     <p class="pln"><span class="n"><a id="t2243" href="#t2243">2243</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2244" href="#t2244">2244</a></span><span class="t"><span class="str">        Args:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2245" href="#t2245">2245</a></span><span class="t"><span class="str">            anterior (str): The last chain name used, which is expected to be a single letter</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2246" href="#t2246">2246</a></span><span class="t"><span class="str">        </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2246" href="#t2246">2246</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2247" href="#t2247">2247</a></span><span class="t"><span class="str">        Raises:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2248" href="#t2248">2248</a></span><span class="t"><span class="str">            ValueError: If the anterior is not a letter or if there are more chains than available</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2249" href="#t2249">2249</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
@@ -2763,7 +2763,7 @@
     <p class="pln"><span class="n"><a id="t2681" href="#t2681">2681</a></span><span class="t"><span class="str">        Args:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2682" href="#t2682">2682</a></span><span class="t"><span class="str">            fix_atoms (bool): If True, rename repeated atoms.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2683" href="#t2683">2683</a></span><span class="t"><span class="str">            display_summary (bool): If True, display a summary of repeated atoms.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2684" href="#t2684">2684</a></span><span class="t"><span class="str">        </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2684" href="#t2684">2684</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2685" href="#t2685">2685</a></span><span class="t"><span class="str">        Returns:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2686" href="#t2686">2686</a></span><span class="t"><span class="str">            bool: True if there were any repeated atoms, False otherwise.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2687" href="#t2687">2687</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
@@ -2812,8 +2812,8 @@
     <p class="run"><span class="n"><a id="t2730" href="#t2730">2730</a></span><span class="t">        <span class="key">return</span> <span class="nam">any</span><span class="op">(</span><span class="nam">bond</span> <span class="op">==</span> <span class="nam">MISSING_BONDS</span> <span class="key">for</span> <span class="nam">bond</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">bonds</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2731" href="#t2731">2731</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2732" href="#t2732">2732</a></span><span class="t">    <span class="key">def</span> <span class="nam">check_incoherent_bonds</span> <span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2733" href="#t2733">2733</a></span><span class="t">        <span class="str">""" Check bonds to be incoherent i.e. check atoms not to have more or less </span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2734" href="#t2734">2734</a></span><span class="t"><span class="str">        bonds than expected according to their element. </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2733" href="#t2733">2733</a></span><span class="t">        <span class="str">""" Check bonds to be incoherent i.e. check atoms not to have more or less</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2734" href="#t2734">2734</a></span><span class="t"><span class="str">        bonds than expected according to their element.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2735" href="#t2735">2735</a></span><span class="t"><span class="str">        Return True if any incoherent bond is found. """</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2736" href="#t2736">2736</a></span><span class="t">        <span class="com"># Find out if there are hydrogens in the structure</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2737" href="#t2737">2737</a></span><span class="t">        <span class="com"># It may happen that we encounter an structure without hydrogens</span>&nbsp;</span><span class="r"></span></p>
@@ -3061,7 +3061,7 @@
     <p class="run"><span class="n"><a id="t2979" href="#t2979">2979</a></span><span class="t">    <span class="key">return</span> <span class="nam">float</span><span class="op">(</span><span class="nam">np</span><span class="op">.</span><span class="nam">degrees</span><span class="op">(</span><span class="nam">np</span><span class="op">.</span><span class="nam">arctan2</span><span class="op">(</span><span class="nam">y</span><span class="op">,</span> <span class="nam">x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2980" href="#t2980">2980</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2981" href="#t2981">2981</a></span><span class="t"><span class="com"># =========================</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2982" href="#t2982">2982</a></span><span class="t"><span class="com">#    Auxiliar functions </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2982" href="#t2982">2982</a></span><span class="t"><span class="com">#    Auxiliar functions</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2983" href="#t2983">2983</a></span><span class="t"><span class="com"># =========================</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2984" href="#t2984">2984</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2985" href="#t2985">2985</a></span><span class="t"><span class="key">def</span> <span class="nam">get_next_letter</span> <span class="op">(</span><span class="nam">letter</span> <span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -3074,7 +3074,7 @@
     <p class="run"><span class="n"><a id="t2992" href="#t2992">2992</a></span><span class="t">    <span class="key">return</span> <span class="nam">next_letter</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2993" href="#t2993">2993</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2994" href="#t2994">2994</a></span><span class="t"><span class="key">def</span> <span class="nam">first_cap_only</span> <span class="op">(</span><span class="nam">name</span> <span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2995" href="#t2995">2995</a></span><span class="t">    <span class="str">"""Given a string with 1 or 2 characters, return a new string with </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2995" href="#t2995">2995</a></span><span class="t">    <span class="str">"""Given a string with 1 or 2 characters, return a new string with</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2996" href="#t2996">2996</a></span><span class="t"><span class="str">    the first letter cap and the second letter not cap (if any)"""</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2997" href="#t2997">2997</a></span><span class="t">    <span class="key">if</span> <span class="nam">len</span><span class="op">(</span><span class="nam">name</span><span class="op">)</span> <span class="op">==</span> <span class="num">1</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2998" href="#t2998">2998</a></span><span class="t">        <span class="key">return</span> <span class="nam">name</span><span class="op">.</span><span class="nam">upper</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -3134,7 +3134,7 @@
             <a class="nav" href="z_df02346164d35d04_subsets_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
     </div>
 </footer>

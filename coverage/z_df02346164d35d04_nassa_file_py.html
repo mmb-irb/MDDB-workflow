@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_df02346164d35d04_nucleicacid_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -112,7 +112,7 @@
     <p class="pln"><span class="n"><a id="t30" href="#t30">30</a></span><span class="t">        <span class="com"># As the base path of sequences is given, we will search for the sequences in the given path and create a list of them</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t31" href="#t31">31</a></span><span class="t">        <span class="nam">seq_path</span> <span class="op">=</span> <span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">abspath</span><span class="op">(</span><span class="nam">seq_path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t32" href="#t32">32</a></span><span class="t">        <span class="key">for</span> <span class="nam">sequence_file</span> <span class="key">in</span> <span class="nam">os</span><span class="op">.</span><span class="nam">listdir</span><span class="op">(</span><span class="nam">seq_path</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t33" href="#t33">33</a></span><span class="t">            <span class="com"># We assume that the sequences are in fasta format </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t33" href="#t33">33</a></span><span class="t">            <span class="com"># We assume that the sequences are in fasta format</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t34" href="#t34">34</a></span><span class="t">            <span class="com"># AGUS: I think we should allow for other formats as: .seq, .txt</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t35" href="#t35">35</a></span><span class="t">            <span class="key">if</span> <span class="nam">sequence_file</span><span class="op">.</span><span class="nam">endswith</span><span class="op">(</span><span class="str">'.fasta'</span><span class="op">)</span> <span class="key">or</span> <span class="nam">sequence_file</span><span class="op">.</span><span class="nam">endswith</span><span class="op">(</span><span class="str">'.fa'</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t36" href="#t36">36</a></span><span class="t">                <span class="nam">nassa_config</span><span class="op">[</span><span class="str">'sequence_files'</span><span class="op">]</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">str</span><span class="op">(</span><span class="nam">os</span><span class="op">.</span><span class="nam">path</span><span class="op">.</span><span class="nam">join</span><span class="op">(</span><span class="nam">seq_path</span><span class="op">,</span><span class="nam">sequence_file</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -191,7 +191,7 @@
     <p class="mis show_mis"><span class="n"><a id="t109" href="#t109">109</a></span><span class="t">        <span class="nam">nassa_config</span><span class="op">[</span><span class="str">'sequence_files'</span><span class="op">]</span><span class="op">.</span><span class="nam">sort</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t110" href="#t110">110</a></span><span class="t">        <span class="nam">nassa_config</span><span class="op">[</span><span class="str">'sequence_files'</span><span class="op">]</span> <span class="op">=</span> <span class="nam">nassa_config</span><span class="op">[</span><span class="str">'sequence_files'</span><span class="op">]</span><span class="op">[</span><span class="op">:</span><span class="nam">num_archives</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t111" href="#t111">111</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">    <span class="com"># At this point is strange but If something wrong could happen, we will raise an error    </span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">    <span class="com"># At this point is strange but If something wrong could happen, we will raise an error</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">    <span class="key">if</span> <span class="nam">len</span><span class="op">(</span><span class="nam">nassa_config</span><span class="op">[</span><span class="str">'sequence_files'</span><span class="op">]</span><span class="op">)</span> <span class="op">!=</span> <span class="nam">num_archives</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t114" href="#t114">114</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="str">f"Number of sequence files: {len(nassa_config['sequence_files'])}"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t115" href="#t115">115</a></span><span class="t">        <span class="nam">print</span><span class="op">(</span><span class="str">f"Number of coordinate archives: {num_archives}"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -215,7 +215,7 @@
             <a class="nav" href="z_df02346164d35d04_nucleicacid_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
     </div>
 </footer>

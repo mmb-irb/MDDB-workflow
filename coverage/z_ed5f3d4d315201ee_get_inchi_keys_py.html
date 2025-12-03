@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_ed5f3d4d315201ee_get_ligands_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -331,7 +331,7 @@
     <p class="run run2"><span class="n"><a id="t249" href="#t249">249</a></span><span class="t">    <span class="nam">inchikeys</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="str">'InChIKeyData'</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t250" href="#t250">250</a></span><span class="t">    <span class="nam">lipid_references</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">dict</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t251" href="#t251">251</a></span><span class="t">    <span class="nam">ligand_references</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">dict</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t252" href="#t252">252</a></span><span class="t">    <span class="nam">output_filepath</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t252" href="#t252">252</a></span><span class="t">    <span class="nam">output_file</span><span class="op">:</span> <span class="str">'File'</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t253" href="#t253">253</a></span><span class="t"><span class="op">)</span> <span class="op">-></span> <span class="nam">list</span><span class="op">[</span><span class="nam">dict</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t254" href="#t254">254</a></span><span class="t">    <span class="str">"""Generate InChI references for the database."""</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">    <span class="nam">inchikey_references</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -360,12 +360,12 @@
     <p class="run run2"><span class="n"><a id="t278" href="#t278">278</a></span><span class="t">            <span class="com"># 'inchi': ref_inchi,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t279" href="#t279">279</a></span><span class="t">            <span class="com"># 'fragments': res_data.fragments,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t280" href="#t280">280</a></span><span class="t">            <span class="str">'residue_indices'</span><span class="op">:</span> <span class="nam">resindices</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t281" href="#t281">281</a></span><span class="t">            <span class="str">'is_lipid'</span><span class="op">:</span> <span class="nam">inchikey</span> <span class="key">in</span> <span class="nam">ligand_references</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t281" href="#t281">281</a></span><span class="t">            <span class="str">'is_lipid'</span><span class="op">:</span> <span class="nam">inchikey</span> <span class="key">in</span> <span class="nam">lipid_references</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t282" href="#t282">282</a></span><span class="t">            <span class="str">'match'</span><span class="op">:</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t283" href="#t283">283</a></span><span class="t">                <span class="str">'ref'</span><span class="op">:</span> <span class="op">{</span><span class="str">'inchikey'</span><span class="op">:</span> <span class="nam">inchikey</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t284" href="#t284">284</a></span><span class="t">            <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t285" href="#t285">285</a></span><span class="t">        <span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t286" href="#t286">286</a></span><span class="t">    <span class="nam">save_json</span><span class="op">(</span><span class="nam">inchikey_references</span><span class="op">,</span> <span class="nam">output_filepath</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t286" href="#t286">286</a></span><span class="t">    <span class="nam">save_json</span><span class="op">(</span><span class="nam">inchikey_references</span><span class="op">,</span> <span class="nam">output_file</span><span class="op">.</span><span class="nam">path</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t287" href="#t287">287</a></span><span class="t">    <span class="key">return</span> <span class="nam">inchikey_map</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
@@ -376,7 +376,7 @@
             <a class="nav" href="z_ed5f3d4d315201ee_get_ligands_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-11-28 09:56 +0000
+            created at 2025-12-03 18:45 +0000
         </p>
     </div>
 </footer>
