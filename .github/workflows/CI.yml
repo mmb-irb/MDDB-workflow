@@ -8,10 +8,12 @@ on:
     # Only run on changes to the mddb_workflow directory
     paths:
       - 'mddb_workflow/**'
+      - 'envs/environment.yml'
   pull_request:
     branches: [ master ]
     paths:
       - 'mddb_workflow/**'
+      - 'envs/environment.yml'
   # everyday Monday to Saturday at 7am UTC
   schedule:
     - cron: "0 7 * * 1-6"
