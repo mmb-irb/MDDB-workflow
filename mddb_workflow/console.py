@@ -328,10 +328,12 @@ def main():
             dataset.launch_workflow(
                 include_groups=args.include_groups,
                 exclude_groups=args.exclude_groups,
+                n_jobs=args.n_jobs,
                 slurm=args.slurm,
-                job_template=args.job_template
+                job_template=args.job_template,
+                debug=args.debug
             )
-        elif args.dataset_subcommand == 'status':
+        elif args.dataset_subcommand == 'groups':
             dataset.show_groups(cmd=True)
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
@@ -763,10 +765,12 @@ dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=Custom
 help="Run the workflow for a dataset of MDDB projects.",
     parents=[common_parser])
 dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
-dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
-dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
 dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, default=[], help="List of group IDs to be run.")
 dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
+dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
+dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
+dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
+dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")
 
 # Dataset status subcommand
 dataset_status_parser = dataset_subparsers.add_parser("groups", formatter_class=CustomHelpFormatter,
