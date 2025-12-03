@@ -91,7 +91,7 @@ def pca (
 
     # Get eigenvalues
     # Multiply values by 100 since values are in namometers (squared) and we want Ångstroms
-    raw_eigenvalues = pca.explained_variance_
+    raw_eigenvalues = pca.explained_variance_.tolist()
     eigenvalues = [ ev * 100 for ev in raw_eigenvalues ]
     # Get eigenvectors
     raw_eigenvectors = pca.components_
