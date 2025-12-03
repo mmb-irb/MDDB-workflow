@@ -1,21 +1,21 @@
 # Pockets analysis
-# 
-# The pockets analysis is carried by the 'Fpocket' software. Fpocket is a fast open source protein 
+#
+# The pockets analysis is carried by the 'Fpocket' software. Fpocket is a fast open source protein
 # pocket (cavity) detection algorithm based on Voronoi tessellation.
 #
 # The analysis is performed over 100 frames selected along the trajectory. First of all, an 'MDpocket'
-# analysis is run over these frames thus generating an output grid file. This grid contains a measure 
-# of frequency of how many times the pocket was open during the trajectory. The most stable and wide 
-# pockets are selected from this grid and then analyzed again with MDpocket individually. This second 
+# analysis is run over these frames thus generating an output grid file. This grid contains a measure
+# of frequency of how many times the pocket was open during the trajectory. The most stable and wide
+# pockets are selected from this grid and then analyzed again with MDpocket individually. This second
 # run returns dynamic data of the pocket volume and drugability score, among others.
 #
-# Vincent Le Guilloux, Peter Schmidtke and Pierre Tuffery, “Fpocket: An open source platform for ligand 
+# Vincent Le Guilloux, Peter Schmidtke and Pierre Tuffery, “Fpocket: An open source platform for ligand
 # pocket detection”, BMC Bioinformatics 2009, 10:168
 #
-# Peter Schmidtke & Xavier Barril “Understanding and predicting druggability. A high-throughput method 
+# Peter Schmidtke & Xavier Barril “Understanding and predicting druggability. A high-throughput method
 # for detection of drug binding sites.”, J Med Chem, 2010, 53(15):5858-67
 #
-# Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, “MDpocket: open-source cavity detection 
+# Peter Schmldtke, Axel Bidon-Chanal, Javier Luque, Xavier Barril, “MDpocket: open-source cavity detection
 # and characterization on molecular dynamics trajectories.”, Bioinformatics. 2011 Dec 1;27(23):3276-85
 
 from os.path import exists, getsize, split
@@ -53,7 +53,7 @@ def pockets (
     # DANI: Cuando hagamos threading y no haya limite de tamaño para cargar en mongo podremos hacer más pockets
     maximum_pockets_number : int = 10):
     """Perform the pockets analysis."""
-    
+
     # DANI: De momento, no se hacen pockets para simulaciones con residuos en PBC (e.g. membrana)
     # DANI: Esto es debido a que los átomos donde NO queremos que encuentre pockets no se pueden descartar
     # DANI: Descartarlos significa quitarlos, pero si los quitamos entonces podemos encontrar pockets donde están estos átomos
@@ -62,7 +62,7 @@ def pockets (
     if pbc_selection:
         print(' Pockets analysis will be skipped since we have PBC atoms')
         return
-    
+
     # Set output filepaths
     output_analysis_filepath = f'{output_directory}/{OUTPUT_POCKETS_FILENAME}'
 
@@ -75,7 +75,7 @@ def pockets (
         frames_limit,
     )
     # Save the pockets trajectory as a file
-    pockets_trajectory_file = File(pockets_trajectory)    
+    pockets_trajectory_file = File(pockets_trajectory)
 
     # WARNING: There is a silent sharp limit of characters here
     # https://github.com/Discngine/fpocket/issues/130
@@ -173,7 +173,7 @@ def pockets (
         grid_values_pattern = "^([.0-9]+) ([.0-9]+) ([.0-9]+) $"
         # The last line of the grid may have less than 3 values
         last_line_grid_values_pattern_1 = "^([.0-9]+) ([.0-9]+) $"
-        last_line_grid_values_pattern_2 = "^([.0-9]+) $" 
+        last_line_grid_values_pattern_2 = "^([.0-9]+) $"
         for line in file:
             search = re.search(grid_values_pattern, line)
             if (search != None):
@@ -296,7 +296,7 @@ def pockets (
             if value < cuttoff:
                 return False
         return True
-            
+
     # Save also each point coordinates
     for x in range(xl):
         for y in range(yl):
@@ -370,7 +370,7 @@ def pockets (
 
             # Update the logs
             print(f' Analyzing pocket {p}/{pockets_number}', end='\r')
-            
+
             # Create the new grid for this pocket, where all values from other pockets are set to 0
             pocket_value = pock[0]
             new_grid_values = [str(value).ljust(5,'0') if pockets[v] == pocket_value else '0.000' for v, value in enumerate(grid_values)]
@@ -418,7 +418,7 @@ def pockets (
 
             # Write the pdb file
             with open(new_pdb_filename,'w') as file:
-                for line in new_pdb_lines: 
+                for line in new_pdb_lines:
                     file.write(line)
 
             # Run the mdpocket analysis focusing in this specific pocket

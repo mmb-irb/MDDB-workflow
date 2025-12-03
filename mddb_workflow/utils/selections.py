@@ -10,7 +10,7 @@ class Selection:
 
     def __repr__ (self):
         return f'<Selection ({len(self.atom_indices)} atoms)>'
-    
+
     def __hash__ (self):
         return hash(tuple(self.atom_indices))
 
@@ -50,7 +50,7 @@ class Selection:
         unique_atom_indices = list(set( self.atom_indices + other.atom_indices ))
         return Selection(unique_atom_indices)
 
-    # Return a new selection made of self and not other selection atom indices 
+    # Return a new selection made of self and not other selection atom indices
     def substract (self, other : Optional['Selection']) -> 'Selection':
         if not other:
             return self
@@ -78,14 +78,14 @@ class Selection:
         indices = [ index + 1 for index in self.atom_indices ]
         # Make ranges for atoms in a row
         return '@' + ranger(indices)
-    
+
     def to_ngl (self) -> str:
         return '@' + ','.join([ str(index) for index in self.atom_indices ])
-    
+
     def to_list (self) -> list[int]:
         """Return a copy of the atom indices as a list."""
         return self.atom_indices.copy()
-    
+
     # Get a string made of all indexes separated by underscores
     # This string can be then passed as a bash argument and easily parsed by other programms
     # Indices can start from 0 or from 1

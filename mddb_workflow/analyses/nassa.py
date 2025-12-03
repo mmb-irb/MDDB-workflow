@@ -60,12 +60,12 @@ class BasePairCorrelation(Base):
                         crd_data.append(ser)
                     extracted[coord.lower()] = crd_data
                     self.logger.info(f"loaded {len(crd_data)} files for coordinate <{coord}>")
-            
+
         return extracted
 
     def extraer_tetramero_central(hexamero):
                 return hexamero[1:5]
-    
+
     def transform(self, data):
         sequences = data.pop("sequences")
         # iterate over trajectories
@@ -105,7 +105,7 @@ class BasePairCorrelation(Base):
             next_unit_df = pd.DataFrame(
                 {coord: coordinates[coord][idx+2]
                  for coord in coordinates.keys()})
-            crd_corr = self.get_correlation(next_unit_df, unit_df) # inverse order ? 
+            crd_corr = self.get_correlation(next_unit_df, unit_df) # inverse order ?
             coordinate_correlations[f"{subunit}/{next_subunit}"] = crd_corr
         return coordinate_correlations
 
@@ -174,7 +174,7 @@ class BasePairCorrelation(Base):
 
     def make_plots(self, dataset):
         basepair_plot(dataset, "all_basepairs", self.save_path)
-    
+
 # BASE PAIR CONFIRMATION ANALYSIS
 
 class BConformations(Base):
@@ -267,7 +267,7 @@ class BConformations(Base):
             pd.DataFrame(epsilW.T),
             pd.DataFrame(epsilC[::-1].T)],
             axis=1)
-        
+
         # This function was contained in a separated script in the original NASSA code (angle_utils.py)
         def fix_angle_range(x, domain=[0, 360]):
             """Fix angle range so it's in the given angle range (degrees) by adding or subtracting 360.
@@ -558,7 +558,7 @@ class CoordinateDistributions(Base):
             coordinate_df,
             axis=0)
         return coordinate_df
-    
+
     def duplicate_trajectory_iteration(
                 self,
                 coord_dataset,
@@ -571,21 +571,21 @@ class CoordinateDistributions(Base):
             # iterate over subunits
                 start = 2 + sequence.flanksize
                 end = sequence.size - (2 + sequence.baselen + sequence.flanksize - 1)
-                
+
                 for idx in range(start, end):
                     subunit = sequence.get_subunit(idx)
                     ic_subunit = sequence.inverse_complement(subunit)
                     ser = dataseries[idx + 1]
                     ser = ser[~np.isnan(ser)].to_numpy()
-                    
+
                     if subunit in dict_all_subunits_ser:
                         dict_all_subunits_ser[subunit] = np.concatenate((dict_all_subunits_ser[subunit], ser))
                     else:
                         dict_all_subunits_ser[subunit] = ser
-                    
+
                     if ic_subunit not in dict_all_subunits_ser:
                         dict_all_subunits_ser[ic_subunit] = ser
-                    
+
             for subunit, ser in dict_all_subunits_ser.items():
                 ser = ser.reshape(-1, 1)
                 subunit_information = self.subunit_iteration(
@@ -595,7 +595,7 @@ class CoordinateDistributions(Base):
                 if not self.bimod:
                     subunit_information["unimodal"] = True
                 trajectory_info.append(subunit_information)
-                
+
             # create dataframe from list of dictionaries
             trajectory_df = pd.DataFrame.from_dict(trajectory_info)
             return trajectory_df
@@ -759,7 +759,7 @@ class StiffnessDistributions(Base):
         self.logger.info(f"loaded {len(sequences)} sequences")
         # In this case the selection of coordinates is different, it depends on the length of the unit (par or impar)
         if (self.unit_len % 2) == 0:
-            stiff_coordiantes = NASSA_ANALYSES_CANALS['bpcorr'] 
+            stiff_coordiantes = NASSA_ANALYSES_CANALS['bpcorr']
         elif (self.unit_len % 2) == 1:
             stiff_coordiantes = NASSA_ANALYSES_CANALS['stiff']
         for stiff_coord in stiff_coordiantes:
@@ -869,7 +869,7 @@ class StiffnessDistributions(Base):
             last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av, CW_av, CC_av]
             stiff = np.append(stiff, last_row).reshape(9, 8)
             scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
-        
+
         stiff = stiff.round(6)
         stiff_diag = np.diagonal(stiff) * np.array(scaling)
 
@@ -943,9 +943,9 @@ class StiffnessDistributions(Base):
                 unit_name=self.unit_name,
                 unit_len=self.unit_len)
 
-# Run the NASSA analysis pipeline giving the name of the analysis and the configuration file. 
+# Run the NASSA analysis pipeline giving the name of the analysis and the configuration file.
 # The overwrite flag could be used to overwrite the output folder if it already exists.
-def run_nassa(analysis_name: str, 
+def run_nassa(analysis_name: str,
               config_archive: dict,
               overwrite_nassa: bool = False):
     """Run the NASSA analysis pipeline"""
@@ -984,13 +984,13 @@ def run_nassa(analysis_name: str,
                 coordinate_files = NASSA_ANALYSES_CANALS["bpcorr"]
             elif (unit_len % 2) == 1:
                 coordinate_files = NASSA_ANALYSES_CANALS["stiff"]
-        # The rest of the analyses have their corresponding coordinate files 
+        # The rest of the analyses have their corresponding coordinate files
         else:
             coordinate_files = NASSA_ANALYSES_CANALS[analysis_name]
         # The coordinate files are filtered from the configuration archive because we only need the ones that correspond to the analysis
         config_archive["coordinate_info"] = {
             coord: config_archive["coordinate_info"][coord] for coord in coordinate_files}
-        # Call the analysis class with the configuration archive and run NASSA software 
+        # Call the analysis class with the configuration archive and run NASSA software
         analysis_instance = analysis_class(**config_archive)
         analysis_instance.run()
     # If the analysis name is not valid, an error is raised
@@ -999,12 +999,12 @@ def run_nassa(analysis_name: str,
             f"{analysis_name} is not a valid analysis! "
             "Please choose from: "
             f"{list(analyses.keys())}")
-    
+
 
 def workflow_nassa(
-    config_file_path: Optional[str], 
-    analysis_names: Optional[list[str]], 
-    make_config: bool = False, 
+    config_file_path: Optional[str],
+    analysis_names: Optional[list[str]],
+    make_config: bool = False,
     output: Optional[list[str]] = None,
     working_directory: str = '.',
     overwrite: bool = False,
@@ -1047,19 +1047,19 @@ def workflow_nassa(
             # Call the workflow function to run the helical parameters analysis with the include flag set to helical and overwrite (if it is added)
             workflow(project_parameters={#'directory':os.getcwd(),
                                          #'md_directories':[os.getcwd()],
-                                         #'input_structure_filepath':input_structure_file, 
-                                         'input_topology_filepath':input_top_file, 
+                                         #'input_structure_filepath':input_structure_file,
+                                         'input_topology_filepath':input_top_file,
                                          'input_trajectory_filepaths':input_trajectory_file,
                                          'md_directories': md_directories,
                                          'trust': trust,
                                          'mercy': mercy
-                                         }, 
-                     include=['helical'], 
+                                         },
+                     include=['helical'],
                      overwrite=overwrite
                      )
             os.chdir('..')
         # If all flag is selected, the NASSA analysis will be run after the helical parameters analysis
-        # Reminder: the NASSA analysis needs the helical parameters files to be generated before running it. 
+        # Reminder: the NASSA analysis needs the helical parameters files to be generated before running it.
         if all:
             # The sequences path is needed to run the NASSA analysis so it has to be defined
             if seq_path == None:
@@ -1068,7 +1068,7 @@ def workflow_nassa(
             # If the output folder already exists, it is checked so that it can be overwritten with te overwrite_nassa flag
             if not os.path.exists(output_nassa_analysis):
                 os.mkdir(output_nassa_analysis)
-            else:   
+            else:
                 if overwrite_nassa == True:
                     print(f'WARNING: Output folder {output_nassa_analysis} already exists. Overwriting it.')
                 else:
@@ -1095,10 +1095,10 @@ def workflow_nassa(
                                 ymlfile, Loader=yaml.FullLoader)
                     except FileNotFoundError:
                         raise FileNotFoundError(
-                            f"Configuration file {config_file_path} not found!")      
+                            f"Configuration file {config_file_path} not found!")
                     # Run the NASSA analysis with the selected analysis
-                    run_nassa(analysis_name=analysis_name, 
-                            config_archive=config_archive, 
+                    run_nassa(analysis_name=analysis_name,
+                            config_archive=config_archive,
                             overwrite_nassa=overwrite_nassa)
                 print(f'NASSA analysis completed at {output_nassa_analysis}')
                 return
@@ -1112,10 +1112,10 @@ def workflow_nassa(
                             ymlfile, Loader=yaml.FullLoader)
                 except FileNotFoundError:
                     raise FileNotFoundError(
-                        f"Configuration file {config_file_path} not found!")   
-                # Run the NASSA analysis with the selected analysis   
-                run_nassa(analysis_name=analysis_name, 
-                          config_archive=config_archive, 
+                        f"Configuration file {config_file_path} not found!")
+                # Run the NASSA analysis with the selected analysis
+                run_nassa(analysis_name=analysis_name,
+                          config_archive=config_archive,
                           overwrite_nassa=overwrite_nassa)
             print(f'NASSA analysis completed at {output_nassa_analysis}')
             return
@@ -1131,7 +1131,7 @@ def workflow_nassa(
                     ymlfile, Loader=yaml.FullLoader)
         except FileNotFoundError:
             raise FileNotFoundError(
-                f"Configuration file {config_file_path} not found!")   
+                f"Configuration file {config_file_path} not found!")
         # The user can select the analysis to run
         for analysis_name in analysis_names:
             # THe output folder is defined in the configuration file
@@ -1144,8 +1144,8 @@ def workflow_nassa(
                     config_archive['save_path'] = output_path
                 else:
                     raise InputError('No output path defined. Please define it in the configuration file or pass it as an argument (--output)')
-            
-            # To check if the user has created the configuration file with the needed information 
+
+            # To check if the user has created the configuration file with the needed information
             # it's important to check if the needed files are defined for the analysis selected
             canal_files_config = config_archive['coordinate_info']
             needed_files = NASSA_ANALYSES_CANALS[analysis_name]
@@ -1153,7 +1153,7 @@ def workflow_nassa(
                 # If some of the files needed are not in the config file, raise an error because it is needed
                 if file not in canal_files_config:
                     raise InputError(f'Analysis {analysis_name} requires the files of {file} coordinate to be defined in the configuration file')
-            
+
             # The check for the output folder is done here
             if os.path.exists(output_path):
                 if os.listdir(output_path) == [] or overwrite_nassa == True:
@@ -1168,7 +1168,7 @@ def workflow_nassa(
                 run_nassa(analysis_name, config_archive, overwrite_nassa)
     if all:
         for analysis_name in NASSA_ANALYSES_CANALS.keys():
-            print(f"{GREEN_HEADER} |-----> Running analysis {analysis_name}{COLOR_END}")  
+            print(f"{GREEN_HEADER} |-----> Running analysis {analysis_name}{COLOR_END}")
             # Read the configuration file
             try:
                 with Path(config_file_path).open("r") as ymlfile:
@@ -1176,7 +1176,7 @@ def workflow_nassa(
                         ymlfile, Loader=yaml.FullLoader)
             except FileNotFoundError:
                 raise FileNotFoundError(
-                    f"Configuration file {config_file_path} not found!")   
+                    f"Configuration file {config_file_path} not found!")
             # Override nassa.yml output path if defined in the command line
             if output is not None:
                 output_path = os.path.join(output, 'nassa_analysis')
@@ -1191,7 +1191,7 @@ def workflow_nassa(
                 os.makedirs(os.path.join(output_path, analysis_name))
             #     config_archive['save_path'] = os.path.join(output_path, analysis_name)
             # Run the NASSA analysis with the selected analysis
-            run_nassa(analysis_name=analysis_name, 
-                        config_archive=config_archive, 
+            run_nassa(analysis_name=analysis_name,
+                        config_archive=config_archive,
                         overwrite_nassa=overwrite_nassa)
             print(f'NASSA analysis completed at {current_directory_name}')

@@ -23,7 +23,7 @@ for accession in projects:
         parsed_response = json.loads(response.read())
     except:
         raise Exception('EFE')
-    
+
     # Log the project title
     title = parsed_response["metadata"]["NAME"]
     print(f'{accession} -> {title}')

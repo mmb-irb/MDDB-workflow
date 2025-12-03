@@ -53,12 +53,12 @@ class FileHandler(Operations):
         # Check if Content-Length header exists
         size = int(response.headers.get('Content-Length', 0))
         return size
-        
+
     def _fetch_file_content(self):
         """Fetch content from remote API."""
         self._response = requests.get(self.url)
         self._response.raise_for_status()
-    
+
     # Attribute keys
     # Got from https://github.com/skorokithakis/python-fuse-sample/blob/master/passthrough.py
     stat_keys = 'st_atime', 'st_ctime', 'st_mtime', 'st_gid', 'st_uid', 'st_mode', 'st_nlink', 'st_size'
@@ -101,11 +101,11 @@ class FileHandler(Operations):
             self._fetch_file_content()
         # Return a file descriptor (dummy in this case)
         return 0
-    
+
     # Read length is set automatically by FUSE
     # This length is calculated from the getattr 'st_size' value
     # However the length is not the exact value of st_size, but the first multiple of 4096 which exceeds its value
-    # Also length has a maximum value: 131072, experimentally observed 
+    # Also length has a maximum value: 131072, experimentally observed
     # When the maximum value is not enought to cover the length the read function is called several times
     # Each time with different offset value
     def read (self, path : str, length : int, offset : int, fh : int) -> str:
@@ -125,7 +125,7 @@ class FileHandler(Operations):
     lock = None
     # Note the FUSE will complain for several functions to be not implemented when trying to write in the file
     # User should never try to write this file so these cases are not handled
-    
+
 # Mount a fake file which returns an url content when read
 def mount (url : str, mountpoint : str):
     # Create a fake file to be opened in case it does not exists yet

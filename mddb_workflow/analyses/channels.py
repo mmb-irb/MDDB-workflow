@@ -6,20 +6,22 @@ from mddb_workflow.utils.type_hints import *
 import re
 import numpy as np
 
-def channels (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
+
+def channels(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
     membrane_map: dict,
     snapshots: int,
-    frames_limit: int):
-
+    frames_limit: int
+):
+    """Analyze channels in a membrane protein using MDAnalysis' mda_hole."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping channels analysis')
         return
-    
+
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-    
+
     prop = {
         'select': 'protein',
         'steps': frame_step,
@@ -31,11 +33,11 @@ def channels (
 
     mda_hole(input_top_path=structure_file.path,
             input_traj_path=trajectory_file.path,
-            output_hole_path=output_directory+'/hole.vmd',
-            output_csv_path=output_directory+'/mda.hole_profile.csv',
+            output_hole_path=output_directory + '/hole.vmd',
+            output_csv_path=output_directory + '/mda.hole_profile.csv',
             properties=prop)
-    
-    with open(output_directory+'/hole.vmd', 'r') as f:
+
+    with open(output_directory + '/hole.vmd', 'r') as f:
         lines = f.readlines()
 
     # Find lines with triangle coordinates
@@ -54,12 +56,12 @@ def channels (
     data = {}
     for frame in range(frame_count):
         poss = []
-        cols = [0,0,0]
+        cols = [0, 0, 0]
         z_range = 0
-        for i in range(3): # RGB
+        for i in range(3):  # RGB
             # Get triangle coordinates for this frame and color
             # Red are low radiues, green medium, blue high
-            trinorms_cl = np.array(trinorms[frame][i]) # (N, 6, 3) # 6: 3 positions + 3 normals, 3: vertex
+            trinorms_cl = np.array(trinorms[frame][i])  # (N, 6, 3) # 6: 3 positions + 3 normals, 3: vertex
             if len(trinorms_cl) == 0:
                 continue
             pos = trinorms_cl[:, :3, :]

@@ -228,15 +228,15 @@ def prepare_project_metadata (
 
         if cv19_variant is not None:
             metadata['CV19_VARIANT'] = cv19_variant
-    
+
     # Write metadata to a file
     save_json(metadata, output_file.path)
 
 metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
-    'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES', 
+    'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES',
     'REFERENCES', 'INPUT_LIGANDS', 'LIGANDS', 'LIGANDNAMES', 'PROTSEQ', 'NUCLSEQ', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
     'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'SYSTATS', 'PROTATS', 'PROT', 'DPPC', 'SOL', 'NA', 'CL',
-    'INTERACTIONS', 'PBC_SELECTION', 'CHAINNAMES', 'MEMBRANES', 'CUSTOMS', 'ORIENTATION', 'PTM', 
+    'INTERACTIONS', 'PBC_SELECTION', 'CHAINNAMES', 'MEMBRANES', 'CUSTOMS', 'ORIENTATION', 'PTM',
     'MULTIMERIC', 'COLLECTIONS', 'WARNINGS', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'CV19_UNIT', 'CV19_STARTCONF',
     'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
 ])
@@ -254,7 +254,7 @@ def generate_md_metadata (
     # Mine name and directory from MD inputs
     name = md_inputs.get('name', None)
     directory = md_inputs.get(MD_DIRECTORY, None)
-    
+
     # Write the metadata file
     md_metadata = {
         'name': name,

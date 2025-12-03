@@ -13,7 +13,7 @@ from mddb_workflow.utils.type_hints import *
 # Set analysis version
 CHAINS_VERSION = '0.1'
 
-# Get the sequence and name of the chain in the structure and request the InterProScan 
+# Get the sequence and name of the chain in the structure and request the InterProScan
 def request_interpsocan (sequence : str) -> str:
     # Set the request URL
     request_url = 'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/run'
@@ -39,7 +39,7 @@ def request_interpsocan (sequence : str) -> str:
 # Check the status of the InterProScan job
 def check_interproscan_status (jobid : str) -> str:
     # Set the request URL
-    request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/status/{jobid}'   
+    request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/status/{jobid}'
     parsed_response = None
     try:
         with urlopen(request_url) as response:
@@ -56,7 +56,7 @@ def check_interproscan_status (jobid : str) -> str:
 # Obtain the result of the InterProScan job in json format
 def check_interproscan_result (jobid : str) -> dict:
     # Set the request URL
-    request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{jobid}/json'   
+    request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{jobid}/json'
     parsed_response = None
     try:
         with urlopen(request_url) as response:
@@ -124,7 +124,7 @@ def prepare_chain_references (
     protein_sequences = set([ chain['sequence'] for chain in protein_parsed_chains ])
 
     print(f' Found {len(protein_parsed_chains)} protein chains with {len(protein_sequences)} unique sequences')
-        
+
     # Save data from all chains to be saved in a file
     chains_data = []
     # Load the chains file if exists already
@@ -162,7 +162,7 @@ def prepare_chain_references (
             interproscan_jobid = request_interpsocan(sequence)
             interproscan_jobids[sequence] = interproscan_jobid
 
-    # Get the pending interpsocan jobids 
+    # Get the pending interpsocan jobids
     pending_jobids = list(interproscan_jobids.values())
 
     # If we already have the results of all the chains then we can skip the next steps
@@ -185,7 +185,7 @@ def get_interproscan_results (
     TIMEOUT = 300  # 5 min (seg)
     start_time = time.time()
     # Iterate over the jobids to check the status and get the results
-    # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list 
+    # If the status is 'FINISHED' then we can get the results and eliminate the jobid from the list
     # until there are no more jobids in either list
     while len(pending_jobids) >= 1:
         if time.time() - start_time > TIMEOUT:

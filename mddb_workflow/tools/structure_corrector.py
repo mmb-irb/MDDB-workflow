@@ -10,25 +10,24 @@ from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.type_hints import *
 
 
-def structure_corrector (
+def structure_corrector(
     # Note that this is an early provisional structure
-    structure : 'Structure',
-    input_trajectory_file : Optional['File'],
-    input_topology_file : Union['File', Exception],
-    output_structure_file : 'File',
-    output_trajectory_file : Optional['File'],
-    MD : 'MD',
+    structure: 'Structure',
+    input_trajectory_file: Optional['File'],
+    input_topology_file: Union['File', Exception],
+    output_structure_file: 'File',
+    output_trajectory_file: Optional['File'],
+    MD: 'MD',
     # Note that this is an early provisional atom selection
-    pbc_selection : 'Selection',
-    snapshots : int,
-    register : 'Register',
-    mercy : list[str],
-    trust : list[str],
-    guess_bonds : bool,
-    ignore_bonds : bool,
+    pbc_selection: 'Selection',
+    snapshots: int,
+    register: 'Register',
+    mercy: list[str],
+    trust: list[str],
+    guess_bonds: bool,
+    ignore_bonds: bool,
 ) -> dict:
-    """
-    Analyze the structure looking for irregularities and then modify the structure to standarize the format.
+    """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
 
     Supported cases:
 
@@ -48,8 +47,8 @@ def structure_corrector (
     Note that the 'trust' flag may be passed for critical checkings to skip them.
 
     This function also sets some values in the passed MD.
-    """
 
+    """
     # Write the inital output structure file which will be overwritten several times further
     print(' The structure file has been copied -> ' + output_structure_file.filename)
     structure.generate_pdb_file(output_structure_file.path)
@@ -94,7 +93,7 @@ def structure_corrector (
     if missing_any_bonds: must_check_stable_bonds = False
 
     # If safe bonds do not match structure bonds then we have to fix it
-    def check_stable_bonds ():
+    def check_stable_bonds():
         # Save the current structure bonds to further compare with the safe bonds
         current_bonds = structure.bonds
         # Now force safe bonds in the structure even if they "match" already
@@ -116,12 +115,12 @@ def structure_corrector (
         print(' They are wrong')
         # Find the first frame in the whole trajectory where safe bonds are respected
         bonds_reference_frame = get_bonds_reference_frame(
-            structure_file = output_structure_file,
-            trajectory_file = input_trajectory_file,
-            snapshots = snapshots,
-            reference_bonds = safe_bonds,
-            structure = structure,
-            pbc_selection = pbc_selection
+            structure_file=output_structure_file,
+            trajectory_file=input_trajectory_file,
+            snapshots=snapshots,
+            reference_bonds=safe_bonds,
+            structure=structure,
+            pbc_selection=pbc_selection
         )
         # Update the task output so it does not have to be repeated further
         # IMPORTANT: Note that this is not always run, but only when default structure bonds are wrong
@@ -191,8 +190,8 @@ def structure_corrector (
         if len(fragments) == 1: raise RuntimeError('Test failed but should not')
         warn(f'Multiple fragments in residue {residue.index}: {residue}')
         for f, fragment in enumerate(fragments, 1):
-            fragment_atoms = [ structure.atoms[index] for index in fragment.atom_indices ]
-            atom_names = [ atom.label for atom in fragment_atoms ]
+            fragment_atoms = [structure.atoms[index] for index in fragment.atom_indices]
+            atom_names = [atom.label for atom in fragment_atoms]
             print(f' Fragment {f}: {", ".join(atom_names)}')
         raise TestFailure(f'Residue {residue.index}: {residue} is not coherent: some atoms are disconnected')
 
@@ -205,7 +204,7 @@ def structure_corrector (
     if missing_any_bonds: must_check_coherent_bonds = False
 
     # If this analysis has been already passed then we skip the process
-    if register.tests.get(COHERENT_BONDS_FLAG, None) == True:
+    if register.tests.get(COHERENT_BONDS_FLAG, None) is True:
         must_check_stable_bonds = False
 
     # Run the coherent bonds analysis if necessary
@@ -250,11 +249,11 @@ def structure_corrector (
         # Note that atoms with no chain are not a problem for the workflow but they are for the web client
         unlettered_chain = next((chain for chain in chains if chain.name == ' '), None)
         if unlettered_chain:
-            current_letters = set([ chain.name for chain in chains ])
+            current_letters = set([chain.name for chain in chains])
             new_letter = get_new_letter(current_letters)
             # If we run out of letters there may be some problematic chain configuration
             # In this cases we cannot respect the original chains
-            if new_letter == None:
+            if new_letter is None:
                 warn('No more letters in the alphabet to fill missing chains -> All chains will be assigned from scratch')
                 # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
                 # Note that we rely in fragments (and thus in bonds) to guess chains
@@ -277,7 +276,7 @@ def structure_corrector (
     # This will only happen if chains were missing and guessed
     # This may mean there is something wrong in the structure
     # Check fragments with the VMD and searh for wrong bonds
-    if structure.check_splitted_chains(fix_chains = True, display_summary = True):
+    if structure.check_splitted_chains(fix_chains=True, display_summary=True):
         # Update the structure file using the corrected structure
         print(' The structure file has been modified (splitted chains) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
@@ -362,7 +361,7 @@ def structure_corrector (
     # NEVER FORGET: Merged residues may be generated when calling the structure.auto_chainer
     # Note that we need bonds to check for merged residues
     # If bonds are missing then we skip this check
-    if not missing_any_bonds and structure.check_merged_residues(fix_residues = True, display_summary = True):
+    if not missing_any_bonds and structure.check_merged_residues(fix_residues=True, display_summary=True):
         # Update the structure file using the corrected structure
         print(' The structure file has been modified (merged residues) -> ' + output_structure_file.filename)
         structure.generate_pdb_file(output_structure_file.path)
@@ -389,7 +388,7 @@ def structure_corrector (
             # DANI: Esto no se prueba desde hace tiempo y ha sufrido cambios
             # DANI: Debería funcionar pero puede tener algun bug
             charges = get_charges(input_topology_file)
-            resorted_charges = [ charges[index] for index in structure.new_atom_order ]
+            resorted_charges = [charges[index] for index in structure.new_atom_order]
             MD.project.get_charges.prefill(MD.project, resorted_charges, {
                 'topology_file': input_topology_file
             })

@@ -81,7 +81,7 @@ def get_most_stable_bonds (
 
     # Get each frame in pdb format to run VMD
     print('Finding most stable bonds')
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath, 
+    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath,
                                          snapshots, frames_limit, pbar_bool=True)
 
     # Track bonds along frames

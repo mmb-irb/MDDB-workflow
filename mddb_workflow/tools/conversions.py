@@ -69,7 +69,7 @@ def convert (
     input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
     if len(input_trajectory_formats) > 1:
         raise InputError('Input trajectories must have the same format')
-        
+
     # Get the first trajectory as a sample for those processes which do not require the whole trajectory
     trajectory_sample = input_trajectory_files[0] if len(input_trajectory_files) > 0 else File(None)
 

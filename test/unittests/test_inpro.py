@@ -9,10 +9,12 @@ data_dir = pathlib.Path(__file__).parent.parent/'data'
 dummy_dir = data_dir/'input/dummy'
 test_fld = data_dir/'output/test_inpro'
 
+
 def regenerate_test_fld():
     # Remove old test and copy files
     shutil.rmtree(test_fld, ignore_errors=True)
     test_fld.mkdir(parents=True, exist_ok=True)
+
 
 def test_amber_prmtop_nc():
     regenerate_test_fld()
@@ -30,6 +32,7 @@ def test_amber_prmtop_nc():
                     md_directories=['replica_1'])
     md = project.mds[0]
     md.input_files_processing(md)
+
 
 def test_amber_top_nc():
     regenerate_test_fld()

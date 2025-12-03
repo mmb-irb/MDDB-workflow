@@ -7,15 +7,15 @@ from mddb_workflow.utils.auxiliar import save_json, mean
 from mddb_workflow.utils.constants import OUTPUT_DIHEDRAL_ENERGIES_FILENAME
 
 
-def compute_dihedral_energies (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
-    dihedrals : list[dict],
-    snapshots : int,
-    frames_limit : int,
+def compute_dihedral_energies(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
+    dihedrals: list[dict],
+    snapshots: int,
+    frames_limit: int,
 ):
-    """ Calculate torsions and then dihedral energies for every dihedral along the trajectory. """
+    """Calculate torsions and then dihedral energies for every dihedral along the trajectory."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_DIHEDRAL_ENERGIES_FILENAME}'
 
@@ -40,7 +40,7 @@ def compute_dihedral_energies (
 
     # MDtraj is prepared to analyze all dihedrals at once
     # To do so, prepare a list with every group of atoms conforming a dihedral
-    dihedral_atom_indices = [ data['atom_indices'] for data in dihedrals ]
+    dihedral_atom_indices = [data['atom_indices'] for data in dihedrals]
 
     # Compute dihedral torsions using MDtraj
     trajectory_torsions = mdt.compute_dihedrals(traj, dihedral_atom_indices)
@@ -72,11 +72,11 @@ def compute_dihedral_energies (
     # Now calculate non covalent energies
     # These energies are always computed between atoms 1-4 in the dihedral
     # i.e. atoms in both ends
-    dihedral_1_4_indices = [ [ data['atom_indices'][0], data['atom_indices'][3] ] for data in dihedrals ]
+    dihedral_1_4_indices = [[data['atom_indices'][0], data['atom_indices'][3]] for data in dihedrals]
 
     # Compute atom distance along the trajectory using MDtraj
     trajectory_distances = mdt.compute_distances(traj, dihedral_1_4_indices)
-            
+
     # Results are returned by frame
     # Iterate frames and calculate dihedral energies for each frame
     for frame_distances in trajectory_distances:
@@ -99,7 +99,7 @@ def compute_dihedral_energies (
             # Calculate the dihedral electrostatic energy according to the formula
             ee_energy = (1/scee) * (q1 * q4) / r14
             # Calculate the dihedral Var Der Waals energy according to the formula
-            vdw_energy = (1/scnb) * (( acoef / (r14 ** 12) ) - ( bcoef / (r14 ** 6) ))
+            vdw_energy = (1/scnb) * ((acoef / (r14 ** 12)) - (bcoef / (r14 ** 6)))
             # Add non covalent energies to the dihedral energies object
             atom_indices = dihedral_data['atom_indices']
             dihedral_energies[atom_indices]['ee'].append(ee_energy)

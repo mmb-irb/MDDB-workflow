@@ -13,7 +13,7 @@ from mddb_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 
 
 def run_gromacs(
-    command : str, 
+    command : str,
     user_input : Optional[str] = None,
     expected_output_filepath : Optional[str] = 'auto',
     show_output_logs : bool = False,
@@ -46,7 +46,7 @@ def run_gromacs(
     process = run([ GROMACS_EXECUTABLE, *command.split(), '-quiet' ],
         stdin = user_input_process.stdout if user_input else None,
         stdout = PIPE, stderr = PIPE if not show_error_logs else None)
-    
+
     # If error is to be shown the color it in grey
     # This is usually used to see progress logs
     if show_error_logs: print(GREY_HEADER, end='\r')
@@ -86,7 +86,7 @@ def run_gromacs(
             final_command = f'{GROMACS_EXECUTABLE} {command}'
             if user_input: final_command += f' (with user input "{user_input}")'
             raise ToolError(f'Something went wrong with Gromacs while running "{GROMACS_EXECUTABLE} {command}"')
-    
+
     # If all was good then show final logs but only if it was requested
     if show_output_logs: print(output_logs)
 

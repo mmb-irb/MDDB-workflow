@@ -7,13 +7,14 @@ import MDAnalysis
 
 
 def lipid_order(
-        universe: 'MDAnalysis.Universe',
-        output_directory: str,
-        membrane_map: dict,
-        inchikey_map: list[dict],
-        cg_residues: list[int],
-        snapshots: int,
-        frames_limit: int = 100):
+    universe: 'MDAnalysis.Universe',
+    output_directory: str,
+    membrane_map: dict,
+    inchikey_map: list[dict],
+    cg_residues: list[int],
+    snapshots: int,
+    frames_limit: int = 100
+):
     """Calculate lipid order parameters for membranes.
     This function computes the order parameter (S) for lipid acyl chains, defined as:
     S = 0.5*(3*<cos²θ> - 1)

@@ -65,7 +65,7 @@ def get_axes(subunit_len, base):
 
 def reorder_labels_rotated_plot(df, subunit_name, tetramer_order):
     '''For the rotated plot: reorder the nucleotides labels matching them to their according values of the dataframe. '''
-    
+
     if subunit_name == 'tetramer':
         sorted_index = dict(zip(tetramer_order, range(len(tetramer_order))))
         df["subunit_rank"] = df[subunit_name].map(sorted_index)
@@ -77,8 +77,8 @@ def reorder_labels_rotated_plot(df, subunit_name, tetramer_order):
     all_tetramers = pd.DataFrame({subunit_name: ["".join(tetramer) for tetramer in tetramer_order]})
     merged_df = pd.merge(all_tetramers, df, on=subunit_name, how='left')
     merged_df['subunit_rank'] = merged_df[subunit_name].map(lambda x: tetramer_order.index(x) if not pd.isna(x) else np.nan)
-    merged_df = merged_df.sort_values(by='subunit_rank').reset_index(drop=True) 
-    
+    merged_df = merged_df.sort_values(by='subunit_rank').reset_index(drop=True)
+
     if subunit_name == 'hexamer':
         centre= len(merged_df[subunit_name][1])//2
         merged_df['yaxis'] = merged_df[subunit_name].apply(lambda x: x[:centre-2]+"...."+x[centre+2:])
@@ -121,7 +121,7 @@ def reorder_labels_rotated_plot(df, subunit_name, tetramer_order):
         for nucl in yaxiss:
             if nucl not in yaxis1:
                 yaxis1.append(nucl)
-        df1 = merged_df    
+        df1 = merged_df
 
     # if subunit_name == 'pentamer':
     #     centre= len(merged_df[subunit_name][1])%2
@@ -143,7 +143,7 @@ def reorder_labels_rotated_plot(df, subunit_name, tetramer_order):
     #     for nucl in yaxiss:
     #         if nucl not in yaxis1:
     #             yaxis1.append(nucl)
-    #     df1 = merged_df   
+    #     df1 = merged_df
 
     return df1, xaxis1, yaxis1
 
@@ -161,8 +161,8 @@ def reorder_labels_straight_plot(df, subunit_name, tetramer_order):
     all_tetramers = pd.DataFrame({subunit_name: ["".join(tetramer) for tetramer in tetramer_order]})
     merged_df = pd.merge(all_tetramers, df, on=subunit_name, how='left')
     merged_df['subunit_rank'] = merged_df[subunit_name].map(lambda x: tetramer_order.index(x) if not pd.isna(x) else np.nan)
-    merged_df = merged_df.sort_values(by='subunit_rank').reset_index(drop=True) 
-    
+    merged_df = merged_df.sort_values(by='subunit_rank').reset_index(drop=True)
+
     if subunit_name == 'hexamer':
         centre= len(merged_df[subunit_name][1])//2
         merged_df['yaxis'] = merged_df[subunit_name].apply(lambda x: x[:centre-1] + "_" + x[centre+1:])
@@ -242,20 +242,20 @@ def arlequin_plot(
         unit_len,
         base,
         label_offset=0.5):
-    
+
     xaxis, yaxis, tetramer_order = get_axes(unit_len, base)
     df, xaxis, yaxis = reorder_labels_straight_plot(df, unit_name, tetramer_order)
     df1, xaxis1, yaxis1 = reorder_labels_rotated_plot(df, unit_name, tetramer_order)
 
     sz1 = df["col1"].ravel()
     sz2 = df["col2"].ravel()
- 
+
     if unit_name == 'hexamer':
         M = 4**2
         N = 4**(unit_len - 2)
         M_1 = 4 ** (unit_len - 2)
         N_1 = 4 ** 2
-    
+
     if unit_name == 'pentamer':
         M = 4 * 4
         N = 4 ** 3
@@ -263,7 +263,7 @@ def arlequin_plot(
         N_1 = 4 * 4
 
     # STRAIGHT PLOT
-    
+
     x = np.arange(M + 1)
     y = np.arange(N + 1)
     xs, ys = np.meshgrid(x, y)
@@ -276,7 +276,7 @@ def arlequin_plot(
     triang2 = Triangulation(xs.ravel(), ys.ravel(), lower_triangle)
 
     fig, axs = plt.subplots(
-        1,      
+        1,
         1,
         figsize=(8,18),
         dpi=300,
@@ -328,9 +328,9 @@ def arlequin_plot(
     triang2_1 = Triangulation(xs_1.ravel(), ys_1.ravel(), lower_triangle_1)
 
     fig_1, axs_1 = plt.subplots(
-        1,      
         1,
-        figsize=(22, 6), 
+        1,
+        figsize=(22, 6),
         dpi=300,
         tight_layout=True)
 
@@ -361,7 +361,7 @@ def arlequin_plot(
 
     file_path1 = pathlib.Path(save_path) / f"{helpar}_rotated.pdf"
     fig_1.savefig(fname=file_path1, format="pdf")
-    return fig, axs, fig_1, axs_1 
+    return fig, axs, fig_1, axs_1
 
 
 def bconf_heatmap(df, fname, save_path, subunit_len, base="T", label_offset=0.05):
@@ -453,12 +453,12 @@ def bconf_heatmap(df, fname, save_path, subunit_len, base="T", label_offset=0.05
             columns=["hexamer"])
         df = df.merge(tetramer_order, how="right", on="hexamer")
         fig, ax = plt.subplots(
-            1,      
             1,
-            figsize=(22, 12), 
+            1,
+            figsize=(22, 12),
             dpi=300,
             tight_layout=True)
-    
+
     colormap = ListedColormap([
         "darkblue",
         "blue",
@@ -588,7 +588,7 @@ def basepair_plot(
 
     category = data.index.to_series().apply(lambda s: s[0:4])
     data["category"] = category
-    
+
     for cat in category.unique():
         cat_df = data[data["category"] == cat]
         cat_df = cat_df.drop("category", axis=1)
@@ -610,7 +610,7 @@ def basepair_plot(
         ylocs = np.arange(len(cat_df.index))
         _ = ax.set_yticks(ylocs)
         _ = ax.set_yticklabels(cat_df.index.to_list(),fontsize=4)
-        
+
         ax.set_title(
             f"Correlation for basepair group {cat}")
         plt.tight_layout()

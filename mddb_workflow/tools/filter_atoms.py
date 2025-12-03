@@ -41,7 +41,7 @@ def filter_atoms (
     # Parse the selection to be filtered
     # WARNING: Note that the structure is not corrected at this point and there may be limitations
     parsed_filter_selection = None
-    if filter_selection == True: parsed_filter_selection = reference_structure.select_water_and_counter_ions() 
+    if filter_selection == True: parsed_filter_selection = reference_structure.select_water_and_counter_ions()
     else: parsed_filter_selection = reference_structure.select(filter_selection, syntax=filter_selection_syntax)
 
     # Invert the parsed selection to get the atoms to remain

@@ -38,6 +38,12 @@ filterwarnings = [
 testpaths = ["test"]
 addopts = "-rsx -v --durations=10"
 
+[tool.ruff.lint]
+# E,W: pycodestyle, F: pyflakes, D: pydocstyle
+select = ["W"]
+ignore = ["W605"]
+fixable = ["W"]
+
 [tool.conda-deny]
 safe-licenses = [
     "Apache-2.0",

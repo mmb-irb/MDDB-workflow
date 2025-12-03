@@ -8,7 +8,7 @@ import numpy as np
 from mddb_workflow.utils.auxiliar import ToolError, InputError
 from mddb_workflow.utils.type_hints import *
 
-# The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon. 
+# The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon.
 # SciPy provides a method "scipy. spatial. ConvexHull()" to create a Convex Hull
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import cdist
@@ -22,7 +22,6 @@ AUXILIAR_TGA_FILENAME = '.transition_screenshot.tga'
 debug = False
 
 
-# 
 def get_screenshot (
     structure : 'Structure',
     output_file : 'File',
@@ -32,17 +31,17 @@ def get_screenshot (
     # Thus the image could be radically different and misleading, since the change could be minimal
     parameters : Optional[dict] = None,
 ) -> dict:
-    """ Obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database.
+    """Obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database.
     Returns the rotation values used to take the photo so they can be saved and reused."""
     # Check the output screenshot file extension is JPG
     if output_file.format != 'jpg':
         print(output_file)
         raise InputError(f'You must provide a .jpg file name. {output_file.format} format is not supported')
-    
+
     # Produce a PDB file to feed VMD
     structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)
 
-    # Number of pixels to scale in x 
+    # Number of pixels to scale in x
     x_number_pixels = 350
     # Number of pixels to scale in y
     y_number_pixels = 350
@@ -72,7 +71,7 @@ def get_screenshot (
         # Export the center to a file
         file.write(f'set center_file [open {center_filename} w] \n')
         file.write('puts $center_file $center \n')
-        # Exit VMD 
+        # Exit VMD
         file.write('exit \n')
 
     # Run VMD
@@ -92,7 +91,7 @@ def get_screenshot (
         error_logs = process.stderr.decode()
         print(error_logs)
         raise ToolError('Something went wrong with VMD while generating the center point file')
-    
+
     # Read the generated file to get the center
     with open(center_filename,"r") as file:
         line = file.readline().split()
@@ -102,10 +101,10 @@ def get_screenshot (
     # Set the camera rotation, translation and zoom values to get the optimal picture
     angle = None
     angle2 = None
-    y_axis_difference_vector = None        
+    y_axis_difference_vector = None
     x_axis_difference_vector = None
     scale = None
-    
+
     # If precalculated values are passed then use them
     if parameters:
         angle = parameters['angle']
@@ -118,7 +117,7 @@ def get_screenshot (
     else:
 
         # Obtain all coordinates from each atom of the filtered structure
-        coordinates = [list(atom.coords) for atom in structure.atoms]        
+        coordinates = [list(atom.coords) for atom in structure.atoms]
         # Convert the list into a Numpy Array, since Scipy library just works with this type of data structure
         coordinates_np = np.array(coordinates)
 
@@ -137,13 +136,13 @@ def get_screenshot (
         bestpair = np.unravel_index(hull_best_points.argmax(), hull_best_points.shape)
         # Convert the first point coordinates from Numpy array to list
         first_point = hullpoints[bestpair[0]].tolist()
-        # Now into tuple 
+        # Now into tuple
         first_point = tuple(first_point)
         # Convert the second point coordinates from Numpy array to list
         second_point = hullpoints[bestpair[1]].tolist()
-        # Now into tuple 
+        # Now into tuple
         second_point = tuple(second_point)
-        
+
         ### TRIGONOMETRY TO COMPUTE THE ANGLE WE NEED TO ROTATE
 
         # FIRST ROTATION
@@ -160,7 +159,7 @@ def get_screenshot (
         z_side = abs(first_point[2] - second_point[2])
 
         # Obtain the angle that we are interested in order to rotate the molecule
-        # Apply trigonometry, compute the arcsinus of the division between the opposite side and the hypothenuse 
+        # Apply trigonometry, compute the arcsinus of the division between the opposite side and the hypothenuse
         angle = math.degrees(math.asin(z_side/hypotenuse)) if hypotenuse > 0 else 0
 
         # Set the right rotation direction
@@ -177,7 +176,7 @@ def get_screenshot (
         # Note that once the rotation for this triangle is solved we add an extra 45 grades
         # This is becase we want the molecule to be aligned with the diagonal of the image, not the x axis
 
-        # Get the hypotenuse 
+        # Get the hypotenuse
         # Note that here we use all dimensions and not the projection in x-y plane
         # This is because VMD rotates using its current rotation as reference, not the absolute
         # Thus the segment is already in "our" x-y plane after the previous rotation
@@ -200,14 +199,14 @@ def get_screenshot (
         # As we want it diagonal with respect y and x we add 45 degrees
         angle2 += 45
 
-        # Vector that we are going to use as x axis 
+        # Vector that we are going to use as x axis
         absolute_x_axis = (1,0,0)
-        # Vector that we are going to use as y axis 
+        # Vector that we are going to use as y axis
         absolute_y_axis = (0,1,0)
 
         # Initial normal vector representing the direction of the camera view
         # Note that when we enter VMD the z axis is pointing towards us
-        initial_normal_vector = (0,0,-1) 
+        initial_normal_vector = (0,0,-1)
 
         # Rotate normal vector in order to have it in the same direction as the camera after the first rotation
         # Note that the angle here and below is negative
@@ -220,7 +219,7 @@ def get_screenshot (
 
         # Now, for the second rotation we must use the rotated normal vector as pivot
         # This emulates how VMD rotates around the recently moved camera axis, not the global axis
-        # Obtain rotation matrix to perform the second rotation we have done previously 
+        # Obtain rotation matrix to perform the second rotation we have done previously
         rotated_x_axis = rotate_vector(first_rotated_x_axis, angle2, rotated_normal_vector)
         # Perform just the same procedure as before
         rotated_y_axis = rotate_vector(absolute_y_axis, angle2, rotated_normal_vector)
@@ -234,8 +233,8 @@ def get_screenshot (
         # The point to set the line does not matter. It could be (0,0,0)
         # However, we use the vmd center so then we can take the projected points as references for debugging
         A_point = vmd_center_coordinates
-        
-        # As we are going to compute a line in Y axis we just set AB_vector equal to the rotated y axis 
+
+        # As we are going to compute a line in Y axis we just set AB_vector equal to the rotated y axis
         AB_vector = rotated_y_axis
 
         # Function to project a point into a line
@@ -318,7 +317,7 @@ def get_screenshot (
         file.write('color Display Background white \n')
         # Delete the axes drawing in the VMD window
         file.write('axes location Off \n')
-        # Eliminate the molecule to perform changes in the representation, color and material 
+        # Eliminate the molecule to perform changes in the representation, color and material
         file.write('mol delrep 0 top \n')
         # First add a spcific representation for polymers (protein and nucleic acids)
         if cartoon_selection:
@@ -365,7 +364,7 @@ def get_screenshot (
         # Second rotatoin of the molecule to set it diagonal with respect to z axis
         file.write(f'rotate z by {angle2} \n')
         # Move to rectify the difference
-        file.write('$sel moveby { ' + tuple_to_vmd(y_axis_difference_vector) + ' } \n')        
+        file.write('$sel moveby { ' + tuple_to_vmd(y_axis_difference_vector) + ' } \n')
         # Move to rectify the difference
         file.write('$sel moveby { ' + tuple_to_vmd(x_axis_difference_vector) + ' } \n')
         # Set the scale

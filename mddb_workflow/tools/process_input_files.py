@@ -20,8 +20,9 @@ from mddb_workflow.tools.structure_corrector import structure_corrector
 
 
 def is_amber_top (input_topology_file : 'File') -> bool:
-    """ Check if a .top file is from Amber. 
-    Returns True if it is Amber, False if it is Gromacs. """
+    """Check if a .top file is from Amber.
+    Returns True if it is Amber, False if it is Gromacs.
+    """
     if input_topology_file != MISSING_TOPOLOGY and \
         input_topology_file.extension == 'top':
         with open(input_topology_file.path, 'r') as f:
@@ -39,7 +40,6 @@ def is_amber_top (input_topology_file : 'File') -> bool:
 
             # Otherwise we cannot decide
             raise InputError('Unable to infer topology format from first five lines')
-            
     return False
 
 
@@ -66,9 +66,9 @@ def process_input_files (
     # The faith argument
     faith : bool,
 ):
-    """ Process input files to generate the processed files.
-    This process corrects and standarizes the topology, the trajectory and the structure. """
-
+    """Process input files to generate the processed files.
+    This process corrects and standarizes the topology, the trajectory and the structure.
+    """
     # Make sure we do not enter in a loop
     # This may happen when we read/call an output value/file by mistake
     if hasattr(self, '_processed'): raise RuntimeError('Looped processing')
@@ -335,12 +335,12 @@ def process_input_files (
     same_trajectory = 'input_trajectory_files' not in task.changed_inputs
     if same_trajectory: snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
     # Calculate the new value
-    if snapshots == None:
+    if snapshots is None:
         snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
     # Update the MD task snapshots value
     self.get_snapshots.prefill(self, snapshots, {
         'structure_file': imaged_structure_file,
-        'trajectory_file' : imaged_trajectory_file
+        'trajectory_file': imaged_trajectory_file
     })
     # Save the snapshots value in the cache as well
     self.cache.update(SNAPSHOTS_FLAG, snapshots)

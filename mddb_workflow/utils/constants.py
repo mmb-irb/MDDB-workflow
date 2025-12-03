@@ -479,9 +479,9 @@ RESIDUE_NAME_LETTERS = { **PROTEIN_RESIDUE_NAME_LETTERS, **NUCLEIC_RESIDUE_NAME_
 # Source: https://github.com/NMRLipids/Databank/blob/main/Scripts/DatabankLib/settings/molecules.py#L10
 # Meanings: https://github.com/NMRLipids/Databank/blob/48fdf2c4149d0db8900ce08b0e74dc1836dcfab3/Scripts/BuildDatabank/docs/source/moleculesAndMapping.md?plain=1#L50
 FATTY_RESIDUE_NAMES = {
-    "POPC", "POPG", "POPS", "POPE", "PYPC", "PAzePCprot", "PAzePCdeprot", "DMPC", 
-    "DPPC", "DPPE", "DPPG", "DEPC", "DRPC", "DYPC", "DLPC", "DLIPC", "DOG", "DOPC", 
-    "DOPE", "DDOPC", "DOPS", "DSPC", "DAPC", "DMTAP", "SDG", "SDPE", "SOPC", "POPI", 
+    "POPC", "POPG", "POPS", "POPE", "PYPC", "PAzePCprot", "PAzePCdeprot", "DMPC",
+    "DPPC", "DPPE", "DPPG", "DEPC", "DRPC", "DYPC", "DLPC", "DLIPC", "DOG", "DOPC",
+    "DOPE", "DDOPC", "DOPS", "DSPC", "DAPC", "DMTAP", "SDG", "SDPE", "SOPC", "POPI",
     "SAPI", "SAPI24", "SAPI25", "SLPI", "CER", "CER180", "DHMDMAB", "SLiPC", "SM16",
     "SM18", "TOCL", "TLCL_0H", "TMCL", "GM1", "DPPGK", "GB3", "BOG"
 }

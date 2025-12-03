@@ -51,7 +51,7 @@ def filter_atoms (
         print('Missing input selection string -> Water and counter ions will be filtered')
     elif not selection_syntax:
         raise InputError('Missing input selection syntax')
-    
+
     # We need a PDB to instantiate the reference structure
     # The structure file may also be instantiated from some topology file formats but this is not much reliable
     # If the input structure is not a PDB then we make a conversion to generate it
@@ -87,7 +87,7 @@ def filter_atoms (
         # If the selection is empty then war the user
         if not selection:
             raise InputError('There are no water or counter ions')
-        
+
     # Remove the axuiliar PDB file, if exists
     if AUXILIAR_PDB_FILE.exists: AUXILIAR_PDB_FILE.remove()
 

@@ -1,12 +1,12 @@
 import os
-from os import chdir, getcwd 
+from os import chdir, getcwd
 import glob
 import json
-from pathlib import Path 
+from pathlib import Path
 from typing import List
 from mddb_workflow.utils.constants import NASSA_ANALYSES_CANALS
 
-def generate_nassa_config ( 
+def generate_nassa_config (
         folder_path: list[str],
         seq_path: str,
         output_path: str,
@@ -30,7 +30,7 @@ def generate_nassa_config (
         # As the base path of sequences is given, we will search for the sequences in the given path and create a list of them
         seq_path = os.path.abspath(seq_path)
         for sequence_file in os.listdir(seq_path):
-            # We assume that the sequences are in fasta format 
+            # We assume that the sequences are in fasta format
             # AGUS: I think we should allow for other formats as: .seq, .txt
             if sequence_file.endswith('.fasta') or sequence_file.endswith('.fa'):
                 nassa_config['sequence_files'].append(str(os.path.join(seq_path,sequence_file)))
@@ -52,7 +52,7 @@ def generate_nassa_config (
     #actual_path = os.path.abspath(folder_path)
     #print('actual_path: ', actual_path)
     actual_path = getcwd()
-    
+
     for path in folder_path:
         md_path = os.path.join(actual_path, path)
         if os.path.exists(os.path.join(md_path, 'helical')):
@@ -91,7 +91,7 @@ def generate_nassa_config (
                                 if n_sequences:
                                     if len(nassa_config['coordinate_info'][coordinate]) == n_sequences:
                                         break
-    
+
     # Sometimes, the number of .ser archives could be less than the whole sequence files, so we will filter the sequence files that have a .ser archive and sort them
     num_archives = None
     for coordinate, archives in nassa_config['coordinate_info'].items():
@@ -109,7 +109,7 @@ def generate_nassa_config (
         nassa_config['sequence_files'].sort()
         nassa_config['sequence_files'] = nassa_config['sequence_files'][:num_archives]
 
-    # At this point is strange but If something wrong could happen, we will raise an error    
+    # At this point is strange but If something wrong could happen, we will raise an error
     if len(nassa_config['sequence_files']) != num_archives:
         print(f"Number of sequence files: {len(nassa_config['sequence_files'])}")
         print(f"Number of coordinate archives: {num_archives}")
@@ -119,8 +119,8 @@ def generate_nassa_config (
         save_path = os.path.join(output_path, 'nassa.yml')
     else:
         save_path = os.path.join(os.path.abspath('.'), 'nassa.yml')
-    
+
     with open(save_path, 'w') as f:
         json.dump(nassa_config, f)
-    
+
     return save_path

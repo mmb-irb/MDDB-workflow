@@ -10,7 +10,7 @@
 
 import mdtraj as mdt
 
-from mddb_workflow.tools.get_screenshot import get_screenshot 
+from mddb_workflow.tools.get_screenshot import get_screenshot
 from mddb_workflow.utils.auxiliar import save_json
 from mddb_workflow.utils.type_hints import *
 

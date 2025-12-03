@@ -37,7 +37,7 @@ stderr_backup = sys.stderr
 # AGUS: Necesitamos que la secuencia de aa alineada tenga gaps identificados con guiones y pairwaise2 (biopython < 1.80) no lo hace
 # AGUS: Para actualizar a biopython >= 1.80 pairwaise2 ya no existe y no podemos obtener el mismo outoput que necesitábamos
 # AGUS: Esta función parece resolver el problema: https://github.com/biopython/biopython/issues/4769
-# Set the aligner 
+# Set the aligner
 aligner = Align.PairwiseAligner(mode='local')
 aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
 aligner.open_gap_score = -10
@@ -611,7 +611,7 @@ def get_uniprot_reference (uniprot_accession : str) -> Optional[dict]:
         # The domain 'begin' and 'end' values may include non-numeric symbols such as '~', '>' or '<'
         # These values are usually ignored or replaced by '?' in the UniProt web client
         # There may be not numeric value at all (e.g. Q99497)
-        # In these cases uniprot shows the domain but it does not allow to use its functionallities 
+        # In these cases uniprot shows the domain but it does not allow to use its functionallities
         # e.g. you can not blast using the domain sequence
         # It makes not sense having a domain with unkown range to me so we skip these domains
         begin = feature['begin'].replace('~', '').replace('>', '').replace('<', '')
@@ -798,7 +798,7 @@ def get_sequence_metadata (structure : 'Structure', protein_references_file : 'F
         covid_spike_reference_index = reference_ids.index(covid_spike_reference_id)
         sample_residue_index = next((residue_index for residue_index, reference_index in enumerate(residue_reference_indices) if reference_index == covid_spike_reference_index), None)
         if sample_residue_index == None:
-            raise RuntimeError('Failed to find residue belonging to SARS-CoV-2 variant') 
+            raise RuntimeError('Failed to find residue belonging to SARS-CoV-2 variant')
         sample_chain_sequence = structure.residues[sample_residue_index].chain.get_sequence()
         # Align the sample chain sequence against all variants to find the best match
         highest_score = 0

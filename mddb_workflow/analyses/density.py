@@ -2,31 +2,31 @@ from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_DENSITY_FILENAME
 from mddb_workflow.utils.type_hints import *
-
 import pytraj as pt
 
-def density (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
+
+def density(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
     membrane_map: dict,
-    structure : 'Structure',
-    snapshots : int,
-    density_types = ['number', 'mass', 'charge', 'electron'],
-    frames_limit = 1000):
-    """ Membrane density analysis. """
-    
+    structure: 'Structure',
+    snapshots: int,
+    density_types=['number', 'mass', 'charge', 'electron'],
+    frames_limit=1000
+):
+    """Membrane density analysis."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping density analysis')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_DENSITY_FILENAME}'
 
     # Load
     tj, frame_step, frames_count = get_reduced_pytraj_trajectory(
         structure_file.path, trajectory_file.path, snapshots, frames_limit)
-    
+
     # Set every selections to be analyzed separately
     components = []
     for chain in structure.chains:
@@ -35,11 +35,11 @@ def density (
             'selection': chain.get_selection(),
             'number': {},
             'mass': {},
-            'charge': {}, # charge will be all 0 because we cannot add charges to pytraj topology
+            'charge': {},  # charge will be all 0 because we cannot add charges to pytraj topology
             'electron': {}
         })
     # Parse selections to pytraj masks
-    pytraj_masks = [ component['selection'].to_pytraj() for component in components ]
+    pytraj_masks = [component['selection'].to_pytraj() for component in components]
     # Add polar atoms selection
     polar_atoms = []
     for n in range(membrane_map['n_mems']):
@@ -48,9 +48,9 @@ def density (
     components.append({
         'name': 'polar',
         'selection': polar_atoms,
-        'number': {},'mass': {},'charge': {},'electron': {}
-    }) 
-    pytraj_masks.append('@'+', '.join(map(str,polar_atoms)))
+        'number': {}, 'mass': {}, 'charge': {}, 'electron': {}
+    })
+    pytraj_masks.append('@' + ', '.join(map(str, polar_atoms)))
 
     # Run pytraj
     for density_type in density_types:
@@ -68,8 +68,9 @@ def density (
         if component['name'] == 'polar': continue
         component['selection'] = component['selection'].atom_indices
     # Export results
-    data = {'data': { 'comps': components, 'z': list(out['z']) } }
+    data = {'data': {'comps': components, 'z': list(out['z'])}}
     save_json(data, output_analysis_filepath)
+
 
 def plot_density(output_analysis_filepath):
     """Plot density analysis grouped by density type."""

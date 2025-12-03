@@ -22,7 +22,7 @@ def markov (
     if not populations or len(populations) == 0:
         print(' There are no populations')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_MARKOV_FILENAME}'
 

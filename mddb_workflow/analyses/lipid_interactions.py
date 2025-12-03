@@ -12,7 +12,8 @@ def lipid_interactions(
     inchikey_map: list[dict],
     cg_residues: list[int],
     snapshots: int,
-    frames_limit: int = 100):
+    frames_limit: int = 100
+):
     """Lipid-protein interactions analysis."""
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
 

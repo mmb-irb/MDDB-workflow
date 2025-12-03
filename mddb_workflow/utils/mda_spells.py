@@ -65,9 +65,9 @@ def to_MDAnalysis_topology(standard_topology_path : str) -> 'Topology':
     ]
     if topology['atom_charges']:
         attrs.append(Charges(topology['atom_charges']))
-        
-    mda_top = Topology(n_atoms=len(topology['atom_names']), 
-                       n_res=len(topology['residue_names']), 
+
+    mda_top = Topology(n_atoms=len(topology['atom_names']),
+                       n_res=len(topology['residue_names']),
                        n_seg=len(topology['chain_names']),
                        attrs=attrs,
                        atom_resindex=topology['atom_residue_indices'],

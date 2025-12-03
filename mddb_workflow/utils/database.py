@@ -123,7 +123,7 @@ class Remote:
         format : Optional[str] = None
     ):
         if  [frame_selection, atom_selection, format] == [None,None,'xtc']:
-            # If we dont have a specific request, we can download the main trajectory 
+            # If we dont have a specific request, we can download the main trajectory
             # directly from the trajectory.xtc file so it is faster
             request_url = f'{self.project_url}/files/trajectory.xtc'
         else:
@@ -194,7 +194,7 @@ class Remote:
             save_json(file_content, output_file.path, indent=4)
         except Exception as error:
             raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url} with error: {error}')
-        
+
 class Database:
     def __init__(self, url: str, no_ssl_authentication : bool = False):
         self.url = url
@@ -206,7 +206,7 @@ class Database:
 
     def __str__ (self) -> str:
         return f'< Database {self.url} >'
-    
+
     # Check if the database is alive
     # WARNING: Note that this function requires internet connection
     # WARNING: Do not run in by default
@@ -243,7 +243,7 @@ class Database:
     # Instantiate the remote project handler
     def get_remote_project (self, accession : str) -> Remote:
         return Remote(self, accession, context=self.context)
-    
+
     # Check if the required sequence is already in the MDDB database
     def get_reference_data (self, reference : str, id : str) -> Optional[dict]:
         # Make sure the database is alive (and thus the provided database URL is valid)

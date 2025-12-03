@@ -3,7 +3,7 @@ import json
 from os.path import exists
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.file import File
-from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references 
+from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references
 from mddb_workflow.tools.generate_map import get_uniprot_reference
 from mddb_workflow.tools.chains import request_interpsocan, get_interproscan_results
 from mddb_workflow.utils.auxiliar import save_json, InputError
@@ -54,7 +54,7 @@ def updater(ref_type = 'proteins'):
     orphan_uniprots_count = len(orphan_uniprots)
     if orphan_uniprots_count > 0:
         print(f'We have {str(orphan_uniprots_count)}'
-              ' orphan project ids: ' + ', '.join(list(orphan_uniprots)[:10]) 
+              ' orphan project ids: ' + ', '.join(list(orphan_uniprots)[:10])
               + ' ...' if orphan_uniprots_count > 10 else '')
         print(' WARNING: This may be a problem')
     # Show the orphan references
@@ -125,7 +125,7 @@ def updater(ref_type = 'proteins'):
             for i in range(0, len(sequences_list), batch_size):
                 batch = sequences_list[i:i+batch_size]
                 print(f"Processing batch {i//batch_size + 1}/{(len(sequences_list)-1)//batch_size + 1} ({len(batch)} sequences)")
-                
+
                 # Save the jobids of every call to InterProScan
                 interproscan_jobids = {}
                 # Request interproscan for each sequence in the batch
@@ -133,7 +133,7 @@ def updater(ref_type = 'proteins'):
                     interproscan_jobid = request_interpsocan(sequence)
                     interproscan_jobids[sequence] = interproscan_jobid
                     print(f"  Submitted {sequence} to interproscan: {interproscan_jobid}")
-                # Get the pending interpsocan jobids 
+                # Get the pending interpsocan jobids
                 pending_jobids = list(interproscan_jobids.values())
                 # Get results and add to references
                 batch_references = [{'sequence': sequence, 'interproscan': None} for sequence in batch]

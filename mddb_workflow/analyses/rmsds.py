@@ -66,7 +66,7 @@ def rmsds(
     if len(non_pbc_selections) == 0:
         print('  The RMSDs analysis will be skipped since there is nothing to analyze')
         return
-    
+
     # Get the coarse grain selection
     cg_selection = structure.select_cg()
 
@@ -120,8 +120,8 @@ def rmsds(
     save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)
 
 # RMSD
-# 
-# Perform the RMSd analysis 
+#
+# Perform the RMSd analysis
 def rmsd (
     reference_filepath : str,
     trajectory_filepath : str,
@@ -135,7 +135,7 @@ def rmsd (
     ndx_filename = '.rmsd.ndx'
     with open(ndx_filename, 'w') as file:
         file.write(ndx_selection)
-    
+
     # Run Gromacs
     run_gromacs(f'rms -s {reference_filepath} -f {trajectory_filepath} \
         -o {output_analysis_filepath} -n {ndx_filename} {"-mw no" if skip_mass_weighting else ""}',

@@ -1,5 +1,5 @@
 # Functions powered by VMD
-# Humphrey, W., Dalke, A. and Schulten, K., "VMD - Visual Molecular Dynamics", J. Molec. Graphics, 1996, vol. 14, pp. 33-38. 
+# Humphrey, W., Dalke, A. and Schulten, K., "VMD - Visual Molecular Dynamics", J. Molec. Graphics, 1996, vol. 14, pp. 33-38.
 # http://www.ks.uiuc.edu/Research/vmd/
 
 import os
@@ -135,7 +135,7 @@ def chainer (
     # Check the file exists
     if not exists(input_pdb_filename):
         raise InputError(f'The file {input_pdb_filename} does not exist')
-       
+
     with open(commands_filename, "w") as file:
         # Select the specified atoms and set the specified chain
         file.write(f'set atoms [atomselect top "{escaped_atom_selection}"]\n')
@@ -260,7 +260,7 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
 
     # Escape TCL meaningful characters
     escaped_selection = escape_tcl_selection(selection)
-    
+
     # Prepare a script for VMD to run. This is Tcl language
     # The output of the script will be written to a txt file
     atom_indices_filename = '.vmd_output.txt'
@@ -295,7 +295,7 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
 
     # Parse the atom indices string to an array of integers
     atom_indices = [ int(i) for i in raw_atom_indices.split() ]
-    
+
     # Remove trahs files
     trash_files = [ commands_filename, atom_indices_filename ]
     for trash_file in trash_files:
@@ -323,7 +323,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
         file.write(f'set bondsfile [open {output_bonds_file} w]\n')
         file.write('puts $bondsfile $bonds\n')
         file.write('exit\n')
-        
+
     # Run VMD
     logs = run([
         "vmd",
@@ -338,7 +338,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
     if not exists(output_bonds_file):
         print(logs)
         raise ToolError('Something went wrong with VMD')
-    
+
     # Read the VMD output
     with open(output_bonds_file, 'r') as file:
         raw_bonds = file.read()
@@ -350,7 +350,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
     # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
     # Add a space at the end of the string to make the parser get the last character
     raw_bonds = raw_bonds.replace('\n', '') + ' '
-    
+
     # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
     # Raw bonds format is (for each atom in the selection):
     # '{index1, index2, index3 ...}' with the index of each connected atom
@@ -384,7 +384,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
             in_brackets = False
             continue
         last_atom_index += character
-                
+
     return bonds_per_atom
 
 def get_covalent_bonds_between (
@@ -394,7 +394,7 @@ def get_covalent_bonds_between (
     selection_2 : Union['Selection', str]
 ) -> list[ list[int] ]:
     """ Set a function to retrieve covalent (strong) bonds between 2 atom selections. """
-    
+
     # Parse selections (if not parsed yet)
     parsed_selection_1 = selection_1 if type(selection_1) == str else selection_1.to_vmd()
     parsed_selection_2 = selection_2 if type(selection_2) == str else selection_2.to_vmd()
@@ -424,7 +424,7 @@ def get_covalent_bonds_between (
         file.write(f'set indexfile2 [open {output_index_2_file} w]\n')
         file.write('puts $indexfile2 $index2\n')
         file.write('exit\n')
-        
+
     # Run VMD
     logs = run([
         "vmd",
@@ -439,7 +439,7 @@ def get_covalent_bonds_between (
     if not exists(output_index_1_file) or not exists(output_bonds_file) or not exists(output_index_2_file):
         print(logs)
         raise ToolError('Something went wrong with VMD')
-    
+
     # Read the VMD output
     with open(output_index_1_file, 'r') as file:
         raw_index_1 = file.read()
@@ -455,11 +455,11 @@ def get_covalent_bonds_between (
     # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
     # Add a space at the end of the string to make the parser get the last character
     raw_bonds = raw_bonds.replace('\n', '') + ' '
-    
+
     # Raw indexes is a string with all indexes separated by spaces
     index_1 = [ int(i) for i in raw_index_1.split() ]
     index_2 = set([ int(i) for i in raw_index_2.split() ])
-    
+
     # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
     # Raw bonds format is (for each atom in the selection):
     # '{index1, index2, index3 ...}' with the index of each connected atom
@@ -493,11 +493,11 @@ def get_covalent_bonds_between (
             in_brackets = False
             continue
         last_atom_index += character
-        
+
     # At this point indexes and bonds from the first selection should match in number
     if len(index_1) != len(bonds_per_atom):
         raise ValueError(f'Indexes ({len(index_1)}) and atom bonds ({len(bonds_per_atom)}) do not match in number')
-        
+
     # Now get all covalent bonds which include an index from the atom selection 2
     crossed_bonds = []
     for i, index in enumerate(index_1):
@@ -509,7 +509,7 @@ def get_covalent_bonds_between (
                 # DANI: And the interactions are saved to json, so a list keeps things more coherent
                 crossed_bond = [index, bond]
                 crossed_bonds.append(crossed_bond)
-                
+
     return crossed_bonds
 
 def get_interface_atom_indices (
@@ -526,7 +526,7 @@ def get_interface_atom_indices (
     # Set the interface selections
     interface_selection_1 = (f'({selection_1}) and within {distance_cutoff} of ({selection_2})')
     interface_selection_2 = (f'({selection_2 }) and within {distance_cutoff} of ({selection_1})')
-    
+
     # Set the output txt files for vmd to write the atom indices
     # Note that these output files are deleted at the end of this function
     selection_1_filename = '.selection_1.txt'
@@ -632,7 +632,7 @@ def get_interface_atom_indices (
         if not os.path.exists(output_file):
             print(logs)
             raise ToolError('Something went wrong with VMD')
-    
+
     # Set a function to read the VMD output and parse the atom indices string to an array of integers
     def process_vmd_output (output_filename : str) -> list[int]:
         with open(output_filename, 'r') as file:
@@ -646,7 +646,7 @@ def get_interface_atom_indices (
     selection_2_interface_atom_indices = process_vmd_output(interface_selection_2_filename)
     interacting_frames = process_vmd_output(interacting_frames_filename)[0]
     total_frames = process_vmd_output(total_frames_filename)[0]
-    
+
     # Remove trash files
     trash_files = [ commands_filename ] + expected_output_files
     for trash_file in trash_files:

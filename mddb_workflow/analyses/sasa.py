@@ -22,12 +22,12 @@ def sasa(
     frames_limit : int = 100,
 ):
     """Perform the Solvent Accessible Surface Analysis."""
-    
+
     # If all residues are to be excluded since the whole system is in PCB then stop here
     if len(pbc_residues) == len(structure.residues):
         print(' No residues to run the analysis')
         return
-    
+
     # Set the output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_SASA_FILENAME}'
 

@@ -9,17 +9,17 @@ import numpy as np
 import os
 
 
-def area_per_lipid (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
-    membrane_map: dict):
+def area_per_lipid(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
+    membrane_map: dict
+):
     """Area per lipid analysis."""
-    
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping area per lipid analysis')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_APL_FILENAME}'
 
@@ -27,7 +27,7 @@ def area_per_lipid (
     for n in range(membrane_map['n_mems']):
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
-    head_sel_mda = 'index ' + " ".join(map(str,(head_sel)))
+    head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
     prop = {
         'lipid_selection': head_sel_mda,
@@ -47,11 +47,11 @@ def area_per_lipid (
     # Replace NaNs with -1 in the grids so the loader don't break
     grids = [np.nan_to_num(grid, nan=-1) for grid in grids]
     # Save the data
-    data = { 'data':{
+    data = {'data': {
         'lower leaflet': grids[0].tolist(),
         'upper leaflet': grids[1].tolist(),
-        'grid_x': grid_x[:,0].tolist(),
-        'grid_y': grid_y[0,:].tolist(),
+        'grid_x': grid_x[:, 0].tolist(),
+        'grid_y': grid_y[0, :].tolist(),
         'median': m,
         'std': s,
         }
@@ -66,7 +66,7 @@ def process_apl(output_csv_path, res=100j):
     df['Area per lipid'] *= 100  # Convert to A^2
     m = df['Area per lipid'].median()
     s = df['Area per lipid'].std()
-    
+
     # Define common grid for both plots
     x_all = df['X coords']
     y_all = df['Y coords']

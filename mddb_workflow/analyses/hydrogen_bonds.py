@@ -1,12 +1,12 @@
 # Hydrogen bonds analysis
 
-# The pytraj 'hbond' analysis finds possible hydrogen bonds interactions between closer atoms and 
-# calculates the percent of frames where the hydrogen bond would happen according to the distance 
+# The pytraj 'hbond' analysis finds possible hydrogen bonds interactions between closer atoms and
+# calculates the percent of frames where the hydrogen bond would happen according to the distance
 # between two atoms and the bond angle.
 #
-# Pytraj analysis will return the residue number, residue type and atom name of each pair of bonded 
-# atoms. WARNING: In irregular pdb topologies, there may be atoms with identical residue number, 
-# residue type and atom name. This makes impossible to know the real resulted atom. For this reason 
+# Pytraj analysis will return the residue number, residue type and atom name of each pair of bonded
+# atoms. WARNING: In irregular pdb topologies, there may be atoms with identical residue number,
+# residue type and atom name. This makes impossible to know the real resulted atom. For this reason
 # topology has been corrected previously and duplicated atoms have been renamed
 
 import pytraj as pt
@@ -19,36 +19,38 @@ from mddb_workflow.utils.auxiliar import save_json, numerate_filename, get_analy
 from mddb_workflow.utils.constants import OUTPUT_HBONDS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
+
 # WARNING: the output file size depends on the number of hydrogen bonds
 # WARNING: analyses must be no heavier than 16Mb in BSON format
 # WARNING: In case of large surface interaction the output analysis may be larger than the limit
-def hydrogen_bonds (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
-    populations : Optional[list[float]],
-    structure : 'Structure',
-    interactions : list,
-    is_time_dependent : bool,
+def hydrogen_bonds(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
+    populations: Optional[list[float]],
+    structure: 'Structure',
+    interactions: list,
+    is_time_dependent: bool,
     # Number of splits along the trajectory
-    time_splits : int = 100,
+    time_splits: int = 100,
     # Explicit values for the most populated frames is saved apart
     # Set how many frames (in order of population) are saved
-    most_populated_frames_number : int = 5,
-    ):
+    most_populated_frames_number: int = 5,
+):
     """Perform an hydrogen bonds analysis for each interaction interface.
     The 'interactions' input may be an empty list (i.e. there are no interactions).
     In case there are no interactions the analysis stops.
     Note that this analysis find hydrogen bonds in a subset of frames along the trajectory.
-    Storing the results for the whole trajectory is not possible due to storage limits."""
+    Storing the results for the whole trajectory is not possible due to storage limits.
+    """
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_HBONDS_FILENAME}'
-    
+
     # Set a reference system to handle conversions to pytraj topology
     # First set the pytraj topology
     pytraj_topology = structure.get_pytraj_topology()
@@ -57,7 +59,7 @@ def hydrogen_bonds (
     # Transform a pytraj residue numeration (1-based) and an atom name to a 0-based atom index
     # Double check the residue is the one we expect to find and, if not, use another strategy
     # Remember that sometimes pytraj may parse residues differently for chaotic topologies
-    def pytraj_residue_number_2_residue (pytraj_residue_index : int) -> 'Residue':
+    def pytraj_residue_number_2_residue(pytraj_residue_index: int) -> 'Residue':
         residue_index = pytraj_residue_index - 1
         pytraj_residue = pytraj_residues[residue_index]
         expected_number = pytraj_residue.original_resid
@@ -75,7 +77,7 @@ def hydrogen_bonds (
         for residue in structure.residues:
             if residue.number == expected_number and residue.name[0:3] == expected_name:
                 return residue
-        # Return None if there are no results    
+        # Return None if there are no results
         return None
 
     # Parse the trajectory intro ptraj
@@ -104,12 +106,12 @@ def hydrogen_bonds (
         # Add the root of the output analysis filename to the run data
         analysis_name = get_analysis_name(numbered_output_analysis_filepath)
         # Append current interaction to the summary
-        analysis_entry = { 'name': name, 'analysis': analysis_name }
+        analysis_entry = {'name': name, 'analysis': analysis_name}
         output_summary.append(analysis_entry)
 
         # If the analysis already exists then proceed to the next interaction
         if exists(numbered_output_analysis_filepath): continue
-        
+
         # Get interface atom indices
         interface_atom_indices_1 = interaction['interface_atom_indices_1']
         interface_atom_indices_2 = interaction['interface_atom_indices_2']
@@ -143,12 +145,12 @@ def hydrogen_bonds (
         # In case we have populations
         if populations:
             # Set a function to calculate the population-weighted value of a given frame
-            def get_populated_value (hbond_value : float, frame : int) -> float:
+            def get_populated_value(hbond_value: float, frame: int) -> float:
                 population = populations[frame]
                 multiplier = population * snapshots
                 return hbond_value * multiplier
             # Get the most populated frames numbers
-            population_per_frames = [ (population, frame) for frame, population in enumerate(populations) ]
+            population_per_frames = [(population, frame) for frame, population in enumerate(populations)]
             population_sorted_frames = [frame for population, frame in sorted(population_per_frames, reverse=True)]
             most_populated_frames = population_sorted_frames[0:most_populated_frames_number]
 
@@ -159,15 +161,15 @@ def hydrogen_bonds (
         hbond_overall = []
         hbond_timed = []
         hbond_framed = []
-        
+
         # Search all predicted hydrogen bonds
         for i, hb in enumerate(hbonds):
             key = hbond_keys[i]
             # hb.key example: "ASN15_OD1-LEU373_N-H"
             # matchObj = re.match( r'\w{3}(\d*)_(.*)-\w{3}(\d*)_(.*)-(.*)', hb.key, re.M|re.I)
             # hb.key example: "ASN_15@OD1-LEU_373@N-H"
-            matchObj = re.match( r'\w*_(\d*)@(.*)-\w*_(\d*)@(.*)-(.*)', key, re.M|re.I)
-            if matchObj == None: continue
+            matchObj = re.match(r'\w*_(\d*)@(.*)-\w*_(\d*)@(.*)-(.*)', key, re.M|re.I)
+            if matchObj is None: continue
             # Mine all data from the parsed results
             acceptor_resnum = int(matchObj.group(1))
             acceptor_atom_name = matchObj.group(2)
@@ -193,10 +195,10 @@ def hydrogen_bonds (
             # In case we have populations
             if populations:
                 # Save if there is or not hydrogen bond for the most populated frames
-                framed_hbonds = { frame: bool(hbond_values[frame]) for frame in most_populated_frames }
+                framed_hbonds = {frame: bool(hbond_values[frame]) for frame in most_populated_frames}
                 hbond_framed.append(framed_hbonds)
                 # Weigth hbond values according to populations
-                hbond_values = [ get_populated_value(hbond_value, frame) for frame, hbond_value in enumerate(hbond_values) ]
+                hbond_values = [get_populated_value(hbond_value, frame) for frame, hbond_value in enumerate(hbond_values)]
             # Get the overall percent of frames where the hydrogen bond exists
             overall_percent = sum(hbond_values) / snapshots
             hbond_overall.append(overall_percent)

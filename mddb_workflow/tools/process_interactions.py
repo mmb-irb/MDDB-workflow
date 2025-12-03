@@ -54,7 +54,7 @@ def process_interactions (
     """
     # Set our own internal interactions
     interactions = []
-    
+
     # If there are no interactions then stop here
     if input_interactions == None: return []
     # If interactions is not a list then make it a list of it
@@ -65,7 +65,7 @@ def process_interactions (
         interactions = [input_interactions]
     # If interactions is an empty list then stop here
     if len(input_interactions) == 0: return []
-        
+
     # Get explicit interactions (not keywords)
     # Duplicate input interactions to avoid modifying the originals
     explicit_interactions = [
@@ -109,7 +109,7 @@ def process_interactions (
     # Get keywords from the input interactions
     # Right now the only supported instruction is 'auto'
     keyword_interactions = set([ inter for inter in interactions if type(inter) == str ])
-        
+
     # If the iauto argument is used from the console then add it here
     if interactions_auto:
         keyword_interactions.add( f'auto "{interactions_auto}"' )
@@ -243,10 +243,10 @@ def process_interactions (
             if len(interface_atom_indices) == 0:
                 raise ValueError(f'Empty interface for agent "{agent_name}" in interaction "{interaction_name}": {agent_selection}')
             interaction[f'interface_atom_indices_{agent}'] = interface_atom_indices
-        
+
         # Add residue notations
         add_residues_indices(interaction, structure)
-            
+
         # Find strong bonds between residues in different interfaces
         # Use the main topology, which is corrected and thus will retrieve the right bonds
         strong_bonds = get_covalent_bonds_between(structure_file.path, interaction['selection_1'], interaction['selection_2'])
@@ -309,7 +309,7 @@ def process_interactions (
     for interaction in valid_interactions:
         file_interaction = { key: value for key, value in interaction.items() if key in UPLOAD_FIELDS }
         file_interactions.append(file_interaction)
-    
+
     # Write them to disk
     save_json(file_interactions, output_analysis_filepath, indent = 4)
 

@@ -114,7 +114,7 @@ class Atom:
         # Affected residues are the ones to update this atom internal residue index
         new_residue = self.structure.residues[new_residue_index]
         new_residue.add_atom(self)
-    residue_index = property(get_residue_index, set_residue_index, None, 
+    residue_index = property(get_residue_index, set_residue_index, None,
                              "The atom residue index according to parent structure residues")
 
     def get_residue (self) -> Optional['Residue']:
@@ -142,7 +142,7 @@ class Atom:
         if not self.residue:
             return None
         return self.residue.chain_index
-    chain_index = property(get_chain_index, None, None, 
+    chain_index = property(get_chain_index, None, None,
                            "The atom chain index according to parent structure chains (read only)")
 
     def get_chain (self) -> Optional['Chain']:
@@ -172,7 +172,7 @@ class Atom:
         return bonds
 
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
-    bonds = property(get_bonds, None, None, 
+    bonds = property(get_bonds, None, None,
                      'Atoms indices of atoms in the structure which are covalently bonded to this atom')
 
     def get_bonded_atoms (self) -> list['Atom']:
@@ -351,7 +351,7 @@ class Residue:
         """Get the parent structure (read only).
         This value is set by the structure itself."""
         return self._structure
-    structure: 'Structure' = property(get_structure, None, None, 
+    structure: 'Structure' = property(get_structure, None, None,
                          "The parent structure (read only)")
 
     def get_index (self) -> Optional[int]:
@@ -367,7 +367,7 @@ class Residue:
         self.chain._residue_indices[chain_residue_index] = index
         # Finally update self index
         self._index = index
-    index = property(get_index, set_index, None, 
+    index = property(get_index, set_index, None,
                      "The residue index according to parent structure residues (read only)")
 
     def get_atom_indices (self) -> list[int]:
@@ -389,7 +389,7 @@ class Residue:
             atom._residue_index = self.index
         # Now new indices are coherent and thus we can save them
         self._atom_indices = new_atom_indices
-    atom_indices = property(get_atom_indices, set_atom_indices, None, 
+    atom_indices = property(get_atom_indices, set_atom_indices, None,
                             "The atom indices according to parent structure atoms for atoms in this residue")
 
     def get_atoms (self) -> list['Atom']:
@@ -464,7 +464,7 @@ class Residue:
         if self.chain:
             self.chain.remove_residue(self)
         new_chain.add_residue(self)
-    chain_index = property(get_chain_index, set_chain_index, None, 
+    chain_index = property(get_chain_index, set_chain_index, None,
                            "The residue chain index according to parent structure chains")
 
     # The residue chain
@@ -525,7 +525,7 @@ class Residue:
         bonded_atom_indices = set(self.get_bonded_atom_indices())
         if next((index for index in other.atom_indices if index in bonded_atom_indices), None) != None: return True
         return False
-    
+
     def is_missing_any_bonds (self) -> bool:
         return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
 
@@ -698,7 +698,7 @@ class Residue:
         # -------------------------------------------------------------------------------------------------------
         self._classification = 'other'
         return self._classification
-    
+
     def get_classification_by_name (self) -> str:
         """
         Set an alternative function to "try" to classify the residues according only to its name.
@@ -763,8 +763,8 @@ class Residue:
         # Create graph and add edges in one pass
         G = nx.Graph()
         G.add_edges_from(
-            (atom.index, bonded_atom) 
-            for atom in self.atoms 
+            (atom.index, bonded_atom)
+            for atom in self.atoms
             for bonded_atom in atom.bonds
         )
         # Get cycles and convert to atoms in one comprehension
@@ -776,7 +776,7 @@ class Residue:
             [self.atoms[residue_atom_indices[i]] for i in cycle]
             for cycle in cycles
         ]
-    
+
     def split (self,
         first_residue_atom_indices : list[int],
         second_residue_atom_indices : list[int],
@@ -861,7 +861,7 @@ class Residue:
         """Get a standard label."""
         chainname = self.chain.name if self.chain.name.strip() else ''
         return f'{chainname}{self.number}{self.icode}({self.name})'
-    label = property(get_label, None, None, 
+    label = property(get_label, None, None,
                      "The residue standard label (read only)")
 
     def is_cg (self) -> bool:
@@ -888,7 +888,7 @@ class Chain:
 
     def __eq__ (self, other):
         return self.name == other.name
-    
+
     def __hash__ (self):
         return hash(self.name)
 
@@ -943,7 +943,7 @@ class Chain:
         # Get residues in the structure according to residue indices
         residues = self.structure.residues
         return [ residues[residue_index] for residue_index in self.residue_indices ]
-    
+
     def set_residues (self, new_residues : list['Residue']):
         """Find indices for new residues and set their indices as the new residue indices.
         Note that residues must be set in the structure already."""
@@ -1028,14 +1028,14 @@ class Chain:
         chain_copy._index = self._index
         chain_copy.residue_indices = self.residue_indices
         return chain_copy
-    
+
     def has_cg (self) -> bool:
         """Ask if the current chain has at least one coarse grain atom/residue."""
         return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
-    
+
     def is_missing_any_bonds (self) -> bool:
         return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
-    
+
     def find_residue (self, number : int, icode : str = '', index = None) -> Optional['Residue']:
         """Find a residue by its number and insertion code."""
         # Iterate chain residues
@@ -1122,8 +1122,8 @@ class Structure:
         """Find fragments in a selection of atoms. A fragment is a selection of
         covalently bonded atoms. All atoms are searched if no selection is provided.
 
-        WARNING: Note that fragments generated from a specific selection may not 
-        match the structure fragments. A selection including 2 separated regions of a 
+        WARNING: Note that fragments generated from a specific selection may not
+        match the structure fragments. A selection including 2 separated regions of a
         structure fragment will yield 2 fragments.
 
         For convenience, bonds between non-consecutive residues are excluded from this logic.
@@ -1404,7 +1404,7 @@ class Structure:
         with open(pdb_filepath, 'r') as file:
             pdb_content = file.read()
         return cls.from_pdb(pdb_content, model, flexible_numeration)
-    
+
     # https://biopandas.github.io/biopandas/tutorials/Working_with_mmCIF_Structures_in_DataFrames/
     @classmethod
     def from_mmcif (cls, mmcif_content : str, model : Optional[int] = None, author_notation : bool = False):
@@ -1434,7 +1434,7 @@ class Structure:
             if len(values) == 0 or values[0] not in atom_headers: continue
             # Get the atom model number if a model number was passed
             # Note that then model is a number greater than 0
-            if model: 
+            if model:
                 model_number = int(values[20])
                 # If the model number odes not match then skip it
                 if model != model_number: continue
@@ -1681,7 +1681,7 @@ class Structure:
         # Overwrite current coordinates with the new coordinates
         for i, atom in enumerate(self.atoms):
             atom.coords = tuple(new_coordinates[i])
-    
+
     def get_ion_atom_indices (self) -> set:
         """Get all supported ion atom indices together in a set."""
         # If we already did this then return the stored value
@@ -1841,7 +1841,7 @@ class Structure:
         WARNING: This logic is a bit guessy and it may fail for non-standard residue named structures
         """
         return self.select_by_classification('solvent')
-    
+
     def select_ions (self) -> 'Selection':
         """Select ions."""
         return self.select_by_classification('ion')
@@ -1891,15 +1891,15 @@ class Structure:
         VMD considers protein any residue including N, C, CA and O while terminals may have OC1 and OC2 instead of O.
         """
         return self.select_by_classification('protein')
-    
+
     def select_nucleic (self) -> 'Selection':
         """Select nucleic atoms."""
         return self.select_by_classification('dna') + self.select_by_classification('rna')
-    
+
     def select_lipids (self) -> 'Selection':
         """Select lipids."""
         return self.select_by_classification('fatty') + self.select_by_classification('steroid')
-    
+
     def select_carbohydrates (self) -> 'Selection':
         """Select carbohydrates."""
         return self.select_by_classification('carbohydrate')
@@ -1908,11 +1908,11 @@ class Structure:
         """Return a selection of the typical PBC atoms: solvent, counter ions and lipids.
         WARNING: This is just a guess."""
         return self.select_water() + self.select_counter_ions() + self.select_lipids()
-    
+
     def select_cg (self) -> 'Selection':
         """Select coarse grain atoms."""
         return Selection([ atom.index for atom in self.atoms if atom.element == CG_ATOM_ELEMENT ])
-    
+
     def select_missing_bonds (self) -> 'Selection':
         return Selection([ index for index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])
 
@@ -1922,7 +1922,7 @@ class Structure:
         Rules are:
           1. Residues must be protein (i.e. must contain C, CA, N and O atoms) or nucleic (P, OP1, OP2, O3', C3', C4', C5', O5')
           2. There must be at least 3 covalently bonded residues
-    
+
         It does not matter their chain, numeration or even index order as long as they are bonded.
         * Note that we can represent cartoon while we display one residue alone, but it must be connected anyway.
         Also, we have the option to include terminals in the cartoon selection although they are not representable.
@@ -1953,29 +1953,29 @@ class Structure:
         for atom_index in selection.atom_indices:
             atom_indices[atom_index] = None
         return Selection([ atom_index for atom_index in atom_indices if atom_index != None ])
-    
+
     def get_selection_residue_indices (self, selection : 'Selection') -> list[int]:
         """Given a selection, get a list of residue indices for residues implicated.
         Note that if a single atom from the residue is in the selection then the residue index is returned."""
         return list(set([ self.atoms[atom_index].residue_index for atom_index in selection.atom_indices ]))
-    
+
     def get_selection_residues (self, selection : 'Selection') -> list['Residue']:
         """Given a selection, get a list of residues implicated.
         Note that if a single atom from the residue is in the selection then the residue is returned."""
         residue_indices = self.get_selection_residue_indices(selection)
         return [ self.residues[index] for index in residue_indices ]
-    
+
     def get_selection_chain_indices (self, selection : 'Selection') -> list[int]:
         """Given a selection, get a list of chain indices for chains implicated.
         Note that if a single atom from the chain is in the selection then the chain index is returned."""
         return list(set([ self.atoms[atom_index].chain_index for atom_index in selection.atom_indices ]))
-    
+
     def get_selection_chains (self, selection : 'Selection') -> list['Chain']:
         """Given a selection, get a list of chains implicated.
         Note that if a single atom from the chain is in the selection then the chain is returned."""
         chain_indices = self.get_selection_chain_indices(selection)
         return [ self.chains[index] for index in chain_indices ]
-    
+
     def get_selection_classification (self, selection : 'Selection') -> str:
         """Get type of the chain."""
         # Get selection residues
@@ -1992,7 +1992,7 @@ class Structure:
                 residue_counts[res_class] += 1
             else:
                 # If the classification is not recognized, count it as "other"
-                residue_counts[res_class] = 1  
+                residue_counts[res_class] = 1
 
         # Count the total number of residues in the selection
         total_residues = sum(residue_counts.values())
@@ -2015,7 +2015,7 @@ class Structure:
             return "glycoprotein"
         if proportions.get("fatty", 0) > relevant_threshold and proportions.get("steroid", 0) > relevant_threshold:
             return "lipid"
-        
+
         # Any other combinations of different main proportions
         main_proportions = { k: v for k, v in proportions.items() if v > relevant_threshold }
         # Nothing is above the threshold
@@ -2113,9 +2113,9 @@ class Structure:
             chain.residue_indices = residue_indices
         return Structure(atoms=new_atoms, residues=new_residues, chains=new_chains)
 
-    def chainer (self, 
-                 selection : Optional['Selection'] = None, 
-                 letter : Optional[str] = None, 
+    def chainer (self,
+                 selection : Optional['Selection'] = None,
+                 letter : Optional[str] = None,
                  whole_fragments : bool = False):
         """Set chains on demand.
         If no selection is passed then the whole structure will be affected.
@@ -2197,7 +2197,7 @@ class Structure:
     def set_selection_chain_name (self, selection : 'Selection', letter : str):
         """
         Given an atom selection, set the chain for all these atoms.
-        Note that the chain is changed in every whole residue, no 
+        Note that the chain is changed in every whole residue, no
         matter if only one atom was selected.
         """
         # Find if the letter belongs to an already existing chain
@@ -2208,8 +2208,8 @@ class Structure:
         # Get the selection residue indices
         selection_residue_indices = self.get_selection_residue_indices(selection)
         # Set the chain index of every residue to the new chain
-        # WARNING: 
-        #   This may have to be done atom by atom but we forgot why so we change 
+        # WARNING:
+        #   This may have to be done atom by atom but we forgot why so we change
         #   it so see what was the problem. Doing it atom by atom is not efficient
         #   and was causing a bug where residues with same number could change their name
         #   to that of the first residue found with that number.
@@ -2236,14 +2236,14 @@ class Structure:
         current_chain_names = [ chain.name for chain in self.chains ]
         next_available_chain_name = next((name for name in AVAILABLE_LETTERS if name not in current_chain_names), None)
         return next_available_chain_name
-    
+
     def get_next_available_chain_name (self, anterior : str) -> str:
         """
         Get the next available chain name.
 
         Args:
             anterior (str): The last chain name used, which is expected to be a single letter
-        
+
         Raises:
             ValueError: If the anterior is not a letter or if there are more chains than available
         """
@@ -2368,7 +2368,7 @@ class Structure:
 
         # Fix repeated chains if requested
         return len(repeated_chains) > 0
-    
+
     def check_splitted_chains (self, fix_chains : bool = False, display_summary : bool = False) -> bool:
         """Check if non-consecutive atoms belong to the same chain.
         If so, separate pieces of non-consecuite atoms in different chains.
@@ -2427,7 +2427,7 @@ class Structure:
                     residue = self.residues[residue_index]
                     residue.set_chain_index(new_chain.index)
         return len(splitted_fragments) > 0
-    
+
     def sort_residues (self):
         """Coherently sort residues according to the indices of the atoms they hold."""
         # Set a function to sort atoms and residues by index
@@ -2483,7 +2483,7 @@ class Structure:
             print(f' e.g. {merged_residues[0]}')
         # Return if we found merged residues
         return merged_residues_count > 0
- 
+
     def check_repeated_residues (self, fix_residues : bool = False, display_summary : bool = False) -> bool:
         """
         There may be residues which are equal in the structure (i.e. same chain, number and icode).
@@ -2681,7 +2681,7 @@ class Structure:
         Args:
             fix_atoms (bool): If True, rename repeated atoms.
             display_summary (bool): If True, display a summary of repeated atoms.
-        
+
         Returns:
             bool: True if there were any repeated atoms, False otherwise.
         """
@@ -2725,13 +2725,13 @@ class Structure:
                 warn(f'There are repeated atoms ({repeated_atoms_count})')
                 print(f'    e.g. {example}')
         return repeated_atoms_count > 0
-    
+
     def is_missing_any_bonds (self) -> bool:
         return any(bond == MISSING_BONDS for bond in self.bonds)
 
     def check_incoherent_bonds (self) -> bool:
-        """ Check bonds to be incoherent i.e. check atoms not to have more or less 
-        bonds than expected according to their element. 
+        """ Check bonds to be incoherent i.e. check atoms not to have more or less
+        bonds than expected according to their element.
         Return True if any incoherent bond is found. """
         # Find out if there are hydrogens in the structure
         # It may happen that we encounter an structure without hydrogens
@@ -2797,7 +2797,7 @@ class Structure:
         # Remove the auxiliar pdb file
         os.remove(auxiliar_pdb_filepath)
         return covalent_bonds
-    
+
     def copy_bonds (self) -> list[list[int]]:
         """Make a copy of the bonds list."""
         new_bonds = []
@@ -2856,7 +2856,7 @@ class Structure:
         if selection & self.select_missing_bonds():
             raise RuntimeError('The find rings logic can not be used when we are missing bonds')
 
-    
+
     def get_selection_outer_bonds (self, selection : Selection) -> list[int]:
         """Given an atom selection, get all bonds between these atoms and any other atom in the structure.
         Note that inner bonds between atoms in the selection are discarded."""
@@ -2979,7 +2979,7 @@ def calculate_torsion (atom_1 : Atom, atom_2 : Atom, atom_3 : Atom, atom_4 : Ato
     return float(np.degrees(np.arctan2(y, x)))
 
 # =========================
-#    Auxiliar functions 
+#    Auxiliar functions
 # =========================
 
 def get_next_letter (letter : str) -> str:
@@ -2992,7 +2992,7 @@ def get_next_letter (letter : str) -> str:
     return next_letter
 
 def first_cap_only (name : str) -> str:
-    """Given a string with 1 or 2 characters, return a new string with 
+    """Given a string with 1 or 2 characters, return a new string with
     the first letter cap and the second letter not cap (if any)"""
     if len(name) == 1:
         return name.upper()

@@ -7,19 +7,18 @@ from contextlib import redirect_stdout
 import os
 
 
-def thickness (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
+def thickness(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
     membrane_map: dict,
-    snapshots : int,
+    snapshots: int,
     frames_limit: int = 100):
     """Membrane thickness analysis."""
-
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping thickness analysis')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_THICKNESS_FILENAME}'
 
@@ -29,7 +28,7 @@ def thickness (
     for n in range(membrane_map['n_mems']):
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
-    head_sel_mda = 'index ' + " ".join(map(str,(head_sel)))
+    head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
     prop = {
         'lipid_sel': head_sel_mda,
@@ -45,7 +44,7 @@ def thickness (
                        input_traj_path=trajectory_file.path,
                        output_positions_path='.zpositions.csv',
                        properties=prop)
-    df = frame_df('.zpositions.csv') # Per frame data
+    df = frame_df('.zpositions.csv')  # Per frame data
     os.remove('.zpositions.csv')
 
     # Calculate the mean z position of midplane wrt the box axis using pytraj
@@ -56,7 +55,7 @@ def thickness (
         mean_z = selected_atoms.mean(axis=0)[2]
         midplane_z.append(float(mean_z))
     # Save the data
-    data = { 'data':{
+    data = {'data': {
         'frame': df.index.tolist(),
         'mean_positive': df['mean_positive'].tolist(),
         'mean_negative': df['mean_negative'].tolist(),
@@ -72,6 +71,7 @@ def thickness (
 
 
 def plot_thickness(output_analysis_filepath):
+    """Plot membrane thickness analysis results."""
     import matplotlib.pyplot as plt
 
     data = load_json(output_analysis_filepath)["data"]
@@ -96,7 +96,7 @@ def plot_thickness(output_analysis_filepath):
     plt.plot(frames, midplane_z, label='Midplane Z', linestyle='--', color='orange')
 
     # Plot mean positive and mean negative with error bars
-    eb1= plt.errorbar(frames, mean_positive, yerr=std_positive, label='Mean Positive', fmt='-o', color='green', capsize=3)
+    eb1 = plt.errorbar(frames, mean_positive, yerr=std_positive, label='Mean Positive', fmt='-o', color='green', capsize=3)
     eb1[-1][0].set_linestyle('--')
     eb2 = plt.errorbar(frames, mean_negative, yerr=std_negative, label='Mean Negative', fmt='-o', color='red', capsize=3)
     eb2[-1][0].set_linestyle('--')

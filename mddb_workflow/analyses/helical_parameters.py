@@ -22,7 +22,7 @@ curves_path = conda_prefix + '/.curvesplus'
 # Note that this is not a file, but the prefix to 3 different files
 standard_prefix = curves_path + '/standard'
 
-# TAKE INTO ACCOUNT THAT EL CODE WAS DEVELOP AND IMPLEMENTED IN THIS WORKFLOW USING AS A TEMPLATE CODE USED IN IRBBARCELONA BIOBB 
+# TAKE INTO ACCOUNT THAT EL CODE WAS DEVELOP AND IMPLEMENTED IN THIS WORKFLOW USING AS A TEMPLATE CODE USED IN IRBBARCELONA BIOBB
 # HERE THERE IS THE LINK RELATED TO THEIR WEBPAGE WITH MORE WORKFLOWS COMPUTING OTHER STUFF
 # https://mmb.irbbarcelona.org/biobb/workflows
 
@@ -183,7 +183,7 @@ def helical_parameters (
     # Convert the dictionary into a json file
     # DANI: Estamos teniendo NaNs que no son soportados más adelante, hay que eliminarlos
     save_json(dictionary_information, output_analysis_filepath)
-    
+
 # Function to execute cpptraj and calculate .dat file (Hydrogen Bonds)
 def hydrogen_bonds(
     topology_file : 'File',
@@ -194,8 +194,8 @@ def hydrogen_bonds(
 ):
     # This analysis is done using cpptraj and its done by two steps
     # 1. Crate the cpptraj.in file to generate the dry trajectory (cpptraj_dry.inpcrd)
-    # parm_path = f"/orozco/projects/ABCix/ProductionFiles" 
-    # setup_path = f"/orozco/projects/ABCix/ProductionFiles/SETUP" 
+    # parm_path = f"/orozco/projects/ABCix/ProductionFiles"
+    # setup_path = f"/orozco/projects/ABCix/ProductionFiles/SETUP"
 
     # # Config cpptraj
     # cpptraj_in_file = f"{output_directory}/cpptraj.in"
@@ -205,7 +205,7 @@ def hydrogen_bonds(
 
 
     #     # Exec cpptraj
-    #     cpptraj_command = f"cpptraj {cpptraj_in_file}" 
+    #     cpptraj_command = f"cpptraj {cpptraj_in_file}"
     #     res = subprocess.run(cpptraj_command, shell=True)
 
 
@@ -225,7 +225,7 @@ def hydrogen_bonds(
         structure_reference = structure_file.path
     else:
         structure_reference = inpcrd_file[0]  # Select the first matching file
-    
+
     # Crear el contenido del input de cpptraj usando las variables
     cpptraj_script = f"""
     # Load the topology file
@@ -258,11 +258,11 @@ def hydrogen_bonds(
         raise ToolError(f"Error: {output_dat_file} was not created. Check the cpptraj command and input files.")
 
     # Renumber the dat file because the first line is repeated
-    # AGUS: con esto tuvimos muchos problemas en el proyecto de ABCix y al final optamos por eliminar la primera línea y renumerar todo 
+    # AGUS: con esto tuvimos muchos problemas en el proyecto de ABCix y al final optamos por eliminar la primera línea y renumerar todo
     # AGUS: además, también sirvió para comprimir el archivo y leerlo mejor
     def renumber_dat_file(file_path):
         with open(file_path, 'r') as file:
-            lines = file.readlines()  
+            lines = file.readlines()
 
         counter = 1
         first = True
@@ -283,7 +283,7 @@ def hydrogen_bonds(
         print("Renumbering the dat file...")
     # Renumber the dat file
     renumber_dat_file(output_dat_file)
-    
+
     # Set the function to compress the dat file to .bin file
     def compress_dat_to_bin(output_dat_file):
         data = []
@@ -337,7 +337,7 @@ def hydrogen_bonds(
             if bit_count != 0:
                 last_byte = current_byte.ljust(8, '0')
                 file.write(pack('<B', int(last_byte, 2)))
-        
+
         # Set the name of the meta file and create the meta data corresponding to the binary dat file
         meta_file_path = bin_file_path + '.meta.json'
         meta_data = {
@@ -352,7 +352,7 @@ def hydrogen_bonds(
             'bitsize': 2,
         }
         save_json(meta_data, meta_file_path)
-    
+
     # Compress the dat file to .bin file
     compress_dat_to_bin(output_dat_file)
     print("Dat file compressed to bin file, removing original dat file...")
@@ -360,20 +360,20 @@ def hydrogen_bonds(
     #os.remove(output_dat_file)
 
 def terminal_execution(
-        trajectory_filepath: 'str', 
-        topology_filepath: 'str', 
-        strand_indexes: 'list', 
-        sequence: 'str', 
+        trajectory_filepath: 'str',
+        topology_filepath: 'str',
+        strand_indexes: 'list',
+        sequence: 'str',
         output_directory: 'str'):
     """Function to execute Curves+ and Canals software to generate the output needed."""
-    
+
     # Purge residual files from previous runs
     possible_residual_filenames = glob.glob(output_directory+'/*.cda') \
         + glob.glob(output_directory+'/*.lis') \
         + glob.glob(output_directory+'/*.ser')
     for filename in possible_residual_filenames:
         os.remove(filename)
-        
+
     # Indicate all the instructions with the desired commands, keep in mind that there could be more commands to include and obtain other results and files
     instructions = [
         "Cur+ <<!",
@@ -400,7 +400,7 @@ def terminal_execution(
 
     # Enter inside helicalparameters folder to execute Canals software as it needs the Curves+ output as input
     os.chdir(output_directory)
-    
+
     # If output has not been generated then warn the user
     if not os.path.exists('test.cda'):
         raise ToolError('Something went wrong with Curves+ software')
@@ -409,9 +409,9 @@ def terminal_execution(
     # We have set up level1 and level2 to 0 as if lev1=lev2=0, lev1 is set to 1 and lev2 is set to the length of the oligmer
     level1 = 0
     level2 = 0
-    # We just want to compute series files, but if you want more output just use the link written before 
+    # We just want to compute series files, but if you want more output just use the link written before
     # And include them in the instructions similarly to series input
-    
+
     series = ".t."
     instructions2 = [
         "Canal <<! ",
@@ -428,7 +428,7 @@ def terminal_execution(
     #logs = subprocess.run(instructions,stderr=subprocess.PIPE).stderr.decode()
     print(' Running canals')
     process = subprocess.Popen(cmd2,stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True,executable=os.getenv('SHELL', '/bin/sh'))
-    
+
     out, err = process.communicate()
     process.wait()
     out.decode("utf-8")
@@ -487,21 +487,21 @@ def send_files(sequence: str, frames_limit: int, output_directory: str):
         words = file.split('.')
         helpar = words[0].split('_')[-1].lower()
         # Check to which block the file came from
-        if helpar in ["shear","stagger","stretch","buckle","opening","propel","inclin","tip","xdisp","ydisp", 
+        if helpar in ["shear","stagger","stretch","buckle","opening","propel","inclin","tip","xdisp","ydisp",
                         "majw","majd","minw","mind","rise","shift","slide","roll","tilt","twist"]:
-            
+
             files_averages.append(file)
 
         elif helpar in ["alphac","alphaw","betac","betaw","gammac","gammaw","phasec","phasew","epsilc","epsilw","zetac","zetaw"]:
-            
+
             files_backbones.append(file)
 
-        if helpar in ['alphac', 'alphaw', 'betac', 'betaw', 'gammac', 'gammaw', 'deltac', 'deltaw', 'epsilc', 'epsilw', 
+        if helpar in ['alphac', 'alphaw', 'betac', 'betaw', 'gammac', 'gammaw', 'deltac', 'deltaw', 'epsilc', 'epsilw',
                         'zetac', 'zetaw', 'chic', 'chiw', 'phasec', 'phasew']:
-            
+
             files_allbackbones.append(file)
 
-    
+
 
     information_dictionary = {'avg_res':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}, 'stiffness':{}}}
 
@@ -509,19 +509,19 @@ def send_files(sequence: str, frames_limit: int, output_directory: str):
     # 'ts':{'backbone':{},'grooves':{},'axisbp':{},'intrabp':{},'interbp':{}}
     # Before there was another field called 'ts' or time series but it was removed because now it is included in the .ser and .bin files
 
-    # Work with files that correspond to the different blocks of Helical Parameters and perform the different computations to each block 
+    # Work with files that correspond to the different blocks of Helical Parameters and perform the different computations to each block
 
     # Call function to distribute the different files to compute their averages
     information_dictionary1 = flow_files_average(files_averages,information_dictionary0,sequence)
 
     # Call function to distribute the files related to backbone torsions and perform different calculcations to each
-    information_dictionary2 = flow_files_backbone(files_backbones,information_dictionary1) 
+    information_dictionary2 = flow_files_backbone(files_backbones,information_dictionary1)
 
     # Call function to distribut all files and compute Time Series in all of them
-    #info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit) 
+    #info_dictionary = flow_files_timeseries(files_averages,files_allbackbones,information_dictionary2,frames_limit)
     return information_dictionary2 # Return the dictionary to convert it to a json
 
-# Function to compute the stiffness 
+# Function to compute the stiffness
 def get_stiffness(sequence,files,info_dict,frames_limit):
     # Create and object (as NASSA does) to store the sequence and the corresponding .ser info so then we can calculate the stiffness
     extracted = {}
@@ -543,10 +543,10 @@ def get_stiffness(sequence,files,info_dict,frames_limit):
         print(f"loaded {len(crd_data)} files for coordinate <{coord}>")
     results = transform(extracted)
     # Add the results stiffness to the dictionary
-    info_dict['avg_res']['stiffness'] = results  
+    info_dict['avg_res']['stiffness'] = results
     return info_dict
 
-# AGUS: estas tres funciones siguientes son una copia de NASSA pero modificada para este caso ya que NASSA 
+# AGUS: estas tres funciones siguientes son una copia de NASSA pero modificada para este caso ya que NASSA
 # AGUS: funciona para todas las secuencias o MD al mismo tiempo y el WF para cada proyecto/MD
 # AGUS: además, ahora se define por defecto el nombre de la unidad como hexámero
 def transform(data, unit_name='hexamer'):
@@ -575,7 +575,7 @@ def transform(data, unit_name='hexamer'):
     for item in results["stiffness"]:
         for key, value in item.items():
             if key == "hexamer":
-                continue  
+                continue
             if key not in stiffness_by_coord:
                 stiffness_by_coord[key] = []
             stiffness_by_coord[key].append(value)
@@ -677,7 +677,7 @@ def get_subunit_stiffness(
     #     print(last_row)
     #     stiff = np.append(stiff, last_row).reshape(9, 8)
     #     scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
-    
+
     stiff = stiff.round(6)
     stiff_diag = np.diagonal(stiff) * np.array(scaling)
 
@@ -710,19 +710,19 @@ def checking2(helpar_name):
 
 # Function to compute the inverse complement DNA or RNA sequence it is comented becuase it is not used but in case it must be used it is here
 '''
-# Compute inverse complement DNA or RNA sequence 
+# Compute inverse complement DNA or RNA sequence
 def reverse_sequence(sequence,DNA=True):
     if DNA: # If DNA flag is tru we want to compute the inverse using T instead of U
         A_base = "T"
     else: # Now it is RNA so we want to convert T to U
         A_base = "U"
-    inverse = {"A":A_base,"G":"C","C":"G",A_base:"A"} # Dictionary to convert easily the sequence 
+    inverse = {"A":A_base,"G":"C","C":"G",A_base:"A"} # Dictionary to convert easily the sequence
     inv_seq = ""
     for i in sequence[::-1]: # Traverse the sequence from the end to the beginning
-        inv_seq += inverse[i] # Obtain the complementary base 
+        inv_seq += inverse[i] # Obtain the complementary base
     return inv_seq # Return the inverse complement
 '''
-    
+
 # Function to read a given .ser file and transform it into pandas dataframe
 def read_series(input_serfile, usecols=None):
     """Read .ser file"""
@@ -747,55 +747,55 @@ def flow_files_average(files,info_dict,sequence):
         word = file.split('.')
         helpword = word[0].split('_')[-1].lower()
         # Obtain baselen value depending on the file
-        baselen = checking(helpword) 
+        baselen = checking(helpword)
         # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-        dataframe = read_series(file) 
+        dataframe = read_series(file)
         df1,df2 = average_std(dataframe,baselen,sequence)
         df1i,df2i = average_std_intra(dataframe,baselen,sequence)
-        if helpword in ["roll","tilt","twist","rise","shift","slide"]: 
+        if helpword in ["roll","tilt","twist","rise","shift","slide"]:
             # INTER BASEPAIR BLOCK
             info_dict['avg_res']['interbp'][helpword] = {'avg':{},'std':{}}
-            #  we want to store all the information regarding the averages 
-            info_dict['avg_res']['interbp'][helpword]['avg'] = df1.T.values.tolist() 
+            #  we want to store all the information regarding the averages
+            info_dict['avg_res']['interbp'][helpword]['avg'] = df1.T.values.tolist()
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['interbp'][helpword]['std'] = df2.T.values.tolist() 
+            info_dict['avg_res']['interbp'][helpword]['std'] = df2.T.values.tolist()
 
-        elif helpword in ["shear","stagger","stretch","buckle","opening","propel"]: 
+        elif helpword in ["shear","stagger","stretch","buckle","opening","propel"]:
             # INTRA BASEPAIR BLOCK
             info_dict['avg_res']['intrabp'][helpword] = {'avg':{},'std':{}}
-            #  we want to store all the information regarding the averages 
-            info_dict['avg_res']['intrabp'][helpword]['avg'] = df1i.T.values.tolist() 
+            #  we want to store all the information regarding the averages
+            info_dict['avg_res']['intrabp'][helpword]['avg'] = df1i.T.values.tolist()
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['intrabp'][helpword]['std'] = df2i.T.values.tolist() 
+            info_dict['avg_res']['intrabp'][helpword]['std'] = df2i.T.values.tolist()
 
         elif helpword in ["xdisp","ydisp","inclin","tip"]:
-            # AXIS BASEPAIR BLOCK 
-            info_dict['avg_res']['axisbp'][helpword] = {'avg':{},'std':{}} 
+            # AXIS BASEPAIR BLOCK
+            info_dict['avg_res']['axisbp'][helpword] = {'avg':{},'std':{}}
 
             #  we want to store all the information regarding the averages
-            info_dict['avg_res']['axisbp'][helpword]['avg'] = df1i.T.values.tolist()  
+            info_dict['avg_res']['axisbp'][helpword]['avg'] = df1i.T.values.tolist()
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['axisbp'][helpword]['std'] = df2i.T.values.tolist() 
+            info_dict['avg_res']['axisbp'][helpword]['std'] = df2i.T.values.tolist()
 
         else:
             # GROOVES BLOCK
-            info_dict['avg_res']['grooves'][helpword] = {'avg':{},'std':{}} 
+            info_dict['avg_res']['grooves'][helpword] = {'avg':{},'std':{}}
 
-            #  we want to store all the information regarding the averages 
-            info_dict['avg_res']['grooves'][helpword]['avg'] = df1.T.values.tolist() 
+            #  we want to store all the information regarding the averages
+            info_dict['avg_res']['grooves'][helpword]['avg'] = df1.T.values.tolist()
 
             #  we want to store all the information regarding the standard deviations
-            info_dict['avg_res']['grooves'][helpword]['std'] = df2.T.values.tolist() 
-    
+            info_dict['avg_res']['grooves'][helpword]['std'] = df2.T.values.tolist()
+
     return info_dict # Return dictionary with all information computed (averages and standard deviation)
 
 # Compute average and standard deviation
 def average_std(dataf,baselen,sequence):
     # For hexamers, baselen has to be 2
-    baselen = 2 
+    baselen = 2
     # discard first and last base(pairs) from sequence
     dataf = dataf[dataf.columns[2:17]]
     # sequence = sequence[1:]
@@ -805,11 +805,11 @@ def average_std(dataf,baselen,sequence):
         for i in range(len(dataf.columns))] # - baselen
     means = dataf.mean(axis=0).iloc[:len(xlabels)]
     stds = dataf.std(axis=0).iloc[:len(xlabels)]
-    return means,stds 
+    return means,stds
 
 def average_std_intra(dataf,baselen,sequence):
     # For hexamers, baselen has to be 2
-    baselen = 2 
+    baselen = 2
     # discard first and last base(pairs) from sequence
     dataf = dataf[dataf.columns[2:18]]
     # sequence = sequence[1:]
@@ -819,67 +819,67 @@ def average_std_intra(dataf,baselen,sequence):
         for i in range(len(dataf.columns))] # - baselen
     means = dataf.mean(axis=0).iloc[:len(xlabels)]
     stds = dataf.std(axis=0).iloc[:len(xlabels)]
-    return means,stds 
+    return means,stds
 
 # OTHER FUNCTIONS THAT MUST PERFORM OTHER CALCULATIONS REGARDING TO THE LAST BLOCK OF HELICAL PARAMETERS (BACKBONE TORSIONS)
-# THERE ARE 3 DIFFERENT FUNCTIONS EACH ONE COMPUTING DIFFERENT ASPECTS OF THE FLEXIBILITY IN THE BACKBONE 
+# THERE ARE 3 DIFFERENT FUNCTIONS EACH ONE COMPUTING DIFFERENT ASPECTS OF THE FLEXIBILITY IN THE BACKBONE
 # SUGAR PUCKERING, CANONICAL ALPHA/GAMMA AND BI/BII POPULATIONS
 
-# FUNCTION TO CONTROL 
+# FUNCTION TO CONTROL
 def flow_files_backbone(files,info_dict):
     # Store files related to Puckering computations
-    puckering_files = [] 
+    puckering_files = []
     # Store files related to Canonical Alpha Gamma computations
-    canonicalg_files = [] 
+    canonicalg_files = []
     # Store files related to BI and BII populations
-    bipopulations_files = [] 
+    bipopulations_files = []
     # Iterate over all files that must be analyzed
-    for file in files: 
+    for file in files:
         word = file.split('.')
         helpword = word[0].split('_')[-1].lower()
         # Sugar Puckering
-        if helpword in ['phasec','phasew']: 
+        if helpword in ['phasec','phasew']:
             puckering_files.append(file)
         # Canonical Alpha/Gamma
-        elif helpword in ['alphac','alphaw','gammac','gammaw']: 
+        elif helpword in ['alphac','alphaw','gammac','gammaw']:
             canonicalg_files.append(file)
         # BI/BII Population
-        elif helpword in ['epsilc','epsilw','zetac','zetaw']: 
+        elif helpword in ['epsilc','epsilw','zetac','zetaw']:
             bipopulations_files.append(file)
     info_dict['avg_res']['backbone'] = {'puckering':{'north':{},'east':{},'west':{},'south':{}},'bi':{},'bii':{},'canonical_alphagamma':{}}
     # Call function to perform computations regarding Sugar Puckering
-    npop, epop, wpop, spop = sugar_puckering(puckering_files) 
+    npop, epop, wpop, spop = sugar_puckering(puckering_files)
     info_dict['avg_res']['backbone']['puckering']['north'] = npop.T.values.tolist()
     info_dict['avg_res']['backbone']['puckering']['east'] = epop.T.values.tolist()
     info_dict['avg_res']['backbone']['puckering']['west'] =  wpop.T.values.tolist()
     info_dict['avg_res']['backbone']['puckering']['south'] = spop.T.values.tolist()
     # Call function to perform computations regarding Canonical Alpha Gamma
-    canon = canonical_alphagamma(canonicalg_files) 
+    canon = canonical_alphagamma(canonicalg_files)
     info_dict['avg_res']['backbone']['canonical_alphagamma'] = canon.T.values.tolist()
     # Call function to perform computations regarding BI and BII populations
-    b1,b2 = bi_populations(bipopulations_files) 
+    b1,b2 = bi_populations(bipopulations_files)
     info_dict['avg_res']['backbone']['bi'] = b1.T.values.tolist()
     info_dict['avg_res']['backbone']['bii'] = b2.T.values.tolist()
     return info_dict
 
-######## SUGAR PUCKERING 
+######## SUGAR PUCKERING
 
-# READ FILES AND CORRECT ANGLES 
+# READ FILES AND CORRECT ANGLES
 def sugar_puckering(pcukfiles):
-    for file in pcukfiles: # Iterate over all files 
+    for file in pcukfiles: # Iterate over all files
         if file[-5:] == "C.ser":
             phasec = file
         else:
             phasew = file
-    
+
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    phasec = read_series(phasec) 
+    phasec = read_series(phasec)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    phasew = read_series(phasew) 
+    phasew = read_series(phasew)
     # Fix angles that are negative
-    phasec = fix_angles(phasec)  
+    phasec = fix_angles(phasec)
     # Fix angles that are negative
-    phasew = fix_angles(phasew) 
+    phasew = fix_angles(phasew)
 
     return cpuck(phasec,phasew)
 
@@ -907,7 +907,7 @@ def cpuck(phaseC,phaseW):
 
 ######## CANONICAL ALPHA/GAMMA
 
-# READ FILES AND CORRECT ANGLES REGARDING CANICAL ALPHA GAMMA 
+# READ FILES AND CORRECT ANGLES REGARDING CANICAL ALPHA GAMMA
 def canonical_alphagamma(canonfiles):
     for file in canonfiles:
         if file[-7:] == "haC.ser":
@@ -920,21 +920,21 @@ def canonical_alphagamma(canonfiles):
             gammaw = file
 
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    alphac = read_series(alphac) 
+    alphac = read_series(alphac)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    alphaw = read_series(alphaw) 
+    alphaw = read_series(alphaw)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    gammac = read_series(gammac) 
+    gammac = read_series(gammac)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    gammaw = read_series(gammaw) 
+    gammaw = read_series(gammaw)
     # Fix angles that are negative and over 360 degrees
-    alphac = fix_angles2(alphac) 
+    alphac = fix_angles2(alphac)
     # Fix angles that are negative and over 360 degrees
     alphaw = fix_angles2(alphaw)
     # Fix angles that are negative and over 360 degrees
     gammac = fix_angles2(gammac)
     # Fix angles that are negative and over 360 degrees
-    gammaw = fix_angles2(gammaw) 
+    gammaw = fix_angles2(gammaw)
 
     return check_alpgamm(alphac,gammac,alphaw,gammaw)
 
@@ -979,23 +979,23 @@ def bi_populations(bfiles):
             zetaw = file
 
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    epsilc = read_series(epsilc) 
+    epsilc = read_series(epsilc)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    epsilw = read_series(epsilw) 
+    epsilw = read_series(epsilw)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    zetac = read_series(zetac) 
+    zetac = read_series(zetac)
     # Convert the files into Pandas dataframe to make the computations and data manipulation easily
-    zetaw = read_series(zetaw) 
+    zetaw = read_series(zetaw)
     # Fix angles that are negative and over 360 degrees
-    epsilc = fix_angles2(epsilc) 
+    epsilc = fix_angles2(epsilc)
     # Fix angles that are negative and over 360 degrees
     epsilw = fix_angles2(epsilw)
     # Fix angles that are negative and over 360 degrees
     zetac = fix_angles2(zetac)
     # Fix angles that are negative and over 360 degrees
-    zetaw = fix_angles2(zetaw) 
+    zetaw = fix_angles2(zetaw)
     # Compute differences between Epsilon and Zeta values
-    diff_epsil_zeta = angles_diff_ze(epsilc,zetac,epsilw,zetaw) 
+    diff_epsil_zeta = angles_diff_ze(epsilc,zetac,epsilw,zetaw)
     BI,BII = bi_pop(diff_epsil_zeta)
     return BI,BII
 
@@ -1033,40 +1033,38 @@ def flow_files_timeseries(files_average,files_backbone,info_dict,frames_limit):
         helpword = word[0].split('_')[-1].lower()
         df = time_series(file,helpword,frames_limit)
 
-        # Store all computations from files that are related to the block Inter Basepair 
-        if helpword in ["roll","tilt","twist","rise","shift","slide"]: 
+        # Store all computations from files that are related to the block Inter Basepair
+        if helpword in ["roll","tilt","twist","rise","shift","slide"]:
             info_dict['ts']['interbp'][helpword] = {}
-            # Store all information 
-            info_dict['ts']['interbp'][helpword] = df.T.values.tolist()  
+            # Store all information
+            info_dict['ts']['interbp'][helpword] = df.T.values.tolist()
 
         # Store all computations from files that are related to the block Intra Basepair
-        elif helpword in ["shear","stagger","stretch","buckle","opening","propel"]: 
+        elif helpword in ["shear","stagger","stretch","buckle","opening","propel"]:
             info_dict['ts']['intrabp'][helpword] = {}
-            # Store all information 
-            info_dict['ts']['intrabp'][helpword] = df.T.values.tolist() 
+            # Store all information
+            info_dict['ts']['intrabp'][helpword] = df.T.values.tolist()
 
         # Store all computations from files that are related to the block Axis Basepair
-        elif helpword in ["xdisp","ydisp","inclin","tip"]: 
+        elif helpword in ["xdisp","ydisp","inclin","tip"]:
             info_dict['ts']['axisbp'][helpword] = {}
             # Store all information
-            info_dict['ts']['axisbp'][helpword] = df.T.values.tolist()  
-
+            info_dict['ts']['axisbp'][helpword] = df.T.values.tolist()
 
         else:
             # Store all computations from files that are related to the block Grooves
-            info_dict['ts']['grooves'][helpword] = {} 
-            # Store all information 
-            info_dict['ts']['grooves'][helpword] = df.T.values.tolist() 
-            
+            info_dict['ts']['grooves'][helpword] = {}
+            # Store all information
+            info_dict['ts']['grooves'][helpword] = df.T.values.tolist()
+
     for file2 in files_backbone:
         word = file2.split('.')
         helpword = word[0].split('_')[-1].lower()
         df1 = time_series(file2,helpword,frames_limit)
         # Store all computations from files that are related to the block Backbone Torsions
-        info_dict['ts']['backbone'][helpword] = {} 
+        info_dict['ts']['backbone'][helpword] = {}
         # Store all information
-        info_dict['ts']['backbone'][helpword] = df1.T.values.tolist() 
-
+        info_dict['ts']['backbone'][helpword] = df1.T.values.tolist()
 
     return info_dict
 

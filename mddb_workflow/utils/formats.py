@@ -155,13 +155,13 @@ def get_format_set_suitable_combination (
     available_functions : list[Callable],
     available_request_format_sets : list[dict],
 ) -> Generator[Optional[tuple[Callable, dict]], None, None]:
-    
+
     # Try with each request format set
     for request_format_set in available_request_format_sets:
 
         # Get the required outputs
         required_outputs = request_format_set.get('outputs', None)
-    
+
         # For each function + format set possibility which is compatible with the required inputs, return the available outputs
         def get_combinations (
             current_functions : list[Callable],
@@ -214,7 +214,7 @@ def get_format_set_suitable_combination (
                     for results in get_combinations(new_functions, new_function_common_inputs, new_available_inputs):
                         if results:
                             yield results
-        
+
         # Get every possible combination after combining the corresponding functions
         first_available_inputs = request_format_set.get('inputs', None)
         for functions, function_common_inputs, last_common_outputs in get_combinations([], [], first_available_inputs):

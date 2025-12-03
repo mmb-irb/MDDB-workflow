@@ -20,6 +20,7 @@ MISSING_VALUE_EXCEPTION = Exception('Missing value')
 # Name of the argument used by all functions to know where to write output
 OUTPUT_DIRECTORY_ARG = 'output_directory'
 
+
 class Task:
     """Descriptor class to handle a generic task.
     It implements lazy properties, caching and overwriting.
@@ -209,9 +210,6 @@ class Task:
             self._set_parent_output(parent, output)
         # Check if this dependency is to be overwriten
         forced_overwrite = self.flag in parent.overwritables
-        # Get the list of inputs which have changed compared to a previous run
-        # WARNING: Always get changed inputs, since this function updates the cache
-        # If had_cache is false then it means this is the first time the task is ever done
         changed_inputs, had_cache, cache_cksums = self._get_changed_inputs(parent, processed_args)
         any_input_changed = len(changed_inputs) > 0
         # Update the cache inputs
@@ -225,7 +223,7 @@ class Task:
         existing_final_output = writes_output_dir and exists(final_output_directory)
         # If the output file already exists then it also means the task was done in a previous run
         existing_output_files = writes_output_file and \
-            all( output_file== None or type(output_file) == Exception or output_file.exists
+            all( output_file == None or type(output_file) == Exception or output_file.exists
                  for output_file in output_files.values() )
         # If we already have a cached output result
         existing_output_data = output != MISSING_VALUE_EXCEPTION
@@ -278,11 +276,10 @@ class Task:
         end_time = time.time()
         print(f'   Task {self.flag} completed in {end_time - start_time:.2f} seconds{COLOR_END}')
         self._set_parent_output(parent, output)
-        # Set the output to be saved in cache
-        # Note that all must be JSON serializable values
-        cache_output = output
-        # Update cache output unless it is marked to not save it
-        if self.use_cache: parent.cache.update(self.cache_output_key, cache_output)
+        if self.use_cache:
+            # Save output in cache unless it is marked to not save it
+            # Note that all must be JSON serializable values
+            parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
         # Change the incomplete directory name to its final name
@@ -323,7 +320,15 @@ class Task:
         parent: Union['Project', 'MD'],
         processed_args: dict,
     ) -> tuple[list[str], bool, dict]:
-        """Find out if input arguments changed regarding the last run."""
+        """Find out if input arguments changed regarding the last run.
+
+        Get the list of inputs which have changed compared to a previous run.
+        If had_cache is false then it means this is the first time the task is ever done.
+
+        Warning:
+            Always get changed inputs, since this function updates the cache.
+
+        """
         # Get cache argument references
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
         had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
@@ -353,7 +358,7 @@ class Task:
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
 
-    def prefill(self, parent, output, inputs):
+    def prefill(self, parent: Union['Project', 'MD'], output, inputs):
         """Assign an output value to a task thus marking it as already run.
         This function is used in a very specific scenario:
         Tasks which generate no output files/directory inside the 'inpro' task.
@@ -363,9 +368,5 @@ class Task:
         # Update cache output unless it is marked to not save it
         if self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Save input cksums to avoid repeating this task in future runs
-        # Get the list of inputs which have changed compared to a previous run
-        # WARNING: Always get changed inputs, since this function updates the cache
-        # If had_cache is false then it means this is the first time the task is ever done
-        changed_inputs, had_cache, cache_cksums = self._get_changed_inputs(parent, inputs)
-        # Update the cache inputs
+        _, _, cache_cksums = self._get_changed_inputs(parent, inputs)
         parent.cache.update(self.cache_arg_cksums, cache_cksums)

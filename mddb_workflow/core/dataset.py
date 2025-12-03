@@ -9,15 +9,14 @@ import os
 
 
 class Dataset:
-    """
-    Class to manage and process a dataset of MDDB projects.
-    """
+    """Class to manage and process a dataset of MDDB projects."""
+
     def __init__(self, dataset_yaml_path: str):
-        """
-        Initializes the Dataset object.
+        """Initialize the Dataset object.
 
         Args:
             dataset_yaml_path (str): Path to the dataset YAML file.
+
         """
         self.root_path = os.path.dirname(os.path.abspath(dataset_yaml_path))
         self.config = load_yaml(dataset_yaml_path)
@@ -27,8 +26,7 @@ class Dataset:
         self._status = None
 
     def _resolve_directory_patterns(self, dir_patterns: list[str]) -> list[str]:
-        """
-        Helper method to resolve directory patterns (glob or absolute/relative paths).
+        """Resolve directory patterns (glob or absolute/relative paths).
         Validates that resolved paths are under the dataset root.
 
         Args:
@@ -36,9 +34,10 @@ class Dataset:
 
         Returns:
             list[str]: List of resolved directory paths.
-        
+
         Raises:
             ValueError: If a resolved path is outside the dataset root.
+
         """
         directories = []
         for dir_pattern in dir_patterns:
@@ -81,7 +80,7 @@ class Dataset:
             input_generator (callable): A callable function intended for generating input values.
                 Currently, it is called with the project directory name (DIR) as its argument
             overwrite (bool): Whether to overwrite existing inputs.yaml files. Default is False.
-        
+
         """
         # Load the template
         with open(inputs_template_path, 'r') as f:

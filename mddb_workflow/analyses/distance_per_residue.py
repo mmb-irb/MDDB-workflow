@@ -1,5 +1,5 @@
 # Distance per residue analysis
-# 
+#
 # Perform the distance per residue analysis between each pair of interacting agents
 # The analysis is carried by pytraj
 
@@ -18,32 +18,34 @@ from mddb_workflow.utils.type_hints import *
 # This is an aproximation below the limit which has been observed experimentally
 N_VALUES_LIMIT = 400000
 
-def distance_per_residue (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
-    structure : 'Structure',
-    interactions : list,
-    snapshots : int,
-    frames_limit : int
+
+def distance_per_residue(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
+    structure: 'Structure',
+    interactions: list,
+    snapshots: int,
+    frames_limit: int
 ):
     """Calculate the distance mean and standard deviation of each pair of residues of different agents.
-    Note that the distances are calculated for all residues in the agent, not only the interface residues."""
-    
+    Note that the distances are calculated for all residues in the agent, not only the interface residues.
+    """
     # Return before doing anything if there are no interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_DIST_PERRES_FILENAME}'
-    
+
     # Set a reference system to handle conversions to pytraj residue numeration
     # First set the pytraj topology
     pytraj_topology = structure.get_pytraj_topology()
     pytraj_residues = list(pytraj_topology.residues)
-    # Transform a structure residue to the pytraj residue numeration (1, 2, ... n)
-    def residue_2_pytraj_residue_index (residue_index : int) -> int:
+
+    def residue_2_pytraj_residue_index(residue_index: int) -> int:
+        """Transform a structure residue to the pytraj residue numeration (1, 2, ... n)."""
         residue = structure.residues[residue_index]
         residue_number = residue.number
         residue_name = residue.name[0:3]
@@ -89,7 +91,7 @@ def distance_per_residue (
         # If the interaction has more values than we can store then it will be reduced
         # Reduced interactions will store only residues in the interface in order to fit
         n_values = len(residues_1) * len(residues_2)
-        reduced = n_values > N_VALUES_LIMIT        
+        reduced = n_values > N_VALUES_LIMIT
         # Contact Matrix -- Initialization
         # Create 2 lists filled with 0s with the length of the residue number arrays respectively
         if reduced:
@@ -99,22 +101,22 @@ def distance_per_residue (
             n_values = len(residues_1) * len(residues_2)
             if n_values > N_VALUES_LIMIT: raise ValueError('Too many values, even after reducing')
         # Show the size of the matrix
-        h,w = len(residues_2), len(residues_1)
+        h, w = len(residues_2), len(residues_1)
         print(f'     {h}x{w} residues')
         # Convert residues to pytraj residue numbers
         pt_residues_1 = list(map(residue_2_pytraj_residue_index, residues_1))
         pt_residues_2 = list(map(residue_2_pytraj_residue_index, residues_2))
-        
+
         # Contact Matrix -- Calculation (Vectorized)
         # Create all mask pairs at once
         mask_pairs = []
         for r2 in pt_residues_2:
             for r1 in pt_residues_1:
                 mask_pairs.append(f":{r2} :{r1}")
-        
+
         # Calculate all distances in one call
         all_distances = pt.distance(pt_trajectory, mask_pairs)
-        
+
         # Reshape the results into matrices
         # all_distances shape: (n_pairs, n_frames)
         means_matrix = np.zeros((h, w))

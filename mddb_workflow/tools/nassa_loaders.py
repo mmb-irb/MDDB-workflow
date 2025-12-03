@@ -61,10 +61,10 @@ def reverse_sequence(sequence,DNA=True):
         A_base = "T"
     else: # Now it is RNA so we want to convert T to U
         A_base = "U"
-    inverse = {"A":A_base,"G":"C","C":"G",A_base:"A"} # Dictionary to convert easily the sequence 
+    inverse = {"A":A_base,"G":"C","C":"G",A_base:"A"} # Dictionary to convert easily the sequence
     inv_seq = ""
     for i in sequence[::-1]: # Traverse the sequence from the end to the beginning
-        inv_seq += inverse[i] # Obtain the complementary base 
+        inv_seq += inverse[i] # Obtain the complementary base
     return inv_seq # Return the inverse complement
 
 def write_sequence(nucleic_acid, filename):

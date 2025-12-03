@@ -74,7 +74,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
             # Get the uniprot
             uniprots = identifier.get('uniprot_ids', None)
             if not uniprots: continue
-            if len(uniprots) > 1:  
+            if len(uniprots) > 1:
                 print(f'PDB {pdb_id} has multiple uniprots: {uniprots}. Saving only the first one')
             uniprot_id = uniprots[0]
             chains = identifier['asym_ids']

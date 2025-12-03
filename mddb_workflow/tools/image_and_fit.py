@@ -54,7 +54,7 @@ def image_and_fit (
 
     if not image and not fit:
         return
-    
+
     # In order to run the imaging with PBC residues we need a .tpr file, not just the .pdb file
     # This is because there is a '-pbc mol' step which only works with a .tpr file
     is_tpr_available = input_topology_file != MISSING_TOPOLOGY and input_topology_file.format == 'tpr'
@@ -96,7 +96,7 @@ def image_and_fit (
     if image:
         print(' Running first imaging step')
 
-        # Check if coordinates are to be translated 
+        # Check if coordinates are to be translated
         must_translate = translation != [0, 0, 0]
 
         # If so run the imaging process without the '-center' flag
@@ -170,7 +170,7 @@ def image_and_fit (
             -fit rot+trans -n {CENTER_INDEX_FILEPATH}',
             user_input = f'{CENTER_SELECTION_NAME} System',
             show_error_logs = True)
-        
+
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
         # Note that the input structure is not necessarily the output structure in this scenario
         # The fit may have been done using the topology and there may be an offset, so better dump it

@@ -48,7 +48,7 @@ def check_trajectory_integrity (
     # Skip the test if it is already passed according to the register
     if register.tests.get(TRAJECTORY_INTEGRITY_FLAG, None):
         return True
-    
+
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if snapshots < 3:
         register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
@@ -72,7 +72,7 @@ def check_trajectory_integrity (
         warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
         register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
         return True
-    
+
     # Get fragments out of the parsed selection
     # Fragments will be analyzed independently
     # A sudden jump of a small fragment may cause a small RMSD perturbation when
@@ -198,7 +198,7 @@ def check_trajectory_integrity (
             if outliers > 0: print(f' Outliers: {outliers}')
             if bypassed_frames > 0: print(f' Bypassed frames: {bypassed_frames}')
         print('*The z-score of a value means how many times the standard deviation away it is from the average')
-            
+
     # If there were any outlier then the check has failed
     if any_outliers > 0:
         # Add a warning an return True since the test failed in case we have mercy

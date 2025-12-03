@@ -12,17 +12,16 @@ from mddb_workflow.utils.type_hints import *
 rgyr_data_filename = '.rgyr_data.xvg'
 
 
-def rgyr (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    output_directory : str,
-    snapshots : int,
-    structure : 'Structure',
-    pbc_selection : 'Selection',
-    frames_limit : int = 5000
+def rgyr(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    output_directory: str,
+    snapshots: int,
+    structure: 'Structure',
+    pbc_selection: 'Selection',
+    frames_limit: int = 5000
 ):
     """Perform the RMSd analysis. Use the first trajectory frame in .pdb format as a reference."""
-
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_RGYR_FILENAME}'
 
@@ -44,10 +43,10 @@ def rgyr (
     ndx_filename = '.not_pbc.ndx'
     with open(ndx_filename, 'w') as file:
         file.write(ndx_selection)
-    
+
     # Run Gromacs
     run_gromacs(f'gyrate -s {structure_file.path} -f {reduced_trajectory_filepath} \
-        -o {rgyr_data_filename} -n {ndx_filename} -mode geometry', user_input = selection_name)
+        -o {rgyr_data_filename} -n {ndx_filename} -mode geometry', user_input=selection_name)
 
     # Read the output file and parse it
     raw_rgyr_data = xvg_parse(rgyr_data_filename, ['times', 'rgyr', 'rgyrx', 'rgyry', 'rgyrz'])

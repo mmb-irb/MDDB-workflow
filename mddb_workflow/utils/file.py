@@ -156,7 +156,7 @@ class File:
         if self.extension == self.format:
             return self
         return self.reformat(self.format)
-    
+
     def reformat (self, new_extension : str) -> 'File':
         """ Given a file and a new extension we set a symlink from a new file with that extension. """
         # Set the filename with the standard extension and initiate the file
@@ -170,7 +170,7 @@ class File:
     def get_prefixed_file (self, prefix : str) -> 'File':
         """ Get a prefixed file using this file name as the name base. """
         return File(f'{self.basepath}/{prefix}{self.filename}')
-    
+
     def get_neighbour_file (self, filename : str) -> 'File':
         """ Get a file in the same path but with a different name."""
         return File(f'{self.basepath}/{filename}')

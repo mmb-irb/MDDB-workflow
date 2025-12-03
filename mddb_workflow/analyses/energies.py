@@ -61,7 +61,7 @@ def energies (
     if not charges or type(charges) == Exception:
         print('Atom charges are not available -> This analysis will be skipped')
         return
-    
+
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_ENERGIES_FILENAME}'
 
@@ -504,7 +504,7 @@ def energies (
             # sample = {
             #     'agent1': { 'energies': agent1_atom_energies, 'pdb': agent1_cmip },
             #     'agent2': { 'energies': agent2_atom_energies, 'pdb': agent2_cmip },
-            #     'box': { 'origin': box_origin, 'size': box_size } 
+            #     'box': { 'origin': box_origin, 'size': box_size }
             # }
             # save_json(sample, 'energies_sample.json')
 
@@ -700,7 +700,7 @@ def compute_new_grid (
         cnew = min_new + (dnew / 2)
         new_density.append(dnew)
         new_center.append(cnew)
-    return new_center, new_density    
+    return new_center, new_density
 
 # Format data grouping atom energies by average ES/VDW
 # Calculate values for the whole set of frames analyzed

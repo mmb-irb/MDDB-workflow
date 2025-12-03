@@ -31,7 +31,7 @@ def fix_gromacs_masses ():
 
     # Set the path to a local copy of the workflow custom masses file
     # According to Justin Lemkul:
-    # "All GROMACS programs will read relevant database files from the working directory 
+    # "All GROMACS programs will read relevant database files from the working directory
     # before referencing them from $GMXLIB."
     local_custom_masses_file = File('atommass.dat')
 

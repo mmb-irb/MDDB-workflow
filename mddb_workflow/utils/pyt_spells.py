@@ -20,11 +20,11 @@ def get_pytraj_trajectory (
     # Topology is mandatory to setup the pytraj trajectory
     if not input_topology_filename:
         raise InputError('Missing topology file to setup PyTraj trajectory')
-    
+
     # Set the pytraj trayectory and get the number of frames
     # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atoms later
     pyt_trajectory = pyt.iterload(input_trajectory_filename, input_topology_filename)
-    
+
     # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
     # This happens with some random pdbs which pytraj considers to have 0 Mols
     # More info: https://github.com/Amber-MD/cpptraj/pull/820
@@ -53,7 +53,7 @@ def get_reduced_pytraj_trajectory (
     input_trajectory_filename : str,
     snapshots : int,
     reduced_trajectory_frames_limit : int):
-    
+
     # Set the pytraj trayectory and get the number of frames
     pt_trajectory = get_pytraj_trajectory(input_topology_filename, input_trajectory_filename)
     # WARNING: Do not read pt_trajectory.n_frames to get the number of snapshots or you will read the whole trajectory
@@ -81,7 +81,7 @@ def get_frames_count (
 
     if not trajectory_file.exists:
         raise InputError('Missing trajectroy file when counting frames: ' + trajectory_file.path)
-    
+
     if not structure_file.exists:
         raise InputError('Missing topology file when counting frames: ' + structure_file.path)
 
@@ -161,7 +161,7 @@ def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepa
         if not last_atom_coordinates.any():
             return f
     return None
-    
+
 # This process is carried by pytraj, since the Gromacs average may be displaced
 def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_file : 'File'):
     """Get an average structure from a trajectory."""

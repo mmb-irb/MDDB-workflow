@@ -8,7 +8,7 @@ import MDAnalysis as mda
 
 def create_amber_files(output_dir, water=False):
     """ Creates AMBER files (prmtop, inpcrd, pdb) for an Ala-Ala dipeptide in water. """
-    
+
     leap_script_path = os.path.join(output_dir, 'leap.in')
     with open(leap_script_path, 'w') as f:
         f.write("source leaprc.protein.ff14SB\n\n")
@@ -39,7 +39,7 @@ def create_amber_files(output_dir, water=False):
             print(f"tleap stdout:\n{e.stdout}")
             print(f"tleap stderr:\n{e.stderr}")
         return None
-    
+
     # Extract PDB file using ambpdb
     pdb_path = 'ala_ala.pdb'
 
@@ -52,10 +52,10 @@ def create_amber_files(output_dir, water=False):
             check=True,
             cwd=output_dir
         )
-    
+
     with open(pdb_path, 'w') as pdb_file:
         pdb_file.write(result.stdout)
-    
+
     print(f"Created PDB file: {pdb_path}")
 
 
@@ -65,7 +65,7 @@ def create_amber_files(output_dir, water=False):
     with mda.Writer(nc_path, n_atoms=u.atoms.n_atoms) as W:
         # First frame (t=0) - original positions
         W.write(u.atoms)
-        
+
         # Second frame (t=1) - slightly perturbed positions
         u.atoms.positions += np.random.randn(u.atoms.n_atoms, 3) * 0.1
         W.write(u.atoms)
@@ -82,16 +82,16 @@ def create_amber_files(output_dir, water=False):
         temp_path = os.path.join(output_dir, temp_file)
         if os.path.exists(temp_path):
             os.remove(temp_path)
-    
+
     return pdb_path
 
 
 def create_gromacs_files(pdb_path, output_dir):
     """ Creates GROMACS files (gro, top) from AMBER PDB using gmx pdb2gmx. """
-    
+
     gro_path = os.path.join(output_dir, 'ala_ala.gro')
     top_path = os.path.join(output_dir, 'topol.top')
-    
+
     try:
         # Run gmx pdb2gmx
         # Use force field 6 (AMBER99SB-ILDN) and water model 1 (TIP3P) as defaults
@@ -104,7 +104,7 @@ def create_gromacs_files(pdb_path, output_dir):
         )
         print(f"Created GROMACS gro file: {gro_path}")
         print(f"Created GROMACS top file: {top_path}")
-        
+
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         if isinstance(e, subprocess.CalledProcessError):
             print(f"gmx pdb2gmx stderr:\n{e.stderr}")
@@ -117,7 +117,7 @@ def create_gromacs_files(pdb_path, output_dir):
         with mda.Writer(xtc_path, n_atoms=u.atoms.n_atoms) as W:
             # First frame (t=0) - original positions
             W.write(u.atoms)
-            
+
             # Second frame (t=1) - slightly perturbed positions
             u.atoms.positions += np.random.randn(u.atoms.n_atoms, 3) * 0.1
             W.write(u.atoms)
@@ -133,7 +133,7 @@ def create_gromacs_files(pdb_path, output_dir):
     mdp_path = os.path.join(output_dir, 'grompp.mdp')
     mdp_out = os.path.join(output_dir, 'mdout.mdp')
     tpr_path = os.path.join(output_dir, 'ala_ala.tpr')
-    
+
     with open(mdp_path, 'w') as f:
         f.write("integrator  = md\n")
         f.write("nsteps      = 10\n")
@@ -143,7 +143,7 @@ def create_gromacs_files(pdb_path, output_dir):
         f.write("rvdw        = 0.1\n")
         f.write("rcoulomb    = 0.1\n")
         f.write("pbc         = xyz\n")
-    
+
     try:
         os.remove
         subprocess.run(
@@ -156,7 +156,7 @@ def create_gromacs_files(pdb_path, output_dir):
         print(f"Warning: Could not create TPR file.")
         if isinstance(e, subprocess.CalledProcessError):
             print(f"gmx grompp stderr:\n{e.stderr}")
-    
+
     # Clean up temporary files
     for file in os.listdir(output_dir):
         if file.endswith('mdp') or file.startswith('#'):

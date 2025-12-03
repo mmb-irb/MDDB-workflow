@@ -42,7 +42,7 @@ def merge_and_convert_trajectories (
     if not exists(output_trajectory_filename) or getsize(output_trajectory_filename) == 0:
         print(error_logs)
         raise ToolError('Something went wrong with MDTraj')
-        
+
 # NEVER FORGET: mdconvert does not handle mdcrd format
 mdconvert_supported_formats = {'dcd', 'xtc', 'trr', 'nc', 'h5', 'binpos'}
 merge_and_convert_trajectories.format_sets = [
@@ -140,10 +140,10 @@ def merge_and_convert_trajectories_unefficient (
         else:
             extra = mdt.load(sample_trajectory)
         trajectory = mdt.join([trajectory, extra], check_topology=False)
-        
+
     # Write the whole trajectory
     trajectory.save(output_trajectory_filename)
-    
+
 merge_and_convert_trajectories_unefficient.format_sets = [
     {
         'inputs': {
@@ -333,7 +333,7 @@ def split_merged_trajectories (
         split_filename = output_trajectory_prefix + '_' + str(i+1) + '.' + input_trajectory_format
         print('Writting from frame ' + str(start) + ' to frame ' + str(end) + ' to "' + split_filename + '"')
         trajectory_split.save(split_filename)
-    
+
 # Sort atoms in a trajectory file by sorting its coordinates
 # A new atom indices list is expected in order to do the sorting
 def sort_trajectory_atoms (
