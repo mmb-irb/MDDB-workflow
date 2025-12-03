@@ -611,10 +611,10 @@ def get_stiffness_seq(
             coordinates)
         diagonals[hexamer] = np.append(
             stiffness_diag,
-            [np.product(stiffness_diag), np.sum(stiffness_diag)])
+            [np.prod(stiffness_diag), np.sum(stiffness_diag)])
         # diagonals[ic_hexamer] = np.append(
         #     stiffness_diag,
-        #     [np.product(stiffness_diag), np.sum(stiffness_diag)])
+        #     [np.prod(stiffness_diag), np.sum(stiffness_diag)])
         results["covariances"][hexamer] = cov_df
         #results["covariances"][ic_hexamer] = cov_df
         results["constants"][hexamer] = cte

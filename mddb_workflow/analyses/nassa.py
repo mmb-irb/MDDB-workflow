@@ -815,10 +815,10 @@ class StiffnessDistributions(Base):
                 coordinates)
             diagonals[tetramer] = np.append(
                 stiffness_diag,
-                [np.product(stiffness_diag), np.sum(stiffness_diag)])
+                [np.prod(stiffness_diag), np.sum(stiffness_diag)])
             diagonals[ic_tetramer] = np.append(
                 stiffness_diag,
-                [np.product(stiffness_diag), np.sum(stiffness_diag)])
+                [np.prod(stiffness_diag), np.sum(stiffness_diag)])
             #results["covariances"][tetramer] = cov_df
             results["covariances"][ic_tetramer] = cov_df
             #results["constants"][tetramer] = cte
