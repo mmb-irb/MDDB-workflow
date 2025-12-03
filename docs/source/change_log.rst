@@ -7,6 +7,46 @@ All notable changes to this project will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.7] - 2025-11-28
+=====================
+
+Added
+-----
+- Support for URLs as input files
+- Test for network flag and top_no to CI
+- Ignore bonds flag (``-ib``) for handling systems without bonds
+- Support for virtual site "pseudo-bonds"
+- Support for command line forced inputs
+- RMSD check per fragment functionality
+- Enhanced InChIKey handling with PubChem CID retrieval
+
+Changed
+-------
+- Refactored ligand and lipid references to use InChIKeys (#42)
+- Renamed ligands module for better organization
+- Changed dataset subcommand from status to groups
+- Changed source code license to Apache 2
+- Updated HPC instructions (#30)
+- Sample trajectory (smp) now picks frames along trajectory instead of at start
+- Better function checksums implementation
+
+Fixed
+-----
+- Fixed PCA memory inefficiency
+- Patched MDTraj problem in PCA
+- Fixed TM score no anchors problem
+- Safe trajectory download implementation
+- Fixed issues with missing topology support
+- Fixed errors in handling missing bonds throughout codebase
+- Fixed handling of missing bonds when finding PTMs
+- Fixed CG-related issues
+- Improved pdb_to_uniprot function for nucleic acids
+
+Changed
+-------
+- Use networkx for cycle detection
+
+
 [0.1.6] - 2025-10-29
 =====================
 
