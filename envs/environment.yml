@@ -31,7 +31,8 @@ dependencies:
   - xmltodict
   # Ligands analyses
   - rdkit
-  - mordred
+  # mordred compatible with new numpy versions
+  - mordredcommunity 
   # Membrane proteins analysis
   - bioconda::biobb_mem=5.1.2
   - requests # To check is molecules is in LIPID MAPS
