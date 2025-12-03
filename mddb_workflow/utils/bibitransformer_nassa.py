@@ -4,8 +4,7 @@ from sklearn import mixture
 
 
 class BiBiTransformer(TransformerMixin):
-    """
-    Obtain binormality/bimodality information for a given a distribution.
+    """Obtain binormality/bimodality information for a given a distribution.
     This is accomplished by fitting the dataset to two Gaussian Mixture models with one and two components, respectively.
     Then the BIC score together with Bayes Factor is used to assert binormality, and a modification of Helguero's theorem to assert bimodality.
     Other parameters such as means, variances and weights are given for both distributions.
@@ -24,8 +23,7 @@ class BiBiTransformer(TransformerMixin):
         self.confidence_level = confidence_level
 
     def GMM_models(self, **kwargs):
-        """
-        Create two GaussianMixture models with the same hyperparameters,
+        """Create two GaussianMixture models with the same hyperparameters,
         one with one component and the other with two components.
 
         :return: tuple of both Gaussian Mixture models
