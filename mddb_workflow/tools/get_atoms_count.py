@@ -24,10 +24,14 @@ def get_atoms_count (structure : 'Structure') -> tuple:
     solvent_selection = structure.select_water()
     solvent_atoms = len(solvent_selection)
     solvent_residues = len(structure.get_selection_residue_indices(solvent_selection))
-    # Number of counter ions
+    # Number of ions
     counter_cations = len(structure.select_counter_ions(charge='+'))
     counter_anions = len(structure.select_counter_ions(charge='-'))
     counter_ions = counter_cations + counter_anions
+    total_ions = len(structure.select_ions())
+    non_counter_ions = total_ions - counter_ions
+    # Other atoms which do not fail in any of the previous sections
+    other_atoms = system_atoms - protein_atoms - nucleic_atoms - lipid_atoms - carbohydrates_atoms - total_ions
 
     # Display a summary of atom and residue counts
     print('Atom and residue counts:')
@@ -46,9 +50,11 @@ def get_atoms_count (structure : 'Structure') -> tuple:
     print(f' Counter cations: {counter_cations}')
     print(f' Counter anions: {counter_anions}')
     print(f' Counter ions: {counter_ions}')
+    print(f' Non-counter ions: {non_counter_ions}')
+    print(f' Other atoms: {other_atoms}')
 
     # Return the counts
     return (system_atoms, system_residues, protein_atoms, protein_residues,
         nucleic_atoms, nucleic_residues, lipid_atoms, lipid_residues,
         carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
-        counter_cations, counter_anions, counter_ions)
+        counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms)

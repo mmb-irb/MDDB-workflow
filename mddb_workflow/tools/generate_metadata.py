@@ -67,7 +67,7 @@ def prepare_project_metadata (
     (system_atoms, system_residues, protein_atoms, protein_residues,
     nucleic_atoms, nucleic_residues, lipid_atoms, lipid_residues,
     carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
-    counter_cations, counter_anions, counter_ions) = get_atoms_count(structure)
+    counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atoms_count(structure)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
@@ -190,6 +190,8 @@ def prepare_project_metadata (
         'COUNCAT': counter_cations,
         'COUNANI': counter_anions,
         'COUNION': counter_ions,
+        'NOCNION': non_counter_ions,
+        'OTHRATS': other_atoms,
         'INTERACTIONS': metadata_interactions,
         'PBC_SELECTION': input_pbc_selection,
         'CG_SELECTION': input_cg_selection,
