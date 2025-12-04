@@ -82,13 +82,11 @@ def process_input_files (
     # If the faith argument was passed then set input files as output files and exit
     if faith:
         self.register.add_warning(FAITH_BYPASS, 'All processing steps and tests were skipped')
-        if output_structure_file.exists: output_structure_file.remove()
-        output_structure_file.set_symlink_to(input_structure_file)
-        if output_trajectory_file.exists: output_trajectory_file.remove()
-        output_trajectory_file.set_symlink_to(input_trajectory_files[0])
+        output_structure_file.set_symlink_to(input_structure_file, force=True)
+        if len(input_trajectory_files) > 1: raise InputError('Please do not use the --faith argument')
+        output_trajectory_file.set_symlink_to(input_trajectory_files[0], force=True)
         if output_topology_file != MISSING_TOPOLOGY:
-            if output_topology_file.exists: output_topology_file.remove()
-            output_topology_file.set_symlink_to(input_topology_file)
+            output_topology_file.set_symlink_to(input_topology_file, force=True)
         return
     self.register.remove_warnings(FAITH_BYPASS)
 
@@ -410,10 +408,7 @@ def process_input_files (
         # However we need the output files to exist and we dont want to rename the original ones to conserve them
         # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
         if processed_file == input_file:
-            # If output file exists and its the same as the input file, we can not create a symlink from a file to the same file
-            if output_file.exists:
-                output_file.remove()
-            output_file.set_symlink_to(input_file)
+            output_file.set_symlink_to(input_file, force=True)
         # Otherwise rename the last intermediate file as the output file
         else:
             # In case the processed file is a symlink we must make sure the symlink is not made to a intermediate step

@@ -415,15 +415,17 @@ def is_url(path: str) -> bool:
     return path[0:4] == 'http'
 
 
-def url_to_source_filename(url: str) -> str:
+def url_to_source_filename(url : str, remote : 'Remote') -> str:
     """Set the filename of an input file downloaded from an input URL.
 
     In this scenario we are free to set our own paths or filenames.
     Note that the original name will usually be the very same output filename.
     In order to avoid both filenames being the same we will add a header here.
+    This headers includes also a reference to the database and project.
+    Thus if there is a new accession then we rely on the filenames to know if we already have the correct ones.
     """
     original_filename = url.split('/')[-1]
-    return 'source_' + original_filename
+    return f'source_{remote.database.alias}_{remote.accession}_{original_filename}'
 
 
 def download_file(request_url: str, output_file: 'File'):

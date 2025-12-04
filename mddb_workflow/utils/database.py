@@ -19,6 +19,7 @@ class Remote:
     def __init__(self, database : 'Database', accession : str, context = None):
         # Set the URL
         self.database = database
+        self.accession = accession
         self.project_url = f'{self.database.url}rest/current/projects/{accession}'
         # Set the context
         self.context = context
@@ -27,6 +28,9 @@ class Remote:
         self._available_files = None
         # Download project data to make sure we have database access and the project exists
         self.get_project_data()
+
+    def __str__ (self) -> str:
+        return f'< Remote {self.project_url} >'
 
     # Get project data
     # This is only used to make sure the project exists by now
@@ -201,6 +205,8 @@ class Database:
         # If the URL already includes /rest/... then clean this part away
         if '/rest' in self.url:
             self.url = self.url.split('/rest')[0] + '/'
+        # Set an alias for this database
+        self.alias = self.url.split('://')[1].split('.')[0].split('-')[0]
         # Set the context
         self.context = NO_SSL_CONTEXT if no_ssl_authentication else None
 

@@ -215,7 +215,7 @@ class MD:
             if is_url(input_path):
                 self._input_structure_url = input_path
                 # Set the paths for the further download
-                source_filename = url_to_source_filename(input_path)
+                source_filename = url_to_source_filename(input_path, self.remote)
                 md_relative_filepath = self.pathify(source_filename)
                 return md_relative_filepath
             # Check if it is an absolute path
@@ -354,7 +354,7 @@ class MD:
                 # Set the paths for the further download
                 parsed_paths = []
                 for path in checked_paths:
-                    source_filename = url_to_source_filename(path)
+                    source_filename = url_to_source_filename(path, self.remote)
                     md_relative_filepath = self.pathify(source_filename)
                     parsed_paths.append(md_relative_filepath)
                 return parsed_paths
@@ -1150,18 +1150,50 @@ class Project:
         if self.database and self.accession:
             self.remote = self.database.get_remote_project(self.accession)
 
+        # If an accession is passed then make sure no other inputs file paths are passed
+        # If input data files are to be downloaded then the workflow will automatically handle their paths
+        # NEVER FORGET we rely in input file names to track whether files belong to a specific database + accession
+        if accession:
+            if inputs_filepath:
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                    ' Please either remove the "-inp" argument or the "-proj" argument.')
+            if input_topology_filepath:
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                    ' Please either remove the "-top" argument or the "-proj" argument.')
+            if input_structure_filepath:
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                    ' Please either remove the "-stru" argument or the "-proj" argument.')
+            if input_trajectory_filepaths:
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                    ' Please either remove the "-traj" argument or the "-proj" argument.')
+            if md_directories:
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                    ' Please either remove the "-mdir" argument or the "-proj" argument.')
+            if md_config:
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                    ' Please either remove any "-md" argument or the "-proj" argument.')
+
         # Set the inputs file
         # Set the expected default name in case there is no inputs file since it may be downloaded
-        self._inputs_file = File(self.pathify(DEFAULT_INPUTS_FILENAME))
-        # If there is an input filepath then use it
-        if inputs_filepath:
-            self._inputs_file = File(inputs_filepath)
-        # Otherwise guess the inputs file using the accepted filenames
-        else:
+        self.inputs_filepath = inputs_filepath
+        # If we have a remote accession to download data from then we also set the inputs filename accordingly
+        if self.remote:
+            inputs_filename = url_to_source_filename(DEFAULT_INPUTS_FILENAME, self.remote)
+            self.inputs_filepath = self.pathify(inputs_filename)
+        # Try to guess which is the inputs file by searching for some supported names
+        if self.inputs_filepath == None:
+            candidates = []
             for filename in ACCEPTED_INPUT_FILENAMES:
-                if exists(filename):
-                    self._inputs_file = File(filename)
-                    break
+                filepath = self.pathify(filename)
+                if exists(filepath):
+                    candidates.append(filepath)
+            if len(candidates) > 1: raise InputError(f'Multiple files could be the inputs file: {candidates.join(", ")}\n' + \
+                                                     ' Please specify which is the inputs file using the "-inp" argument.')
+            if len(candidates) == 1: self.inputs_filepath = candidates[0]
+        # Set the expected default name in case there is no inputs file since it may be downloaded
+        if self.inputs_filepath == None:
+            self.inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
+        self._inputs_file = File(self.inputs_filepath)
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
@@ -1470,7 +1502,7 @@ class Project:
         # If the file already exists then we are done
         if self._inputs_file.exists:
             return self._inputs_file
-        # Try to download it
+        # Try to download the inputs file
         # If we do not have the required parameters to download it then we surrender here
         if not self.remote:
             raise InputError(f'Missing inputs file "{self._inputs_file.filename}"')
@@ -1501,7 +1533,7 @@ class Project:
             # If it is a URL then set the paths for the further download
             if is_url(filepath):
                 self._input_topology_url = filepath
-                source_filename = url_to_source_filename(filepath)
+                source_filename = url_to_source_filename(filepath, self.remote)
                 return source_filename
             if not is_glob(filepath):
                 return filepath
@@ -1559,7 +1591,7 @@ class Project:
         # If no input is passed then we check the inputs file
         # Set the file
         input_topology_file = File(input_topology_filepath)
-        # If there is a topology URL then we must donwload the topology first
+        # If there is a topology URL then we may donwload the topology first
         input_topology_url = self._input_topology_url
         if input_topology_url and not input_topology_file.exists:
             original_filename = input_topology_url.split('/')[-1]
@@ -1586,7 +1618,7 @@ class Project:
                     warn('Automatic download of itp files is not supported without the "-proj" argument.' +
                          ' Thus if the topology has associated itp files they will not be downloaded.')
                 download_file(input_topology_url, input_topology_file)
-        # If the file already exists then we are done
+        # If the file finally exists then we are done
         if input_topology_file.exists:
             self._input_topology_file = input_topology_file
             return self._input_topology_file

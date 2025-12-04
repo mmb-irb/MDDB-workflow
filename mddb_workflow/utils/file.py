@@ -66,10 +66,7 @@ class File:
     # Note that this is critical for the task args cksum when we handle lists of files
     # e.g. input_trajectory_files in process_input_files
     def __repr__ (self) -> str:
-        if not self.filename:
-            return '< No file >'
-        cksum = self.get_cksum(unsafe=True)
-        return f'< File {cksum} >'
+        return f'< File {self.path} >'
 
     def __str__ (self) -> str:
         return self.__repr__()
@@ -182,17 +179,19 @@ class File:
             return None
         return File(self.basepath + '/' + target_filepath)
 
-    def set_symlink_to (self, other_file : 'File'):
-        """ Set this file a symlink to another file. """
+    def set_symlink_to (self, other_file : 'File', force : bool = False):
+        """ Set this file a symlink to another file.
+        Use the "force" argument to delete an already existing file/symlink"""
+        # Self file must not exist
+        if self.exists or self.is_symlink():
+            if force: self.remove()
+            else: raise Exception(f'Cannot set a symlink from an already existing file or symlink: {self}')
         # Check if symlinks are allowed
         no_symlinks = GLOBALS['no_symlinks']
         # If symlinks are now allowed then copy the file instead
         if no_symlinks:
             other_file.copy_to(self)
             return
-        # Self file must not exist
-        if self.exists:
-            raise Exception('Cannot set a symlink from an already existing file: ' + str(self))
         # Note that symlink path must be relative to this file
         relative_path = relpath(other_file.path, self.basepath)
         # Set the symlink
