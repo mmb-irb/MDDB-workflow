@@ -2,7 +2,7 @@
 
 from mddb_workflow import __path__, __version__
 from mddb_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
-from mddb_workflow.utils.constants import YELLOW_HEADER, COLOR_END
+from mddb_workflow.utils.constants import YELLOW_HEADER, RED_HEADER, COLOR_END
 from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from mddb_workflow.utils.type_hints import *
 
@@ -289,6 +289,11 @@ def reprint(text: str):
 def warn(message: str):
     """Print a message with a colored warning header."""
     print(YELLOW_HEADER + '⚠  WARNING: ' + COLOR_END + message)
+
+
+def fail(message: str):
+    """Print a message with a colored warning header."""
+    print(RED_HEADER + '✖  FAIL: ' + COLOR_END + message)
 
 
 def mean(values: list[float]) -> float:

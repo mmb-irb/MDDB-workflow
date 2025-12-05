@@ -8,7 +8,7 @@ import sys
 from tqdm import tqdm
 import plotext as plt
 
-from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn
+from mddb_workflow.utils.auxiliar import delete_previous_log, reprint, TestFailure, warn, fail
 from mddb_workflow.utils.auxiliar import round_to_hundredths
 from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG, RED_HEADER, COLOR_END
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory
@@ -189,12 +189,12 @@ def check_trajectory_integrity (
             passed = outliers == 0 and bypassed_frames == 0
             # If the fragment has n0 problems
             if passed:
-                print(f'Fragment "{name}" PASSED with a maximum z-score of {max_z_score}' + \
-                    f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
+                print(f'Fragment "{name}" PASSED with a maximum z-score of {max_z_score}'
+                      f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}')
                 continue
             # If the fragment failed to pass the test
-            print(f'{RED_HEADER}Fragment "{name}" FAILED with a maximum z-score of {max_z_score}' + \
-                f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}{COLOR_END}')
+            fail(f'Fragment "{name}" FAILED with a maximum z-score of {max_z_score}'
+                 f' reported between frames {max_z_score_frame} and {max_z_score_frame + 1}{COLOR_END}')
             if outliers > 0: print(f' Outliers: {outliers}')
             if bypassed_frames > 0: print(f' Bypassed frames: {bypassed_frames}')
         print('*The z-score of a value means how many times the standard deviation away it is from the average')
@@ -238,11 +238,12 @@ def check_trajectory_integrity (
     register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
     return True
 
-# Display a graph to show the distribution of sudden jumps along the trajectory in the terminal itself
+
 def display_rmsd_jumps_graph (data : list, title : str):
+    """Display a graph to show the distribution of sudden jumps along the trajectory in the terminal itself."""
     if not is_terminal: return
     # Display a graph to show the distribution of sudden jumps along the trajectory
-    plt.scatter(data) 
+    plt.scatter(data)
     plt.title(title)
     plt.xlabel('Frame')
     plt.ylabel('RMSD jump')
