@@ -8,10 +8,14 @@ def get_atoms_count (structure : 'Structure') -> tuple:
     protein_selection = structure.select_protein()
     protein_atoms = len(protein_selection)
     protein_residues = len(structure.get_selection_residue_indices(protein_selection))
-    # Number of nucleic atoms and residues
-    nucleic_selection = structure.select_nucleic()
-    nucleic_atoms = len(nucleic_selection)
-    nucleic_residues = len(structure.get_selection_residue_indices(nucleic_selection))
+    # Number of DNA atoms and residues
+    dna_selection = structure.select_by_classification('dna')
+    dna_atoms = len(dna_selection)
+    dna_residues = len(structure.get_selection_residue_indices(dna_selection))
+    # Number of RNA atoms and residues
+    rna_selection = structure.select_by_classification('rna')
+    rna_atoms = len(rna_selection)
+    rna_residues = len(structure.get_selection_residue_indices(rna_selection))
     # Number of lipid atoms and residues
     lipids_selection = structure.select_lipids()
     lipid_atoms = len(lipids_selection)
@@ -31,7 +35,7 @@ def get_atoms_count (structure : 'Structure') -> tuple:
     total_ions = len(structure.select_ions())
     non_counter_ions = total_ions - counter_ions
     # Other atoms which do not fail in any of the previous sections
-    other_atoms = system_atoms - protein_atoms - nucleic_atoms - lipid_atoms - carbohydrates_atoms - total_ions
+    other_atoms = system_atoms - protein_atoms - dna_atoms - rna_atoms - lipid_atoms - carbohydrates_atoms - total_ions
 
     # Display a summary of atom and residue counts
     print('Atom and residue counts:')
@@ -39,8 +43,10 @@ def get_atoms_count (structure : 'Structure') -> tuple:
     print(f' System residues: {system_residues}')
     print(f' Protein atoms: {protein_atoms}')
     print(f' Protein residues: {protein_residues}')
-    print(f' Nucleic atoms: {nucleic_atoms}')
-    print(f' Nucleic residues: {nucleic_residues}')
+    print(f' DNA atoms: {dna_atoms}')
+    print(f' DNA residues: {dna_residues}')
+    print(f' RNA atoms: {rna_atoms}')
+    print(f' RNA residues: {rna_residues}')
     print(f' Lipid atoms: {lipid_atoms}')
     print(f' Lipid residues: {lipid_residues}')
     print(f' Carbohydrate atoms: {carbohydrates_atoms}')
@@ -55,6 +61,6 @@ def get_atoms_count (structure : 'Structure') -> tuple:
 
     # Return the counts
     return (system_atoms, system_residues, protein_atoms, protein_residues,
-        nucleic_atoms, nucleic_residues, lipid_atoms, lipid_residues,
+        dna_atoms, dna_residues, rna_atoms, rna_residues, lipid_atoms, lipid_residues,
         carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
         counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms)

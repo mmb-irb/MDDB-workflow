@@ -65,7 +65,7 @@ def prepare_project_metadata (
 
     # Count different types of atoms and residues
     (system_atoms, system_residues, protein_atoms, protein_residues,
-    nucleic_atoms, nucleic_residues, lipid_atoms, lipid_residues,
+    dna_atoms, dna_residues, rna_atoms, rna_residues, lipid_atoms, lipid_residues,
     carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
     counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atoms_count(structure)
 
@@ -179,8 +179,10 @@ def prepare_project_metadata (
         'SYSTRES': system_residues,
         'PROTATS': protein_atoms,
         'PROTRES': protein_residues,
-        'NUCLATS': nucleic_atoms,
-        'NUCLRES': nucleic_residues,
+        'DNAATS': dna_atoms,
+        'DNARES': dna_residues,
+        'RNAATS': rna_atoms,
+        'RNARES': rna_residues,
         'LIPIATS': lipid_atoms,
         'LIPIRES': lipid_residues,
         'CARBATS': carbohydrates_atoms,
