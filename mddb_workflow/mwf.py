@@ -13,7 +13,7 @@ from glob import glob
 from mddb_workflow.utils.constants import *
 
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
@@ -871,6 +871,7 @@ class MD:
     # Tests
     # ---------------------------------------------------------------------------------
 
+    # RUBEN: TODO hacer task?
     def is_trajectory_integral(self) -> Optional[bool]:
         """Sudden jumps test."""
         # If we already have a stored value then return it
@@ -1061,7 +1062,7 @@ class Project:
                 Path to the different MD directories.
                 Each directory is to contain an independent trajectory and structure.
                 Several output files will be generated in every MD directory.
-            md_config (Optional[list]):
+            md_config (Optional[list[list[str]]]):
                 Configuration of a specific MD. You may declare as many as you want.
                 Every MD requires a directory name and at least one trajectory path.
                 The structure is -md <directory> <trajectory_1> <trajectory_2> ...
@@ -2159,7 +2160,7 @@ DEPENDENCY_FLAGS = {
     'download': list(input_files.keys()),
     'setup': list(processed_files.keys()),
     'meta': ['pmeta', 'mdmeta'],
-    'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap'],
+    'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap', 'stopology'],
     'minimal': ['pmeta', 'mdmeta', 'stopology'],
     'interdeps': ['inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist'],
     'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter', 'channels']
@@ -2314,13 +2315,21 @@ def workflow(
         return
 
     # Now iterate over the different MDs
+    replica_errors = []
     for md in project.mds:
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
         # Run the MD tasks
-        for task in md_tasks:
-            # Get the function to be called and call it
-            getter = requestables[task]
-            getter(md)
+        try:
+            for task in md_tasks:
+                # Get the function to be called and call it
+                getter = requestables[task]
+                getter(md)
+        except TestFailure as e:
+            error = e.__class__.__name__ + ': ' + str(e)
+            replica_errors.append((md.directory, error))
+            print(error)
+        except Exception as e:
+            raise e
 
         # Remove gromacs backups and other trash files from this MD
         remove_trash(md.directory)
@@ -2333,4 +2342,10 @@ def workflow(
     # But if you call the workflow function from a python script then this is important
     chdir(workflow_call_directory)
 
-    print("Done!")
+    if replica_errors and len(project.mds) > 1:
+        # If there is more than one replica with errors that may being hidden by the others working fine
+        print(f'\n{RED_HEADER}Finished with errors in {len(replica_errors)} MD replicas:{COLOR_END}')
+        for replica_error in replica_errors:
+            print(f'  - MD at {replica_error[0]}: {replica_error[1]}')
+    else:
+        print("Done!")
