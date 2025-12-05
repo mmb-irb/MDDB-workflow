@@ -8,10 +8,8 @@ logic fails when checking for satisfied output because the expected file doesn't
 import os
 import shutil
 import pathlib
-from functools import wraps
 from unittest.mock import patch
 from mddb_workflow.mwf import Project
-from mddb_workflow.tools.generate_map import generate_protein_mapping
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
@@ -26,20 +24,7 @@ def regenerate_test_fld():
 
 
 def test_task_no_output_file_second_run():
-    """Test that tasks which don't generate output files work correctly on subsequent runs.
-
-    This tests a bug where:
-    1. First run: Task runs but generates no output file (e.g. no protein sequences)
-    2. Second run: Task logic fails when checking existing_output_files because file doesn't exist
-
-    The bug is in the Task._run method where it checks:
-        existing_output_files = writes_output_file and all(output_file.exists for output_file in output_files.values())
-
-    When the task produces no output file but caches its result, on the next run:
-    - existing_output_data is True (cached result exists)
-    - existing_output_files is False (file was never created)
-    - satisfied_output becomes False even though the task completed successfully
-    """
+    """Test that tasks which don't generate output files work correctly on subsequent runs."""
     regenerate_test_fld()
 
     # Copy necessary files

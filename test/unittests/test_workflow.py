@@ -53,6 +53,7 @@ def run_workflow_with_mock_task(mock_task):
                                       ['replica_2', 'trajectory.xtc']],
                     },
                     include=['mock_task'],
+                    keep_going=True,
                 )
         yield
     finally:
