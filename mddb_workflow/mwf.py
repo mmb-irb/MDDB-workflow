@@ -2180,6 +2180,7 @@ def workflow(
     include: Optional[list[str]] = None,
     exclude: Optional[list[str]] = None,
     overwrite: Optional[list[str] | bool] = None,
+    keep_going: bool = False,
 ):
     """Run the MDDB workflow.
 
@@ -2191,6 +2192,7 @@ def workflow(
         include (list[str] | None): Set the unique analyses or tools to be run. All other steps will be skipped.
         exclude (list[str] | None): List of analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway.
         overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
+        keep_going (bool): If True, continue running the workflow even if some MD replicas fail. Default is False.
 
     """
     # Check there are not input errors
@@ -2325,6 +2327,8 @@ def workflow(
                 getter = requestables[task]
                 getter(md)
         except TestFailure as e:
+            if not keep_going:
+                raise e
             error = e.__class__.__name__ + ': ' + str(e)
             replica_errors.append((md.directory, error))
             print(error)
