@@ -201,6 +201,8 @@ class Remote:
 
 class Database:
     def __init__(self, url: str, no_ssl_authentication : bool = False):
+        if '://' not in url:
+            raise InputError(f'Invalid database URL "{url}"')
         self.url = url
         # If the URL already includes /rest/... then clean this part away
         if '/rest' in self.url:

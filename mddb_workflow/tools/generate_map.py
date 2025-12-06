@@ -6,6 +6,7 @@ import re
 
 from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
+from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
@@ -23,7 +24,6 @@ REFERENCE_ANTIBODY_SEQUENCES = {
     # CDR regionds have been replaced by X
     'QVQLVESGGGLVQPGGSLRLSCAASXXXXXXXWYRQAPGKEREFVAXXXXXXRFTISRDNAKNTVYLQMNSLKPEDTAVYYCXXXXXXXXXXWGQGTQVTVSS'
 }
-
 
 # Save current stderr to further restore it
 stderr_backup = sys.stderr
@@ -103,6 +103,9 @@ def generate_protein_mapping (
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
+    # Cache wrappers for reference getter which connect to the internet
+    cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
+    cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
     # Given a uniprot accession, get the reference object
     # Try first asking to the MDposit database in case the reference exists already
     # If not, retrieve UniProt data and build the reference object
@@ -111,10 +114,10 @@ def generate_protein_mapping (
         reference = references.get(uniprot_accession, None)
         if reference:
             return reference, True
-        reference = database.get_reference_data('proteins', uniprot_accession)
+        reference = cached_get_database_reference('proteins', uniprot_accession)
         if reference:
             return reference, True
-        reference = get_uniprot_reference(uniprot_accession)
+        reference = cached_get_uniprot_reference(uniprot_accession)
         return reference, False
     # Import local references, in case the references json file already exists
     imported_references = None
@@ -299,12 +302,14 @@ def generate_protein_mapping (
             print(' Using also references imported from references.json')
             if match_sequences():
                 return protein_parsed_chains
+    # Cache wrapper for pdb 2 uniprot logic
+    cached_pdb_to_uniprot = get_cached_function(pdb_to_uniprot, cache)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot ids associated to the pdb ids, if any
     if pdb_ids and len(pdb_ids) > 0:
         for pdb_id in pdb_ids:
             # Ask PDB
-            uniprot_ids = pdb_to_uniprot(pdb_id)
+            uniprot_ids = cached_pdb_to_uniprot(pdb_id)
             for uniprot_id in uniprot_ids:
                 # If this is not an actual UniProt, but a no referable exception, then handle it
                 # We must find the matching sequence and set the corresponding chain as no referable
@@ -322,15 +327,17 @@ def generate_protein_mapping (
         print(' Using also references related to PDB ids from the inputs file')
         if match_sequences():
             return protein_parsed_chains
+    # Cache wrapper for blast
+    cached_blast = get_cached_function(blast, cache)
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, we run a blast with each orphan chain sequence
     for chain_data in protein_parsed_chains:
         # Skip already references chains
-        if chain_data['match']['ref']:
-            continue
-        # Run the blast
+        if chain_data['match']['ref']: continue
+        # Get the chain sequence
         sequence = chain_data['sequence']
-        uniprot_id = blast(sequence, cache)
+        # Run the blast
+        uniprot_id = cached_blast(sequence)
         if not uniprot_id:
             chain_data['match'] = { 'ref': NOT_FOUND_FLAG }
             continue
@@ -490,15 +497,8 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
 # WARNING: This always means results will correspond to curated entries only
 #   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
 # Since this function may take some time we always cache the result
-def blast (sequence : str, cache : Optional['Cache'] = None) -> Optional[str]:
-    # Check if we have the resulted saved in cache already
-    if cache != None:
-        cached_blasts = cache.retrieve('blasts', {})
-        if sequence in cached_blasts:
-            accession = cached_blasts[sequence]
-            print(f'Using previous blast result from cache: {accession}')
-            return accession
-    print('Throwing blast...')
+def blast (sequence : str) -> Optional[str]:
+    print(f'Throwing blast for sequence {sequence}. This may take some time...')
     result = NCBIWWW.qblast(
         program = "blastp",
         database = "swissprot", # UniProtKB / Swiss-Prot
@@ -520,10 +520,6 @@ def blast (sequence : str, cache : Optional['Cache'] = None) -> Optional[str]:
     # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
     accession = first_result['Hit_accession']
     print('Result: ' + accession)
-    # Save the result in the cache
-    if cache != None:
-        cached_blasts[sequence] = accession
-        cached_blasts = cache.update('blasts', cached_blasts)
     return accession
 
 # Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database

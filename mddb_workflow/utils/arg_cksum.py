@@ -4,13 +4,8 @@ from mddb_workflow.utils.auxiliar import safe_hasattr
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.register import Register
-from mddb_workflow.utils.cache import Cache
-from mddb_workflow.utils.database import Database, Remote
 from mddb_workflow.utils.mda_spells import get_mda_universe_cksum
 from mddb_workflow.utils.type_hints import *
-
-from mddb_workflow.tools.get_inchi_keys import InChIKeyData
 
 from MDAnalysis.core.universe import Universe
 
@@ -26,8 +21,12 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     value_type = type(value)
     # For numbers simply use the number itself
     if value_type == int or value_type == float or value_type == bool: return value
-    # For strings, sum the ordinal numbers of every letter
-    if value_type == str: return f'{sum(map(ord, value))} -> {len(value)}'
+    # For short strings, save them as they are
+    # For long strings, sum the ordinal numbers of every letter
+    # DANI: 256 is an arbitray number
+    if value_type == str:
+        if len(value) <= 256: return value
+        else: return f'{sum(map(ord, value))} -> {len(value)}'
     # For exceptions simply keep the excepction message
     if value_type == Exception: return str(value)
     # For objects, stringify them and then do the same that with strings
@@ -49,18 +48,20 @@ def get_cksum_id (value) -> Optional[int | float | str]:
     if isinstance(value, Universe): return get_mda_universe_cksum(value)
     # For the parsed structure
     if isinstance(value, Selection): return f'{len(value.atom_indices)}-{sum(value.atom_indices)}'
-    # For handler class instances it makes not sense making a comparision
-    # WARNING: If they are used as input then make sure it is only being "used" and not "read"
+    # For handler class instances it depends on every class
+    # If classes can be compared then handle this here
+    # If classes can not be compared (or it makes not sense) then:
+    # WARNING: If classes can not be compared and they are used as input then make sure they are being only "used" and not "read"
     # Otherwise, the content will be not compared between runs (e.g. warnings in the register)
-    if isinstance(value, Register): return True
-    if isinstance(value, Cache): return True
-    if isinstance(value, Database): return str(value)
-    if isinstance(value, Remote): return str(value)
-    if isinstance(value, InChIKeyData): return value.inchi
     if safe_hasattr(value, '__class__'):
         if value.__class__.__name__ == 'Project': return True
         if value.__class__.__name__ == 'MD': return True
         if value.__class__.__name__ == 'Task': return True
+        if value.__class__.__name__ == 'Register': return True
+        if value.__class__.__name__ == 'Cache': return True
+        if value.__class__.__name__ == 'Database': return str(value)
+        if value.__class__.__name__ == 'Remote': return str(value)
+        if value.__class__.__name__ == 'InChIKeyData': return value.inchi
     # For functions get some parsed code variables and get thier cksums
     # We check for functions in the last place because some classes may be callable as well (e.g. Taks)
     if callable(value):
