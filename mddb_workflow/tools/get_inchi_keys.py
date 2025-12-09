@@ -113,6 +113,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
         inchikey = Chem.MolToInchiKey(res_RD)
         # rdinchi.MolToInchi so it doesnt print the warnings
         inchi, retcode, message, logs, aux = Chem.rdinchi.MolToInchi(res_RD)
+    if not inchi: raise RuntimeError('Failed to find inchi. Is the atom group too big?')
     return (inchikey, inchi, resindices)
 
 
