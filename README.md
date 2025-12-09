@@ -53,13 +53,14 @@ Note that there is no need to install the workflow module in this case.
 
 Now pack the mwf environment with:
 
-`conda pack -n mwf --ignore-editable-packages`
+`conda pack -n mwf_env --ignore-editable-packages`
 
 This will generate a file called 'mwf.tar.gz'. Copy this file in the remote machine where the workflow must me installed. Then go to that directory and run:
 
 ``` shell
+rsync -avP mwf_env.tar.gz <remote>:<path>
 mkdir mwf_env
-tar -xzf mwf.tar.gz -C mwf_env
+tar -xzf mwf_env.tar.gz -C mwf_env
 ``` 
 
 Activate the mwf environment:
@@ -85,6 +86,30 @@ python -m pip install --no-build-isolation --no-index --no-deps -e .
 ```
 
 At this point your environment is ready to use and it includes the `mwf` command. From now on, you can access the `mwf` command from anywhere in your computer as long as the `mwf_env` environment is activated.
+
+### Using pixi-pack
+If you have `pixi` installed in your local machine, you can use it to create a portable conda environment that can be transferred and deployed on remote machines.
+```shell
+# Local machine
+conda install pixi
+pixi init -i envs/environment.yml
+pixi lock
+pixi-pack --create-executable
+rsync -avP environment.sh <remote>:<path>
+# Remote machine
+./environment.sh
+source activate.sh
+```
+
+Now copy the whole workflow repository from your local machine to the remote machine.
+```shell
+# Local machine
+git clone https://github.com/mmb-irb/MDDB-workflow.git mwf
+rsync -avP mwf <remote>:<path>
+# Remote machine
+cd <path>
+python -m pip install --no-build-isolation --no-index --no-deps -e .
+```
 
 ### Using containers
 Alternatively, you can use containerized versions of the workflow, which bundle all dependencies and the workflow itself into a portable image.
