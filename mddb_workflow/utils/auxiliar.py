@@ -176,6 +176,8 @@ def json_serializer(object: dict | list | tuple) -> dict | list | tuple:
         # If we have exceptions then convert them to text with an appropiate header
         if type(value) is Exception:
             return f'{EXCEPTION_HEADER}{value}'
+        if type(value) is NoReferableException:
+            return f'NoReferableException: {value.sequence}'
         # This must be done before the set check because asdict() will create dicts with sets inside
         if is_dataclass(value) and not isinstance(value, type):
             dict_value = asdict(value)
@@ -200,6 +202,9 @@ def json_deserializer(object: dict | list | tuple) -> dict | list | tuple:
             if standard_exception is None:
                 raise ValueError(f'Exception "{exception_message}" is not among standard exceptions')
             return standard_exception
+        if type(value) is str and value[0:22] == 'NoReferableException: ':
+            sequence = value[22:]
+            return NoReferableException(sequence)
         # If the type is not among the ones we check then assume it is already deserialized
         return value
     object_clone = recursive_transformer(object, deserializer)
@@ -233,6 +238,7 @@ def save_json(content, filepath: str, indent: Optional[int] = None):
     except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         os.rename(filepath, filepath + '.wrong')
+        breakpoint()
         raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 
