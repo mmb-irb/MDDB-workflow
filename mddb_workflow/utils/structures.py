@@ -681,7 +681,7 @@ class Residue:
                 continue
             # Now that we have found a suitable candidate atom we start the series
             bonded_fatty_atoms = [atom]
-            if get_bonded_fatty_atoms_recursive(atom) and len(bonded_fatty_atoms) >= 3:
+            if get_bonded_fatty_atoms_recursive(atom) and len(bonded_fatty_atoms) >= 6:
                 self._classification = 'fatty'
                 return self._classification
             already_checked_atoms += bonded_fatty_atoms
