@@ -376,12 +376,6 @@ def main():
                 nassa_parser.print_help()
                 print('Please provide a project directory to run the helical parameters analysis with the -pdirs flag')
                 return
-            if args.input_structure_filepath is None:
-                raise InputError('Please provide a structure file to run the helical parameters analysis with the -stru flag')
-            elif args.input_trajectory_filepath is None:
-                raise InputError('Please provide a trajectory file to run the helical parameters analysis with the -traj flag')
-            elif args.input_topology_filepath is None:
-                raise InputError('Please provide a topology file to run the helical parameters analysis with the -top flag')
             # If the all flag is set, the user must provide the path to the sequences because it is necessary to create the nassa.yml and run the NASSA analysis
             if args.all:
                 if not args.seq_path:
@@ -393,6 +387,8 @@ def main():
                 overwrite=args.overwrite,
                 overwrite_nassa=args.overwrite_nassa,
                 helical_par=args.helical_parameters,
+                accession=args.accession,
+                sample_trajectory=args.sample_trajectory,
                 proj_dirs=args.proj_directories,
                 input_structure_file=args.input_structure_filepath,
                 input_trajectory_file=args.input_trajectory_filepath,
@@ -637,124 +633,37 @@ for flags, kwargs in chainer_parser_args:
 nassa_parser = subparsers.add_parser("nassa", formatter_class=CustomHelpFormatter,
     help="Run and set the configuration of the NASSA analysis",
     parents=[common_parser])
-nassa_parser.add_argument(
-    "-c", "--config",
-    help="Configuration file for the NASSA analysis")
-nassa_parser.add_argument(
-    "-n", "--analysis_names",
-    nargs='*',
-    default=None,
-    help="Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST))
-nassa_parser.add_argument(
-    "-w", "--make_config",
-    # type=str,
-    nargs='*',
-    default=None,
-    # const=True,
-    # action=custom,
-    help="Make a configuration file for the NASSA analysis: makecfg.\nThe base path could be given as an argument. If not, an example of configuration file is created.")
-nassa_parser.add_argument(
-    "-seq", "--seq_path",
-    type=str,
-    const=False,
-    action=custom,
-    help="Set the base path of the sequences. If not given, the sequences are searched in the current directory.")
-nassa_parser.add_argument(
-    "-o", "--output",
-    help="Output path for the NASSA analysis")
-nassa_parser.add_argument(
-    "-dir", "--working_directory",
-    default='.',
-    help="Directory where the whole workflow is run. Current directory by default.")
-nassa_parser.add_argument(
-    "-ow", "--overwrite",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=True,
-    help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool")
-nassa_parser.add_argument(
-    "-own", "--overwrite_nassa",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=True,
-    help="Set the output files to be overwritten thus re-runing its corresponding analysis or tool for the NASSA analysis")
-nassa_parser.add_argument(
-    "-nseq", "--n_sequences",
-    type=int,
-    help="Number of sequences to be analyzed")
-nassa_parser.add_argument(
-    "-i", "--unit_len",
-    type=int,
-    default=6,
-    help="Number of base pairs to be analyzed")
-nassa_parser.add_argument(
-    "-hp", "--helical_parameters",
-    action='store_true',
-    default=False,
-    help="Run the helical parameters analysis")
-nassa_parser.add_argument(
-    "-pdirs", "--proj_directories",
-    nargs='*',
-    default=None,
-    help=("Path to the different project directories. Each directory is to contain an independent project.\n"
-        "Several output files will be generated in the same folder directory"))
-nassa_parser.add_argument(
-    "-all", "--all",
-    action='store_true',
-    default=False,
-    help="Run all the helical parameters and NASSA analyses")
-nassa_parser.add_argument(
-    "-stru", "--input_structure_filepath",
-    default=None,
-    help=("Path to input structure file. It may be relative to the project or to each MD directory.\n"
-        "If this value is not passed then the standard structure file is used as input by default"))
-nassa_parser.add_argument(
-    "-traj", "--input_trajectory_filepath",
-    nargs='*',
-    default=None,
-    help=("Path to input trajectory file. It is relative to each MD directory.\n"
-        "If this value is not passed then the standard trajectory file path is used as input by default"))
-nassa_parser.add_argument(
-    "-top", "--input_topology_filepath",
-    default=None,  # There is no default since many formats may be possible
-    help="Path to input topology file. It is relative to the project directory.")
-nassa_parser.add_argument(
-    "-mdir", "--md_directories",
-    nargs='*',
-    default=None,
-    help=("Path to the different MD directories. Each directory is to contain an independent trajectory and structure.\n"
-        "Several output files will be generated in every MD directory"))
-nassa_parser.add_argument(
-    "-t", "--trust",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=AVAILABLE_CHECKINGS,
-    choices=AVAILABLE_CHECKINGS,
-    help="If passed, do not run the specified checking. Note that all checkings are skipped if passed alone.  Available checkings:" + pretty_list(AVAILABLE_CHECKINGS)
-)
-nassa_parser.add_argument(
-    "-m", "--mercy",
-    type=str,
-    nargs='*',
-    default=[],
-    action=custom,
-    const=AVAILABLE_FAILURES,
-    choices=AVAILABLE_FAILURES,
-    help=("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow.\n"
-        "Note that all checkings are allowed to fail if the argument is passed alone. Available checkings:" + pretty_list(AVAILABLE_FAILURES))
-)
-nassa_parser.add_argument(
-    "-dup", "--duplicates",
-    default=False,
-    action='store_true',
-    help="If passed, merge duplicate subunits if there is more than one, in the sequences. if not only the last will be selected"
-)
+nassa_parser_args = [
+    (['-c', '--config'], {'help': "Configuration file for the NASSA analysis"}),
+    (['-n', '--analysis_names'], {'nargs': '*', 'default': None, 'help': "Name of the analysis to be run. It can be: " + ', '.join(NASSA_ANALYSES_LIST)}),
+    (['-w', '--make_config'], {'nargs': '*', 'default': None, 'help': "Make a configuration file for the NASSA analysis: makecfg.\nThe base path could be given as an argument. If not, an example of configuration file is created."}),
+    (['-seq', '--seq_path'], {'type': str, 'const': False, 'action': custom, 'help': "Set the base path of the sequences. If not given, the sequences are searched in the current directory."}),
+    (['-o', '--output'], {'help': "Output path for the NASSA analysis"}),
+    (['-dir', '--working_directory'], {'default': '.', 'help': "Directory where the whole workflow is run. Current directory by default."}),
+    (['-ow', '--overwrite'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'choices': choices, 'help': workflow_help['overwrite']}),
+    (['-own', '--overwrite_nassa'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'help': "Set the output files to be overwritten thus re-runing its corresponding analysis or tool for the NASSA analysis"}),
+    (['-nseq', '--n_sequences'], {'type': int, 'help': "Number of sequences to be analyzed"}),
+    (['-i', '--unit_len'], {'type': int, 'default': 6, 'help': "Number of base pairs to be analyzed"}),
+    (['-hp', '--helical_parameters'], {'action': 'store_true', 'default': False, 'help': "Run the helical parameters analysis"}),
+    (['-pdirs', '--proj_directories'], {'nargs': '*', 'default': None, 'help': "Path to the different project directories. Each directory is to contain an independent project.\nSeveral output files will be generated in the same folder directory"}),
+    (['-all', '--all'], {'action': 'store_true', 'default': False, 'help': "Run all the helical parameters and NASSA analyses"}),
+    (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']}),
+    (['-traj', '--input_trajectory_filepath'], {'nargs': '*', 'default': None, 'help': project_init_help['input_trajectory_filepaths']}),
+    (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']}),
+    (['-mdir', '--md_directories'], {'nargs': '*', 'default': None, 'help': project_init_help['md_directories']}),
+    (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
+    (['-smp', '--sample_trajectory'], {'type': int, 'nargs': '?', 'default': None, 'const': 10, 'metavar': 'N_FRAMES', 'help': project_init_help['sample_trajectory']}),
+    (['-t', '--trust'], {'default': [], 'nargs': '*', 'action': custom, 'const': AVAILABLE_CHECKINGS, 'choices': AVAILABLE_CHECKINGS,
+      'help': ("If passed, do not run the specified checking. Note that all checkings are skipped if passed alone. "
+               "Available checkings:" + pretty_list(AVAILABLE_CHECKINGS))}),
+    (['-m', '--mercy'], {'default': [], 'nargs': '*', 'action': custom, 'const': AVAILABLE_FAILURES, 'choices': AVAILABLE_FAILURES,
+     'help': ("If passed, do not kill the process when any of the specfied checkings fail and proceed with the workflow. "
+              "Note that all checkings are allowed to fail if the argument is passed alone. "
+              "Available checkings:" + pretty_list(AVAILABLE_FAILURES))}),
+    (['-dup', '--duplicates'], {'default': False, 'action': 'store_true', 'help': "If passed, merge duplicate subunits if there is more than one, in the sequences. if not only the last will be selected"}),
+]
+for flags, kwargs in nassa_parser_args:
+    nassa_parser.add_argument(*flags, **kwargs)
 
 # Dataset subcommand
 dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpFormatter,

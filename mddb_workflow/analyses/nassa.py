@@ -21,13 +21,12 @@ from mddb_workflow.utils.nassa_file import generate_nassa_config
 from typing import Optional
 import yaml
 
+
 # There are five analyses in total
 
 # BASE PAIR CORRELATION ANALYSIS
 class BasePairCorrelation(Base):
-    """
-    Execution plan and methods for basepair correlation analysis.
-    """
+    """Execution plan and methods for basepair correlation analysis."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -105,7 +104,7 @@ class BasePairCorrelation(Base):
             next_unit_df = pd.DataFrame(
                 {coord: coordinates[coord][idx+2]
                  for coord in coordinates.keys()})
-            crd_corr = self.get_correlation(next_unit_df, unit_df) # inverse order ?
+            crd_corr = self.get_correlation(next_unit_df, unit_df)  # inverse order ?
             coordinate_correlations[f"{subunit}/{next_subunit}"] = crd_corr
         return coordinate_correlations
 
@@ -177,6 +176,7 @@ class BasePairCorrelation(Base):
 
 # BASE PAIR CONFIRMATION ANALYSIS
 
+
 class BConformations(Base):
     """Execution plan and methods for BI/BII conformations analysis pipeline"""
 
@@ -245,7 +245,7 @@ class BConformations(Base):
             angles_df.append(traj_df)
         angles_df = pd.concat(angles_df, axis=1)
         # percentages BI
-        B_I = (angles_df < 0).sum(axis=0) * 100 / len(angles_df) # self.n_lines
+        B_I = (angles_df < 0).sum(axis=0) * 100 / len(angles_df)  # self.n_lines
         # clean dataset
         B_I = B_I[~B_I.index.duplicated(keep='first')]
         B_I = B_I.reset_index()
@@ -275,7 +275,8 @@ class BConformations(Base):
             :param float x: angle value (asumed to be in degrees)
             :param sequence domain: start and end of angle range.
 
-            : return float: angle value with fixed range """
+            : return float: angle value with fixed range
+            """
             while x < domain[0]:
                 x += 360
             while x > domain[1]:
@@ -319,10 +320,10 @@ class BConformations(Base):
         B_II["pct"] = 100 - B_I["pct"]
         bconf_heatmap(B_II, "BII", self.save_path, self.unit_len, self.Ac)
 
+
 # COORDINATE CORRELATION ANALYSIS
 class CoordinateCorrelation(Base):
-    """
-    Execution plan and methods for correlation analyses
+    """Execution plan and methods for correlation analyses
     """
 
     def __init__(self, **kwargs):
@@ -470,11 +471,10 @@ class CoordinateCorrelation(Base):
             "coordcorr",
             save_subpath)
 
+
 # COORDINATE DISTRIBUTION ANALYSIS
 class CoordinateDistributions(Base):
-    """
-    Execution plan and methods for coordinate distributions analysis pipeline
-    """
+    """Execution plan and methods for coordinate distributions analysis pipeline."""
 
     def __init__(
             self,
@@ -560,45 +560,46 @@ class CoordinateDistributions(Base):
         return coordinate_df
 
     def duplicate_trajectory_iteration(
-                self,
-                coord_dataset,
-                sequences,
-                coordinate):
-            trajectory_info = []
-            dict_all_subunits_ser = {}
-            # iterate over datasets and sequences
-            for dataseries, sequence in zip(coord_dataset, sequences):
+        self,
+        coord_dataset,
+        sequences,
+        coordinate
+    ):
+        trajectory_info = []
+        dict_all_subunits_ser = {}
+        # iterate over datasets and sequences
+        for dataseries, sequence in zip(coord_dataset, sequences):
             # iterate over subunits
-                start = 2 + sequence.flanksize
-                end = sequence.size - (2 + sequence.baselen + sequence.flanksize - 1)
+            start = 2 + sequence.flanksize
+            end = sequence.size - (2 + sequence.baselen + sequence.flanksize - 1)
 
-                for idx in range(start, end):
-                    subunit = sequence.get_subunit(idx)
-                    ic_subunit = sequence.inverse_complement(subunit)
-                    ser = dataseries[idx + 1]
-                    ser = ser[~np.isnan(ser)].to_numpy()
+            for idx in range(start, end):
+                subunit = sequence.get_subunit(idx)
+                ic_subunit = sequence.inverse_complement(subunit)
+                ser = dataseries[idx + 1]
+                ser = ser[~np.isnan(ser)].to_numpy()
 
-                    if subunit in dict_all_subunits_ser:
-                        dict_all_subunits_ser[subunit] = np.concatenate((dict_all_subunits_ser[subunit], ser))
-                    else:
-                        dict_all_subunits_ser[subunit] = ser
+                if subunit in dict_all_subunits_ser:
+                    dict_all_subunits_ser[subunit] = np.concatenate((dict_all_subunits_ser[subunit], ser))
+                else:
+                    dict_all_subunits_ser[subunit] = ser
 
-                    if ic_subunit not in dict_all_subunits_ser:
-                        dict_all_subunits_ser[ic_subunit] = ser
+                if ic_subunit not in dict_all_subunits_ser:
+                    dict_all_subunits_ser[ic_subunit] = ser
 
-            for subunit, ser in dict_all_subunits_ser.items():
-                ser = ser.reshape(-1, 1)
-                subunit_information = self.subunit_iteration(
-                    ser,
-                    subunit,
-                    coordinate)
-                if not self.bimod:
-                    subunit_information["unimodal"] = True
-                trajectory_info.append(subunit_information)
+        for subunit, ser in dict_all_subunits_ser.items():
+            ser = ser.reshape(-1, 1)
+            subunit_information = self.subunit_iteration(
+                ser,
+                subunit,
+                coordinate)
+            if not self.bimod:
+                subunit_information["unimodal"] = True
+            trajectory_info.append(subunit_information)
 
-            # create dataframe from list of dictionaries
-            trajectory_df = pd.DataFrame.from_dict(trajectory_info)
-            return trajectory_df
+        # create dataframe from list of dictionaries
+        trajectory_df = pd.DataFrame.from_dict(trajectory_info)
+        return trajectory_df
 
     def trajectory_iteration(
             self,
@@ -819,9 +820,9 @@ class StiffnessDistributions(Base):
             diagonals[ic_tetramer] = np.append(
                 stiffness_diag,
                 [np.prod(stiffness_diag), np.sum(stiffness_diag)])
-            #results["covariances"][tetramer] = cov_df
+            # results["covariances"][tetramer] = cov_df
             results["covariances"][ic_tetramer] = cov_df
-            #results["constants"][tetramer] = cte
+            # results["constants"][tetramer] = cte
             results["constants"][ic_tetramer] = cte
         # build stiffness table
         columns = [sequence.unit_name] + coordinates + ["product", "sum"]
@@ -863,12 +864,12 @@ class StiffnessDistributions(Base):
         stiff = np.linalg.inv(cv) * KT
         # Added two new variables: ChiC and ChiW -> 8 (for PENTAMERS)
         if (self.unit_len % 2) == 0:
-            last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av] #, CW_av, CC_av]
+            last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av]  #, CW_av, CC_av]
             stiff = np.append(stiff, last_row).reshape(7, 6)
         elif (self.unit_len % 2) == 1:
             last_row = [SH_av, SL_av, RS_av, TL_av, RL_av, TW_av, CW_av, CC_av]
             stiff = np.append(stiff, last_row).reshape(9, 8)
-            scaling=[1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
+            scaling = [1, 1, 1, 10.6, 10.6, 10.6, 1, 1]
 
         stiff = stiff.round(6)
         stiff_diag = np.diagonal(stiff) * np.array(scaling)
@@ -943,13 +944,13 @@ class StiffnessDistributions(Base):
                 unit_name=self.unit_name,
                 unit_len=self.unit_len)
 
+
 # Run the NASSA analysis pipeline giving the name of the analysis and the configuration file.
 # The overwrite flag could be used to overwrite the output folder if it already exists.
 def run_nassa(analysis_name: str,
               config_archive: dict,
               overwrite_nassa: bool = False):
-    """Run the NASSA analysis pipeline"""
-
+    """Run the NASSA analysis pipeline."""
     # Dictionary with the available NASSA analyses and their corresponding classes
     analyses = {
         "bpcorr": BasePairCorrelation,
@@ -979,7 +980,7 @@ def run_nassa(analysis_name: str,
         analysis_class = analyses[analysis_name]
         # The stiffness analysis is a special case, since the coordinate files are different depending on the unit length (if it is pair or impair)
         if analysis_name == "stiff":
-            unit_len = config_archive["unit_len"] # Obtain the unit length from the configuration archive
+            unit_len = config_archive["unit_len"]  # Obtain the unit length from the configuration archive
             if (unit_len % 2) == 0:
                 coordinate_files = NASSA_ANALYSES_CANALS["bpcorr"]
             elif (unit_len % 2) == 1:
@@ -1010,6 +1011,8 @@ def workflow_nassa(
     overwrite: bool = False,
     overwrite_nassa: bool = False,
     helical_par: bool = False,
+    accession: Optional[str] = None,
+    sample_trajectory: bool = False,
     proj_dirs: Optional[list[str]] = None,
     input_structure_file: Optional[str] = None,
     input_trajectory_file: Optional[str] = None,
@@ -1031,8 +1034,8 @@ def workflow_nassa(
     if helical_par:
         # AGUS: This option with glob is commented because it is not working properly so if in the future it is needed, it should be fixed
         # AGUS: the objective to use glob is to run this part (of project directories) calling this function from python and not from the command line
-        #seq_paths = glob.glob(f'{proj_dirs}')
-        #seq_paths = [path for path in glob.glob(f'{proj_dirs}*') if os.path.isdir(path)]
+        # seq_paths = glob.glob(f'{proj_dirs}')
+        # seq_paths = [path for path in glob.glob(f'{proj_dirs}*') if os.path.isdir(path)]
 
         actual_path = getcwd()
         # The workflow function is imported from mddb_workflow to run the helical parameters analysis and do all the checks in each project directory
@@ -1045,31 +1048,31 @@ def workflow_nassa(
             os.chdir(md_path)
             print(f'\n{CYAN_HEADER}Running Helical Parameters at {proj_path}{COLOR_END}')
             # Call the workflow function to run the helical parameters analysis with the include flag set to helical and overwrite (if it is added)
-            workflow(project_parameters={#'directory':os.getcwd(),
-                                         #'md_directories':[os.getcwd()],
-                                         #'input_structure_filepath':input_structure_file,
-                                         'input_topology_filepath':input_top_file,
-                                         'input_trajectory_filepaths':input_trajectory_file,
-                                         'md_directories': md_directories,
-                                         'trust': trust,
-                                         'mercy': mercy
-                                         },
-                     include=['helical'],
-                     overwrite=overwrite
-                     )
+            workflow(project_parameters={
+                'accession': accession,
+                'sample_trajectory': sample_trajectory,
+                'input_topology_filepath': input_top_file,
+                'input_trajectory_filepaths': input_trajectory_file,
+                'md_directories': md_directories,
+                'trust': trust,
+                'mercy': mercy
+                },
+                include=['helical'],
+                overwrite=overwrite
+            )
             os.chdir('..')
         # If all flag is selected, the NASSA analysis will be run after the helical parameters analysis
         # Reminder: the NASSA analysis needs the helical parameters files to be generated before running it.
         if all:
             # The sequences path is needed to run the NASSA analysis so it has to be defined
-            if seq_path == None:
+            if seq_path is None:
                 raise InputError('No sequence path defined. Please define it as an argument (--seq_path)')
             output_nassa_analysis = os.path.join(actual_path, 'nassa_analysis')
             # If the output folder already exists, it is checked so that it can be overwritten with te overwrite_nassa flag
             if not os.path.exists(output_nassa_analysis):
                 os.mkdir(output_nassa_analysis)
             else:
-                if overwrite_nassa == True:
+                if overwrite_nassa is True:
                     print(f'WARNING: Output folder {output_nassa_analysis} already exists. Overwriting it.')
                 else:
                     print(f'WARNING: Output folder {output_nassa_analysis} already exists and is not empty. Skipping NASSA analysis. \nSet the overwrite flag to overwrite the output folder (--overwrite_nassa).')
