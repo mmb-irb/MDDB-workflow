@@ -462,12 +462,12 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
     # Non maching sequence may return a 0.1-0.3 normalized score
     # Matching sequence may return >4 normalized score
     if normalized_score < 2:
-        print('    Not valid alignment')
+        if verbose: print('    Not valid alignment')
         return None
 
     # Tell the user about the success
     beautiful_normalized_score = round(normalized_score * 100) / 100
-    print(f'    Valid alignment -> Normalized score = {beautiful_normalized_score}')
+    if verbose: print(f'    Valid alignment -> Normalized score = {beautiful_normalized_score}')
 
     # Match each residue
     aligned_mapping = []

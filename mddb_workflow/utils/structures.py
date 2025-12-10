@@ -590,11 +590,15 @@ class Residue:
                 self._classification = 'solvent'
                 return self._classification
         # -------------------------------------------------------------------------------------------------------
+        # Check if the residue is bonded or not to other residues or alone
+        is_single_residue = len(self.get_bonded_residue_indices()) == 0
+        # -------------------------------------------------------------------------------------------------------
         # Protein definition according to vmd:
         # a residue with atoms named C, N, CA, and O
         # In our case we accept OC1 and OC2 or OT1 and OT2 instead of O for terminal residues
+        # Also in our case the residue must be bonded to other residues
         atom_names = set([ atom.name for atom in self.atoms ])
-        if ( all((name in atom_names) for name in ['C', 'N', 'CA']) and (
+        if (not is_single_residue and all((name in atom_names) for name in ['C', 'N', 'CA']) and (
             'O' in atom_names or { 'OC1', 'OC2' } <= atom_names or { 'OT1', 'OT2' } <= atom_names
         )):
             self._classification = 'protein'
@@ -604,7 +608,9 @@ class Residue:
         # a residue with atoms named P, O1P, O2P and either O3’, C3’, C4’, C5’, O5’ or O3*, C3*, C4*, C5*, O5*
         # Apparently it has been fixed so now a residue does not need to be phosphorylated to be considered nucleic
         # LORE: This included the condition "all((name in atom_names) for name in ['P', 'OP1', 'OP2'])"
-        if (( all((name in atom_names) for name in ["O3'", "C3'", "C4'", "C5'", "O5'"]) or
+        # Also in our case the residue must be bonded to other residues
+        if not is_single_residue and (
+            ( all((name in atom_names) for name in ["O3'", "C3'", "C4'", "C5'", "O5'"]) or
             all((name in atom_names) for name in ["O3*", "C3*", "C4*", "C5*", "O5*"]) )):
             # At this point we know it is nucleic
             # We must tell the difference between DNA and RNA
@@ -2276,6 +2282,18 @@ class Structure:
         if not target_chain: return None
         # Find the residue in the target chain
         target_chain.find_residue(number, icode)
+
+    def get_sequences (self, polymer_type : str | None = None) -> list[str]:
+        """Get list of protein sequences in the structure."""
+        sequences = []
+        # Iterate structure chains
+        for chain in self.chains:
+            # If there is a polymer type filter then apply it here
+            if polymer_type and chain.get_classification() != polymer_type: continue
+            # Get the current chain sequence and add it to the list
+            sequence = chain.get_sequence()
+            sequences.append(sequence)
+        return sequences
 
     def display_summary (self):
         """Get a summary of the structure."""
