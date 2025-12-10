@@ -85,8 +85,13 @@ class Task:
         self.parent_output_file_keys = {}
         for argument in self.output_filenames.keys():
             self.parent_output_file_keys[argument] = f'{self.flag}_task_{argument}'
-        self.cache_arg_cksums = f'{self.flag}_task_arg_cksums'
+        self.cache_arg_cksums_key = f'{self.flag}_task_arg_cksums'
         self.cache_output_key = f'{self.flag}_task_output'
+        # Set keys for when a output-generator task has not output given the inputs
+        self.cache_missing_output_dir_key = f'{self.flag}_missing_output_directory'
+        self.cache_missing_output_file_keys = {}
+        for argument in self.output_filenames.keys():
+            self.cache_missing_output_file_keys[argument] = f'{self.flag}_missing_{argument}'
         # Para el arg_cksum
         self.__name__ = self.flag
 
@@ -147,7 +152,7 @@ class Task:
         # Find out which arguments are optional since they have default values
         default_arguments = set(expected_arguments[::-1][:n_default_arguments])
         # If output_filenames are among the expected arguments then set them here
-        writes_output_file = len(self.output_filenames) > 0
+        writes_output_files = len(self.output_filenames) > 0
         output_files = {}
         for argument, output_filename in self.output_filenames.items():
             # Make sure the declared output filename is expected
@@ -213,7 +218,7 @@ class Task:
         changed_inputs, had_cache, cache_cksums = self._get_changed_inputs(parent, processed_args)
         any_input_changed = len(changed_inputs) > 0
         # Update the cache inputs
-        parent.cache.update(self.cache_arg_cksums, cache_cksums)
+        parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
         # We must overwrite outputs either if inputs changed or if it was forced by the user
         must_overwrite = forced_overwrite or any_input_changed
         # Check if output already exists
@@ -221,17 +226,25 @@ class Task:
         existing_incomplete_output = writes_output_dir and exists(incomplete_output_directory)
         # If the final directory already exists then it means the task was done in a previous run
         existing_final_output = writes_output_dir and exists(final_output_directory)
+        # Check if the output directory was missing after completing the task in the last run
+        naturally_missing_output = writes_output_dir and \
+            parent.cache.retrieve(self.cache_missing_output_dir_key, False)
         # If the output file already exists then it also means the task was done in a previous run
-        existing_output_files = writes_output_file and \
-            all( output_file == None or type(output_file) == Exception or output_file.exists
+        any_existing_output_files = writes_output_files and \
+            any( output_file == None or type(output_file) == Exception or output_file.exists
                  for output_file in output_files.values() )
+        # Check if all output file exist or are naurally missing
+        all_existing_or_naturally_missing_output_files = writes_output_files and \
+            all( output_file == None or type(output_file) == Exception or output_file.exists
+                 or parent.cache.retrieve(self.cache_missing_output_file_keys[argument], False)
+                 for argument, output_file in output_files.items() )
         # If we already have a cached output result
         existing_output_data = output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
         if must_overwrite:
             if existing_incomplete_output: rmtree(incomplete_output_directory)
             if existing_final_output: rmtree(final_output_directory)
-            if existing_output_files:
+            if any_existing_output_files:
                 for output_file in output_files.values():
                     if output_file == None or type(output_file) == Exception: continue
                     if output_file.exists: output_file.remove()
@@ -240,9 +253,9 @@ class Task:
         else:
             # If output files/directories are expected then they must exist
             # If output data is expected then it must be cached
-            satisfied_output = (not writes_output_dir or existing_final_output) \
-                and (not writes_output_file or existing_output_files) \
-                and existing_output_data
+            satisfied_output = existing_output_data \
+                and (not writes_output_dir or existing_final_output or naturally_missing_output) \
+                and (not writes_output_files or all_existing_or_naturally_missing_output_files)
             if self.debug:
                 print(f'existing_output_data: {existing_output_data}')
                 print(f'output: {output}')
@@ -262,7 +275,6 @@ class Task:
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
         print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
-        start_time = time.time()
         # If the task is to be run again because an inputs changed then let the user know
         if any_input_changed and had_cache and not forced_overwrite:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
@@ -272,6 +284,7 @@ class Task:
         self.changed_inputs = changed_inputs
         self.cache_cksums = cache_cksums
         # Run the actual task
+        start_time = time.time()
         output = self.func(**processed_args)
         end_time = time.time()
         print(f'   Task {self.flag} completed in {end_time - start_time:.2f} seconds{COLOR_END}')
@@ -282,6 +295,16 @@ class Task:
             parent.cache.update(self.cache_output_key, output)
         # Update the overwritables so this is not remade further in the same run
         parent.overwritables.discard(self.flag)
+        # Check if, although it should have written output, it did not
+        # Some tasks may no write output under certain conditions
+        # e.g. protmap when there is no protein
+        # In these cases the task must remember there is no output to not run again further
+        if writes_output_dir and not exists(incomplete_output_directory):
+            parent.cache.update(self.cache_missing_output_dir_key, True)
+        for argument, output_file in output_files.items():
+            if output_file.exists: continue
+            cache_key = self.cache_missing_output_file_keys[argument]
+            parent.cache.update(cache_key, True)
         # Change the incomplete directory name to its final name
         # We do not remove the directory if it is empty anymore
         # The empty directory stands as a proof that the task was run successfully
@@ -330,7 +353,7 @@ class Task:
 
         """
         # Get cache argument references
-        cache_cksums = parent.cache.retrieve(self.cache_arg_cksums, MISSING_VALUE_EXCEPTION)
+        cache_cksums = parent.cache.retrieve(self.cache_arg_cksums_key, MISSING_VALUE_EXCEPTION)
         had_cache = False if cache_cksums == MISSING_VALUE_EXCEPTION else True
         if cache_cksums == MISSING_VALUE_EXCEPTION: cache_cksums = {}
         # Check argument by argument
@@ -369,4 +392,4 @@ class Task:
         if self.use_cache: parent.cache.update(self.cache_output_key, output)
         # Save input cksums to avoid repeating this task in future runs
         _, _, cache_cksums = self._get_changed_inputs(parent, inputs)
-        parent.cache.update(self.cache_arg_cksums, cache_cksums)
+        parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
