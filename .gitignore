@@ -20,3 +20,7 @@ mwf.tar.gz
 
 # Docs
 docs/_build/
+
+# pixi environments
+.pixi
+*.egg-info
