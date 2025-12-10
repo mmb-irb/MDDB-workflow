@@ -125,6 +125,13 @@ def prepare_project_metadata (
         for chain in chainnames.keys():
             if chain not in structure_chains:
                 raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
+            
+    # Get a summary of atom/residue/chain names which are potential query targets
+    # LORE: These fields were topology queries but they were innefficient
+    unique_atom_names = list(set([ atom.name for atom in structure.atoms ]))
+    unique_atom_elements = list(set([ atom.element for atom in structure.atoms ]))
+    unique_residue_names = list(set([ residue.name for residue in structure.residues ]))
+    unique_chain_names = list(set([ chain.name for chain in structure.chains ]))
 
     # Get the MD type
     md_type = input_type
@@ -212,6 +219,10 @@ def prepare_project_metadata (
         'MULTIMERIC': input_multimeric,
         'COLLECTIONS': collections,
         'SYSKEYS': system_keywords,
+        'ATNAME': unique_atom_names,
+        'ATELEM': unique_atom_elements,
+        'RSNAME': unique_residue_names,
+        'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
     }
     # Add boxsizes only if any of them is 0
