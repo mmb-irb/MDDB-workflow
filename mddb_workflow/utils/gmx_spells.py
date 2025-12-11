@@ -407,6 +407,8 @@ GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*([0-9]*) type=[0-9]* \((BONDS|CONSTR|CONNBO
 # This is not yet supported, but at least we check if this is happening to raise an error when found
 GROMACS_TPR_SETTLE_REGEX = r"^\s*([0-9]*) type=[0-9]* \(SETTLE\)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)$"
 
+# Set the fields including vsites in the tpr dump tool
+VIRTUAL_SITE_FIELDS = ['virtual_site_1', 'virtual_site_2', 'virtual_site_3', 'virtual_site_4', 'virtual_site_n']
 
 def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
     """ Get tpr atom bonds. """
@@ -415,12 +417,19 @@ def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
     topology = parsed_tpr['gromacs-topology']
     # Get the actual bonds
     tpr_bonds = topology['bond']['value']
-    # Get VSITEN bond-like annotations
+    # Get virtual sites with bond-like annotations
     # These are not actual bonds, but some CG models such as Martini use them as such
     # If not consider, some beads may remain non-bonded to anything thus breaking our logic
     # DANI: I check for the field to exist just to support old versions of the tool
-    virtuals = topology.get('virtual_site_n', None)
-    if virtuals: tpr_bonds += virtuals['value']
+    for virtual_size_field in VIRTUAL_SITE_FIELDS:
+        virtuals = topology.get(virtual_size_field, None)
+        if not virtuals: continue
+        # Add a bond between the first atom index and each of the rest of atom indices
+        for virtual in virtuals['value']:
+            main = virtual[0]
+            for other in virtual[1:]:
+                fake_bond = [main, other]
+                tpr_bonds.append(fake_bond)
     return tpr_bonds
 
 
