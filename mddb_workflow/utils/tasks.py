@@ -302,6 +302,7 @@ class Task:
         if writes_output_dir and not exists(incomplete_output_directory):
             parent.cache.update(self.cache_missing_output_dir_key, True)
         for argument, output_file in output_files.items():
+            if output_file == None or type(output_file) == Exception: continue
             if output_file.exists: continue
             cache_key = self.cache_missing_output_file_keys[argument]
             parent.cache.update(cache_key, True)
