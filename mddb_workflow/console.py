@@ -11,10 +11,11 @@ from mddb_workflow.utils.file import File
 from mddb_workflow.utils.filters import filter_atoms
 from mddb_workflow.utils.subsets import get_trajectory_subset
 from mddb_workflow.utils.constants import *
-from mddb_workflow.utils.auxiliar import InputError
+from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS
 from mddb_workflow.utils.nassa_file import generate_nassa_config
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
+from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
@@ -309,6 +310,22 @@ def main():
     elif subcommand == 'chainer':
         # Parse the structure
         structure = Structure.from_pdb_file(args.input_structure)
+        # If there is a bonds source then mine bonds from it
+        if args.bonds_source:
+            bonds_source = File(args.bonds_source)
+            if not bonds_source.exists:
+                raise InputError(f'Missing bonds source "{bonds_source.path}"')
+            # Extract bonds from the topology
+            mined_bonds = mine_topology_bonds(bonds_source)
+            # Set mined bonds in the structure
+            structure.bonds = mined_bonds
+        # Check if there are missing bonds at this point, which may happen if we have a coarse grain
+        # Note that we might know if the structure is in coarse grain thanks to the elements (Cg)
+        missing_any_bonds = any(bond == MISSING_BONDS for bond in structure.bonds)
+        # If we are missing any bond then we can not run the per-fragment logic
+        if missing_any_bonds and not args.letter:
+            raise InputError('Cannot run the per-fragment logic with missing bonds.\n' + \
+                '  Please either specify a chain letter (-let) or provide a bonds source topology (-bs).')
         # Select atom accoridng to inputs
         selection = structure.select(args.selection_string, args.selection_syntax) if args.selection_string else structure.select_all()
         if not selection: raise InputError(f'Empty selection {selection}')
@@ -624,6 +641,7 @@ chainer_parser_args = [
     (["-syn", "--selection_syntax"], {'default': 'vmd', 'choices': Structure.SUPPORTED_SELECTION_SYNTAXES, 'help': "Atom selection syntax (VMD syntax by default)"}),
     (["-let", "--letter"], {'help': "New chain letter (one letter per fragment by default)"}),
     (["-whfr", "--whole_fragments"], {'type': bool, 'default': False, 'help': "Consider fragments beyond the atom selection. Otherwise a fragment could end up having multiple chains."}),
+    (["-bs", "--bonds_source"], {'help': "Source topology file to mine bonds from."}),
 ]
 for flags, kwargs in chainer_parser_args:
     chainer_parser.add_argument(*flags, **kwargs)
