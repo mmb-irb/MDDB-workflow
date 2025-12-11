@@ -17,13 +17,13 @@ These tasks are executed once per project:
 
 * ``charges`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_charges.py#L13>`__: extract charges from a source file. 
 
-* ``inchikeys`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_inchi_keys.py#L119>`__: generate a dictionary mapping InChI keys to residue information for non-standard residues.  This function uses MDAnalysis to parse the input structure and topology files and identifies residues that are not classified as 'ion', 'solvent', 'nucleic', or 'protein'. For each identified residue, it converts the structure to RDKit format to obtain the InChI key and InChI string. The resulting data is stored in dictionaries to map InChI keys to residue details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers. 
+* ``inchikeys`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_inchi_keys.py#L120>`__: generate a dictionary mapping InChI keys to residue information for non-standard residues.  This function uses MDAnalysis to parse the input structure and topology files and identifies residues that are not classified as 'ion', 'solvent', 'nucleic', or 'protein'. For each identified residue, it converts the structure to RDKit format to obtain the InChI key and InChI string. The resulting data is stored in dictionaries to map InChI keys to residue details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers. 
 
-* ``inchimap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_inchi_keys.py#L248>`__: generate InChI references for the database.
+* ``inchimap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_inchi_keys.py#L249>`__: generate InChI references for the database.
 
-* ``inputs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1466>`__: set a function to load the inputs yaml file.
+* ``inputs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1498>`__: set a function to load the inputs yaml file.
 
-* ``itopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1547>`__: get the input topology file. If the file is not found try to download it.
+* ``itopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1579>`__: get the input topology file. If the file is not found try to download it.
 
 * ``ligmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_ligands.py#L40>`__: generate a map of residues associated to ligands.  This function identifies and maps ligands in the molecular structure through a multi-step matching process:  1. **Direct InChIKey matching**: Extracts InChIKeys from structure fragments    (excluding lipids and membrane components) and attempts direct matching with    PubChem database.  2. **Chemical similarity matching**: If direct matching fails, progressively    modifies the molecular structure and calculates Tanimoto coefficient (TC)    for similarity assessment:    1. Neutralize charges    2. Remove stereochemistry information    3. Apply PubChem standardization (tautomer, protonation, etc.)    4. Match against PDB-derived ligands (TC threshold ≥ 0.9)    5. Perform similarity search in PubChem/ChEMBL (TC threshold ≥ 0.9)  3. **Fallback handling**: Unmatched ligands are saved as-is with warnings.  4. **User-forced selections**: Respects user-specified ligand selections from    inputs.yaml, with warnings if TC compared to original fragment is insufficient.
 
@@ -33,9 +33,9 @@ These tasks are executed once per project:
 
 * ``pdbs`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_pdb_references.py#L8>`__: prepare the PDB references json file to be uploaded to the database.
 
-* ``pmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_metadata.py#L12>`__: prepare a JSON file with all project metadata.
+* ``pmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_metadata.py#L13>`__: prepare a JSON file with all project metadata.
 
-* ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1610>`__: get the MSM equilibrium populations file.
+* ``populations`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1642>`__: get the MSM equilibrium populations file.
 
 * ``protmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_map.py#L75>`__: map the structure aminoacids sequences against the Uniprot reference sequences.
 
@@ -43,13 +43,13 @@ These tasks are executed once per project:
 
 * ``resmap`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/residue_mapping.py#L5>`__: build the residue map from both proteins and ligands maps.  This is formatted as both the standard topology and metadata generators expect them.
 
-* ``screenshot`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_screenshot.py#L26>`__: obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database. Returns the rotation values used to take the photo so they can be saved and reused.
+* ``screenshot`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/get_screenshot.py#L25>`__: obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database. Returns the rotation values used to take the photo so they can be saved and reused.
 
 * ``stopology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_topology.py#L5>`__: prepare the standard topology file to be uploaded to the database.
 
-* ``topology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1835>`__: get the processed topology from the reference MD.
+* ``topology`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1867>`__: get the processed topology from the reference MD.
 
-* ``transitions`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1617>`__: get the MSM transition probabilities file.
+* ``transitions`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L1649>`__: get the MSM transition probabilities file.
 
 MD Tasks
 -----------
@@ -65,9 +65,9 @@ Files
 
 * ``itrajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/mwf.py#L438>`__: get the input trajectory filename(s) from the inputs. If file(s) are not found try to download it.
 
-* ``structure`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/tasks.py#L114>`__: 
+* ``structure`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/tasks.py#L121>`__: 
 
-* ``trajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/tasks.py#L114>`__: 
+* ``trajectory`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/tasks.py#L121>`__: 
 
 Analyses
 ~~~~~~~~~~~~~~
@@ -76,15 +76,15 @@ Analyses
 
 * ``average`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/pyt_spells.py#L166>`__: get an average structure from a trajectory.
 
-* ``channels`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/channels.py#L9>`__: 
+* ``channels`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/channels.py#L10>`__: analyze channels in a membrane protein using MDAnalysis' mda_hole.
 
-* ``clusters`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/clusters.py#L16>`__: run the cluster analysis.
+* ``clusters`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/clusters.py#L15>`__: run the cluster analysis.
 
 * ``density`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/density.py#L8>`__: membrane density analysis.
 
 * ``dihedrals`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/dihedral_energies.py#L10>`__: calculate torsions and then dihedral energies for every dihedral along the trajectory.
 
-* ``dist`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/distance_per_residue.py#L21>`__: calculate the distance mean and standard deviation of each pair of residues of different agents. Note that the distances are calculated for all residues in the agent, not only the interface residues.
+* ``dist`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/distance_per_residue.py#L22>`__: calculate the distance mean and standard deviation of each pair of residues of different agents. Note that the distances are calculated for all residues in the agent, not only the interface residues.
 
 * ``energies`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/energies.py#L42>`__: perform the electrostatic and vdw energies analysis for each pair of interaction agents.
 
@@ -92,7 +92,7 @@ Analyses
 
 * ``frames`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/pyt_spells.py#L75>`__: get the trajectory frames count.
 
-* ``hbonds`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/hydrogen_bonds.py#L25>`__: perform an hydrogen bonds analysis for each interaction interface. The 'interactions' input may be an empty list (i.e. there are no interactions). In case there are no interactions the analysis stops. Note that this analysis find hydrogen bonds in a subset of frames along the trajectory. Storing the results for the whole trajectory is not possible due to storage limits.
+* ``hbonds`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/hydrogen_bonds.py#L26>`__: perform an hydrogen bonds analysis for each interaction interface. The 'interactions' input may be an empty list (i.e. there are no interactions). In case there are no interactions the analysis stops. Note that this analysis find hydrogen bonds in a subset of frames along the trajectory. Storing the results for the whole trajectory is not possible due to storage limits.
 
 * ``helical`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/helical_parameters.py#L115>`__: helical parameters analysis.
 
@@ -106,7 +106,7 @@ Analyses
 
 * ``mda_univ`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/mda_spells.py#L89>`__: create a MDAnalysis universe using data in the workflow.
 
-* ``mdmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_metadata.py#L244>`__: produce the MD metadata file to be uploaded to the database.
+* ``mdmeta`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/tools/generate_metadata.py#L268>`__: produce the MD metadata file to be uploaded to the database.
 
 * ``pairwise`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/rmsd_pairwise.py#L18>`__: perform an analysis for the overall structure and then one more analysis for each interaction.
 

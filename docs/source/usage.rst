@@ -15,9 +15,9 @@ All you need to start processing your files is a topology file (prmtop, tpr, psf
 
     project/
     ├── raw_topology.prmtop
-    ├── raw_trajectory_01.nc
-    ├── raw_trajectory_02_part01.nc
-    └── raw_trajectory_02_part02.nc
+    ├── raw_trajectory_1.nc
+    ├── raw_trajectory_2_part1.nc
+    └── raw_trajectory_2_part2.nc
 
 Note that here we have 2 independent replicas sharing common topology. The second replica is actually split in 2 consecutive parts but this is not a problem.
 
@@ -34,7 +34,7 @@ The command to start the processing would be as follows:
 
 .. code-block:: bash
 
-   mwf run -top raw_topology.prmtop -md replica_1 raw_trajectory_01.nc -md replica_2 raw_trajectory_02_part01.nc raw_trajectory_02_part02.nc
+   mwf run -top raw_topology.prmtop -md replica_1 raw_trajectory_1.nc -md replica_2 raw_trajectory_2_part1.nc raw_trajectory_2_part2.nc
 
 The ``mwf`` command is the main handler of the workflow and its letters stand for 'MDDB-WorkFlow'. The ``run`` subcommand is the one which triggers the main logic and thus run the workflow. Now lets explain every argument in this command:
 
@@ -53,8 +53,8 @@ If everything is fine after the processing, some *new files* may have been gener
     project/
     ├── raw_topology.prmtop
     ├── raw_trajectory.nc
-    ├── raw_trajectory_part01.nc
-    ├── raw_trajectory_part02.nc
+    ├── raw_trajectory_part1.nc
+    ├── raw_trajectory_part2.nc
     ├── topology.prmtop
     ├── replica_1/
     │   ├── structure.pdb
