@@ -82,7 +82,7 @@ def extract_yaml_documentation(yaml_file_path):
             i += 1
 
     # Generate RST content
-    rst_content = ".. _input_file_documentation: generated with generate_input_docs.py\n\n"
+    rst_content = ".. _inputs_file_documentation: generated with generate_inputs_docs.py\n\n"
     rst_content += "Input File\n"
     rst_content += "==========================\n\n"
     rst_content += ".. note::\n"

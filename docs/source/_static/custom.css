@@ -86,3 +86,7 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 #workflow-tasks a:hover {
     color: #4f14a7;
 }
+
+pre {
+    white-space: pre-wrap !important; 
+}

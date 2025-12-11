@@ -1,4 +1,4 @@
-.. _input_file_documentation: generated with generate_input_docs.py
+.. _inputs_file_documentation: generated with generate_inputs_docs.py
 
 Input File
 ==========================

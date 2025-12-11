@@ -12,11 +12,11 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-.PHONY: help Makefile generate_input_docs
+.PHONY: help Makefile generate_inputs_docs
 
 # Generate input file documentation from YAML template
 generate_docs:
-	@python scripts/generate_input_docs.py
+	@python scripts/generate_inputs_docs.py
 	@python scripts/generate_task_docs.py
 
 # Override the html target to first generate input docs
@@ -26,5 +26,5 @@ html: generate_docs
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile 
-	@python ./scripts/generate_input_docs.py
+	@python ./scripts/generate_inputs_docs.py
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
