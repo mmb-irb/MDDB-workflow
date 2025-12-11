@@ -1156,22 +1156,22 @@ class Project:
         # NEVER FORGET we rely in input file names to track whether files belong to a specific database + accession
         if accession:
             if inputs_filepath:
-                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-inp" argument or the "-proj" argument.')
             if input_topology_filepath:
-                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-top" argument or the "-proj" argument.')
             if input_structure_filepath:
-                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-stru" argument or the "-proj" argument.')
             if input_trajectory_filepaths:
-                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-traj" argument or the "-proj" argument.')
             if md_directories:
-                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-mdir" argument or the "-proj" argument.')
             if md_config:
-                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' + \
+                raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove any "-md" argument or the "-proj" argument.')
 
         # Set the inputs file
@@ -1182,17 +1182,17 @@ class Project:
             inputs_filename = url_to_source_filename(DEFAULT_INPUTS_FILENAME, self.remote)
             self.inputs_filepath = self.pathify(inputs_filename)
         # Try to guess which is the inputs file by searching for some supported names
-        if self.inputs_filepath == None:
+        if self.inputs_filepath is None:
             candidates = []
             for filename in ACCEPTED_INPUT_FILENAMES:
                 filepath = self.pathify(filename)
                 if exists(filepath):
                     candidates.append(filepath)
-            if len(candidates) > 1: raise InputError(f'Multiple files could be the inputs file: {candidates.join(", ")}\n' + \
+            if len(candidates) > 1: raise InputError(f'Multiple files could be the inputs file: {candidates.join(", ")}\n' +
                                                      ' Please specify which is the inputs file using the "-inp" argument.')
             if len(candidates) == 1: self.inputs_filepath = candidates[0]
         # Set the expected default name in case there is no inputs file since it may be downloaded
-        if self.inputs_filepath == None:
+        if self.inputs_filepath is None:
             self.inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
         self._inputs_file = File(self.inputs_filepath)
         # Set the input topology file

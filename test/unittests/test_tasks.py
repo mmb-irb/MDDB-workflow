@@ -8,8 +8,9 @@ logic fails when checking for satisfied output because the expected file doesn't
 import os
 import shutil
 import pathlib
-from unittest.mock import patch
+from unittest.mock import patch, create_autospec
 from mddb_workflow.mwf import Project
+from mddb_workflow.tools.generate_map import generate_protein_mapping
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
@@ -31,7 +32,7 @@ def test_task_no_output_file_second_run():
     shutil.copy(dummy_dir / "inputs.yaml", test_fld)
     shutil.copy(dummy_dir / "gromacs/ala_ala.tpr", test_fld)
     (test_fld / "replica_1").mkdir(exist_ok=True)
-    shutil.copy(dummy_dir / "gromacs/trajectory.xtc", test_fld / "replica_1")
+    shutil.copy(dummy_dir / "gromacs/raw_trajectory.xtc", test_fld / "replica_1")
 
     cwd = pathlib.Path.cwd()
     os.chdir(test_fld)
@@ -40,19 +41,10 @@ def test_task_no_output_file_second_run():
         # Mock generate_protein_mapping to return an empty list (simulating no protein sequences)
         # This causes the task to complete without creating the output file
         # We need to patch the Task's func attribute directly since it stores the function reference at class definition time
-        # The mock must have the same signature as the original function
-        def mock_generate_protein_mapping(
-            structure,
-            protein_references_file,
-            database,
-            cache,
-            register,
-            mercy=[],
-            input_protein_references=[],
-            pdb_ids=[],
-        ):
-            """Mock that simulates no protein sequences found."""
-            return []
+        # Use create_autospec to copy the signature from the original function
+        mock_generate_protein_mapping = create_autospec(
+            generate_protein_mapping, return_value=[]
+        )
 
         with patch.object(Project.get_protein_map, 'func', mock_generate_protein_mapping):
             # First run: Initialize Project and run protmap task
@@ -60,7 +52,7 @@ def test_task_no_output_file_second_run():
             project = Project(
                 directory=str(test_fld),
                 input_topology_filepath=str(test_fld / "ala_ala.tpr"),
-                input_trajectory_filepaths=str(test_fld / "replica_1/trajectory.xtc"),
+                input_trajectory_filepaths=str(test_fld / "replica_1/raw_trajectory.xtc"),
                 md_directories=['replica_1']
             )
             # Trigger the protmap task
@@ -73,15 +65,19 @@ def test_task_no_output_file_second_run():
         # but it was never created, causing the satisfied_output check to fail
         with patch.object(Project.get_protein_map, 'func', mock_generate_protein_mapping):
             print("\n ------ Second run: protmap should use cache ------ \n")
+            # Reset the mock call count before second run
+            mock_generate_protein_mapping.reset_mock()
+
             project2 = Project(
                 directory=str(test_fld),
                 input_topology_filepath=str(test_fld / "ala_ala.tpr"),
-                input_trajectory_filepaths=str(test_fld / "replica_1/trajectory.xtc"),
+                input_trajectory_filepaths=str(test_fld / "replica_1/raw_trajectory.xtc"),
                 md_directories=['replica_1']
             )
             # This should not fail - it should use the cached result
             result2 = project2.protein_map
-            assert not hasattr(project2.get_protein_map, 'cache_cksums'), "Cache checksums not should exist"
+            mock_generate_protein_mapping.assert_not_called()
+            assert result2 == [], "Second run should return cached empty list"
 
     finally:
         os.chdir(cwd)

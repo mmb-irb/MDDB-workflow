@@ -1,7 +1,7 @@
+import os
 import shutil
 import pathlib
-from mddb_workflow.mwf import Project, MD
-from mddb_workflow.utils.constants import TRAJECTORY_INTEGRITY_FLAG
+from mddb_workflow.mwf import Project, MD, Structure
 
 
 # Set up paths
@@ -50,28 +50,62 @@ def test_amber_top_nc():
     md = project.mds[0]
     md.input_files_processing(md)
 
-# def test_mercy():
-#     regenerate_test_fld()
-#     shutil.copy(dummy_dir/"inputs.yaml", test_fld)
-#     shutil.copy(dummy_dir/"gromacs/ala_ala.tpr", test_fld)
-#     (test_fld/"replica_1").mkdir(exist_ok=True)
-#     shutil.copy(dummy_dir/"gromacs/trajectory.xtc", test_fld/"replica_1")
 
-#     for mercy in [True, False]:
-#         print(f"\nTesting mercy={mercy}\n")
-#         # Initialize Project and process files
-#         project = Project(directory=str(test_fld),
-#                         input_topology_filepath=str(test_fld/"ala_ala.tpr"),
-#                         #input_trajectory_filepaths=str(test_fld/"replica_1/trajectory.xtc"),
-#                         md_config=[['replica_1','*xtc']],
-#                         mercy=mercy)
-#         md: MD = project.mds[0]
-#         md.register.add_warning(TRAJECTORY_INTEGRITY_FLAG, 'Dummy error to trigger mercy')
-#         md.register.update_test(TRAJECTORY_INTEGRITY_FLAG, False)
-#         md.input_files_processing(md)
-    
+def test_mercy():
+    regenerate_test_fld()
+    shutil.copy(dummy_dir/"inputs.yaml", test_fld)
+    shutil.copy(dummy_dir/"gromacs/ala_ala.tpr", test_fld)
+    (test_fld/"replica_1").mkdir(exist_ok=True)
+    shutil.copy(dummy_dir/"gromacs/raw_trajectory.xtc", test_fld/"replica_1")
+
+    # Modify check_incoherent_bonds to force a trajectory integrity failure
+    old_fn = Structure.check_incoherent_bonds
+    Structure.check_incoherent_bonds = lambda _: True
+    cwd = pathlib.Path.cwd()
+    os.chdir(test_fld)
+    for mercy in [True, False]:
+        print(f"\nTesting mercy={mercy}\n")
+        # Initialize Project and process files
+        project = Project(
+            input_topology_filepath=str("ala_ala.tpr"),
+            md_config=[['replica_1', '*xtc']],
+            mercy=mercy)
+        md: MD = project.mds[0]
+        md.input_files_processing(md)
+    os.chdir(cwd)
+    # Restore original function in case there are further tests
+    Structure.check_incoherent_bonds = old_fn
+
+
+def test_mda_universe():
+    regenerate_test_fld()
+
+    # Copy necessary files
+    shutil.copy(dummy_dir/"inputs.yaml", test_fld)
+    shutil.copy(dummy_dir/"gromacs/ala_ala.tpr", test_fld)
+    (test_fld/"replica_1").mkdir(exist_ok=True)
+    shutil.copy(dummy_dir/"gromacs/raw_trajectory.xtc", test_fld/"replica_1")
+
+    cwd = pathlib.Path.cwd()
+    os.chdir(test_fld)
+    # Initialize Project and process files
+    project = Project(directory=str(test_fld),
+                    input_topology_filepath=str(test_fld/"ala_ala.tpr"),
+                    input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.xtc"),
+                    md_directories=['replica_1'])
+    project.membrane_map
+    # Second run to test cache loading
+    print("\n ------ Second run to test cache loading ------ \n")
+    project = Project(directory=str(test_fld),
+                    input_topology_filepath=str(test_fld/"ala_ala.tpr"),
+                    input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.xtc"),
+                    md_directories=['replica_1'])
+    project.membrane_map
+    os.chdir(cwd)
+
 
 if __name__ == "__main__":
-    test_amber_prmtop_nc()
-    test_amber_top_nc()
-    # test_mercy()
+    # test_amber_prmtop_nc()
+    # test_amber_top_nc()
+    test_mercy()
+    #test_mda_universe()
