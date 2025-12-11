@@ -86,6 +86,7 @@ class TestSubcommands:
         """Test that the workflow runs without errors, simulating console execution."""
         working_directory = os.path.join(test_data_dir, 'output/test_run')
         # Copy the inputs from raw_project
+        shutil.rmtree(working_directory, ignore_errors=True)
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
             working_directory,
@@ -96,7 +97,7 @@ class TestSubcommands:
                     '-dir', working_directory,
                     '-stru', 'raw_structure.pdb',
                     '-traj', 'raw_trajectory.xtc',
-                    '-top', 'topology.tpr',
+                    '-top', 'raw_topology.tpr',
                     '-i', 'setup', 'rmsds',
                     '-filt', 'chain A']
         main()
