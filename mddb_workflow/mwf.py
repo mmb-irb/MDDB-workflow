@@ -1241,11 +1241,12 @@ class Project:
 
         # Set the MD directories
         self._md_directories = []
-        for dir in md_directories:
-            if is_glob(dir):
-                self._md_directories.extend(glob(dir))
-            else:
-                self._md_directories.append(dir)
+        if md_directories:
+            for dir in md_directories:
+                if is_glob(dir):
+                    self._md_directories.extend(glob(dir))
+                else:
+                    self._md_directories.append(dir)
         # Check input MDs are correct to far
         if self._md_directories:
             self.check_md_directories()
