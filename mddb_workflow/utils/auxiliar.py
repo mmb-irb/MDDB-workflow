@@ -253,7 +253,7 @@ def load_yaml(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
             content = file.read()
             # Pre-process fields that commonly contain colons (DOIs, URLs, etc.)
             # Match field: value where value isn't already quoted and may span multiple lines
-            content = re.sub(
+            # content = re.sub(
             #     r'^(citation:\s*)(?!")([^\n]+(?:\n(?!\w+:)[^\n]+)*)$',
             #     r'\1"\2"',
             #     content,
