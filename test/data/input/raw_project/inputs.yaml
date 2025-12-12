@@ -8,9 +8,9 @@ chainnames:
   A: Antibody
   B: Antibody
   C: Protein
-citation: Puneet K Singh, Razvan C Stan, ThermoPCD: a database of molecular dynamics\
+citation: "Puneet K Singh, Razvan C Stan, ThermoPCD: a database of molecular dynamics\
   \ trajectories of antibody\u2013antigen complexes at physiologic and fever-range\
-  \ temperatures, Database, Volume 2024, 2024, baae015, https://doi.org/10.1093/database/baae015
+  \ temperatures, Database, Volume 2024, 2024, baae015, https://doi.org/10.1093/database/baae015"
 collections: null
 contact: strazvan@jnu.ac.kr
 customs: null
