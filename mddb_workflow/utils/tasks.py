@@ -257,8 +257,9 @@ class Task:
                 and (not writes_output_dir or existing_final_output or naturally_missing_output) \
                 and (not writes_output_files or all_existing_or_naturally_missing_output_files)
             if self.debug:
-                print(f'existing_output_data: {existing_output_data}')
-                print(f'output: {output}')
+                print(f'existing output data: {existing_output_data}')
+                print(f'existing output dir: {not writes_output_dir or existing_final_output or naturally_missing_output}')
+                print(f'existing output files: {not writes_output_files or all_existing_or_naturally_missing_output_files}')
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
                 print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')

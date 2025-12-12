@@ -23,24 +23,23 @@ def is_amber_top (input_topology_file : 'File') -> bool:
     """Check if a .top file is from Amber.
     Returns True if it is Amber, False if it is Gromacs.
     """
-    if input_topology_file != MISSING_TOPOLOGY and \
-        input_topology_file.extension == 'top':
-        with open(input_topology_file.path, 'r') as f:
-            lines = f.readlines(5)
-
-            # If all non-empty first words are '%' assume Amber (.prmtop)
-            first_words = {line.split()[0] for line in lines if line.strip()}
-            if '%VERSION' in first_words:
-                return True
-
-            # If any line starts with ';' or '[' assume Gromacs (.top)
-            first_chars = {word[0] for word in first_words}
-            if any(c in (';', '[') for c in first_chars):
-                return False
-
-            # Otherwise we cannot decide
-            raise InputError('Unable to infer topology format from first five lines')
-    return False
+    # If we are missing the topology then there is nothing to do here
+    if input_topology_file == MISSING_TOPOLOGY: return False
+    # If the file is not a .top topology then there is nothing to do here
+    if input_topology_file.extension != 'top': return False
+    # Read a few first lines of the topology file
+    with open(input_topology_file.path, 'r') as f:
+        lines = f.readlines(5)
+        # If all non-empty first words are '%' assume Amber (.prmtop)
+        first_words = {line.split()[0] for line in lines if line.strip()}
+        if '%VERSION' in first_words:
+            return True
+        # If any line starts with ';' or '[' assume Gromacs (.top)
+        first_chars = {word[0] for word in first_words}
+        if any(c in (';', '[') for c in first_chars):
+            return False
+        # Otherwise we cannot decide
+        raise InputError('Unable to infer topology format from first five lines')
 
 
 def process_input_files (
@@ -96,12 +95,12 @@ def process_input_files (
     # Topologies with the .top extension for us are considered Gromacs topology format
     # However it is usual than Amber topologies (ideally .prmtop) are also '.top'
     # So if the trajectory is Amber and the topology is .top then assume it is Amber
-    input_trajectories_format = list(input_trajectory_formats)[0]
     if is_amber_top(input_topology_file):
         # Creating a topology symlink/copy with the correct extension
         warn('Topology is .top but the trajectory is from Amber. It is assumed the topology is .prmtop')
         reformatted_topology_file = input_topology_file.reformat('prmtop')
         output_topology_file.path = output_topology_file.extensionless_filepath + '.prmtop'
+        # Replace input files
         if input_structure_file == input_topology_file:
             input_structure_file = reformatted_topology_file
         input_topology_file = reformatted_topology_file

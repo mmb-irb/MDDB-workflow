@@ -47,7 +47,7 @@ from mddb_workflow.tools.generate_topology import generate_topology
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.remove_trash import remove_trash
 from mddb_workflow.tools.get_screenshot import get_screenshot
-from mddb_workflow.tools.process_input_files import process_input_files
+from mddb_workflow.tools.process_input_files import process_input_files, is_amber_top
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
@@ -1841,13 +1841,20 @@ class Project:
         """Set the expected output topology filename given the input topology filename.
         Note that topology formats are conserved.
         """
+        # If there is no topology at all
         if self.input_topology_file == MISSING_TOPOLOGY:
             return MISSING_TOPOLOGY
+        # Get the filename
         filename = self.input_topology_file.filename
         if not filename: raise RuntimeError('Unnamed file?')
+        # If it is the raw charges file then return it as is
         if filename == RAW_CHARGES_FILENAME:
             return filename
+        # Get the format
         standard_format = self.input_topology_file.format
+        # If it is a .top topology then we have to check if it is a gromacs or an amber topology
+        if is_amber_top(self.input_topology_file):
+            standard_format = 'prmtop'
         return 'topology.' + standard_format
 
     def get_topology_filepath(self) -> str:
