@@ -1051,15 +1051,15 @@ class Project:
             inputs_filepath (str):
                 Path to a file with inputs for metadata, simulation parameters and analysis config.
             input_topology_filepath (Optional[str]):
-                Path to input topology file relative to the project directory.
+                Path or glob pattern to input topology file relative to the project directory.
             input_structure_filepath (Optional[str]):
-                Path to input structure file. It may be relative to the project or to each MD directory.
+                Path or glob pattern to input structure file. It may be relative to the project or to each MD directory.
                 If this value is not passed then the standard structure file is used as input by default.
             input_trajectory_filepaths (Optional[list[str]]):
-                Paths to input trajectory files relative to each MD directory.
+                Paths or glob patterns to input trajectory files relative to each MD directory.
                 If this value is not passed then the standard trajectory file path is used as input by default.
             md_directories (Optional[list[str]]):
-                Path to the different MD directories.
+                Path or glob pattern to the different MD directories.
                 Each directory is to contain an independent trajectory and structure.
                 Several output files will be generated in every MD directory.
             md_config (Optional[list[list[str]]]):
@@ -1240,11 +1240,15 @@ class Project:
         self._standard_topology_file = None
 
         # Set the MD directories
-        self._md_directories = md_directories
+        self._md_directories = []
+        for dir in md_directories:
+            if is_glob(dir):
+                self._md_directories.extend(glob(dir))
+            else:
+                self._md_directories.append(dir)
         # Check input MDs are correct to far
         if self._md_directories:
             self.check_md_directories()
-
         # Set the reference MD
         self._reference_md = None
         self._reference_md_index = reference_md_index
