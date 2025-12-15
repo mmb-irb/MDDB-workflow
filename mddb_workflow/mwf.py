@@ -1413,6 +1413,25 @@ class Project:
         # If the inputs file is available then it must declare the reference MD index
         if self.is_inputs_file_available():
             self._reference_md_index = self.get_input('mdref')
+        # If keep going is set then we try to find the first MD which processes correctly
+        if self.keep_going and (self._reference_md_index is None):
+            md_errors = []
+            for i, md in enumerate(self.mds):
+                try:
+                    md.input_files_processing()
+                    self._reference_md_index = i
+                    self.update_inputs('mdref', i)
+                    break
+                except Exception as e:
+                    error = e.__class__.__name__ + ': ' + str(e)
+                    md_errors.append((md.directory, error))
+                    print(error)
+                    continue
+            if self._reference_md_index is None:
+                print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
+                for md_error in md_errors:
+                    print(f'  - MD at {md_error[0]}: {md_error[1]}')
+                raise Exception('Could not find a valid reference MD automatically when keep going is set.')
         # Otherwise we simply set the first MD as the reference and warn the user about this
         if self._reference_md_index is None:
             warn('No reference MD was specified. The first MD will be used as reference.')
@@ -2325,7 +2344,7 @@ def workflow(
         return
 
     # Now iterate over the different MDs
-    replica_errors = []
+    md_errors = []
     for md in project.mds:
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
         # Run the MD tasks
@@ -2338,8 +2357,9 @@ def workflow(
             if not keep_going:
                 raise e
             error = e.__class__.__name__ + ': ' + str(e)
-            replica_errors.append((md.directory, error))
+            md_errors.append((md.directory, error))
             print(error)
+            continue
         except Exception as e:
             raise e
 
@@ -2354,10 +2374,11 @@ def workflow(
     # But if you call the workflow function from a python script then this is important
     chdir(workflow_call_directory)
 
-    if replica_errors and len(project.mds) > 1:
+    if md_errors and len(project.mds) > 1:
         # If there is more than one replica with errors that may being hidden by the others working fine
-        print(f'\n{RED_HEADER}Finished with errors in {len(replica_errors)} MD replicas:{COLOR_END}')
-        for replica_error in replica_errors:
-            print(f'  - MD at {replica_error[0]}: {replica_error[1]}')
+        print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
+        for md_error in md_errors:
+            print(f'  - MD at {md_error[0]}: {md_error[1]}')
+        print('The rest of MD replicas were processed successfully.')
     else:
         print("Done!")

@@ -74,7 +74,7 @@ class TestRunFlags:
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
             working_directory,
-            ignore=shutil.ignore_patterns('topology.tpr'),
+            ignore=shutil.ignore_patterns('raw_topology.tpr'),
             dirs_exist_ok=True,
         )
 
@@ -105,7 +105,7 @@ class TestRunFlags:
             'mddb_workflow',
             'run',
             '-dir', working_directory,
-            '-top', 'topology.tpr',
+            '-top', 'raw_topology.tpr',
             '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
             '-i', 'setup', 'rmsds',
         ]
@@ -137,7 +137,7 @@ class TestRunFlags:
         sys.argv = [
             'mddb_workflow', 'run',
             '-dir', working_directory,
-            '-top', 'topology.tpr',
+            '-top', 'raw_topology.tpr',
             '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
             '-e', 'network', 'interdeps', 'membs', 'clusters', 'pockets',]
 

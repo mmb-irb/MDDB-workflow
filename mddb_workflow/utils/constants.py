@@ -65,7 +65,6 @@ ACCEPTED_INPUT_FILENAMES = [
 DEFAULT_INPUT_VALUES = {
     'license': 'This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License',
     'linkcense': 'https://creativecommons.org/licenses/by/4.0/',
-    'mdref': 0,
 }
 
 # Resource files which are always part of the workflow

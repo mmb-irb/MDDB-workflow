@@ -10,10 +10,10 @@ from mddb_workflow.utils.type_hints import *
 from MDAnalysis.topology.TPRParser import TPRParser
 from MDAnalysis.topology.TOPParser import TOPParser
 
+
 def get_charges (topology_file : Union['File', Exception],
     resorted_charges_file : Optional['File'] = None) -> list[float]:
-    """
-    Extract charges from a source file.
+    """Extract charges from a source file.
 
     Returns:
     list[float]: A list of atomic charges if extraction is successful, 

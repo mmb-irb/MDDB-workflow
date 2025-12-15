@@ -82,7 +82,7 @@ def generate_protein_mapping (
     input_protein_references : list | dict = [],
     pdb_ids : list[str] = [],
 ) -> dict:
-    """ Map the structure aminoacids sequences against the Uniprot reference sequences. """
+    """Map the structure aminoacids sequences against the Uniprot reference sequences."""
     # Remove previous warnings, if any
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict
