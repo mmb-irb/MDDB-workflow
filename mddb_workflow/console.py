@@ -474,7 +474,7 @@ run_parser_input_args = [
     (['-dir', '--working_directory'], {'default': '.', 'help': "Directory where the whole workflow is run."}),
     (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
     (['-md', '--md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['md_config']}),
-    (['-mdref', '--reference_md_index'], {'default': None, 'help': project_init_help['reference_md_index']}),
+    (['-mdref', '--reference_md_index'], {'type': int, 'default': None, 'help': project_init_help['reference_md_index']}),
     (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
     (['-url', '--database_url'], {'default': DEFAULT_API_URL, 'help': project_init_help['database_url']}),
     (['-inp', '--inputs_filepath'], {'default': None, 'help': "Path to inputs file"}),
