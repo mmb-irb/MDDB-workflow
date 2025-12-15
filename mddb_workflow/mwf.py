@@ -858,7 +858,7 @@ class MD:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
-    def get_charges(self) -> dict:
+    def get_charges(self) -> list[float]:
         """Get the residues mapping from the project."""
         return self.project.charges
     charges = property(get_charges, None, None, "Residues charges (read only)")
@@ -1038,6 +1038,7 @@ class Project:
         guess_bonds: bool = False,
         ignore_bonds: bool = False,
         sample_trajectory: Optional[int] = None,
+        keep_going: bool = False,
     ):
         """Initialize a Project.
 
@@ -1341,19 +1342,13 @@ class Project:
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
         self.resorted_charges_file = File(self.pathify(RESORTED_CHARGES_FILENAME))
 
-        # Set a new entry for the register
-        # This is useful to track previous workflow runs and problems
-        register_filepath = self.pathify(REGISTER_FILENAME)
-        register_file = File(register_filepath)
-        self.register = Register(register_file)
-
-        # Set the cache
-        cache_filepath = self.pathify(CACHE_FILENAME)
-        cache_file = File(cache_filepath)
-        self.cache = Cache(cache_file)
+        # Register: useful to track previous workflow runs and problems
+        self.register = Register(File(self.pathify(REGISTER_FILENAME)))
+        self.cache = Cache(File(self.pathify(CACHE_FILENAME)))
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
+        self.keep_going = keep_going
 
     def __repr__(self):
         """Return a string representation of the Project object."""
@@ -1435,7 +1430,7 @@ class Project:
         return self._reference_md
     reference_md: MD = property(get_reference_md, None, None, "Reference MD (read only)")
 
-    def get_mds(self) -> list:
+    def get_mds(self) -> list[MD]:
         """Get the available MDs (read only)."""
         # If MDs are already declared then return them
         if self._mds:
@@ -1446,6 +1441,7 @@ class Project:
         if self.md_config:
             for n, config in enumerate(self.md_config, 1):
                 directory = config[0]
+                # RUBEN: add deprecation warning for the old format?
                 # LEGACY
                 # In a previous version, the md config argument also holded the structure
                 # This was the second argument, so we check if we have more than 2 arguments
@@ -1732,7 +1728,7 @@ class Project:
 
     # Then set getters for every value in the inputs file
     def get_input(self, name: str) -> Any:
-        """Get a specific 'input' value."""
+        """Get a specific 'input' value from the inputs file."""
         # Check if the value of this input was forced from command line
         if name in self.forced_inputs:
             return self.forced_inputs[name]
@@ -1747,7 +1743,7 @@ class Project:
         warn(f'Missing input "{name}" -> Using default value: {default_value}')
         return default_value
 
-    def input_property(name: str, doc: str = ""):
+    def inputs_property(name: str, doc: str = ""):
         """Set a function to get a specific 'input' value by its key/name.
         Note that we return the property without calling the getter.
         """
@@ -1756,44 +1752,44 @@ class Project:
         return property(getter, doc=doc)
 
     # Assign the getters
-    input_interactions = input_property('interactions', "Interactions to be analyzed (read only)")
-    input_protein_references = input_property('forced_references', "Uniprot IDs to be used first when aligning protein sequences (read only)")
-    input_pdb_ids = input_property('pdb_ids', "Protein Data Bank IDs used for the setup of the system (read only)")
-    input_type = input_property('type', "Set if its a trajectory or an ensemble (read only)")
-    input_mds = input_property('mds', "Input MDs configuration (read only)")
-    input_ligands = input_property('ligands', "Input ligand references (read only)")
-    input_force_fields = input_property('ff', "Input force fields (read only)")
-    input_collections = input_property('collections', "Input collections (read only)")
-    input_chain_names = input_property('chainnames', "Input chain names (read only)")
-    input_framestep = input_property('framestep', "Input framestep (read only)")
-    input_name = input_property('name', "Input name (read only)")
-    input_description = input_property('description', "Input description (read only)")
-    input_authors = input_property('authors', "Input authors (read only)")
-    input_groups = input_property('groups', "Input groups (read only)")
-    input_contact = input_property('contact', "Input contact (read only)")
-    input_program = input_property('program', "Input program (read only)")
-    input_version = input_property('version', "Input version (read only)")
-    input_method = input_property('method', "Input method (read only)")
-    input_license = input_property('license', "Input license (read only)")
-    input_linkcense = input_property('linkcense', "Input license link (read only)")
-    input_citation = input_property('citation', "Input citation (read only)")
-    input_thanks = input_property('thanks', "Input acknowledgements (read only)")
-    input_links = input_property('links', "Input links (read only)")
-    input_timestep = input_property('timestep', "Input timestep (read only)")
-    input_temperature = input_property('temp', "Input temperature (read only)")
-    input_ensemble = input_property('ensemble', "Input ensemble (read only)")
-    input_water = input_property('wat', "Input water force field (read only)")
-    input_boxtype = input_property('boxtype', "Input boxtype (read only)")
-    input_pbc_selection = input_property('pbc_selection', "Input Periodic Boundary Conditions (PBC) selection (read only)")
-    input_cg_selection = input_property('cg_selection', "Input Coarse Grained (CG) selection (read only)")
-    input_customs = input_property('customs', "Input custom representations (read only)")
-    input_orientation = input_property('orientation', "Input orientation (read only)")
-    input_multimeric = input_property('multimeric', "Input multimeric labels (read only)")
+    input_interactions = inputs_property('interactions', "Interactions to be analyzed (read only)")
+    input_protein_references = inputs_property('forced_references', "Uniprot IDs to be used first when aligning protein sequences (read only)")
+    input_pdb_ids = inputs_property('pdb_ids', "Protein Data Bank IDs used for the setup of the system (read only)")
+    input_type = inputs_property('type', "Set if its a trajectory or an ensemble (read only)")
+    input_mds = inputs_property('mds', "Input MDs configuration (read only)")
+    input_ligands = inputs_property('ligands', "Input ligand references (read only)")
+    input_force_fields = inputs_property('ff', "Input force fields (read only)")
+    input_collections = inputs_property('collections', "Input collections (read only)")
+    input_chain_names = inputs_property('chainnames', "Input chain names (read only)")
+    input_framestep = inputs_property('framestep', "Input framestep (read only)")
+    input_name = inputs_property('name', "Input name (read only)")
+    input_description = inputs_property('description', "Input description (read only)")
+    input_authors = inputs_property('authors', "Input authors (read only)")
+    input_groups = inputs_property('groups', "Input groups (read only)")
+    input_contact = inputs_property('contact', "Input contact (read only)")
+    input_program = inputs_property('program', "Input program (read only)")
+    input_version = inputs_property('version', "Input version (read only)")
+    input_method = inputs_property('method', "Input method (read only)")
+    input_license = inputs_property('license', "Input license (read only)")
+    input_linkcense = inputs_property('linkcense', "Input license link (read only)")
+    input_citation = inputs_property('citation', "Input citation (read only)")
+    input_thanks = inputs_property('thanks', "Input acknowledgements (read only)")
+    input_links = inputs_property('links', "Input links (read only)")
+    input_timestep = inputs_property('timestep', "Input timestep (read only)")
+    input_temperature = inputs_property('temp', "Input temperature (read only)")
+    input_ensemble = inputs_property('ensemble', "Input ensemble (read only)")
+    input_water = inputs_property('wat', "Input water force field (read only)")
+    input_boxtype = inputs_property('boxtype', "Input boxtype (read only)")
+    input_pbc_selection = inputs_property('pbc_selection', "Input Periodic Boundary Conditions (PBC) selection (read only)")
+    input_cg_selection = inputs_property('cg_selection', "Input Coarse Grained (CG) selection (read only)")
+    input_customs = inputs_property('customs', "Input custom representations (read only)")
+    input_orientation = inputs_property('orientation', "Input orientation (read only)")
+    input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
     # Additional topic-specific inputs
-    input_cv19_unit = input_property('cv19_unit', "Input Covid-19 Unit (read only)")
-    input_cv19_startconf = input_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
-    input_cv19_abs = input_property('cv19_abs', "Input Covid-19 antibodies (read only)")
-    input_cv19_nanobs = input_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
+    input_cv19_unit = inputs_property('cv19_unit', "Input Covid-19 Unit (read only)")
+    input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
+    input_cv19_abs = inputs_property('cv19_abs', "Input Covid-19 antibodies (read only)")
+    input_cv19_nanobs = inputs_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
 
     def get_input_pbc_selection(self) -> Optional[str]:
         """PBC selection may come from the console or from the inputs file.
@@ -1830,7 +1826,7 @@ class Project:
     input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
 
     # Set additional values infered from input values
-
+    # RUBEN: unused?
     def check_is_time_dependent(self) -> bool:
         """Set if MDs are time dependent."""
         if self.input_type == 'trajectory':
