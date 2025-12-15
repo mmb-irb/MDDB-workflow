@@ -494,7 +494,7 @@ run_parser_workflow_args = [
     (['-trans', '--translation'], {'nargs': '*', 'default': [0, 0, 0], 'help': project_init_help['translation']}),
     (['-d', '--download'], {'action': 'store_true', 'help': workflow_help['download']}),
     (['-s', '--setup'], {'action': 'store_true', 'help': workflow_help['setup']}),
-    (['-k', '--keep_going'], {'action': 'store_true', 'help': workflow_help['keep_going']}),
+    (['-k', '--keep_going'], {'action': 'store_true', 'help': project_init_help['keep_going']}),
     (['-smp', '--sample_trajectory'], {'type': int, 'nargs': '?', 'default': None, 'const': 10, 'metavar': 'N_FRAMES', 'help': project_init_help['sample_trajectory']}),
     (['-rcut', '--rmsd_cutoff'], {'type': float, 'default': DEFAULT_RMSD_CUTOFF, 'help': project_init_help['rmsd_cutoff']}),
     (['-icut', '--interaction_cutoff'], {'type': float, 'default': DEFAULT_INTERACTION_CUTOFF, 'help': project_init_help['interaction_cutoff']}),
