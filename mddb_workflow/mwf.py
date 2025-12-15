@@ -2223,7 +2223,7 @@ def workflow(
 
     """
     # Check there are not input errors
-    breakpoint()
+
     # Include and exclude are not compatible
     # This is to protect the user to do something which makes not sense
     if include and exclude:
