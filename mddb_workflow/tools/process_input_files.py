@@ -44,7 +44,7 @@ def is_amber_top (input_topology_file : 'File') -> bool:
 
 def process_input_files (
     input_structure_file : 'File',
-    input_trajectory_files : 'File',
+    input_trajectory_files : list['File'],
     input_topology_file : 'File',
     # Output
     output_directory : str,
@@ -55,7 +55,7 @@ def process_input_files (
     filter_selection : str,
     image : bool,
     fit : bool,
-    translation : tuple,
+    translation : list[float],
     # Make sure the MD is used only to set values or use its functions, but not to get values
     # Values must be passed separately as inputs so the task can identify when inputs change
     self : 'MD',

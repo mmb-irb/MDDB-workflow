@@ -42,7 +42,7 @@ def image_and_fit (
     output_trajectory_file : 'File',
     image : bool,
     fit : bool,
-    translation : list,
+    translation : list[float],
     # Note that this is an early provisional structure
     structure : 'Structure',
     # Selection of atoms which are to stay in PBC conditions after imaging

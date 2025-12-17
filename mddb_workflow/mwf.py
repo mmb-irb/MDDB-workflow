@@ -1009,7 +1009,7 @@ class Project:
         directory: str = '.',
         accession: Optional[str] = None,
         database_url: str = DEFAULT_API_URL,
-        inputs_filepath: str = None,
+        inputs_filepath: Optional[str] = None,
         input_topology_filepath: Optional[str] = None,
         input_structure_filepath: Optional[str] = None,
         input_trajectory_filepaths: Optional[list[str]] = None,
@@ -1702,9 +1702,7 @@ class Project:
         if self._inputs:
             return self._inputs
         # When loading the inuts file, replace some values automatically
-        replaces = [
-            ('$DIR', self.directory_name)
-        ]
+        replaces = [('$DIR', self.directory_name)]
         # Otherwise, load inputs from the inputs file
         inputs_data = None
         if self.inputs_file.format == 'json':
@@ -2120,7 +2118,7 @@ def name_2_directory(name: str) -> str:
     return directory
 
 
-def check_directory(directory: str) -> str:
+def check_directory(directory: str):
     """Check for problematic characters in a directory path."""
     # Remove problematic characters
     directory_characters = set(directory)

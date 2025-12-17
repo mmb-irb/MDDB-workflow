@@ -22,8 +22,8 @@ def structure_corrector(
     pbc_selection: 'Selection',
     snapshots: int,
     register: 'Register',
-    mercy: list[str],
-    trust: list[str],
+    mercy: list[str] | bool,
+    trust: list[str] | bool,
     guess_bonds: bool,
     ignore_bonds: bool,
 ) -> dict:
