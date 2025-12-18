@@ -48,12 +48,7 @@ def tmscores(
         print('WARNING: There are not atoms to be analyzed for the TM score analysis after PBC substraction')
         return
 
-    # Set the frame start and step
-    start = 0
-    step = None
-
     output_analysis = []
-
     template = strucio.load_structure(first_frame_file.path)
     ca_list = selection.to_list()
 
@@ -89,4 +84,4 @@ def tmscores(
         output_analysis.append(data)
 
     # Export the analysis in json format
-    save_json({'start': start, 'step': step, 'data': output_analysis}, output_analysis_filepath)
+    save_json({'start': 0, 'step': frame_step, 'data': output_analysis}, output_analysis_filepath)
