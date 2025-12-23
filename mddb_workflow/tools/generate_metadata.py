@@ -224,6 +224,8 @@ def prepare_project_metadata (
         'RSNAME': unique_residue_names,
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
+        # Beware, we already have a VERSION field for the PROGRAM version
+        'ver': '0.0.1',
     }
     # Add boxsizes only if any of them is 0
     if boxsizex > 0 and boxsizey > 0 and boxsizez > 0:
