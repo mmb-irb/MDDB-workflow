@@ -272,7 +272,7 @@ def load_yaml(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
 def save_yaml(content, filepath: str):
     """Save a YAML with additional logic to better handle problems."""
     with open(filepath, 'w') as file:
-        yaml.dump(content, file)
+        yaml.dump(content, file, sort_keys=False)
 
 
 # Set a few constants to erase previou logs in the terminal
