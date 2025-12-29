@@ -291,6 +291,9 @@ def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
+    # The response may be None
+    # e.g. an obsolete entry with no replacement
+    if parsed_response == None: return []
     # Mine data for nonpolymer entities
     nonpolymers = parsed_response['nonpolymer_entities']
     # If there are no nonpolymer entities, another type of entitie could be used

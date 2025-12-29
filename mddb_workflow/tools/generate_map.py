@@ -667,6 +667,9 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
+    # The response may be None
+    # e.g. an obsolete entry with no replacement
+    if parsed_response == None: return []
     # Mine data
     uniprot_ids = []
     # WARNING: Polymers do not come in the same order than in PDB
