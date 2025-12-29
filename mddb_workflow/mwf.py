@@ -2336,11 +2336,6 @@ def workflow(
         getter = requestables[task]
         getter(project)
 
-    # If there are no MD tasks then we are done already
-    if len(md_tasks) == 0:
-        print("Finished!")
-        return
-
     # Now iterate over the different MDs
     md_errors = []
     for md in project.mds:
