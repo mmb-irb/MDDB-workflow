@@ -5,7 +5,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAc
 from textwrap import wrap, dedent
 import re
 
-from mddb_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
+from mddb_workflow.mwf import workflow, Project, requestables, TaskResolver
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.filters import filter_atoms
@@ -539,7 +539,7 @@ for flags, kwargs in run_parser_checks_args:
     run_parser_checks_group.add_argument(*flags, **kwargs)
 
 # Set a list with the alias of all requestable dependencies
-choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))
+choices = sorted(list(requestables.keys()) + list(TaskResolver.DEPENDENCY_FLAGS.keys()))
 task_groups = [
   "download: Check/download input files (already ran with analyses)",
   "setup: Process and test input files (already ran with analyses)",
@@ -549,7 +549,7 @@ task_groups = [
   "interdeps: Run interactions and all its dependent analyses",
   "membs: Run all membrane-related analyses",
 ]
-assert len(DEPENDENCY_FLAGS.keys()) == len(task_groups), "The number of dependency flags and task groups must be the same"
+assert len(TaskResolver.DEPENDENCY_FLAGS.keys()) == len(task_groups), "The number of dependency flags and task groups must be the same"
 
 run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS',
     description=f"Available tasks: {choices}\nFor more information about each task, please visit:\n{task_docs_url}")

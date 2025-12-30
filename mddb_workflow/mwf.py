@@ -289,7 +289,7 @@ class MD:
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')
 
-    def get_input_structure_file(self) -> str:
+    def get_input_structure_file(self) -> File:
         """Get the input pdb filename from the inputs.
         If the file is not found try to download it.
         """
@@ -325,7 +325,7 @@ class MD:
 
     # Input trajectory filename ------------
 
-    def get_input_trajectory_filepaths(self) -> str:
+    def get_input_trajectory_filepaths(self) -> list[str]:
         """Get the input trajectory file paths."""
         # Return the internal value if it is already assigned
         if self._input_trajectory_filepaths is not None:
@@ -435,7 +435,7 @@ class MD:
         # If there is no trajectory available then we surrender
         raise InputError('There is not input trajectory at all')
 
-    def get_input_trajectory_files(self) -> str:
+    def get_input_trajectory_files(self) -> list[File]:
         """Get the input trajectory filename(s) from the inputs.
         If file(s) are not found try to download it.
         """
@@ -2182,21 +2182,135 @@ for callable in vars(MD).values():
 # Note that this constant is global
 requestables = {**project_requestables, **md_requestables}
 
-# Set groups of dependencies to be requested together using only one flag
-DEPENDENCY_FLAGS = {
-    'download': list(input_files.keys()),
-    'setup': list(processed_files.keys()),
-    'meta': ['pmeta', 'mdmeta'],
-    'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap'],
-    'minimal': ['pmeta', 'mdmeta', 'stopology'],
-    'interdeps': ['inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist'],
-    'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter', 'channels']
-}
 
-# Set the default analyses to be run when no task is specified
-DEFAULT_ANALYSES = ['clusters', 'dist', 'energies', 'hbonds', 'pca', 'pockets',
-    'rgyr', 'rmsds', 'perres', 'pairwise', 'rmsf', 'sas', 'tmscore', 'density',
-    'thickness', 'apl', 'lorder', 'linter']
+class TaskResolver:
+    """Resolves which tasks should run based on include/exclude/overwrite flags."""
+
+    # Dependency flag groups
+    DEPENDENCY_FLAGS = {
+        'download': list(input_files.keys()),
+        'setup': list(processed_files.keys()),
+        'meta': ['pmeta', 'mdmeta'],
+        'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap'],
+        'minimal': ['pmeta', 'mdmeta', 'stopology'],
+        'interdeps': ['inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist'],
+        'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter', 'channels']
+    }
+    # Default analyses to be run when no task is specified
+    DEFAULT_ANALYSES = [
+        'clusters', 'dist', 'energies', 'hbonds', 'pca', 'pockets',
+        'rgyr', 'rmsds', 'perres', 'pairwise', 'rmsf', 'sas', 'tmscore',
+        'density', 'thickness', 'apl', 'lorder', 'linter'
+    ]
+
+    DEFAULT_PROJECT_TASKS = ['stopology', 'screenshot', 'pmeta', 'pdbs', 'chains']
+    DEFAULT_MD_TASKS = ['mdmeta', 'inter']
+
+    def __init__(
+        self,
+        include: Optional[list[str]] = None,
+        exclude: Optional[list[str]] = None,
+        overwrite: Optional[list[str] | bool] = None,
+        download: bool = False,
+        setup: bool = False,
+    ):
+        if self.include and self.exclude:
+            raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
+
+        self.project_requestables = project_requestables
+        self.md_requestables = md_requestables
+        self.include = include
+        self.exclude = exclude
+        self.overwrite = overwrite
+        self.download = download
+        self.setup = setup
+
+        self._tasks: Optional[list[str]] = None
+        self._overwritables: Optional[set[str]] = None
+
+    def _expand_dependency_flags(self, flags: list[str]) -> list[str]:
+        """Expand special group flags into their individual tasks."""
+        expanded = set()
+        for flag in flags:
+            if flag in self.DEPENDENCY_FLAGS:
+                expanded.update(self.DEPENDENCY_FLAGS[flag])
+            else:
+                expanded.add(flag)
+        return list(expanded)
+
+    @property
+    def tasks(self) -> list[str]:
+        """Get the resolved list of tasks to run."""
+        if self._tasks is not None:
+            return self._tasks
+
+        if self.download:
+            warn('The "-d" or "--download" argument is deprecated. Please use "-i download" instead.')
+            self._tasks = list(input_files.keys())
+        elif self.setup:
+            warn('The "-s" or "--setup" argument is deprecated. Please use "-i setup" instead.')
+            self._tasks = list(processed_files.keys())
+        elif self.include and len(self.include) > 0:
+            self._tasks = self._expand_dependency_flags(self.include)
+        else:
+            # Default tasks
+            self._tasks = [
+                *self.DEFAULT_PROJECT_TASKS,
+                *self.DEFAULT_MD_TASKS,
+                *self.DEFAULT_ANALYSES,
+            ]
+            if self.exclude and len(self.exclude) > 0:
+                excluded = self._expand_dependency_flags(self.exclude)
+                # Remove excluded tasks
+                self._tasks = [t for t in self._tasks if t not in excluded]
+
+        return self._tasks
+
+    @property
+    def overwritables(self) -> set[str]:
+        """Get the set of tasks that should overwrite existing outputs."""
+        if self._overwritables is not None:
+            return self._overwritables
+
+        # If the user requested to overwrite something, make sure it is in the tasks list
+        # Update the overwritable variable with the requested overwrites
+        self._overwritables = set()
+        if self.overwrite:
+            # If the overwrite argument is simply true then add all requestables to the overwritable
+            if isinstance(self.overwrite, bool):
+                self._overwritables = set(self.tasks)
+            # If the overwrite argument is a list of tasks then iterate them
+            elif isinstance(self.overwrite, list):
+                for task in self.overwrite:
+                    # Make sure the task to be overwriten is among the tasks to be run
+                    if task not in self.tasks:
+                        raise InputError(
+                            f'Task "{task}" is to be overwritten but it is not in the tasks list. '
+                            'Either include it or do not exclude it'
+                        )
+                    self._overwritables.add(task)
+            else:
+                raise ValueError('Not supported overwrite type')
+
+        return self._overwritables
+
+    @property
+    def project_tasks(self) -> list[str]:
+        """Get tasks that apply to the project level."""
+        return [t for t in self.tasks if t in self.project_requestables]
+
+    @property
+    def md_tasks(self) -> list[str]:
+        """Get tasks that apply to individual MDs."""
+        return [t for t in self.tasks if t in self.md_requestables]
+
+    def get_project_overwritables(self) -> set[str]:
+        """Get overwritables for project-level tasks."""
+        return set(t for t in self.project_tasks if t in self.overwritables)
+
+    def get_md_overwritables(self) -> set[str]:
+        """Get overwritables for MD-level tasks."""
+        return set(t for t in self.md_tasks if t in self.overwritables)
 
 
 def workflow(
@@ -2220,21 +2334,12 @@ def workflow(
         overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
 
     """
-    # Check there are not input errors
-
-    # Include and exclude are not compatible
-    # This is to protect the user to do something which makes not sense
-    if include and exclude:
-        raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
-
     # Save the directory where the workflow is called from so we can come back at the very end
     workflow_call_directory = getcwd()
 
-    # Make sure the working directory exists
+    # Make sure the working directory exists and is actually a directory
     if not exists(working_directory):
         raise InputError(f'Working directory "{working_directory}" does not exist')
-
-    # Make sure the working directory is actually a directory
     if not isdir(working_directory):
         raise InputError(f'Working directory "{working_directory}" is actually not a directory')
 
@@ -2249,89 +2354,21 @@ def workflow(
     print(f'  {len(project.mds)} MDs are to be run')
 
     # Set the tasks to be run
-    tasks = None
-    # If the download argument is passed then just make sure input files are available
-    if download:
-        warn('The "-d" or "--download" argument is deprecated. Please use "-i download" instead.')
-        tasks = list(input_files.keys())
-    # If the setup argument is passed then just process input files
-    elif setup:
-        warn('The "-s" or "--setup" argument is deprecated. Please use "-i setup" instead.')
-        tasks = list(processed_files.keys())
-    # If the include argument then add only the specified tasks to the list
-    elif include and len(include) > 0:
-        tasks = [*include]
-        # Search for special flags among included
-        for flag, dependencies in DEPENDENCY_FLAGS.items():
-            if flag not in tasks: continue
-            # If the flag is found then remove it and write the corresponding dependencie instead
-            # Make sure not to duplicate a dependency if it was already included
-            tasks.remove(flag)
-            for dep in dependencies:
-                if dep in tasks: continue
-                tasks.append(dep)
-    # Set the default tasks otherwise
-    else:
-        tasks = [
-            # Project tasks
-            'stopology',
-            'screenshot',
-            'pmeta',
-            'pdbs',
-            'chains',
-            # MD tasks
-            'mdmeta',
-            'inter',
-            *DEFAULT_ANALYSES,
-        ]
-        # If the exclude parameter was passed then remove excluded tasks from the default tasks
-        if exclude and len(exclude) > 0:
-            excluded_dependencies = [*exclude]
-            # Search for special flags among excluded
-            for flag, dependencies in DEPENDENCY_FLAGS.items():
-                if flag not in exclude: continue
-                # If the flag is found then exclude the dependencies instead
-                # Make sure not to duplicate a dependency if it was already included
-                excluded_dependencies.remove(flag)
-                for dep in dependencies:
-                    if dep in exclude: continue
-                    excluded_dependencies.append(dep)
-            tasks = [name for name in tasks if name not in excluded_dependencies]
-
-    # If the user requested to overwrite something, make sure it is in the tasks list
-
-    # Update the overwritable variable with the requested overwrites
-    overwritables = set()
-    if overwrite:
-        # If the overwrite argument is simply true then add all requestables to the overwritable
-        if type(overwrite) is bool:
-            for task in tasks:
-                overwritables.add(task)
-        # If the overwrite argument is a list of tasks then iterate them
-        elif type(overwrite) is list:
-            for task in overwrite:
-                # Make sure the task to be overwriten is among the tasks to be run
-                if task not in tasks:
-                    raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
-                # Add it to the global variable
-                overwritables.add(task)
-        else: raise ValueError('Not supported overwrite type')
-
-    # Get project tasks
-    project_tasks = [task for task in tasks if task in project_requestables]
-    # Get the MD tasks
-    md_tasks = [task for task in tasks if task in md_requestables]
-
-    # Set project overwritables
-    project.overwritables = set([task for task in project_tasks if task in overwritables])
-    # Set MD overwrittables
+    tasker = TaskResolver(
+        include=include,
+        exclude=exclude,
+        overwrite=overwrite,
+        download=download,
+        setup=setup,
+    )
+    project.overwritables = tasker.get_project_overwritables()
     # Note that this must be done before running project tasks
     # Some project tasks rely in MD tasks
     for md in project.mds:
-        md.overwritables = set([task for task in md_tasks if task in overwritables])
+        md.overwritables = tasker.get_md_overwritables()
 
     # Run the project tasks now
-    for task in project_tasks:
+    for task in tasker.project_tasks:
         # Get the function to be called and call it
         getter = requestables[task]
         getter(project)
@@ -2342,12 +2379,12 @@ def workflow(
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
         # Run the MD tasks
         try:
-            for task in md_tasks:
+            for task in tasker.md_tasks:
                 # Get the function to be called and call it
                 getter = requestables[task]
                 getter(md)
         except TestFailure as e:
-            if not project_parameters['keep_going']:
+            if project_parameters['keep_going'] is False:
                 raise e
             error = e.__class__.__name__ + ': ' + str(e)
             md_errors.append((md.directory, error))
