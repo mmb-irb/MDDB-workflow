@@ -1038,7 +1038,6 @@ class Project:
         guess_bonds: bool = False,
         ignore_bonds: bool = False,
         sample_trajectory: Optional[int] = None,
-        keep_going: bool = False,
     ):
         """Initialize a Project.
 
@@ -1129,8 +1128,6 @@ class Project:
             sample_trajectory (Optional[int]):
                 If passed, download the first 10 (by default) frames from the trajectory.
                 You can specify a different number by providing an integer value.
-            keep_going (bool):
-                If True, continue running the workflow even if some MD replicas fail. Default is False.
 
         """
         # Save input parameters
@@ -1350,7 +1347,6 @@ class Project:
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
-        self.keep_going = keep_going
 
     def __repr__(self):
         """Return a string representation of the Project object."""
@@ -1415,25 +1411,6 @@ class Project:
         # If the inputs file is available then it must declare the reference MD index
         if self.is_inputs_file_available():
             self._reference_md_index = self.get_input('mdref')
-        # If keep going is set then we try to find the first MD which processes correctly
-        if self.keep_going and (self._reference_md_index is None):
-            md_errors = []
-            for i, md in enumerate(self.mds):
-                try:
-                    md.input_files_processing()
-                    self._reference_md_index = i
-                    self.update_inputs('mdref', i)
-                    break
-                except Exception as e:
-                    error = e.__class__.__name__ + ': ' + str(e)
-                    md_errors.append((md.directory, error))
-                    print(error)
-                    continue
-            if self._reference_md_index is None:
-                print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
-                for md_error in md_errors:
-                    print(f'  - MD at {md_error[0]}: {md_error[1]}')
-                raise Exception('Could not find a valid reference MD automatically when keep going is set.')
         # Otherwise we simply set the first MD as the reference and warn the user about this
         if self._reference_md_index is None:
             warn('No reference MD was specified. The first MD will be used as reference.')
@@ -2321,6 +2298,7 @@ def workflow(
     include: Optional[list[str]] = None,
     exclude: Optional[list[str]] = None,
     overwrite: Optional[list[str] | bool] = None,
+    keep_going: bool = False
 ):
     """Run the MDDB workflow.
 
@@ -2332,6 +2310,7 @@ def workflow(
         include (list[str] | None): Set the unique analyses or tools to be run. All other steps will be skipped.
         exclude (list[str] | None): List of analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway.
         overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
+        keep_going (bool): If True, continue running the workflow even if some MD replicas fail. Default is False.
 
     """
     # Save the directory where the workflow is called from so we can come back at the very end
@@ -2366,6 +2345,28 @@ def workflow(
     # Some project tasks rely in MD tasks
     for md in project.mds:
         md.overwritables = tasker.get_md_overwritables()
+
+    if (project.get_input('mdref') is None and
+        project_parameters['reference_md_index'] is None and
+        keep_going):
+        # If keep going is set then we try to find the first MD which processes correctly
+        md_errors = []
+        for i, md in enumerate(project.mds):
+            try:
+                md.input_files_processing()
+                project._reference_md_index = i
+                project.update_inputs('mdref', i)
+                break
+            except Exception as e:
+                error = e.__class__.__name__ + ': ' + str(e)
+                md_errors.append((md.directory, error))
+                print(error)
+                continue
+        if project._reference_md_index is None:
+            print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
+            for md_error in md_errors:
+                print(f'  - MD at {md_error[0]}: {md_error[1]}')
+            raise Exception('Could not find a valid reference MD automatically when keep going is set.')
 
     # Run the project tasks now
     for task in tasker.project_tasks:
