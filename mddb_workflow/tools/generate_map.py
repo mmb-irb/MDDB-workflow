@@ -299,7 +299,7 @@ def generate_protein_mapping (
             add_reference(uniprot_id)
         # Now that we have all forced references data perform the matching
         # If we have every protein chain matched with a reference then we stop here
-        print(' Using only forced references from the inputs file')
+        print(' Using forced references from the inputs file')
         if match_sequences():
             return protein_parsed_chains
     # Now add the imported references to reference sequences. Thus now they will be 'matchable'
@@ -316,7 +316,7 @@ def generate_protein_mapping (
             reference_sequences[uniprot_id] = reference['sequence']
         # If there was at least one imported reference missing then rerun the matching
         if need_rematch:
-            print(' Using also references imported from references.json')
+            print(' Using references imported from references.json')
             if match_sequences():
                 return protein_parsed_chains
     # Cache wrapper for pdb 2 uniprot logic
@@ -324,6 +324,8 @@ def generate_protein_mapping (
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, retrieve all uniprot ids associated to the pdb ids, if any
     if pdb_ids and len(pdb_ids) > 0:
+        # Track if we added any reference
+        any_pdb_reference = False
         for pdb_id in pdb_ids:
             # Ask PDB
             uniprot_ids = cached_pdb_to_uniprot(pdb_id)
@@ -335,10 +337,16 @@ def generate_protein_mapping (
                     continue
                 # Build a new reference from the resulting uniprot
                 add_reference(uniprot_id)
+                any_pdb_reference = True
+        # If we found any reference from our search in the PDB then try to match every chain again
         # If we have every protein chain matched with a reference already then we stop here
-        print(' Using also references related to PDB ids from the inputs file')
-        if match_sequences():
-            return protein_parsed_chains
+        pdb_ids_label = ', '.join(pdb_ids)
+        if any_pdb_reference:
+            print(f' Using references related to PDB ids from the inputs file: {pdb_ids_label}')
+            if match_sequences():
+                return protein_parsed_chains
+        else:
+            print(f' Failed to find any reference related to PDB ids from the inputs file: {pdb_ids_label}')
     # Cache wrapper for blast
     cached_blast = get_cached_function(blast, cache)
     # If there are still any chain which is not matched with a reference then we need more references
@@ -356,7 +364,7 @@ def generate_protein_mapping (
         # Build a new reference from the resulting uniprot
         add_reference(uniprot_id)
         # If we have every protein chain matched with a reference already then we stop here
-        print(' Using also references from blast')
+        print(' Using references from blast')
         if match_sequences():
             return protein_parsed_chains
     # At this point we should have macthed all sequences
