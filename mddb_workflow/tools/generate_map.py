@@ -329,6 +329,8 @@ def generate_protein_mapping (
         for pdb_id in pdb_ids:
             # Ask PDB
             uniprot_ids = cached_pdb_to_uniprot(pdb_id)
+            if uniprot_ids: any_pdb_reference = True
+            # Iterate UniProt ids we just found
             for uniprot_id in uniprot_ids:
                 # If this is not an actual UniProt, but a no referable exception, then handle it
                 # We must find the matching sequence and set the corresponding chain as no referable
@@ -337,7 +339,6 @@ def generate_protein_mapping (
                     continue
                 # Build a new reference from the resulting uniprot
                 add_reference(uniprot_id)
-                any_pdb_reference = True
         # If we found any reference from our search in the PDB then try to match every chain again
         # If we have every protein chain matched with a reference already then we stop here
         pdb_ids_label = ', '.join(pdb_ids)
