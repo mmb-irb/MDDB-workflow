@@ -706,11 +706,12 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
         sequence = entity.get('pdbx_seq_one_letter_code', None) if entity else None
         if sequence:
             # WARNING: some polymers/chains may have a "special" sequence
-            # It may combine one-letter code with 3-letter code in parenthesis for special aminoacids
+            # It may combine one-letter code with 2/3-letter code in parenthesis
+            # These are special aminoacids or other type of residues such as nucleotides
             # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
             # e.g. 6ME2, entity 1 -> ... DRYLYI(YCM)HSLKYD ...
             # e.g. nucleic acids -> (DC)(DA)(DA)(DC)(DC)(DG)(DC)(DA)(DA)(DC)
-            # We simply replace these special aminoacids by X
+            # We simply replace these special residues by X in the sequence
             sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
         # Get the uniprot ids associated to this polymer (or chain)
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
@@ -725,14 +726,19 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
             if all(letter == 'X' for letter in sequence): continue
             # Get the organisms
             organisms = polymer.get('rcsb_entity_source_organism', None)
-            # Some synthetic constructs may have not defined organisms at all
-            # e.g. 3H11, entity 3
+            # Some synthetic constructs may have not defined organisms at all -> e.g. 3H11, entity 3
             if not organisms:
                 uniprot_ids.append( NoReferableException(sequence) )
                 continue
             # Get scientific names in lower caps since sometimes they are all upper caps
             scientific_names = set(
                 [ (organism.get('scientific_name') or '').lower() for organism in organisms ])
+            # A synthetic construct may have a null scientific name -> e.g. 1LQ7
+            if len(scientific_names) == 1 and '' in scientific_names:
+                uniprot_ids.append( NoReferableException(sequence) )
+                continue
+            # Some synthetic construct have an object with an empty scientific name -> e.g. 1LQ7
+            #breakpoint()
             # If we have a synthetic construct then flag the sequence as no referable
             if 'synthetic construct' in scientific_names:
                 uniprot_ids.append( NoReferableException(sequence) )
