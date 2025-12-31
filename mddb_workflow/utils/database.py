@@ -4,7 +4,7 @@ import ssl
 import json
 from tqdm import tqdm
 from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError, warn
-from mddb_workflow.utils.constants import INCOMPLETE_PREFIX
+from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
 # When downloading files, set the chunk size in bytes
@@ -164,6 +164,10 @@ class Remote:
             raise Exception(f'Something went wrong when downloading the main trajectory: {request_url} with error: {error}')
         # Once the trajectory is fully downloaded we change its filename
         incomplete_trajectory.rename_to(output_file)
+
+    # Get the inputs file name with the source format
+    def get_inputs_file_source_filename (self) -> str:
+        return f'source_{self.database.alias}_{self.accession}_{DEFAULT_INPUTS_FILENAME}'
 
     # Download the inputs file
     def download_inputs_file (self, output_file : 'File'):

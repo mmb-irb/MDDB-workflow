@@ -426,17 +426,32 @@ def is_url(path: str) -> bool:
     return path[0:4] == 'http'
 
 
-def url_to_source_filename(url : str, remote : 'Remote') -> str:
+def url_to_source_filename(url : str, verbose : bool = True) -> str:
     """Set the filename of an input file downloaded from an input URL.
 
     In this scenario we are free to set our own paths or filenames.
     Note that the original name will usually be the very same output filename.
     In order to avoid both filenames being the same we will add a header here.
     This headers includes also a reference to the database and project.
-    Thus if there is a new accession then we rely on the filenames to know if we already have the correct ones.
+    Thus if there is a new accession then we rely on the filenames to know
+    if we already have the correct ones or if we must download again.
     """
-    original_filename = url.split('/')[-1]
-    return f'source_{remote.database.alias}_{remote.accession}_{original_filename}'
+    splits = url.split('/')
+    # Get the name of the source database/service
+    # This will be at the start of the URL, right after the protocol
+    source_site = splits[2]
+    source_alias = source_site.split('.')[0].split('-')[0]
+    # Get the project accession
+    # Accession in the URL is placed in .../projects/ACCESSION/...
+    accession = 'unknown-accession'
+    accession_split_index = splits.index('projects') + 1
+    accession = splits[accession_split_index]
+    # Get the original filename, which will be at the end of the URL
+    original_filename = splits[-1]
+    # Set the final name
+    source_filename = f'source_{source_alias}_{accession}_{original_filename}'
+    if verbose: print(f'{url} -> {source_filename}')
+    return source_filename
 
 
 def download_file(request_url: str, output_file: 'File'):
@@ -696,3 +711,7 @@ def get_git_version() -> str:
     git_command = f"git -C {__path__[0]} describe"
     process = run(git_command, shell=True, stdout=PIPE)
     return process.stdout.decode().replace('\n', '') or __version__
+
+def unique (source_list : list) -> list:
+    """Get a new list with unique values while conserving the order"""
+    return list(dict.fromkeys(source_list))

@@ -471,7 +471,7 @@ run_parser_input_args = [
     (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']+f'\nSupported formats: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}.'}),
     (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']+f'\nSupported formats: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}.'}),
     (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']+f'\nSupported formats: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}.'}),
-    (['-dir', '--working_directory'], {'default': '.', 'help': "Directory where the whole workflow is run."}),
+    (['-dir', '--directory'], {'default': '.', 'help': "Project directory where the whole workflow is to be run."}),
     (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
     (['-md', '--md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['md_config']}),
     (['-mdref', '--reference_md_index'], {'type': int, 'default': None, 'help': project_init_help['reference_md_index']}),

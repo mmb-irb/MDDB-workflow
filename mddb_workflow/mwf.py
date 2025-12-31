@@ -1,6 +1,6 @@
 # This is the starter script
 
-from os import chdir, walk, mkdir, getcwd
+from os import walk, mkdir, getcwd
 from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 import sys
 import io
@@ -17,7 +17,7 @@ from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_TOPOLO
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
-from mddb_workflow.utils.auxiliar import is_standard_topology
+from mddb_workflow.utils.auxiliar import is_standard_topology, unique
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -138,6 +138,8 @@ class MD:
         # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
+        elif not isdir(self.directory):
+            raise InputError(f'MD directory {self.directory} already exists and it is not a directory')
         # Save the input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
@@ -204,7 +206,7 @@ class MD:
         if self._input_structure_filepath is not None:
             return self._input_structure_filepath
 
-        def relativize_and_parse_paths(input_path: str, may_not_exist: bool = False) -> Optional[str]:
+        def relativize_and_parse_path (input_filepath: str) -> Optional[str]:
             """Find out if a path is relative to MD directories or to the project directory.
 
             To do so just check if the file exists in any of those.
@@ -212,73 +214,59 @@ class MD:
             Parse glob notation in the process.
             """
             # Check if it is a URL
-            if is_url(input_path):
-                self._input_structure_url = input_path
+            if is_url(input_filepath):
+                self._input_structure_url = input_filepath
                 # Set the paths for the further download
-                source_filename = url_to_source_filename(input_path, self.remote)
+                source_filename = url_to_source_filename(input_filepath)
                 md_relative_filepath = self.pathify(source_filename)
                 return md_relative_filepath
             # Check if it is an absolute path
-            if isabs(input_path):
-                abs_glob_parse = parse_glob(input_path)
+            if isabs(input_filepath):
+                abs_glob_parse = parse_glob(input_filepath)
                 # If we had multiple results then we complain
                 if len(abs_glob_parse) > 1:
-                    raise InputError(f'Multiple structures found with "{input_path}": {", ".join(abs_glob_parse)}')
+                    raise InputError(f'Multiple structures found with "{input_filepath}": {", ".join(abs_glob_parse)}')
                 # If we had no results then we complain
                 if len(abs_glob_parse) == 0:
                     if self.remote:
                         warn('Spread syntax is not supported to download remote files')
-                    raise InputError(f'No structure found with "{input_path}"')
+                    raise InputError(f'No structure found with "{input_filepath}"')
                 abs_parsed_filepath = abs_glob_parse[0]
                 return abs_parsed_filepath
-            # Check the MD directory
-            md_relative_filepath = self.pathify(input_path)
-            md_glob_parse = parse_glob(md_relative_filepath)
-            if len(md_glob_parse) > 1:
-                raise InputError(f'Multiple structures found with "{input_path}": {", ".join(md_glob_parse)}')
-            md_parsed_filepath = md_glob_parse[0] if len(md_glob_parse) == 1 else None
-            if md_parsed_filepath and File(md_parsed_filepath).exists:
-                return md_parsed_filepath
-            # Check the project directory
-            project_relative_filepath = self.project.pathify(input_path)
-            project_glob_parse = parse_glob(project_relative_filepath)
-            if len(project_glob_parse) > 1:
-                raise InputError(f'Multiple structures found with "{input_path}": {", ".join(project_glob_parse)}')
-            project_parsed_filepath = project_glob_parse[0] if len(project_glob_parse) == 1 else None
-            if project_parsed_filepath and File(project_parsed_filepath).exists:
-                return project_parsed_filepath
-            # At this point we can conclude the input structure file does not exist
-            # If we have no paths at all then it means a glob pattern was passed and it didn't match
-            # Note that if a glob pattern existed then it would mean the file actually existed
-            if len(md_glob_parse) == 0 and len(project_glob_parse) == 0:
-                # Warn the user in case it was trying to use glob syntax to donwload remote files
-                if self.remote:
-                    warn('Spread syntax is not supported to download remote files')
-                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_path))
-            # If the path does not exist anywhere then we asume it will be downloaded and set it relative to the MD
-            # However make sure we have a remote
-            # As an exception, if the 'may not exist' flag is passed then we return the result even if there is no remote
-            if not may_not_exist and not self.remote:
-                raise InputError(f'Cannot find a structure file by "{input_path}" anywhere')
-            md_parsed_filepath = self.project.pathify(input_path) if f'{self.directory_name}/' in md_parsed_filepath else self.pathify(input_path)
-            return md_parsed_filepath
+            # Now iterate the different possible contexts in the following order:
+            # 1 - Path is relative to the MD directory
+            # 2 - Path is relative to the project directory
+            # 3 - Path is relative to the workflow caller directory
+            available_contexts = unique([ self.directory, self.project.directory, '.' ])
+            for available_context in available_contexts:
+                context_filepath = normpath(f'{available_context}/{input_filepath}')
+                glob_parse = parse_glob(context_filepath)
+                if len(glob_parse) > 1:
+                    raise InputError(f'Multiple structures found with "{context_filepath}": {", ".join(glob_parse)}')
+                parsed_filepath = glob_parse[0] if len(glob_parse) == 1 else None
+                if parsed_filepath and File(parsed_filepath).exists:
+                    return parsed_filepath
+            # If the path does not exist anywhere then we surrender
+            raise InputError(f'Input structure {input_filepath} is nowhere to be found.')
+        # Set the input structure filepath
+        input_structure_filepath = None
         # If we have a value passed through command line
         if self.arg_input_structure_filepath:
-            # Find out if it is relative to MD directories or to the project directory
-            self._input_structure_filepath = relativize_and_parse_paths(self.arg_input_structure_filepath)
-            # Save the parsed value in the inputs file
+            input_structure_filepath = self.arg_input_structure_filepath
+        # If we have a value passed through the inputs file has the value
+        elif self.project.is_inputs_file_available():
+            # Get the input value, whose key must exist
+            input_structure_filepath = self.get_input('input_structure_filepath')
+        # Find out if it is relative to MD directories or to the project directory
+        if input_structure_filepath:
+            self._input_structure_filepath = relativize_and_parse_path(input_structure_filepath)
+            # Save or update the parsed value in the inputs file
+            # Note that the path must be relative to the project, no matter where the workflow is run
+            project_relative_path = relpath(self._input_structure_filepath, self.project.directory)
             self.project.update_inputs(
                 f'mds.{self.index}.input_structure_filepath',
-                self._input_structure_filepath)
+                project_relative_path)
             return self._input_structure_filepath
-        # If we have a value passed through the inputs file has the value
-        if self.project.is_inputs_file_available():
-            # Get the input value, whose key must exist
-            inputs_value = self.get_input('input_structure_filepath')
-            # If there is a valid input then use it
-            if inputs_value:
-                self._input_structure_filepath = relativize_and_parse_paths(inputs_value)
-                return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
@@ -331,11 +319,10 @@ class MD:
         if self._input_trajectory_filepaths is not None:
             return self._input_trajectory_filepaths
 
-        def relativize_and_parse_paths(input_paths: list[str]) -> list[str]:
+        def relativize_and_parse_paths(input_filepaths: list[str]) -> list[str]:
             """Check and fix input trajectory filepaths.
-            Also relativize paths to the current MD directory and parse glob notation.
-            """
-            checked_paths = input_paths
+            Also relativize paths to the workflow caller directory and parse glob notation."""
+            checked_paths = input_filepaths
             # Input trajectory filepaths may be both a list or a single string
             # However we must keep a list
             if type(checked_paths) is list:
@@ -354,7 +341,7 @@ class MD:
                 # Set the paths for the further download
                 parsed_paths = []
                 for path in checked_paths:
-                    source_filename = url_to_source_filename(path, self.remote)
+                    source_filename = url_to_source_filename(path)
                     md_relative_filepath = self.pathify(source_filename)
                     parsed_paths.append(md_relative_filepath)
                 return parsed_paths
@@ -377,63 +364,47 @@ class MD:
                     # Warn the user in case it was trying to use glob syntax to donwload remote files
                     if self.remote:
                         warn('Spread syntax is not supported to download remote files')
-                    raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
+                    raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_filepaths))
                 return absolute_parsed_paths
-            # If trajectory paths are not absolute then check if they are relative to the MD directory
-            # Get paths relative to the current MD directory
-            md_relative_paths = [self.pathify(path) for path in checked_paths]
-            # In case there are glob characters we must parse the paths
-            md_parsed_paths = parse_all_glob(md_relative_paths)
-            # Check we successfully defined some trajectory file
-            if len(md_parsed_paths) > 0:
-                # If so, check at least one of the files do actually exist
-                if any([exists(path) for path in md_parsed_paths]):
-                    return md_parsed_paths
-            # If no trajectory files where found then asume they are relative to the project
-            # Get paths relative to the project directory
-            project_relative_paths = [self.project.pathify(path) for path in checked_paths]
-            # In case there are glob characters we must parse the paths
-            project_parsed_paths = parse_all_glob(project_relative_paths)
-            # Check we successfully defined some trajectory file
-            if len(project_parsed_paths) > 0:
-                # If so, check at least one of the files do actually exist
-                if any([exists(path) for path in project_parsed_paths]):
-                    return project_parsed_paths
+            # Now if trajectory paths are not absolute then check if they are relative
+            # Iterate the different possible contexts in the following order:
+            # 1 - Path is relative to the MD directory
+            # 2 - Path is relative to the project directory
+            # 3 - Path is relative to the workflow caller directory
+            available_contexts = unique([ self.directory, self.project.directory, '.' ])
+            for available_context in available_contexts:
+                # Get paths relative to the current context
+                context_filepaths = [ normpath(f'{available_context}/{path}') for path in checked_paths ]
+                # In case there are glob characters we must parse the paths
+                parsed_paths = parse_all_glob(context_filepaths)
+                # Check we successfully defined some trajectory file
+                if len(parsed_paths) > 0:
+                    # If so, check at least one of the files do actually exist
+                    if any([exists(path) for path in parsed_paths]):
+                        return parsed_paths
             # At this point we can conclude the input trajectory file does not exist
-            # If we have no paths at all then it means a glob pattern was passed and it didn't match
-            # Note that if a glob pattern existed then it would mean the file actually existed
-            if len(md_parsed_paths) == 0 and len(project_parsed_paths) == 0:
-                # Warn the user in case it was trying to use glob syntax to donwload remote files
-                if self.remote:
-                    warn('Spread syntax is not supported to download remote files')
-                raise InputError('No trajectory file was reached neither in the project directory or MD directories in path(s) ' + ', '.join(input_paths))
-            # If we have a path however it may be downloaded from the database if we have a remote
-            if not self.remote:
-                raise InputError(f'Cannot find anywhere a trajectory file with path(s) "{", ".join(input_paths)}"')
-            # Note that if input path was not glob based it will be both as project relative and MD relative
-            if len(md_parsed_paths) == 0: raise ValueError('This should never happen')
-            # If file is to be downloaded then we must make sure the path is relative to the project
-            project_relative_paths = [
-                self.project.pathify(path) if f'{self.directory_name}/' in path else self.pathify(path) for path in checked_paths
-            ]
-            return project_relative_paths
+            raise InputError(f'Input trajectories "{", ".join(input_filepaths)}" are nowhere to be found.')
+        # Set the input trajectory filepaths
+        input_trajectory_filepaths = None
         # If we have a value passed through command line
         if self.arg_input_trajectory_filepaths:
-            self._input_trajectory_filepaths = relativize_and_parse_paths(self.arg_input_trajectory_filepaths)
-            # Save the parsed value in the inputs file
-            self.project.update_inputs(
-                f'mds.{self.index}.input_trajectory_filepaths',
-                self._input_trajectory_filepaths)
-            return self._input_trajectory_filepaths
+            input_trajectory_filepaths = self.arg_input_trajectory_filepaths
         # Check if the inputs file has the value
-        if self.project.is_inputs_file_available():
+        elif self.project.is_inputs_file_available():
             # Get the input value
-            inputs_value = self.get_input('input_trajectory_filepaths')
-            if inputs_value:
-                self._input_trajectory_filepaths = relativize_and_parse_paths(inputs_value)
-                return self._input_trajectory_filepaths
+            input_trajectory_filepaths = self.get_input('input_trajectory_filepaths')
         # If there is no trajectory available then we surrender
-        raise InputError('There is not input trajectory at all')
+        if input_trajectory_filepaths is None:
+            raise InputError('There is not input trajectory at all')
+        # Parse input paths by processing globs and making every path relative to the workflow caller
+        self._input_trajectory_filepaths = relativize_and_parse_paths(input_trajectory_filepaths)
+        # Save the parsed value in the inputs file
+        # Note that the path must be relative to the project, no matter where the workflow is run
+        project_relative_paths = [ relpath(path, self.project.directory) for path in self._input_trajectory_filepaths ]
+        self.project.update_inputs(
+            f'mds.{self.index}.input_trajectory_filepaths',
+            project_relative_paths)
+        return self._input_trajectory_filepaths
 
     def get_input_trajectory_files(self) -> str:
         """Get the input trajectory filename(s) from the inputs.
@@ -1134,9 +1105,9 @@ class Project:
 
         """
         # Save input parameters
-        # RUBEN: directory nunca se usa, eliminar?
+        # Save the project directory
         self.directory = normpath(directory)
-        # If it is an absolute path then make it relative to the project
+        # If it is an absolute path then make it relative to the workflow caller
         if isabs(self.directory):
             self.directory = relpath(self.directory)
         # Save the directory name alone apart
@@ -1144,6 +1115,11 @@ class Project:
             self.directory_name = basename(getcwd())
         else:
             self.directory_name = basename(self.directory)
+        # Make sure the directory exists
+        if not exists(self.directory):
+            raise InputError(f'Project directory {self.directory} does not exist')
+        if not isdir(self.directory):
+            raise InputError(f'Project directory {self.directory} exists and it is not a directory')
 
         # Set the database handler
         self.ssleep = ssleep
@@ -1178,26 +1154,39 @@ class Project:
                     ' Please either remove any "-md" argument or the "-proj" argument.')
 
         # Set the inputs file
-        # Set the expected default name in case there is no inputs file since it may be downloaded
-        self.inputs_filepath = inputs_filepath
+        self.inputs_filepath = None
+        # Set the filepath in case it was passed from the console arguments
+        # If this is the case then we must check here it exists
+        if inputs_filepath:
+            # Check if the path is relative to the project or to the workflow caller directory
+            self.inputs_filepath = self.pathify(inputs_filepath)
+            if not exists(self.inputs_filepath):
+                self.inputs_filepath = normpath(inputs_filepath) 
+                if not exists(self.inputs_filepath):
+                    raise InputError(f'Inputs file {inputs_filepath} is nowhere to be found')
         # If we have a remote accession to download data from then we also set the inputs filename accordingly
         if self.remote:
-            inputs_filename = url_to_source_filename(DEFAULT_INPUTS_FILENAME, self.remote)
+            inputs_filename = self.remote.get_inputs_file_source_filename()
             self.inputs_filepath = self.pathify(inputs_filename)
         # Try to guess which is the inputs file by searching for some supported names
         if self.inputs_filepath is None:
             candidates = []
             for filename in ACCEPTED_INPUT_FILENAMES:
-                filepath = self.pathify(filename)
-                if exists(filepath):
-                    candidates.append(filepath)
-            if len(candidates) > 1: raise InputError(f'Multiple files could be the inputs file: {candidates.join(", ")}\n' +
-                                                     ' Please specify which is the inputs file using the "-inp" argument.')
+                # No matter the header, as long as the filename ends as we expect
+                flexible_filename = '*' + filename
+                filepath = self.pathify(flexible_filename)
+                candidates += parse_glob(filepath)
+            if len(candidates) > 1:
+                raise InputError(f'Multiple files could be the inputs file: {", ".join(candidates)}\n' +
+                    ' Please specify which is the inputs file using the "-inp" argument.')
             if len(candidates) == 1: self.inputs_filepath = candidates[0]
         # Set the expected default name in case there is no inputs file since it may be downloaded
         if self.inputs_filepath is None:
             self.inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
         self._inputs_file = File(self.inputs_filepath)
+        # Check if the inputs file is available at this point
+        if not self.is_inputs_file_available():
+            warn('Missing inputs file. Allowed tasks will be very limited.')
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
@@ -1401,7 +1390,7 @@ class Project:
             # If we found no MD directory then it means MDs were never declared before
             if len(self._md_directories) == 0:
                 raise InputError('Impossible to know which are the MD directories. '
-                    'You can either declare them using the "-mdir" option or by providing an inputs file')
+                    'You can either declare them using the "-md" option or by providing an inputs file')
         self.check_md_directories()
         return self._md_directories
     md_directories = property(get_md_directories, None, None, "MD directories (read only)")
@@ -1551,52 +1540,75 @@ class Project:
         if self._input_topology_filepath is not None:
             return self._input_topology_filepath
 
-        def parse(filepath: str) -> str:
-            """Parse possible glob notation."""
+        def relativize_and_parse_path (input_filepath: str) -> str:
+            """Check and fix the input topology filepath.
+            If it is an URL then set the filepath where it is to be downloaded.
+            Find if the path is relative to the workflow caller directory or to the project.
+            If the path exists in both contexts then priorize the project-relative one.
+            Relativize the path to the workflow caller directory.
+            Also parse glob notation."""
             # If it is a URL then set the paths for the further download
-            if is_url(filepath):
-                self._input_topology_url = filepath
-                source_filename = url_to_source_filename(filepath, self.remote)
+            if is_url(input_filepath):
+                self._input_topology_url = input_filepath
+                source_filename = url_to_source_filename(input_filepath)
                 return source_filename
-            if not is_glob(filepath):
-                return filepath
-            # If there is glob pattern then parse it
-            parsed_filepaths = glob(filepath)
-            if len(parsed_filepaths) == 0:
-                # Warn the user in case it was trying to use glob syntax to donwload remote files
-                if self.remote:
-                    warn('Spread syntax is not supported to download remote files')
-                raise InputError(f'No topologies found with "{filepath}"')
-            if len(parsed_filepaths) > 1:
-                raise InputError(f'Multiple topologies found with "{filepath}": {", ".join(parsed_filepaths)}')
-            return parsed_filepaths[0]
+            # Check if it is an absolute path
+            if isabs(input_filepath):
+                abs_glob_parse = parse_glob(input_filepath)
+                # If we had multiple results then we complain
+                if len(abs_glob_parse) > 1:
+                    raise InputError(f'Multiple topologies found with "{input_filepath}": {", ".join(abs_glob_parse)}')
+                # If we had no results then we complain
+                if len(abs_glob_parse) == 0:
+                    if self.remote:
+                        warn('Spread syntax is not supported to download remote files')
+                    raise InputError(f'No topology found with "{input_filepath}"')
+                abs_parsed_filepath = abs_glob_parse[0]
+                return abs_parsed_filepath
+            # Now iterate the different possible contexts in the following order:
+            # 1 - Path is relative to the project directory
+            # 2 - Path is relative to the workflow caller directory
+            available_contexts = unique([ self.directory, '.' ])
+            for available_context in available_contexts:
+                context_filepath = normpath(f'{available_context}/{input_filepath}')
+                if not is_glob(context_filepath):
+                    if not exists(context_filepath): continue
+                    return context_filepath
+                # If there is glob pattern then parse it
+                parsed_filepaths = glob(context_filepath)
+                if len(parsed_filepaths) == 1:
+                    return parsed_filepaths[0]
+                if len(parsed_filepaths) > 1:
+                    raise InputError(f'Multiple topologies found with "{context_filepath}": {", ".join(parsed_filepaths)}')
+            # If we found no topology file in any context then we complain
+            raise InputError(f'Input topology {input_filepath} is nowhere to be found.')
+        # Set the input topology filepath
+        input_topology_filepath = None
         # If this value was passed through command line then it would be set as the internal value already
         if self.arg_input_topology_filepath:
-            if self.arg_input_topology_filepath.lower() in {'no', 'not', 'na'}:
-                self._input_topology_filepath = MISSING_TOPOLOGY
-                return self._input_topology_filepath
-            self._input_topology_filepath = parse(self.arg_input_topology_filepath)
-            # Update the input topology fielpath in the inputs file, in case it is not matching
-            self.update_inputs('input_topology_filepath', relpath(self._input_topology_filepath, self.directory))
-            return self._input_topology_filepath
-        # Check if the inputs file has the value
-        if self.is_inputs_file_available():
+            input_topology_filepath = self.arg_input_topology_filepath
+        # If the inputs file is available and has has the value then use it
+        elif self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            inputs_value = self.get_input('input_topology_filepath')
-            # If there is a valid input then use it
-            if inputs_value is not None:
-                # WARNING: the yaml parser automatically converts 'no' to False
-                if inputs_value is False or inputs_value.lower() in {'no', 'not', 'na'}:
-                    self._input_topology_filepath = MISSING_TOPOLOGY
-                    return self._input_topology_filepath
-                parsed_input_value = parse(inputs_value)
-                self._input_topology_filepath = self.pathify(parsed_input_value)
-                return self._input_topology_filepath
-        # If nothing worked then surrender
-        raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
-            '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
-            '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
-            '  Some analyses such us the interaction energies will be skiped')
+            input_topology_filepath = self.get_input('input_topology_filepath')
+        # If we have no input topology at this point then we surrender
+        if input_topology_filepath is None:
+            raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
+                '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
+                '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
+                '  Some analyses such us the interaction energies will be skiped.')
+        # If we have an input topology filepath then process it
+        # WARNING: the yaml parser automatically converts 'no' to False
+        if input_topology_filepath == False or input_topology_filepath.lower() in {'no', 'not', 'na'}:
+            self._input_topology_filepath = MISSING_TOPOLOGY
+            return self._input_topology_filepath
+        # Relativize and glob-parse the input filepath
+        self._input_topology_filepath = relativize_and_parse_path(input_topology_filepath)
+        # Update the input topology filepath in the inputs file, in case it is not matching
+        # Note that the path must be relative to the project, no matter where the workflow is run
+        project_relative_path = relpath(self._input_topology_filepath, self.directory)
+        self.update_inputs('input_topology_filepath', project_relative_path)
+        return self._input_topology_filepath
 
     def get_input_topology_file(self) -> Optional[File]:
         """Get the input topology file.
@@ -1645,7 +1657,7 @@ class Project:
         if input_topology_file.exists:
             self._input_topology_file = input_topology_file
             return self._input_topology_file
-        raise InputError(f'Missing input topology file "{input_topology_file.filename}"')
+        raise InputError(f'Missing input topology file "{input_topology_file.path}"')
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
     def get_input_structure_file(self) -> File:
@@ -2201,7 +2213,6 @@ DEFAULT_ANALYSES = ['clusters', 'dist', 'energies', 'hbonds', 'pca', 'pockets',
 
 def workflow(
     project_parameters: dict = {},
-    working_directory: str = '.',
     download: bool = False,
     setup: bool = False,
     include: Optional[list[str]] = None,
@@ -2212,7 +2223,6 @@ def workflow(
 
     Args:
         project_parameters (dict): Parameters to initiate the project.
-        working_directory (str): Working directory where the project is located.
         download (bool): (Deprecated: use -i download) If passed, only download required files. Then exits.
         setup (bool): (Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.
         include (list[str] | None): Set the unique analyses or tools to be run. All other steps will be skipped.
@@ -2227,25 +2237,16 @@ def workflow(
     if include and exclude:
         raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
 
-    # Save the directory where the workflow is called from so we can come back at the very end
-    workflow_call_directory = getcwd()
-
-    # Make sure the working directory exists
-    if not exists(working_directory):
-        raise InputError(f'Working directory "{working_directory}" does not exist')
-
-    # Make sure the working directory is actually a directory
-    if not isdir(working_directory):
-        raise InputError(f'Working directory "{working_directory}" is actually not a directory')
-
     # Move the current directory to the working directory
-    chdir(working_directory)
-    current_directory_name = getcwd().split('/')[-1]
     git_version = get_git_version()
-    print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}) for project at {current_directory_name}{COLOR_END}')
+    print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}){COLOR_END}')
 
     # Initiate the project project
     project = Project(**project_parameters)
+    project_directory_label = project.directory
+    if project_directory_label == '.':
+        project_directory_label = 'current directory'
+    print(f'Processing project at {project_directory_label}')
     print(f'  {len(project.mds)} MDs are to be run')
 
     # Set the tasks to be run
@@ -2361,11 +2362,6 @@ def workflow(
 
     # Remove gromacs backups and other trash files from the project
     remove_trash(project.directory)
-
-    # Return back to the place where the workflow was called originally
-    # This is not important for many applications
-    # But if you call the workflow function from a python script then this is important
-    chdir(workflow_call_directory)
 
     if md_errors and len(project.mds) > 1:
         # If there is more than one replica with errors that may being hidden by the others working fine
