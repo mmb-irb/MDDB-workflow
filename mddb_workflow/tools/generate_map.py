@@ -684,6 +684,9 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
     # Set the request query
     query = '''query ($id: String!) {
         entry(entry_id: $id) {
+            struct_keywords {
+                pdbx_keywords
+            }
             polymer_entities {
                 rcsb_polymer_entity_container_identifiers { uniprot_ids }
                 rcsb_entity_source_organism { scientific_name }
@@ -696,6 +699,13 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
     # The response may be None
     # e.g. an obsolete entry with no replacement
     if parsed_response == None: return []
+    # Check if it is a "de novo protein" according to the entry keywords
+    de_novo_protein = False
+    structure_keywords = parsed_response['struct_keywords']
+    if structure_keywords:
+        pdb_keywords = structure_keywords.get('pdbx_keywords', None)
+        if pdb_keywords == 'DE NOVO PROTEIN':
+            de_novo_protein = True
     # Mine data
     uniprot_ids = []
     # WARNING: Polymers do not come in the same order than in PDB
@@ -738,9 +748,15 @@ def pdb_to_uniprot (pdb_id : str) -> list[ str | NoReferableException ]:
                 uniprot_ids.append( NoReferableException(sequence) )
                 continue
             # Some synthetic construct have an object with an empty scientific name -> e.g. 1LQ7
-            #breakpoint()
             # If we have a synthetic construct then flag the sequence as no referable
             if 'synthetic construct' in scientific_names:
+                uniprot_ids.append( NoReferableException(sequence) )
+                continue
+            # However some synthetic constructs may have an organism: the expression organism
+            # e.g. 1P68 -> Escherichia Coli
+            # If we reach this point but the whole entry is marked as a de novo protein then
+            # we make the assumtion that this chain/polymer is synthetic
+            if de_novo_protein:
                 uniprot_ids.append( NoReferableException(sequence) )
                 continue
             # Check if the sequence of this chain may belong to an antibody
