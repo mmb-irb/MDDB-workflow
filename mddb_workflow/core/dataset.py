@@ -36,6 +36,8 @@ class Dataset:
             raise ValueError("dataset_path must be provided")
         self.root_path = Path(dataset_path).parent.resolve()
         self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
+        # Enable foreign key constraints (disabled by default in SQLite)
+        self.conn.execute("PRAGMA foreign_keys = ON")
         self._ensure_tables()
 
     def _ensure_tables(self):
@@ -93,14 +95,13 @@ class Dataset:
 
         self.conn.commit()
 
-    def _resolve_directory_patterns(self, dir_patterns: list[str]) -> list[Path]:
+    def _resolve_directory_patterns(self, dir_patterns: list[str], root_path: Path = None) -> list[Path]:
         """Resolve directory patterns (glob or absolute/relative paths)."""
+        root_path = self.root_path if root_path is None else root_path
         directories = []
-        if dir_patterns is str:
-            dir_patterns = [dir_patterns]
         for dir_pattern in dir_patterns:
             if is_glob(dir_pattern):
-                matched_dirs = list(self.root_path.glob(dir_pattern))
+                matched_dirs = list(root_path.glob(dir_pattern))
                 directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
             else:
                 p = Path(dir_pattern)
@@ -108,10 +109,26 @@ class Dataset:
                 directories.append(p)
         return directories
 
-    def add_entries(self, paths_or_globs: list[str], ignore_dirs: list[str] = [], verbose: bool = False, md_glob: str = "replica*"):
+    def _type_check_dir_list(self, dir_list: list[str] | str) -> list[str]:
+        """Ensure the input is a list of strings."""
+        if isinstance(dir_list, str):
+            dir_list = [dir_list]
+        return dir_list
+
+    def add_entries(self,
+        paths_or_globs: list[str] | str,
+        ignore_dirs: list[str] | str = [],
+        md_dirs: list[str] | str = ["replica*"],
+        verbose: bool = False,
+    ):
         """Scan all project directories and their MDs (replicas/subprojects) and register them in the database if not present.
         This should be called once after creating the Dataset to ensure all projects and MDs are tracked in the DB.
         """
+        # Normalize str inputs to lists
+        paths_or_globs = self._type_check_dir_list(paths_or_globs)
+        ignore_dirs = self._type_check_dir_list(ignore_dirs)
+        md_dirs = self._type_check_dir_list(md_dirs)
+
         project_directories = self._resolve_directory_patterns(paths_or_globs)
         ignore_dirs = [Path(d).resolve() for d in ignore_dirs]
         for project_dir in project_directories:
@@ -124,36 +141,42 @@ class Dataset:
                     print(f"Warning: Project directory {project_dir} does not exist. Skipping.")
                 continue
             # Count MDs in this project
-            md_dirs = [md for md in project_dir.glob(md_glob) if md.is_dir()]
-            num_mds = len(md_dirs)
+            project_md_dirs = [md for md in self._resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
+            num_mds = len(project_md_dirs)
             # Add project row (num_mds will be set automatically by triggers when MDs are added)
             if not self.get_status(rel_path):
                 if verbose:
                     print(f"Adding project: {rel_path} (with {num_mds} MDs)")
                 self.update_status(rel_path, state=State.NOT_RUN, message='No information have been recorded yet.')
             # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
-            for md_dir_path in md_dirs:
+            for md_dir_path in project_md_dirs:
                 md_dir = md_dir_path.name
                 if not self.get_status(rel_path, md_dir=md_dir):
                     if verbose:
                         print(f"  Adding MD: {rel_path}/{md_dir}")
                     self.update_status(rel_path, md_dir=md_dir, state=State.NOT_RUN, message='No information have been recorded yet.')
 
-    def remove_entries(self, paths_or_globs: list[str],
-                        ignore_dirs: list[str] = [],
-                        md_dir: str | list[str] = None,
-                        verbose: bool = False,
+    def remove_entries(self,
+        paths_or_globs: list[str] | str,
+        ignore_dirs: list[str] | str = [],
+        md_dirs: list[str] | str = None,
+        verbose: bool = False,
     ):
         """Remove specified project directories or MDs from the database.
-        If md_dir is provided, only remove that MD (or those MDs) for each project.
+        If md_dirs is provided, only remove that MD (or those MDs) for each project.
 
         Args:
             paths_or_globs: List of directory paths or glob patterns
             ignore_dirs: List of directories to ignore
-            md_dir: Single MD directory name or list of MD directory names to remove
+            md_dirs: directory, list or glob pattern of MD directories to remove.
             verbose: Whether to print verbose output
 
         """
+        # Normalize str inputs to lists
+        paths_or_globs = self._type_check_dir_list(paths_or_globs)
+        ignore_dirs = self._type_check_dir_list(ignore_dirs)
+        md_dirs = self._type_check_dir_list(md_dirs) if md_dirs else None
+
         project_directories = self._resolve_directory_patterns(paths_or_globs)
         for project_dir in project_directories:
             if project_dir in ignore_dirs:
@@ -161,14 +184,13 @@ class Dataset:
                 continue
             rel_path = project_dir.relative_to(self.root_path).as_posix()
             cur = self.conn.cursor()
-            if md_dir is not None:
-                # Normalize to list
-                md_dirs = [md_dir] if isinstance(md_dir, str) else md_dir
+            if md_dirs:
+                project_md_dirs = self._resolve_directory_patterns(md_dirs, root_path=project_dir)
                 # Remove specific MDs (triggers will auto-decrement num_mds)
-                for md in md_dirs:
-                    cur.execute("DELETE FROM mds WHERE project_rel_path=? AND md_dir=?", (rel_path, md))
+                for md_dir in project_md_dirs:
+                    cur.execute("DELETE FROM mds WHERE project_rel_path=? AND md_dir=?", (rel_path, md_dir.name))
                     if verbose and cur.rowcount > 0:
-                        print(f"Deleted MD '{md}' from '{rel_path}'")
+                        print(f"Deleted MD '{md_dir.name}' from '{rel_path}'")
             else:
                 # Remove entire project and all its MDs (CASCADE will handle MDs)
                 cur.execute("DELETE FROM projects WHERE rel_path=?", (rel_path,))
@@ -257,6 +279,7 @@ class Dataset:
     def dataframe(self) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
+        Adds a 'scope' column to indicate if the row is from a project or an MD.
         """
         dfs = self.dataframes
         df_projects = dfs['projects'].reset_index()
@@ -264,14 +287,19 @@ class Dataset:
 
         # Set missing columns for alignment
         df_projects['md_dir'] = ''
+        df_projects['scope'] = 'Project'
         df_mds['num_mds'] = ''
+        df_mds['scope'] = 'MD'
         df_mds = df_mds.rename(columns={'project_rel_path': 'rel_path'})
 
         # Concatenate, sort, and set multi-index
         df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
         df_joined = df_joined.sort_values(['rel_path', 'md_dir'], na_position='first')
         df_joined.set_index(['rel_path', 'md_dir'], inplace=True)
-
+        # Change the order of the columns to have 'scope' first
+        cols = df_joined.columns.tolist()
+        cols.insert(0, cols.pop(cols.index('scope')))
+        df_joined = df_joined[cols]
         return df_joined
 
 

@@ -20,7 +20,7 @@ def test_adds_projects():
         ds = Dataset(dataset_path=db_path)
         ds.add_entries(project_dirs,
                        ignore_dirs=[os.path.join(tmpdir, "proj_glob2")],
-                       md_glob="replica*",
+                       md_dirs="replica*",
                        verbose=True)
         for d in project_dirs:
             rel_path = os.path.relpath(d, tmpdir)
@@ -39,7 +39,7 @@ def test_adds_projects():
         ds.remove_entries([os.path.join(tmpdir, "wrong")], verbose=True)
         assert ds.get_status("wrong") is None  # 'wrong' project should be removed
         # Remove specific replicas from proj0
-        ds.remove_entries([os.path.join(tmpdir, "proj0")], md_dir=['replica0'], verbose=True)
-        assert ds.get_status("proj0")['num_mds'] == 1  # One replica should remain
-        ds.remove_entries([os.path.join(tmpdir, "proj1")], md_dir=['replica0', 'replica1'], verbose=True)
+        ds.remove_entries([os.path.join(tmpdir, "proj0")], md_dirs=['replica0'], verbose=True)
+        assert ds.get_status("proj0")['num_mds'] == 1, "Expected 1 MD remaining for proj0"
+        ds.remove_entries([os.path.join(tmpdir, "proj1")], md_dirs=['replica0', 'replica1'], verbose=True)
         assert ds.get_status("proj1")['num_mds'] == 1  # One replica should remain
