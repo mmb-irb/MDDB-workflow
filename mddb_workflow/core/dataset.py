@@ -20,8 +20,10 @@ class State(Enum):
 
 class Dataset:
     """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
-    columns = ['rel_path', 'md_dir', 'scope', 'state', 'message', 'last_modified']  # TODO: log_file, err_file, group_id
-    columns_str = ', '.join(columns)
+    # TODO: log_file, err_file, group_id
+    common_columns = ['state', 'message', 'last_modified']
+    project_columns = ['rel_path', 'num_mds'] + common_columns
+    md_columns = ['project_rel_path', 'md_dir'] + common_columns
 
     def __init__(self, dataset_path: Optional[str] = None):
         """Initialize the Dataset object and connect to SQLite DB.
@@ -39,18 +41,56 @@ class Dataset:
     def _ensure_tables(self):
         """Create tables if they do not exist."""
         cur = self.conn.cursor()
+        # Create projects table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS projects (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                rel_path TEXT,
-                md_dir TEXT,
-                scope TEXT,
+                rel_path TEXT UNIQUE NOT NULL,
+                num_mds INTEGER DEFAULT 0,
+                state TEXT,
+                message TEXT,
+                last_modified TEXT
+            )
+        ''')
+        # Create mds table
+        # MDs are linked to projects via project_rel_path foreign key
+        # ON DELETE CASCADE ensures MDs are deleted when project is deleted
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS mds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_rel_path TEXT NOT NULL,
+                md_dir TEXT NOT NULL,
                 state TEXT,
                 message TEXT,
                 last_modified TEXT,
-                UNIQUE(rel_path, md_dir, scope)
+                UNIQUE(project_rel_path, md_dir),
+                FOREIGN KEY (project_rel_path) REFERENCES projects(rel_path) ON DELETE CASCADE
             )
         ''')
+
+        # Create triggers to automatically maintain num_mds count
+        # Trigger on INSERT: increment num_mds when a new MD is added
+        cur.execute('''
+            CREATE TRIGGER IF NOT EXISTS increment_num_mds
+            AFTER INSERT ON mds
+            BEGIN
+                UPDATE projects
+                SET num_mds = num_mds + 1
+                WHERE rel_path = NEW.project_rel_path;
+            END
+        ''')
+
+        # Trigger on DELETE: decrement num_mds when an MD is removed
+        cur.execute('''
+            CREATE TRIGGER IF NOT EXISTS decrement_num_mds
+            AFTER DELETE ON mds
+            BEGIN
+                UPDATE projects
+                SET num_mds = num_mds - 1
+                WHERE rel_path = OLD.project_rel_path;
+            END
+        ''')
+
         self.conn.commit()
 
     def _resolve_directory_patterns(self, dir_patterns: list[str]) -> list[Path]:
@@ -68,7 +108,7 @@ class Dataset:
                 directories.append(p)
         return directories
 
-    def add_projects(self, paths_or_globs: list[str], ignore_dirs: list[str] = [], verbose: bool = False, md_glob: str = "replica*"):
+    def add_entries(self, paths_or_globs: list[str], ignore_dirs: list[str] = [], verbose: bool = False, md_glob: str = "replica*"):
         """Scan all project directories and their MDs (replicas/subprojects) and register them in the database if not present.
         This should be called once after creating the Dataset to ensure all projects and MDs are tracked in the DB.
         """
@@ -83,29 +123,36 @@ class Dataset:
                 if verbose:
                     print(f"Warning: Project directory {project_dir} does not exist. Skipping.")
                 continue
-            # Add project row (scope='project')
+            # Count MDs in this project
+            md_dirs = [md for md in project_dir.glob(md_glob) if md.is_dir()]
+            num_mds = len(md_dirs)
+            # Add project row (num_mds will be set automatically by triggers when MDs are added)
             if not self.get_status(rel_path):
                 if verbose:
-                    print(f"Adding project: {rel_path}")
-                self.update_status(rel_path, state=State.NOT_RUN, message='No information have been recorded yet.', scope='Project')
-            # Add MDs (replicas/subprojects) rows (scope='md')
-            for md_dir in project_dir.glob(md_glob):
-                if not md_dir.is_dir():
-                    continue
-                md_dir = md_dir.name
-                if not self.get_status(rel_path, md_dir=md_dir, scope='MD'):
+                    print(f"Adding project: {rel_path} (with {num_mds} MDs)")
+                self.update_status(rel_path, state=State.NOT_RUN, message='No information have been recorded yet.')
+            # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
+            for md_dir_path in md_dirs:
+                md_dir = md_dir_path.name
+                if not self.get_status(rel_path, md_dir=md_dir):
                     if verbose:
                         print(f"  Adding MD: {rel_path}/{md_dir}")
-                    self.update_status(rel_path, state=State.NOT_RUN, message='No information have been recorded yet.', scope='MD', md_dir=md_dir)
+                    self.update_status(rel_path, md_dir=md_dir, state=State.NOT_RUN, message='No information have been recorded yet.')
 
-    def remove_projects(self, paths_or_globs: list[str],
+    def remove_entries(self, paths_or_globs: list[str],
                         ignore_dirs: list[str] = [],
-                        md_dir: str = None,
-                        scope: str = None,
+                        md_dir: str | list[str] = None,
                         verbose: bool = False,
     ):
         """Remove specified project directories or MDs from the database.
-        If md_dir is provided, only remove that MD for each project. If scope is provided, filter by scope.
+        If md_dir is provided, only remove that MD (or those MDs) for each project.
+
+        Args:
+            paths_or_globs: List of directory paths or glob patterns
+            ignore_dirs: List of directories to ignore
+            md_dir: Single MD directory name or list of MD directory names to remove
+            verbose: Whether to print verbose output
+
         """
         project_directories = self._resolve_directory_patterns(paths_or_globs)
         for project_dir in project_directories:
@@ -115,52 +162,59 @@ class Dataset:
             rel_path = project_dir.relative_to(self.root_path).as_posix()
             cur = self.conn.cursor()
             if md_dir is not None:
-                # Remove specific MD
-                cur.execute("DELETE FROM projects WHERE rel_path=? AND md_dir=? AND scope=?", (rel_path, md_dir, scope or 'md'))
-            elif scope is not None:
-                # Remove project scope
-                cur.execute("DELETE FROM projects WHERE rel_path=? AND scope=?", (rel_path, scope))
+                # Normalize to list
+                md_dirs = [md_dir] if isinstance(md_dir, str) else md_dir
+                # Remove specific MDs (triggers will auto-decrement num_mds)
+                for md in md_dirs:
+                    cur.execute("DELETE FROM mds WHERE project_rel_path=? AND md_dir=?", (rel_path, md))
+                    if verbose and cur.rowcount > 0:
+                        print(f"Deleted MD '{md}' from '{rel_path}'")
             else:
-                # Remove entire project and all its MDs
+                # Remove entire project and all its MDs (CASCADE will handle MDs)
                 cur.execute("DELETE FROM projects WHERE rel_path=?", (rel_path,))
-            if verbose and cur.rowcount > 0:
-                print(f"Deleted {cur.rowcount} record(s) for '{rel_path}' (md_dir={md_dir}, scope={scope})")
+                if verbose and cur.rowcount > 0:
+                    print(f"Deleted project '{rel_path}' and all its MDs")
         self.conn.commit()
 
     def update_status(self,
         rel_path: str,
         state: State | str,
         message: str,
-        scope: str = 'Project',
         md_dir: str = None,
     ):
-        """Update or insert a project's or MD's status in the database."""
+        """Update or insert a project or MD's status in the database."""
         cur = self.conn.cursor()
         if isinstance(state, State):
             state = state.value
         last_modified = time.strftime("%H:%M:%S %d-%m-%Y", time.localtime())
-        cur.execute(f'''
-            INSERT INTO projects ({self.columns_str})
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(rel_path, md_dir, scope) DO UPDATE SET
-                state=excluded.state,
-                message=excluded.message,
-                last_modified=excluded.last_modified
-        ''', (rel_path, md_dir, scope, state, message, last_modified))
+
+        if md_dir is not None:
+            cur.execute('''
+                INSERT INTO mds (project_rel_path, md_dir, state, message, last_modified)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(project_rel_path, md_dir) DO UPDATE SET
+                    state=excluded.state,
+                    message=excluded.message,
+                    last_modified=excluded.last_modified
+            ''', (rel_path, md_dir, state, message, last_modified))
+        else:
+            cur.execute('''
+                INSERT INTO projects (rel_path, state, message, last_modified, num_mds)
+                VALUES (?, ?, ?, ?, 0)
+                ON CONFLICT(rel_path) DO UPDATE SET
+                    state=excluded.state,
+                    message=excluded.message,
+                    last_modified=excluded.last_modified
+            ''', (rel_path, state, message, last_modified))
         self.conn.commit()
 
-    def get_status(self, rel_path, md_dir: str = None, scope: str = None):
-        """Retrieve a project's or MD's status from the database."""
+    def get_status(self, rel_path: str, md_dir: str = None):
+        """Retrieve a project's status from the database."""
         cur = self.conn.cursor()
-        query = "SELECT * FROM projects WHERE rel_path=?"
-        params = [rel_path]
         if md_dir is not None:
-            query += " AND md_dir=?"
-            params.append(md_dir)
-        if scope is not None:
-            query += " AND scope=?"
-            params.append(scope)
-        cur.execute(query, tuple(params))
+            cur.execute("SELECT * FROM mds WHERE project_rel_path=? AND md_dir=?", (rel_path, md_dir))
+        else:
+            cur.execute("SELECT * FROM projects WHERE rel_path=?", (rel_path,))
         row = cur.fetchone()
         if row:
             columns = [desc[0] for desc in cur.description]
@@ -168,19 +222,57 @@ class Dataset:
         return None
 
     @property
-    def status(self) -> list[dict]:
-        """Retrieve all project and MD status from the SQLite database as a list of dicts."""
+    def status(self) -> dict:
+        """Retrieve all project and MD status from the SQLite database as a dictionary with 'projects' and 'mds' keys."""
         cur = self.conn.cursor()
-        cur.execute(f"SELECT {self.columns_str} FROM projects ORDER BY rel_path, md_dir, scope")
-        rows = cur.fetchall()
-        return rows
+        # Get all projects
+        cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY rel_path")
+        projects = cur.fetchall()
+        # Get all MDs
+        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY project_rel_path, md_dir")
+        mds = cur.fetchall()
+        return {'projects': projects, 'mds': mds}
+
+    @property
+    def dataframes(self) -> dict:
+        """Retrieve project and MD status from the SQLite database as pandas DataFrames.
+
+        Returns:
+            dict: Dictionary with 'projects' and 'mds' keys, each containing a DataFrame.
+
+        """
+        status = self.status
+        # Create DataFrames
+        df_projects = pd.DataFrame(status['projects'], columns=self.project_columns)
+        df_projects.set_index('rel_path', inplace=True)
+        # Create MDs DataFrame
+        df_mds = pd.DataFrame(status['mds'], columns=self.md_columns)
+        df_mds.set_index(['project_rel_path', 'md_dir'], inplace=True)
+        return {
+            'projects': df_projects,
+            'mds': df_mds
+        }
 
     @property
     def dataframe(self) -> 'pd.DataFrame':
-        """Retrieve project and MD status from the SQLite database as a pandas DataFrame."""
-        df = pd.DataFrame(self.status, columns=self.columns)
-        df.set_index(['rel_path', 'md_dir', 'scope'], inplace=True)
-        return df
+        """Retrieve a joined view of projects and MDs as a single DataFrame
+        with empty values for the not matching columns.
+        """
+        dfs = self.dataframes
+        df_projects = dfs['projects'].reset_index()
+        df_mds = dfs['mds'].reset_index()
+
+        # Set missing columns for alignment
+        df_projects['md_dir'] = ''
+        df_mds['num_mds'] = ''
+        df_mds = df_mds.rename(columns={'project_rel_path': 'rel_path'})
+
+        # Concatenate, sort, and set multi-index
+        df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
+        df_joined = df_joined.sort_values(['rel_path', 'md_dir'], na_position='first')
+        df_joined.set_index(['rel_path', 'md_dir'], inplace=True)
+
+        return df_joined
 
 
 class OldDataset:
