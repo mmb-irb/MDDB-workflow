@@ -1,19 +1,21 @@
 # This is the starter script
 
-from os import chdir, walk, mkdir, getcwd
+from os import walk, mkdir, getcwd
 from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 import sys
 import io
 import re
 import numpy
 from glob import glob
+import contextlib
+from functools import partial
 
 # Constants
 # Importing constants first is important
 from mddb_workflow.utils.constants import *
-
+from mddb_workflow.core.dataset import Dataset, State
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
@@ -135,7 +137,6 @@ class MD:
             raise InputError(f'MD {self.number} has the same directory as the project: {self.directory}')
         # Save the directory name alone apart
         self.directory_location, self.directory_name = split(self.directory)
-        # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
         # Save the input structure filepath
@@ -500,7 +501,7 @@ class MD:
                 # Get the directory according to the inputs
                 directory = md.get(MD_DIRECTORY, None)
                 if directory:
-                    check_directory(directory)
+                    check_md_directory(directory)
                 # If no directory is specified in the inputs then guess it from the MD name
                 else:
                     name = md.get('name', None)
@@ -1131,7 +1132,6 @@ class Project:
 
         """
         # Save input parameters
-        # RUBEN: directory nunca se usa, eliminar?
         self.directory = normpath(directory)
         # If it is an absolute path then make it relative to the project
         if isabs(self.directory):
@@ -1380,7 +1380,7 @@ class Project:
                 # Get the directory according to the inputs
                 directory = input_md.get(MD_DIRECTORY, None)
                 if directory:
-                    check_directory(directory)
+                    check_md_directory(directory)
                 # If no directory is specified in the inputs then guess it from the MD name
                 else:
                     name = input_md['name']
@@ -2095,7 +2095,7 @@ def name_2_directory(name: str) -> str:
     return directory
 
 
-def check_directory(directory: str):
+def check_md_directory(directory: str):
     """Check for problematic characters in a directory path."""
     # Remove problematic characters
     directory_characters = set(directory)
@@ -2191,7 +2191,8 @@ class TaskResolver:
         download: bool = False,
         setup: bool = False,
     ):
-        if self.include and self.exclude:
+        """Initialize the task resolver."""
+        if include and exclude:
             raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
 
         self.project_requestables = project_requestables
@@ -2290,6 +2291,107 @@ class TaskResolver:
         return set(t for t in self.md_tasks if t in self.overwritables)
 
 
+class ErrorHandling:
+    """Class to handle errors during workflow execution."""
+
+    def __init__(self, workflow: 'WorkflowHandler', wf_class: Union['Project', 'MD']):
+        """Initialize the error handling."""
+        self.workflow = workflow
+        self.dataset: Dataset = getattr(workflow, 'dataset', None)
+        self.scope = 'Project' if isinstance(wf_class, Project) else 'MD'
+        self.md_dir = wf_class.directory if isinstance(wf_class, MD) else None
+        # Make the update function with partial so we do not have to repeat parameters
+        if self.dataset:
+            if not self.dataset.get_status(self.workflow.rel_path, self.md_dir):
+                # If no status is available, add a new entry
+                self.dataset.add_entries(self.workflow.rel_path, md_dirs=self.md_dir)
+            self.update_state = partial(self.dataset.update_status,
+                                        self.workflow.rel_path,
+                                        md_dir=self.md_dir)
+        else:
+            # If no dataset is available, use a null function
+            self.update_state = lambda *args, **kwargs: None
+
+    def __enter__(self):
+        """Enter the context manager."""
+        # Update project status to running on entering the context.
+        self.update_state(state=State.RUNNING, message='Running workflow')
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context manager."""
+        if exc_type and issubclass(exc_type, Exception):
+            error = exc_value.__class__.__name__ + ': ' + str(exc_value)
+            self.update_state(state=State.ERROR, message=error)
+            if self.scope == 'MD' and self.workflow.keep_going:
+                # Record error to print at the end of the run and continue
+                self.workflow.md_errors.append((self.md_dir, error))
+                print(error)
+                return True  # Suppress exception
+        else:
+            self.update_state(state=State.DONE, message='Done!')
+        return False  # Do not suppress other exceptions
+
+
+class WorkflowHandler:
+    """Context manager to handle workflow execution environment."""
+
+    def __init__(self, working_directory: str, dataset_path: Optional[str] = None, keep_going: bool = False):
+        """Initialize the workflow handler."""
+        # Make sure the working directory exists and is actually a directory
+        if not exists(working_directory):
+            raise InputError(f'Working directory "{working_directory}" does not exist')
+        if not isdir(working_directory):
+            raise InputError(f'Working directory "{working_directory}" is actually not a directory')
+        self.working_directory = working_directory
+        if dataset_path:
+            self.dataset = Dataset(dataset_path)
+            self.rel_path = relpath(working_directory, self.dataset.root_path)
+        self.keep_going = keep_going
+        self.md_errors: list[tuple[str, str]] = []
+
+        # Print workflow header
+        current_directory_name = working_directory.rstrip('/').split('/')[-1] or '.'
+        git_version = get_git_version()
+        print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}) for project at {current_directory_name}{COLOR_END}')
+
+    def add_base_classes(self, project: Project, tasker: TaskResolver) -> None:
+        """Add base classes used to run the workflow.
+        These are not added in the constructor to respect the original input errors order.
+        """
+        project.overwritables = tasker.get_project_overwritables()
+        # Note that this must be done before running project tasks
+        # Some project tasks rely in MD tasks
+        for md in project.mds:
+            md.overwritables = tasker.get_md_overwritables()
+        self.project = project
+        self.tasker = tasker
+
+    def launch(self):
+        """Launch the workflow execution."""
+        # Run the project tasks and MD tasks as per the task resolver.
+        with ErrorHandling(self, self.project):
+            for task in self.tasker.project_tasks:
+                # Get the function to be called and call it
+                getter = requestables[task]
+                getter(self.project)
+
+        # Now iterate over the different MDs
+        for md in self.project.mds:
+            print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
+            # Run the MD tasks
+            with ErrorHandling(self, md):
+                for task in self.tasker.md_tasks:
+                    # Get the function to be called and call it
+                    getter = requestables[task]
+                    getter(md)
+            # Remove gromacs backups and other trash files from this MD
+            remove_trash(md.directory)
+
+        # Remove gromacs backups and other trash files from the project
+        remove_trash(self.project.directory)
+
+
 def workflow(
     project_parameters: dict = {},
     working_directory: str = '.',
@@ -2298,6 +2400,7 @@ def workflow(
     include: Optional[list[str]] = None,
     exclude: Optional[list[str]] = None,
     overwrite: Optional[list[str] | bool] = None,
+    dataset_path: Optional[str] = None,
     keep_going: bool = False
 ):
     """Run the MDDB workflow.
@@ -2307,109 +2410,37 @@ def workflow(
         working_directory (str): Working directory where the project is located.
         download (bool): (Deprecated: use -i download) If passed, only download required files. Then exits.
         setup (bool): (Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.
-        include (list[str] | None): Set the unique analyses or tools to be run. All other steps will be skipped.
+        include (list[str] | None): Set the unique analyses or tools to be run while all other steps will be skipped. If not passed, all default analyses will be run.
         exclude (list[str] | None): List of analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway.
         overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
+        dataset_path (str | None): Path to the dataset where to register the workflow status.
         keep_going (bool): If True, continue running the workflow even if some MD replicas fail. Default is False.
 
     """
-    # Save the directory where the workflow is called from so we can come back at the very end
-    workflow_call_directory = getcwd()
+    runner = WorkflowHandler(working_directory, dataset_path, keep_going)
 
-    # Make sure the working directory exists and is actually a directory
-    if not exists(working_directory):
-        raise InputError(f'Working directory "{working_directory}" does not exist')
-    if not isdir(working_directory):
-        raise InputError(f'Working directory "{working_directory}" is actually not a directory')
+    with contextlib.chdir(working_directory):
+        # Initiate the project
+        project = Project(**project_parameters)
+        print(f'  {len(project.mds)} MDs are to be run')
 
-    # Move the current directory to the working directory
-    chdir(working_directory)
-    current_directory_name = getcwd().split('/')[-1]
-    git_version = get_git_version()
-    print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}) for project at {current_directory_name}{COLOR_END}')
+        # Set the tasks to be run
+        tasker = TaskResolver(
+            include=include,
+            exclude=exclude,
+            overwrite=overwrite,
+            download=download,
+            setup=setup,
+        )
+        # Use the WorkflowHandler for running the workflow
+        runner.add_base_classes(project, tasker)
+        runner.launch()
 
-    # Initiate the project project
-    project = Project(**project_parameters)
-    print(f'  {len(project.mds)} MDs are to be run')
-
-    # Set the tasks to be run
-    tasker = TaskResolver(
-        include=include,
-        exclude=exclude,
-        overwrite=overwrite,
-        download=download,
-        setup=setup,
-    )
-    project.overwritables = tasker.get_project_overwritables()
-    # Note that this must be done before running project tasks
-    # Some project tasks rely in MD tasks
-    for md in project.mds:
-        md.overwritables = tasker.get_md_overwritables()
-
-    if (project.get_input('mdref') is None and
-        project_parameters['reference_md_index'] is None and
-        keep_going):
-        # If keep going is set then we try to find the first MD which processes correctly
-        md_errors = []
-        for i, md in enumerate(project.mds):
-            try:
-                md.input_files_processing()
-                project._reference_md_index = i
-                project.update_inputs('mdref', i)
-                break
-            except Exception as e:
-                error = e.__class__.__name__ + ': ' + str(e)
-                md_errors.append((md.directory, error))
-                print(error)
-                continue
-        if project._reference_md_index is None:
-            print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
-            for md_error in md_errors:
-                print(f'  - MD at {md_error[0]}: {md_error[1]}')
-            raise Exception('Could not find a valid reference MD automatically when keep going is set.')
-
-    # Run the project tasks now
-    for task in tasker.project_tasks:
-        # Get the function to be called and call it
-        getter = requestables[task]
-        getter(project)
-
-    # Now iterate over the different MDs
-    md_errors = []
-    for md in project.mds:
-        print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
-        # Run the MD tasks
-        try:
-            for task in tasker.md_tasks:
-                # Get the function to be called and call it
-                getter = requestables[task]
-                getter(md)
-        except TestFailure as e:
-            if project_parameters['keep_going'] is False:
-                raise e
-            error = e.__class__.__name__ + ': ' + str(e)
-            md_errors.append((md.directory, error))
-            print(error)
-            continue
-        except Exception as e:
-            raise e
-
-        # Remove gromacs backups and other trash files from this MD
-        remove_trash(md.directory)
-
-    # Remove gromacs backups and other trash files from the project
-    remove_trash(project.directory)
-
-    # Return back to the place where the workflow was called originally
-    # This is not important for many applications
-    # But if you call the workflow function from a python script then this is important
-    chdir(workflow_call_directory)
-
-    if md_errors and len(project.mds) > 1:
-        # If there is more than one replica with errors that may being hidden by the others working fine
-        print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
-        for md_error in md_errors:
-            print(f'  - MD at {md_error[0]}: {md_error[1]}')
-        print('The rest of MD replicas were processed successfully.')
-    else:
-        print("Done!")
+        if runner.md_errors and len(project.mds) > 1:
+            # If there is more than one replica with errors that may being hidden by the others working fine
+            print(f'\n{RED_HEADER}Finished with errors in MD replicas:{COLOR_END}')
+            for md_dir, error_msg in runner.md_errors:
+                print(f'  - MD at {md_dir}: {error_msg}')
+            print('The rest of MD replicas were processed successfully.')
+        else:
+            print("Done!")

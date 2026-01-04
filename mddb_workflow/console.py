@@ -494,7 +494,8 @@ run_parser_workflow_args = [
     (['-trans', '--translation'], {'nargs': '*', 'default': [0, 0, 0], 'help': project_init_help['translation']}),
     (['-d', '--download'], {'action': 'store_true', 'help': workflow_help['download']}),
     (['-s', '--setup'], {'action': 'store_true', 'help': workflow_help['setup']}),
-    (['-k', '--keep_going'], {'action': 'store_true', 'help': project_init_help['keep_going']}),
+    (['-ds', '--dataset_path'], {'default': None, 'help': workflow_help['dataset_path']}),
+    (['-k', '--keep_going'], {'action': 'store_true', 'help': workflow_help['keep_going']}),
     (['-smp', '--sample_trajectory'], {'type': int, 'nargs': '?', 'default': None, 'const': 10, 'metavar': 'N_FRAMES', 'help': project_init_help['sample_trajectory']}),
     (['-rcut', '--rmsd_cutoff'], {'type': float, 'default': DEFAULT_RMSD_CUTOFF, 'help': project_init_help['rmsd_cutoff']}),
     (['-icut', '--interaction_cutoff'], {'type': float, 'default': DEFAULT_INTERACTION_CUTOFF, 'help': project_init_help['interaction_cutoff']}),
@@ -555,9 +556,9 @@ run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS',
     description=f"Available tasks: {choices}\nFor more information about each task, please visit:\n{task_docs_url}")
 run_parser_analysis_args = [
     (['-i', '--include'], {'nargs': '*', 'choices': choices,
-      'help': ("Set the unique analyses or tools to be run. All other steps will be skipped.\n"
-               "There are also some additional flags to define a preconfigured group of dependencies:"
-               + '\n  - ' + '\n  - '.join(task_groups))}),
+      'help': (workflow_help['include']
+               + "\nThere are also some additional flags to define a preconfigured group of dependencies:\n  - "
+               + '\n  - '.join(task_groups))}),
     (['-e', '--exclude'], {'nargs': '*', 'choices': choices, 'help': workflow_help['exclude']}),
     (['-ow', '--overwrite'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'choices': choices, 'help': workflow_help['overwrite']}),
 ]

@@ -3,7 +3,7 @@ import tempfile
 from mddb_workflow.core.dataset import Dataset
 
 
-def test_adds_projects():
+def test_add_remove_entries():
     """Test that adding projects works correctly."""
     # Create a temporary directory to act as the dataset root
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -40,6 +40,6 @@ def test_adds_projects():
         assert ds.get_status("wrong") is None  # 'wrong' project should be removed
         # Remove specific replicas from proj0
         ds.remove_entries([os.path.join(tmpdir, "proj0")], md_dirs=['replica0'], verbose=True)
-        assert ds.get_status("proj0")['num_mds'] == 1, "Expected 1 MD remaining for proj0"
+        assert ds.get_status("proj0")['num_mds'] == 1
         ds.remove_entries([os.path.join(tmpdir, "proj1")], md_dirs=['replica0', 'replica1'], verbose=True)
         assert ds.get_status("proj1")['num_mds'] == 1  # One replica should remain
