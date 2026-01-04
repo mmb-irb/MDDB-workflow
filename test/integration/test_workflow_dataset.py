@@ -58,6 +58,7 @@ def run_workflow_with_mock_task(mock_task, dataset_path=None):
             yield
 
 
+@pytest.mark.unit_int
 class TestDatasetIntegration:
     """Test the Dataset integration with the workflow."""
 

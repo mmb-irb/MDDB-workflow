@@ -49,6 +49,7 @@ def run_workflow_with_mock_task(mock_task):
             )
 
 
+@pytest.mark.unit_int
 class TestReplicaErrorHandling:
     """Test the error handling in the workflow for MD replicas."""
 

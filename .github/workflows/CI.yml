@@ -73,7 +73,7 @@ jobs:
         shell: bash -l {0}
         run: pytest -m CI
 
-      - name: Run extensive tests
+      - name: Run all tests
         if: github.event_name == 'schedule'
         shell: bash -l {0}
-        run: pytest -m release
+        run: pytest --all-marks
