@@ -85,24 +85,23 @@ class TestDatasetIntegration:
             assert len(status['mds']) == 2
 
             # Check project entry
-            project_status = ds.get_status(project_dir.name)
+            project_status = ds.get_status(project_dir)
 
             assert project_status is not None
-            assert project_status['rel_path'] == project_dir.name
             assert project_status['state'] == State.DONE.value
             assert project_status['message'] == 'Done!'
             assert project_status['num_mds'] == 2
 
             # Check MD entries
-            md1_status = ds.get_status(project_dir.name, md_dir='replica_1')
+            md1_status = ds.get_status(project_dir/'replica_1')
             assert md1_status is not None
-            assert md1_status['md_dir'] == 'replica_1'
+            assert 'replica_1' in md1_status['abs_path']
             assert md1_status['state'] == State.DONE.value
             assert md1_status['message'] == 'Done!'
 
-            md2_status = ds.get_status(project_dir.name, md_dir='replica_2')
+            md2_status = ds.get_status(project_dir/'replica_2')
             assert md2_status is not None
-            assert md2_status['md_dir'] == 'replica_2'
+            assert 'replica_2' in md2_status['abs_path']
             assert md2_status['state'] == State.DONE.value
             assert md2_status['message'] == 'Done!'
 
@@ -124,16 +123,16 @@ class TestDatasetIntegration:
                 ds = Dataset(db_path)
 
                 # Check MD state
-                md_status = ds.get_status(project_dir.name, md_dir=md.directory)
+                md_status = ds.get_status(project_dir/md.directory)
                 if md_status:
                     states_seen[f'md{1 if md.directory == "replica_1" else 2}'].append(md_status['state'])
                     # Should be RUNNING during execution
                     assert md_status['state'] == State.RUNNING.value
-                    assert md_status['message'] == 'Running workflow'
+                    assert md_status['message'] == 'Running workflow...'
 
                 # Also check project state on first MD
                 if md.directory == 'replica_1':
-                    project_status = ds.get_status(project_dir.name)
+                    project_status = ds.get_status(project_dir)
                     if project_status:
                         # If we are running the MD tasks, the project tasks have finished
                         states_seen['project'].append(project_status['state'])
@@ -150,13 +149,13 @@ class TestDatasetIntegration:
             # After workflow completes, check final states are DONE
             ds = Dataset(db_path)
 
-            project_status = ds.get_status(project_dir.name)
+            project_status = ds.get_status(project_dir)
             assert project_status['state'] == State.DONE.value
 
-            md1_status = ds.get_status(project_dir.name, md_dir='replica_1')
+            md1_status = ds.get_status(project_dir/'replica_1')
             assert md1_status['state'] == State.DONE.value
 
-            md2_status = ds.get_status(project_dir.name, md_dir='replica_2')
+            md2_status = ds.get_status(project_dir/'replica_2')
             assert md2_status['state'] == State.DONE.value
 
         finally:
@@ -181,20 +180,19 @@ class TestDatasetIntegration:
             # Check final states
             ds = Dataset(db_path)
             # Check project entry
-            project_status = ds.get_status(project_dir.name)
+            project_status = ds.get_status(project_dir)
 
             assert project_status is not None
-            assert project_status['rel_path'] == project_dir.name
             assert project_status['state'] == State.DONE.value
 
             # First MD should be ERROR
-            md1_status = ds.get_status(project_dir.name, md_dir='replica_1')
+            md1_status = ds.get_status(project_dir/'replica_1')
             assert md1_status['state'] == State.ERROR.value
             assert 'TestFailure' in md1_status['message']
             assert 'Simulated error in replica 1' in md1_status['message']
 
             # Second MD should be DONE (keep_going=False)
-            md2_status = ds.get_status(project_dir.name, md_dir='replica_2')
+            md2_status = ds.get_status(project_dir/'replica_2')
             assert md2_status is None
 
         finally:

@@ -1,4 +1,7 @@
 from mddb_workflow.utils.auxiliar import load_yaml, is_glob, warn
+from mddb_workflow.utils.cache import Cache
+from mddb_workflow.utils.file import File
+from mddb_workflow.utils.constants import CACHE_FILENAME
 from mddb_workflow.utils.type_hints import *
 import pandas as pd
 import subprocess
@@ -8,22 +11,24 @@ import os
 import sqlite3
 from pathlib import Path
 from enum import Enum
+import importlib.util
 
 
 class State(Enum):
     """Enumeration of possible workflow states."""
-    NOT_RUN = 'not_run'
+    NEW = 'new'
     RUNNING = 'running'
-    DONE = 'done'
     ERROR = 'error'
+    DONE = 'done'
+    UPLOADED = 'uploaded'  # TODO: implement functionality in the loader
 
 
 class Dataset:
     """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
     # TODO: log_file, err_file, group_id
     common_columns = ['state', 'message', 'last_modified']
-    project_columns = ['rel_path', 'num_mds'] + common_columns
-    md_columns = ['project_rel_path', 'md_dir'] + common_columns
+    project_columns = ['uuid', 'abs_path', 'num_mds'] + common_columns
+    md_columns = ['uuid', 'project_uuid', 'abs_path'] + common_columns
 
     def __init__(self, dataset_path: Optional[str] = None):
         """Initialize the Dataset object and connect to SQLite DB.
@@ -34,7 +39,8 @@ class Dataset:
         """
         if dataset_path is None:
             raise ValueError("dataset_path must be provided")
-        self.root_path = Path(dataset_path).parent.resolve()
+        self.dataset_path = Path(dataset_path).resolve()
+        self.root_path = self.dataset_path.parent
         self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
         # Enable foreign key constraints (disabled by default in SQLite)
         self.conn.execute("PRAGMA foreign_keys = ON")
@@ -46,8 +52,8 @@ class Dataset:
         # Create projects table
         cur.execute('''
             CREATE TABLE IF NOT EXISTS projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                rel_path TEXT UNIQUE NOT NULL,
+                uuid TEXT PRIMARY KEY NOT NULL,
+                abs_path TEXT UNIQUE NOT NULL,
                 num_mds INTEGER DEFAULT 0,
                 state TEXT,
                 message TEXT,
@@ -55,18 +61,17 @@ class Dataset:
             )
         ''')
         # Create mds table
-        # MDs are linked to projects via project_rel_path foreign key
+        # MDs are linked to projects via project_uuid foreign key
         # ON DELETE CASCADE ensures MDs are deleted when project is deleted
         cur.execute('''
             CREATE TABLE IF NOT EXISTS mds (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_rel_path TEXT NOT NULL,
-                md_dir TEXT NOT NULL,
+                uuid TEXT PRIMARY KEY NOT NULL,
+                project_uuid TEXT NOT NULL,
+                abs_path TEXT UNIQUE NOT NULL,
                 state TEXT,
                 message TEXT,
                 last_modified TEXT,
-                UNIQUE(project_rel_path, md_dir),
-                FOREIGN KEY (project_rel_path) REFERENCES projects(rel_path) ON DELETE CASCADE
+                FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE
             )
         ''')
 
@@ -78,7 +83,7 @@ class Dataset:
             BEGIN
                 UPDATE projects
                 SET num_mds = num_mds + 1
-                WHERE rel_path = NEW.project_rel_path;
+                WHERE uuid = NEW.project_uuid;
             END
         ''')
 
@@ -89,169 +94,335 @@ class Dataset:
             BEGIN
                 UPDATE projects
                 SET num_mds = num_mds - 1
-                WHERE rel_path = OLD.project_rel_path;
+                WHERE uuid = OLD.project_uuid;
             END
         ''')
 
         self.conn.commit()
 
-    def _resolve_directory_patterns(self, dir_patterns: list[str], root_path: Path = None) -> list[Path]:
-        """Resolve directory patterns (glob or absolute/relative paths)."""
-        root_path = self.root_path if root_path is None else root_path
-        directories = []
-        for dir_pattern in dir_patterns:
-            if is_glob(dir_pattern):
-                matched_dirs = list(root_path.glob(dir_pattern))
-                directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
-            else:
-                p = Path(dir_pattern)
-                p = p.absolute() if not p.is_absolute() else p
-                directories.append(p)
-        return directories
+    def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
+        """Read UUID and project_uuid from cache file in the given directory."""
+        directory = Path(directory).resolve()
+        if not directory.exists():
+            raise ValueError(f"Directory {directory} does not exist.")
+        cache_file = directory / CACHE_FILENAME
+        if not cache_file.exists() and not make_uuid:
+            return None, None
+        cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
+        uuid = cache.retrieve('uuid')
+        project_uuid = cache.retrieve('project_uuid')
+        if not uuid:
+            raise ValueError(f"No 'uuid' found in cache file '{cache_file}'")
+        return uuid, project_uuid
 
-    def _type_check_dir_list(self, dir_list: list[str] | str) -> list[str]:
-        """Ensure the input is a list of strings."""
-        if isinstance(dir_list, str):
-            dir_list = [dir_list]
-        return dir_list
+    def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False):
+        """Add a single project mentry to the database."""
+        uuid, _ = self._read_uuid_from_cache(directory, make_uuid=make_uuid)
+        abs_path = str(Path(directory).resolve())
+        if not self.get_uuid_status(uuid):
+            if verbose:
+                print(f"Adding project: {abs_path} (UUID: {uuid})")
+            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', abs_path=abs_path)
 
-    def add_entries(self,
-        paths_or_globs: list[str] | str,
-        ignore_dirs: list[str] | str = [],
-        md_dirs: list[str] | str = ["replica*"],
-        verbose: bool = False,
-    ):
-        """Scan all project directories and their MDs (replicas/subprojects) and register them in the database if not present.
-        This should be called once after creating the Dataset to ensure all projects and MDs are tracked in the DB.
-        """
-        # Normalize str inputs to lists
-        paths_or_globs = self._type_check_dir_list(paths_or_globs)
-        ignore_dirs = self._type_check_dir_list(ignore_dirs)
-        md_dirs = self._type_check_dir_list(md_dirs)
+    def add_md(self, directory: str, make_uuid: bool = False, verbose: bool = False):
+        """Add a single MD entry to the database."""
+        # Get the project UUID from the parent directory in case is not already cached
+        project_uuid, _ = self._read_uuid_from_cache(Path(directory).parent.as_posix())
+        if not project_uuid:
+            raise ValueError(f"Directory '{Path(directory).name}' is not inside a valid project directory")
+        # Get MD UUID and add the project_uuid
+        uuid, _ = self._read_uuid_from_cache(directory, make_uuid, project_uuid)
+        abs_path = str(Path(directory).resolve())
+        if not project_uuid:
+            raise ValueError(f"Directory '{directory}' does not appear to be an MD")
+        if not self.get_uuid_status(uuid, project_uuid):
+            if verbose:
+                print(f"Adding MD: {abs_path} (UUID: {uuid}, Project UUID: {project_uuid})")
+            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, abs_path=abs_path)
 
-        project_directories = self._resolve_directory_patterns(paths_or_globs)
-        ignore_dirs = [Path(d).resolve() for d in ignore_dirs]
-        for project_dir in project_directories:
-            if project_dir in ignore_dirs:
-                if verbose: print(f"Ignoring project: {project_dir}")
-                continue
-            rel_path = project_dir.relative_to(self.root_path).as_posix()
-            if not project_dir.exists():
-                if verbose:
-                    print(f"Warning: Project directory {project_dir} does not exist. Skipping.")
-                continue
-            # Count MDs in this project
-            project_md_dirs = [md for md in self._resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
-            num_mds = len(project_md_dirs)
-            # Add project row (num_mds will be set automatically by triggers when MDs are added)
-            if not self.get_status(rel_path):
-                if verbose:
-                    print(f"Adding project: {rel_path} (with {num_mds} MDs)")
-                self.update_status(rel_path, state=State.NOT_RUN, message='No information have been recorded yet.')
-            # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
-            for md_dir_path in project_md_dirs:
-                md_dir = md_dir_path.name
-                if not self.get_status(rel_path, md_dir=md_dir):
-                    if verbose:
-                        print(f"  Adding MD: {rel_path}/{md_dir}")
-                    self.update_status(rel_path, md_dir=md_dir, state=State.NOT_RUN, message='No information have been recorded yet.')
+    def get_uuid_status(self, uuid: str, project_uuid: str = None):
+        """Retrieve a project or MD's status from the database by UUID."""
+        cur = self.conn.cursor()
+        if project_uuid:
+            # This is an MD entry
+            cur.execute("SELECT * FROM mds WHERE uuid=?", (uuid,))
+            row = cur.fetchone()
+            if row:
+                columns = [desc[0] for desc in cur.description]
+                result = dict(zip(columns, row))
+                result['type'] = 'md'
+                return result
+        else:
+            # This is a project entry
+            cur.execute("SELECT * FROM projects WHERE uuid=?", (uuid,))
+            row = cur.fetchone()
+            if row:
+                columns = [desc[0] for desc in cur.description]
+                result = dict(zip(columns, row))
+                result['type'] = 'project'
+                return result
 
-    def remove_entries(self,
-        paths_or_globs: list[str] | str,
-        ignore_dirs: list[str] | str = [],
-        md_dirs: list[str] | str = None,
-        verbose: bool = False,
-    ):
-        """Remove specified project directories or MDs from the database.
-        If md_dirs is provided, only remove that MD (or those MDs) for each project.
-
-        Args:
-            paths_or_globs: List of directory paths or glob patterns
-            ignore_dirs: List of directories to ignore
-            md_dirs: directory, list or glob pattern of MD directories to remove.
-            verbose: Whether to print verbose output
-
-        """
-        # Normalize str inputs to lists
-        paths_or_globs = self._type_check_dir_list(paths_or_globs)
-        ignore_dirs = self._type_check_dir_list(ignore_dirs)
-        md_dirs = self._type_check_dir_list(md_dirs) if md_dirs else None
-
-        project_directories = self._resolve_directory_patterns(paths_or_globs)
-        for project_dir in project_directories:
-            if project_dir in ignore_dirs:
-                if verbose: print(f"Ignoring project: {project_dir}")
-                continue
-            rel_path = project_dir.relative_to(self.root_path).as_posix()
-            cur = self.conn.cursor()
-            if md_dirs:
-                project_md_dirs = self._resolve_directory_patterns(md_dirs, root_path=project_dir)
-                # Remove specific MDs (triggers will auto-decrement num_mds)
-                for md_dir in project_md_dirs:
-                    cur.execute("DELETE FROM mds WHERE project_rel_path=? AND md_dir=?", (rel_path, md_dir.name))
-                    if verbose and cur.rowcount > 0:
-                        print(f"Deleted MD '{md_dir.name}' from '{rel_path}'")
-            else:
-                # Remove entire project and all its MDs (CASCADE will handle MDs)
-                cur.execute("DELETE FROM projects WHERE rel_path=?", (rel_path,))
-                if verbose and cur.rowcount > 0:
-                    print(f"Deleted project '{rel_path}' and all its MDs")
-        self.conn.commit()
+    def get_status(self, directory: str | Path):
+        """Retrieve a project or MD's status from the database by directory path."""
+        if isinstance(directory, Path):
+            directory = directory.resolve().as_posix()
+        uuid, project_uuid = self._read_uuid_from_cache(directory)
+        return self.get_uuid_status(uuid, project_uuid)
 
     def update_status(self,
-        rel_path: str,
+        uuid: str,
         state: State | str,
         message: str,
-        md_dir: str = None,
+        project_uuid: str = None,
+        abs_path: str = None,
     ):
-        """Update or insert a project or MD's status in the database."""
+        """Update or insert a project or MD's status in the database.
+
+        Args:
+            uuid: UUID of the project or MD
+            state: State enum or string
+            message: Status message
+            project_uuid: If provided, this is an MD entry (requires abs_path)
+            abs_path: Absolute path to the directory (required for new entries)
+
+        """
         cur = self.conn.cursor()
         if isinstance(state, State):
             state = state.value
         last_modified = time.strftime("%H:%M:%S %d-%m-%Y", time.localtime())
 
-        if md_dir is not None:
+        if project_uuid:
+            # This is an MD entry
+            if abs_path is None:
+                # Try to get existing abs_path
+                existing = self.get_uuid_status(uuid)
+                if existing:
+                    abs_path = existing['abs_path']
+                else:
+                    raise ValueError("abs_path is required for new MD entries")
+
             cur.execute('''
-                INSERT INTO mds (project_rel_path, md_dir, state, message, last_modified)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(project_rel_path, md_dir) DO UPDATE SET
+                INSERT INTO mds (uuid, project_uuid, abs_path, state, message, last_modified)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(uuid) DO UPDATE SET
                     state=excluded.state,
                     message=excluded.message,
-                    last_modified=excluded.last_modified
-            ''', (rel_path, md_dir, state, message, last_modified))
+                    last_modified=excluded.last_modified,
+                    abs_path=excluded.abs_path
+            ''', (uuid, project_uuid, abs_path, state, message, last_modified))
         else:
+            # This is a project entry
+            if abs_path is None:
+                # Try to get existing abs_path
+                existing = self.get_uuid_status(uuid)
+                if existing:
+                    abs_path = existing['abs_path']
+                else:
+                    raise ValueError("abs_path is required for new project entries")
+
             cur.execute('''
-                INSERT INTO projects (rel_path, state, message, last_modified, num_mds)
-                VALUES (?, ?, ?, ?, 0)
-                ON CONFLICT(rel_path) DO UPDATE SET
+                INSERT INTO projects (uuid, abs_path, state, message, last_modified, num_mds)
+                VALUES (?, ?, ?, ?, ?, 0)
+                ON CONFLICT(uuid) DO UPDATE SET
                     state=excluded.state,
                     message=excluded.message,
-                    last_modified=excluded.last_modified
-            ''', (rel_path, state, message, last_modified))
+                    last_modified=excluded.last_modified,
+                    abs_path=excluded.abs_path
+            ''', (uuid, abs_path, state, message, last_modified))
         self.conn.commit()
 
-    def get_status(self, rel_path: str, md_dir: str = None):
-        """Retrieve a project's status from the database."""
+    def remove_entry(self, directory: str | Path, verbose: bool = False):
+        """Remove a single project or MD entry from the database by UUID."""
+        if isinstance(directory, Path):
+            directory = directory.resolve().as_posix()
+        uuid, project_uuid = self._read_uuid_from_cache(directory)
         cur = self.conn.cursor()
-        if md_dir is not None:
-            cur.execute("SELECT * FROM mds WHERE project_rel_path=? AND md_dir=?", (rel_path, md_dir))
+        if project_uuid:
+            # Remove from MDs
+            cur.execute("DELETE FROM mds WHERE uuid=?", (uuid,))
         else:
-            cur.execute("SELECT * FROM projects WHERE rel_path=?", (rel_path,))
-        row = cur.fetchone()
-        if row:
-            columns = [desc[0] for desc in cur.description]
-            return dict(zip(columns, row))
-        return None
+            # Remove from projects
+            cur.execute("DELETE FROM projects WHERE uuid=?", (uuid,))
+        if verbose:
+            if cur.rowcount > 0:
+                print(f"Deleted {'MD' if project_uuid else 'project'} {directory} with UUID '{uuid}'")
+            else:
+                breakpoint()
+                print(f"No entry found for '{directory}'")
+        self.conn.commit()
+
+    def add_entries(self,
+        paths_or_globs: list[str] | str,
+        ignore_dirs: list[str] | str = [],
+        md_dirs: list[str] | str = [],
+        verbose: bool = True,
+    ):
+        """Scan all project directories and their MDs (replicas/subprojects) and register them in the database if not present.
+        This should be called once after creating the Dataset to ensure all projects and MDs are tracked in the DB.
+        """
+        # Normalize str inputs to lists
+        paths_or_globs = _type_check_dir_list(paths_or_globs)
+        ignore_dirs = _type_check_dir_list(ignore_dirs)
+        md_dirs = _type_check_dir_list(md_dirs)
+
+        project_directories = _resolve_directory_patterns(paths_or_globs)
+        ignore_dirs = _resolve_directory_patterns(ignore_dirs)
+        for project_dir in project_directories:
+            if project_dir in ignore_dirs:
+                if verbose: print(f"Ignoring project: {project_dir}")
+                continue
+            if not project_dir.exists():
+                if verbose: print(f"Warning: Project directory {project_dir} does not exist. Skipping.")
+                continue
+            # Add project row (num_mds will be set automatically by triggers when MDs are added)
+            self.add_project(project_dir, make_uuid=True, verbose=verbose)
+            # Count MDs in this project
+            project_md_dirs = [md for md in _resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
+            # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
+            for md_dir_path in project_md_dirs:
+                self.add_md(md_dir_path, make_uuid=True, verbose=verbose)
+
+    def generate_inputs_yaml(self,
+            inputs_template_path: str,
+            ignore_dirs: list[str] | str = [],
+            input_generator: Optional[Callable | str] = None,
+            overwrite: bool = False,
+            inputs_filename: str = 'inputs.yaml'
+        ):
+        """Generate an inputs.yaml file for the project directory based on a Jinja2 template.
+
+        Args:
+            inputs_template_path (str):
+                The file path to the Jinja2 template file that will be used to generate
+                the inputs YAML files.
+            ignore_dirs (list[str] | str):
+                A list of directory names or glob patterns to be ignored when generating inputs.yaml files.
+            input_generator (callable):
+                A callable function intended for generating input values or a string path
+                to a generator file with a input_generator(project_dir) function.
+                Accepts the project directory name (DIR) as an argument and returns a
+                dictionary of the key-value pairs to be used in the template.
+            overwrite (bool):
+                Whether to overwrite existing inputs.yaml files.
+            inputs_filename (str):
+                The name of the inputs YAML file to be generated.
+
+        """
+        # Normalize str inputs to lists
+        ignore_dirs = _type_check_dir_list(ignore_dirs)
+        ignore_dirs = _resolve_directory_patterns(ignore_dirs)
+        project_directories = [st[1] for st in self.status['projects']]
+
+        # Load the template
+        with open(inputs_template_path, 'r') as f:
+            template_str = f.read()
+
+        # Generate input values using the provided generator function if any
+        if input_generator is str:
+            print(f"Loading input generator from file: {input_generator}")
+            # Load the generator module
+            spec = importlib.util.spec_from_file_location("generator", input_generator)
+            generator_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(generator_module)
+            # Call the input_generator function
+            if not hasattr(generator_module, 'input_generator'):
+                raise ValueError(f"Generator file '{input_generator}' must define a input_generator(project_dir) function")
+
+            input_generator = generator_module.input_generator
+
+        # Generate inputs.yaml for each project directory
+        for project_dir in project_directories:
+            template = jinja2.Template(template_str)
+            inputs_yaml_path = os.path.join(project_dir, inputs_filename)
+            if os.path.exists(inputs_yaml_path) and not overwrite:
+                print(f"{inputs_yaml_path} already exists and overwrite is set to False. Skipping.")
+                return
+            if input_generator:
+                # If generator returned None, use empty dict
+                generated_input = input_generator(project_dir) or {}
+            # Render the template with project defaults
+            rendered_yaml = template.render(DIR=Path(project_dir).name, DATASET=str(self.dataset_path), **generated_input)
+            # Write the rendered YAML to inputs.yaml
+            with open(inputs_yaml_path, 'w') as f:
+                f.write(rendered_yaml)
+
+    def scan(self,
+        root_dir: str = None,
+        ignore_dirs: list[str] = [],
+        verbose: bool = False,
+    ):
+        """Scan directory tree for projects and MDs by finding CACHE_FILENAME files.
+
+        This function walks the directory tree starting from root_dir (or self.root_path),
+        looks for CACHE_FILENAME files, reads their UUIDs and project_uuids, and adds entries to the database.
+        Projects are identified by the absence of project_uuid in their cache.
+        MDs are identified by the presence of project_uuid in their cache.
+
+        Args:
+            root_dir: Root directory to scan (defaults to self.root_path)
+            ignore_dirs: List of directory names to ignore
+            verbose: Whether to print verbose output
+
+        """
+        root_path = Path(root_dir) if root_dir else self.root_path
+        root_dir = root_path.resolve()
+        ignore_dirs_set = set(ignore_dirs)
+
+        # Separate projects and MDs based on presence of project_uuid in cache
+        projects = {}  # {abs_path: uuid}
+        mds = {}  # {abs_path: (uuid, project_uuid)}
+
+        # Walk directory tree and find all cache files
+        for dirpath, dirnames, filenames in os.walk(root_dir):
+            # Skip ignored directories
+            dirnames[:] = [d for d in dirnames if d not in ignore_dirs_set]
+
+            if CACHE_FILENAME in filenames:
+                dir_path = Path(dirpath)
+                uuid, project_uuid = self._read_uuid_from_cache(dir_path)
+
+                if not uuid:
+                    if verbose:
+                        print(f"Warning: No UUID found in {dir_path}. Skipping.")
+                    continue
+
+                abs_path = str(dir_path)
+                if project_uuid:
+                    # This is an MD (has project_uuid in cache)
+                    mds[abs_path] = (uuid, project_uuid)
+                else:
+                    # This is a Project (no project_uuid in cache)
+                    projects[abs_path] = uuid
+
+        # Add all projects first
+        for abs_path, uuid in projects.items():
+            display_name = abs_path.split('/')[-1]
+            if not self.get_uuid_status(uuid):
+                if verbose:
+                    print(f"Adding project: {display_name} (UUID: {uuid})")
+                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', abs_path=abs_path)
+            elif verbose:
+                print(f"Project already exists: {display_name} (UUID: {uuid})")
+
+        # Then add all MDs
+        for abs_path, (uuid, project_uuid) in mds.items():
+            display_name = '/'.join(abs_path.split('/')[-2:])
+            if not self.get_uuid_status(uuid, project_uuid):
+                if verbose:
+                    print(f"  Adding MD: {display_name} (UUID: {uuid}, Project UUID: {project_uuid})")
+                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, abs_path=abs_path)
+            elif verbose:
+                print(f"  MD already exists: {display_name} (UUID: {uuid})")
 
     @property
     def status(self) -> dict:
         """Retrieve all project and MD status from the SQLite database as a dictionary with 'projects' and 'mds' keys."""
         cur = self.conn.cursor()
         # Get all projects
-        cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY rel_path")
+        cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY abs_path")
         projects = cur.fetchall()
         # Get all MDs
-        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY project_rel_path, md_dir")
+        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY project_uuid, abs_path")
         mds = cur.fetchall()
         return {'projects': projects, 'mds': mds}
 
@@ -266,41 +437,104 @@ class Dataset:
         status = self.status
         # Create DataFrames
         df_projects = pd.DataFrame(status['projects'], columns=self.project_columns)
-        df_projects.set_index('rel_path', inplace=True)
+        df_projects.set_index('uuid', inplace=True)
         # Create MDs DataFrame
         df_mds = pd.DataFrame(status['mds'], columns=self.md_columns)
-        df_mds.set_index(['project_rel_path', 'md_dir'], inplace=True)
+        df_mds.set_index('uuid', inplace=True)
         return {
             'projects': df_projects,
             'mds': df_mds
         }
 
-    @property
-    def dataframe(self) -> 'pd.DataFrame':
+    def get_dataframe(self, uuid_length=None, root_path=None, numeric_index=False) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
         Adds a 'scope' column to indicate if the row is from a project or an MD.
+
+        Args:
+            uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
+            root_path (str, optional): If provided, show the absolute paths relative to this root path.
+            numeric_index (bool, optional): If True, replace uuid and project_uuid with plain numeric indices.
+
         """
         dfs = self.dataframes
         df_projects = dfs['projects'].reset_index()
         df_mds = dfs['mds'].reset_index()
 
         # Set missing columns for alignment
-        df_projects['md_dir'] = ''
+        df_projects['project_uuid'] = ''
         df_projects['scope'] = 'Project'
         df_mds['num_mds'] = ''
         df_mds['scope'] = 'MD'
-        df_mds = df_mds.rename(columns={'project_rel_path': 'rel_path'})
 
-        # Concatenate, sort, and set multi-index
+        # Concatenate, sort, and set index
         df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
-        df_joined = df_joined.sort_values(['rel_path', 'md_dir'], na_position='first')
-        df_joined.set_index(['rel_path', 'md_dir'], inplace=True)
+        df_joined = df_joined.sort_values(['abs_path'], na_position='first')
+        df_joined.set_index('uuid', inplace=True)
+
+        # Optionally make abs_path relative to root_path
+        if root_path is not None:
+            root_path = os.path.abspath(root_path)
+            df_joined['abs_path'] = df_joined['abs_path'].apply(
+                lambda x: os.path.relpath(x, root_path)
+            )
+            df_joined.rename(columns={'abs_path': 'rel_path'}, inplace=True)
+
+        # Optionally truncate uuid and project_uuid columns for display
+        if uuid_length is not None and uuid_length > 0:
+            # Truncate index (uuid)
+            df_joined.index = df_joined.index.map(lambda x: x[:uuid_length] if isinstance(x, str) else x)
+            # Truncate project_uuid column if present
+            if 'project_uuid' in df_joined.columns:
+                df_joined['project_uuid'] = df_joined['project_uuid'].apply(
+                    lambda x: x[:uuid_length] if isinstance(x, str) and x else x
+                )
+
+        # Optionally convert uuid and project_uuid to numeric indices
+        if numeric_index:
+            # Create a mapping from uuid to numeric index
+            uuid_list = list(df_joined.index.unique())
+            uuid_map = {uuid: idx for idx, uuid in enumerate(uuid_list)}
+            # Replace index
+            df_joined.index = df_joined.index.map(lambda x: uuid_map.get(x, -1))
+            # Replace project_uuid column if present and not empty
+            if 'project_uuid' in df_joined.columns:
+                df_joined['project_uuid'] = df_joined['project_uuid'].apply(
+                    lambda x: uuid_map.get(x, '') if x in uuid_map else ''
+                )
+
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
-        cols.insert(0, cols.pop(cols.index('scope')))
+        cols.insert(0, cols.pop(cols.index('project_uuid')))
+        cols.insert(1, cols.pop(cols.index('scope')))
         df_joined = df_joined[cols]
         return df_joined
+
+    @property
+    def dataframe(self) -> 'pd.DataFrame':
+        """Retrieve the joined DataFrame view of projects and MDs."""
+        return self.get_dataframe(numeric_index=True, root_path=self.root_path)
+
+
+def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path('.')) -> list[Path]:
+    """Resolve directory patterns (glob or absolute/relative paths)."""
+    directories = []
+    for dir_pattern in dir_patterns:
+        if is_glob(dir_pattern):
+            matched_dirs = list(root_path.glob(dir_pattern))
+            directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
+        else:
+            p = Path(dir_pattern)
+            p = p.absolute() if not p.is_absolute() else p
+            directories.append(p)
+    return directories
+
+
+def _type_check_dir_list(dir_list: list[str] | str) -> list[str]:
+    """Ensure the input is a list of strings."""
+    if isinstance(dir_list, str):
+        dir_list = [dir_list]
+    return dir_list
 
 
 class OldDataset:
@@ -381,44 +615,6 @@ class OldDataset:
             'err_file_link': 'err_file'
         })
         return df_display.to_html(escape=False)
-
-    def generate_inputs_yaml(self,
-        inputs_template_path: str,
-        overwrite: bool = False,
-        input_generator: Optional[Callable] = None,
-    ):
-        """Generate an inputs.yaml file in each project directory based on the dataset configuration.
-
-        Args:
-            inputs_template_path (str): The file path to the Jinja2 template file that will be
-                used to generate the inputs YAML files.
-            input_generator (callable): A callable function intended for generating input values.
-                Currently, it is called with the project directory name (DIR) as its argument
-            overwrite (bool): Whether to overwrite existing inputs.yaml files. Default is False.
-
-        """
-        # Load the template
-        with open(inputs_template_path, 'r') as f:
-            template_str = f.read()
-
-        template = jinja2.Template(template_str)
-        skipped = 0
-        generated = 0
-        for project_dir in self.project_directories:
-            inputs_yaml_path = os.path.join(project_dir, 'inputs.yaml')
-            if os.path.exists(inputs_yaml_path) and not overwrite:
-                skipped += 1
-                continue
-            generated += 1
-            # Get the directory name
-            DIR = os.path.basename(os.path.normpath(project_dir))
-            # Render the template with project defaults
-            generated_input = input_generator(DIR) if input_generator else {}
-            rendered_yaml = template.render(DIR=DIR, **generated_input)
-            # Write the rendered YAML to inputs.yaml
-            with open(inputs_yaml_path, 'w') as f:
-                f.write(rendered_yaml)
-        print(f"Generated {generated} inputs.yaml files. Skipped {skipped} existing files.")
 
     def launch_workflow(self,
         include_groups: list[int] = [],

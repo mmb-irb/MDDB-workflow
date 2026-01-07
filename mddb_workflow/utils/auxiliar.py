@@ -696,3 +696,9 @@ def get_git_version() -> str:
     git_command = f"git -C {__path__[0]} describe"
     process = run(git_command, shell=True, stdout=PIPE)
     return process.stdout.decode().replace('\n', '') or __version__
+
+
+def natural_sort_key(s):
+    """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)."""
+    return [int(text) if text.isdigit() else text.lower()
+            for text in re.split('([0-9]+)', s)]

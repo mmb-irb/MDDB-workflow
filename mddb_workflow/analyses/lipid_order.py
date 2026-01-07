@@ -1,5 +1,5 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.utils.auxiliar import save_json, load_json
+from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key
 from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME
 from mddb_workflow.utils.type_hints import *
 import numpy as np
@@ -175,13 +175,6 @@ def find_CH_bonds(universe, lipid_resindices, atom_names):
         ch_pairs[name]['C'] = np.array(ch_pairs[name]['C'])
         ch_pairs[name]['H'] = np.array(ch_pairs[name]['H'])
     return ch_pairs
-
-
-def natural_sort_key(s):
-    """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)."""
-    import re
-    return [int(text) if text.isdigit() else text.lower()
-            for text in re.split('([0-9]+)', s)]
 
 
 def plot_lipid_order(data_filepath: str):

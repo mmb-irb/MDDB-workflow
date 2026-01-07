@@ -1,7 +1,7 @@
 # This is the starter script
 
 from os import walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath, normpath, split, basename
+from os.path import exists, isdir, isabs, relpath, normpath, split, basename, abspath
 import sys
 import io
 import re
@@ -179,7 +179,7 @@ class MD:
         if cache_file.path == self.project.cache.file.path:
             self.cache = self.project.cache
         else:
-            self.cache = Cache(cache_file)
+            self.cache = Cache(cache_file, self.project.cache.retrieve('uuid'))
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
@@ -1781,6 +1781,7 @@ class Project:
     input_customs = inputs_property('customs', "Input custom representations (read only)")
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
     input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
+    input_dataset = inputs_property('dataset_path', "Dataset storage file. (read only)")
     # Additional topic-specific inputs
     input_cv19_unit = inputs_property('cv19_unit', "Input Covid-19 Unit (read only)")
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
@@ -2299,15 +2300,16 @@ class ErrorHandling:
         self.workflow = workflow
         self.dataset: Dataset = getattr(workflow, 'dataset', None)
         self.scope = 'Project' if isinstance(wf_class, Project) else 'MD'
-        self.md_dir = wf_class.directory if isinstance(wf_class, MD) else None
+        self.uuids = {'uuid': wf_class.cache.retrieve('uuid'),
+                      'project_uuid': wf_class.cache.retrieve('project_uuid')}
         # Make the update function with partial so we do not have to repeat parameters
         if self.dataset:
-            if not self.dataset.get_status(self.workflow.rel_path, self.md_dir):
-                # If no status is available, add a new entry
-                self.dataset.add_entries(self.workflow.rel_path, md_dirs=self.md_dir)
             self.update_state = partial(self.dataset.update_status,
-                                        self.workflow.rel_path,
-                                        md_dir=self.md_dir)
+                                        abs_path=abspath(wf_class.directory),
+                                        **self.uuids)
+            if not self.dataset.get_uuid_status(**self.uuids):
+                # If no status is available, add a new entry
+                self.update_state(state=State.NEW, message='No information have been recorded yet.')
         else:
             # If no dataset is available, use a null function
             self.update_state = lambda *args, **kwargs: None
@@ -2315,7 +2317,7 @@ class ErrorHandling:
     def __enter__(self):
         """Enter the context manager."""
         # Update project status to running on entering the context.
-        self.update_state(state=State.RUNNING, message='Running workflow')
+        self.update_state(state=State.RUNNING, message='Running workflow...')
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -2366,6 +2368,9 @@ class WorkflowHandler:
             md.overwritables = tasker.get_md_overwritables()
         self.project = project
         self.tasker = tasker
+        # If dataset is not already set, set it from project inputs
+        if not hasattr(self, 'dataset'):
+            self.dataset = Dataset(project.input_dataset)
 
     def launch(self):
         """Launch the workflow execution."""

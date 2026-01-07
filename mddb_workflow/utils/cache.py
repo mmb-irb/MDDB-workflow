@@ -2,12 +2,13 @@ from mddb_workflow.utils.auxiliar import load_json, save_json
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_inchi_keys import InChIKeyData
+import uuid
 
 
 class Cache:
     """The cache is used to store data to be reused between different runs."""
 
-    def __init__(self, cache_file: 'File'):
+    def __init__(self, cache_file: 'File', project_uuid: str = None):
         """Initialize the cache."""
         # Save the previous cache file
         self.file = cache_file
@@ -17,6 +18,12 @@ class Cache:
         self.data = {}
         # Load data from the cache file, if it already exists
         self.load()
+        if not self.data.get('uuid'):
+            # Create a unique id for the Project/MD
+            self.data['uuid'] = str(uuid.uuid4())
+        if project_uuid is not None:
+            # Add Project uuid for this MD
+            self.data['project_uuid'] = project_uuid
         # Save the entry for the first time
         self.save()
 
@@ -37,7 +44,9 @@ class Cache:
 
     def reset(self):
         """Reset the cache. This is called when some input files are modified."""
-        self.data = {}
+        # Preserve 'uuid' and 'project_uuid' if present
+        keep_keys = ['uuid', 'project_uuid']
+        self.data = {k: self.data[k] for k in keep_keys if k in self.data}
         self.save()
 
     def load(self):
