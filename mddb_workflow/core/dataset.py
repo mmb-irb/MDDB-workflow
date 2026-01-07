@@ -31,15 +31,13 @@ class Dataset:
     project_columns = ['uuid', 'abs_path', 'num_mds'] + common_columns
     md_columns = ['uuid', 'project_uuid', 'abs_path'] + common_columns
 
-    def __init__(self, dataset_path: Optional[str] = None):
+    def __init__(self, dataset_path: str):
         """Initialize the Dataset object and connect to SQLite DB.
 
         Args:
             dataset_path (str): Path to the root directory of the dataset.
 
         """
-        if dataset_path is None:
-            raise ValueError("dataset_path must be provided")
         self.dataset_path = Path(dataset_path).resolve()
         self.root_path = self.dataset_path.parent
         self.conn = sqlite3.connect(dataset_path, check_same_thread=False)

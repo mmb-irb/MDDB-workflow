@@ -2348,7 +2348,6 @@ class WorkflowHandler:
         self.working_directory = working_directory
         if dataset_path:
             self.dataset = Dataset(dataset_path)
-            self.rel_path = relpath(working_directory, self.dataset.root_path)
         self.keep_going = keep_going
         self.md_errors: list[tuple[str, str]] = []
 
@@ -2368,8 +2367,8 @@ class WorkflowHandler:
             md.overwritables = tasker.get_md_overwritables()
         self.project = project
         self.tasker = tasker
-        # If dataset is not already set, set it from project inputs
-        if not hasattr(self, 'dataset'):
+        # If dataset not set from CLI arguments, try from project inputs
+        if not hasattr(self, 'dataset') and project.input_dataset:
             self.dataset = Dataset(project.input_dataset)
 
     def launch(self):
