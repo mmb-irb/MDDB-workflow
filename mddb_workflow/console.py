@@ -347,6 +347,13 @@ def main():
                 rich_display_dataframe(df, title="MDDB Dataset")
             except ImportError:
                 print(df)
+        elif args.dataset_subcommand == 'run':
+            dataset.launch_workflow(
+                n_jobs=args.n_jobs,
+                slurm=args.slurm,
+                job_template=args.job_template,
+                debug=args.debug
+            )
 
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
@@ -694,13 +701,11 @@ dataset_show.add_argument("dataset_path", help="Path to the dataset storage file
 dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default=None, type=str)
 
 # # Dataset run subcommand
-# dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
-# help="Run the workflow for a dataset of MDDB projects.",
-#     parents=[common_parser])
-# dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
-# dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, default=[], help="List of group IDs to be run.")
-# dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
-# dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
-# dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
-# dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
-# dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")
+dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
+help="Run the workflow for a dataset of MDDB projects.",
+    parents=[common_parser])
+dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
+dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
+dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
+dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")

@@ -8,6 +8,7 @@ import subprocess
 import jinja2
 import time
 import os
+import glob
 import sqlite3
 from pathlib import Path
 from enum import Enum
@@ -311,7 +312,6 @@ class Dataset:
         # Normalize str inputs to lists
         ignore_dirs = _type_check_dir_list(ignore_dirs)
         ignore_dirs = _resolve_directory_patterns(ignore_dirs)
-        project_directories = [st[1] for st in self.status['projects']]
 
         # Load the template
         with open(inputs_template_path, 'r') as f:
@@ -331,12 +331,12 @@ class Dataset:
             input_generator = generator_module.input_generator
 
         # Generate inputs.yaml for each project directory
-        for project_dir in project_directories:
+        for project_dir in self.project_directories:
             template = jinja2.Template(template_str)
             inputs_yaml_path = os.path.join(project_dir, inputs_filename)
             if os.path.exists(inputs_yaml_path) and not overwrite:
                 print(f"{inputs_yaml_path} already exists and overwrite is set to False. Skipping.")
-                return
+                continue
             generated_input = {}
             if input_generator:
                 # If generator returned None, use empty dict
@@ -416,16 +416,25 @@ class Dataset:
                 print(f"  MD already exists: {display_name} (UUID: {uuid})")
 
     @property
-    def status(self) -> dict:
-        """Retrieve all project and MD status from the SQLite database as a dictionary with 'projects' and 'mds' keys."""
+    def projects_table(self) -> dict:
+        """Retrieve all project status from the SQLite database as a list of tuples."""
         cur = self.conn.cursor()
-        # Get all projects
         cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY abs_path")
         projects = cur.fetchall()
-        # Get all MDs
-        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY project_uuid, abs_path")
+        return projects
+
+    @property
+    def mds_table(self) -> dict:
+        """Retrieve all MD status from the SQLite database as a list of tuples."""
+        cur = self.conn.cursor()
+        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY abs_path")
         mds = cur.fetchall()
-        return {'projects': projects, 'mds': mds}
+        return mds
+
+    @property
+    def project_directories(self) -> list[str]:
+        """Retrieve all project directories from the database."""
+        return [st[1] for st in self.projects_table]
 
     @property
     def dataframes(self) -> dict:
@@ -435,12 +444,11 @@ class Dataset:
             dict: Dictionary with 'projects' and 'mds' keys, each containing a DataFrame.
 
         """
-        status = self.status
         # Create DataFrames
-        df_projects = pd.DataFrame(status['projects'], columns=self.project_columns)
+        df_projects = pd.DataFrame(self.projects_table, columns=self.project_columns)
         df_projects.set_index('uuid', inplace=True)
         # Create MDs DataFrame
-        df_mds = pd.DataFrame(status['mds'], columns=self.md_columns)
+        df_mds = pd.DataFrame(self.mds_table, columns=self.md_columns)
         df_mds.set_index('uuid', inplace=True)
         return {
             'projects': df_projects,
@@ -506,110 +514,7 @@ class Dataset:
         """Retrieve the joined DataFrame view of projects and MDs."""
         return self.get_dataframe(uuid_length=8, root_path=self.root_path)
 
-
-def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path('.')) -> list[Path]:
-    """Resolve directory patterns (glob or absolute/relative paths)."""
-    directories = []
-    for dir_pattern in dir_patterns:
-        if is_glob(dir_pattern):
-            matched_dirs = list(root_path.glob(dir_pattern))
-            directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
-        else:
-            p = Path(dir_pattern)
-            p = p.absolute() if not p.is_absolute() else p
-            directories.append(p)
-    return directories
-
-
-def _type_check_dir_list(dir_list: list[str] | str) -> list[str]:
-    """Ensure the input is a list of strings."""
-    if isinstance(dir_list, str):
-        dir_list = [dir_list]
-    return dir_list
-
-
-class OldDataset:
-    """Placeholder for the old Dataset class function that have to be migrated or removed."""
-
-    def show_groups(self, cmd=False):
-        """Display the groups of projects based on their status messages."""
-        if cmd:
-            print("Project groups based on status messages:\n")
-            status = self.status
-            grouped = status.groupby('group')
-            for group_id, group_df in grouped:
-                print(f"Group {group_id}:")
-                print(f"Message: {group_df['message'].iloc[0]}")
-                print("Projects:")
-                for rel_path in group_df.index:
-                    print(f"  - {rel_path}")
-                print()
-        else:
-            grouped = self.status.groupby('group').agg({
-                'message': 'first',
-                'state': 'count'
-            }).rename(columns={'state': 'count'})
-            return grouped
-
-    def status_with_links(self) -> pd.DataFrame:
-        """Return the status DataFrame with clickable log file links."""
-        self._status = None  # Force reload
-        df = self.status.copy()
-
-        # Create clickable links for log files
-        def make_out_link(row):
-            if row['log_file'] and row['state'] != 'not_run':
-                project_dir = os.path.join(self.root_path, row.name)
-                log_path = os.path.join(project_dir, row['log_file'])
-                # Create a file:// URL for local files
-                file_url = f"file://{log_path}"
-                return f'<a href="{file_url}" target="_blank">{row["log_file"].split("/")[-1]}</a>'
-            return row['log_file']
-
-        # Create clickable links for error log files
-        def make_error_link(row):
-            if row['err_file'] and row['state'] != 'not_run':
-                project_dir = os.path.join(self.root_path, row.name)
-                error_log_path = os.path.join(project_dir, row['err_file'])
-                # Create a file:// URL for local files
-                file_url = f"file://{error_log_path}"
-                return f'<a href="{file_url}" target="_blank">{row["err_file"].split("/")[-1]}</a>'
-            return row['err_file']
-
-        df['log_file_link'] = df.apply(make_out_link, axis=1)
-        df['err_file_link'] = df.apply(make_error_link, axis=1)
-        return df
-
-    def display_status_with_links(self):
-        """Display the status DataFrame with clickable links in Jupyter."""
-        from IPython.display import HTML, display
-
-        df = self.status_with_links()
-        # Drop the original log_file columns and rename the link columns
-        df_display = df.drop(['log_file', 'err_file'], axis=1)
-        df_display = df_display.rename(columns={
-            'log_file_link': 'log_file',
-            'err_file_link': 'err_file'
-        })
-
-        # Convert to HTML and display
-        html = df_display.to_html(escape=False)
-        display(HTML(html))
-
-    def _repr_html_(self):
-        """Return HTML representation for Jupyter notebooks."""
-        df = self.status_with_links()
-        # Drop the original log_file columns and rename the link columns
-        df_display = df.drop(['log_file', 'err_file'], axis=1)
-        df_display = df_display.rename(columns={
-            'log_file_link': 'log_file',
-            'err_file_link': 'err_file'
-        })
-        return df_display.to_html(escape=False)
-
     def launch_workflow(self,
-        include_groups: list[int] = [],
-        exclude_groups: list[int] = [],
         n_jobs: int = 0,
         pool_size: int = 1,
         slurm: bool = False,
@@ -618,10 +523,6 @@ class OldDataset:
         """Launch the workflow for each project directory in the dataset.
 
         Args:
-            include_groups (list[int]):
-                List of group IDs to be run.
-            exclude_groups (list[int]):
-                List of group IDs to be excluded.
             n_jobs (int):
                 Number of jobs to launch. If 0, all jobs are launched.
             pool_size (int):
@@ -631,19 +532,16 @@ class OldDataset:
             job_template (str):
                 Path to the bash script or SLURM job template file. You can use Jinja2
                 templating to customize the job script using the fields of
-                the input YAML and the columns of project status dataframe.
+                the input YAML, the project directory, and whether SLURM is used.
             debug (bool):
                 Only print the commands without executing them.
 
         """
-        # Include/exclude groups should not intersect
-        if include_groups and exclude_groups:
-            intersection = set(include_groups).intersection(set(exclude_groups))
-            if intersection:
-                raise ValueError(f"include_groups and exclude_groups intersect: {intersection}")
-
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
+        else:
+            with open(job_template, 'r') as f:
+                template_str = f.read()
 
         # Determine pool size for parallel execution
         pool_size = min(pool_size, os.cpu_count())
@@ -655,12 +553,7 @@ class OldDataset:
         n = 0
         for project_dir in self.project_directories:
             rel_path = os.path.relpath(project_dir, self.root_path)
-            project_status = self.status.loc[rel_path].to_dict()
-            project_status['rel_path'] = rel_path
-            # Check group inclusion/exclusion
-            if project_status['group'] in exclude_groups or \
-                (include_groups and project_status['group'] not in include_groups):
-                continue
+
             n += 1
             if n_jobs > 0 and n > n_jobs:
                 break
@@ -671,12 +564,9 @@ class OldDataset:
 
             inputs_config = load_yaml(inputs_yaml_path)
 
-            with open(job_template, 'r') as f:
-                template_str = f.read()
-
             template = jinja2.Template(template_str)
-            rendered_script = template.render(**inputs_config, **project_status,
-                                                DIR=os.path.basename(os.path.normpath(project_dir)),
+            rendered_script = template.render(**inputs_config,
+                                                DIR=Path(project_dir).name,
                                                 slurm=slurm)
 
             job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
@@ -780,3 +670,109 @@ class OldDataset:
                 time.sleep(1)  # Avoid busy waiting
 
         print(f"All {total} jobs completed.")
+
+
+def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path('.')) -> list[Path]:
+    """Resolve directory patterns (glob or absolute/relative paths)."""
+    directories = []
+    for dir_pattern in dir_patterns:
+        if is_glob(dir_pattern):
+            if Path(dir_pattern).is_absolute():
+                matched_dirs = [Path(p) for p in glob.glob(dir_pattern)]
+            else:
+                matched_dirs = list(root_path.glob(dir_pattern))
+            directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
+        else:
+            p = Path(dir_pattern)
+            p = p.absolute() if not p.is_absolute() else p
+            directories.append(p)
+    return directories
+
+
+def _type_check_dir_list(dir_list: list[str] | str) -> list[str]:
+    """Ensure the input is a list of strings."""
+    if isinstance(dir_list, str):
+        dir_list = [dir_list]
+    return dir_list
+
+
+class OldDataset:
+    """Placeholder for the old Dataset class function that have to be migrated or removed."""
+
+    def show_groups(self, cmd=False):
+        """Display the groups of projects based on their status messages."""
+        if cmd:
+            print("Project groups based on status messages:\n")
+            status = self.status
+            grouped = status.groupby('group')
+            for group_id, group_df in grouped:
+                print(f"Group {group_id}:")
+                print(f"Message: {group_df['message'].iloc[0]}")
+                print("Projects:")
+                for rel_path in group_df.index:
+                    print(f"  - {rel_path}")
+                print()
+        else:
+            grouped = self.status.groupby('group').agg({
+                'message': 'first',
+                'state': 'count'
+            }).rename(columns={'state': 'count'})
+            return grouped
+
+    def status_with_links(self) -> pd.DataFrame:
+        """Return the status DataFrame with clickable log file links."""
+        self._status = None  # Force reload
+        df = self.status.copy()
+
+        # Create clickable links for log files
+        def make_out_link(row):
+            if row['log_file'] and row['state'] != 'not_run':
+                project_dir = os.path.join(self.root_path, row.name)
+                log_path = os.path.join(project_dir, row['log_file'])
+                # Create a file:// URL for local files
+                file_url = f"file://{log_path}"
+                return f'<a href="{file_url}" target="_blank">{row["log_file"].split("/")[-1]}</a>'
+            return row['log_file']
+
+        # Create clickable links for error log files
+        def make_error_link(row):
+            if row['err_file'] and row['state'] != 'not_run':
+                project_dir = os.path.join(self.root_path, row.name)
+                error_log_path = os.path.join(project_dir, row['err_file'])
+                # Create a file:// URL for local files
+                file_url = f"file://{error_log_path}"
+                return f'<a href="{file_url}" target="_blank">{row["err_file"].split("/")[-1]}</a>'
+            return row['err_file']
+
+        df['log_file_link'] = df.apply(make_out_link, axis=1)
+        df['err_file_link'] = df.apply(make_error_link, axis=1)
+        return df
+
+    def display_status_with_links(self):
+        """Display the status DataFrame with clickable links in Jupyter."""
+        from IPython.display import HTML, display
+
+        df = self.status_with_links()
+        # Drop the original log_file columns and rename the link columns
+        df_display = df.drop(['log_file', 'err_file'], axis=1)
+        df_display = df_display.rename(columns={
+            'log_file_link': 'log_file',
+            'err_file_link': 'err_file'
+        })
+
+        # Convert to HTML and display
+        html = df_display.to_html(escape=False)
+        display(HTML(html))
+
+    def _repr_html_(self):
+        """Return HTML representation for Jupyter notebooks."""
+        df = self.status_with_links()
+        # Drop the original log_file columns and rename the link columns
+        df_display = df.drop(['log_file', 'err_file'], axis=1)
+        df_display = df_display.rename(columns={
+            'log_file_link': 'log_file',
+            'err_file_link': 'err_file'
+        })
+        return df_display.to_html(escape=False)
+
+    
