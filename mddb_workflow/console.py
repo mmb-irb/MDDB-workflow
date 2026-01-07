@@ -354,6 +354,8 @@ def main():
                 job_template=args.job_template,
                 debug=args.debug
             )
+        elif args.dataset_subcommand == 'scan':
+            dataset.scan(root_dir='.', verbose=True)
 
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
@@ -693,18 +695,24 @@ dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpForm
     help="Manage and process a dataset of MDDB projects.")
 dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
 
-# Dataset run subcommand
+# Dataset show subcommand
 dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
 help="Display information about a dataset of MDDB projects.",
     parents=[common_parser])
 dataset_show.add_argument("dataset_path", help="Path to the dataset storage file.")
 dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default=None, type=str)
 
+
+dataset_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter,
+help="Scan a directory and add all MDDB projects to a dataset storage file.",
+    parents=[common_parser])
+dataset_scan.add_argument("dataset_path", help="Path to the dataset storage file.")
+
 # # Dataset run subcommand
 dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
 help="Run the workflow for a dataset of MDDB projects.",
     parents=[common_parser])
-dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+dataset_run_parser.add_argument("dataset_path", help="Path to the dataset YAML file.")
 dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
 dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
 dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")

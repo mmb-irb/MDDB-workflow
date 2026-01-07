@@ -149,7 +149,7 @@ class Dataset:
             if row:
                 columns = [desc[0] for desc in cur.description]
                 result = dict(zip(columns, row))
-                result['type'] = 'md'
+                result['scope'] = 'MD'
                 return result
         else:
             # This is a project entry
@@ -158,7 +158,7 @@ class Dataset:
             if row:
                 columns = [desc[0] for desc in cur.description]
                 result = dict(zip(columns, row))
-                result['type'] = 'project'
+                result['scope'] = 'Project'
                 return result
 
     def get_status(self, directory: str | Path):
@@ -396,10 +396,15 @@ class Dataset:
         # Add all projects first
         for abs_path, uuid in projects.items():
             display_name = abs_path.split('/')[-1]
-            if not self.get_uuid_status(uuid):
+            status = self.get_uuid_status(uuid)
+            if not status:
                 if verbose:
                     print(f"Adding project: {display_name} (UUID: {uuid})")
                 self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', abs_path=abs_path)
+            elif status['abs_path'] != abs_path:
+                if verbose:
+                    print(f"Updating project path: {display_name} (UUID: {uuid}) from {status['abs_path']} to {abs_path}")
+                self.update_status(uuid, state=status['state'], message=status['message'], abs_path=abs_path)
             elif verbose:
                 print(f"Project already exists: {display_name} (UUID: {uuid})")
 
