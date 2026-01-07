@@ -46,7 +46,7 @@ from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 from mddb_workflow.tools.generate_topology import generate_topology
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.remove_trash import remove_trash
-from mddb_workflow.tools.get_screenshot import get_screenshot
+from mddb_workflow.tools.get_project_screenshot import get_project_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files, is_amber_top
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
@@ -1009,6 +1009,7 @@ class Project:
         guess_bonds: bool = False,
         ignore_bonds: bool = False,
         sample_trajectory: Optional[int] = None,
+        screenshot_frame: Optional[int] = None,
         keep_going: bool = False,
     ):
         """Initialize a Project.
@@ -1100,6 +1101,10 @@ class Project:
             sample_trajectory (Optional[int]):
                 If passed, download the first 10 (by default) frames from the trajectory.
                 You can specify a different number by providing an integer value.
+            screenshot_frame (Optional[int]):
+                If passed, the project screenshot is made using the specified frame (0-based), from the reference MD.
+                Negative number may be passed to select frames starting by the end. e.g. -1 is the last frame.
+                By default the screenshot is made using the reference frame from the reference MD.
             keep_going (bool):
                 If True, continue running the workflow even if some MD replicas fail. Default is False.
 
@@ -1278,6 +1283,7 @@ class Project:
         self.rmsd_cutoff = rmsd_cutoff
         self.interaction_cutoff = interaction_cutoff
         self.sample_trajectory = sample_trajectory
+        self.screenshot_frame = screenshot_frame
         self.interactions_auto = interactions_auto
         self.guess_bonds = guess_bonds
         self.ignore_bonds = ignore_bonds
@@ -2089,7 +2095,7 @@ class Project:
 
     # Get a screenshot of the system
     get_screenshot_filename = Task('screenshot', 'Screenshot file',
-        get_screenshot, output_filenames={'output_file': OUTPUT_SCREENSHOT_FILENAME})
+        get_project_screenshot, output_filenames={'output_file': OUTPUT_SCREENSHOT_FILENAME})
     screenshot_filename = property(get_screenshot_filename, None, None, "Screenshot filename (read only)")
 
     # Provenance data

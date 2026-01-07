@@ -394,3 +394,13 @@ def sort_trajectory_atoms (
     # WARNING: It may not exist if the trajectory has 1 frame
     if exists(frame_filename):
         os.remove(frame_filename)
+
+# Get a frame in MDtraj
+# Most specifically, get a trajectry with a single frame
+def get_frame (structure_file : 'File', trajectory_file : 'File', frame : int) -> 'mdt.Trajectory':
+    # Read the trajectory until we get the desired frame
+    trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
+    # Iterate frames until we get the one we want
+    for f, mdt_frame in enumerate(trajectory):
+        if f != frame: continue
+        return mdt_frame
