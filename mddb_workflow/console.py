@@ -339,19 +339,15 @@ def main():
             dataset_parser.print_help()
             return
 
-        dataset = Dataset(dataset_yaml_path=args.dataset_yaml)
+        dataset = Dataset(args.dataset_path)
+        if args.dataset_subcommand == 'show':
+            df = dataset.get_dataframe(uuid_length=8, root_path=dataset.root_path, sort_by=args.sort_by)
+            try:
+                from mddb_workflow.utils.rich import rich_display_dataframe
+                rich_display_dataframe(df, title="MDDB Dataset")
+            except ImportError:
+                print(df)
 
-        if args.dataset_subcommand == 'run':
-            dataset.launch_workflow(
-                include_groups=args.include_groups,
-                exclude_groups=args.exclude_groups,
-                n_jobs=args.n_jobs,
-                slurm=args.slurm,
-                job_template=args.job_template,
-                debug=args.debug
-            )
-        elif args.dataset_subcommand == 'groups':
-            dataset.show_groups(cmd=True)
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
@@ -691,19 +687,20 @@ dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpForm
 dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
 
 # Dataset run subcommand
-dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
-help="Run the workflow for a dataset of MDDB projects.",
+dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
+help="Display information about a dataset of MDDB projects.",
     parents=[common_parser])
-dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
-dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, default=[], help="List of group IDs to be run.")
-dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
-dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
-dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
-dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
-dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")
+dataset_show.add_argument("dataset_path", help="Path to the dataset storage file.")
+dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default=None, type=str)
 
-# Dataset status subcommand
-dataset_status_parser = dataset_subparsers.add_parser("groups", formatter_class=CustomHelpFormatter,
-    help="Show the status of projects in a dataset, grouped by their last log message.",
-    parents=[common_parser])
-dataset_status_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+# # Dataset run subcommand
+# dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
+# help="Run the workflow for a dataset of MDDB projects.",
+#     parents=[common_parser])
+# dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+# dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, default=[], help="List of group IDs to be run.")
+# dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
+# dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
+# dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
+# dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
+# dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")

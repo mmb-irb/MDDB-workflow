@@ -337,6 +337,7 @@ class Dataset:
             if os.path.exists(inputs_yaml_path) and not overwrite:
                 print(f"{inputs_yaml_path} already exists and overwrite is set to False. Skipping.")
                 return
+            generated_input = {}
             if input_generator:
                 # If generator returned None, use empty dict
                 generated_input = input_generator(project_dir) or {}
@@ -446,7 +447,7 @@ class Dataset:
             'mds': df_mds
         }
 
-    def get_dataframe(self, uuid_length=None, root_path=None, numeric_index=False) -> 'pd.DataFrame':
+    def get_dataframe(self, uuid_length=None, root_path=None, sort_by=None) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
         Adds a 'scope' column to indicate if the row is from a project or an MD.
@@ -454,7 +455,7 @@ class Dataset:
         Args:
             uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
-            numeric_index (bool, optional): If True, replace uuid and project_uuid with plain numeric indices.
+            sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'abs_path'.
 
         """
         dfs = self.dataframes
@@ -462,16 +463,19 @@ class Dataset:
         df_mds = dfs['mds'].reset_index()
 
         # Set missing columns for alignment
-        df_projects['project_uuid'] = ''
         df_projects['scope'] = 'Project'
-        df_mds['num_mds'] = ''
         df_mds['scope'] = 'MD'
 
         # Concatenate, sort, and set index
         df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
-        df_joined = df_joined.sort_values(['abs_path'], na_position='first')
-        df_joined.set_index('uuid', inplace=True)
+        sort_by = sort_by if sort_by else 'abs_path'
+        df_joined = df_joined.sort_values([sort_by], na_position='first')
 
+        # Replace NaN with empty string for display
+        df_joined = df_joined.fillna('')
+        df_joined.set_index('uuid', inplace=True)
+        # Convert num_mds from float to int if present
+        df_joined['num_mds'] = df_joined['num_mds'].apply(lambda x: int(x) if isinstance(x, float) and not pd.isna(x) else x)
         # Optionally make abs_path relative to root_path
         if root_path is not None:
             root_path = os.path.abspath(root_path)
@@ -490,19 +494,6 @@ class Dataset:
                     lambda x: x[:uuid_length] if isinstance(x, str) and x else x
                 )
 
-        # Optionally convert uuid and project_uuid to numeric indices
-        if numeric_index:
-            # Create a mapping from uuid to numeric index
-            uuid_list = list(df_joined.index.unique())
-            uuid_map = {uuid: idx for idx, uuid in enumerate(uuid_list)}
-            # Replace index
-            df_joined.index = df_joined.index.map(lambda x: uuid_map.get(x, -1))
-            # Replace project_uuid column if present and not empty
-            if 'project_uuid' in df_joined.columns:
-                df_joined['project_uuid'] = df_joined['project_uuid'].apply(
-                    lambda x: uuid_map.get(x, '') if x in uuid_map else ''
-                )
-
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
         cols.insert(0, cols.pop(cols.index('project_uuid')))
@@ -513,7 +504,7 @@ class Dataset:
     @property
     def dataframe(self) -> 'pd.DataFrame':
         """Retrieve the joined DataFrame view of projects and MDs."""
-        return self.get_dataframe(numeric_index=True, root_path=self.root_path)
+        return self.get_dataframe(uuid_length=8, root_path=self.root_path)
 
 
 def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path('.')) -> list[Path]:
