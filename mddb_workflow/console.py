@@ -359,6 +359,8 @@ def main():
                 print(df)
         elif args.dataset_subcommand == 'run':
             dataset.launch_workflow(
+                path_query=args.path_query,
+                state_query=args.state_query,
                 n_jobs=args.n_jobs,
                 slurm=args.slurm,
                 job_template=args.job_template,
@@ -726,6 +728,8 @@ help="Scan a directory and add all MDDB projects to a dataset storage file.",
 dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
 help="Run the workflow for a dataset of MDDB projects.",
     parents=[common_dataset_parser])
+dataset_run_parser.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
+dataset_run_parser.add_argument("-sq", "--state_query", type=str, default=None, help="Filter projects by their current state.")
 dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
 dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
 dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")

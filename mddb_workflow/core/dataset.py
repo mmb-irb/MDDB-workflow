@@ -534,14 +534,23 @@ class Dataset:
         return self.get_dataframe(uuid_length=8)
 
     def launch_workflow(self,
+        path_query: str = '*',
+        state_query: str = None,
         n_jobs: int = 0,
         pool_size: int = 1,
         slurm: bool = False,
         job_template: str = None,
-        debug: bool = False):
+        debug: bool = False
+    ):
         """Launch the workflow for each project directory in the dataset.
 
         Args:
+            path_query (str):
+                If provided, only launch the workflow for project directories
+                whose relative path matches this glob pattern.
+            state_query (str):
+                If provided, only launch the workflow for project directories
+                whose current state matches this value.
             n_jobs (int):
                 Number of jobs to launch. If 0, all jobs are launched.
             pool_size (int):
@@ -570,7 +579,13 @@ class Dataset:
         jobs_to_run = []
 
         n = 0
-        for rel_path in self.project_directories:
+        for project_entry in self.projects_table:
+            project_dict = dict(zip(self.project_columns, project_entry))
+            rel_path = project_dict['rel_path']
+            if not Path(rel_path).match(path_query):
+                continue
+            if state_query and project_dict['state'] != state_query:
+                continue
             project_dir = self._rel_to_abs(rel_path)
 
             n += 1
@@ -601,7 +616,7 @@ class Dataset:
                 # SLURM execution
                 if debug:
                     print(f"cd {project_dir}")
-                    print(f'Job script: {job_script_path}')
+                    print(f'# Job script: {job_script_path}')
                     print("sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
                 else:
                     print(f"Submitting SLURM job for {project_dir}")
