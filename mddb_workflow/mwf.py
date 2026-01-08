@@ -700,8 +700,10 @@ class MD:
         if selection_string == 'auto':
             # To guess PBC atoms (with the current implementation) we must make sure ther eis no CG
             if reference_structure.has_cg():
-                raise InputError('We can not guess PBC atoms in CG systems. Please set PBC atoms manually.\n'
-                    ' Use the "-pbc" argument or set the inputs file "pbc_selection" field.')
+                raise InputError('We can not guess which atoms are under Periodic Boundary Conditions (PBC) in Coarse Grained (CG) systems. Please set PBC atoms manually.\n'
+                    ' Please provide an atom selection (VMD syntax) aiming for all atoms under PBC.\n'
+                    ' Use the "-pbc" argument or set the "pbc_selection" field in the inputs file.\n'
+                    ' e.g. -pbc "resname DPPC"')
             if verbose: print(' Guessing PBC atoms as solvent, counter ions and lipids')
             parsed_selection = reference_structure.select_pbc_guess()
         # If we have a valid input value then use it
