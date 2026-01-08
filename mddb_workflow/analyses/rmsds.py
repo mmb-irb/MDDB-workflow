@@ -50,7 +50,9 @@ def rmsds(
     missing_regions = structure.select_all()
     for selection in selections.values():
         missing_regions -= selection
-    if missing_regions: selections['other'] = missing_regions
+    # WARNING: Atom selections with less than 3 atoms will raise an error from Gromacs
+    if missing_regions and len(missing_regions.atom_indices) >= 3:
+        selections['other'] = missing_regions
 
     # Remove PBC residues from parsed selections
     non_pbc_selections = {}
