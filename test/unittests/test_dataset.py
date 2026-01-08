@@ -4,6 +4,7 @@ import tempfile
 from mddb_workflow.core.dataset import Dataset, State
 from pathlib import Path
 
+
 @pytest.mark.unit_int
 def test_add_remove_entries():
     """Test that adding projects works correctly."""

@@ -1,6 +1,5 @@
 import shutil
 import pathlib
-import tempfile
 from contextlib import contextmanager
 from unittest.mock import patch
 import pytest
@@ -65,8 +64,7 @@ class TestDatasetIntegration:
     def test_entries_are_added_to_dataset(self):
         """Test that project and MD entries are added to the dataset."""
         # Create a temporary database
-        with tempfile.NamedTemporaryFile(dir=str(test_dir), suffix='.db', delete=False) as tmp:
-            db_path = tmp.name
+        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
 
         try:
             def mock_task(md):
@@ -77,12 +75,11 @@ class TestDatasetIntegration:
 
             # Check that entries were added
             ds = Dataset(db_path)
-            status = ds.status
 
             # Should have 1 project entry
-            assert len(status['projects']) == 1
+            assert len(ds.projects_table) == 1
             # Should have 2 MD entries
-            assert len(status['mds']) == 2
+            assert len(ds.mds_table) == 2
 
             # Check project entry
             project_status = ds.get_status(project_dir)
@@ -95,24 +92,23 @@ class TestDatasetIntegration:
             # Check MD entries
             md1_status = ds.get_status(project_dir/'replica_1')
             assert md1_status is not None
-            assert 'replica_1' in md1_status['abs_path']
+            assert 'replica_1' in md1_status['rel_path']
             assert md1_status['state'] == State.DONE.value
             assert md1_status['message'] == 'Done!'
 
             md2_status = ds.get_status(project_dir/'replica_2')
             assert md2_status is not None
-            assert 'replica_2' in md2_status['abs_path']
+            assert 'replica_2' in md2_status['rel_path']
             assert md2_status['state'] == State.DONE.value
             assert md2_status['message'] == 'Done!'
 
         finally:
             # Clean up
-            pathlib.Path(db_path).unlink(missing_ok=True)
+            db_path.unlink(missing_ok=True)
 
     def test_running_state_during_execution(self):
         """Test that state is set to RUNNING during task execution."""
-        with tempfile.NamedTemporaryFile(dir=str(test_dir), suffix='.db', delete=False) as tmp:
-            db_path = tmp.name
+        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
 
         try:
             # Track states seen during execution
@@ -159,12 +155,11 @@ class TestDatasetIntegration:
             assert md2_status['state'] == State.DONE.value
 
         finally:
-            pathlib.Path(db_path).unlink(missing_ok=True)
+            db_path.unlink(missing_ok=True)
 
     def test_state_transitions_on_error(self):
         """Test that states transition to ERROR when workflow fails."""
-        with tempfile.NamedTemporaryFile(dir=str(test_dir), suffix='.db', delete=False) as tmp:
-            db_path = tmp.name
+        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
 
         try:
             call_count = [0]
@@ -196,4 +191,4 @@ class TestDatasetIntegration:
             assert md2_status is None
 
         finally:
-            pathlib.Path(db_path).unlink(missing_ok=True)
+            db_path.unlink(missing_ok=True)

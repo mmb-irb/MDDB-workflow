@@ -28,8 +28,8 @@ class Dataset:
     """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
     # TODO: log_file, err_file, group_id
     common_columns = ['state', 'message', 'last_modified']
-    project_columns = ['uuid', 'abs_path', 'num_mds'] + common_columns
-    md_columns = ['uuid', 'project_uuid', 'abs_path'] + common_columns
+    project_columns = ['uuid', 'rel_path', 'num_mds'] + common_columns
+    md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
 
     def __init__(self, dataset_path: str):
         """Initialize the Dataset object and connect to SQLite DB.
@@ -39,11 +39,23 @@ class Dataset:
 
         """
         self.dataset_path = Path(dataset_path).resolve()
+        # if not self.dataset_path.exists():
+        #     raise ValueError(f"Dataset path {self.dataset_path} does not exist.")
         self.root_path = self.dataset_path.parent
         self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
         # Enable foreign key constraints (disabled by default in SQLite)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self._ensure_tables()
+
+    def _abs_to_rel(self, abs_path: str | Path) -> str:
+        """Convert any path to relative path from root_path."""
+        abs_path = Path(abs_path).resolve()
+        return os.path.relpath(str(abs_path), start=str(self.root_path))
+
+    def _rel_to_abs(self, rel_path: str | Path) -> str:
+        """Convert any path to absolute path from root_path."""
+        rel_path = Path(rel_path)
+        return str((self.root_path / rel_path).resolve())
 
     def _ensure_tables(self):
         """Create tables if they do not exist."""
@@ -52,7 +64,7 @@ class Dataset:
         cur.execute('''
             CREATE TABLE IF NOT EXISTS projects (
                 uuid TEXT PRIMARY KEY NOT NULL,
-                abs_path TEXT UNIQUE NOT NULL,
+                rel_path TEXT UNIQUE NOT NULL,
                 num_mds INTEGER DEFAULT 0,
                 state TEXT,
                 message TEXT,
@@ -66,7 +78,7 @@ class Dataset:
             CREATE TABLE IF NOT EXISTS mds (
                 uuid TEXT PRIMARY KEY NOT NULL,
                 project_uuid TEXT NOT NULL,
-                abs_path TEXT UNIQUE NOT NULL,
+                rel_path TEXT UNIQUE NOT NULL,
                 state TEXT,
                 message TEXT,
                 last_modified TEXT,
@@ -117,11 +129,11 @@ class Dataset:
     def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False):
         """Add a single project mentry to the database."""
         uuid, _ = self._read_uuid_from_cache(directory, make_uuid=make_uuid)
-        abs_path = str(Path(directory).resolve())
+        rel_path = self._abs_to_rel(directory)
         if not self.get_uuid_status(uuid):
             if verbose:
-                print(f"Adding project: {abs_path} (UUID: {uuid})")
-            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', abs_path=abs_path)
+                print(f"Adding project: {rel_path} (UUID: {uuid})")
+            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', rel_path=rel_path)
 
     def add_md(self, directory: str, make_uuid: bool = False, verbose: bool = False):
         """Add a single MD entry to the database."""
@@ -131,13 +143,13 @@ class Dataset:
             raise ValueError(f"Directory '{Path(directory).name}' is not inside a valid project directory")
         # Get MD UUID and add the project_uuid
         uuid, _ = self._read_uuid_from_cache(directory, make_uuid, project_uuid)
-        abs_path = str(Path(directory).resolve())
+        rel_path = self._abs_to_rel(directory)
         if not project_uuid:
             raise ValueError(f"Directory '{directory}' does not appear to be an MD")
         if not self.get_uuid_status(uuid, project_uuid):
             if verbose:
-                print(f"Adding MD: {abs_path} (UUID: {uuid}, Project UUID: {project_uuid})")
-            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, abs_path=abs_path)
+                print(f"Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
+            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
 
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
         """Retrieve a project or MD's status from the database by UUID."""
@@ -173,7 +185,7 @@ class Dataset:
         state: State | str,
         message: str,
         project_uuid: str = None,
-        abs_path: str = None,
+        rel_path: str = None,
     ):
         """Update or insert a project or MD's status in the database.
 
@@ -181,8 +193,8 @@ class Dataset:
             uuid: UUID of the project or MD
             state: State enum or string
             message: Status message
-            project_uuid: If provided, this is an MD entry (requires abs_path)
-            abs_path: Absolute path to the directory (required for new entries)
+            project_uuid: If provided, this is an MD entry (requires rel_path)
+            rel_path: Relative path to the directory (required for new entries)
 
         """
         cur = self.conn.cursor()
@@ -192,42 +204,42 @@ class Dataset:
 
         if project_uuid:
             # This is an MD entry
-            if abs_path is None:
-                # Try to get existing abs_path
+            if rel_path is None:
+                # Try to get existing rel_path
                 existing = self.get_uuid_status(uuid)
                 if existing:
-                    abs_path = existing['abs_path']
+                    rel_path = existing['rel_path']
                 else:
-                    raise ValueError("abs_path is required for new MD entries")
+                    raise ValueError("rel_path is required for new MD entries")
 
             cur.execute('''
-                INSERT INTO mds (uuid, project_uuid, abs_path, state, message, last_modified)
+                INSERT INTO mds (uuid, project_uuid, rel_path, state, message, last_modified)
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uuid) DO UPDATE SET
                     state=excluded.state,
                     message=excluded.message,
                     last_modified=excluded.last_modified,
-                    abs_path=excluded.abs_path
-            ''', (uuid, project_uuid, abs_path, state, message, last_modified))
+                    rel_path=excluded.rel_path
+            ''', (uuid, project_uuid, rel_path, state, message, last_modified))
         else:
             # This is a project entry
-            if abs_path is None:
-                # Try to get existing abs_path
+            if rel_path is None:
+                # Try to get existing rel_path
                 existing = self.get_uuid_status(uuid)
                 if existing:
-                    abs_path = existing['abs_path']
+                    rel_path = existing['rel_path']
                 else:
-                    raise ValueError("abs_path is required for new project entries")
+                    raise ValueError("rel_path is required for new project entries")
 
             cur.execute('''
-                INSERT INTO projects (uuid, abs_path, state, message, last_modified, num_mds)
+                INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
                 VALUES (?, ?, ?, ?, ?, 0)
                 ON CONFLICT(uuid) DO UPDATE SET
                     state=excluded.state,
                     message=excluded.message,
                     last_modified=excluded.last_modified,
-                    abs_path=excluded.abs_path
-            ''', (uuid, abs_path, state, message, last_modified))
+                    rel_path=excluded.rel_path
+            ''', (uuid, rel_path, state, message, last_modified))
         self.conn.commit()
 
     def remove_entry(self, directory: str | Path, verbose: bool = False):
@@ -267,11 +279,12 @@ class Dataset:
         project_directories = _resolve_directory_patterns(paths_or_globs)
         ignore_dirs = _resolve_directory_patterns(ignore_dirs)
         for project_dir in project_directories:
+            rel_path = self._abs_to_rel(project_dir)
             if project_dir in ignore_dirs:
-                if verbose: print(f"Ignoring project: {project_dir}")
+                if verbose: print(f"Ignoring project: {rel_path}")
                 continue
             if not project_dir.exists():
-                if verbose: print(f"Warning: Project directory {project_dir} does not exist. Skipping.")
+                if verbose: print(f"Warning: Project directory {rel_path} does not exist. Skipping.")
                 continue
             # Add project row (num_mds will be set automatically by triggers when MDs are added)
             self.add_project(project_dir, make_uuid=True, verbose=verbose)
@@ -329,7 +342,11 @@ class Dataset:
             input_generator = generator_module.input_generator
 
         # Generate inputs.yaml for each project directory
-        for project_dir in self.project_directories:
+        for rel_path in self.project_directories:
+            project_dir = self._rel_to_abs(rel_path)
+            if project_dir in ignore_dirs:
+                print(f"Ignoring project: {project_dir}")
+                continue
             template = jinja2.Template(template_str)
             inputs_yaml_path = os.path.join(project_dir, inputs_filename)
             if os.path.exists(inputs_yaml_path) and not overwrite:
@@ -340,7 +357,9 @@ class Dataset:
                 # If generator returned None, use empty dict
                 generated_input = input_generator(project_dir) or {}
             # Render the template with project defaults
-            rendered_yaml = template.render(DIR=Path(project_dir).name, DATASET=str(self.dataset_path), **generated_input)
+            rendered_yaml = template.render(DIR=Path(project_dir).name,
+                                            DATASET=os.path.relpath(self.dataset_path, start=project_dir),
+                                            **generated_input)
             # Write the rendered YAML to inputs.yaml
             with open(inputs_yaml_path, 'w') as f:
                 f.write(rendered_yaml)
@@ -368,8 +387,8 @@ class Dataset:
         ignore_dirs_set = set(ignore_dirs)
 
         # Separate projects and MDs based on presence of project_uuid in cache
-        projects = {}  # {abs_path: uuid}
-        mds = {}  # {abs_path: (uuid, project_uuid)}
+        projects = {}  # {rel_path: uuid}
+        mds = {}  # {rel_path: (uuid, project_uuid)}
 
         # Walk directory tree and find all cache files
         for dirpath, dirnames, filenames in os.walk(root_dir):
@@ -385,44 +404,42 @@ class Dataset:
                         print(f"Warning: No UUID found in {dir_path}. Skipping.")
                     continue
 
-                abs_path = str(dir_path)
+                rel_path = self._abs_to_rel(dir_path)
                 if project_uuid:
                     # This is an MD (has project_uuid in cache)
-                    mds[abs_path] = (uuid, project_uuid)
+                    mds[rel_path] = (uuid, project_uuid)
                 else:
                     # This is a Project (no project_uuid in cache)
-                    projects[abs_path] = uuid
+                    projects[rel_path] = uuid
 
         # Add all projects first
-        for abs_path, uuid in projects.items():
-            display_name = abs_path.split('/')[-1]
+        for rel_path, uuid in projects.items():
             status = self.get_uuid_status(uuid)
             if not status:
                 if verbose:
-                    print(f"Adding project: {display_name} (UUID: {uuid})")
-                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', abs_path=abs_path)
-            elif status['abs_path'] != abs_path:
+                    print(f"Adding project: {rel_path} (UUID: {uuid})")
+                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', rel_path=rel_path)
+            elif status['rel_path'] != rel_path:
                 if verbose:
-                    print(f"Updating project path: {display_name} (UUID: {uuid}) from {status['abs_path']} to {abs_path}")
-                self.update_status(uuid, state=status['state'], message=status['message'], abs_path=abs_path)
+                    print(f"Updating project path: {rel_path} (UUID: {uuid}) from {status['rel_path']} to {rel_path}")
+                self.update_status(uuid, state=status['state'], message=status['message'], rel_path=rel_path)
             elif verbose:
-                print(f"Project already exists: {display_name} (UUID: {uuid})")
+                print(f"Project already exists: {rel_path} (UUID: {uuid})")
 
         # Then add all MDs
-        for abs_path, (uuid, project_uuid) in mds.items():
-            display_name = '/'.join(abs_path.split('/')[-2:])
+        for rel_path, (uuid, project_uuid) in mds.items():
             if not self.get_uuid_status(uuid, project_uuid):
                 if verbose:
-                    print(f"  Adding MD: {display_name} (UUID: {uuid}, Project UUID: {project_uuid})")
-                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, abs_path=abs_path)
+                    print(f"  Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
+                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
             elif verbose:
-                print(f"  MD already exists: {display_name} (UUID: {uuid})")
+                print(f"  MD already exists: {rel_path} (UUID: {uuid})")
 
     @property
     def projects_table(self) -> dict:
         """Retrieve all project status from the SQLite database as a list of tuples."""
         cur = self.conn.cursor()
-        cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY abs_path")
+        cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY rel_path")
         projects = cur.fetchall()
         return projects
 
@@ -430,13 +447,13 @@ class Dataset:
     def mds_table(self) -> dict:
         """Retrieve all MD status from the SQLite database as a list of tuples."""
         cur = self.conn.cursor()
-        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY abs_path")
+        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY rel_path")
         mds = cur.fetchall()
         return mds
 
     @property
     def project_directories(self) -> list[str]:
-        """Retrieve all project directories from the database."""
+        """Retrieve all project rel_path from the database."""
         return [st[1] for st in self.projects_table]
 
     @property
@@ -466,7 +483,7 @@ class Dataset:
         Args:
             uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
-            sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'abs_path'.
+            sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'rel_path'.
 
         """
         dfs = self.dataframes
@@ -479,7 +496,7 @@ class Dataset:
 
         # Concatenate, sort, and set index
         df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
-        sort_by = sort_by if sort_by else 'abs_path'
+        sort_by = sort_by if sort_by else 'rel_path'
         df_joined = df_joined.sort_values([sort_by], na_position='first')
 
         # Replace NaN with empty string for display
@@ -487,13 +504,12 @@ class Dataset:
         df_joined.set_index('uuid', inplace=True)
         # Convert num_mds from float to int if present
         df_joined['num_mds'] = df_joined['num_mds'].apply(lambda x: int(x) if isinstance(x, float) and not pd.isna(x) else x)
-        # Optionally make abs_path relative to root_path
+        # Optionally make rel_path relative to root_path
         if root_path is not None:
             root_path = os.path.abspath(root_path)
-            df_joined['abs_path'] = df_joined['abs_path'].apply(
-                lambda x: os.path.relpath(x, root_path)
+            df_joined['rel_path'] = df_joined['rel_path'].apply(
+                lambda x: os.path.relpath(Path(x).resolve(), root_path)
             )
-            df_joined.rename(columns={'abs_path': 'rel_path'}, inplace=True)
 
         # Optionally truncate uuid and project_uuid columns for display
         if uuid_length is not None and uuid_length > 0:
@@ -515,7 +531,7 @@ class Dataset:
     @property
     def dataframe(self) -> 'pd.DataFrame':
         """Retrieve the joined DataFrame view of projects and MDs."""
-        return self.get_dataframe(uuid_length=8, root_path=self.root_path)
+        return self.get_dataframe(uuid_length=8)
 
     def launch_workflow(self,
         n_jobs: int = 0,
@@ -777,5 +793,3 @@ class OldDataset:
             'err_file_link': 'err_file'
         })
         return df_display.to_html(escape=False)
-
-    
