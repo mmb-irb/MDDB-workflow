@@ -1,5 +1,6 @@
 import re
 import json
+import time
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
@@ -16,6 +17,43 @@ import numpy as np
 # Set the expected ligand data fields
 LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid', 'inchikey'])
 MINIMUM_TANIMOTO_THRESHOLD = 0.3
+
+# Retry configuration for HTTP requests
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0  # seconds
+RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+
+
+def retry_request(func):
+    """Decorator to retry HTTP requests with exponential backoff."""
+    def wrapper(*args, **kwargs):
+        delay = RETRY_DELAY
+        last_exception = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                return func(*args, **kwargs)
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                    requests.exceptions.RequestException) as e:
+                last_exception = e
+                if attempt < MAX_RETRIES - 1:
+                    print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
+                    time.sleep(delay)
+                    delay *= RETRY_BACKOFF
+                else:
+                    print(f"Request failed after {MAX_RETRIES} attempts: {e}")
+        raise last_exception
+    return wrapper
+
+
+@retry_request
+def _make_get_request(url: str) -> requests.Response:
+    return requests.get(url, timeout=30)
+
+
+@retry_request
+def _make_post_request(url, payload):
+    return requests.post(url, data=payload, timeout=30)
 
 
 def record_pubchem_match(
@@ -154,8 +192,7 @@ def generate_ligand_references(
             neutral_inchi = Chem.MolToInchi(neutral_mol)
             for threshold in [95, 90]:
                 similarity_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/inchi/JSON?Threshold={threshold}&MaxRecords=5"
-                payload = {'inchi': neutral_inchi}
-                r = requests.post(similarity_url, data=payload)
+                r = _make_post_request(similarity_url, payload={'inchi': neutral_inchi})
                 if r.status_code != 200:
                     continue
                 data = r.json()
@@ -583,7 +620,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
 def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
     """Given a DrugBank ID, request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{drugbank_id}/JSON'
-    r = requests.get(url)
+    r = _make_get_request(url)
     if r.ok:
         data = r.json()
         return str(data['PC_Compounds'][0]['id']['id']['cid'])
@@ -594,7 +631,7 @@ def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
 def chembl_2_pubchem(chembl_id) -> Optional[str]:
     """Given a ChemBL ID, use the uniprot API to request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/xref/RegistryID/{chembl_id}/cids/JSON'
-    r = requests.get(url)
+    r = _make_get_request(url)
     if r.ok:
         data = r.json()
         return str(data['IdentifierList']['CID'][0])
@@ -686,7 +723,8 @@ def inchikey_2_pubchem(inchikey: str, conectivity_only=False) -> Optional[str]:
     """Given an InChIKey, get the PubChem CID."""
     inchikey = inchikey.split('-')[0] if conectivity_only else inchikey
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
-    r = requests.get(url)
+
+    r = _make_get_request(url)
     if r.ok:
         data = r.json()
         if conectivity_only:
@@ -703,8 +741,8 @@ def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
     You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8
     """
     url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-    payload = {'inchi': inchi}
-    r = requests.post(url, data=payload)
+
+    r = _make_post_request(url, payload={'inchi': inchi})
     if r.ok:
         data = r.json()
         results = []

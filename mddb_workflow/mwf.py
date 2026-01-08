@@ -2305,7 +2305,7 @@ class ErrorHandling:
         # Make the update function with partial so we do not have to repeat parameters
         if self.dataset:
             self.update_state = partial(self.dataset.update_status,
-                                        rel_path=wf_class.directory,
+                                        rel_path=self.dataset._abs_to_rel(wf_class.directory),
                                         **self.uuids)
             if not self.dataset.get_uuid_status(**self.uuids):
                 # If no status is available, add a new entry

@@ -123,6 +123,7 @@ class TestDatasetIntegration:
                 if md_status:
                     states_seen[f'md{1 if md.directory == "replica_1" else 2}'].append(md_status['state'])
                     # Should be RUNNING during execution
+                    assert md_status['rel_path'] == ds._abs_to_rel(md.directory)
                     assert md_status['state'] == State.RUNNING.value
                     assert md_status['message'] == 'Running workflow...'
 
