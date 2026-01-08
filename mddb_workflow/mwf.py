@@ -2309,7 +2309,7 @@ class ErrorHandling:
                                         **self.uuids)
             if not self.dataset.get_uuid_status(**self.uuids):
                 # If no status is available, add a new entry
-                self.update_state(state=State.NEW, message='No information have been recorded yet.')
+                self.update_state(state=State.NEW, message='No information recorded yet.')
         else:
             # If no dataset is available, use a null function
             self.update_state = lambda *args, **kwargs: None

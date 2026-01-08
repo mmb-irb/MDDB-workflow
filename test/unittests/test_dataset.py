@@ -34,7 +34,7 @@ def test_add_remove_entries():
             else:
                 assert status is not None
                 assert status['state'] == State.NEW.value
-                assert status['message'] == 'No information have been recorded yet.'
+                assert status['message'] == 'No information recorded yet.'
             if "proj0" in d:
                 assert status['num_mds'] == 2, f"Expected 2 MDs for {d}, got {status['num_mds']}"
             elif "proj1" in d:

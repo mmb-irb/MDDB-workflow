@@ -4,7 +4,7 @@ from subprocess import call
 from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAction
 from textwrap import wrap, dedent
 import re
-
+import glob
 from mddb_workflow.mwf import workflow, Project, requestables, TaskResolver
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
@@ -338,6 +338,16 @@ def main():
         if not hasattr(args, 'dataset_subcommand') or not args.dataset_subcommand:
             dataset_parser.print_help()
             return
+        # If dataset_path is not provided, search for *.db file
+        if (not hasattr(args, 'dataset_path') or not args.dataset_path):
+            db_files = glob.glob("*.db")
+            if db_files:
+                args.dataset_path = db_files[0]
+                print(f"Using dataset file: {args.dataset_path}")
+            else:
+                print("No dataset_path provided and no *.db file found in the current directory.")
+                dataset_parser.print_help()
+                return
 
         dataset = Dataset(args.dataset_path)
         if args.dataset_subcommand == 'show':
@@ -694,25 +704,28 @@ for flags, kwargs in nassa_parser_args:
 dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpFormatter,
     help="Manage and process a dataset of MDDB projects.")
 dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
-
+common_dataset_parser = ArgumentParser(add_help=False)
+common_dataset_parser.add_argument(
+    "-ds", "--dataset_path",
+    help="Path to the dataset storage file. If not provided, the first *.db file found in the current directory will be used.",
+    default=None,
+    required=False
+)
 # Dataset show subcommand
 dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
 help="Display information about a dataset of MDDB projects.",
-    parents=[common_parser])
-dataset_show.add_argument("dataset_path", help="Path to the dataset storage file.")
+    parents=[common_dataset_parser])
 dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default=None, type=str)
 
 
 dataset_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter,
 help="Scan a directory and add all MDDB projects to a dataset storage file.",
-    parents=[common_parser])
-dataset_scan.add_argument("dataset_path", help="Path to the dataset storage file.")
+    parents=[common_dataset_parser])
 
 # # Dataset run subcommand
 dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
 help="Run the workflow for a dataset of MDDB projects.",
-    parents=[common_parser])
-dataset_run_parser.add_argument("dataset_path", help="Path to the dataset YAML file.")
+    parents=[common_dataset_parser])
 dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
 dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
 dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")

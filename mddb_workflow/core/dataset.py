@@ -133,7 +133,7 @@ class Dataset:
         if not self.get_uuid_status(uuid):
             if verbose:
                 print(f"Adding project: {rel_path} (UUID: {uuid})")
-            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', rel_path=rel_path)
+            self.update_status(uuid, state=State.NEW, message='No information recorded yet.', rel_path=rel_path)
 
     def add_md(self, directory: str, make_uuid: bool = False, verbose: bool = False):
         """Add a single MD entry to the database."""
@@ -149,7 +149,7 @@ class Dataset:
         if not self.get_uuid_status(uuid, project_uuid):
             if verbose:
                 print(f"Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
-            self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
+            self.update_status(uuid, state=State.NEW, message='No information recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
 
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
         """Retrieve a project or MD's status from the database by UUID."""
@@ -418,7 +418,7 @@ class Dataset:
             if not status:
                 if verbose:
                     print(f"Adding project: {rel_path} (UUID: {uuid})")
-                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', rel_path=rel_path)
+                self.update_status(uuid, state=State.NEW, message='No information recorded yet.', rel_path=rel_path)
             elif status['rel_path'] != rel_path:
                 if verbose:
                     print(f"Updating project path: {rel_path} (UUID: {uuid}) from {status['rel_path']} to {rel_path}")
@@ -431,7 +431,7 @@ class Dataset:
             if not self.get_uuid_status(uuid, project_uuid):
                 if verbose:
                     print(f"  Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
-                self.update_status(uuid, state=State.NEW, message='No information have been recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
+                self.update_status(uuid, state=State.NEW, message='No information recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
             elif verbose:
                 print(f"  MD already exists: {rel_path} (UUID: {uuid})")
 
