@@ -50,7 +50,7 @@ def rmsds(
     missing_regions = structure.select_all()
     for selection in selections.values():
         missing_regions -= selection
-    if missing_regions: selections['other'] = missing_regions
+    if len(missing_regions) >= 3: selections['other'] = missing_regions
 
     # Remove PBC residues from parsed selections
     non_pbc_selections = {}
