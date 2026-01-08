@@ -88,11 +88,15 @@ def record_pubchem_match(
     """Set the pubchem id for the inchikey and compute/print Tanimoto vs descriptor_data if match_mol provided."""
     matched_fg = obtain_mordred_morgan_descriptors(match_mol)
     tc = tanimoto_similarity(reference_fg['morgan_fp_bit_array'], matched_fg['morgan_fp_bit_array'])
+    # For ions, set threshold to 0.0 as TC can vary a lot with small changes
+    threshold = threshold if match_mol.GetNumAtoms() > 1 else 0.0
     if tc >= threshold:
         ligand_references[inchikey]['pubchem'] = str(pubchem_id)
         ligand_references[inchikey]['tc'] = tc
         print(f'Found CID {pubchem_id} after {reason}. Tanimoto coef. (morgan fingerprint): {tc:.3f}')
-    return tc
+    else:
+        print(f'Found CID {pubchem_id} after {reason}. Tanimoto coef. (morgan fingerprint): {tc:.3f}, below threshold {threshold}. Ignoring match.')
+    return tc >= threshold
 
 
 def generate_ligand_references(
@@ -168,31 +172,31 @@ def generate_ligand_references(
         neutral_mol = rdMolStandardize.ChargeParent(mol)
         neutral_inchikey = Chem.MolToInchiKey(neutral_mol)
         if pubchem_id := inchikey_2_pubchem(neutral_inchikey):
-            record_pubchem_match(inchikey, pubchem_id, neutral_mol, descriptor_data,
-                                 automatic_references, 'neutralization')
-            continue
+            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, descriptor_data,
+                                    automatic_references, 'neutralization'):
+                continue
         # 2.2. Remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(mol)
-            record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
-                                 automatic_references, 'stereochemistry removal')
-            continue
+            if record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
+                                    automatic_references, 'stereochemistry removal'):
+                continue
         # Neutralize charges and remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(neutral_mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(neutral_mol)
-            record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
-                                 automatic_references, 'neutralization + stereochemistry removal')
-            continue
+            if record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
+                                    automatic_references, 'neutralization + stereochemistry removal'):
+                continue
         # 2.3. Standardize molecule
         standar_id = pubchem_standardization(inchi)
         if standar_id and len(standar_id) == 1:
             standar_pubchem = standar_id[0]['pubchem']
             standar_mol = Chem.MolFromInchi(standar_id[0]['inchi'])
-            record_pubchem_match(inchikey, standar_pubchem, standar_mol, descriptor_data,
-                                 automatic_references, 'standardization')
-            continue
+            if record_pubchem_match(inchikey, standar_pubchem, standar_mol, descriptor_data,
+                                    automatic_references, 'standardization'):
+                continue
         # 2.4. Match against PDB-derived ligands
         if pubchem_ids_from_pdb:
             for pdb_ligand in pubchem_ids_from_pdb:
@@ -303,10 +307,10 @@ def generate_ligand_references(
                            if 'pubchem' not in v]
     if not_matched_ligands:
         for k, v in not_matched_ligands:
-            warn(f'Ligand {inchikeys[k].molname} could not be matched to any PubChem ID. Residues: {v}')
+            warn(f'Ligand {k} could not be matched to any PubChem ID. Residues: {v}')
         if LIGANDS_MATCH_FLAG not in mercy:
             raise InputError('Provide PubChem IDs for all ligands, a PDB code where it is '
-                             f'present or use the flag -m {LIGANDS_MATCH_FLAG} to bypass this check.')
+                             f'present or use the flag "-m {LIGANDS_MATCH_FLAG}" to bypass this check.')
 
     if not ligand_references:
         print('No ligands were matched')
@@ -469,7 +473,7 @@ def pdbs_2_pubchems(pdb_ids: list[str], cache: 'Cache') -> list[dict]:
         # Check we have cached this specific pdb
         pubchem_ids_from_pdb = pdb_2_pubchem_cache.get(pdb_id, None)
         if pubchem_ids_from_pdb is not None:
-            print(f' Retriving from cache PubChem IDs for PDB ID {pdb_id}: ')
+            print(f' Retrieving from cache PubChem IDs for PDB ID {pdb_id}: ')
             if len(pubchem_ids_from_pdb) > 0:
                 print('  PubChem IDs: ' + ', '.join(pubchem_ids_from_pdb))
             else:
