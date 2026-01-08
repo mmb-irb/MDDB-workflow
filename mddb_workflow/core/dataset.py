@@ -570,8 +570,8 @@ class Dataset:
         jobs_to_run = []
 
         n = 0
-        for project_dir in self.project_directories:
-            rel_path = os.path.relpath(project_dir, self.root_path)
+        for rel_path in self.project_directories:
+            project_dir = self._rel_to_abs(rel_path)
 
             n += 1
             if n_jobs > 0 and n > n_jobs:

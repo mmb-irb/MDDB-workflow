@@ -1,7 +1,7 @@
 # This is the starter script
 
 from os import walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath, normpath, split, basename, abspath
+from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 import sys
 import io
 import re
