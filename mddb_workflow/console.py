@@ -706,10 +706,10 @@ dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpForm
 dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
 common_dataset_parser = ArgumentParser(add_help=False)
 common_dataset_parser.add_argument(
-    "-ds", "--dataset_path",
+    "dataset_path",
+    nargs='?',
     help="Path to the dataset storage file. If not provided, the first *.db file found in the current directory will be used.",
-    default=None,
-    required=False
+    default=None
 )
 # Dataset show subcommand
 dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
