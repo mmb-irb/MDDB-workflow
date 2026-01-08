@@ -7,6 +7,7 @@ from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM
 from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn
 from mddb_workflow.utils.type_hints import *
+import http.client
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 from functools import lru_cache
@@ -32,9 +33,11 @@ def retry_request(func):
         for attempt in range(MAX_RETRIES):
             try:
                 return func(*args, **kwargs)
+            # Catch network-related exceptions for retry
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout,
-                    requests.exceptions.RequestException) as e:
+                    requests.exceptions.RequestException,
+                    http.client.RemoteDisconnected) as e:
                 last_exception = e
                 if attempt < MAX_RETRIES - 1:
                     print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
@@ -42,6 +45,9 @@ def retry_request(func):
                     delay *= RETRY_BACKOFF
                 else:
                     print(f"Request failed after {MAX_RETRIES} attempts: {e}")
+            # Do not retry for HTTPError or URLError
+            except (HTTPError, URLError) as e:
+                raise e
         raise last_exception
     return wrapper
 
@@ -54,6 +60,20 @@ def _make_get_request(url: str) -> requests.Response:
 @retry_request
 def _make_post_request(url, payload):
     return requests.post(url, data=payload, timeout=30)
+
+
+@retry_request
+def handle_http_request(request_url, error_context="request") -> Optional[str]:
+    """Make an HTTP request handler with consistent error handling."""
+    try:
+        with urlopen(request_url) as response:
+            return response.read().decode("utf-8", errors='ignore')
+    except HTTPError as error:
+        if error.code == 404:
+            return None
+        raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
+    except URLError as error:
+        raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
 
 
 def record_pubchem_match(
@@ -377,18 +397,7 @@ def pdb_ligand_2_pubchem_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Set the request URL
     request_url = f'https://www.rcsb.org/ligand/{pdb_ligand_id}'
     # Run the query
-    parsed_response = None
-    try:
-        with urlopen(request_url) as response:
-            parsed_response = response.read().decode("utf-8")
-    # If the accession is not found in the PDB then we can stop here
-    except HTTPError as error:
-        if error.code == 404:
-            print(f' PDB ligand {pdb_ligand_id} not found')
-            return None
-        else:
-            print(error.msg)
-            raise ValueError('Something went wrong with the PDB ligand request: ' + request_url)
+    parsed_response = handle_http_request(request_url, "PDB ligand request")
     # Mine the PubChem ID out of the whole response
     pattern = re.compile('pubchem.ncbi.nlm.nih.gov\/compound\/([0-9]*)\"')
     match = re.search(pattern, parsed_response)
@@ -408,17 +417,7 @@ def pdb_ligand_2_pubchem_RAW_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Set the request URL
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{pdb_ligand_id}/json'
     # Run the query
-    parsed_response = None
-    try:
-        with urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the PDB then we can stop here
-    except HTTPError as error:
-        # This may happen for weird things such as UNX (unknown atom or ion)
-        if error.code == 404:
-            return None
-        print(error.msg)
-        raise RuntimeError('Something went wrong with the PDB ligand request in PubChem: ' + request_url)
+    parsed_response = json.loads(handle_http_request(request_url, "PDB ligand request"))
     # Mine the PubChem ID
     compounds = parsed_response['PC_Compounds']
     if len(compounds) != 1:
@@ -490,19 +489,6 @@ def pdbs_2_pubchems(pdb_ids: list[str], cache: 'Cache') -> list[dict]:
     if new_data_to_cache: cache.update(PDB_TO_PUBCHEM, pdb_2_pubchem_cache)
 
     return pdb_ligands
-
-
-def handle_http_request(request_url, error_context="request"):
-    """Make an HTTP request handler with consistent error handling."""
-    try:
-        with urlopen(request_url) as response:
-            return response.read().decode("utf-8", errors='ignore')
-    except HTTPError as error:
-        if error.code == 404:
-            return None
-        raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
-    except URLError as error:
-        raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
 
 
 def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
