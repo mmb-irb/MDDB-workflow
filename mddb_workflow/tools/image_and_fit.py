@@ -66,7 +66,8 @@ def image_and_fit (
     # It will not work otherwise since we need atom masses
     # For some image protocols we need to work with pdbs at some points so we directly surrender
     if structure.select_cg():
-        if image: raise InputError('We cannot image a coarse grain simulation using Gromacs')
+        if image: raise InputError('We cannot image a coarse grain simulation using Gromacs.\n'
+            ' Please remove the "-img" argument and manually image the simulation before running the workflow.')
         if not is_tpr_available:
             raise InputError('We cannot fit a coarse grain simulation using Gromacs without a TPR file')
 
