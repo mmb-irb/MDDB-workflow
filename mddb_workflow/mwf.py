@@ -218,8 +218,8 @@ class MD:
                 self._input_structure_url = input_filepath
                 # Set the paths for the further download
                 source_filename = url_to_source_filename(input_filepath)
-                md_relative_filepath = self.pathify(source_filename)
-                return md_relative_filepath
+                source_filepath = self.pathify(source_filename)
+                return source_filepath
             # Check if it is an absolute path
             if isabs(input_filepath):
                 abs_glob_parse = parse_glob(input_filepath)
@@ -342,8 +342,8 @@ class MD:
                 parsed_paths = []
                 for path in checked_paths:
                     source_filename = url_to_source_filename(path)
-                    md_relative_filepath = self.pathify(source_filename)
-                    parsed_paths.append(md_relative_filepath)
+                    source_filepath = self.pathify(source_filename)
+                    parsed_paths.append(source_filepath)
                 return parsed_paths
             # Make sure all or none of the trajectory paths are absolute
             abs_count = sum([isabs(path) for path in checked_paths])
@@ -1560,7 +1560,8 @@ class Project:
             if is_url(input_filepath):
                 self._input_topology_url = input_filepath
                 source_filename = url_to_source_filename(input_filepath)
-                return source_filename
+                source_filepath = self.pathify(source_filename)
+                return source_filepath
             # Check if it is an absolute path
             if isabs(input_filepath):
                 abs_glob_parse = parse_glob(input_filepath)
