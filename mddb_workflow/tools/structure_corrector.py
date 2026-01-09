@@ -112,7 +112,13 @@ def structure_corrector(
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
-        print(' They are wrong')
+        # Explain the problem to the user
+        # Make clear this is not a problem but very normal or you will get mails from users
+        print(' There may be an atom clash or a bond overstretch in the default structure but this is normal.\n' \
+        ' An atom clash means that two non-bonded atoms are too close.\n' \
+        ' A bond overstretch means that two bonded atoms are too far away.\n' \
+        ' Now we will look for a frame which has no clashes/overstretches at all.\n' \
+        ' This frame will be considered as the "reference frame".')
         # Find the first frame in the whole trajectory where safe bonds are respected
         bonds_reference_frame = get_bonds_reference_frame(
             structure_file=output_structure_file,
