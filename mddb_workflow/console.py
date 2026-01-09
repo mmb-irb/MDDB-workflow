@@ -29,6 +29,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
     """Custom formatter for argparse help text with better organization and spacing."""
 
     def __init__(self, prog, indent_increment=2, max_help_position=6, width=None):
+        """Initialize the custom help formatter."""
         super().__init__(prog, indent_increment, max_help_position, width)
 
     def _get_help_string(self, action):
@@ -351,12 +352,27 @@ def main():
 
         dataset = Dataset(args.dataset_path)
         if args.dataset_subcommand == 'show':
-            df = dataset.get_dataframe(uuid_length=8, root_path=dataset.root_path, sort_by=args.sort_by)
+            df = dataset.get_dataframe(uuid_length=8,
+                                       root_path=dataset.root_path,
+                                       sort_by=args.sort_by,
+                                       path_query=args.path_query,
+                                       state_query=args.state_query,
+                                       asc=True
+                                       )
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe
-                rich_display_dataframe(df, title="MDDB Dataset")
+                print(rich_display_dataframe(df, title="MDDB Dataset"))
             except ImportError:
                 print(df)
+        elif args.dataset_subcommand == 'watch':
+            from mddb_workflow.utils.rich import watch_dataframe
+            watch_dataframe(lambda: dataset.get_dataframe(
+                                                    uuid_length=8,
+                                                    root_path=dataset.root_path,
+                                                    sort_by='last_modified', asc=False
+                                                    ),
+                            title="Live MDDB Dataset"
+                            )
         elif args.dataset_subcommand == 'run':
             dataset.launch_workflow(
                 path_query=args.path_query,
@@ -713,17 +729,22 @@ common_dataset_parser.add_argument(
     help="Path to the dataset storage file. If not provided, the first *.db file found in the current directory will be used.",
     default=None
 )
-# Dataset show subcommand
+# Dataset show/watch subcommand
 dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
 help="Display information about a dataset of MDDB projects.",
     parents=[common_dataset_parser])
-dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default=None, type=str)
+dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
+dataset_show.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
+dataset_show.add_argument("-sq", "--state_query", type=str, default=None, help="Filter projects by their current state.")
 
+dataset_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter,
+help="Display information live about a dataset of MDDB projects.",
+    parents=[common_dataset_parser])
 
+# Dataset scan subcommand
 dataset_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter,
 help="Scan a directory and add all MDDB projects to a dataset storage file.",
     parents=[common_dataset_parser])
-
 # # Dataset run subcommand
 dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
 help="Run the workflow for a dataset of MDDB projects.",
@@ -731,6 +752,6 @@ help="Run the workflow for a dataset of MDDB projects.",
 dataset_run_parser.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
 dataset_run_parser.add_argument("-sq", "--state_query", type=str, default=None, help="Filter projects by their current state.")
 dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
-dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
+dataset_run_parser.add_argument("-sl", "--slurm", action="store_true", help="Submit the workflow to SLURM.")
 dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
 dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")

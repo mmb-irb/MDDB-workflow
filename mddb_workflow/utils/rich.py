@@ -1,10 +1,11 @@
 import contextlib
-
 from rich.errors import NotRenderableError
+from rich.live import Live
+import time
 
 
 # From: https://gist.github.com/izikeros/b0d32072f234fba73650eb4b1e9c0017
-def rich_display_dataframe(df, title="Dataframe") -> None:
+def rich_display_dataframe(df, row_limit=None, title="Dataframe", only_return=False) -> None:
     """Display dataframe as table using rich library.
 
     Args:
@@ -30,4 +31,23 @@ def rich_display_dataframe(df, title="Dataframe") -> None:
     for row in df.values:
         with contextlib.suppress(NotRenderableError):
             table.add_row(*row)
+        if row_limit and table.row_count >= row_limit:
+            break
+    if only_return:
+        return table
     print(table)
+
+
+def watch_dataframe(get_df_func, interval=2, title="Live Dataframe"):
+    """Watch a dataframe with periodic updates."""
+    with Live(refresh_per_second=0.5) as live:
+        while True:
+            df = get_df_func()
+            table = rich_display_dataframe(
+                df,
+                row_limit=20,
+                title=title,
+                only_return=True
+            )
+            live.update(table)
+            time.sleep(interval)

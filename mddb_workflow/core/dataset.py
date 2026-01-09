@@ -21,7 +21,6 @@ class State(Enum):
     RUNNING = 'running'
     ERROR = 'error'
     DONE = 'done'
-    UPLOADED = 'uploaded'  # TODO: implement functionality in the loader
 
 
 class Dataset:
@@ -30,6 +29,7 @@ class Dataset:
     common_columns = ['state', 'message', 'last_modified']
     project_columns = ['uuid', 'rel_path', 'num_mds'] + common_columns
     md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
+    date_format = "%H:%M:%S %d-%m-%Y"
 
     def __init__(self, dataset_path: str):
         """Initialize the Dataset object and connect to SQLite DB.
@@ -200,7 +200,7 @@ class Dataset:
         cur = self.conn.cursor()
         if isinstance(state, State):
             state = state.value
-        last_modified = time.strftime("%H:%M:%S %d-%m-%Y", time.localtime())
+        last_modified = time.strftime(self.date_format, time.localtime())
 
         if project_uuid:
             # This is an MD entry
@@ -243,10 +243,14 @@ class Dataset:
         self.conn.commit()
 
     def remove_entry(self, directory: str | Path, verbose: bool = False):
-        """Remove a single project or MD entry from the database by UUID."""
+        """Remove a single project or MD entry from the database by directory."""
         if isinstance(directory, Path):
             directory = directory.resolve().as_posix()
         uuid, project_uuid = self._read_uuid_from_cache(directory)
+        self.remove_entry_by_uuid(uuid, project_uuid, verbose=verbose)
+
+    def remove_entry_by_uuid(self, uuid: str, project_uuid: str = None, verbose: bool = False):
+        """Remove a single project or MD entry from the database by UUID."""
         cur = self.conn.cursor()
         if project_uuid:
             # Remove from MDs
@@ -256,10 +260,9 @@ class Dataset:
             cur.execute("DELETE FROM projects WHERE uuid=?", (uuid,))
         if verbose:
             if cur.rowcount > 0:
-                print(f"Deleted {'MD' if project_uuid else 'project'} {directory} with UUID '{uuid}'")
+                print(f"Deleted {'MD' if project_uuid else 'project'} with UUID '{uuid}'")
             else:
-                breakpoint()
-                print(f"No entry found for '{directory}'")
+                print(f"No entry found for UUID '{uuid}' to delete")
         self.conn.commit()
 
     def add_entries(self,
@@ -475,7 +478,14 @@ class Dataset:
             'mds': df_mds
         }
 
-    def get_dataframe(self, uuid_length=None, root_path=None, sort_by=None) -> 'pd.DataFrame':
+    def get_dataframe(self,
+            path_query: str = '*',
+            state_query: str = None,
+            uuid_length=None,
+            root_path=None,
+            sort_by='last_modified',
+            asc=False
+    ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
         Adds a 'scope' column to indicate if the row is from a project or an MD.
@@ -484,6 +494,7 @@ class Dataset:
             uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
             sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'rel_path'.
+            asc (bool, optional): Whether to sort in ascending order. Defaults to True.
 
         """
         dfs = self.dataframes
@@ -494,10 +505,17 @@ class Dataset:
         df_projects['scope'] = 'Project'
         df_mds['scope'] = 'MD'
 
-        # Concatenate, sort, and set index
+        # Concatenate, filter rows,sort, and set index
         df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
-        sort_by = sort_by if sort_by else 'rel_path'
-        df_joined = df_joined.sort_values([sort_by], na_position='first')
+        if path_query:
+            df_joined = df_joined[df_joined['rel_path'].apply(lambda x: Path(x).match(path_query))]
+        if state_query:
+            df_joined = df_joined[df_joined['state'] == state_query]
+        if sort_by == 'last_modified':
+            df_joined['last_modified'] = pd.to_datetime(df_joined['last_modified'], format=self.date_format, errors='coerce')
+        df_joined = df_joined.sort_values([sort_by], ascending=asc, na_position='first')
+        if sort_by == 'last_modified':
+            df_joined['last_modified'] = df_joined['last_modified'].dt.strftime(self.date_format)
 
         # Replace NaN with empty string for display
         df_joined = df_joined.fillna('')
