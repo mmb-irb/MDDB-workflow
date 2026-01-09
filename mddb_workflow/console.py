@@ -357,6 +357,7 @@ def main():
                                        sort_by=args.sort_by,
                                        path_query=args.path_query,
                                        state_query=args.state_query,
+                                       scope_query=args.scope_query,
                                        asc=True
                                        )
             try:
@@ -736,6 +737,7 @@ help="Display information about a dataset of MDDB projects.",
 dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
 dataset_show.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
 dataset_show.add_argument("-sq", "--state_query", type=str, default=None, help="Filter projects by their current state.")
+dataset_show.add_argument("-scq", "--scope_query", type=str, default=None, help="Filter projects by their current state.")
 
 dataset_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter,
 help="Display information live about a dataset of MDDB projects.",

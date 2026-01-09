@@ -27,6 +27,10 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
     lipid_references = {}
 
     for inchikey, mol_data in inchikeys.items():
+        clasi = mol_data.classification
+        if len(clasi) == 1 and 'ion' in clasi:
+            # Skip ions
+            continue
         # If we dont find it, we try without stereochemistry (only connection layer)
         SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
         LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
@@ -36,7 +40,6 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
             lipid_references[inchikey] = {'swisslipids': SL_data, 'lipidmaps': LM_data}
 
             # QUALITY CHECKS
-            clasi = mol_data.classification
             # If the residue is a lipid, we check if it is classified as fatty/steroid
             if all('fatty' not in classes for classes in clasi) and \
                 all('steroid' not in classes for classes in clasi):

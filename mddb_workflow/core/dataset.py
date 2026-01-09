@@ -481,6 +481,7 @@ class Dataset:
     def get_dataframe(self,
             path_query: str = '*',
             state_query: str = None,
+            scope_query: str = None,
             uuid_length=None,
             root_path=None,
             sort_by='last_modified',
@@ -491,6 +492,9 @@ class Dataset:
         Adds a 'scope' column to indicate if the row is from a project or an MD.
 
         Args:
+            path_query (str, optional): If provided, filters rows whose 'rel_path' matches this glob pattern.
+            state_query (str, optional): If provided, filters rows whose 'state' matches this value.
+            scope_query (str, optional): If provided, filters rows whose 'scope' matches this value ('Project' or 'MD').
             uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
             sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'rel_path'.
@@ -506,9 +510,18 @@ class Dataset:
         df_mds['scope'] = 'MD'
 
         # Concatenate, filter rows,sort, and set index
-        df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
+        if scope_query:
+            scope_query = scope_query.lower()
+            if scope_query not in ['p', 'project', 'm', 'md']:
+                raise ValueError("scope_query must be either 'Project' or 'MD'")
+            if scope_query in ['p', 'project']:
+                df_joined = df_projects.copy()
+            else:
+                df_joined = df_mds.copy()
+        else:
+            df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
         if path_query:
-            df_joined = df_joined[df_joined['rel_path'].apply(lambda x: Path(x).match(path_query))]
+            df_joined = df_joined[df_joined['rel_path'].apply(lambda x: Path(x).match(path_query) or path_query in x)]
         if state_query:
             df_joined = df_joined[df_joined['state'] == state_query]
         if sort_by == 'last_modified':
@@ -541,8 +554,9 @@ class Dataset:
 
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
-        cols.insert(0, cols.pop(cols.index('project_uuid')))
-        cols.insert(1, cols.pop(cols.index('scope')))
+        if not scope_query:
+            cols.insert(0, cols.pop(cols.index('project_uuid')))
+            cols.insert(1, cols.pop(cols.index('scope')))
         df_joined = df_joined[cols]
         return df_joined
 
