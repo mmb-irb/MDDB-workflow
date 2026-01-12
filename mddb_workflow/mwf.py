@@ -5,6 +5,7 @@ from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 import sys
 import io
 import re
+from time import time
 import numpy
 from glob import glob
 import contextlib
@@ -2373,6 +2374,7 @@ class WorkflowHandler:
 
     def launch(self):
         """Launch the workflow execution."""
+        t0 = time.time()
         # Run the project tasks and MD tasks as per the task resolver.
         with ErrorHandling(self, self.project):
             for task in self.tasker.project_tasks:
@@ -2394,6 +2396,8 @@ class WorkflowHandler:
 
         # Remove gromacs backups and other trash files from the project
         remove_trash(self.project.directory)
+        t = time.time() - t0
+        print(f'\n{CYAN_HEADER} Workflow finished in {t/60:.2f} minutes {COLOR_END}')
 
 
 def workflow(

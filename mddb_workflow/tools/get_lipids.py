@@ -56,7 +56,7 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
 
 
 @lru_cache(maxsize=None)
-def is_in_LIPID_MAPS(inchikey : str, only_first_layer : bool = False) -> dict:
+def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     """Search the InChI keys in LIPID MAPS."""
     if not inchikey: raise RuntimeError('Empty inchikey')
     headers = {'accept': 'json'}

@@ -374,6 +374,14 @@ def main():
                                                     ),
                             title="Live MDDB Dataset"
                             )
+        elif args.dataset_subcommand == 'inputs':
+            dataset.generate_inputs_yaml(
+                inputs_template_path=args.inputs_template,
+                path_query=args.path_query,
+                ignore_dirs=args.ignore_dirs,
+                input_generator=args.input_generator,
+                overwrite=args.overwrite
+            )
         elif args.dataset_subcommand == 'run':
             dataset.launch_workflow(
                 path_query=args.path_query,
@@ -730,6 +738,17 @@ common_dataset_parser.add_argument(
     help="Path to the dataset storage file. If not provided, the first *.db file found in the current directory will be used.",
     default=None
 )
+
+# Dataset inputs subcommand
+dataset_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter,
+help="Generate inputs file for MDDB projects.",
+    parents=[common_dataset_parser])
+dataset_inputs.add_argument("-it", "--inputs_template", type=str, help="Path to the inputs template file to be used for generating the inputs files.")
+dataset_inputs.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
+dataset_inputs.add_argument("-id", "--ignore_dirs", type=str, nargs='*', default=[], help="List of directory names to ignore when generating inputs files.")
+dataset_inputs.add_argument("-g", "--input_generator", type=str, help="Python file with a input_generator(project_dir) function.")
+dataset_inputs.add_argument("-o", "--overwrite", action="store_true", help="Whether to overwrite existing inputs.yaml files.")
+
 # Dataset show/watch subcommand
 dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
 help="Display information about a dataset of MDDB projects.",

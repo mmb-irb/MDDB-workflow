@@ -299,6 +299,7 @@ class Dataset:
 
     def generate_inputs_yaml(self,
             inputs_template_path: str,
+            path_query: str = '*',
             ignore_dirs: list[str] | str = [],
             input_generator: Optional[Callable | str] = None,
             overwrite: bool = False,
@@ -310,6 +311,8 @@ class Dataset:
             inputs_template_path (str):
                 The file path to the Jinja2 template file that will be used to generate
                 the inputs YAML files.
+            path_query (str):
+                If provided, only generate inputs.yaml for project directories matching this glob pattern.
             ignore_dirs (list[str] | str):
                 A list of directory names or glob patterns to be ignored when generating inputs.yaml files.
             input_generator (callable):
@@ -332,7 +335,7 @@ class Dataset:
             template_str = f.read()
 
         # Generate input values using the provided generator function if any
-        if input_generator is str:
+        if type(input_generator) is str:
             print(f"Loading input generator from file: {input_generator}")
             # Load the generator module
             spec = importlib.util.spec_from_file_location("generator", input_generator)
@@ -347,6 +350,8 @@ class Dataset:
         # Generate inputs.yaml for each project directory
         for rel_path in self.project_directories:
             project_dir = self._rel_to_abs(rel_path)
+            if not Path(project_dir).match(path_query):
+                continue
             if project_dir in ignore_dirs:
                 print(f"Ignoring project: {project_dir}")
                 continue
@@ -632,8 +637,9 @@ class Dataset:
 
             template = jinja2.Template(template_str)
             rendered_script = template.render(**inputs_config,
-                                                DIR=Path(project_dir).name,
-                                                slurm=slurm)
+                                              project_status=project_dict,
+                                              DIR=Path(project_dir).name,
+                                              slurm=slurm)
 
             job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
             log_dir = os.path.join(project_dir, 'logs')
