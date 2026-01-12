@@ -5,7 +5,7 @@ from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 import sys
 import io
 import re
-from time import time
+import time
 import numpy
 from glob import glob
 import contextlib
