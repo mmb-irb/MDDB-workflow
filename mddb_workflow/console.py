@@ -368,10 +368,13 @@ def main():
         elif args.dataset_subcommand == 'watch':
             from mddb_workflow.utils.rich import watch_dataframe
             watch_dataframe(lambda: dataset.get_dataframe(
-                                                    uuid_length=8,
-                                                    root_path=dataset.root_path,
-                                                    sort_by='last_modified', asc=False
-                                                    ),
+                                        uuid_length=8,
+                                        root_path=dataset.root_path,
+                                        sort_by='last_modified', asc=False,
+                                        path_query=args.path_query,
+                                        state_query=args.state_query,
+                                        scope_query=args.scope_query,
+                                    ),
                             title="Live MDDB Dataset"
                             )
         elif args.dataset_subcommand == 'inputs':
@@ -739,12 +742,16 @@ common_dataset_parser.add_argument(
     default=None
 )
 
+query_parser = ArgumentParser(add_help=False)
+query_parser.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
+query_parser.add_argument("-sq", "--state_query", nargs='*', default=[], help="Filter projects by their current state.")
+query_parser.add_argument("-scq", "--scope_query", type=str, default=None, help="Filter projects by their current state.")
+
 # Dataset inputs subcommand
 dataset_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter,
 help="Generate inputs file for MDDB projects.",
-    parents=[common_dataset_parser])
+    parents=[common_dataset_parser, query_parser])
 dataset_inputs.add_argument("-it", "--inputs_template", type=str, help="Path to the inputs template file to be used for generating the inputs files.")
-dataset_inputs.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
 dataset_inputs.add_argument("-id", "--ignore_dirs", type=str, nargs='*', default=[], help="List of directory names to ignore when generating inputs files.")
 dataset_inputs.add_argument("-g", "--input_generator", type=str, help="Python file with a input_generator(project_dir) function.")
 dataset_inputs.add_argument("-o", "--overwrite", action="store_true", help="Whether to overwrite existing inputs.yaml files.")
@@ -752,15 +759,12 @@ dataset_inputs.add_argument("-o", "--overwrite", action="store_true", help="Whet
 # Dataset show/watch subcommand
 dataset_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter,
 help="Display information about a dataset of MDDB projects.",
-    parents=[common_dataset_parser])
+    parents=[common_dataset_parser, query_parser])
 dataset_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
-dataset_show.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
-dataset_show.add_argument("-sq", "--state_query", type=str, default=None, help="Filter projects by their current state.")
-dataset_show.add_argument("-scq", "--scope_query", type=str, default=None, help="Filter projects by their current state.")
 
 dataset_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter,
 help="Display information live about a dataset of MDDB projects.",
-    parents=[common_dataset_parser])
+    parents=[common_dataset_parser, query_parser])
 
 # Dataset scan subcommand
 dataset_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter,
@@ -769,9 +773,7 @@ help="Scan a directory and add all MDDB projects to a dataset storage file.",
 # # Dataset run subcommand
 dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
 help="Run the workflow for a dataset of MDDB projects.",
-    parents=[common_dataset_parser])
-dataset_run_parser.add_argument("-pq", "--path_query", type=str, default='*', help="Glob pattern to filter project directories to run the workflow on.")
-dataset_run_parser.add_argument("-sq", "--state_query", type=str, default=None, help="Filter projects by their current state.")
+    parents=[common_dataset_parser, query_parser])
 dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
 dataset_run_parser.add_argument("-sl", "--slurm", action="store_true", help="Submit the workflow to SLURM.")
 dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")

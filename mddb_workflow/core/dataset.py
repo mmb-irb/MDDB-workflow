@@ -485,7 +485,7 @@ class Dataset:
 
     def get_dataframe(self,
             path_query: str = '*',
-            state_query: str = None,
+            state_query: list[str] = [],
             scope_query: str = None,
             uuid_length=None,
             root_path=None,
@@ -498,7 +498,7 @@ class Dataset:
 
         Args:
             path_query (str, optional): If provided, filters rows whose 'rel_path' matches this glob pattern.
-            state_query (str, optional): If provided, filters rows whose 'state' matches this value.
+            state_query (list[str], optional): If provided, filters rows whose 'state' matches this value.
             scope_query (str, optional): If provided, filters rows whose 'scope' matches this value ('Project' or 'MD').
             uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
@@ -528,7 +528,7 @@ class Dataset:
         if path_query:
             df_joined = df_joined[df_joined['rel_path'].apply(lambda x: Path(x).match(path_query) or path_query in x)]
         if state_query:
-            df_joined = df_joined[df_joined['state'] == state_query]
+            df_joined = df_joined[df_joined['state'].isin(state_query)]
         if sort_by == 'last_modified':
             df_joined['last_modified'] = pd.to_datetime(df_joined['last_modified'], format=self.date_format, errors='coerce')
         df_joined = df_joined.sort_values([sort_by], ascending=asc, na_position='first')
@@ -572,7 +572,7 @@ class Dataset:
 
     def launch_workflow(self,
         path_query: str = '*',
-        state_query: str = None,
+        state_query: list = [],
         n_jobs: int = 0,
         pool_size: int = 1,
         slurm: bool = False,
@@ -585,7 +585,7 @@ class Dataset:
             path_query (str):
                 If provided, only launch the workflow for project directories
                 whose relative path matches this glob pattern.
-            state_query (str):
+            state_query (list[str]):
                 If provided, only launch the workflow for project directories
                 whose current state matches this value.
             n_jobs (int):
@@ -621,7 +621,7 @@ class Dataset:
             rel_path = project_dict['rel_path']
             if not Path(rel_path).match(path_query):
                 continue
-            if state_query and project_dict['state'] != state_query:
+            if state_query and project_dict['state'] not in state_query:
                 continue
             project_dir = self._rel_to_abs(rel_path)
 
