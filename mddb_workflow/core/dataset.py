@@ -629,11 +629,7 @@ class Dataset:
             if n_jobs > 0 and n > n_jobs:
                 break
             inputs_yaml_path = os.path.join(project_dir, 'inputs.yaml')
-            if not os.path.exists(inputs_yaml_path):
-                warn(f"{inputs_yaml_path} not found. Skipping {project_dir}")
-                continue
-
-            inputs_config = load_yaml(inputs_yaml_path)
+            inputs_config = load_yaml(inputs_yaml_path) if os.path.exists(inputs_yaml_path) else {}
 
             template = jinja2.Template(template_str)
             rendered_script = template.render(**inputs_config,
