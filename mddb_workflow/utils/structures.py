@@ -778,10 +778,13 @@ class Residue:
         # Create a mapping from structure atom indices to residue-local atom indices
         residue_atom_indices = {atom.index: i for i, atom in enumerate(self.atoms)}
         # Return the rings as lists of Atom objects
-        return [
-            [self.atoms[residue_atom_indices[i]] for i in cycle]
-            for cycle in cycles
-        ]
+        rings = []
+        for cycle in cycles:
+            try:
+                rings.append([self.atoms[residue_atom_indices[i]] for i in cycle])
+            except KeyError:
+                warn(f"Residue {self.name} contains cycles with atoms outside the residue")
+        return rings
 
     def split (self,
         first_residue_atom_indices : list[int],
