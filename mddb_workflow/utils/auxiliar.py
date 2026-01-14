@@ -238,7 +238,6 @@ def save_json(content, filepath: str, indent: Optional[int] = None):
     except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         os.rename(filepath, filepath + '.wrong')
-        breakpoint()
         raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 

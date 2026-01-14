@@ -1921,6 +1921,10 @@ class Structure:
     def select_cg (self) -> 'Selection':
         """Select coarse grain atoms."""
         return Selection([ atom.index for atom in self.atoms if atom.element == CG_ATOM_ELEMENT ])
+    
+    def select_dummy (self) -> 'Selection':
+        """Select dummy atoms."""
+        return Selection([ atom.index for atom in self.atoms if atom.element == DUMMY_ATOM_ELEMENT ])
 
     def select_missing_bonds (self) -> 'Selection':
         return Selection([ index for index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])

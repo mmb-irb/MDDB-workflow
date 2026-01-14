@@ -19,7 +19,8 @@ def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Sele
     # They are not taken in count when testing coherent bonds or looking for the reference frame
     non_pbc_ions_selection = structure.select_ions() - pbc_selection
     # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
-    excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg()
+    # Also dummy atoms are excluded since they are not real atoms
+    excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg() + structure.select_dummy()
     return excluded_atoms_selection
 
 def do_bonds_match (
