@@ -185,7 +185,7 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ 
     if is_standard_topology(bonds_source_file):
         print(f' Bonds in the "{bonds_source_file.filename}" file will be used')
         standard_topology = load_json(bonds_source_file.path)
-        standard_atom_bonds = standard_topology.get('atom_bonds', None)
+        standard_atom_bonds = standard_topology.get('atom_bonds', [])
         # Convert missing bonds flags
         # These come from coarse grain (CG) simulations with no topology
         atom_bonds = []
