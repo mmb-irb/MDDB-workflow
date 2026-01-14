@@ -52,9 +52,8 @@ class Selection:
 
     # Return a new selection made of self and not other selection atom indices
     def substract (self, other : Optional['Selection']) -> 'Selection':
-        if not other:
-            return self
-        remaining_atom_indices = [ atom_index for atom_index in self.atom_indices if atom_index not in other.atom_indices ]
+        if not other: return self
+        remaining_atom_indices = list(set(self.atom_indices) - set(other.atom_indices))
         return Selection(remaining_atom_indices)
 
     # Return a new selection with the intersection of both selections
