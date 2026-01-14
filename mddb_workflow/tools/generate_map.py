@@ -398,9 +398,10 @@ def import_references (protein_references_file : 'File') -> list:
         references[uniprot] = reference
     return references
 
-# Get each chain name and aminoacids sequence in a topology
-# Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]
+
 def get_parsed_chains (structure : 'Structure') -> list:
+    """Get each chain name and aminoacids sequence in a topology.
+    Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]"""
     parsed_chains = []
     chains = structure.chains
     for chain in chains:
@@ -408,7 +409,10 @@ def get_parsed_chains (structure : 'Structure') -> list:
         sequence = ''
         residue_indices = []
         for residue in chain.residues:
+            # Check that residue is protein?
             letter = protein_residue_name_to_letter(residue.name)
+            if letter != 'X' and len(residue.atoms) > 27:
+                raise RuntimeError(f'Residue {residue.name} in chain {name} has an aminoacid name but has more than 27 atoms.')
             sequence += letter
             residue_indices.append(residue.index)
         sequence_object = { 'name': name, 'sequence': sequence, 'residue_indices': residue_indices }

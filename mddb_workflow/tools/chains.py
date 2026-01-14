@@ -30,12 +30,12 @@ def request_interproscan (sequence : str) -> str:
         with urlopen(request_url, data=data) as response:
             parsed_response = response.read().decode("utf-8")
     except HTTPError as error:
-        print(error.read().decode())
+        print('Error:', error.read().decode())
         if error.code == 404:
             print(' Not found')
             return None
         else:
-            raise ValueError('Something went wrong with the InterProScan request: ' + request_url)
+            raise error
     return parsed_response
 
 # Check the status of the InterProScan job
