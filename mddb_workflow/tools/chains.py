@@ -6,21 +6,23 @@ from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 
-from mddb_workflow.utils.auxiliar import warn, load_json, save_json, protein_residue_name_to_letter
+from mddb_workflow.utils.auxiliar import warn, load_json, save_json, protein_residue_name_to_letter, retry_request
 from mddb_workflow.utils.auxiliar import RemoteServiceError
 from mddb_workflow.utils.type_hints import *
 
 # Set analysis version
 CHAINS_VERSION = '0.1'
 
-# Get the sequence and name of the chain in the structure and request the InterProScan
-def request_interpsocan (sequence : str) -> str:
+
+@retry_request
+def request_interproscan (sequence : str) -> str:
+    """Get the sequence and name of the chain in the structure and request the InterProScan."""
     # Set the request URL
     request_url = 'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/run'
     # Set the POST data
     data = urlencode({
         'email': 'daniel.beltran@irbbarcelona.org',
-        'title': f'Chain X',
+        'title': 'Chain X',
         'sequence': f'>chain X\n{sequence}'
     }).encode()
     parsed_response = None
@@ -30,7 +32,7 @@ def request_interpsocan (sequence : str) -> str:
     except HTTPError as error:
         print(error.read().decode())
         if error.code == 404:
-            print(f' Not found')
+            print(' Not found')
             return None
         else:
             raise ValueError('Something went wrong with the InterProScan request: ' + request_url)
@@ -159,7 +161,7 @@ def prepare_chain_references (
         # Request the InterProScan service
         # Keep the returned job ids to check the status and get the results later
         if chain_data['interproscan'] == None:
-            interproscan_jobid = request_interpsocan(sequence)
+            interproscan_jobid = request_interproscan(sequence)
             interproscan_jobids[sequence] = interproscan_jobid
 
     # Get the pending interpsocan jobids

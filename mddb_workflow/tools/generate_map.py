@@ -4,7 +4,7 @@ import urllib.request
 import numpy as np
 import re
 
-from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException
+from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException, retry_request
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -209,7 +209,7 @@ def generate_protein_mapping (
                     continue
                 # If the match is a 'no referable' exception then set a no referable flag
                 if type(uniprot_id) == NoReferableException:
-                    chain_data['match'] = { 'ref': NO_REFERABLE_FLAG }
+                    chain_data['match'] = { 'ref': NO_REFERABLE_FLAG, 'map': sequence_map, 'score': align_score }
                     continue
                 # Proceed to set the corresponding reference toherwise
                 reference = references[uniprot_id]
@@ -423,7 +423,7 @@ def get_parsed_chains (structure : 'Structure') -> list:
 # Set verbose = True to see a visual summary of the sequence alignments in the logs
 def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Optional[ tuple[list, float] ]:
 
-    #print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
+    if verbose: print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
 
     # If the new sequence is all 'X' stop here, since this would make the alignment infinite
     # Then an array filled with None is returned
@@ -497,6 +497,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Op
 # WARNING: This always means results will correspond to curated entries only
 #   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
 # Since this function may take some time we always cache the result
+@retry_request
 def blast (sequence : str) -> Optional[str]:
     print(f'Throwing blast for sequence {sequence}. This may take some time...')
     result = NCBIWWW.qblast(

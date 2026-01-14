@@ -1,15 +1,14 @@
 import re
 import json
-import time
+
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM
-from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn
+from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, retry_request, handle_http_request
 from mddb_workflow.utils.type_hints import *
-import http.client
-from urllib.request import urlopen
-from urllib.error import HTTPError, URLError
+
+
 from functools import lru_cache
 import requests
 from scipy.optimize import linear_sum_assignment
@@ -18,38 +17,6 @@ import numpy as np
 # Set the expected ligand data fields
 LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid', 'inchikey'])
 MINIMUM_TANIMOTO_THRESHOLD = 0.3
-
-# Retry configuration for HTTP requests
-MAX_RETRIES = 3
-RETRY_DELAY = 1.0  # seconds
-RETRY_BACKOFF = 2.0  # exponential backoff multiplier
-
-
-def retry_request(func):
-    """Decorator to retry HTTP requests with exponential backoff."""
-    def wrapper(*args, **kwargs):
-        delay = RETRY_DELAY
-        last_exception = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                return func(*args, **kwargs)
-            # Catch network-related exceptions for retry
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                    requests.exceptions.RequestException,
-                    http.client.RemoteDisconnected) as e:
-                last_exception = e
-                if attempt < MAX_RETRIES - 1:
-                    print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
-                    time.sleep(delay)
-                    delay *= RETRY_BACKOFF
-                else:
-                    print(f"Request failed after {MAX_RETRIES} attempts: {e}")
-            # Do not retry for HTTPError or URLError
-            except (HTTPError, URLError) as e:
-                raise e
-        raise last_exception
-    return wrapper
 
 
 @retry_request
@@ -60,20 +27,6 @@ def _make_get_request(url: str) -> requests.Response:
 @retry_request
 def _make_post_request(url, payload):
     return requests.post(url, data=payload, timeout=30)
-
-
-@retry_request
-def handle_http_request(request_url, error_context="request") -> Optional[str]:
-    """Make an HTTP request handler with consistent error handling."""
-    try:
-        with urlopen(request_url) as response:
-            return response.read().decode("utf-8", errors='ignore')
-    except HTTPError as error:
-        if error.code == 404:
-            return None
-        raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
-    except URLError as error:
-        raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
 
 
 def record_pubchem_match(
@@ -354,7 +307,7 @@ def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     parsed_response = request_pdb_data(pdb_id, query)
     # The response may be None
     # e.g. an obsolete entry with no replacement
-    if parsed_response == None: return []
+    if parsed_response is None: return []
     # Mine data for nonpolymer entities
     nonpolymers = parsed_response['nonpolymer_entities']
     # If there are no nonpolymer entities, another type of entitie could be used
