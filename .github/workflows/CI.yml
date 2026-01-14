@@ -72,8 +72,10 @@ jobs:
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         shell: bash -l {0}
         run: pytest -m CI
+        timeout-minutes: 20
 
       - name: Run extensive tests
         if: github.event_name == 'schedule'
         shell: bash -l {0}
         run: pytest -m release
+        timeout-minutes: 60
