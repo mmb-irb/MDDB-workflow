@@ -368,6 +368,7 @@ def main():
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_scope=args.query_scope,
+                include_logs=True
             )
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe

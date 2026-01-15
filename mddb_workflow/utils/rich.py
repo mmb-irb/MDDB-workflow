@@ -2,6 +2,29 @@ import contextlib
 from rich.errors import NotRenderableError
 from rich.live import Live
 import time
+import re
+
+
+def _convert_html_links_to_rich(text: str) -> str:
+    """Convert HTML links to Rich markup format.
+
+    Args:
+        text: String that may contain HTML anchor tags
+
+    Returns:
+        String with Rich markup links or original text
+
+    """
+    # Pattern to match <a href="URL" ...>text</a>
+    pattern = r'<a href="([^"]+)"[^>]*>([^<]+)</a>'
+
+    def replace_link(match):
+        url = match.group(1)
+        # link_text = match.group(2)
+        return f'[link={url}]📝[/link]'
+
+    result = re.sub(pattern, replace_link, text)
+    return result
 
 
 # From: https://gist.github.com/izikeros/b0d32072f234fba73650eb4b1e9c0017
@@ -10,7 +33,9 @@ def rich_display_dataframe(df, row_limit=None, title="Dataframe", only_return=Fa
 
     Args:
         df (pd.DataFrame): dataframe to display
+        row_limit (int, optional): maximum number of rows to display
         title (str, optional): title of the table. Defaults to "Dataframe".
+        only_return (bool, optional): if True, return table without printing
 
     Raises:
         NotRenderableError: if dataframe cannot be rendered
@@ -29,8 +54,10 @@ def rich_display_dataframe(df, row_limit=None, title="Dataframe", only_return=Fa
     for col in df.columns:
         table.add_column(col)
     for row in df.values:
+        # Convert HTML links to Rich markup for each cell
+        rich_row = [_convert_html_links_to_rich(cell) for cell in row]
         with contextlib.suppress(NotRenderableError):
-            table.add_row(*row)
+            table.add_row(*rich_row)
         if row_limit and table.row_count >= row_limit:
             break
     if only_return:

@@ -516,11 +516,6 @@ class Dataset:
         """Retrieve all MD status from the SQLite database as a list of tuples."""
         return self.query_table('mds')
 
-    @property
-    def project_directories(self) -> list[str]:
-        """Retrieve all project rel_path from the database."""
-        return [st[1] for st in self.projects_table]
-
     def get_dataframe(self,
             uuid_length=None,
             root_path=None,
@@ -529,6 +524,7 @@ class Dataset:
             query_path: list[str] | str = [],
             query_state: list[str] | str = [],
             query_scope: str = None,
+            include_logs: bool = False,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
@@ -542,6 +538,7 @@ class Dataset:
             query_path (list[str] | str): If provided, filters rows whose 'rel_path' matches these glob patterns.
             query_state (list[str] | str): If provided, filters rows whose 'state' matches this value/list of values.
             query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
+            include_logs (bool, optional): If True, adds 'log_file' and 'err_file' columns with HTML links to the latest log files.
 
         """
         query_path = _type_check_dir_list(query_path)
@@ -599,6 +596,30 @@ class Dataset:
                     lambda x: x[:uuid_length] if isinstance(x, str) and x else x
                 )
 
+        # Optionally add log file columns with HTML links
+        if include_logs:
+            def make_log_link(log_path: str | None, link_text: str) -> str:
+                """Create an HTML link for a log file."""
+                if log_path and Path(log_path).exists():
+                    file_url = f"file://{log_path}"
+                    return f'<a href="{file_url}" target="_blank">{link_text}</a>'
+                return ''
+
+            log_files = []
+            err_files = []
+            for idx, row in df_joined.iterrows():
+                rel_path = row['rel_path']
+                latest_out, latest_err = self._get_latest_log_files(rel_path)
+
+                out_name = Path(latest_out).name if latest_out else ''
+                err_name = Path(latest_err).name if latest_err else ''
+
+                log_files.append(make_log_link(latest_out, out_name))
+                err_files.append(make_log_link(latest_err, err_name))
+
+            df_joined['log_file'] = log_files
+            df_joined['err_file'] = err_files
+
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
         if not query_scope and 'project_uuid' in cols:
@@ -609,8 +630,36 @@ class Dataset:
 
     @property
     def dataframe(self) -> 'pd.DataFrame':
-        """Retrieve the joined DataFrame view of projects and MDs."""
+        """Retrieve the joined DataFrame view of projects and MDs with log file links."""
         return self.get_dataframe(uuid_length=8)
+
+    def _get_latest_log_files(self, rel_path: str) -> tuple[str | None, str | None]:
+        """Find the most recent .out and .err log files in the rel_path/logs directory."""
+        logs_dir = Path(self._rel_to_abs(rel_path)) / 'logs'
+        if not logs_dir.exists():
+            return None, None
+
+        out_files = sorted(logs_dir.glob('*.out'), key=lambda f: f.stat().st_mtime, reverse=True)
+        err_files = sorted(logs_dir.glob('*.err'), key=lambda f: f.stat().st_mtime, reverse=True)
+
+        latest_out = str(out_files[0]) if out_files else None
+        latest_err = str(err_files[0]) if err_files else None
+
+        return latest_out, latest_err
+
+    def display(self, **kwargs):
+        """Display the dataframe with clickable log links in Jupyter."""
+        from IPython.display import HTML, display
+        # Ensure include_logs is True for display
+        kwargs.setdefault('include_logs', True)
+        kwargs.setdefault('uuid_length', 8)
+        df = self.get_dataframe(**kwargs)
+        html = df.to_html(escape=False)
+        display(HTML(html))
+
+    def _repr_html_(self) -> str:
+        """Return HTML representation for automatic Jupyter notebook display."""
+        return self.dataframe.to_html(escape=False)
 
     def launch_workflow(self,
         query_path: list[str] | str = [],
@@ -803,83 +852,3 @@ def _type_check_dir_list(dir_list: list[str] | str) -> list[str]:
     if isinstance(dir_list, str):
         dir_list = [dir_list]
     return dir_list
-
-
-class OldDataset:
-    """Placeholder for the old Dataset class function that have to be migrated or removed."""
-
-    def show_groups(self, cmd=False):
-        """Display the groups of projects based on their status messages."""
-        if cmd:
-            print("Project groups based on status messages:\n")
-            status = self.status
-            grouped = status.groupby('group')
-            for group_id, group_df in grouped:
-                print(f"Group {group_id}:")
-                print(f"Message: {group_df['message'].iloc[0]}")
-                print("Projects:")
-                for rel_path in group_df.index:
-                    print(f"  - {rel_path}")
-                print()
-        else:
-            grouped = self.status.groupby('group').agg({
-                'message': 'first',
-                'state': 'count'
-            }).rename(columns={'state': 'count'})
-            return grouped
-
-    def status_with_links(self) -> pd.DataFrame:
-        """Return the status DataFrame with clickable log file links."""
-        self._status = None  # Force reload
-        df = self.status.copy()
-
-        # Create clickable links for log files
-        def make_out_link(row):
-            if row['log_file'] and row['state'] != 'not_run':
-                project_dir = os.path.join(self.root_path, row.name)
-                log_path = os.path.join(project_dir, row['log_file'])
-                # Create a file:// URL for local files
-                file_url = f"file://{log_path}"
-                return f'<a href="{file_url}" target="_blank">{row["log_file"].split("/")[-1]}</a>'
-            return row['log_file']
-
-        # Create clickable links for error log files
-        def make_error_link(row):
-            if row['err_file'] and row['state'] != 'not_run':
-                project_dir = os.path.join(self.root_path, row.name)
-                error_log_path = os.path.join(project_dir, row['err_file'])
-                # Create a file:// URL for local files
-                file_url = f"file://{error_log_path}"
-                return f'<a href="{file_url}" target="_blank">{row["err_file"].split("/")[-1]}</a>'
-            return row['err_file']
-
-        df['log_file_link'] = df.apply(make_out_link, axis=1)
-        df['err_file_link'] = df.apply(make_error_link, axis=1)
-        return df
-
-    def display_status_with_links(self):
-        """Display the status DataFrame with clickable links in Jupyter."""
-        from IPython.display import HTML, display
-
-        df = self.status_with_links()
-        # Drop the original log_file columns and rename the link columns
-        df_display = df.drop(['log_file', 'err_file'], axis=1)
-        df_display = df_display.rename(columns={
-            'log_file_link': 'log_file',
-            'err_file_link': 'err_file'
-        })
-
-        # Convert to HTML and display
-        html = df_display.to_html(escape=False)
-        display(HTML(html))
-
-    def _repr_html_(self):
-        """Return HTML representation for Jupyter notebooks."""
-        df = self.status_with_links()
-        # Drop the original log_file columns and rename the link columns
-        df_display = df.drop(['log_file', 'err_file'], axis=1)
-        df_display = df_display.rename(columns={
-            'log_file_link': 'log_file',
-            'err_file_link': 'err_file'
-        })
-        return df_display.to_html(escape=False)
