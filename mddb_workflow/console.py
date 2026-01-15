@@ -353,7 +353,7 @@ def main():
         dataset = Dataset(args.dataset_path)
         if args.dataset_subcommand == 'add':
             dataset.add_entries(
-                args.project_dirs,
+                paths_or_globs=args.paths_or_globs,
                 ignore_dirs=args.ignore_dirs,
                 md_dirs=args.md_dirs,
                 verbose=args.verbose
