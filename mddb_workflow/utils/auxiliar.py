@@ -527,8 +527,10 @@ class CaptureOutput (object):
         os.dup2(self.pipe_in, self.original_streamfd)
         return self
     def __exit__(self, type, value, traceback):
+        # Make sure there is at least some output or the 'readOutput' may hang forever
+        # This has been observed only when running the workflow from Jupyter Notebook
         # Print the escape character to make the readOutput method stop:
-        self.original_stream.write(self.escape_char)
+        self.original_stream.write(' ' + self.escape_char)
         # Flush the stream to make sure all our data goes in before
         # the escape character:
         self.original_stream.flush()
@@ -542,7 +544,10 @@ class CaptureOutput (object):
         os.close(self.streamfd)
     def readOutput(self):
         while True:
-            char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
+            content = os.read(self.pipe_out, os.O_RDONLY)
+            char = content.decode(self.original_stream.encoding)
+            #print(char)
+            #char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
             if not char or self.escape_char in char:
                 break
             self.captured_text += char
