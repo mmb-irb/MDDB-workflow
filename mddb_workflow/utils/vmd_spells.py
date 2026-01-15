@@ -29,7 +29,7 @@ vmd_supported_structure_formats = {'pdb', 'prmtop', 'psf', 'parm', 'gro'} # DANI
 vmd_supported_trajectory_formats = {'mdcrd', 'crd', 'dcd', 'xtc', 'trr', 'nc', 'netcdf', 'cdf', 'pdb', 'rst7'}
 
 # Set a vmd format translator
-vmd_format = {
+VMD_FORMAT = {
     'pdb': 'pdb',
     'prmtop': 'prmtop',
     'psf': 'psf',
@@ -45,32 +45,48 @@ vmd_format = {
     'rst7': 'rst7'
 }
 
-# Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file
-def vmd_to_pdb (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    output_structure_filename : str):
+# Set the command of the different available writers
+# These have been tested but for sure there are more
+VMD_WRITERS = {
+    'pdb': 'writepdb',
+    'psf': 'writepsf'
+}
+
+# Use VMD to conver format or filter structure or topology files
+def vmd_converter (
+    input_structure_or_topology_filepath : str,
+    input_trajectory_filepath : str,
+    output_structure_or_topology_filepath : str,
+    atom_selection : str = 'all'):
 
     # Get the trajectory format according to the vmd dictionary
-    input_trajectory_file = File(input_trajectory_filename)
+    input_trajectory_file = File(input_trajectory_filepath)
     trajectory_format = input_trajectory_file.format
-    vmd_trajectory_format = vmd_format[trajectory_format]
+    vmd_trajectory_format = VMD_FORMAT.get(trajectory_format)
+    if vmd_trajectory_format is None:
+        raise RuntimeError(f'Not supported VMD input format {trajectory_format}')
+
+    # Get the output writer according to its format
+    output_file = File(output_structure_or_topology_filepath)
+    vmd_writer = VMD_WRITERS.get(output_file.format)
+    if vmd_writer is None:
+        raise RuntimeError(f'Not supported VMD writer for output format {output_file.format}')
 
     # Prepare a script for VMD to run. This is Tcl language
     with open(commands_filename, "w") as file:
         # Load only the first frame of the trajectory
-        file.write(f'animate read {vmd_trajectory_format} {input_trajectory_filename} end 1\n')
-        # Select all atoms
-        file.write('set all [atomselect top "all"]\n')
+        file.write(f'animate read {vmd_trajectory_format} {input_trajectory_filepath} end 1\n')
+        # Select the specified atoms
+        file.write(f'set myselection [atomselect top "{atom_selection}"]\n')
         # Write the current topology in 'pdb' format
-        file.write('$all frame first\n')
-        file.write(f'$all writepdb {output_structure_filename}\n')
+        file.write('$myselection frame first\n')
+        file.write(f'$myselection {vmd_writer} {output_structure_or_topology_filepath}\n')
         file.write('exit\n')
 
     # Run VMD
     vmd_process = run([
         "vmd",
-        input_structure_filename,
+        input_structure_or_topology_filepath,
         "-e",
         commands_filename,
         "-dispdev",
@@ -78,13 +94,23 @@ def vmd_to_pdb (
     ], stdout=PIPE, stderr=PIPE)
     output_logs = vmd_process.stdout.decode()
 
-    if not exists(output_structure_filename):
+    # If the expected output does not exist then warn the user
+    if not exists(output_structure_or_topology_filepath):
         print(output_logs)
         error_logs = vmd_process.stderr.decode()
         print(error_logs)
         raise ToolError('Something went wrong with VMD')
-
     os.remove(commands_filename)
+
+# Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file
+def vmd_to_pdb (
+    input_structure_filename : str,
+    input_trajectory_filename : str,
+    output_structure_filename : str):
+    return vmd_converter(
+        input_structure_filename,
+        input_trajectory_filename,
+        output_structure_filename)
 # Set function supported formats
 vmd_to_pdb.format_sets = [
     {

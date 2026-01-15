@@ -8,9 +8,9 @@ from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter, pdb_filter
+from mddb_workflow.utils.vmd_spells import vmd_converter
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_charges import get_raw_charges
-from mddb_workflow.tools.check_inputs import check_and_fix_psf
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -86,8 +86,23 @@ def filter_atoms (
     # Filter topology according to the file format
     if input_topology_file != MISSING_TOPOLOGY and input_topology_file.exists:
         print('Filtering topology...')
-        # Pytraj supported formats
-        if input_topology_file.is_pytraj_supported():
+        # Check the PSF file before the rest of Pytraj supported formats
+        # NEVER FORGET: Pytraj filters PSF files but it stripes chains and writes problematic headers
+        # Pytraj-generated PSF files may not be read y MDtraj or MDAnalysis
+        # To avoid this problem we use VMD, which has proved to do it right
+        if input_topology_file.format == 'psf':
+            # Run VMD to generate the filtered PSF topology
+            vmd_converter(
+                input_topology_file.path,
+                input_trajectory_file.path,
+                output_topology_file.path,
+                atom_selection = keep_selection.to_vmd()
+            )
+            # Double check the amout of atoms in the topology after filtering
+            pt_topology = pt.load_topology(filename=output_topology_file.path)
+            filtered_topology_atoms_count = pt_topology.n_atoms
+        # The rest of Pytraj supported formats
+        elif input_topology_file.is_pytraj_supported():
             # Load the topology and count its atoms
             pt_topology = pt.load_topology(filename=input_topology_file.path)
             topology_atoms_count = pt_topology.n_atoms
@@ -107,8 +122,6 @@ def filter_atoms (
                     format=input_topology_file.get_pytraj_parm_format(),
                     overwrite=True
                 )
-                # If it is a PSF file then we may need to fix it afterwards
-                check_and_fix_psf(output_topology_file, output_topology_file)
         # Gromacs format format
         elif input_topology_file.format == 'tpr':
             # Get the input tpr atom count
