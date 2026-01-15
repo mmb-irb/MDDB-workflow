@@ -365,10 +365,10 @@ def main():
                 root_path=dataset.root_path,
                 sort_by=args.sort_by,
                 asc=True,
+                include_logs=args.include_logs,
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_scope=args.query_scope,
-                include_logs=True
             )
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe
@@ -766,6 +766,7 @@ ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['g
 # Dataset show subcommand
 ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
+ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 # Dataset scan subcommand

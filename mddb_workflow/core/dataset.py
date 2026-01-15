@@ -521,10 +521,10 @@ class Dataset:
             root_path=None,
             sort_by='last_modified',
             asc=False,
+            include_logs: bool = False,
             query_path: list[str] | str = [],
             query_state: list[str] | str = [],
             query_scope: str = None,
-            include_logs: bool = False,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
@@ -535,10 +535,10 @@ class Dataset:
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
             sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'rel_path'.
             asc (bool, optional): Whether to sort in ascending order. Defaults to True.
+            include_logs (bool, optional): If True, adds 'log_file' and 'err_file' columns with HTML links to the latest log files.
             query_path (list[str] | str): If provided, filters rows whose 'rel_path' matches these glob patterns.
             query_state (list[str] | str): If provided, filters rows whose 'state' matches this value/list of values.
             query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
-            include_logs (bool, optional): If True, adds 'log_file' and 'err_file' columns with HTML links to the latest log files.
 
         """
         query_path = _type_check_dir_list(query_path)
