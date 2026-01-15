@@ -751,8 +751,8 @@ common_ds_parser.add_argument("dataset_path", nargs='?', default=None, help=ds_h
 # Dataset add subcommand
 dataset_add = dataset_subparsers.add_parser("add", formatter_class=CustomHelpFormatter, help="Add a directory and add all MDDB projects to a dataset storage file.", parents=[common_ds_parser])
 dataset_add.add_argument("-p", "--paths_or_globs", nargs='*', help=ds_help['add_entries']['paths_or_globs'])
+dataset_add.add_argument("-i", "--ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
 dataset_add.add_argument("-md", "--md_dirs", nargs='*', help=ds_help['add_entries']['md_dirs'], default=[])
-dataset_add.add_argument("-i", "-ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-qp", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
