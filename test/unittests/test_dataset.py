@@ -1,6 +1,7 @@
 import os
 import pytest
 import tempfile
+import subprocess
 from mddb_workflow.core.dataset import Dataset, State
 from pathlib import Path
 
@@ -48,3 +49,66 @@ def test_add_remove_entries():
         ds.remove_entry(tmpdir / "proj1/replica0", verbose=True)
         ds.remove_entry(tmpdir / "proj1/replica1", verbose=True)
         assert ds.get_status(tmpdir / "proj1")['num_mds'] == 1  # One replica should remain
+
+@pytest.mark.unit_int
+def test_dataset_console_commands():
+    """Test dataset console commands help output."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        db_path = tmpdir / "dataset.db"
+        # Test main dataset help
+        result = subprocess.run(
+            ['mwf', 'dataset', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'dataset' in result.stdout.lower()
+        # Test add subcommand help
+        result = subprocess.run(
+            ['mwf', 'dataset', 'add', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'add' in result.stdout.lower()
+        # Test show subcommand help
+        result = subprocess.run(
+            ['mwf', 'dataset', 'show', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'show' in result.stdout.lower()
+        # Test inputs subcommand help
+        result = subprocess.run(
+            ['mwf', 'dataset', 'inputs', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'inputs' in result.stdout.lower()
+        # Test run subcommand help
+        result = subprocess.run(
+            ['mwf', 'dataset', 'run', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'run' in result.stdout.lower()
+        # Test scan subcommand help
+        result = subprocess.run(
+            ['mwf', 'dataset', 'scan', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'scan' in result.stdout.lower()
+        # Test watch subcommand help
+        result = subprocess.run(
+            ['mwf', 'dataset', 'watch', '--help'],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert 'watch' in result.stdout.lower()

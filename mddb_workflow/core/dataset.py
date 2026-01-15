@@ -1,4 +1,4 @@
-from mddb_workflow.utils.auxiliar import load_yaml, is_glob, warn
+from mddb_workflow.utils.auxiliar import load_yaml, is_glob
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import CACHE_FILENAME
@@ -35,7 +35,7 @@ class Dataset:
         """Initialize the Dataset object and connect to SQLite DB.
 
         Args:
-            dataset_path (str): Path to the root directory of the dataset.
+            dataset_path (str): Path to the dataset storage file, normally an .db file.
 
         """
         self.dataset_path = Path(dataset_path).resolve()
@@ -151,6 +151,44 @@ class Dataset:
                 print(f"Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
             self.update_status(uuid, state=State.NEW, message='No information recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
 
+    def add_entries(self,
+        paths_or_globs: list[str] | str,
+        ignore_dirs: list[str] | str = [],
+        md_dirs: list[str] | str = [],
+        verbose: bool = True,
+    ):
+        """Add multiple project and MD entries to the database from given paths or glob patterns.
+
+        Args:
+            paths_or_globs (list[str]): List of directory paths or glob patterns to search for projects.
+            ignore_dirs (list[str]): List of directory paths or glob patterns to ignore.
+            md_dirs (list[str]): List of directory paths or glob patterns to identify MDs within each project.
+            verbose (bool): Whether to print verbose output.
+
+        """
+        # Normalize str inputs to lists
+        paths_or_globs = _type_check_dir_list(paths_or_globs)
+        ignore_dirs = _type_check_dir_list(ignore_dirs)
+        md_dirs = _type_check_dir_list(md_dirs)
+
+        project_directories = _resolve_directory_patterns(paths_or_globs)
+        ignore_dirs = _resolve_directory_patterns(ignore_dirs)
+        for project_dir in project_directories:
+            rel_path = self._abs_to_rel(project_dir)
+            if project_dir in ignore_dirs:
+                if verbose: print(f"Ignoring project: {rel_path}")
+                continue
+            if not project_dir.exists():
+                if verbose: print(f"Warning: Project directory {rel_path} does not exist. Skipping.")
+                continue
+            # Add project row (num_mds will be set automatically by triggers when MDs are added)
+            self.add_project(project_dir, make_uuid=True, verbose=verbose)
+            # Count MDs in this project
+            project_md_dirs = [md for md in _resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
+            # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
+            for md_dir_path in project_md_dirs:
+                self.add_md(md_dir_path, make_uuid=True, verbose=verbose)
+
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
         """Retrieve a project or MD's status from the database by UUID."""
         cur = self.conn.cursor()
@@ -265,108 +303,75 @@ class Dataset:
                 print(f"No entry found for UUID '{uuid}' to delete")
         self.conn.commit()
 
-    def add_entries(self,
-        paths_or_globs: list[str] | str,
-        ignore_dirs: list[str] | str = [],
-        md_dirs: list[str] | str = [],
-        verbose: bool = True,
-    ):
-        """Scan all project directories and their MDs (replicas/subprojects) and register them in the database if not present.
-        This should be called once after creating the Dataset to ensure all projects and MDs are tracked in the DB.
-        """
-        # Normalize str inputs to lists
-        paths_or_globs = _type_check_dir_list(paths_or_globs)
-        ignore_dirs = _type_check_dir_list(ignore_dirs)
-        md_dirs = _type_check_dir_list(md_dirs)
-
-        project_directories = _resolve_directory_patterns(paths_or_globs)
-        ignore_dirs = _resolve_directory_patterns(ignore_dirs)
-        for project_dir in project_directories:
-            rel_path = self._abs_to_rel(project_dir)
-            if project_dir in ignore_dirs:
-                if verbose: print(f"Ignoring project: {rel_path}")
-                continue
-            if not project_dir.exists():
-                if verbose: print(f"Warning: Project directory {rel_path} does not exist. Skipping.")
-                continue
-            # Add project row (num_mds will be set automatically by triggers when MDs are added)
-            self.add_project(project_dir, make_uuid=True, verbose=verbose)
-            # Count MDs in this project
-            project_md_dirs = [md for md in _resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
-            # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
-            for md_dir_path in project_md_dirs:
-                self.add_md(md_dir_path, make_uuid=True, verbose=verbose)
-
     def generate_inputs_yaml(self,
             inputs_template_path: str,
-            path_query: str = '*',
-            ignore_dirs: list[str] | str = [],
-            input_generator: Optional[Callable | str] = None,
+            inputs_generator: Optional[Callable | str] = None,
             overwrite: bool = False,
-            inputs_filename: str = 'inputs.yaml'
+            inputs_filename: str = 'inputs.yaml',
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
         ):
         """Generate an inputs.yaml file for the project directory based on a Jinja2 template.
 
         Args:
             inputs_template_path (str):
-                The file path to the Jinja2 template file that will be used to generate
-                the inputs YAML files.
-            path_query (str):
-                If provided, only generate inputs.yaml for project directories matching this glob pattern.
-            ignore_dirs (list[str] | str):
-                A list of directory names or glob patterns to be ignored when generating inputs.yaml files.
-            input_generator (callable):
+                Path to the inputs Jinja2 template file to be used for generating the inputs files.
+            inputs_generator (callable):
                 A callable function intended for generating input values or a string path
-                to a generator file with a input_generator(project_dir) function.
+                to a generator file with a inputs_generator(project_dir) function.
                 Accepts the project directory name (DIR) as an argument and returns a
                 dictionary of the key-value pairs to be used in the template.
             overwrite (bool):
                 Whether to overwrite existing inputs.yaml files.
             inputs_filename (str):
                 The name of the inputs YAML file to be generated.
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+
 
         """
-        # Normalize str inputs to lists
-        ignore_dirs = _type_check_dir_list(ignore_dirs)
-        ignore_dirs = _resolve_directory_patterns(ignore_dirs)
+        # Query projects directly from database with filters
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        filtered_projects = self.query_table('projects', query_path, query_state)
 
         # Load the template
         with open(inputs_template_path, 'r') as f:
             template_str = f.read()
 
         # Generate input values using the provided generator function if any
-        if type(input_generator) is str:
-            print(f"Loading input generator from file: {input_generator}")
+        if type(inputs_generator) is str:
+            print(f"Loading inputs generator from file: {inputs_generator}")
             # Load the generator module
-            spec = importlib.util.spec_from_file_location("generator", input_generator)
+            spec = importlib.util.spec_from_file_location("generator", inputs_generator)
             generator_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(generator_module)
-            # Call the input_generator function
-            if not hasattr(generator_module, 'input_generator'):
-                raise ValueError(f"Generator file '{input_generator}' must define a input_generator(project_dir) function")
+            # Call the inputs_generator function
+            if not hasattr(generator_module, 'inputs_generator'):
+                raise ValueError(f"Generator file '{inputs_generator}' must define a inputs_generator(project_dir) function")
 
-            input_generator = generator_module.input_generator
+            inputs_generator = generator_module.inputs_generator
 
         # Generate inputs.yaml for each project directory
-        for rel_path in self.project_directories:
-            project_dir = self._rel_to_abs(rel_path)
-            if not Path(project_dir).match(path_query):
-                continue
-            if project_dir in ignore_dirs:
-                print(f"Ignoring project: {project_dir}")
-                continue
+        for project_entry in filtered_projects:
+            project_dict = dict(zip(self.project_columns, project_entry))
+            project_dir = self._rel_to_abs(project_dict['rel_path'])
+
             template = jinja2.Template(template_str)
             inputs_yaml_path = os.path.join(project_dir, inputs_filename)
             if os.path.exists(inputs_yaml_path) and not overwrite:
                 print(f"{inputs_yaml_path} already exists and overwrite is set to False. Skipping.")
                 continue
             generated_input = {}
-            if input_generator:
+            if inputs_generator:
                 # If generator returned None, use empty dict
-                generated_input = input_generator(project_dir) or {}
+                generated_input = inputs_generator(project_dir) or {}
             # Render the template with project defaults
             rendered_yaml = template.render(DIR=Path(project_dir).name,
                                             DATASET=os.path.relpath(self.dataset_path, start=project_dir),
+                                            project_status=project_dict,
                                             **generated_input)
             # Write the rendered YAML to inputs.yaml
             with open(inputs_yaml_path, 'w') as f:
@@ -443,92 +448,128 @@ class Dataset:
             elif verbose:
                 print(f"  MD already exists: {rel_path} (UUID: {uuid})")
 
-    @property
-    def projects_table(self) -> dict:
-        """Retrieve all project status from the SQLite database as a list of tuples."""
+    def _build_where_clause(self, query_path: list[str] = None, query_state: list[str] = None) -> tuple[str, list]:
+        """Build a SQL WHERE clause from query parameters.
+
+        Args:
+            query_path: List of glob patterns to filter rel_path by (uses GLOB with OR)
+            query_state: List of states to filter by (uses IN clause)
+
+        Returns:
+            Tuple of (where_clause_string, parameters_list)
+
+        """
+        conditions = []
+        params = []
+
+        if query_state:
+            placeholders = ','.join('?' * len(query_state))
+            conditions.append(f"state IN ({placeholders})")
+            params.extend(query_state)
+
+        if query_path:
+            # Filter out '*' patterns and convert glob patterns to SQL GLOB patterns
+            # Python glob uses ** for recursive, SQL GLOB uses * for any chars
+            glob_conditions = []
+            for pattern in query_path:
+                if pattern and pattern != '*':
+                    sql_pattern = pattern.replace('**/', '*').replace('**', '*')
+                    glob_conditions.append("rel_path GLOB ?")
+                    params.append(sql_pattern)
+            if glob_conditions:
+                conditions.append(f"({' OR '.join(glob_conditions)})")
+
+        where_clause = " AND ".join(conditions) if conditions else ""
+        return where_clause, params
+
+    def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None) -> list[tuple]:
+        """Query an available table with optional filters.
+
+        Args:
+            table: Table name to query ('projects' or 'mds')
+            query_path: List of glob patterns to filter rel_path by
+            query_state: List of states to filter by
+
+        Returns:
+            List of tuples with project data
+
+        """
+        if table not in ['projects', 'mds']:
+            raise ValueError("Table must be either 'projects' or 'mds'")
         cur = self.conn.cursor()
-        cur.execute(f"SELECT {', '.join(self.project_columns)} FROM projects ORDER BY rel_path")
-        projects = cur.fetchall()
-        return projects
+        where_clause, params = self._build_where_clause(query_path, query_state)
+        cols = self.project_columns if table == 'projects' else self.md_columns
+        query = f"SELECT {', '.join(cols)} FROM {table}"
+        if where_clause:
+            query += f" WHERE {where_clause}"
+        query += " ORDER BY rel_path"
+        cur.execute(query, params)
+        return cur.fetchall()
 
     @property
-    def mds_table(self) -> dict:
+    def projects_table(self) -> list[tuple]:
+        """Retrieve all project status from the SQLite database as a list of tuples."""
+        return self.query_table('projects')
+
+    @property
+    def mds_table(self) -> list[tuple]:
         """Retrieve all MD status from the SQLite database as a list of tuples."""
-        cur = self.conn.cursor()
-        cur.execute(f"SELECT {', '.join(self.md_columns)} FROM mds ORDER BY rel_path")
-        mds = cur.fetchall()
-        return mds
+        return self.query_table('mds')
 
     @property
     def project_directories(self) -> list[str]:
         """Retrieve all project rel_path from the database."""
         return [st[1] for st in self.projects_table]
 
-    @property
-    def dataframes(self) -> dict:
-        """Retrieve project and MD status from the SQLite database as pandas DataFrames.
-
-        Returns:
-            dict: Dictionary with 'projects' and 'mds' keys, each containing a DataFrame.
-
-        """
-        # Create DataFrames
-        df_projects = pd.DataFrame(self.projects_table, columns=self.project_columns)
-        df_projects.set_index('uuid', inplace=True)
-        # Create MDs DataFrame
-        df_mds = pd.DataFrame(self.mds_table, columns=self.md_columns)
-        df_mds.set_index('uuid', inplace=True)
-        return {
-            'projects': df_projects,
-            'mds': df_mds
-        }
-
     def get_dataframe(self,
-            path_query: str = '*',
-            state_query: list[str] = [],
-            scope_query: str = None,
             uuid_length=None,
             root_path=None,
             sort_by='last_modified',
-            asc=False
+            asc=False,
+            query_path: list[str] | str = [],
+            query_state: list[str] | str = [],
+            query_scope: str = None,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
         with empty values for the not matching columns.
         Adds a 'scope' column to indicate if the row is from a project or an MD.
 
         Args:
-            path_query (str, optional): If provided, filters rows whose 'rel_path' matches this glob pattern.
-            state_query (list[str], optional): If provided, filters rows whose 'state' matches this value.
-            scope_query (str, optional): If provided, filters rows whose 'scope' matches this value ('Project' or 'MD').
             uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
             sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'rel_path'.
             asc (bool, optional): Whether to sort in ascending order. Defaults to True.
+            query_path (list[str] | str): If provided, filters rows whose 'rel_path' matches these glob patterns.
+            query_state (list[str] | str): If provided, filters rows whose 'state' matches this value/list of values.
+            query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
 
         """
-        dfs = self.dataframes
-        df_projects = dfs['projects'].reset_index()
-        df_mds = dfs['mds'].reset_index()
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
 
-        # Set missing columns for alignment
-        df_projects['scope'] = 'Project'
-        df_mds['scope'] = 'MD'
-
-        # Concatenate, filter rows,sort, and set index
-        if scope_query:
-            scope_query = scope_query.lower()
-            if scope_query not in ['p', 'project', 'm', 'md']:
-                raise ValueError("scope_query must be either 'Project' or 'MD'")
-            if scope_query in ['p', 'project']:
-                df_joined = df_projects.copy()
+        if query_scope:
+            query_scope = query_scope.lower()
+            if query_scope in ('p', 'project', 'projects'):
+                scopes_to_query = ['projects']
+            elif query_scope in ('m', 'md', 'mds'):
+                scopes_to_query = ['mds']
             else:
-                df_joined = df_mds.copy()
+                raise ValueError("query_scope must be either 'project'/'p' or 'md'/'m'")
         else:
-            df_joined = pd.concat([df_projects, df_mds], ignore_index=True)
-        if path_query:
-            df_joined = df_joined[df_joined['rel_path'].apply(lambda x: Path(x).match(path_query) or path_query in x)]
-        if state_query:
-            df_joined = df_joined[df_joined['state'].isin(state_query)]
+            scopes_to_query = ['projects', 'mds']
+
+        # Query data directly from SQLite with filters applied
+        dataframes = []
+        for scope in scopes_to_query:
+            cols = self.project_columns if scope == 'projects' else self.md_columns
+            data = self.query_table(scope, query_path, query_state)
+            df = pd.DataFrame(data, columns=cols)
+            df['scope'] = scope
+            dataframes.append(df)
+
+        df_joined = pd.concat(dataframes, ignore_index=True) if len(dataframes) > 1 else dataframes[0]
+
+        # Sort the DataFrame
         if sort_by == 'last_modified':
             df_joined['last_modified'] = pd.to_datetime(df_joined['last_modified'], format=self.date_format, errors='coerce')
         df_joined = df_joined.sort_values([sort_by], ascending=asc, na_position='first')
@@ -539,7 +580,8 @@ class Dataset:
         df_joined = df_joined.fillna('')
         df_joined.set_index('uuid', inplace=True)
         # Convert num_mds from float to int if present
-        df_joined['num_mds'] = df_joined['num_mds'].apply(lambda x: int(x) if isinstance(x, float) and not pd.isna(x) else x)
+        if 'num_mds' in df_joined.columns:
+            df_joined['num_mds'] = df_joined['num_mds'].apply(lambda x: int(x) if isinstance(x, float) and not pd.isna(x) else x)
         # Optionally make rel_path relative to root_path
         if root_path is not None:
             root_path = os.path.abspath(root_path)
@@ -559,7 +601,7 @@ class Dataset:
 
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
-        if not scope_query:
+        if not query_scope and 'project_uuid' in cols:
             cols.insert(0, cols.pop(cols.index('project_uuid')))
             cols.insert(1, cols.pop(cols.index('scope')))
         df_joined = df_joined[cols]
@@ -571,8 +613,8 @@ class Dataset:
         return self.get_dataframe(uuid_length=8)
 
     def launch_workflow(self,
-        path_query: str = '*',
-        state_query: list = [],
+        query_path: list[str] | str = [],
+        query_state: list[str] | str = [],
         n_jobs: int = 0,
         pool_size: int = 1,
         slurm: bool = False,
@@ -582,12 +624,10 @@ class Dataset:
         """Launch the workflow for each project directory in the dataset.
 
         Args:
-            path_query (str):
-                If provided, only launch the workflow for project directories
-                whose relative path matches this glob pattern.
-            state_query (list[str]):
-                If provided, only launch the workflow for project directories
-                whose current state matches this value.
+            query_path (list[str] | str):
+                If provided, filters rows whose 'rel_path' matches these glob patterns.
+            query_state (list[str] | str):
+                If provided, filters rows whose 'state' matches this value/list of values.
             n_jobs (int):
                 Number of jobs to launch. If 0, all jobs are launched.
             pool_size (int):
@@ -615,14 +655,15 @@ class Dataset:
         parallel = pool_size > 1 and not slurm
         jobs_to_run = []
 
+        # Query projects directly from database with filters
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        filtered_projects = self.query_table('projects', query_path, query_state)
+
         n = 0
-        for project_entry in self.projects_table:
+        for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
             rel_path = project_dict['rel_path']
-            if not Path(rel_path).match(path_query):
-                continue
-            if state_query and project_dict['state'] not in state_query:
-                continue
             project_dir = self._rel_to_abs(rel_path)
 
             n += 1
