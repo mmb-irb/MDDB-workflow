@@ -356,7 +356,7 @@ def main():
                 paths_or_globs=args.paths_or_globs,
                 ignore_dirs=args.ignore_dirs,
                 md_dirs=args.md_dirs,
-                verbose=args.verbose
+                verbose=True
             )
 
         elif args.dataset_subcommand == 'show':
