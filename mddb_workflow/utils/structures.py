@@ -779,11 +779,14 @@ class Residue:
         residue_atom_indices = {atom.index: i for i, atom in enumerate(self.atoms)}
         # Return the rings as lists of Atom objects
         rings = []
+        has_warning = False
         for cycle in cycles:
             try:
                 rings.append([self.atoms[residue_atom_indices[i]] for i in cycle])
             except KeyError:
-                warn(f"Residue {self.name} contains cycles with atoms outside the residue")
+                has_warning = True
+        if has_warning:
+            warn(f"Residue {self.name}.{self.index} contains cycles with atoms outside the residue")
         return rings
 
     def split (self,
