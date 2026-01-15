@@ -16,6 +16,8 @@ class Cache:
         self._aux_file = cache_file.get_prefixed_file('.aux')
         # Set a dict to store the actual cached data
         self.data = {}
+        # Set a variable to store the hash of the cache file
+        self.filehash = None
         # Load data from the cache file, if it already exists
         self.load()
         if not self.data.get('uuid'):
@@ -27,26 +29,30 @@ class Cache:
         # Save the entry for the first time
         self.save()
 
+    def refresh(self):
+        """Check if the cache file has changed right before we modify its content.
+        If so, then we must read it again before.
+        This is checked in case the workflow is running several times in paralel
+        """
+        current_filehash = self.file.get_cksum()
+        if current_filehash != self.filehash: self.load()
+
     def retrieve(self, key: str, fallback=None):
         """Read a value from the cache."""
+        self.refresh()
         return self.data.get(key, fallback)
 
     def update(self, key: str, value):
         """Update the cache and save it to disk."""
+        self.refresh()
         self.data[key] = value
         self.save()
 
     def delete(self, key: str):
         """Delete a value in the cache."""
+        self.refresh()
         if key not in self.data: return
         del self.data[key]
-        self.save()
-
-    def reset(self):
-        """Reset the cache. This is called when some input files are modified."""
-        # Preserve 'uuid' and 'project_uuid' if present
-        keep_keys = ['uuid', 'project_uuid']
-        self.data = {k: self.data[k] for k in keep_keys if k in self.data}
         self.save()
 
     def load(self):
@@ -55,6 +61,9 @@ class Cache:
         if not self.file.exists: return
         # Read the cache in disk
         self.data = load_json(self.file.path)
+        # Save a cksum of the current cache file
+        self.filehash = self.file.get_cksum()
+        # Make some modifications
         if 'inchikeys_task_output' in self.data:
             self.data['inchikeys_task_output'] = InChIKeyData.load_cache(self.data['inchikeys_task_output'])
 

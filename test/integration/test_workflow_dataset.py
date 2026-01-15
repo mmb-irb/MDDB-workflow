@@ -45,12 +45,13 @@ def run_workflow_with_mock_task(mock_task, dataset_path=None):
     with patch.dict(mwf.requestables, {'mock_task': mock_task}):
         with patch.dict(mwf.md_requestables, {'mock_task': mock_task}):
             md_config = setup_test_project(num_replicas=2)
+            print(md_config)
             workflow(
                 project_parameters={
                     'input_topology_filepath': 'ala_ala.tpr',
                     'md_config': md_config,
+                    'directory': str(project_dir),
                 },
-                working_directory=str(project_dir),
                 include=['mock_task'],
                 dataset_path=dataset_path,
             )
@@ -114,21 +115,21 @@ class TestDatasetIntegration:
             # Track states seen during execution
             states_seen = {'project': [], 'md1': [], 'md2': []}
 
-            def mock_task(md):
+            def mock_task(md: 'mwf.MD'):
                 # Check database state during execution
                 ds = Dataset(db_path)
 
                 # Check MD state
-                md_status = ds.get_status(project_dir/md.directory)
+                md_status = ds.get_status(md.directory)
                 if md_status:
-                    states_seen[f'md{1 if md.directory == "replica_1" else 2}'].append(md_status['state'])
+                    states_seen[f'md{1 if "replica_1" in md.directory else 2}'].append(md_status['state'])
                     # Should be RUNNING during execution
                     assert md_status['rel_path'] == ds._abs_to_rel(md.directory)
                     assert md_status['state'] == State.RUNNING.value
                     assert md_status['message'] == 'Running workflow...'
 
                 # Also check project state on first MD
-                if md.directory == 'replica_1':
+                if md.directory.endswith('replica_1'):
                     project_status = ds.get_status(project_dir)
                     if project_status:
                         # If we are running the MD tasks, the project tasks have finished

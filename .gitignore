@@ -9,6 +9,7 @@ atommass.dat
 .coverage*
 .pytest_cache/
 test/data/output/
+test/data/source_*
 atommass.dat
 **/tmp/
 

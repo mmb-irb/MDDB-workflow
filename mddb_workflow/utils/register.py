@@ -1,5 +1,6 @@
 from sys import argv
 from os.path import exists
+from time import time
 from datetime import datetime
 
 from mddb_workflow.utils.auxiliar import load_json, save_json, warn, get_git_version
@@ -18,7 +19,9 @@ class Register:
         # Quote those arguments including space, since it means they were quoted when inputed
         quoted_argv = [f"'{arg}'" if ' ' in arg else arg for arg in argv]
         self.call = ' '.join(quoted_argv)
-        # Save the current date
+        # Save the current time to identify our registry entry
+        self.time = time()
+        # Save the date in a human friendly format
         self.date = datetime.today().strftime(DATE_STYLE)
         # Save the current version
         self.version = get_git_version()
@@ -27,11 +30,10 @@ class Register:
         # Set the warnings list, which will be filled by failing tests
         self.warnings = []
         # Inherit test results and warning from the register last entry
-        self.entries = []
         if self.file.exists:
             # Read the register in disk
-            self.entries = load_json(self.file.path)
-            last_entry = self.entries[-1]
+            entries = load_json(self.file.path)
+            last_entry = entries[-1]
             # Inherit test results
             for test_name, test_result in last_entry['tests'].items():
                 self.tests[test_name] = test_result
@@ -51,6 +53,7 @@ class Register:
         # Set a dictionary with the current values
         dictionary = {
             'call': self.call,
+            'time': self.time,
             'date': self.date,
             'version': self.version,
             'tests': self.tests,
@@ -96,9 +99,13 @@ class Register:
         # If path does not exist then do nothing
         # WARNING: I know this looks a bit silent
         # WARNING: Otherwise it is a constant spam when something goes wrong close to beginning
-        if not exists(self.file.basepath):
-            return
+        if not exists(self.file.path): return
+        # Read the register in disk again
+        # Note that we do not save previous entries since the register may have changed
+        # This may happen in the event of several workflows running in paralel
+        entries = load_json(self.file.path)
+        other_entries = [ entry for entry in entries if entry.get('time') != self.time ]
         # Set a new entry for the current run
         current_entry = self.to_dict()
         # Write entries to disk
-        save_json(self.entries + [current_entry], self.file.path, indent=4)
+        save_json(other_entries + [current_entry], self.file.path, indent=4)

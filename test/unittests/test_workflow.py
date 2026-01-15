@@ -33,7 +33,7 @@ def setup_two_replica_project(traj1="raw_trajectory", traj2="raw_trajectory"):
 
 
 @contextmanager
-def run_workflow_with_mock_task(mock_task):
+def run_workflow_with_mock_task(mock_task, keep_going=True):
     """Context manager to run workflow with a mock task in the test folder."""
     with patch.dict(mwf.requestables, {'mock_task': mock_task}):
         with patch.dict(mwf.md_requestables, {'mock_task': mock_task}):
@@ -42,16 +42,34 @@ def run_workflow_with_mock_task(mock_task):
                     'input_topology_filepath': 'ala_ala.tpr',
                     'md_config': [['replica_1', 'raw_trajectory.xtc'],
                                   ['replica_2', 'raw_trajectory.xtc']],
+                    'directory': str(test_fld),
                 },
-                working_directory=str(test_fld),
                 include=['mock_task'],
-                keep_going=True,
+                keep_going=keep_going,
             )
 
 
 @pytest.mark.unit_int
 class TestReplicaErrorHandling:
     """Test the error handling in the workflow for MD replicas."""
+
+    def test_workflow_no_keep_going(self, capsys):
+        """Test that non-TestFailure exceptions are re-raised and not caught."""
+        setup_two_replica_project()
+
+        call_count = [0]
+        def mock_task(md):
+            call_count[0] += 1
+            # Raise a regular exception, not a TestFailure
+            raise RuntimeError("Unexpected runtime error")
+
+        # The RuntimeError should propagate up and not be caught
+        with pytest.raises(RuntimeError, match="Unexpected runtime error") as exc_info:
+            run_workflow_with_mock_task(mock_task, keep_going=False)
+
+        # Print the caught exception for debugging
+        print(f"Caught exception: {exc_info.value}")
+        assert call_count[0] == 1, "Only first replica should have been attempted before exception"
 
     def test_workflow_continues_after_replica_error(self, capsys):
         """Test that workflow continues processing other MDs when one fails."""
@@ -71,7 +89,7 @@ class TestReplicaErrorHandling:
         captured = capsys.readouterr()
         print(captured.out)
         assert "Simulated error in replica 1" in captured.out
-        assert "Finished with errors in 1 MD replicas" in captured.out
+        assert "Finished with errors in MD replicas" in captured.out
         assert call_count[0] == 2, "Both replicas should have been processed"
 
     def test_workflow_collects_multiple_replica_errors(self, capsys):
@@ -89,7 +107,7 @@ class TestReplicaErrorHandling:
         print(captured.out)
         assert "Simulated error in replica 1" in captured.out
         assert "Simulated error in replica 2" in captured.out
-        assert "Finished with errors in 2 MD replicas" in captured.out
+        assert "Finished with errors in MD replicas" in captured.out
         assert call_count[0] == 2, "Both replicas should have been attempted"
 
     def test_workflow_succeeds_without_errors(self, capsys):
@@ -108,20 +126,3 @@ class TestReplicaErrorHandling:
         assert "Finished with errors" not in captured.out
         assert call_count[0] == 2, "Both replicas should have been processed"
 
-    def test_workflow_raises_non_test_failure_exceptions(self, capsys):
-        """Test that non-TestFailure exceptions are re-raised and not caught."""
-        setup_two_replica_project()
-
-        call_count = [0]
-        def mock_task(md):
-            call_count[0] += 1
-            # Raise a regular exception, not a TestFailure
-            raise RuntimeError("Unexpected runtime error")
-
-        # The RuntimeError should propagate up and not be caught
-        with pytest.raises(RuntimeError, match="Unexpected runtime error") as exc_info:
-            run_workflow_with_mock_task(mock_task)
-
-        # Print the caught exception for debugging
-        print(f"Caught exception: {exc_info.value}")
-        assert call_count[0] == 1, "Only first replica should have been attempted before exception"

@@ -19,7 +19,8 @@ def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Sele
     # They are not taken in count when testing coherent bonds or looking for the reference frame
     non_pbc_ions_selection = structure.select_ions() - pbc_selection
     # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
-    excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg()
+    # Also dummy atoms are excluded since they are not real atoms
+    excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg() + structure.select_dummy()
     return excluded_atoms_selection
 
 def do_bonds_match (
@@ -185,7 +186,7 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ 
     if is_standard_topology(bonds_source_file):
         print(f' Bonds in the "{bonds_source_file.filename}" file will be used')
         standard_topology = load_json(bonds_source_file.path)
-        standard_atom_bonds = standard_topology.get('atom_bonds', None)
+        standard_atom_bonds = standard_topology.get('atom_bonds', [])
         # Convert missing bonds flags
         # These come from coarse grain (CG) simulations with no topology
         atom_bonds = []

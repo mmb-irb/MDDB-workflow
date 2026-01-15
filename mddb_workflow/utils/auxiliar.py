@@ -242,7 +242,6 @@ def save_json(content, filepath: str, indent: Optional[int] = None):
     except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         os.rename(filepath, filepath + '.wrong')
-        breakpoint()
         raise Exception(f'Something went wrong when saving JSON file {filepath}: {str(error)}')
 
 
@@ -430,17 +429,32 @@ def is_url(path: str) -> bool:
     return path[0:4] == 'http'
 
 
-def url_to_source_filename(url : str, remote : 'Remote') -> str:
+def url_to_source_filename(url : str, verbose : bool = True) -> str:
     """Set the filename of an input file downloaded from an input URL.
 
     In this scenario we are free to set our own paths or filenames.
     Note that the original name will usually be the very same output filename.
     In order to avoid both filenames being the same we will add a header here.
     This headers includes also a reference to the database and project.
-    Thus if there is a new accession then we rely on the filenames to know if we already have the correct ones.
+    Thus if there is a new accession then we rely on the filenames to know
+    if we already have the correct ones or if we must download again.
     """
-    original_filename = url.split('/')[-1]
-    return f'source_{remote.database.alias}_{remote.accession}_{original_filename}'
+    splits = url.split('/')
+    # Get the name of the source database/service
+    # This will be at the start of the URL, right after the protocol
+    source_site = splits[2]
+    source_alias = source_site.split('.')[0].split('-')[0]
+    # Get the project accession
+    # Accession in the URL is placed in .../projects/ACCESSION/...
+    accession = 'unknown-accession'
+    accession_split_index = splits.index('projects') + 1
+    accession = splits[accession_split_index]
+    # Get the original filename, which will be at the end of the URL
+    original_filename = splits[-1]
+    # Set the final name
+    source_filename = f'source_{source_alias}_{accession}_{original_filename}'
+    if verbose: print(f'{url} -> {source_filename}')
+    return source_filename
 
 
 def download_file(request_url: str, output_file: 'File'):
@@ -517,8 +531,10 @@ class CaptureOutput (object):
         os.dup2(self.pipe_in, self.original_streamfd)
         return self
     def __exit__(self, type, value, traceback):
+        # Make sure there is at least some output or the 'readOutput' may hang forever
+        # This has been observed only when running the workflow from Jupyter Notebook
         # Print the escape character to make the readOutput method stop:
-        self.original_stream.write(self.escape_char)
+        self.original_stream.write(' ' + self.escape_char)
         # Flush the stream to make sure all our data goes in before
         # the escape character:
         self.original_stream.flush()
@@ -532,7 +548,10 @@ class CaptureOutput (object):
         os.close(self.streamfd)
     def readOutput(self):
         while True:
-            char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
+            content = os.read(self.pipe_out, os.O_RDONLY)
+            char = content.decode(self.original_stream.encoding)
+            #print(char)
+            #char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
             if not char or self.escape_char in char:
                 break
             self.captured_text += char
@@ -753,3 +772,8 @@ def handle_http_request(request_url, error_context="request") -> Optional[str]:
         raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
     except URLError as error:
         raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
+
+
+def unique (source_list : list) -> list:
+    """Get a new list with unique values while conserving the order."""
+    return list(dict.fromkeys(source_list))
