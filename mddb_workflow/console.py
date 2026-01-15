@@ -335,7 +335,7 @@ def main():
         # Generate the output file from the modified structure
         structure.generate_pdb_file(args.output_structure)
         print(f'Changes written to {args.output_structure}')
-    elif subcommand == 'dataset':
+    elif subcommand in ['dataset', 'ds']:
         if not hasattr(args, 'dataset_subcommand') or not args.dataset_subcommand:
             ds_parser.print_help()
             return
@@ -742,7 +742,7 @@ for flags, kwargs in nassa_parser_args:
 
 # Dataset subcommand
 ds_help = {func.__name__: parse_docstring_for_help(func.__doc__) for func in Dataset.__dict__.values() if callable(func)}
-ds_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpFormatter, help="Manage and process a dataset of MDDB projects.")
+ds_parser = subparsers.add_parser("dataset", aliases=["ds"], formatter_class=CustomHelpFormatter, help="Manage and process a dataset of MDDB projects.")
 dataset_subparsers = ds_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
 common_ds_parser = ArgumentParser(add_help=False)
 common_ds_parser.add_argument("dataset_path", nargs='?', default=None, help=ds_help['__init__']['dataset_path'] + " If not provided, the first *.db file found in the current directory will be used.",)
