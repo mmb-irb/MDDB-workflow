@@ -22,6 +22,8 @@ MDTRAJ_INSERTION_CODES_ERROR = r'^Could not convert residue number \[[0-9]*[a-zA
 PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does not match # atoms in (topology|parm) [\w.-]* \(([0-9]*)\)'
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
 GROMACS_ATOM_COUNT_CHECK = r'# Atoms  ([0-9]*)'
+PSF_HEADER_PATTERN = r'^\s*[0-9]* ![A-Z]*'
+EMPTY_LINE = '\n'
 
 # List supported formats
 TOPOLOGY_SUPPORTED_FORMATS = {'tpr', 'top', 'prmtop', 'psf'}
@@ -33,7 +35,7 @@ GROMACS_TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr'}
 AUXILIAR_PDB_FILE = '.auxiliar.pdb'
 
 # Set exceptions for fixes applied from here
-PREFILTERED_TOPOLOGY_EXCEPTION = Exception('Prefiltered topology')
+FIXED_TOPOLOGY_EXCEPTION = Exception('Fixed topology')
 
 
 def check_inputs(
@@ -45,18 +47,23 @@ def check_inputs(
     Some exceptional problems may be fixed from here.
     In these cases, both the exception and the modified file are returned in a final dict.
     """
+
     # Set the exceptions dict to be returned at the end
     exceptions = {}
+
+    # Set the topology file to be checked
+    # Note that this variable may be reassigned as fixes are applied
+    topology_file = input_topology_file
 
     # Get a sample trajectory file and then check its format
     # All input trajectory files must have the same format
     trajectory_sample = input_trajectory_files[0]
 
     # Check input files are supported by the workflow
-    if input_topology_file != MISSING_TOPOLOGY and not is_standard_topology(input_topology_file) and input_topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
-        if input_topology_file.format in {'pdb', 'gro'}:
+    if topology_file != MISSING_TOPOLOGY and not is_standard_topology(topology_file) and topology_file.format not in TOPOLOGY_SUPPORTED_FORMATS:
+        if topology_file.format in {'pdb', 'gro'}:
             raise InputError('A structure file is not supported as topology anymore. If there is no topology then use the argument "-top no"')
-        raise InputError(f'Topology {input_topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
+        raise InputError(f'Topology {topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
     if trajectory_sample.format not in TRAJECTORY_SUPPORTED_FORMATS:
         raise InputError(f'Trajectory {trajectory_sample.path} has a not supported format. Try one of these: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}')
     if input_structure_file.format not in STRUCTURE_SUPPORTED_FORMATS:
@@ -80,16 +87,31 @@ def check_inputs(
             error_message = str(error)
             if error_message == NETCDF_DTYPE_ERROR:
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
-                pytraj_input_topology = input_topology_file if input_topology_file != MISSING_TOPOLOGY else input_structure_file
+                pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else input_structure_file
                 first_corrupted_frame = find_first_corrupted_frame(pytraj_input_topology.path, trajectory_file.path)
                 print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
                 raise InputError('Corrupted input trajectory file')
             # If we do not know the error then raise it as is
             else:
                 raise error
+            
+    # Make sure the topology file is well formated
+    # Check a specific problem affecting some PSF topologies
+    if topology_file != MISSING_TOPOLOGY and topology_file.format == 'psf':
+        # Set the output fixed topology file, in case it is to be created
+        fixed_topology_filepath = f'{topology_file.basepath}/fixed.{topology_file.format}'
+        fixed_topology_file = File(fixed_topology_filepath)
+        had_problem = check_and_fix_psf(topology_file, fixed_topology_file)
+        # If a problem was found then report the problem and save the exception
+        if had_problem:
+            print(f'The input topology had format problem but it has been fixed in {fixed_topology_file.path}')
+            exceptions[FIXED_TOPOLOGY_EXCEPTION] = fixed_topology_file
+            # From now on use the fixed topology as the topology
+            topology_file = fixed_topology_file
+
 
     # Get topology and trajectory atom counts
-    topology_atom_count, trajectory_atom_count = get_topology_and_trajectory_atoms(input_topology_file, trajectory_sample)
+    topology_atom_count, trajectory_atom_count = get_topology_and_trajectory_atoms(topology_file, trajectory_sample)
 
     # If we have the trajectory atom count then it means we had a valid topology
     if trajectory_atom_count is not None:
@@ -97,24 +119,28 @@ def check_inputs(
         # Make sure their atom counts match
         if topology_atom_count != trajectory_atom_count:
             warn('Mismatch in the number of atoms between input files:\n' +
-                f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms\n' +
+                f' Topology "{topology_file.path}" -> {topology_atom_count} atoms\n' +
                 f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
             if topology_atom_count < trajectory_atom_count:
                 raise InputError('Trajectory has more atoms than topology, there is no way to fix this.')
             # If the topology has more atoms than the trajectory however we may attempt to guess
             # If we guess which atoms are the ones in the trajectory then we can filter the topology
             else:
-                prefiltered_topology_filepath = f'{input_topology_file.basepath}/prefiltered.{input_topology_file.format}'
+                prefiltered_topology_filepath = f'{topology_file.basepath}/prefiltered.{topology_file.format}'
                 prefiltered_topology_file = File(prefiltered_topology_filepath)
                 guessed = guess_and_filter_topology(
-                    input_topology_file,
+                    topology_file,
                     prefiltered_topology_file,
                     trajectory_atom_count)
-                if guessed: exceptions[PREFILTERED_TOPOLOGY_EXCEPTION] = prefiltered_topology_file
+                # Save the new topology file in the exceptions
+                if guessed:
+                    exceptions[FIXED_TOPOLOGY_EXCEPTION] = prefiltered_topology_file
+                    # From now on use the prefiltered topology as the topology
+                    topology_file = fixed_topology_file
                 else: raise InputError('Could not guess topology atom selection to match trajectory atoms count')
 
         # If the topology file is already the structure file then there is no need to check it
-        if input_structure_file == input_topology_file:
+        if input_structure_file == topology_file:
             print(f'Topology and trajectory files match in number of atoms: {trajectory_atom_count}')
             return exceptions
 
@@ -146,7 +172,7 @@ def check_inputs(
     if topology_atom_count is not None and topology_atom_count != trajectory_atom_count:
         raise InputError('Mismatch in the number of atoms between input files:\n' +
             f' Structure and trajectory -> {trajectory_atom_count} atoms\n' +
-            f' Topology "{input_topology_file.path}" -> {topology_atom_count} atoms')
+            f' Topology "{topology_file.path}" -> {topology_atom_count} atoms')
 
     # If we made it this far it means all checkings are good
     print(f'Input files match in number of atoms: {trajectory_atom_count}')
@@ -312,3 +338,31 @@ def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 
     topology = pyt.load_topology(structure_file.path)
     structure_atom_count = topology.n_atoms
     return structure_atom_count, trajectory_atom_count
+
+# Check if a PSF topology is properly formatted in the headers
+# Wrong-formmated topologies may still valid for NAMD tools and pytraj
+# However they failed to be read by both MDtraj and MDAnalysis
+# Pytraj may write PSF files with this problem, for instance
+# If so, an output topology file will be created with the problem fixed
+def check_and_fix_psf (input_topology_file : 'File', output_topology_file : 'File') -> bool:
+    # Read the content of the PSF file
+    psf_content = None
+    with open(input_topology_file.path, 'r') as file:
+        psf_content = file.readlines()
+    # Keep track of if a problem was found
+    problem = False
+    # Iterate lines in the file conetent
+    for l, line in enumerate(psf_content):
+        # We only care about headers
+        if not re.search(PSF_HEADER_PATTERN, line): continue
+        # Make sure the line previous to a header is an empty line
+        last_line = psf_content[l-1]
+        if last_line == EMPTY_LINE: continue
+        # Otherwise we must fix it
+        problem = True
+        psf_content.insert(l, EMPTY_LINE)
+    # If a problem was found then write a new fixed topology
+    if not problem: return False
+    # Write the fixed content to  a new topology file
+    with open(output_topology_file.path, 'w') as file:
+        file.writelines(psf_content)

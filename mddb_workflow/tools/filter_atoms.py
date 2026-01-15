@@ -10,6 +10,7 @@ from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standar
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter, pdb_filter
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_charges import get_raw_charges
+from mddb_workflow.tools.check_inputs import check_and_fix_psf
 
 # Set the gromacs indices filename
 index_filename = 'filter.ndx'
@@ -106,6 +107,8 @@ def filter_atoms (
                     format=input_topology_file.get_pytraj_parm_format(),
                     overwrite=True
                 )
+                # If it is a PSF file then we may need to fix it afterwards
+                check_and_fix_psf(output_topology_file, output_topology_file)
         # Gromacs format format
         elif input_topology_file.format == 'tpr':
             # Get the input tpr atom count

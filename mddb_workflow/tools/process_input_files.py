@@ -11,7 +11,7 @@ from mddb_workflow.utils.pyt_spells import get_frames_count
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
-from mddb_workflow.tools.check_inputs import check_inputs, PREFILTERED_TOPOLOGY_EXCEPTION
+from mddb_workflow.tools.check_inputs import check_inputs, FIXED_TOPOLOGY_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit
@@ -111,13 +111,13 @@ def process_input_files (
     # Here we have not standarized the format so we must check differently with every format
     exceptions = check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
 
-    # There is a chance that the inputs checker has prefiltered the topology to match trajectory
-    # If this is the case then use the prefiltered topology from now on
-    prefiltered_topology = exceptions.get(PREFILTERED_TOPOLOGY_EXCEPTION, None)
-    if prefiltered_topology:
+    # There is a chance that the inputs checker has fixed or prefiltered the topology to match trajectory
+    # If this is the case then use the fixed/prefiltered topology from now on
+    fixed_topology = exceptions.get(FIXED_TOPOLOGY_EXCEPTION, None)
+    if fixed_topology:
         if input_structure_file == input_topology_file:
-            input_structure_file = prefiltered_topology
-        input_topology_file = prefiltered_topology
+            input_structure_file = fixed_topology
+        input_topology_file = fixed_topology
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
 
