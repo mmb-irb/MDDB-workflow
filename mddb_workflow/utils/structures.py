@@ -778,10 +778,13 @@ class Residue:
         # Create a mapping from structure atom indices to residue-local atom indices
         residue_atom_indices = {atom.index: i for i, atom in enumerate(self.atoms)}
         # Return the rings as lists of Atom objects
-        return [
-            [self.atoms[residue_atom_indices[i]] for i in cycle]
-            for cycle in cycles
-        ]
+        rings = []
+        for cycle in cycles:
+            try:
+                rings.append([self.atoms[residue_atom_indices[i]] for i in cycle])
+            except KeyError:
+                warn(f"Residue {self.name} contains cycles with atoms outside the residue")
+        return rings
 
     def split (self,
         first_residue_atom_indices : list[int],
@@ -1918,6 +1921,10 @@ class Structure:
     def select_cg (self) -> 'Selection':
         """Select coarse grain atoms."""
         return Selection([ atom.index for atom in self.atoms if atom.element == CG_ATOM_ELEMENT ])
+    
+    def select_dummy (self) -> 'Selection':
+        """Select dummy atoms."""
+        return Selection([ atom.index for atom in self.atoms if atom.element == DUMMY_ATOM_ELEMENT ])
 
     def select_missing_bonds (self) -> 'Selection':
         return Selection([ index for index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])

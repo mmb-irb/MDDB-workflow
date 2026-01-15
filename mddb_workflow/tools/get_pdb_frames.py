@@ -49,7 +49,7 @@ def get_pdb_frames (
             frame_number = f * frames_step
             # Update the current frame log
             if pbar_bool: pbar.update(1); pbar.refresh()
-            else: reprint(f'Frame {frame_number+1} ({f+1} / {frames_count})')
+            else: reprint(f'Frame {frame_number+1} ({f+1} / {n_frames})')
             current_frame = f'{cwd}/{output_frames_prefix}{frame_number+1}.pdb'
             single_frame_trajectory = reduced_trajectory[f:f+1]
             pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
