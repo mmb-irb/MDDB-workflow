@@ -391,7 +391,7 @@ def main():
         elif args.dataset_subcommand == 'inputs':
             dataset.generate_inputs_yaml(
                 inputs_template_path=args.inputs_template,
-                input_generator=args.input_generator,
+                inputs_generator=args.inputs_generator,
                 overwrite=args.overwrite,
                 query_path=args.query_path,
                 query_state=args.query_state,
