@@ -125,4 +125,3 @@ class TestReplicaErrorHandling:
         assert "Done!" in captured.out
         assert "Finished with errors" not in captured.out
         assert call_count[0] == 2, "Both replicas should have been processed"
-

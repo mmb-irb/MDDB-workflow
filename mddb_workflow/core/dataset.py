@@ -691,6 +691,8 @@ class Dataset:
                 Only print the commands without executing them.
 
         """
+        if not slurm:
+            raise NotImplementedError("Only slurm=True is currently implemented")
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
         else:
