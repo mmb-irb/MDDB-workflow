@@ -836,6 +836,8 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
     """Resolve directory patterns (glob or absolute/relative paths)."""
     directories = []
     for dir_pattern in dir_patterns:
+        if not Path(dir_pattern).is_dir():
+            continue
         if is_glob(dir_pattern):
             if Path(dir_pattern).is_absolute():
                 matched_dirs = [Path(p) for p in glob.glob(dir_pattern)]
