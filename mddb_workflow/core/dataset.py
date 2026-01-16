@@ -278,7 +278,16 @@ class Dataset:
                     last_modified=excluded.last_modified,
                     rel_path=excluded.rel_path
             ''', (uuid, rel_path, state, message, last_modified))
-        self.conn.commit()
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                self.conn.commit()
+                break
+            except sqlite3.OperationalError as e:
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                else:
+                    raise e
 
     def remove_entry(self, directory: str | Path, verbose: bool = False):
         """Remove a single project or MD entry from the database by directory."""
