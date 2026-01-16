@@ -74,7 +74,7 @@ class Atom:
         self._residue_index = None
 
     def __repr__ (self):
-        return '<Atom ' + self.name + '>'
+        return f'<Atom {self.name}>'
 
     def __eq__ (self, other):
         if type(self) != type(other):
@@ -132,9 +132,9 @@ class Atom:
         Note that the residue must be set in the structure already."""
         new_residue_index = new_residue.index
         if new_residue_index == None:
-            raise ValueError('Residue ' + str(new_residue) + ' is not set in the structure')
+            raise ValueError(f'Residue {new_residue} is not set in the structure')
         self.set_residue_index(new_residue_index)
-    residue = property(get_residue, set_residue, None, "The atom residue")
+    residue : 'Residue' = property(get_residue, set_residue, None, "The atom residue")
 
     def get_chain_index (self) -> Optional[int]:
         """Get the atom chain index according to parent structure chains."""
@@ -142,8 +142,23 @@ class Atom:
         if not self.residue:
             return None
         return self.residue.chain_index
-    chain_index = property(get_chain_index, None, None,
-                           "The atom chain index according to parent structure chains (read only)")
+    def set_chain_index (self, new_chain_index : int):
+        # If the new chain index is the current chain index do nothing
+        # WARNING: It is important to stop this here or it could delete a chain which is not to be deleted
+        if new_chain_index == self.chain_index: return
+        # If there is not strucutre yet it means the chain is beeing set before the structure
+        # We just save the chain index and wait for the structure to be set
+        if not self.structure:
+            raise RuntimeError('Trying to set chain of a tom with no structure')
+        # Relational indices are updated through a top-down hierarchy
+        # Affected chains are the ones to update this residue internal chain index
+        # WARNING: It is critical to find the new chain before removing/adding residues
+        # WARNING: It may happend that we remove the last residue in the current chain and the current chain is purged
+        # WARNING: Thus the 'new_chain_index' would be obsolete since the structure.chains list would have changed
+        new_chain = self.structure.chains[new_chain_index]
+        new_chain.add_atom(self)
+    chain_index = property(get_chain_index, set_chain_index, None,
+                           "The atom chain index according to parent structure chains")
 
     def get_chain (self) -> Optional['Chain']:
         """The atom chain (read only).
@@ -155,7 +170,20 @@ class Atom:
             return None
         # Get the chain in the structure according to the chain index
         return self.structure.chains[self.chain_index]
-    chain: 'Chain' = property(get_chain, None, None, "The atom chain (read only)")
+    def set_chain (self, new_chain : Union['Chain', str]):
+        # In case the chain is just a string we must find/create the corresponding chain
+        if type(new_chain) == str:
+            # Get the residue structure
+            structure = self.structure
+            if not structure:
+                raise ValueError(f'Cannot find the corresponding {new_chain} chain without the structure')
+            # Get the chain with this name or create it if does not exist yet
+            new_chain = structure.find_or_create_chain(new_chain)
+        # Find the new chain index and set it as the residue chain index
+        # Note that the chain must be set in the structure already
+        self.set_chain_index(new_chain.index)
+        
+    chain : 'Chain' = property(get_chain, set_chain, None, "The atom chain")
 
     def get_bonds (self, skip_ions : bool = False, skip_dummies : bool = False) -> Optional[ list[int] ]:
         """Get indices of other atoms in the structure which are covalently bonded to this atom."""
@@ -479,23 +507,15 @@ class Residue:
     def set_chain (self, new_chain : Union['Chain', str]):
         # In case the chain is just a string we must find/create the corresponding chain
         if type(new_chain) == str:
-            letter = new_chain
             # Get the residue structure
             structure = self.structure
             if not structure:
                 raise ValueError(f'Cannot find the corresponding {new_chain} chain without the structure')
-            # Find if the letter belongs to an already existing chain
-            new_chain = structure.get_chain_by_name(letter)
-            # If the chain does not exist yet then create it
-            if not new_chain:
-                new_chain = Chain(name=letter)
-                structure.set_new_chain(new_chain)
+            # Get the chain with this name or create it if does not exist yet
+            new_chain = structure.find_or_create_chain(new_chain)
         # Find the new chain index and set it as the residue chain index
         # Note that the chain must be set in the structure already
-        new_chain_index = new_chain.index
-        if new_chain_index == None:
-            raise ValueError(f'Chain {new_chain} is not set in the structure')
-        self.set_chain_index(new_chain_index)
+        self.set_chain_index(new_chain.index)
     chain: 'Chain' = property(get_chain, set_chain, None, "The residue chain")
 
     def get_bonded_atom_indices (self) -> list[int]:
@@ -896,7 +916,7 @@ class Chain:
         self._residue_indices = []
 
     def __repr__ (self):
-        return '<Chain ' + self.name + '>'
+        return f'<Chain {self.name}>'
 
     def __eq__ (self, other):
         return self.name == other.name
@@ -1001,6 +1021,36 @@ class Chain:
         return sum([ residue.atoms for residue in self.residues ], [])
     atoms: list['Atom'] = property(get_atoms, None, None, "Atoms in the chain (read only)")
 
+    def add_atom (self, new_atom : 'Atom'):
+        """Add an atom to the chain."""
+        # We do not handle the atom from the chain itself, but this is the job of the resiude
+        # If the atom has not residue we can do nothing, since it is the residue who must handle this
+        if new_atom.residue_index is None:
+            raise RuntimeError('Trying to assign an atom with no residue to a chain')
+        # If the residue already belong to this chain then the atom as well
+        residue = new_atom.residue 
+        if residue in self.residues: return
+        # Otherwise we find or create a brand new residue identical to the atom resiude
+        # The residue must match not only in number and insertion code, but also in name
+        new_residue = self.find_or_create_residue(residue.name, residue.number, residue.icode)
+        # Finally we add the atom to this residue and let it handle the rest
+        new_residue.add_atom(new_atom)
+
+    # DANI: Not tested
+    def remove_atom (self, current_atom : 'Atom'):
+        """Remove an atom from the chain."""
+        # We do not handle the atom from the chain itself, but this is the job of the resiude
+        # If the atom has not residue we can do nothing, since it is the residue who must handle this
+        # However this atom is not in the chain by definition
+        if current_atom.residue_index is None:
+            raise RuntimeError('Trying to remove an atom with no residue from a chain.\n'
+                'Note that an atom with no residue is not in any chain.')
+        # If the residue already does not belong to this chain then the atom as well
+        current_resiude = current_atom.residue 
+        if current_resiude not in self.residues: return
+        # Let the residue handle the rest
+        current_resiude.remove_atom(current_atom)
+
     def get_atom_count (self) -> int:
         """Get the number of atoms in the chain (read only)."""
         return len(self.atom_indices)
@@ -1048,13 +1098,25 @@ class Chain:
     def is_missing_any_bonds (self) -> bool:
         return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
 
-    def find_residue (self, number : int, icode : str = '', index = None) -> Optional['Residue']:
-        """Find a residue by its number and insertion code."""
+    def find_residue (self, number : int, icode : str = '', name : str = None) -> Optional['Residue']:
+        """Find a residue by its number and insertion code. Name is optional."""
         # Iterate chain residues
         for residue in self.residues:
-            if residue.number == number and residue.icode == icode and (index is None or residue.index == index):
+            if residue.number == number and residue.icode == icode and (name is None or residue.name == name):
                 return residue
         return None
+    
+    def find_or_create_residue (self, name : str, number : int, icode : str = '') -> 'Residue':
+        """Find a residue by its number and insertion code or create it if does not exist."""
+        # Find if the number and icode belong to an already existing residue
+        residue = self.find_residue(number, icode, name)
+        if residue is not None: return residue
+        # If the chain does not exist yet then create it
+        new_residue = Residue(name, number, icode)
+        self.structure.set_new_residue(new_residue)
+        # Also add it to the chain
+        self.add_residue(new_residue)
+        return new_residue
 
 class Structure:
     """A structure is a group of atoms organized in chains and residues."""
@@ -1247,6 +1309,7 @@ class Structure:
         purged_index = residue.index
         # Residues and their atoms below this index are not to be modified
         # Residues and their atoms over this index must be renumerated
+        # DANI: This last step may be very unefficient for long structures
         for affected_residue in self.residues[purged_index+1:]:
             # Chaging the index automatically changes all residues atoms '_residue_index' values
             # Chaging the index automatically changes its corresponding index in residue chain '_residue_indices'
@@ -2210,17 +2273,14 @@ class Structure:
             residue.set_chain(current_chain)
             previous_alpha_carbon = alpha_carbon
 
-    def set_selection_chain_name (self, selection : 'Selection', letter : str):
+    def set_selection_chain_name (self, selection : 'Selection', chain_name : str):
         """
         Given an atom selection, set the chain for all these atoms.
         Note that the chain is changed in every whole residue, no
         matter if only one atom was selected.
         """
-        # Find if the letter belongs to an already existing chain
-        chain = self.get_chain_by_name(letter)
-        if not chain:
-            chain = Chain(name=letter)
-            self.set_new_chain(chain)
+        # Get the chain with this name or create it if does not exist yet
+        chain = self.find_or_create_chain(chain_name)
         # Get the selection residue indices
         selection_residue_indices = self.get_selection_residue_indices(selection)
         # Set the chain index of every residue to the new chain
@@ -2244,7 +2304,7 @@ class Structure:
             '  Please manually set the chains from scratch or merge together some chains to reduce the number.\n' +
             '  Customize a PDB file using the command "mwf chainer". Then use the customized PDB as input structure (-stru).')
 
-    def get_available_chain_name (self) -> str:
+    def get_available_chain_name (self) -> str | None:
         """Get an available chain name.
         Find alphabetically the first letter which is not yet used as a chain name.
         If all letters in the alphabet are used already then raise an error."""
@@ -2281,14 +2341,24 @@ class Structure:
         next_letter = next((letter for letter in second_group if letter not in current_chain_names), None)
         return next_letter
 
-    def get_chain_by_name (self, name : str) -> Optional['Chain']:
+    def find_chain (self, name : str) -> Optional['Chain']:
         """Get a chain by its name."""
         return next((c for c in self.chains if c.name == name), None)
+    
+    def find_or_create_chain (self, name : str) -> 'Chain':
+        """Get a chain by its name or create it if not exists."""
+        # Find if the letter belongs to an already existing chain
+        chain = self.find_chain(name)
+        if chain is not None: return chain
+        # If the chain does not exist yet then create it
+        new_chain = Chain(name)
+        self.set_new_chain(new_chain)
+        return new_chain
 
     def find_residue (self, chain_name : str, number : int, icode : str = '' ) -> Optional['Residue']:
         """Find a residue by its chain, number and insertion code."""
         # Get the corresponding chain
-        target_chain = self.get_chain_by_name(chain_name)
+        target_chain = self.find_chain(chain_name)
         if not target_chain: return None
         # Find the residue in the target chain
         target_chain.find_residue(number, icode)
