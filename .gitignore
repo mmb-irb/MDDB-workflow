@@ -21,6 +21,7 @@ mwf.tar.gz
 
 # Docs
 docs/_build/
+**/*dataset
 
 # pixi environments
 .pixi

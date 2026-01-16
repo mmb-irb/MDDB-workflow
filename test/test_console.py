@@ -10,7 +10,6 @@ from mddb_workflow.utils.type_hints import *
 
 
 @pytest.mark.CI
-@pytest.mark.release
 class TestConsoleArgumentParsing:
     """Test the console argument parsing functionality."""
 
@@ -42,7 +41,6 @@ class TestConsoleArgumentParsing:
 
 
 @pytest.mark.CI
-@pytest.mark.release
 class TestConsoleIntegration:
     """Integration tests for console functionality."""
 
@@ -78,7 +76,6 @@ class TestConsoleIntegration:
 
 
 @pytest.mark.CI
-@pytest.mark.release
 class TestSubcommands:
     """Test the subcommands of the console interface."""
 

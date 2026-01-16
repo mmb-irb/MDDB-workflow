@@ -5,7 +5,6 @@ from mddb_workflow.utils.type_hints import *
 
 
 @pytest.mark.CI
-@pytest.mark.release
 class TestStructure:
     """Test structure-related functionalities."""
 
