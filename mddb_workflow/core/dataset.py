@@ -374,6 +374,7 @@ class Dataset:
                                             project_status=project_dict,
                                             **generated_input)
             # Write the rendered YAML to inputs.yaml
+            print(f"Generating {inputs_yaml_path} for project {project_dict['rel_path']}")
             with open(inputs_yaml_path, 'w') as f:
                 f.write(rendered_yaml)
 
