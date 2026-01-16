@@ -131,13 +131,13 @@ class Dataset:
         This is useful for improving read performance after many individual writes.
         Creates consolidated parquet files and removes the individual ones.
         """
-        for table, storage_dir in [('projects', self.projects_dir), ('mds', self.mds_dir)]:
+        for table in ['projects', 'mds']:
             if not self._has_parquet_files(table):
                 if verbose:
                     print(f"No {table} to compact.")
                 continue
 
-            cols = self.project_columns if table == 'projects' else self.md_columns
+            storage_dir, cols = self._get_table_info(table)
             conn = self._get_duckdb_connection()
 
             # Read all data
@@ -186,7 +186,7 @@ class Dataset:
         return uuid, project_uuid
 
     def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False):
-        """Add a single project mentry to the database."""
+        """Add a single project entry to the dataset."""
         uuid, _ = self._read_uuid_from_cache(directory, make_uuid=make_uuid)
         rel_path = self._abs_to_rel(directory)
         if not self.get_uuid_status(uuid):
@@ -195,7 +195,7 @@ class Dataset:
             self.update_status(uuid, state=State.NEW, message='No information recorded yet.', rel_path=rel_path)
 
     def add_md(self, directory: str, make_uuid: bool = False, verbose: bool = False):
-        """Add a single MD entry to the database."""
+        """Add a single MD entry to the dataset."""
         # Get the project UUID from the parent directory in case is not already cached
         project_uuid, _ = self._read_uuid_from_cache(Path(directory).parent.as_posix())
         if not project_uuid:
@@ -203,8 +203,6 @@ class Dataset:
         # Get MD UUID and add the project_uuid
         uuid, _ = self._read_uuid_from_cache(directory, make_uuid, project_uuid)
         rel_path = self._abs_to_rel(directory)
-        if not project_uuid:
-            raise ValueError(f"Directory '{directory}' does not appear to be an MD")
         if not self.get_uuid_status(uuid, project_uuid):
             if verbose:
                 print(f"Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
@@ -242,11 +240,10 @@ class Dataset:
             if not project_dir.exists():
                 if verbose: print(f"Warning: Project directory {rel_path} does not exist. Skipping.")
                 continue
-            # Add project row (num_mds will be set automatically by triggers when MDs are added)
+            # Add project row
             self.add_project(project_dir, make_uuid=True, verbose=verbose)
-            # Count MDs in this project
+            # Find and add MDs in this project (num_mds updated automatically)
             project_md_dirs = [md for md in _resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
-            # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
             for md_dir_path in project_md_dirs:
                 self.add_md(md_dir_path, make_uuid=True, verbose=verbose)
 
@@ -300,6 +297,8 @@ class Dataset:
                 entry_type = "MD" if is_md else "project"
                 raise ValueError(f"rel_path is required for new {entry_type} entries")
 
+        # Check if this is a new MD entry (file doesn't exist yet)
+        is_new_md = is_md and not self._get_parquet_path(uuid, is_md=True).exists()
         if is_md:
             # This is an MD entry
             data = {
@@ -310,7 +309,6 @@ class Dataset:
                 'message': message,
                 'last_modified': last_modified,
             }
-            self._update_project_num_mds(project_uuid)
         else:
             # This is a project entry
             # Compute num_mds dynamically
@@ -325,6 +323,10 @@ class Dataset:
             }
 
         self._write_parquet(data, is_md=is_md)
+
+        # Update parent project's num_mds count only if this was a new MD
+        if is_new_md:
+            self._update_project_num_mds(project_uuid)
 
     def remove_entry(self, directory: str | Path, verbose: bool = False):
         """Remove a single project or MD entry from the Parquet storage by directory."""
@@ -548,9 +550,15 @@ class Dataset:
         where_clause = " AND ".join(conditions) if conditions else ""
         return where_clause, params
 
+    def _get_table_info(self, table: str) -> tuple[Path, list[str]]:
+        """Get storage directory and columns for a table."""
+        if table == 'mds':
+            return self.mds_dir, self.md_columns
+        return self.projects_dir, self.project_columns
+
     def _has_parquet_files(self, table: str) -> bool:
         """Check if there are any parquet files in the given table directory."""
-        storage_dir = self.mds_dir if table == 'mds' else self.projects_dir
+        storage_dir, _ = self._get_table_info(table)
         return any(storage_dir.glob('*.parquet'))
 
     def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None) -> list[tuple]:
@@ -572,9 +580,7 @@ class Dataset:
         if not self._has_parquet_files(table):
             return []
 
-        storage_dir = self.mds_dir if table == 'mds' else self.projects_dir
-        cols = self.project_columns if table == 'projects' else self.md_columns
-
+        storage_dir, cols = self._get_table_info(table)
         where_clause, params = self._build_where_clause(query_path, query_state)
 
         conn = self._get_duckdb_connection()
@@ -639,7 +645,7 @@ class Dataset:
         # Query data from Parquet files using DuckDB
         dataframes = []
         for scope in scopes_to_query:
-            cols = self.project_columns if scope == 'projects' else self.md_columns
+            _, cols = self._get_table_info(scope)
             data = self.query_table(scope, query_path, query_state)
             df = pd.DataFrame(data, columns=cols)
             df['scope'] = scope
