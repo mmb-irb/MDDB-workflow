@@ -73,6 +73,11 @@ def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
     # rdDepictor.Compute2DCoords(mol_with_h)  # Optional: compute 2D coordinates for visualization
     # Use MDAnalysisInferrer to get formal charge of the molecule
     mol_mda = MDAnalysisInferrer()(mol)
+    # DetermineBondOrders can crash so we first check if the standardization
+    # gives us ferroheme directly without it
+    standar_cid = pubchem_standardization(Chem.MolToInchi(mol_mda))
+    if standar_cid and any(cid['pubchem'] in ['4971', '5353910', '25246109'] for cid in standar_cid):
+        return True
     formal_charge = Chem.GetFormalCharge(mol_mda)
     DetermineBondOrders(mol_with_h, charge=formal_charge, maxIterations=1000)
     unch_mol = rdMolStandardize.ChargeParent(mol_with_h)
