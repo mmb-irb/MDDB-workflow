@@ -45,6 +45,8 @@ class Dataset:
         self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
         # Enable foreign key constraints (disabled by default in SQLite)
         self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout = 5000")
         self._ensure_tables()
 
     def _abs_to_rel(self, abs_path: str | Path) -> str:
