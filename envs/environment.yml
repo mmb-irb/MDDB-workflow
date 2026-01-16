@@ -47,7 +47,9 @@ dependencies:
   - bioconda::curves
   # Visual tool to display graphs in terminal and even text logs
   - plotext
-  # For rich display in the console for dataframes
+  # For dataset storage and display
+  - pyarrow
+  - duckdb
   - rich
   # For dataset templates
   - jinja2

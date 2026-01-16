@@ -65,7 +65,7 @@ class TestDatasetIntegration:
     def test_entries_are_added_to_dataset(self):
         """Test that project and MD entries are added to the dataset."""
         # Create a temporary database
-        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
+        db_path = pathlib.Path(test_dir) / 'test_dataset'
 
         try:
             def mock_task(md):
@@ -104,12 +104,11 @@ class TestDatasetIntegration:
             assert md2_status['message'] == 'Done!'
 
         finally:
-            # Clean up
-            db_path.unlink(missing_ok=True)
+            shutil.rmtree(db_path)
 
     def test_running_state_during_execution(self):
         """Test that state is set to RUNNING during task execution."""
-        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
+        db_path = pathlib.Path(test_dir) / 'test_dataset'
 
         try:
             # Track states seen during execution
@@ -157,11 +156,11 @@ class TestDatasetIntegration:
             assert md2_status['state'] == State.DONE.value
 
         finally:
-            db_path.unlink(missing_ok=True)
+            shutil.rmtree(db_path)
 
     def test_state_transitions_on_error(self):
         """Test that states transition to ERROR when workflow fails."""
-        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
+        db_path = pathlib.Path(test_dir) / 'test_dataset'
 
         try:
             call_count = [0]
@@ -193,4 +192,4 @@ class TestDatasetIntegration:
             assert md2_status is None
 
         finally:
-            db_path.unlink(missing_ok=True)
+            shutil.rmtree(db_path)

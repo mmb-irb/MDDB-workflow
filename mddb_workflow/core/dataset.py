@@ -9,10 +9,10 @@ import jinja2
 import time
 import os
 import glob
-import sqlite3
 from pathlib import Path
 from enum import Enum
 import importlib.util
+import duckdb
 
 
 class State(Enum):
@@ -24,30 +24,39 @@ class State(Enum):
 
 
 class Dataset:
-    """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
-    # TODO: log_file, err_file, group_id
+    """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using Parquet files and DuckDB.
+
+    This implementation uses a "Data Lake" approach:
+    - Each write operation creates a unique Parquet file (no locking, cluster-safe)
+    - DuckDB is used to query all Parquet files as a single virtual table
+    - Safe for network filesystems (NFS, SMB) and distributed cluster environments
+    """
     common_columns = ['state', 'message', 'last_modified']
     project_columns = ['uuid', 'rel_path', 'num_mds'] + common_columns
     md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
     date_format = "%H:%M:%S %d-%m-%Y"
 
     def __init__(self, dataset_path: str):
-        """Initialize the Dataset object and connect to SQLite DB.
+        """Initialize the Dataset object with Parquet-based storage.
 
         Args:
-            dataset_path (str): Path to the dataset storage file, normally an .db file.
+            dataset_path (str): Path to the dataset storage directory.
+                               Will create 'projects/' and 'mds/' subdirectories for Parquet files.
 
         """
         self.dataset_path = Path(dataset_path).resolve()
-        # if not self.dataset_path.exists():
-        #     raise ValueError(f"Dataset path {self.dataset_path} does not exist.")
         self.root_path = self.dataset_path.parent
-        self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
-        # Enable foreign key constraints (disabled by default in SQLite)
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA busy_timeout = 5000")
-        self._ensure_tables()
+
+        # Create storage directories for parquet files
+        self.projects_dir = self.dataset_path / 'projects'
+        self.mds_dir = self.dataset_path / 'mds'
+        self._ensure_storage()
+
+    def _ensure_storage(self):
+        """Create storage directories if they do not exist."""
+        self.dataset_path.mkdir(parents=True, exist_ok=True)
+        self.projects_dir.mkdir(exist_ok=True)
+        self.mds_dir.mkdir(exist_ok=True)
 
     def _abs_to_rel(self, abs_path: str | Path) -> str:
         """Convert any path to relative path from root_path."""
@@ -59,59 +68,107 @@ class Dataset:
         rel_path = Path(rel_path)
         return str((self.root_path / rel_path).resolve())
 
-    def _ensure_tables(self):
-        """Create tables if they do not exist."""
-        cur = self.conn.cursor()
-        # Create projects table
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS projects (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                rel_path TEXT UNIQUE NOT NULL,
-                num_mds INTEGER DEFAULT 0,
-                state TEXT,
-                message TEXT,
-                last_modified TEXT
-            )
-        ''')
-        # Create mds table
-        # MDs are linked to projects via project_uuid foreign key
-        # ON DELETE CASCADE ensures MDs are deleted when project is deleted
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS mds (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                project_uuid TEXT NOT NULL,
-                rel_path TEXT UNIQUE NOT NULL,
-                state TEXT,
-                message TEXT,
-                last_modified TEXT,
-                FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE
-            )
-        ''')
+    def _get_parquet_path(self, uuid: str, is_md: bool = False) -> Path:
+        """Get the path to a parquet file for a given UUID."""
+        storage_dir = self.mds_dir if is_md else self.projects_dir
+        return storage_dir / f"{uuid}.parquet"
 
-        # Create triggers to automatically maintain num_mds count
-        # Trigger on INSERT: increment num_mds when a new MD is added
-        cur.execute('''
-            CREATE TRIGGER IF NOT EXISTS increment_num_mds
-            AFTER INSERT ON mds
-            BEGIN
-                UPDATE projects
-                SET num_mds = num_mds + 1
-                WHERE uuid = NEW.project_uuid;
-            END
-        ''')
+    def _write_parquet(self, data: dict, is_md: bool = False):
+        """Write a single row of data to a Parquet file.
 
-        # Trigger on DELETE: decrement num_mds when an MD is removed
-        cur.execute('''
-            CREATE TRIGGER IF NOT EXISTS decrement_num_mds
-            AFTER DELETE ON mds
-            BEGIN
-                UPDATE projects
-                SET num_mds = num_mds - 1
-                WHERE uuid = OLD.project_uuid;
-            END
-        ''')
+        Each UUID gets its own Parquet file to avoid locking issues.
+        """
+        uuid = data['uuid']
+        parquet_path = self._get_parquet_path(uuid, is_md)
 
-        self.conn.commit()
+        df = pd.DataFrame([data])
+        df.to_parquet(parquet_path, index=False, engine='pyarrow')
+
+    def _read_parquet(self, uuid: str, is_md: bool = False) -> dict | None:
+        """Read a single row from a Parquet file by UUID."""
+        parquet_path = self._get_parquet_path(uuid, is_md)
+        if not parquet_path.exists():
+            return None
+        df = pd.read_parquet(parquet_path)
+        if df.empty:
+            return None
+        return df.iloc[0].to_dict()
+
+    def _delete_parquet(self, uuid: str, is_md: bool = False) -> bool:
+        """Delete a Parquet file by UUID."""
+        parquet_path = self._get_parquet_path(uuid, is_md)
+        if parquet_path.exists():
+            parquet_path.unlink()
+            return True
+        return False
+
+    def _get_duckdb_connection(self):
+        """Get a fresh DuckDB connection for querying."""
+        return duckdb.connect(':memory:')
+
+    def _compute_num_mds(self, project_uuid: str) -> int:
+        """Compute the number of MDs for a given project by counting parquet files."""
+        if not any(self.mds_dir.glob('*.parquet')):
+            return 0
+        conn = self._get_duckdb_connection()
+        result = conn.execute(f"""
+            SELECT COUNT(*) FROM read_parquet('{self.mds_dir}/*.parquet')
+            WHERE project_uuid = ?
+        """, [project_uuid]).fetchone()
+        conn.close()
+        return result[0] if result else 0
+
+    def _update_project_num_mds(self, project_uuid: str):
+        """Update a single project's num_mds count after adding/removing an MD."""
+        project_data = self._read_parquet(project_uuid, is_md=False)
+        if project_data:
+            project_data['num_mds'] = self._compute_num_mds(project_uuid)
+            self._write_parquet(project_data, is_md=False)
+
+    def compact(self, verbose: bool = False):
+        """Compact all individual Parquet files into single files per table.
+
+        This is useful for improving read performance after many individual writes.
+        Creates consolidated parquet files and removes the individual ones.
+        """
+        for table, storage_dir in [('projects', self.projects_dir), ('mds', self.mds_dir)]:
+            if not self._has_parquet_files(table):
+                if verbose:
+                    print(f"No {table} to compact.")
+                continue
+
+            cols = self.project_columns if table == 'projects' else self.md_columns
+            conn = self._get_duckdb_connection()
+
+            # Read all data
+            df = conn.execute(f"""
+                SELECT {', '.join(cols)} FROM read_parquet('{storage_dir}/*.parquet')
+            """).fetchdf()
+            conn.close()
+
+            if df.empty:
+                continue
+
+            # Write to a temporary consolidated file
+            temp_file = storage_dir / '_consolidated.parquet'
+            df.to_parquet(temp_file, index=False, engine='pyarrow')
+
+            # Remove all individual files
+            for pq_file in storage_dir.glob('*.parquet'):
+                if pq_file.name != '_consolidated.parquet':
+                    pq_file.unlink()
+
+            # Write individual files back from consolidated data
+            for _, row in df.iterrows():
+                row_dict = row.to_dict()
+                is_md = table == 'mds'
+                self._write_parquet(row_dict, is_md=is_md)
+
+            # Remove consolidated file
+            temp_file.unlink()
+
+            if verbose:
+                print(f"Compacted {len(df)} {table} entries.")
 
     def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
         """Read UUID and project_uuid from cache file in the given directory."""
@@ -152,6 +209,8 @@ class Dataset:
             if verbose:
                 print(f"Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
             self.update_status(uuid, state=State.NEW, message='No information recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
+            # Update the project's num_mds count
+            self._update_project_num_mds(project_uuid)
 
     def add_entries(self,
         paths_or_globs: list[str] | str,
@@ -192,29 +251,16 @@ class Dataset:
                 self.add_md(md_dir_path, make_uuid=True, verbose=verbose)
 
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
-        """Retrieve a project or MD's status from the database by UUID."""
-        cur = self.conn.cursor()
-        if project_uuid:
-            # This is an MD entry
-            cur.execute("SELECT * FROM mds WHERE uuid=?", (uuid,))
-            row = cur.fetchone()
-            if row:
-                columns = [desc[0] for desc in cur.description]
-                result = dict(zip(columns, row))
-                result['scope'] = 'MD'
-                return result
-        else:
-            # This is a project entry
-            cur.execute("SELECT * FROM projects WHERE uuid=?", (uuid,))
-            row = cur.fetchone()
-            if row:
-                columns = [desc[0] for desc in cur.description]
-                result = dict(zip(columns, row))
-                result['scope'] = 'Project'
-                return result
+        """Retrieve a project or MD's status from Parquet files by UUID."""
+        is_md = project_uuid is not None
+        data = self._read_parquet(uuid, is_md=is_md)
+        if data:
+            data['scope'] = 'MD' if is_md else 'Project'
+            return data
+        return None
 
     def get_status(self, directory: str | Path):
-        """Retrieve a project or MD's status from the database by directory path."""
+        """Retrieve a project or MD's status from Parquet files by directory path."""
         if isinstance(directory, Path):
             directory = directory.resolve().as_posix()
         uuid, project_uuid = self._read_uuid_from_cache(directory)
@@ -227,7 +273,9 @@ class Dataset:
         project_uuid: str = None,
         rel_path: str = None,
     ):
-        """Update or insert a project or MD's status in the database.
+        """Update or insert a project or MD's status by writing to a Parquet file.
+
+        Each UUID gets its own Parquet file, avoiding database locking issues.
 
         Args:
             uuid: UUID of the project or MD
@@ -237,82 +285,88 @@ class Dataset:
             rel_path: Relative path to the directory (required for new entries)
 
         """
-        cur = self.conn.cursor()
         if isinstance(state, State):
             state = state.value
         last_modified = time.strftime(self.date_format, time.localtime())
 
-        if project_uuid:
-            # This is an MD entry
-            if rel_path is None:
-                # Try to get existing rel_path
-                existing = self.get_uuid_status(uuid)
-                if existing:
-                    rel_path = existing['rel_path']
-                else:
-                    raise ValueError("rel_path is required for new MD entries")
+        is_md = project_uuid is not None
 
-            cur.execute('''
-                INSERT INTO mds (uuid, project_uuid, rel_path, state, message, last_modified)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(uuid) DO UPDATE SET
-                    state=excluded.state,
-                    message=excluded.message,
-                    last_modified=excluded.last_modified,
-                    rel_path=excluded.rel_path
-            ''', (uuid, project_uuid, rel_path, state, message, last_modified))
+        if rel_path is None:
+            # Try to get existing rel_path
+            existing = self.get_uuid_status(uuid, project_uuid)
+            if existing:
+                rel_path = existing['rel_path']
+            else:
+                entry_type = "MD" if is_md else "project"
+                raise ValueError(f"rel_path is required for new {entry_type} entries")
+
+        if is_md:
+            # This is an MD entry
+            data = {
+                'uuid': uuid,
+                'project_uuid': project_uuid,
+                'rel_path': rel_path,
+                'state': state,
+                'message': message,
+                'last_modified': last_modified,
+            }
+            self._update_project_num_mds(project_uuid)
         else:
             # This is a project entry
-            if rel_path is None:
-                # Try to get existing rel_path
-                existing = self.get_uuid_status(uuid)
-                if existing:
-                    rel_path = existing['rel_path']
-                else:
-                    raise ValueError("rel_path is required for new project entries")
+            # Compute num_mds dynamically
+            num_mds = self._compute_num_mds(uuid)
+            data = {
+                'uuid': uuid,
+                'rel_path': rel_path,
+                'num_mds': num_mds,
+                'state': state,
+                'message': message,
+                'last_modified': last_modified,
+            }
 
-            cur.execute('''
-                INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
-                VALUES (?, ?, ?, ?, ?, 0)
-                ON CONFLICT(uuid) DO UPDATE SET
-                    state=excluded.state,
-                    message=excluded.message,
-                    last_modified=excluded.last_modified,
-                    rel_path=excluded.rel_path
-            ''', (uuid, rel_path, state, message, last_modified))
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                self.conn.commit()
-                break
-            except sqlite3.OperationalError as e:
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                else:
-                    raise e
+        self._write_parquet(data, is_md=is_md)
 
     def remove_entry(self, directory: str | Path, verbose: bool = False):
-        """Remove a single project or MD entry from the database by directory."""
+        """Remove a single project or MD entry from the Parquet storage by directory."""
         if isinstance(directory, Path):
             directory = directory.resolve().as_posix()
         uuid, project_uuid = self._read_uuid_from_cache(directory)
         self.remove_entry_by_uuid(uuid, project_uuid, verbose=verbose)
 
     def remove_entry_by_uuid(self, uuid: str, project_uuid: str = None, verbose: bool = False):
-        """Remove a single project or MD entry from the database by UUID."""
-        cur = self.conn.cursor()
-        if project_uuid:
-            # Remove from MDs
-            cur.execute("DELETE FROM mds WHERE uuid=?", (uuid,))
-        else:
-            # Remove from projects
-            cur.execute("DELETE FROM projects WHERE uuid=?", (uuid,))
+        """Remove a single project or MD entry from the Parquet storage by UUID."""
+        is_md = project_uuid is not None
+        deleted = self._delete_parquet(uuid, is_md=is_md)
+
+        if not is_md and deleted:
+            # If deleting a project, also delete all its MDs
+            self._delete_project_mds(uuid, verbose=verbose)
+        elif is_md and deleted:
+            # Update the project's num_mds count after removing an MD
+            self._update_project_num_mds(project_uuid)
+
         if verbose:
-            if cur.rowcount > 0:
-                print(f"Deleted {'MD' if project_uuid else 'project'} with UUID '{uuid}'")
+            if deleted:
+                print(f"Deleted {'MD' if is_md else 'project'} with UUID '{uuid}'")
             else:
                 print(f"No entry found for UUID '{uuid}' to delete")
-        self.conn.commit()
+
+    def _delete_project_mds(self, project_uuid: str, verbose: bool = False):
+        """Delete all MDs belonging to a project (cascade delete)."""
+        if not any(self.mds_dir.glob('*.parquet')):
+            return
+
+        conn = self._get_duckdb_connection()
+        result = conn.execute(f"""
+            SELECT uuid FROM read_parquet('{self.mds_dir}/*.parquet')
+            WHERE project_uuid = ?
+        """, [project_uuid]).fetchall()
+        conn.close()
+
+        for (md_uuid,) in result:
+            self._delete_parquet(md_uuid, is_md=True)
+            if verbose:
+                print(f"  Deleted MD with UUID '{md_uuid}' (cascade)")
 
     def generate_inputs_yaml(self,
             inputs_template_path: str,
@@ -385,7 +439,7 @@ class Dataset:
                                             project_status=project_dict,
                                             **generated_input)
             # Write the rendered YAML to inputs.yaml
-            print(f"Generating {inputs_yaml_path} for project {project_dict['rel_path']}")
+            print(f"Generating {inputs_filename} for project {project_dict['rel_path']}")
             with open(inputs_yaml_path, 'w') as f:
                 f.write(rendered_yaml)
 
@@ -494,8 +548,13 @@ class Dataset:
         where_clause = " AND ".join(conditions) if conditions else ""
         return where_clause, params
 
+    def _has_parquet_files(self, table: str) -> bool:
+        """Check if there are any parquet files in the given table directory."""
+        storage_dir = self.mds_dir if table == 'mds' else self.projects_dir
+        return any(storage_dir.glob('*.parquet'))
+
     def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None) -> list[tuple]:
-        """Query an available table with optional filters.
+        """Query Parquet files using DuckDB with optional filters.
 
         Args:
             table: Table name to query ('projects' or 'mds')
@@ -503,29 +562,39 @@ class Dataset:
             query_state: List of states to filter by
 
         Returns:
-            List of tuples with project data
+            List of tuples with project/MD data
 
         """
         if table not in ['projects', 'mds']:
             raise ValueError("Table must be either 'projects' or 'mds'")
-        cur = self.conn.cursor()
-        where_clause, params = self._build_where_clause(query_path, query_state)
+
+        # Check if there are any parquet files
+        if not self._has_parquet_files(table):
+            return []
+
+        storage_dir = self.mds_dir if table == 'mds' else self.projects_dir
         cols = self.project_columns if table == 'projects' else self.md_columns
-        query = f"SELECT {', '.join(cols)} FROM {table}"
+
+        where_clause, params = self._build_where_clause(query_path, query_state)
+
+        conn = self._get_duckdb_connection()
+        query = f"SELECT {', '.join(cols)} FROM read_parquet('{storage_dir}/*.parquet')"
         if where_clause:
             query += f" WHERE {where_clause}"
         query += " ORDER BY rel_path"
-        cur.execute(query, params)
-        return cur.fetchall()
+
+        result = conn.execute(query, params).fetchall()
+        conn.close()
+        return result
 
     @property
     def projects_table(self) -> list[tuple]:
-        """Retrieve all project status from the SQLite database as a list of tuples."""
+        """Retrieve all project status from Parquet files as a list of tuples."""
         return self.query_table('projects')
 
     @property
     def mds_table(self) -> list[tuple]:
-        """Retrieve all MD status from the SQLite database as a list of tuples."""
+        """Retrieve all MD status from Parquet files as a list of tuples."""
         return self.query_table('mds')
 
     def get_dataframe(self,
@@ -567,7 +636,7 @@ class Dataset:
         else:
             scopes_to_query = ['projects', 'mds']
 
-        # Query data directly from SQLite with filters applied
+        # Query data from Parquet files using DuckDB
         dataframes = []
         for scope in scopes_to_query:
             cols = self.project_columns if scope == 'projects' else self.md_columns
@@ -848,14 +917,14 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
     """Resolve directory patterns (glob or absolute/relative paths)."""
     directories = []
     for dir_pattern in dir_patterns:
-        if not Path(dir_pattern).is_dir():
-            continue
         if is_glob(dir_pattern):
             if Path(dir_pattern).is_absolute():
                 matched_dirs = [Path(p) for p in glob.glob(dir_pattern)]
             else:
                 matched_dirs = list(root_path.glob(dir_pattern))
             directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
+        elif not Path(dir_pattern).is_dir():
+            continue
         else:
             p = Path(dir_pattern)
             p = p.absolute() if not p.is_absolute() else p

@@ -21,7 +21,7 @@ def test_add_remove_entries():
         project_dirs += [tmpdir / "wrong"]
         for d in project_dirs + replica_dirs:
             os.makedirs(d)
-        db_path = tmpdir / "dataset.db"
+        db_path = tmpdir / "dataset"
         ds = Dataset(dataset_path=str(db_path))
         project_dirs = [str(d) for d in project_dirs]
         ds.add_entries(project_dirs,
