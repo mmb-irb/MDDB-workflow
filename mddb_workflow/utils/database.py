@@ -98,6 +98,17 @@ class Remote:
             raise Exception(f'Something went wrong when downloading file "{target_filename}" in {request_url}')
 
     # Download the project standard topology
+    def get_standard_topology (self):
+        request_url = self.project_url + '/topology'
+        print(f'Downloading standard topology\n')
+        try:
+            response = urllib.request.urlopen(request_url, context=self.context)
+            content = json.loads(response.read())
+            return content
+        except Exception as error:
+            raise Exception(f'Something went wrong when downloading the standard topology: {request_url} with error: {error}')
+
+    # Download the project standard topology
     def download_standard_topology (self, output_file : 'File'):
         request_url = self.project_url + '/topology'
         print(f'Downloading standard topology ({output_file.path})\n')

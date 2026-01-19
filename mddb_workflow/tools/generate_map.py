@@ -76,6 +76,7 @@ def generate_protein_mapping (
     structure : 'Structure',
     protein_references_file : 'File',
     database : 'Database',
+    remote : 'Remote',
     cache : 'Cache',
     register : dict,
     mercy : list[str] = [],
@@ -103,6 +104,8 @@ def generate_protein_mapping (
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
     references = {}
+    # For each input forced reference, get the reference sequence
+    reference_sequences = {}
     # Cache wrappers for reference getter which connect to the internet
     cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
     cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
@@ -137,6 +140,7 @@ def generate_protein_mapping (
         for isoform_uniprot_id in isoforms:
             add_reference(isoform_uniprot_id, check_isoforms=False)
     # Import local references, in case the references json file already exists
+    # DANI: This may not be run anymore
     imported_references = None
     if protein_references_file.exists:
         imported_references = import_references(protein_references_file)
@@ -156,8 +160,6 @@ def generate_protein_mapping (
     if len(protein_parsed_chains) == 0:
         print(' There are no protein sequences')
         return protein_parsed_chains
-    # For each input forced reference, get the reference sequence
-    reference_sequences = {}
     # Save already tried alignments to not repeat the alignment further
     tried_alignments = { chain_data['name']: [] for chain_data in protein_parsed_chains }
     # Set a function to try to match all protein sequences with the available reference sequences
@@ -317,6 +319,57 @@ def generate_protein_mapping (
         # If there was at least one imported reference missing then rerun the matching
         if need_rematch:
             print(' Using references imported from references.json')
+            if match_sequences():
+                return protein_parsed_chains
+    # Import remote references, in case we have a project id
+    if remote:
+        need_rematch = False
+        # Get remote references
+        remote_references = remote.project_data['metadata']['REFERENCES']
+        # If there are no referables we will have to make a bit of extra work
+        if NO_REFERABLE_FLAG in remote_references:
+            # Get the remote standard topology
+            topology = remote.get_standard_topology()
+            # Find which chain is the no referable
+            # Even if multiple chains are no referable, the reference will be only one
+            topology_references = topology['references']
+            no_referable_reference_index = next(
+                index for index, reference in enumerate(topology_references) \
+                if reference == NO_REFERABLE_FLAG )
+            # Get all residues which are flagged as no referable
+            residue_references = topology['residue_reference_indices']
+            reference_residue_indices = [
+                residue_index for residue_index, reference_index in enumerate(residue_references) \
+                if reference_index == no_referable_reference_index ]
+            # Classify these residues in the different chains they belong to
+            topology_residue_chains_indices = topology['residue_chain_indices']
+            chain_residue_indices = {}
+            for residue_index in reference_residue_indices:
+                chain_index = topology_residue_chains_indices[residue_index]
+                current_chain = chain_residue_indices.get(chain_index, [])
+                if len(current_chain) == 0:
+                    chain_residue_indices[chain_index] = current_chain
+                current_chain.append(residue_index)
+            # Get the amino-acid sequence of every no referable chain and add it to the references
+            topology_residue_names = topology['residue_names']
+            for residue_indices in chain_residue_indices.values():
+                residue_names = [ topology_residue_names[index] for index in residue_indices ]
+                residue_letters = [ protein_residue_name_to_letter(name) for name in residue_names ]
+                chain_sequence = ''.join(residue_letters)
+                no_referable_exception = NoReferableException(chain_sequence)
+                reference_sequences[no_referable_exception] = chain_sequence
+            need_rematch = True
+        # Iterate remote references
+        for uniprot_id in remote_references:
+            # If the imported reference has been aligned already (i.e. it was a forced reference)
+            if uniprot_id in reference_sequences: continue
+            # Skip the no referable flag, which has been handled already
+            if uniprot_id == NO_REFERABLE_FLAG: continue
+            need_rematch = True
+            add_reference(uniprot_id)
+        # If there was at least one project reference missing then rerun the matching
+        if need_rematch:
+            print(f' Using references from remote project {remote.accession}')
             if match_sequences():
                 return protein_parsed_chains
     # Cache wrapper for pdb 2 uniprot logic
