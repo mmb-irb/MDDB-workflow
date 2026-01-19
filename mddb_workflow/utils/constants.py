@@ -79,6 +79,7 @@ ENERGIES_DEBUG_SCRIPT_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/get_energies_sum.py'
 
 # Expected MD inputs
 MD_DIRECTORY = 'mdir'
+MD_REMOVED = 'removed'
 
 # Input config file for the NASSA analysis
 DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'

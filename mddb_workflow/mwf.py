@@ -13,7 +13,7 @@ from glob import glob
 from mddb_workflow.utils.constants import *
 
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_TOPOLOGY, REMOVED_MD
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
@@ -468,6 +468,10 @@ class MD:
             # Iterate over the different MD inputs to find out each directory
             # We must find the MD inputs whcih belong to this specific MD according to this directory
             for md in self.project.input_mds:
+                # Skip removed directories
+                # If it is a removed MD then we must handle it apart
+                was_removed = md.get(MD_REMOVED, False)
+                if was_removed: continue
                 # Get the directory according to the inputs
                 directory = md.get(MD_DIRECTORY, None)
                 if directory:
@@ -1221,7 +1225,7 @@ class Project:
             # Make sure there are no duplictaed MD directories
             md_directories = [mdc[0] for mdc in self.md_config]
             if len(md_directories) > len(set(md_directories)):
-                raise InputError('There are duplicated MD directories')
+                raise InputError('There are duplicated MD directories. Every directory behind every "-md" must be unique.')
 
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
@@ -1379,6 +1383,11 @@ class Project:
         # Use the MDs from the inputs file when available
         if self.is_inputs_file_available() and self.input_mds:
             for input_md in self.input_mds:
+                # If it is a removed MD then we must handle it apart
+                was_removed = input_md.get(MD_REMOVED, False)
+                if was_removed:
+                    self._md_directories.append(REMOVED_MD)
+                    continue
                 # Get the directory according to the inputs
                 directory = input_md.get(MD_DIRECTORY, None)
                 if directory:
@@ -1488,9 +1497,15 @@ class Project:
                     input_trajectory_filepaths=input_trajectory_filepaths,
                 )
                 self._mds.append(md)
-        # Old system (-mdir, -stru -traj)
+        # This is when the MDs are passed through inputs file
+        # Also for the old command line system (-mdir, -stru -traj)
         else:
             for n, md_directory in enumerate(self.md_directories, 1):
+                # If it is a removed MD then we must handle it apart
+                if md_directory == REMOVED_MD:
+                    self._mds.append(REMOVED_MD)
+                    continue
+                # Instantiate the MD handler and add it to the list
                 md = MD(
                     project=self, number=n, directory=md_directory,
                     input_structure_filepath=self.input_structure_filepath,
@@ -2356,6 +2371,8 @@ def workflow(
     # Now iterate over the different MDs
     md_errors = []
     for md in project.mds:
+        # If it is a removed MD then we must handle it apart
+        if md == REMOVED_MD: continue
         print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
         # Run the MD tasks
         try:
