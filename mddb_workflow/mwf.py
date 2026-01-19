@@ -1445,6 +1445,12 @@ class Project:
         if self._reference_md:
             return self._reference_md
         # Otherwise we must find the reference MD
+        md_count = len(self.mds)
+        if md_count <= self.reference_md_index:
+            message_end = 'there is only 1 MD' if md_count == 1 else f'there are only {md_count} MDs'
+            raise InputError(f'Reference MD index is {self.reference_md_index} but {message_end}.\n' \
+                ' Note that the index of the reference MD is 0-based, so the first MD is "0".\n' \
+                ' Please change or leave blank the field "mdref" in the inputs file.')
         self._reference_md = self.mds[self.reference_md_index]
         return self._reference_md
     reference_md: MD = property(get_reference_md, None, None, "Reference MD (read only)")
