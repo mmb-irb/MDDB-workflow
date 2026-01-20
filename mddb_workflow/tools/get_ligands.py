@@ -246,10 +246,10 @@ def generate_ligand_references(
                            if 'pubchem' not in v]
     if not_matched_ligands:
         for k, v in not_matched_ligands:
-            warn(f'Ligand {inchikeys[k].molname} could not be matched to any PubChem ID. Residues: {v}')
+            warn(f'Ligand {k} could not be matched to any PubChem ID. Residues: {v}')
         if LIGANDS_MATCH_FLAG not in mercy:
             raise InputError('Provide PubChem IDs for all ligands, a PDB code where it is '
-                             f'present or use the flag -m {LIGANDS_MATCH_FLAG} to bypass this check.')
+                             f'present or use the flag "-m {LIGANDS_MATCH_FLAG}" to bypass this check.')
 
     if not ligand_references:
         print('No ligands were matched')
