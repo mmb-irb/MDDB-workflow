@@ -627,14 +627,13 @@ class MD:
                 'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
         self._structure = Structure.from_pdb_file(self.structure_file.path)
-        # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
-        # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
-        # If we fail to get bonds from topology then just go along with the default structure bonds
-        if not self.register.tests.get(STABLE_BONDS_FLAG, None):
-            self._structure.bonds = self.reference_bonds
-        # Same procedure if we have coarse grain atoms
-        elif self.cg_selection:
-            self._structure.bonds = self.reference_bonds
+        # Always force reference bonds in the structure
+        # Do not trust in the structure bonds even if they should belong to the reference structure
+        # There are several scenarios where they may be wrong:
+        # 1. Coarse grain
+        # 2. Stable bonds test failed and we had mercy
+        # 3. Ignored ions which may cause clashes
+        self._structure.bonds = self.reference_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 
