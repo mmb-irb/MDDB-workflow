@@ -1,6 +1,8 @@
 import contextlib
 from rich.errors import NotRenderableError
 from rich.live import Live
+from rich.spinner import Spinner
+from rich.console import Group
 import time
 import re
 
@@ -67,14 +69,18 @@ def rich_display_dataframe(df, row_limit=None, title="Dataframe", only_return=Fa
 
 def watch_dataframe(get_df_func, interval=2, title="Live Dataframe"):
     """Watch a dataframe with periodic updates."""
-    with Live(refresh_per_second=0.5) as live:
-        while True:
-            df = get_df_func()
-            table = rich_display_dataframe(
-                df,
-                row_limit=20,
-                title=title,
-                only_return=True
-            )
-            live.update(table)
-            time.sleep(interval)
+    spinner = Spinner("dots", text=title)
+    with Live(refresh_per_second=20) as live:
+        try:
+            while True:
+                df = get_df_func()
+                table = rich_display_dataframe(
+                    df,
+                    row_limit=20,
+                    title=spinner,
+                    only_return=True
+                )
+                live.update(table)
+                time.sleep(interval)
+        except KeyboardInterrupt:
+            pass

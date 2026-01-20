@@ -45,7 +45,7 @@ class DatabaseLock:
 
         """
         self.db_path = Path(db_path).resolve()
-        self.lock_dir = self.db_path.with_stem('.lock_')
+        self.lock_dir = self.db_path.with_stem('.lock_' + self.db_path.name)
         self.timeout = timeout
         self.retry_interval = retry_interval
         self._lock_count = 0  # For reentrant locking
@@ -245,6 +245,7 @@ class Dataset:
             cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
             uuid = cache.retrieve('uuid')
             project_uuid = cache.retrieve('project_uuid')
+            return uuid, project_uuid
         return None, None
 
     def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False):
@@ -463,6 +464,9 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         filtered_projects = self.query_table('projects', query_path, query_state)
+        if len(filtered_projects) == 0:
+            print("No projects found matching the specified query_path and query_state filters.")
+            return
 
         # Load the template
         with open(inputs_template_path, 'r') as f:

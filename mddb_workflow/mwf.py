@@ -2426,26 +2426,27 @@ def workflow(
 
     # Run the project tasks and MD tasks as per the task resolver.
     t0 = time.time()
-    with ErrorHandling(project, keep_going, dataset, clear_register=True):
+    with ErrorHandling(project, keep_going, dataset, clear_register=True) as error_handler:
         for task in tasker.project_tasks:
             # Get the function to be called and call it
             getter = requestables[task]
             getter(project)
 
-    # Now iterate over the different MDs
-    for md in project.mds:
-        print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
-        # Run the MD tasks
-        with ErrorHandling(md, keep_going, dataset):
-            for task in tasker.md_tasks:
-                # Get the function to be called and call it
-                getter = requestables[task]
-                getter(md)
-        # Remove gromacs backups and other trash files from this MD
-        remove_trash(md.directory)
+        # Now iterate over the different MDs
+        for md in project.mds:
+            print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
+            error_handler.update_state(state=State.RUNNING, message=f'Processing MD at {md.directory}')
+            # Run the MD tasks
+            with ErrorHandling(md, keep_going, dataset):
+                for task in tasker.md_tasks:
+                    # Get the function to be called and call it
+                    getter = requestables[task]
+                    getter(md)
+            # Remove gromacs backups and other trash files from this MD
+            remove_trash(md.directory)
 
-    # Remove gromacs backups and other trash files from the project
-    remove_trash(project.directory)
+        # Remove gromacs backups and other trash files from the project
+        remove_trash(project.directory)
     t = time.time() - t0
     print(f'\n{CYAN_HEADER} Workflow finished in {t/60:.2f} minutes {COLOR_END}')
 

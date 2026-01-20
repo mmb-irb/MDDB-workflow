@@ -372,7 +372,7 @@ def main():
             )
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe
-                print(rich_display_dataframe(df, title="MDDB Dataset"))
+                rich_display_dataframe(df, title="MDDB Dataset")
             except ImportError:
                 print(df)
         elif args.dataset_subcommand == 'watch':

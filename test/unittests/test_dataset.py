@@ -53,12 +53,14 @@ def test_add_remove_entries():
         ds.remove_entry(tmpdir / "proj1/replica1", verbose=True)
         assert ds.get_status(tmpdir / "proj1")['num_mds'] == 1  # One replica should remain
 
+
 @pytest.mark.unit_int
 def test_dataset_console_commands():
     """Test dataset console commands help output."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        db_path = tmpdir / "dataset.db"
+        # db_path = tmpdir / "dataset.db"
+
         # Test main dataset help
         result = subprocess.run(
             ['mwf', 'dataset', '--help'],
@@ -117,280 +119,262 @@ def test_dataset_console_commands():
         assert 'watch' in result.stdout.lower()
 
 
-# ============================================================================
-# Lock file tests
-# ============================================================================
-
 @pytest.mark.unit_int
-def test_database_lock_basic():
-    """Test basic lock acquire and release."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.db"
-        db_path.touch()
+class TestDatabaseLock:
+    """Test the DatabaseLock class."""
 
-        lock = DatabaseLock(db_path, timeout=5.0)
-        lock_dir = db_path.with_stem('.lock_')
+    db_name = "test_lock.db"
 
-        # Lock should not exist initially
-        assert not lock_dir.exists()
-        assert not lock.is_locked()
+    def _paths(self, tmpdir):
+        db_path = Path(tmpdir) / self.db_name
+        lock_dir = db_path.with_stem(".lock_" + db_path.name)
+        return db_path, lock_dir
 
-        # Acquire lock
-        lock.acquire()
-        assert lock_dir.exists()
-        assert lock_dir.is_dir()
-        assert lock.is_locked()
+    def test_database_lock_basic(self):
+        """Test basic lock acquire and release."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path, lock_dir = self._paths(tmpdir)
+            db_path.touch()
 
-        # Release lock
-        lock.release()
-        assert not lock_dir.exists()
-        assert not lock.is_locked()
+            lock = DatabaseLock(db_path, timeout=5.0)
+            # Lock should not exist initially
+            assert not lock_dir.exists()
+            assert not lock.is_locked()
 
-
-@pytest.mark.unit_int
-def test_database_lock_reentrant():
-    """Test that the same thread can acquire the lock multiple times."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.db"
-        db_path.touch()
-
-        lock = DatabaseLock(db_path, timeout=5.0)
-        lock_dir = db_path.with_stem('.lock_')
-
-        # Acquire lock multiple times (reentrant)
-        lock.acquire()
-        lock.acquire()
-        lock.acquire()
-        assert lock._lock_count == 3
-
-        # Release once - lock should still be held
-        lock.release()
-        assert lock._lock_count == 2
-        assert lock_dir.exists()
-
-        # Release again
-        lock.release()
-        assert lock._lock_count == 1
-        assert lock_dir.exists()
-
-        # Final release - lock should be gone
-        lock.release()
-        assert lock._lock_count == 0
-        assert not lock_dir.exists()
-
-
-@pytest.mark.unit_int
-def test_database_lock_context_manager():
-    """Test lock context managers."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.db"
-        db_path.touch()
-
-        lock = DatabaseLock(db_path, timeout=5.0)
-        lock_dir = db_path.with_stem('.lock_')
-
-        # Test write_lock context manager
-        with lock.lock_file():
-            assert lock_dir.exists()
-            assert lock._lock_count == 1
-        assert not lock_dir.exists()
-        assert lock._lock_count == 0
-
-
-@pytest.mark.unit_int
-def test_database_lock_timeout():
-    """Test that lock acquisition times out correctly."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.db"
-        db_path.touch()
-
-        lock1 = DatabaseLock(db_path, timeout=5.0)
-        lock2 = DatabaseLock(db_path, timeout=0.3, retry_interval=0.05)
-
-        # First lock acquires
-        lock1.acquire()
-
-        # Second lock should timeout
-        start = time.time()
-        with pytest.raises(TimeoutError) as exc_info:
-            lock2.acquire()
-        elapsed = time.time() - start
-
-        assert "Could not acquire" in str(exc_info.value)
-        assert elapsed >= 0.3
-        assert elapsed < 1.0  # Should not take too long
-
-        lock1.release()
-
-
-@pytest.mark.unit_int
-def test_database_lock_force_release():
-    """Test force release of stale locks."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.db"
-        db_path.touch()
-        lock_dir = db_path.with_stem('.lock_')
-
-        # Simulate a stale lock (directory exists but no process holds it)
-        os.mkdir(lock_dir)
-        assert lock_dir.exists()
-
-        lock = DatabaseLock(db_path, timeout=0.1)
-
-        # Normal acquire should fail/timeout
-        with pytest.raises(TimeoutError):
+            # Acquire lock
             lock.acquire()
+            assert lock_dir.exists()
+            assert lock_dir.is_dir()
+            assert lock.is_locked()
 
-        # Force release should work
-        lock.force_release()
-        assert not lock_dir.exists()
+            # Release lock
+            lock.release()
+            assert not lock_dir.exists()
+            assert not lock.is_locked()
 
-        # Now acquire should work
-        lock.acquire()
-        lock.release()
+    def test_database_lock_reentrant(self):
+        """Test that the same thread can acquire the lock multiple times."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path, lock_dir = self._paths(tmpdir)
+            db_path.touch()
 
+            lock = DatabaseLock(db_path, timeout=5.0)
+            # Acquire lock multiple times (reentrant)
+            lock.acquire()
+            lock.acquire()
+            lock.acquire()
+            assert lock._lock_count == 3
 
-@pytest.mark.unit_int
-def test_database_lock_threading():
-    """Test lock behavior with multiple threads."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.db"
-        db_path.touch()
+            # Release once - lock should still be held
+            lock.release()
+            assert lock._lock_count == 2
+            assert lock_dir.exists()
 
-        counter = {'value': 0}
-        errors = []
+            # Release again
+            lock.release()
+            assert lock._lock_count == 1
+            assert lock_dir.exists()
 
-        def increment_with_lock():
-            try:
-                lock = DatabaseLock(db_path, timeout=10.0, retry_interval=0.01)
-                for _ in range(10):
-                    with lock.lock_file():
-                        current = counter['value']
-                        time.sleep(0.001)  # Small delay to increase contention
-                        counter['value'] = current + 1
-            except Exception as e:
-                errors.append(str(e))
+            # Final release - lock should be gone
+            lock.release()
+            assert lock._lock_count == 0
+            assert not lock_dir.exists()
 
-        # Start multiple threads
-        threads = [threading.Thread(target=increment_with_lock) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+    def test_database_lock_context_manager(self):
+        """Test lock context managers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path, lock_dir = self._paths(tmpdir)
+            db_path.touch()
 
-        # Check no errors occurred
-        assert len(errors) == 0, f"Errors occurred: {errors}"
-        # Check counter is correct (5 threads * 10 increments = 50)
-        assert counter['value'] == 50
+            lock = DatabaseLock(db_path, timeout=5.0)
+            # Test write_lock context manager
+            with lock.lock_file():
+                assert lock_dir.exists()
+                assert lock._lock_count == 1
+            assert not lock_dir.exists()
+            assert lock._lock_count == 0
 
+    def test_database_lock_timeout(self):
+        """Test that lock acquisition times out correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path, _ = self._paths(tmpdir)
+            db_path.touch()
 
-@pytest.mark.unit_int
-def test_dataset_lock_integration():
-    """Test that Dataset uses locks correctly for database operations."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-        db_path = tmpdir / "dataset.db"
+            lock1 = DatabaseLock(db_path, timeout=5.0)
+            lock2 = DatabaseLock(db_path, timeout=0.3, retry_interval=0.05)
 
-        # Create dataset
-        ds = Dataset(dataset_path=str(db_path))
+            # First lock acquires
+            lock1.acquire()
 
-        # Verify lock directory is created during table creation
-        lock_dir = db_path.with_stem('.lock_')
-        # Lock should be released after __init__
-        assert not lock_dir.exists()
+            # Second lock should timeout
+            start = time.time()
+            with pytest.raises(TimeoutError) as exc_info:
+                lock2.acquire()
+            elapsed = time.time() - start
 
-        # Create a project directory
-        project_dir = tmpdir / "proj1"
-        project_dir.mkdir()
+            assert "Could not acquire" in str(exc_info.value)
+            assert elapsed >= 0.3
+            assert elapsed < 1.0  # Should not take too long
 
-        # Add project (should use write lock internally)
-        ds.add_project(str(project_dir), make_uuid=True)
+            lock1.release()
 
-        # Lock should be released after operation
-        assert not lock_dir.exists()
+    def test_database_lock_force_release(self):
+        """Test force release of stale locks."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path, lock_dir = self._paths(tmpdir)
+            db_path.touch()
 
-        # Query status (should use read lock internally)
-        status = ds.get_status(str(project_dir))
-        assert status is not None
-        assert status['state'] == State.NEW.value
+            # Simulate a stale lock (directory exists but no process holds it)
+            os.mkdir(lock_dir)
+            assert lock_dir.exists()
 
-        # Lock should be released after operation
-        assert not lock_dir.exists()
+            lock = DatabaseLock(db_path, timeout=0.1)
 
-        ds.close()
+            # Normal acquire should fail/timeout
+            with pytest.raises(TimeoutError):
+                lock.acquire()
 
+            # Force release should work
+            lock.force_release()
+            assert not lock_dir.exists()
 
-def _worker_update_status(db_path, uuid, project_uuid, worker_id, iterations, results_queue):
-    """Worker function for multiprocessing test."""
-    try:
-        ds = Dataset(dataset_path=str(db_path), lock_timeout=30.0)
-        for i in range(iterations):
-            ds.update_status(
-                uuid=uuid,
-                state=State.RUNNING,
-                message=f"Worker {worker_id} iteration {i}",
-                project_uuid=project_uuid if project_uuid else None,
-            )
-            time.sleep(0.01)  # Small delay
-        ds.close()
-        results_queue.put(('success', worker_id))
-    except Exception as e:
-        results_queue.put(('error', worker_id, str(e)))
+            # Now acquire should work
+            lock.acquire()
+            lock.release()
 
+    def test_database_lock_threading(self):
+        """Test lock behavior with multiple threads."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path, _ = self._paths(tmpdir)
+            db_path.touch()
 
-@pytest.mark.unit_int
-def test_dataset_lock_multiprocess():
-    """Test that locks work correctly across multiple processes."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-        db_path = tmpdir / "dataset.db"
+            counter = {'value': 0}
+            errors = []
 
-        # Create dataset and add a project
-        ds = Dataset(dataset_path=str(db_path))
-        project_dir = tmpdir / "proj1"
-        project_dir.mkdir()
-        ds.add_project(str(project_dir), make_uuid=True)
+            def increment_with_lock():
+                try:
+                    lock = DatabaseLock(db_path, timeout=10.0, retry_interval=0.01)
+                    for _ in range(10):
+                        with lock.lock_file():
+                            current = counter['value']
+                            time.sleep(0.001)  # Small delay to increase contention
+                            counter['value'] = current + 1
+                except Exception as e:
+                    errors.append(str(e))
 
-        # Get the UUID for the project
-        status = ds.get_status(str(project_dir))
-        uuid = status['uuid']
-        ds.close()
+            # Start multiple threads
+            threads = [threading.Thread(target=increment_with_lock) for _ in range(5)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
 
-        # Start multiple processes that update the same project
-        num_workers = 4
-        iterations = 5
-        results_queue = multiprocessing.Queue()
+            # Check no errors occurred
+            assert len(errors) == 0, f"Errors occurred: {errors}"
+            # Check counter is correct (5 threads * 10 increments = 50)
+            assert counter['value'] == 50
 
-        processes = []
-        for i in range(num_workers):
-            p = multiprocessing.Process(
-                target=_worker_update_status,
-                args=(db_path, uuid, None, i, iterations, results_queue)
-            )
-            processes.append(p)
-            p.start()
+    def test_dataset_lock_integration(self):
+        """Test that Dataset uses locks correctly for database operations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path, lock_dir = self._paths(tmpdir)
 
-        # Wait for all processes to complete
-        for p in processes:
-            p.join(timeout=60)
+            # Create dataset
+            ds = Dataset(dataset_path=str(db_path))
 
-        # Collect results
-        results = []
-        while not results_queue.empty():
-            results.append(results_queue.get())
+            # Lock should be released after __init__
+            assert not lock_dir.exists()
 
-        # Check all workers succeeded
-        errors = [r for r in results if r[0] == 'error']
-        assert len(errors) == 0, f"Worker errors: {errors}"
-        assert len(results) == num_workers
+            # Create a project directory
+            project_dir = tmpdir / "proj1"
+            project_dir.mkdir()
 
-        # Verify the lock directory is cleaned up
-        lock_dir = db_path.with_stem('.lock_')
-        assert not lock_dir.exists()
+            # Add project (should use write lock internally)
+            ds.add_project(str(project_dir), make_uuid=True)
 
-        # Verify the project still exists and has valid state
-        ds = Dataset(dataset_path=str(db_path))
-        status = ds.get_status(str(project_dir))
-        assert status is not None
-        assert status['state'] == State.RUNNING.value
-        ds.close()
+            # Lock should be released after operation
+            assert not lock_dir.exists()
+
+            # Query status (should use read lock internally)
+            status = ds.get_status(str(project_dir))
+            assert status is not None
+            assert status['state'] == State.NEW.value
+
+            # Lock should be released after operation
+            assert not lock_dir.exists()
+
+            ds.close()
+
+    def _worker_update_status(self, db_path, uuid, project_uuid, worker_id, iterations, results_queue):
+        """Worker function for multiprocessing test."""
+        try:
+            ds = Dataset(dataset_path=str(db_path), lock_timeout=30.0)
+            for i in range(iterations):
+                ds.update_status(
+                    uuid=uuid,
+                    state=State.RUNNING,
+                    message=f"Worker {worker_id} iteration {i}",
+                    project_uuid=project_uuid if project_uuid else None,
+                )
+                time.sleep(0.01)  # Small delay
+            ds.close()
+            results_queue.put(('success', worker_id))
+        except Exception as e:
+            results_queue.put(('error', worker_id, str(e)))
+
+    def test_dataset_lock_multiprocess(self):
+        """Test that locks work correctly across multiple processes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path, lock_dir = self._paths(tmpdir)
+
+            # Create dataset and add a project
+            ds = Dataset(dataset_path=str(db_path))
+            project_dir = tmpdir / "proj1"
+            project_dir.mkdir()
+            ds.add_project(str(project_dir), make_uuid=True)
+
+            # Get the UUID for the project
+            status = ds.get_status(str(project_dir))
+            uuid = status['uuid']
+            ds.close()
+
+            # Start multiple processes that update the same project
+            num_workers = 4
+            iterations = 5
+            results_queue = multiprocessing.Queue()
+
+            processes = []
+            for i in range(num_workers):
+                p = multiprocessing.Process(
+                    target=self._worker_update_status,
+                    args=(db_path, uuid, None, i, iterations, results_queue)
+                )
+                processes.append(p)
+                p.start()
+
+            # Wait for all processes to complete
+            for p in processes:
+                p.join(timeout=60)
+
+            # Collect results
+            results = []
+            while not results_queue.empty():
+                results.append(results_queue.get())
+
+            # Check all workers succeeded
+            errors = [r for r in results if r[0] == 'error']
+            assert len(errors) == 0, f"Worker errors: {errors}"
+            assert len(results) == num_workers
+
+            # Verify the lock directory is cleaned up
+            lock_dir = db_path.with_stem('.lock_')
+            assert not lock_dir.exists()
+
+            # Verify the project still exists and has valid state
+            ds = Dataset(dataset_path=str(db_path))
+            status = ds.get_status(str(project_dir))
+            assert status is not None
+            assert status['state'] == State.RUNNING.value
+            ds.close()

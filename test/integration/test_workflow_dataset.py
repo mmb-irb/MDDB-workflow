@@ -134,13 +134,13 @@ class TestDatasetIntegration:
                     if project_status:
                         # If we are running the MD tasks, the project tasks have finished
                         states_seen['project'].append(project_status['state'])
-                        assert project_status['state'] == State.DONE.value
+                        assert project_status['state'] == State.RUNNING.value
 
             with run_workflow_with_mock_task(mock_task, dataset_path=db_path):
                 pass
 
             # Verify that we actually checked the RUNNING states
-            assert State.RUNNING.value not in states_seen['project']
+            assert State.RUNNING.value in states_seen['project']
             assert State.RUNNING.value in states_seen['md1']
             assert State.RUNNING.value in states_seen['md2']
 
@@ -180,7 +180,7 @@ class TestDatasetIntegration:
             project_status = ds.get_status(project_dir)
 
             assert project_status is not None
-            assert project_status['state'] == State.DONE.value
+            assert project_status['state'] == State.ERROR.value
 
             # First MD should be ERROR
             md1_status = ds.get_status(project_dir/'replica_1')
