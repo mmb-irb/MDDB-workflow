@@ -12,6 +12,7 @@ test/data/output/
 test/data/source_*
 atommass.dat
 **/tmp/
+**/*dataset
 
 # Build
 build/
@@ -21,7 +22,6 @@ mwf.tar.gz
 
 # Docs
 docs/_build/
-
 # pixi environments
 .pixi
 *.egg-info
