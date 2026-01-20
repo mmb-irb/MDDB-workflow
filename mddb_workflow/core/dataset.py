@@ -1,4 +1,4 @@
-from mddb_workflow.utils.auxiliar import load_yaml, is_glob
+from mddb_workflow.utils.auxiliar import load_yaml, load_json, is_glob
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import CACHE_FILENAME
@@ -12,6 +12,7 @@ import glob
 import sqlite3
 from pathlib import Path
 from enum import Enum
+from contextlib import contextmanager
 import importlib.util
 
 
@@ -23,6 +24,107 @@ class State(Enum):
     DONE = 'done'
 
 
+class DatabaseLock:
+    """Directory-based locking for SQLite database access on distributed filesystems.
+
+    Uses os.mkdir() which is atomic across distributed filesystems like NFS and BeeGFS.
+    This provides reliable locking where fcntl.flock() fails on network filesystems.
+
+    Note: This implementation uses exclusive locking for both read and write operations
+    to ensure consistency on distributed filesystems. While this is more conservative
+    than true reader-writer locks, it guarantees correctness across all nodes.
+    """
+
+    def __init__(self, db_path: str | Path, timeout: float = 30.0, retry_interval: float = 0.1):
+        """Initialize the database lock.
+
+        Args:
+            db_path: Path to the SQLite database file.
+            timeout: Maximum time to wait for lock acquisition (seconds).
+            retry_interval: Time between lock acquisition attempts (seconds).
+
+        """
+        self.db_path = Path(db_path).resolve()
+        self.lock_dir = self.db_path.with_stem('.lock_')
+        self.timeout = timeout
+        self.retry_interval = retry_interval
+        self._lock_count = 0  # For reentrant locking
+        self._current_lock_type = None
+
+    def acquire(self) -> bool:
+        """Acquire the database lock using atomic directory creation."""
+        # Handle reentrant locking
+        if self._lock_count > 0:
+            self._lock_count += 1
+            return True
+
+        start_time = time.time()
+        while True:
+            try:
+                # os.mkdir is atomic across distributed filesystems
+                os.mkdir(self.lock_dir)
+                self._lock_count = 1
+                break
+            except FileExistsError:
+                if time.time() - start_time >= self.timeout:
+                    raise TimeoutError(f"Could not acquire lock on {self.lock_dir} within {self.timeout} seconds")
+                time.sleep(self.retry_interval)
+            except OSError as e:
+                # Handle other OS errors (permission denied, etc.)
+                raise RuntimeError(f"Failed to acquire lock: {e}") from e
+
+    def release(self):
+        """Release the database lock by removing the lock directory."""
+        if self._lock_count > 0:
+            self._lock_count -= 1
+            if self._lock_count == 0:
+                try:
+                    os.rmdir(self.lock_dir)
+                except FileNotFoundError:
+                    pass  # Lock was already released (shouldn't happen normally)
+                except OSError as e:
+                    # Log warning but don't raise - lock file might be stale
+                    import warnings
+                    warnings.warn(f"Failed to release lock directory {self.lock_dir}: {e}")
+                self._current_lock_type = None
+
+    def force_release(self):
+        """Force release the lock, useful for cleaning up stale locks.
+
+        Use with caution - only call this if you're sure no other process holds the lock.
+        """
+        try:
+            os.rmdir(self.lock_dir)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+        self._lock_count = 0
+        self._current_lock_type = None
+
+    def is_locked(self) -> bool:
+        """Check if the lock is currently held by any process."""
+        return self.lock_dir.exists()
+
+    def close(self):
+        """Release any held locks."""
+        while self._lock_count > 0:
+            self.release()
+
+    def __del__(self):
+        """Ensure lock is released on garbage collection."""
+        self.close()
+
+    @contextmanager
+    def lock_file(self):
+        """Context manager for acquiring an exclusive lock."""
+        self.acquire()
+        try:
+            yield
+        finally:
+            self.release()
+
+
 class Dataset:
     """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
     # TODO: log_file, err_file, group_id
@@ -31,23 +133,34 @@ class Dataset:
     md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
     date_format = "%H:%M:%S %d-%m-%Y"
 
-    def __init__(self, dataset_path: str):
+    def __init__(self, dataset_path: str, lock_timeout: float = 30.0):
         """Initialize the Dataset object and connect to SQLite DB.
 
         Args:
             dataset_path (str): Path to the dataset storage file, normally an .db file.
+            lock_timeout (float): Maximum time to wait for database lock (seconds).
 
         """
         self.dataset_path = Path(dataset_path).resolve()
         # if not self.dataset_path.exists():
         #     raise ValueError(f"Dataset path {self.dataset_path} does not exist.")
         self.root_path = self.dataset_path.parent
+        self._lock = DatabaseLock(self.dataset_path, timeout=lock_timeout)
         self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
         # Enable foreign key constraints (disabled by default in SQLite)
         self.conn.execute("PRAGMA foreign_keys = ON")
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA busy_timeout = 5000")
         self._ensure_tables()
+
+    @property
+    def locked_storage_file(self):
+        """Context manager for shared (read/write) database access."""
+        return self._lock.lock_file()
+
+    def close(self):
+        """Close the database connection and release locks."""
+        self._lock.close()
+        if self.conn:
+            self.conn.close()
 
     def _abs_to_rel(self, abs_path: str | Path) -> str:
         """Convert any path to relative path from root_path."""
@@ -61,57 +174,58 @@ class Dataset:
 
     def _ensure_tables(self):
         """Create tables if they do not exist."""
-        cur = self.conn.cursor()
-        # Create projects table
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS projects (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                rel_path TEXT UNIQUE NOT NULL,
-                num_mds INTEGER DEFAULT 0,
-                state TEXT,
-                message TEXT,
-                last_modified TEXT
-            )
-        ''')
-        # Create mds table
-        # MDs are linked to projects via project_uuid foreign key
-        # ON DELETE CASCADE ensures MDs are deleted when project is deleted
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS mds (
-                uuid TEXT PRIMARY KEY NOT NULL,
-                project_uuid TEXT NOT NULL,
-                rel_path TEXT UNIQUE NOT NULL,
-                state TEXT,
-                message TEXT,
-                last_modified TEXT,
-                FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE
-            )
-        ''')
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            # Create projects table
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS projects (
+                    uuid TEXT PRIMARY KEY NOT NULL,
+                    rel_path TEXT UNIQUE NOT NULL,
+                    num_mds INTEGER DEFAULT 0,
+                    state TEXT,
+                    message TEXT,
+                    last_modified TEXT
+                )
+            ''')
+            # Create mds table
+            # MDs are linked to projects via project_uuid foreign key
+            # ON DELETE CASCADE ensures MDs are deleted when project is deleted
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS mds (
+                    uuid TEXT PRIMARY KEY NOT NULL,
+                    project_uuid TEXT NOT NULL,
+                    rel_path TEXT UNIQUE NOT NULL,
+                    state TEXT,
+                    message TEXT,
+                    last_modified TEXT,
+                    FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE
+                )
+            ''')
 
-        # Create triggers to automatically maintain num_mds count
-        # Trigger on INSERT: increment num_mds when a new MD is added
-        cur.execute('''
-            CREATE TRIGGER IF NOT EXISTS increment_num_mds
-            AFTER INSERT ON mds
-            BEGIN
-                UPDATE projects
-                SET num_mds = num_mds + 1
-                WHERE uuid = NEW.project_uuid;
-            END
-        ''')
+            # Create triggers to automatically maintain num_mds count
+            # Trigger on INSERT: increment num_mds when a new MD is added
+            cur.execute('''
+                CREATE TRIGGER IF NOT EXISTS increment_num_mds
+                AFTER INSERT ON mds
+                BEGIN
+                    UPDATE projects
+                    SET num_mds = num_mds + 1
+                    WHERE uuid = NEW.project_uuid;
+                END
+            ''')
 
-        # Trigger on DELETE: decrement num_mds when an MD is removed
-        cur.execute('''
-            CREATE TRIGGER IF NOT EXISTS decrement_num_mds
-            AFTER DELETE ON mds
-            BEGIN
-                UPDATE projects
-                SET num_mds = num_mds - 1
-                WHERE uuid = OLD.project_uuid;
-            END
-        ''')
+            # Trigger on DELETE: decrement num_mds when an MD is removed
+            cur.execute('''
+                CREATE TRIGGER IF NOT EXISTS decrement_num_mds
+                AFTER DELETE ON mds
+                BEGIN
+                    UPDATE projects
+                    SET num_mds = num_mds - 1
+                    WHERE uuid = OLD.project_uuid;
+                END
+            ''')
 
-        self.conn.commit()
+            self.conn.commit()
 
     def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
         """Read UUID and project_uuid from cache file in the given directory."""
@@ -119,14 +233,19 @@ class Dataset:
         if not directory.exists():
             raise ValueError(f"Directory {directory} does not exist.")
         cache_file = directory / CACHE_FILENAME
-        if not cache_file.exists() and not make_uuid:
-            return None, None
-        cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
-        uuid = cache.retrieve('uuid')
-        project_uuid = cache.retrieve('project_uuid')
-        if not uuid:
-            raise ValueError(f"No 'uuid' found in cache file '{cache_file}'")
-        return uuid, project_uuid
+        if cache_file.exists():
+            cache = load_json(cache_file)
+            uuid = cache.get('uuid')
+            project_uuid = cache.get('project_uuid')
+            if not uuid:
+                raise ValueError(f"No 'uuid' found in cache file '{cache_file}'. This may be an old project."
+                                 " Update the cache by running the workflow.")
+            return uuid, project_uuid
+        if make_uuid:
+            cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
+            uuid = cache.retrieve('uuid')
+            project_uuid = cache.retrieve('project_uuid')
+        return None, None
 
     def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False):
         """Add a single project mentry to the database."""
@@ -193,25 +312,26 @@ class Dataset:
 
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
         """Retrieve a project or MD's status from the database by UUID."""
-        cur = self.conn.cursor()
-        if project_uuid:
-            # This is an MD entry
-            cur.execute("SELECT * FROM mds WHERE uuid=?", (uuid,))
-            row = cur.fetchone()
-            if row:
-                columns = [desc[0] for desc in cur.description]
-                result = dict(zip(columns, row))
-                result['scope'] = 'MD'
-                return result
-        else:
-            # This is a project entry
-            cur.execute("SELECT * FROM projects WHERE uuid=?", (uuid,))
-            row = cur.fetchone()
-            if row:
-                columns = [desc[0] for desc in cur.description]
-                result = dict(zip(columns, row))
-                result['scope'] = 'Project'
-                return result
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            if project_uuid:
+                # This is an MD entry
+                cur.execute("SELECT * FROM mds WHERE uuid=?", (uuid,))
+                row = cur.fetchone()
+                if row:
+                    columns = [desc[0] for desc in cur.description]
+                    result = dict(zip(columns, row))
+                    result['scope'] = 'MD'
+                    return result
+            else:
+                # This is a project entry
+                cur.execute("SELECT * FROM projects WHERE uuid=?", (uuid,))
+                row = cur.fetchone()
+                if row:
+                    columns = [desc[0] for desc in cur.description]
+                    result = dict(zip(columns, row))
+                    result['scope'] = 'Project'
+                    return result
 
     def get_status(self, directory: str | Path):
         """Retrieve a project or MD's status from the database by directory path."""
@@ -237,59 +357,54 @@ class Dataset:
             rel_path: Relative path to the directory (required for new entries)
 
         """
-        cur = self.conn.cursor()
-        if isinstance(state, State):
-            state = state.value
-        last_modified = time.strftime(self.date_format, time.localtime())
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            if isinstance(state, State):
+                state = state.value
+            last_modified = time.strftime(self.date_format, time.localtime())
 
-        if project_uuid:
-            # This is an MD entry
-            if rel_path is None:
-                # Try to get existing rel_path
-                existing = self.get_uuid_status(uuid)
-                if existing:
-                    rel_path = existing['rel_path']
-                else:
-                    raise ValueError("rel_path is required for new MD entries")
+            if project_uuid:
+                # This is an MD entry
+                if rel_path is None:
+                    # Try to get existing rel_path (lock already held, call internal)
+                    cur.execute("SELECT rel_path FROM mds WHERE uuid=?", (uuid,))
+                    row = cur.fetchone()
+                    if row:
+                        rel_path = row[0]
+                    else:
+                        raise ValueError("rel_path is required for new MD entries")
 
-            cur.execute('''
-                INSERT INTO mds (uuid, project_uuid, rel_path, state, message, last_modified)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(uuid) DO UPDATE SET
-                    state=excluded.state,
-                    message=excluded.message,
-                    last_modified=excluded.last_modified,
-                    rel_path=excluded.rel_path
-            ''', (uuid, project_uuid, rel_path, state, message, last_modified))
-        else:
-            # This is a project entry
-            if rel_path is None:
-                # Try to get existing rel_path
-                existing = self.get_uuid_status(uuid)
-                if existing:
-                    rel_path = existing['rel_path']
-                else:
-                    raise ValueError("rel_path is required for new project entries")
+                cur.execute('''
+                    INSERT INTO mds (uuid, project_uuid, rel_path, state, message, last_modified)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(uuid) DO UPDATE SET
+                        state=excluded.state,
+                        message=excluded.message,
+                        last_modified=excluded.last_modified,
+                        rel_path=excluded.rel_path
+                ''', (uuid, project_uuid, rel_path, state, message, last_modified))
+            else:
+                # This is a project entry
+                if rel_path is None:
+                    # Try to get existing rel_path (lock already held, call internal)
+                    cur.execute("SELECT rel_path FROM projects WHERE uuid=?", (uuid,))
+                    row = cur.fetchone()
+                    if row:
+                        rel_path = row[0]
+                    else:
+                        raise ValueError("rel_path is required for new project entries")
 
-            cur.execute('''
-                INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
-                VALUES (?, ?, ?, ?, ?, 0)
-                ON CONFLICT(uuid) DO UPDATE SET
-                    state=excluded.state,
-                    message=excluded.message,
-                    last_modified=excluded.last_modified,
-                    rel_path=excluded.rel_path
-            ''', (uuid, rel_path, state, message, last_modified))
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                self.conn.commit()
-                break
-            except sqlite3.OperationalError as e:
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                else:
-                    raise e
+                cur.execute('''
+                    INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
+                    VALUES (?, ?, ?, ?, ?, 0)
+                    ON CONFLICT(uuid) DO UPDATE SET
+                        state=excluded.state,
+                        message=excluded.message,
+                        last_modified=excluded.last_modified,
+                        rel_path=excluded.rel_path
+                ''', (uuid, rel_path, state, message, last_modified))
+
+            self.conn.commit()
 
     def remove_entry(self, directory: str | Path, verbose: bool = False):
         """Remove a single project or MD entry from the database by directory."""
@@ -300,19 +415,20 @@ class Dataset:
 
     def remove_entry_by_uuid(self, uuid: str, project_uuid: str = None, verbose: bool = False):
         """Remove a single project or MD entry from the database by UUID."""
-        cur = self.conn.cursor()
-        if project_uuid:
-            # Remove from MDs
-            cur.execute("DELETE FROM mds WHERE uuid=?", (uuid,))
-        else:
-            # Remove from projects
-            cur.execute("DELETE FROM projects WHERE uuid=?", (uuid,))
-        if verbose:
-            if cur.rowcount > 0:
-                print(f"Deleted {'MD' if project_uuid else 'project'} with UUID '{uuid}'")
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            if project_uuid:
+                # Remove from MDs
+                cur.execute("DELETE FROM mds WHERE uuid=?", (uuid,))
             else:
-                print(f"No entry found for UUID '{uuid}' to delete")
-        self.conn.commit()
+                # Remove from projects
+                cur.execute("DELETE FROM projects WHERE uuid=?", (uuid,))
+            if verbose:
+                if cur.rowcount > 0:
+                    print(f"Deleted {'MD' if project_uuid else 'project'} with UUID '{uuid}'")
+                else:
+                    print(f"No entry found for UUID '{uuid}' to delete")
+            self.conn.commit()
 
     def generate_inputs_yaml(self,
             inputs_template_path: str,
@@ -508,15 +624,16 @@ class Dataset:
         """
         if table not in ['projects', 'mds']:
             raise ValueError("Table must be either 'projects' or 'mds'")
-        cur = self.conn.cursor()
-        where_clause, params = self._build_where_clause(query_path, query_state)
-        cols = self.project_columns if table == 'projects' else self.md_columns
-        query = f"SELECT {', '.join(cols)} FROM {table}"
-        if where_clause:
-            query += f" WHERE {where_clause}"
-        query += " ORDER BY rel_path"
-        cur.execute(query, params)
-        return cur.fetchall()
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            where_clause, params = self._build_where_clause(query_path, query_state)
+            cols = self.project_columns if table == 'projects' else self.md_columns
+            query = f"SELECT {', '.join(cols)} FROM {table}"
+            if where_clause:
+                query += f" WHERE {where_clause}"
+            query += " ORDER BY rel_path"
+            cur.execute(query, params)
+            return cur.fetchall()
 
     @property
     def projects_table(self) -> list[tuple]:
@@ -848,14 +965,14 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
     """Resolve directory patterns (glob or absolute/relative paths)."""
     directories = []
     for dir_pattern in dir_patterns:
-        if not Path(dir_pattern).is_dir():
-            continue
         if is_glob(dir_pattern):
             if Path(dir_pattern).is_absolute():
                 matched_dirs = [Path(p) for p in glob.glob(dir_pattern)]
             else:
                 matched_dirs = list(root_path.glob(dir_pattern))
             directories.extend([p.absolute() for p in matched_dirs if p.is_dir()])
+        elif not Path(dir_pattern).is_dir():
+            continue
         else:
             p = Path(dir_pattern)
             p = p.absolute() if not p.is_absolute() else p
