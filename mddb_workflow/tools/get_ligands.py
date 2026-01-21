@@ -98,13 +98,20 @@ def generate_ligand_references(
         # 1. Direct InChIKey match
         pubchem_id = inchikey_2_pubchem(inchikey)
         inchi = inchikeys[inchikey].inchi
-        mol = Chem.MolFromInchi(inchi)
+        mol = Chem.MolFromInchi(inchi, sanitize=False)
         # Original descriptors to calculate similarity later
         descriptor_data = obtain_mordred_morgan_descriptors(mol)
         automatic_references[inchikey].update(descriptor_data)
         if pubchem_id:
             automatic_references[inchikey]['pubchem'] = pubchem_id
             print(f'Found CID {pubchem_id} by direct InChIKey match.')
+        # Try catch for some weird inchis (MCV1900695, no topology)
+        try:
+            Chem.SanitizeMol(mol, catchErrors=False)
+            # print_molecule_terminal(mol)
+        except Exception:
+            warn(f'Could not sanitize molecule with InChIKey {inchikey}. Skipping further matching attempts.')
+            # print_molecule_terminal(mol)
             continue
         # 2.1. Neutralize charges
         neutral_mol = rdMolStandardize.ChargeParent(mol)
@@ -621,7 +628,11 @@ def obtain_mordred_morgan_descriptors(mol: Chem.Mol) -> dict:
     ], ignore_3D=True)
 
     # Calculate Mordred results
-    mordred_results = calc(mol).drop_missing().asdict()
+    try:
+        mordred_results = calc(mol).drop_missing().asdict()
+    except Exception as e:
+        print(f'WARNING: Mordred calculation failed with error: {e}. Retrying with ignore_3D=False.')
+        mordred_results = {}
 
     # MORGAN FINGERPRINT
     morgan_fp_gen = Chem.rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
@@ -720,3 +731,10 @@ def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
             results.append({'pubchem': cid, 'inchi': standard_inchi})
         return results
     return None
+
+
+def print_molecule_terminal(mol: Chem.Mol):
+    """Print a molecule in the terminal. Useful for debugging."""
+    from rdkit.Chem import Draw
+    im = Draw.MolToImage(mol)
+    im.show()
