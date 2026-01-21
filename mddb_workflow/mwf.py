@@ -2151,7 +2151,6 @@ def check_md_directory(directory: str):
     directory_characters = set(directory)
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
         if character in directory_characters:
-            breakpoint()
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
 
