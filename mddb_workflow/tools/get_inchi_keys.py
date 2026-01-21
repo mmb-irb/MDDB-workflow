@@ -1,4 +1,5 @@
 import MDAnalysis
+import traceback
 import multiprocessing
 from dataclasses import dataclass, field
 from mddb_workflow.tools.get_ligands import pubchem_standardization
@@ -90,7 +91,16 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
     """Process a single residue to get its InChI key and related information."""
     resatoms, resindices = task
     # Convert to RDKIT and get InChI data
-    res_RD = resatoms.convert_to.rdkit(force=True)
+    error = None
+    try:
+        res_RD = resatoms.convert_to.rdkit(force=True)
+    except KeyError as e:
+        tb_str = traceback.format_exc()
+        # Error that happend with accesoin A01J7 (united atoms)
+        if 'bond.SetBondType(RDBONDORDER[order])' in tb_str:
+            error = f'Invalid bond order {e}, failed to convert to RDKit.'
+            return ('', '', resindices, error)
+        raise e
     if 'Fe' in set(resatoms.atoms.elements) and len(resatoms.atoms) > 1:
         # Metallo proteins are not well handled by RDKit/InChI so we hardcode
         # the InChI key for ferroheme that is the only case we have found
@@ -119,7 +129,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
         # rdinchi.MolToInchi so it doesnt print the warnings
         inchi, retcode, message, logs, aux = Chem.rdinchi.MolToInchi(res_RD)
     if not inchi: raise RuntimeError('Failed to find inchi. Is the atom group too big?')
-    return (inchikey, inchi, resindices)
+    return (inchikey, inchi, resindices, error)
 
 
 def generate_inchikeys(
@@ -185,12 +195,28 @@ def generate_inchikeys(
     results = []
     # Execute tasks in parallel
     with multiprocessing.Pool() as pool:
-        results = pool.map(residue_to_inchi, tasks)
+        try:
+            async_results = pool.map_async(residue_to_inchi, tasks)
+            # Add timeout (e.g., 300 seconds = 5 minutes per task)
+            results = async_results.get(300)
+        except multiprocessing.TimeoutError:
+            warn('Pool timeout - some tasks did not complete')
+            pool.terminate()  # Force kill all workers
+            pool.join()
+            raise
+        except Exception:
+            pool.terminate()
+            pool.join()
+            raise
 
     # 2) Process results and build dictionaries
     inchikeys: dict[str, InChIKeyData] = {}  # To see if different name for same residue
     name_2_key = {}  # To see if different residues under same name
-    for (inchikey, inchi, resindices) in results:
+    errors = {}
+    for (inchikey, inchi, resindices, error) in results:
+        if error:
+            errors.setdefault(error, []).append(*resindices)
+            continue
         # Get or create the entry for this InChI key
         data = inchikeys.setdefault(inchikey, InChIKeyData(inchi=inchi))
 
@@ -211,7 +237,9 @@ def generate_inchikeys(
 
         # Incorrect residue name, stereoisomers, loss of atoms...
         name_2_key.setdefault(resnames, []).append(inchikey)
-
+    if errors:
+        for error, resindices in errors.items():
+            warn(f'Error processing residues {resindices}: {error}')
     # 3) Check data coherence
     for inchikey, data in inchikeys.items():
         # Check if there are multiple names for the same InChI key
