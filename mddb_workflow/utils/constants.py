@@ -78,6 +78,7 @@ CMIP_VDW_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/vdwprm'
 ENERGIES_DEBUG_SCRIPT_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/get_energies_sum.py'
 
 # Expected MD inputs
+MD_NAME = 'name'
 MD_DIRECTORY = 'mdir'
 MD_REMOVED = 'removed'
 

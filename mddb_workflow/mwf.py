@@ -474,15 +474,20 @@ class MD:
                 if was_removed: continue
                 # Get the directory according to the inputs
                 directory = md.get(MD_DIRECTORY, None)
-                if directory:
-                    check_directory(directory)
-                # If no directory is specified in the inputs then guess it from the MD name
-                else:
-                    name = md.get('name', None)
-                    if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
+                name = md.get(MD_NAME, None)
+                if not directory and not name:
+                    raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
+                # Make sure we have a directory
+                if not directory:
                     directory = name_2_directory(name)
+                check_directory(directory)
                 # If the directory matches then this is our MD inputs
                 if self.project.pathify(directory) == self.directory:
+                    # Make sure we have a name
+                    if not name:
+                        name = directory_2_name(directory)
+                        md[MD_NAME] = name
+                    # Save the MD inputs and return them
                     self._md_inputs = md
                     return self._md_inputs
         # If this MD directory has not associated inputs then it means it was passed through command line
