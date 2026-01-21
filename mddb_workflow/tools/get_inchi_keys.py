@@ -24,7 +24,7 @@ class InChIKeyData:
         molname (str): Representative molecule name for this InChI key.
         moltype (Literal['residue', 'fragment']): Type of the molecule.
         classification (set): Set of residue classifications for this InChI key.
-        frag_len (int): Length of the fragments. 1 if no fragments are present.
+        frag_len (int): Length on number of residues of the fragments. 1 if no fragments are present.
         references (dict): Additional database references related to this InChI key.
 
     """

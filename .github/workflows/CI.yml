@@ -74,8 +74,8 @@ jobs:
         run: pytest -m CI
         timeout-minutes: 20
 
-      - name: Run extensive tests
+      - name: Run all tests
         if: github.event_name == 'schedule'
         shell: bash -l {0}
-        run: pytest -m release
+        run: pytest --all-marks
         timeout-minutes: 60

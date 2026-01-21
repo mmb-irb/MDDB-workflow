@@ -543,3 +543,7 @@ mds:
 # mdref: 0
 
 mdref:
+
+# Path to the dataset storage file for the Dataset object.
+
+dataset_path:

@@ -5,7 +5,7 @@ from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.file import File
 from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references
 from mddb_workflow.tools.generate_map import get_uniprot_reference
-from mddb_workflow.tools.chains import request_interpsocan, get_interproscan_results
+from mddb_workflow.tools.chains import request_interproscan, get_interproscan_results
 from mddb_workflow.utils.auxiliar import save_json, InputError
 
 # Set the database API URL
@@ -130,7 +130,7 @@ def updater(ref_type = 'proteins'):
                 interproscan_jobids = {}
                 # Request interproscan for each sequence in the batch
                 for sequence in batch:
-                    interproscan_jobid = request_interpsocan(sequence)
+                    interproscan_jobid = request_interproscan(sequence)
                     interproscan_jobids[sequence] = interproscan_jobid
                     print(f"  Submitted {sequence} to interproscan: {interproscan_jobid}")
                 # Get the pending interpsocan jobids
