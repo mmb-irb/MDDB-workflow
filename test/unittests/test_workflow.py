@@ -37,6 +37,7 @@ def run_workflow_with_mock_task(mock_task, keep_going=True):
     """Context manager to run workflow with a mock task in the test folder."""
     with patch.dict(mwf.requestables, {'mock_task': mock_task}):
         with patch.dict(mwf.md_requestables, {'mock_task': mock_task}):
+            # mwf run -top ala_ala.tpr -md replica_1 raw_trajectory.xtc -md replica_2 raw_trajectory.xtc -dir test_fld -k
             workflow(
                 project_parameters={
                     'input_topology_filepath': 'ala_ala.tpr',

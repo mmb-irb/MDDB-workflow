@@ -494,7 +494,8 @@ class MD:
         # If this MD directory has not associated inputs then it means it was passed through command line
         # We set a new MD inputs for it
         new_md_name = directory_2_name(self.directory)
-        self._md_inputs = {MD_NAME: new_md_name, MD_DIRECTORY: self.directory}
+        self._md_inputs = {MD_NAME: new_md_name,
+                           MD_DIRECTORY: relpath(self.directory, self.project.directory)}
         # Update the inputs file with the new MD inputs
         mds = self.project.inputs.get('mds', [])
         if mds is None: mds = []
@@ -1027,7 +1028,7 @@ class Project:
 
         Args:
             directory (str):
-                Local directory where the project takes place.
+                Project directory where the whole workflow is to be run.
             accession (Optional[str]):
                 Project accession to download missing input files from the database (if already uploaded).
             database_url (str):
@@ -2150,6 +2151,7 @@ def check_md_directory(directory: str):
     directory_characters = set(directory)
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
         if character in directory_characters:
+            breakpoint()
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
 
 
