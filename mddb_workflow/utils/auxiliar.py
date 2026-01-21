@@ -89,7 +89,9 @@ def custom_excepthook(exception_class, message, traceback):
 
 sys.excepthook = custom_excepthook
 
-# Set a special exceptions for when the topology is missing
+# Set a special exception for when a MD has been removed
+REMOVED_MD = Exception('Removed MD')
+# Set a special exceptions for when the topology is missing or some of its contents
 MISSING_TOPOLOGY = Exception('Missing topology')
 MISSING_CHARGES = Exception('Missing atom charges')
 MISSING_BONDS = Exception('Missing atom bonds')

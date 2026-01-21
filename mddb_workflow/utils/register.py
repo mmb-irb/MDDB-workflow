@@ -43,6 +43,9 @@ class Register:
                 if not warning.get('tag', None):
                     continue
                 self.warnings.append(warning)
+        # If the register file does not exist then create a new one
+        else:
+            save_json([], self.file.path, indent=4)
         # Save the entry for the first time
         self.save()
 
@@ -96,10 +99,6 @@ class Register:
 
     def save(self):
         """Save the register to a json file."""
-        # If path does not exist then do nothing
-        # WARNING: I know this looks a bit silent
-        # WARNING: Otherwise it is a constant spam when something goes wrong close to beginning
-        if not exists(self.file.path): return
         # Read the register in disk again
         # Note that we do not save previous entries since the register may have changed
         # This may happen in the event of several workflows running in paralel

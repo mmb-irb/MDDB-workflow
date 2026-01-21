@@ -15,7 +15,7 @@ from functools import partial
 from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
@@ -469,23 +469,32 @@ class MD:
             # Iterate over the different MD inputs to find out each directory
             # We must find the MD inputs whcih belong to this specific MD according to this directory
             for md in self.project.input_mds:
+                # Skip removed directories
+                # If it is a removed MD then we must handle it apart
+                was_removed = md.get(MD_REMOVED, False)
+                if was_removed: continue
                 # Get the directory according to the inputs
                 directory = md.get(MD_DIRECTORY, None)
-                if directory:
-                    check_md_directory(directory)
-                # If no directory is specified in the inputs then guess it from the MD name
-                else:
-                    name = md.get('name', None)
-                    if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
+                name = md.get(MD_NAME, None)
+                if not directory and not name:
+                    raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
+                # Make sure we have a directory
+                if not directory:
                     directory = name_2_directory(name)
+                check_md_directory(directory)
                 # If the directory matches then this is our MD inputs
                 if self.project.pathify(directory) == self.directory:
+                    # Make sure we have a name
+                    if not name:
+                        name = directory_2_name(directory)
+                        md[MD_NAME] = name
+                    # Save the MD inputs and return them
                     self._md_inputs = md
                     return self._md_inputs
         # If this MD directory has not associated inputs then it means it was passed through command line
         # We set a new MD inputs for it
         new_md_name = directory_2_name(self.directory)
-        self._md_inputs = {'name': new_md_name, 'mdir': self.directory}
+        self._md_inputs = {MD_NAME: new_md_name, MD_DIRECTORY: self.directory}
         # Update the inputs file with the new MD inputs
         mds = self.project.inputs.get('mds', [])
         if mds is None: mds = []
@@ -624,14 +633,13 @@ class MD:
                 'to access the standard structure before processing input files?')
         # Note that this is not only the structure class, but it also contains additional logic
         self._structure = Structure.from_pdb_file(self.structure_file.path)
-        # If the stable bonds test failed and we had mercy then it is sure our structure will have wrong bonds
-        # In order to make it coherent with the topology we will mine topology bonds from here and force them in the structure
-        # If we fail to get bonds from topology then just go along with the default structure bonds
-        if not self.register.tests.get(STABLE_BONDS_FLAG, None):
-            self._structure.bonds = self.reference_bonds
-        # Same procedure if we have coarse grain atoms
-        elif self.cg_selection:
-            self._structure.bonds = self.reference_bonds
+        # Always force reference bonds in the structure
+        # Do not trust in the structure bonds even if they should belong to the reference structure
+        # There are several scenarios where they may be wrong:
+        # 1. Coarse grain
+        # 2. Stable bonds test failed and we had mercy
+        # 3. Ignored ions which may cause clashes
+        self._structure.bonds = self.reference_bonds
         return self._structure
     structure = property(get_structure, None, None, "Parsed structure (read only)")
 
@@ -1219,7 +1227,7 @@ class Project:
             # Make sure there are no duplictaed MD directories
             md_directories = [mdc[0] for mdc in self.md_config]
             if len(md_directories) > len(set(md_directories)):
-                raise InputError('There are duplicated MD directories')
+                raise InputError('There are duplicated MD directories. Every directory behind every "-md" must be unique.')
 
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
@@ -1376,6 +1384,11 @@ class Project:
         # Use the MDs from the inputs file when available
         if self.is_inputs_file_available() and self.input_mds:
             for input_md in self.input_mds:
+                # If it is a removed MD then we must handle it apart
+                was_removed = input_md.get(MD_REMOVED, False)
+                if was_removed:
+                    self._md_directories.append(REMOVED_MD)
+                    continue
                 # Get the directory according to the inputs
                 directory = input_md.get(MD_DIRECTORY, None)
                 if directory:
@@ -1423,6 +1436,12 @@ class Project:
         if self._reference_md:
             return self._reference_md
         # Otherwise we must find the reference MD
+        md_count = len(self.mds)
+        if md_count <= self.reference_md_index:
+            message_end = 'there is only 1 MD' if md_count == 1 else f'there are only {md_count} MDs'
+            raise InputError(f'Reference MD index is {self.reference_md_index} but {message_end}.\n' \
+                ' Note that the index of the reference MD is 0-based, so the first MD is "0".\n' \
+                ' Please change or leave blank the field "mdref" in the inputs file.')
         self._reference_md = self.mds[self.reference_md_index]
         return self._reference_md
     reference_md: MD = property(get_reference_md, None, None, "Reference MD (read only)")
@@ -1460,9 +1479,15 @@ class Project:
                     input_trajectory_filepaths=input_trajectory_filepaths,
                 )
                 self._mds.append(md)
-        # Old system (-mdir, -stru -traj)
+        # This is when the MDs are passed through inputs file
+        # Also for the old command line system (-mdir, -stru -traj)
         else:
             for n, md_directory in enumerate(self.md_directories, 1):
+                # If it is a removed MD then we must handle it apart
+                if md_directory == REMOVED_MD:
+                    self._mds.append(REMOVED_MD)
+                    continue
+                # Instantiate the MD handler and add it to the list
                 md = MD(
                     project=self, number=n, directory=md_directory,
                     input_structure_filepath=self.input_structure_filepath,
@@ -2121,7 +2146,6 @@ def name_2_directory(name: str) -> str:
 
 def check_md_directory(directory: str):
     """Check for problematic characters in a directory path."""
-    return  # RUBEN: disabled temporarily
     # Remove problematic characters
     directory_characters = set(directory)
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
@@ -2434,6 +2458,8 @@ def workflow(
 
         # Now iterate over the different MDs
         for md in project.mds:
+            # If it is a removed MD then we must handle it apart
+            if md == REMOVED_MD: continue
             print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
             error_handler.update_state(state=State.RUNNING, message=f'Processing MD at {md.directory}')
             # Run the MD tasks
