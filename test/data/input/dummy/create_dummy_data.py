@@ -60,7 +60,7 @@ def create_amber_files(output_dir, water=False):
 
 
     # Create a simple NetCDF trajectory with 3 frames
-    nc_path = os.path.join(output_dir, 'trajectory.nc')
+    nc_path = os.path.join(output_dir, 'raw_trajectory.nc')
     u = mda.Universe(prmtop_path, inpcrd_path)
     with mda.Writer(nc_path, n_atoms=u.atoms.n_atoms) as W:
         # First frame (t=0) - original positions
@@ -111,23 +111,35 @@ def create_gromacs_files(pdb_path, output_dir):
         return
 
     # Create a simple XTC trajectory with 3 frames
-    xtc_path = os.path.join(output_dir, 'trajectory.xtc')
+    xtc_path = os.path.join(output_dir, 'raw_trajectory.xtc')
     try:
         u = mda.Universe(gro_path)
         with mda.Writer(xtc_path, n_atoms=u.atoms.n_atoms) as W:
             # First frame (t=0) - original positions
             W.write(u.atoms)
-
             # Second frame (t=1) - slightly perturbed positions
             u.atoms.positions += np.random.randn(u.atoms.n_atoms, 3) * 0.1
             W.write(u.atoms)
-
             # Third frame (t=2) - more perturbation
             u.atoms.positions += np.random.randn(u.atoms.n_atoms, 3) * 0.1
             W.write(u.atoms)
         print(f"Created GROMACS XTC trajectory: {xtc_path}")
     except Exception as e:
         print(f"Error creating XTC trajectory: {e}")
+
+    # Create a simple XTC trajectory with a rmsd jump
+    xtc_path = os.path.join(output_dir, 'rmsd_jump.xtc')
+    try:
+        u = mda.Universe(gro_path)
+        with mda.Writer(xtc_path, n_atoms=u.atoms.n_atoms) as W:
+            W.write(u.atoms)
+            for i in range(200):
+                jump = 0 if i != 10 else 5000.0  # Introduce a jump at frame 3
+                u.atoms.positions += np.random.randn(u.atoms.n_atoms, 3) * 0.1 + jump
+                W.write(u.atoms)
+        print(f"Created GROMACS XTC jump trajectory: {xtc_path}")
+    except Exception as e:
+        print(f"Error creating XTC jump trajectory: {e}")
 
     # Create a simple TPR file (optional, requires mdp file)
     mdp_path = os.path.join(output_dir, 'grompp.mdp')

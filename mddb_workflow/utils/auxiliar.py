@@ -10,6 +10,7 @@ import os
 from os.path import isfile, exists
 import re
 import sys
+import time
 import json
 import yaml
 from glob import glob
@@ -17,6 +18,9 @@ from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
 import requests
+import http.client
+from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
 import urllib.request
 from subprocess import run, PIPE
 from dataclasses import asdict, is_dataclass
@@ -718,6 +722,60 @@ def get_git_version() -> str:
     process = run(git_command, shell=True, stdout=PIPE)
     return process.stdout.decode().replace('\n', '') or __version__
 
+
+def natural_sort_key(s):
+    """Sort strings that contain numbers in human order (C1, C2, C3 instead of C1, C11, C2)."""
+    return [int(text) if text.isdigit() else text.lower()
+            for text in re.split('([0-9]+)', s)]
+
+
+# Retry configuration for HTTP requests
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0  # seconds
+RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+
+
+def retry_request(func):
+    """Decorator to retry HTTP requests with exponential backoff."""
+    def wrapper(*args, **kwargs):
+        delay = RETRY_DELAY
+        last_exception = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                return func(*args, **kwargs)
+            # Catch network-related exceptions for retry
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                    requests.exceptions.RequestException,
+                    http.client.RemoteDisconnected) as e:
+                last_exception = e
+                if attempt < MAX_RETRIES - 1:
+                    print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
+                    time.sleep(delay)
+                    delay *= RETRY_BACKOFF
+                else:
+                    print(f"Request failed after {MAX_RETRIES} attempts: {e}")
+            # Do not retry for HTTPError or URLError
+            except (HTTPError, URLError) as e:
+                raise e
+        raise last_exception
+    return wrapper
+
+
+@retry_request
+def handle_http_request(request_url, error_context="request") -> Optional[str]:
+    """Make an HTTP request handler with consistent error handling."""
+    try:
+        with urlopen(request_url) as response:
+            return response.read().decode("utf-8", errors='ignore')
+    except HTTPError as error:
+        if error.code == 404:
+            return None
+        raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
+    except URLError as error:
+        raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
+
+
 def unique (source_list : list) -> list:
-    """Get a new list with unique values while conserving the order"""
+    """Get a new list with unique values while conserving the order."""
     return list(dict.fromkeys(source_list))

@@ -4,8 +4,8 @@ from subprocess import call
 from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAction
 from textwrap import wrap, dedent
 import re
-
-from mddb_workflow.mwf import workflow, Project, requestables, DEPENDENCY_FLAGS
+import glob
+from mddb_workflow.mwf import workflow, Project, requestables, TaskResolver
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.filters import filter_atoms
@@ -29,6 +29,7 @@ class CustomHelpFormatter(RawTextHelpFormatter):
     """Custom formatter for argparse help text with better organization and spacing."""
 
     def __init__(self, prog, indent_increment=2, max_help_position=6, width=None):
+        """Initialize the custom help formatter."""
         super().__init__(prog, indent_increment, max_help_position, width)
 
     def _get_help_string(self, action):
@@ -334,24 +335,79 @@ def main():
         # Generate the output file from the modified structure
         structure.generate_pdb_file(args.output_structure)
         print(f'Changes written to {args.output_structure}')
-    elif subcommand == 'dataset':
+    elif subcommand in ['dataset', 'ds']:
         if not hasattr(args, 'dataset_subcommand') or not args.dataset_subcommand:
-            dataset_parser.print_help()
+            ds_parser.print_help()
             return
+        # If dataset_path is not provided, search for *.db file
+        if (not hasattr(args, 'dataset_path') or not args.dataset_path):
+            db_files = glob.glob("*.db")
+            if db_files:
+                args.dataset_path = db_files[0]
+                print(f"Using dataset file: {args.dataset_path}")
+            else:
+                print("No dataset_path provided and no *.db file found in the current directory.")
+                ds_parser.print_help()
+                return
 
-        dataset = Dataset(dataset_yaml_path=args.dataset_yaml)
+        dataset = Dataset(args.dataset_path)
+        if args.dataset_subcommand == 'add':
+            dataset.add_entries(
+                paths_or_globs=args.paths_or_globs,
+                ignore_dirs=args.ignore_dirs,
+                md_dirs=args.md_dirs,
+                verbose=True
+            )
 
-        if args.dataset_subcommand == 'run':
+        elif args.dataset_subcommand == 'show':
+            df = dataset.get_dataframe(
+                uuid_length=8,
+                root_path=dataset.root_path,
+                sort_by=args.sort_by,
+                asc=True,
+                include_logs=args.include_logs,
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_scope=args.query_scope,
+            )
+            try:
+                from mddb_workflow.utils.rich import rich_display_dataframe
+                rich_display_dataframe(df, title="MDDB Dataset")
+            except ImportError:
+                print(df)
+        elif args.dataset_subcommand == 'watch':
+            from mddb_workflow.utils.rich import watch_dataframe
+            watch_dataframe(lambda: dataset.get_dataframe(
+                    uuid_length=8,
+                    root_path=dataset.root_path,
+                    sort_by='last_modified',
+                    asc=False,
+                    query_path=args.query_path,
+                    query_state=args.query_state,
+                    query_scope=args.query_scope,
+                ),
+                title="Live MDDB Dataset"
+            )
+        elif args.dataset_subcommand == 'inputs':
+            dataset.generate_inputs_yaml(
+                inputs_template_path=args.inputs_template,
+                inputs_generator=args.inputs_generator,
+                overwrite=args.overwrite,
+                query_path=args.query_path,
+                query_state=args.query_state,
+            )
+        elif args.dataset_subcommand == 'run':
             dataset.launch_workflow(
-                include_groups=args.include_groups,
-                exclude_groups=args.exclude_groups,
+                query_path=args.query_path,
+                query_state=args.query_state,
                 n_jobs=args.n_jobs,
                 slurm=args.slurm,
                 job_template=args.job_template,
                 debug=args.debug
             )
-        elif args.dataset_subcommand == 'groups':
-            dataset.show_groups(cmd=True)
+        elif args.dataset_subcommand == 'scan':
+            dataset.scan(root_dir='.', verbose=True)
+
     # If user wants to run the NASSA analysis
     elif subcommand == "nassa":
         # If no input arguments are passed print help
@@ -471,13 +527,13 @@ run_parser_input_args = [
     (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']+f'\nSupported formats: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}.'}),
     (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']+f'\nSupported formats: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}.'}),
     (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']+f'\nSupported formats: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}.'}),
-    (['-dir', '--directory'], {'default': '.', 'help': "Project directory where the whole workflow is to be run."}),
+    (['-dir', '--directory'], {'default': '.', 'help': project_init_help['directory']}),
     (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
     (['-md', '--md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['md_config']}),
     (['-mdref', '--reference_md_index'], {'type': int, 'default': None, 'help': project_init_help['reference_md_index']}),
     (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
     (['-url', '--database_url'], {'default': DEFAULT_API_URL, 'help': project_init_help['database_url']}),
-    (['-inp', '--inputs_filepath'], {'default': None, 'help': "Path to inputs file"}),
+    (['-inp', '--inputs_filepath'], {'default': None, 'help': project_init_help['inputs_filepath']}),
     (['-fin', '--forced_inputs'], {'action': 'append', 'nargs': '*', 'default': None, 'help': project_init_help['forced_inputs']}),
     (['-pop', '--populations_filepath'], {'default': DEFAULT_POPULATIONS_FILENAME, 'help': project_init_help['populations_filepath']}),
     (['-tpro', '--transitions_filepath'], {'default': DEFAULT_TRANSITIONS_FILENAME, 'help': project_init_help['transitions_filepath']}),
@@ -494,7 +550,8 @@ run_parser_workflow_args = [
     (['-trans', '--translation'], {'nargs': '*', 'default': [0, 0, 0], 'help': project_init_help['translation']}),
     (['-d', '--download'], {'action': 'store_true', 'help': workflow_help['download']}),
     (['-s', '--setup'], {'action': 'store_true', 'help': workflow_help['setup']}),
-    (['-k', '--keep_going'], {'action': 'store_true', 'help': project_init_help['keep_going']}),
+    (['-ds', '--dataset_path'], {'default': None, 'help': workflow_help['dataset_path']}),
+    (['-k', '--keep_going'], {'action': 'store_true', 'help': workflow_help['keep_going']}),
     (['-smp', '--sample_trajectory'], {'type': int, 'nargs': '?', 'default': None, 'const': 10, 'metavar': 'N_FRAMES', 'help': project_init_help['sample_trajectory']}),
     (['-rcut', '--rmsd_cutoff'], {'type': float, 'default': DEFAULT_RMSD_CUTOFF, 'help': project_init_help['rmsd_cutoff']}),
     (['-icut', '--interaction_cutoff'], {'type': float, 'default': DEFAULT_INTERACTION_CUTOFF, 'help': project_init_help['interaction_cutoff']}),
@@ -540,7 +597,7 @@ for flags, kwargs in run_parser_checks_args:
     run_parser_checks_group.add_argument(*flags, **kwargs)
 
 # Set a list with the alias of all requestable dependencies
-choices = sorted(list(requestables.keys()) + list(DEPENDENCY_FLAGS.keys()))
+choices = sorted(list(requestables.keys()) + list(TaskResolver.DEPENDENCY_FLAGS.keys()))
 task_groups = [
   "download: Check/download input files (already ran with analyses)",
   "setup: Process and test input files (already ran with analyses)",
@@ -550,15 +607,15 @@ task_groups = [
   "interdeps: Run interactions and all its dependent analyses",
   "membs: Run all membrane-related analyses",
 ]
-assert len(DEPENDENCY_FLAGS.keys()) == len(task_groups), "The number of dependency flags and task groups must be the same"
+assert len(TaskResolver.DEPENDENCY_FLAGS.keys()) == len(task_groups), "The number of dependency flags and task groups must be the same"
 
 run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS',
     description=f"Available tasks: {choices}\nFor more information about each task, please visit:\n{task_docs_url}")
 run_parser_analysis_args = [
     (['-i', '--include'], {'nargs': '*', 'choices': choices,
-      'help': ("Set the unique analyses or tools to be run. All other steps will be skipped.\n"
-               "There are also some additional flags to define a preconfigured group of dependencies:"
-               + '\n  - ' + '\n  - '.join(task_groups))}),
+      'help': (workflow_help['include']
+               + "\nThere are also some additional flags to define a preconfigured group of dependencies:\n  - "
+               + '\n  - '.join(task_groups))}),
     (['-e', '--exclude'], {'nargs': '*', 'choices': choices, 'help': workflow_help['exclude']}),
     (['-ow', '--overwrite'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'choices': choices, 'help': workflow_help['overwrite']}),
 ]
@@ -686,24 +743,37 @@ for flags, kwargs in nassa_parser_args:
     nassa_parser.add_argument(*flags, **kwargs)
 
 # Dataset subcommand
-dataset_parser = subparsers.add_parser("dataset", formatter_class=CustomHelpFormatter,
-    help="Manage and process a dataset of MDDB projects.")
-dataset_subparsers = dataset_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
-
-# Dataset run subcommand
-dataset_run_parser = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter,
-help="Run the workflow for a dataset of MDDB projects.",
-    parents=[common_parser])
-dataset_run_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
-dataset_run_parser.add_argument("-ig", "--include-groups", nargs='*', type=int, default=[], help="List of group IDs to be run.")
-dataset_run_parser.add_argument("-eg", "--exclude-groups", nargs='*', type=int, default=[], help="List of group IDs to be excluded.")
-dataset_run_parser.add_argument("-n", "--n_jobs", type=int, default=0, help="Number of jobs to run.")
-dataset_run_parser.add_argument("--slurm", action="store_true", help="Submit the workflow to SLURM.")
-dataset_run_parser.add_argument("-jt", "--job-template", help="Path to the SLURM job template file. Required if --slurm is used.")
-dataset_run_parser.add_argument("--debug", action="store_true", help="Only print the commands without executing them.")
-
-# Dataset status subcommand
-dataset_status_parser = dataset_subparsers.add_parser("groups", formatter_class=CustomHelpFormatter,
-    help="Show the status of projects in a dataset, grouped by their last log message.",
-    parents=[common_parser])
-dataset_status_parser.add_argument("dataset_yaml", help="Path to the dataset YAML file.")
+ds_help = {func.__name__: parse_docstring_for_help(func.__doc__) for func in Dataset.__dict__.values() if callable(func)}
+ds_parser = subparsers.add_parser("dataset", aliases=["ds"], formatter_class=CustomHelpFormatter, help="Manage and process a dataset of MDDB projects.")
+dataset_subparsers = ds_parser.add_subparsers(dest='dataset_subcommand', help='Dataset subcommands')
+common_ds_parser = ArgumentParser(add_help=False)
+common_ds_parser.add_argument("dataset_path", nargs='?', default=None, help=ds_help['__init__']['dataset_path'] + " If not provided, the first *.db file found in the current directory will be used.",)
+# Dataset add subcommand
+dataset_add = dataset_subparsers.add_parser("add", formatter_class=CustomHelpFormatter, help="Add a directory and add all MDDB projects to a dataset storage file.", parents=[common_ds_parser])
+dataset_add.add_argument("-p", "--paths_or_globs", nargs='*', help=ds_help['add_entries']['paths_or_globs'])
+dataset_add.add_argument("-i", "--ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
+dataset_add.add_argument("-md", "--md_dirs", nargs='*', help=ds_help['add_entries']['md_dirs'], default=[])
+# Common query parser for dataset subcommands
+query_parser = ArgumentParser(add_help=False)
+query_parser.add_argument("-qp", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
+query_parser.add_argument("-qs", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
+query_parser.add_argument("-qsc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
+# Dataset inputs subcommand
+ds_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter, help="Generate inputs file for MDDB projects.", parents=[common_ds_parser, query_parser])
+ds_inputs.add_argument("-it", "--inputs_template", type=str, help=ds_help['generate_inputs_yaml']['inputs_template_path'])
+ds_inputs.add_argument("-ig", "--inputs_generator", type=str, help=ds_help['generate_inputs_yaml']['inputs_generator'])
+ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['generate_inputs_yaml']['overwrite'])
+# Dataset show subcommand
+ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
+ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
+ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
+# Dataset watch subcommand
+ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
+# Dataset scan subcommand
+ds_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter, help="Scan a directory and add all MDDB projects to a dataset storage file.", parents=[common_ds_parser])
+# # Dataset run subcommand
+ds_run = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter, help="Run the workflow for a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
+ds_run.add_argument("-n", "--n_jobs", type=int, default=0, help=ds_help['launch_workflow']['n_jobs'])
+ds_run.add_argument("-sl", "--slurm", action="store_true", help=ds_help['launch_workflow']['slurm'])
+ds_run.add_argument("-jt", "--job-template", help=ds_help['launch_workflow']['job_template'])
+ds_run.add_argument("--debug", action="store_true", help=ds_help['launch_workflow']['debug'])

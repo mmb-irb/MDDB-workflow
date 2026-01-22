@@ -146,7 +146,6 @@ class TestRunFlags:
 
 
 @pytest.mark.CI
-@pytest.mark.release
 class TestRunSpecial:
     """Test for special cases and specific accessions."""
 

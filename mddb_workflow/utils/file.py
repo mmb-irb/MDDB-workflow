@@ -15,20 +15,14 @@ LOCAL_PATH = '.'
 
 
 class File:
-    """ File handler class.
+    """File handler class.
     Absolute paths are used in runtime.
     Relative paths are used to store paths.
     """
-    def __init__ (self, relative_or_absolute_path : str):
+    def __init__(self, relative_or_absolute_path: str):
         # If there is no path then complain
         if not relative_or_absolute_path:
             raise RuntimeError('Declared file with no path')
-        # Declare all attributes as none by default
-        self.absolute_path = self.relative_path = self.path = None
-        self.basepath = self.filename = None
-        self.extension = None
-        self.extensionless_filename = None
-        self.extensionless_filepath = None
         # If input path is absolute
         if isabs(relative_or_absolute_path[0]):
             self.absolute_path = relative_or_absolute_path
@@ -56,7 +50,7 @@ class File:
         self.extensionless_filename = self.filename
         self.extensionless_filepath = self.path
         if self.extension:
-            extension_size = len(self.extension) + 1 # We include here the dot
+            extension_size = len(self.extension) + 1  # We include here the dot
             self.extensionless_filename = self.filename[:-extension_size]
             self.extensionless_filepath = self.path[:-extension_size]
         # Set internal values
@@ -65,31 +59,32 @@ class File:
     # We must display the cksum here
     # Note that this is critical for the task args cksum when we handle lists of files
     # e.g. input_trajectory_files in process_input_files
-    def __repr__ (self) -> str:
+    def __repr__(self) -> str:
         return f'< File {self.path} >'
 
-    def __str__ (self) -> str:
+    def __str__(self) -> str:
         return self.__repr__()
 
-    def __hash__ (self) -> str:
-        return hash(self.path) # Path is already normalized
+    def __hash__(self) -> int:
+        return hash(self.path)  # Path is already normalized
 
-    def __bool__ (self) -> bool:
+    def __bool__(self) -> bool:
         return bool(self.filename)
 
-    def __eq__ (self, other : 'File') -> bool:
+    def __eq__(self, other: 'File') -> bool:
         if isinstance(other, self.__class__):
-            return self.path == other.path # Paths are already normalized
+            return self.path == other.path  # Paths are already normalized
         return False
 
-    def check_existence (self) -> bool:
-        """ Check if file exists. """
+    def check_existence(self) -> bool:
+        """Check if file exists."""
         return exists(self.path)
     exists = property(check_existence, None, None, "Does the file exists? (read only)")
 
-    def get_format (self) -> Optional[str]:
-        """ Get file format based on the extension.
-        If the extension is not recognized then raise an error. """
+    def get_format(self) -> Optional[str]:
+        """Get file format based on the extension.
+        If the extension is not recognized then raise an error.
+        """
         if not self.extension:
             return None
         extension_format = EXTENSION_FORMATS.get(self.extension, None)
@@ -98,21 +93,22 @@ class File:
         return extension_format
     format = property(get_format, None, None, "File standard format (read only)")
 
-    def get_mtime (self) -> str:
-        """ Get the file last modification time. """
+    def get_mtime(self) -> str:
+        """Get the file last modification time."""
         raw_mtime = getmtime(self.path)
         return strftime(DATE_STYLE, gmtime(raw_mtime))
     mtime = property(get_mtime, None, None, "File last modification date (read only)")
 
-    def get_size (self) -> str:
-        """ Get the file size in bytes. """
+    def get_size(self) -> str:
+        """Get the file size in bytes."""
         return getsize(self.path)
     size = property(get_size, None, None, "File size in bytes (read only)")
 
-    CKSUM_UNSAFE_SIZE_LIMIT = 1024 * 1024 * 100 # 100 MB
-    def get_cksum (self, unsafe : bool = False, verbose : bool = False) -> str:
-        """ Get a cksum code used to compare identical file content.
-            Use the unsafe argument to make it way faster for large files by reading them partialy."""
+    CKSUM_UNSAFE_SIZE_LIMIT = 1024 * 1024 * 100  # 100 MB
+    def get_cksum(self, unsafe: bool = False, verbose: bool = False) -> str:
+        """Get a cksum code used to compare identical file content.
+        Use the unsafe argument to make it way faster for large files by reading them partially.
+        """
         # If we already have a value then return it
         if self._cksum != None: return self._cksum
         # If the file does not exist then there is no cksum
@@ -138,24 +134,24 @@ class File:
         return self._cksum
 
     # Set a couple of additional functions according to pytraj format requirements
-    def is_pytraj_supported (self) -> bool:
+    def is_pytraj_supported(self) -> bool:
         return self.format in PYTRAJ_SUPPORTED_FORMATS
-    def get_pytraj_parm_format (self) -> Optional[str]:
+    def get_pytraj_parm_format(self) -> Optional[str]:
         return PYTRAJ_PARM_FORMAT.get(self.format, None)
 
-    def remove (self):
-        """ Remove the file. """
+    def remove(self):
+        """Remove the file."""
         remove(self.path)
 
-    def get_standard_file (self) -> 'File':
-        """ Given a file who has non-standard extension of a supported format we set a symlink with the standard extension. """
+    def get_standard_file(self) -> 'File':
+        """Given a file who has non-standard extension of a supported format we set a symlink with the standard extension."""
         # If current file already has the extension then there is nothing to return
         if self.extension == self.format:
             return self
         return self.reformat(self.format)
 
-    def reformat (self, new_extension : str) -> 'File':
-        """ Given a file and a new extension we set a symlink from a new file with that extension. """
+    def reformat(self, new_extension: str) -> 'File':
+        """Given a file and a new extension we set a symlink from a new file with that extension."""
         # Set the filename with the standard extension and initiate the file
         reformatted_filename = f'{self.extensionless_filepath}.{new_extension}'
         reformatted_file = File(reformatted_filename)
@@ -164,24 +160,25 @@ class File:
             reformatted_file.set_symlink_to(self)
         return reformatted_file
 
-    def get_prefixed_file (self, prefix : str) -> 'File':
-        """ Get a prefixed file using this file name as the name base. """
+    def get_prefixed_file(self, prefix: str) -> 'File':
+        """Get a prefixed file using this file name as the name base."""
         return File(f'{self.basepath}/{prefix}{self.filename}')
 
-    def get_neighbour_file (self, filename : str) -> 'File':
-        """ Get a file in the same path but with a different name."""
+    def get_neighbour_file(self, filename: str) -> 'File':
+        """Get a file in the same path but with a different name."""
         return File(f'{self.basepath}/{filename}')
 
-    def get_symlink (self) -> Optional['File']:
-        """ Get the symlink target of this file. """
+    def get_symlink(self) -> Optional['File']:
+        """Get the symlink target of this file."""
         target_filepath = readlink(self.path)
         if not target_filepath:
             return None
         return File(self.basepath + '/' + target_filepath)
 
-    def set_symlink_to (self, other_file : 'File', force : bool = False):
-        """ Set this file a symlink to another file.
-        Use the "force" argument to delete an already existing file/symlink"""
+    def set_symlink_to(self, other_file: 'File', force: bool = False):
+        """Set this file a symlink to another file.
+        Use the "force" argument to delete an already existing file/symlink.
+        """
         # Self file must not exist
         if self.exists or self.is_symlink():
             if force: self.remove()
@@ -197,14 +194,14 @@ class File:
         # Set the symlink
         symlink(relative_path, self.path)
 
-    def is_symlink (self) -> bool:
-        """ Check if a file is already a symlink. """
+    def is_symlink(self) -> bool:
+        """Check if a file is already a symlink."""
         return islink(self.path)
 
-    def copy_to (self, other_file : 'File'):
-        """ Copy a file to another. """
+    def copy_to(self, other_file: 'File'):
+        """Copy a file to another."""
         copyfile(self.path, other_file.path)
 
-    def rename_to (self, other_file : 'File'):
-        """ Rename a file to another. """
+    def rename_to(self, other_file: 'File'):
+        """Rename a file to another."""
         rename(self.path, other_file.path)

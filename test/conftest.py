@@ -3,9 +3,31 @@ from mddb_workflow.mwf import Project
 from mddb_workflow.utils.constants import *
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--all-marks",
+        action="store_true",
+        default=False,
+        help="Run all marked tests (CI, unit_int, release)"
+    )
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "CI: tests related to continuous integration")
     config.addinivalue_line("markers", "release: tests related to release processes")
+    config.addinivalue_line("markers", "unit_int: unit and integration tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--all-marks"):
+        # When --all-marks is used, select tests with any of these marks
+        mark_names = {"CI", "unit_int", "release"}
+        selected = []
+        for item in items:
+            item_marks = {mark.name for mark in item.iter_markers()}
+            if item_marks & mark_names:  # If any mark matches
+                selected.append(item)
+        items[:] = selected
 
 
 @pytest.fixture(scope="session")

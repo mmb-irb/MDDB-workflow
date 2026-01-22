@@ -5,15 +5,17 @@ from os.path import exists, isdir, isabs, relpath, normpath, split, basename
 import sys
 import io
 import re
+import time
 import numpy
 from glob import glob
+from functools import partial
 
 # Constants
 # Importing constants first is important
 from mddb_workflow.utils.constants import *
-
+from mddb_workflow.core.dataset import Dataset, State
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_TOPOLOGY, REMOVED_MD
+from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
@@ -135,7 +137,6 @@ class MD:
             raise InputError(f'MD {self.number} has the same directory as the project: {self.directory}')
         # Save the directory name alone apart
         self.directory_location, self.directory_name = split(self.directory)
-        # If the directory does not exists then create it
         if not exists(self.directory):
             mkdir(self.directory)
         elif not isdir(self.directory):
@@ -180,7 +181,7 @@ class MD:
         if cache_file.path == self.project.cache.file.path:
             self.cache = self.project.cache
         else:
-            self.cache = Cache(cache_file)
+            self.cache = Cache(cache_file, self.project.cache.retrieve('uuid'))
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
@@ -277,7 +278,7 @@ class MD:
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')
 
-    def get_input_structure_file(self) -> str:
+    def get_input_structure_file(self) -> File:
         """Get the input pdb filename from the inputs.
         If the file is not found try to download it.
         """
@@ -313,7 +314,7 @@ class MD:
 
     # Input trajectory filename ------------
 
-    def get_input_trajectory_filepaths(self) -> str:
+    def get_input_trajectory_filepaths(self) -> list[str]:
         """Get the input trajectory file paths."""
         # Return the internal value if it is already assigned
         if self._input_trajectory_filepaths is not None:
@@ -406,7 +407,7 @@ class MD:
             project_relative_paths)
         return self._input_trajectory_filepaths
 
-    def get_input_trajectory_files(self) -> str:
+    def get_input_trajectory_files(self) -> list[File]:
         """Get the input trajectory filename(s) from the inputs.
         If file(s) are not found try to download it.
         """
@@ -474,21 +475,27 @@ class MD:
                 if was_removed: continue
                 # Get the directory according to the inputs
                 directory = md.get(MD_DIRECTORY, None)
-                if directory:
-                    check_directory(directory)
-                # If no directory is specified in the inputs then guess it from the MD name
-                else:
-                    name = md.get('name', None)
-                    if not name: raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
+                name = md.get(MD_NAME, None)
+                if not directory and not name:
+                    raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
+                # Make sure we have a directory
+                if not directory:
                     directory = name_2_directory(name)
+                check_md_directory(directory)
                 # If the directory matches then this is our MD inputs
                 if self.project.pathify(directory) == self.directory:
+                    # Make sure we have a name
+                    if not name:
+                        name = directory_2_name(directory)
+                        md[MD_NAME] = name
+                    # Save the MD inputs and return them
                     self._md_inputs = md
                     return self._md_inputs
         # If this MD directory has not associated inputs then it means it was passed through command line
         # We set a new MD inputs for it
         new_md_name = directory_2_name(self.directory)
-        self._md_inputs = {'name': new_md_name, 'mdir': self.directory}
+        self._md_inputs = {MD_NAME: new_md_name,
+                           MD_DIRECTORY: relpath(self.directory, self.project.directory)}
         # Update the inputs file with the new MD inputs
         mds = self.project.inputs.get('mds', [])
         if mds is None: mds = []
@@ -1016,13 +1023,12 @@ class Project:
         ignore_bonds: bool = False,
         sample_trajectory: Optional[int] = None,
         screenshot_frame: Optional[int] = None,
-        keep_going: bool = False,
     ):
         """Initialize a Project.
 
         Args:
             directory (str):
-                Local directory where the project takes place.
+                Project directory where the whole workflow is to be run.
             accession (Optional[str]):
                 Project accession to download missing input files from the database (if already uploaded).
             database_url (str):
@@ -1111,8 +1117,6 @@ class Project:
                 If passed, the project screenshot is made using the specified frame (0-based), from the reference MD.
                 Negative number may be passed to select frames starting by the end. e.g. -1 is the last frame.
                 By default the screenshot is made using the reference frame from the reference MD.
-            keep_going (bool):
-                If True, continue running the workflow even if some MD replicas fail. Default is False.
 
         """
         # Save input parameters
@@ -1351,7 +1355,6 @@ class Project:
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
-        self.keep_going = keep_going
 
     def __repr__(self):
         """Return a string representation of the Project object."""
@@ -1390,7 +1393,7 @@ class Project:
                 # Get the directory according to the inputs
                 directory = input_md.get(MD_DIRECTORY, None)
                 if directory:
-                    check_directory(directory)
+                    check_md_directory(directory)
                 # If no directory is specified in the inputs then guess it from the MD name
                 else:
                     name = input_md['name']
@@ -1421,25 +1424,6 @@ class Project:
         # If the inputs file is available then it must declare the reference MD index
         if self.is_inputs_file_available():
             self._reference_md_index = self.get_input('mdref')
-        # If keep going is set then we try to find the first MD which processes correctly
-        if self.keep_going and (self._reference_md_index is None):
-            md_errors = []
-            for i, md in enumerate(self.mds):
-                try:
-                    md.input_files_processing()
-                    self._reference_md_index = i
-                    self.update_inputs('mdref', i)
-                    break
-                except Exception as e:
-                    error = e.__class__.__name__ + ': ' + str(e)
-                    md_errors.append((md.directory, error))
-                    print(error)
-                    continue
-            if self._reference_md_index is None:
-                print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
-                for md_error in md_errors:
-                    print(f'  - MD at {md_error[0]}: {md_error[1]}')
-                raise Exception('Could not find a valid reference MD automatically when keep going is set.')
         # Otherwise we simply set the first MD as the reference and warn the user about this
         if self._reference_md_index is None:
             warn('No reference MD was specified. The first MD will be used as reference.')
@@ -1846,6 +1830,7 @@ class Project:
     input_customs = inputs_property('customs', "Input custom representations (read only)")
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
     input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
+    input_dataset = inputs_property('dataset_path', "Dataset storage file. (read only)")
     # Additional topic-specific inputs
     input_cv19_unit = inputs_property('cv19_unit', "Input Covid-19 Unit (read only)")
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
@@ -2160,7 +2145,7 @@ def name_2_directory(name: str) -> str:
     return directory
 
 
-def check_directory(directory: str):
+def check_md_directory(directory: str):
     """Check for problematic characters in a directory path."""
     # Remove problematic characters
     directory_characters = set(directory)
@@ -2224,21 +2209,190 @@ for callable in vars(MD).values():
 # Note that this constant is global
 requestables = {**project_requestables, **md_requestables}
 
-# Set groups of dependencies to be requested together using only one flag
-DEPENDENCY_FLAGS = {
-    'download': list(input_files.keys()),
-    'setup': list(processed_files.keys()),
-    'meta': ['pmeta', 'mdmeta'],
-    'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap'],
-    'minimal': ['pmeta', 'mdmeta', 'stopology'],
-    'interdeps': ['inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist'],
-    'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter', 'channels']
-}
 
-# Set the default analyses to be run when no task is specified
-DEFAULT_ANALYSES = ['clusters', 'dist', 'energies', 'hbonds', 'pca', 'pockets',
-    'rgyr', 'rmsds', 'perres', 'pairwise', 'rmsf', 'sas', 'tmscore', 'density',
-    'thickness', 'apl', 'lorder', 'linter']
+class TaskResolver:
+    """Resolves which tasks should run based on include/exclude/overwrite flags."""
+
+    # Dependency flag groups
+    DEPENDENCY_FLAGS = {
+        'download': list(input_files.keys()),
+        'setup': list(processed_files.keys()),
+        'meta': ['pmeta', 'mdmeta'],
+        'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap'],
+        'minimal': ['pmeta', 'mdmeta', 'stopology'],
+        'interdeps': ['inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist'],
+        'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter', 'channels']
+    }
+    # Default analyses to be run when no task is specified
+    DEFAULT_ANALYSES = [
+        'clusters', 'dist', 'energies', 'hbonds', 'pca', 'pockets',
+        'rgyr', 'rmsds', 'perres', 'pairwise', 'rmsf', 'sas', 'tmscore',
+        'density', 'thickness', 'apl', 'lorder', 'linter'
+    ]
+
+    DEFAULT_PROJECT_TASKS = ['stopology', 'screenshot', 'pmeta', 'pdbs', 'chains']
+    DEFAULT_MD_TASKS = ['mdmeta', 'inter']
+
+    def __init__(
+        self,
+        include: Optional[list[str]] = None,
+        exclude: Optional[list[str]] = None,
+        overwrite: Optional[list[str] | bool] = None,
+        download: bool = False,
+        setup: bool = False,
+    ):
+        """Initialize the task resolver."""
+        if include and exclude:
+            raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
+
+        self.project_requestables = project_requestables
+        self.md_requestables = md_requestables
+        self.include = include
+        self.exclude = exclude
+        self.overwrite = overwrite
+        self.download = download
+        self.setup = setup
+
+        self._tasks: Optional[list[str]] = None
+        self._overwritables: Optional[set[str]] = None
+
+    def _expand_dependency_flags(self, flags: list[str]) -> list[str]:
+        """Expand special group flags into their individual tasks."""
+        expanded = set()
+        for flag in flags:
+            if flag in self.DEPENDENCY_FLAGS:
+                expanded.update(self.DEPENDENCY_FLAGS[flag])
+            else:
+                expanded.add(flag)
+        return list(expanded)
+
+    @property
+    def tasks(self) -> list[str]:
+        """Get the resolved list of tasks to run."""
+        if self._tasks is not None:
+            return self._tasks
+
+        if self.download:
+            warn('The "-d" or "--download" argument is deprecated. Please use "-i download" instead.')
+            self._tasks = list(input_files.keys())
+        elif self.setup:
+            warn('The "-s" or "--setup" argument is deprecated. Please use "-i setup" instead.')
+            self._tasks = list(processed_files.keys())
+        elif self.include and len(self.include) > 0:
+            self._tasks = self._expand_dependency_flags(self.include)
+        else:
+            # Default tasks
+            self._tasks = [
+                *self.DEFAULT_PROJECT_TASKS,
+                *self.DEFAULT_MD_TASKS,
+                *self.DEFAULT_ANALYSES,
+            ]
+            if self.exclude and len(self.exclude) > 0:
+                excluded = self._expand_dependency_flags(self.exclude)
+                # Remove excluded tasks
+                self._tasks = [t for t in self._tasks if t not in excluded]
+
+        return self._tasks
+
+    @property
+    def overwritables(self) -> set[str]:
+        """Get the set of tasks that should overwrite existing outputs."""
+        if self._overwritables is not None:
+            return self._overwritables
+
+        # If the user requested to overwrite something, make sure it is in the tasks list
+        # Update the overwritable variable with the requested overwrites
+        self._overwritables = set()
+        if self.overwrite:
+            # If the overwrite argument is simply true then add all requestables to the overwritable
+            if isinstance(self.overwrite, bool):
+                self._overwritables = set(self.tasks)
+            # If the overwrite argument is a list of tasks then iterate them
+            elif isinstance(self.overwrite, list):
+                for task in self.overwrite:
+                    # Make sure the task to be overwriten is among the tasks to be run
+                    if task not in self.tasks:
+                        raise InputError(
+                            f'Task "{task}" is to be overwritten but it is not in the tasks list. '
+                            'Either include it or do not exclude it'
+                        )
+                    self._overwritables.add(task)
+            else:
+                raise ValueError('Not supported overwrite type')
+
+        return self._overwritables
+
+    @property
+    def project_tasks(self) -> list[str]:
+        """Get tasks that apply to the project level."""
+        return [t for t in self.tasks if t in self.project_requestables]
+
+    @property
+    def md_tasks(self) -> list[str]:
+        """Get tasks that apply to individual MDs."""
+        return [t for t in self.tasks if t in self.md_requestables]
+
+    def get_project_overwritables(self) -> set[str]:
+        """Get overwritables for project-level tasks."""
+        return set(t for t in self.project_tasks if t in self.overwritables)
+
+    def get_md_overwritables(self) -> set[str]:
+        """Get overwritables for MD-level tasks."""
+        return set(t for t in self.md_tasks if t in self.overwritables)
+
+
+class ErrorHandling:
+    """Class to handle errors during workflow execution."""
+
+    # Class-level attribute to collect MD errors across all instances
+    md_errors: list[tuple[str, str]] = []
+
+    def __init__(self,
+        wf_class: Union['Project', 'MD'],
+        keep_going: bool = False,
+        dataset: Dataset = None,
+        clear_register: bool = False,
+    ):
+        """Initialize the error handling."""
+        self.scope = 'Project' if isinstance(wf_class, Project) else 'MD'
+        self.md_dir = wf_class.directory if self.scope == 'MD' else None
+        self.uuids = {'uuid': wf_class.cache.retrieve('uuid'),
+                      'project_uuid': wf_class.cache.retrieve('project_uuid')}
+        self.keep_going = keep_going
+        # Make the update function with partial so we do not have to repeat parameters
+        if dataset:
+            self.update_state = partial(dataset.update_status,
+                                        rel_path=dataset._abs_to_rel(wf_class.directory),
+                                        **self.uuids)
+            if not dataset.get_uuid_status(**self.uuids):
+                # If no status is available, add a new entry
+                self.update_state(state=State.NEW, message='No information recorded yet.')
+        else:
+            # If no dataset is available, use a null function
+            self.update_state = lambda *args, **kwargs: None
+        self.register = []
+        if clear_register:
+            ErrorHandling.md_errors.clear()
+
+    def __enter__(self):
+        """Enter the context manager."""
+        # Update project status to running on entering the context.
+        self.update_state(state=State.RUNNING, message='Running workflow...')
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context manager."""
+        if exc_type and issubclass(exc_type, Exception):
+            error = exc_value.__class__.__name__ + ': ' + str(exc_value)
+            self.update_state(state=State.ERROR, message=error)
+            if self.scope == 'MD' and self.keep_going:
+                # Record error to print at the end of the run and continue
+                ErrorHandling.md_errors.append((self.md_dir, error))
+                print(error)
+                return True  # Suppress exception
+        else:
+            self.update_state(state=State.DONE, message='Done!')
+        return False  # Do not suppress other exceptions
 
 
 def workflow(
@@ -2248,6 +2402,8 @@ def workflow(
     include: Optional[list[str]] = None,
     exclude: Optional[list[str]] = None,
     overwrite: Optional[list[str] | bool] = None,
+    dataset_path: Optional[str] = None,
+    keep_going: bool = False
 ):
     """Run the MDDB workflow.
 
@@ -2255,23 +2411,18 @@ def workflow(
         project_parameters (dict): Parameters to initiate the project.
         download (bool): (Deprecated: use -i download) If passed, only download required files. Then exits.
         setup (bool): (Deprecated: use -i setup) If passed, only download required files and run mandatory dependencies. Then exits.
-        include (list[str] | None): Set the unique analyses or tools to be run. All other steps will be skipped.
+        include (list[str] | None): Set the unique analyses or tools to be run while all other steps will be skipped. If not passed, all default analyses will be run.
         exclude (list[str] | None): List of analyses or tools to be skipped. All other steps will be run. Note that if we exclude a dependency of something else then it will be run anyway.
         overwrite (list[str] | bool | None): List of tasks that will be re-run, overwriting previous output files. Use this flag alone to overwrite everything.
+        dataset_path (str | None): Path to the dataset where to register the workflow status.
+        keep_going (bool): If True, continue to the next MD if a task fails. Project tasks still stop on errors. Default is False.
 
     """
-    # Check there are not input errors
-
-    # Include and exclude are not compatible
-    # This is to protect the user to do something which makes not sense
-    if include and exclude:
-        raise InputError('Include (-i) and exclude (-e) are not compatible. Use one of these options.')
-
-    # Move the current directory to the working directory
+    # Print workflow header
     git_version = get_git_version()
     print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}){COLOR_END}')
 
-    # Initiate the project project
+    # Initiate the project
     project = Project(**project_parameters)
     project_directory_label = project.directory
     if project_directory_label == '.':
@@ -2280,126 +2431,57 @@ def workflow(
     print(f'  {len(project.mds)} MDs are to be run')
 
     # Set the tasks to be run
-    tasks = None
-    # If the download argument is passed then just make sure input files are available
-    if download:
-        warn('The "-d" or "--download" argument is deprecated. Please use "-i download" instead.')
-        tasks = list(input_files.keys())
-    # If the setup argument is passed then just process input files
-    elif setup:
-        warn('The "-s" or "--setup" argument is deprecated. Please use "-i setup" instead.')
-        tasks = list(processed_files.keys())
-    # If the include argument then add only the specified tasks to the list
-    elif include and len(include) > 0:
-        tasks = [*include]
-        # Search for special flags among included
-        for flag, dependencies in DEPENDENCY_FLAGS.items():
-            if flag not in tasks: continue
-            # If the flag is found then remove it and write the corresponding dependencie instead
-            # Make sure not to duplicate a dependency if it was already included
-            tasks.remove(flag)
-            for dep in dependencies:
-                if dep in tasks: continue
-                tasks.append(dep)
-    # Set the default tasks otherwise
-    else:
-        tasks = [
-            # Project tasks
-            'stopology',
-            'screenshot',
-            'pmeta',
-            'pdbs',
-            'chains',
-            # MD tasks
-            'mdmeta',
-            'inter',
-            *DEFAULT_ANALYSES,
-        ]
-        # If the exclude parameter was passed then remove excluded tasks from the default tasks
-        if exclude and len(exclude) > 0:
-            excluded_dependencies = [*exclude]
-            # Search for special flags among excluded
-            for flag, dependencies in DEPENDENCY_FLAGS.items():
-                if flag not in exclude: continue
-                # If the flag is found then exclude the dependencies instead
-                # Make sure not to duplicate a dependency if it was already included
-                excluded_dependencies.remove(flag)
-                for dep in dependencies:
-                    if dep in exclude: continue
-                    excluded_dependencies.append(dep)
-            tasks = [name for name in tasks if name not in excluded_dependencies]
-
-    # If the user requested to overwrite something, make sure it is in the tasks list
-
-    # Update the overwritable variable with the requested overwrites
-    overwritables = set()
-    if overwrite:
-        # If the overwrite argument is simply true then add all requestables to the overwritable
-        if type(overwrite) is bool:
-            for task in tasks:
-                overwritables.add(task)
-        # If the overwrite argument is a list of tasks then iterate them
-        elif type(overwrite) is list:
-            for task in overwrite:
-                # Make sure the task to be overwriten is among the tasks to be run
-                if task not in tasks:
-                    raise InputError(f'Task "{task}" is to be overwriten but it is not in the tasks list. Either include it or do not exclude it')
-                # Add it to the global variable
-                overwritables.add(task)
-        else: raise ValueError('Not supported overwrite type')
-
-    # Get project tasks
-    project_tasks = [task for task in tasks if task in project_requestables]
-    # Get the MD tasks
-    md_tasks = [task for task in tasks if task in md_requestables]
-
-    # Set project overwritables
-    project.overwritables = set([task for task in project_tasks if task in overwritables])
-    # Set MD overwrittables
-    # Note that this must be done before running project tasks
-    # Some project tasks rely in MD tasks
+    tasker = TaskResolver(
+        include=include,
+        exclude=exclude,
+        overwrite=overwrite,
+        download=download,
+        setup=setup,
+    )
+    # Set overwritables
+    project.overwritables = tasker.get_project_overwritables()
     for md in project.mds:
-        md.overwritables = set([task for task in md_tasks if task in overwritables])
+        md.overwritables = tasker.get_md_overwritables()
 
-    # Run the project tasks now
-    for task in project_tasks:
-        # Get the function to be called and call it
-        getter = requestables[task]
-        getter(project)
+    dataset = None
+    if dataset_path:  # From CLI argument
+        dataset = Dataset(dataset_path)
+    elif project.input_dataset:  # From project inputs file
+        dataset = Dataset(project.input_dataset)
 
-    # Now iterate over the different MDs
-    md_errors = []
-    for md in project.mds:
-        # If it is a removed MD then we must handle it apart
-        if md == REMOVED_MD: continue
-        print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
-        # Run the MD tasks
-        try:
-            for task in md_tasks:
-                # Get the function to be called and call it
-                getter = requestables[task]
-                getter(md)
-        except TestFailure as e:
-            if not project_parameters['keep_going']:
-                raise e
-            error = e.__class__.__name__ + ': ' + str(e)
-            md_errors.append((md.directory, error))
-            print(error)
-            continue
-        except Exception as e:
-            raise e
+    # Run the project tasks and MD tasks as per the task resolver.
+    t0 = time.time()
+    with ErrorHandling(project, keep_going, dataset, clear_register=True) as error_handler:
+        for task in tasker.project_tasks:
+            # Get the function to be called and call it
+            getter = requestables[task]
+            getter(project)
 
-        # Remove gromacs backups and other trash files from this MD
-        remove_trash(md.directory)
+        # Now iterate over the different MDs
+        for md in project.mds:
+            # If it is a removed MD then we must handle it apart
+            if md == REMOVED_MD: continue
+            print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
+            error_handler.update_state(state=State.RUNNING, message=f'Processing MD at {md.directory}')
+            # Run the MD tasks
+            with ErrorHandling(md, keep_going, dataset):
+                for task in tasker.md_tasks:
+                    # Get the function to be called and call it
+                    getter = requestables[task]
+                    getter(md)
+            # Remove gromacs backups and other trash files from this MD
+            remove_trash(md.directory)
 
-    # Remove gromacs backups and other trash files from the project
-    remove_trash(project.directory)
+        # Remove gromacs backups and other trash files from the project
+        remove_trash(project.directory)
+    t = time.time() - t0
+    print(f'\n{CYAN_HEADER} Workflow finished in {t/60:.2f} minutes {COLOR_END}')
 
-    if md_errors and len(project.mds) > 1:
+    if ErrorHandling.md_errors and len(project.mds) > 1:
         # If there is more than one replica with errors that may being hidden by the others working fine
-        print(f'\n{RED_HEADER}Finished with errors in {len(md_errors)} MD replicas:{COLOR_END}')
-        for md_error in md_errors:
-            print(f'  - MD at {md_error[0]}: {md_error[1]}')
+        print(f'\n{RED_HEADER}Finished with errors in MD replicas:{COLOR_END}')
+        for md_dir, error_msg in ErrorHandling.md_errors:
+            print(f'  - MD at {md_dir}: {error_msg}')
         print('The rest of MD replicas were processed successfully.')
     else:
         print("Done!")

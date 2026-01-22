@@ -1,13 +1,14 @@
 import re
 import json
+
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM
-from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn
+from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, retry_request, handle_http_request
 from mddb_workflow.utils.type_hints import *
-from urllib.request import urlopen
-from urllib.error import HTTPError, URLError
+
+
 from functools import lru_cache
 import requests
 from scipy.optimize import linear_sum_assignment
@@ -16,6 +17,16 @@ import numpy as np
 # Set the expected ligand data fields
 LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid', 'inchikey'])
 MINIMUM_TANIMOTO_THRESHOLD = 0.3
+
+
+@retry_request
+def _make_get_request(url: str) -> requests.Response:
+    return requests.get(url, timeout=30)
+
+
+@retry_request
+def _make_post_request(url, payload):
+    return requests.post(url, data=payload, timeout=30)
 
 
 def record_pubchem_match(
@@ -30,11 +41,15 @@ def record_pubchem_match(
     """Set the pubchem id for the inchikey and compute/print Tanimoto vs descriptor_data if match_mol provided."""
     matched_fg = obtain_mordred_morgan_descriptors(match_mol)
     tc = tanimoto_similarity(reference_fg['morgan_fp_bit_array'], matched_fg['morgan_fp_bit_array'])
+    # For ions, set threshold to 0.0 as TC can vary a lot with small changes
+    threshold = threshold if match_mol.GetNumAtoms() > 1 else 0.0
     if tc >= threshold:
         ligand_references[inchikey]['pubchem'] = str(pubchem_id)
         ligand_references[inchikey]['tc'] = tc
         print(f'Found CID {pubchem_id} after {reason}. Tanimoto coef. (morgan fingerprint): {tc:.3f}')
-    return tc
+    else:
+        print(f'Found CID {pubchem_id} after {reason}. Tanimoto coef. (morgan fingerprint): {tc:.3f}, below threshold {threshold}. Ignoring match.')
+    return tc >= threshold
 
 
 def generate_ligand_references(
@@ -117,31 +132,31 @@ def generate_ligand_references(
         neutral_mol = rdMolStandardize.ChargeParent(mol)
         neutral_inchikey = Chem.MolToInchiKey(neutral_mol)
         if pubchem_id := inchikey_2_pubchem(neutral_inchikey):
-            record_pubchem_match(inchikey, pubchem_id, neutral_mol, descriptor_data,
-                                 automatic_references, 'neutralization')
-            continue
+            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, descriptor_data,
+                                    automatic_references, 'neutralization'):
+                continue
         # 2.2. Remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(mol)
-            record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
-                                 automatic_references, 'stereochemistry removal')
-            continue
+            if record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
+                                    automatic_references, 'stereochemistry removal'):
+                continue
         # Neutralize charges and remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(neutral_mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(neutral_mol)
-            record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
-                                 automatic_references, 'neutralization + stereochemistry removal')
-            continue
+            if record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
+                                    automatic_references, 'neutralization + stereochemistry removal'):
+                continue
         # 2.3. Standardize molecule
         standar_id = pubchem_standardization(inchi)
         if standar_id and len(standar_id) == 1:
             standar_pubchem = standar_id[0]['pubchem']
             standar_mol = Chem.MolFromInchi(standar_id[0]['inchi'])
-            record_pubchem_match(inchikey, standar_pubchem, standar_mol, descriptor_data,
-                                 automatic_references, 'standardization')
-            continue
+            if record_pubchem_match(inchikey, standar_pubchem, standar_mol, descriptor_data,
+                                    automatic_references, 'standardization'):
+                continue
         # 2.4. Match against PDB-derived ligands
         if pubchem_ids_from_pdb:
             for pdb_ligand in pubchem_ids_from_pdb:
@@ -161,8 +176,7 @@ def generate_ligand_references(
             neutral_inchi = Chem.MolToInchi(neutral_mol)
             for threshold in [95, 90]:
                 similarity_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/inchi/JSON?Threshold={threshold}&MaxRecords=5"
-                payload = {'inchi': neutral_inchi}
-                r = requests.post(similarity_url, data=payload)
+                r = _make_post_request(similarity_url, payload={'inchi': neutral_inchi})
                 if r.status_code != 200:
                     continue
                 data = r.json()
@@ -300,7 +314,7 @@ def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     parsed_response = request_pdb_data(pdb_id, query)
     # The response may be None
     # e.g. an obsolete entry with no replacement
-    if parsed_response == None: return []
+    if parsed_response is None: return []
     # Mine data for nonpolymer entities
     nonpolymers = parsed_response['nonpolymer_entities']
     # If there are no nonpolymer entities, another type of entitie could be used
@@ -347,18 +361,7 @@ def pdb_ligand_2_pubchem_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Set the request URL
     request_url = f'https://www.rcsb.org/ligand/{pdb_ligand_id}'
     # Run the query
-    parsed_response = None
-    try:
-        with urlopen(request_url) as response:
-            parsed_response = response.read().decode("utf-8")
-    # If the accession is not found in the PDB then we can stop here
-    except HTTPError as error:
-        if error.code == 404:
-            print(f' PDB ligand {pdb_ligand_id} not found')
-            return None
-        else:
-            print(error.msg)
-            raise ValueError('Something went wrong with the PDB ligand request: ' + request_url)
+    parsed_response = handle_http_request(request_url, "PDB ligand request")
     # Mine the PubChem ID out of the whole response
     pattern = re.compile('pubchem.ncbi.nlm.nih.gov\/compound\/([0-9]*)\"')
     match = re.search(pattern, parsed_response)
@@ -378,17 +381,7 @@ def pdb_ligand_2_pubchem_RAW_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Set the request URL
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{pdb_ligand_id}/json'
     # Run the query
-    parsed_response = None
-    try:
-        with urlopen(request_url) as response:
-            parsed_response = json.loads(response.read().decode("utf-8"))
-    # If the accession is not found in the PDB then we can stop here
-    except HTTPError as error:
-        # This may happen for weird things such as UNX (unknown atom or ion)
-        if error.code == 404:
-            return None
-        print(error.msg)
-        raise RuntimeError('Something went wrong with the PDB ligand request in PubChem: ' + request_url)
+    parsed_response = json.loads(handle_http_request(request_url, "PDB ligand request"))
     # Mine the PubChem ID
     compounds = parsed_response['PC_Compounds']
     if len(compounds) != 1:
@@ -440,7 +433,7 @@ def pdbs_2_pubchems(pdb_ids: list[str], cache: 'Cache') -> list[dict]:
         # Check we have cached this specific pdb
         pubchem_ids_from_pdb = pdb_2_pubchem_cache.get(pdb_id, None)
         if pubchem_ids_from_pdb is not None:
-            print(f' Retriving from cache PubChem IDs for PDB ID {pdb_id}: ')
+            print(f' Retrieving from cache PubChem IDs for PDB ID {pdb_id}: ')
             if len(pubchem_ids_from_pdb) > 0:
                 print('  PubChem IDs: ' + ', '.join(pubchem_ids_from_pdb))
             else:
@@ -460,19 +453,6 @@ def pdbs_2_pubchems(pdb_ids: list[str], cache: 'Cache') -> list[dict]:
     if new_data_to_cache: cache.update(PDB_TO_PUBCHEM, pdb_2_pubchem_cache)
 
     return pdb_ligands
-
-
-def handle_http_request(request_url, error_context="request"):
-    """Make an HTTP request handler with consistent error handling."""
-    try:
-        with urlopen(request_url) as response:
-            return response.read().decode("utf-8", errors='ignore')
-    except HTTPError as error:
-        if error.code == 404:
-            return None
-        raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
-    except URLError as error:
-        raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
 
 
 def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
@@ -590,7 +570,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
 def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
     """Given a DrugBank ID, request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{drugbank_id}/JSON'
-    r = requests.get(url)
+    r = _make_get_request(url)
     if r.ok:
         data = r.json()
         return str(data['PC_Compounds'][0]['id']['id']['cid'])
@@ -601,7 +581,7 @@ def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
 def chembl_2_pubchem(chembl_id) -> Optional[str]:
     """Given a ChemBL ID, use the uniprot API to request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/xref/RegistryID/{chembl_id}/cids/JSON'
-    r = requests.get(url)
+    r = _make_get_request(url)
     if r.ok:
         data = r.json()
         return str(data['IdentifierList']['CID'][0])
@@ -697,7 +677,8 @@ def inchikey_2_pubchem(inchikey: str, conectivity_only=False) -> Optional[str]:
     """Given an InChIKey, get the PubChem CID."""
     inchikey = inchikey.split('-')[0] if conectivity_only else inchikey
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
-    r = requests.get(url)
+
+    r = _make_get_request(url)
     if r.ok:
         data = r.json()
         if conectivity_only:
@@ -714,8 +695,8 @@ def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
     You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8
     """
     url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-    payload = {'inchi': inchi}
-    r = requests.post(url, data=payload)
+
+    r = _make_post_request(url, payload={'inchi': inchi})
     if r.ok:
         data = r.json()
         results = []

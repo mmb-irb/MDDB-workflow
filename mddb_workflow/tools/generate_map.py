@@ -4,7 +4,7 @@ import urllib.request
 import numpy as np
 import re
 
-from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException
+from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException, retry_request
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -231,7 +231,7 @@ def generate_protein_mapping (
                     continue
                 # If the match is a 'no referable' exception then set a no referable flag
                 if type(uniprot_id) == NoReferableException:
-                    chain_data['match'] = { 'ref': NO_REFERABLE_FLAG }
+                    chain_data['match'] = { 'ref': NO_REFERABLE_FLAG, 'map': sequence_map, 'score': align_score }
                     continue
                 # Proceed to set the corresponding reference otherwise
                 reference = references[uniprot_id]
@@ -469,9 +469,10 @@ def import_references (protein_references_file : 'File') -> list:
         references[uniprot] = reference
     return references
 
-# Get each chain name and aminoacids sequence in a topology
-# Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]
+
 def get_parsed_chains (structure : 'Structure') -> list:
+    """Get each chain name and aminoacids sequence in a topology.
+    Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]"""
     parsed_chains = []
     chains = structure.chains
     for chain in chains:
@@ -479,7 +480,10 @@ def get_parsed_chains (structure : 'Structure') -> list:
         sequence = ''
         residue_indices = []
         for residue in chain.residues:
+            # Check that residue is protein?
             letter = protein_residue_name_to_letter(residue.name)
+            if letter != 'X' and len(residue.atoms) > 27:
+                raise RuntimeError(f'Residue {residue.name} in chain {name} has an aminoacid name but has more than 27 atoms.')
             sequence += letter
             residue_indices.append(residue.index)
         sequence_object = { 'name': name, 'sequence': sequence, 'residue_indices': residue_indices }
@@ -494,7 +498,7 @@ def get_parsed_chains (structure : 'Structure') -> list:
 # Set verbose = True to see a visual summary of the sequence alignments in the logs
 def align (ref_sequence : str, new_sequence : str, verbose : bool = True) -> Optional[ tuple[list, float] ]:
 
-    #print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
+    if verbose: print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
 
     # If the new sequence is all 'X' stop here, since this would make the alignment infinite
     # Then an array filled with None is returned
@@ -569,6 +573,7 @@ def align (ref_sequence : str, new_sequence : str, verbose : bool = True) -> Opt
 # WARNING: This always means results will correspond to curated entries only
 #   If your sequence is from an exotic organism the result may be not from it but from other more studied organism
 # Since this function may take some time we always cache the result
+@retry_request
 def blast (sequence : str) -> Optional[str]:
     print(f'Throwing blast for sequence {sequence}. This may take some time...')
     result = NCBIWWW.qblast(
