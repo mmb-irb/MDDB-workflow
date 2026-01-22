@@ -179,6 +179,20 @@ def structure_corrector(
     })
 
     # ------------------------------------------------------------------------------------------
+    # Incoherent residue -----------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Make sure every known residue has an expected number of atoms
+    # This number was obtained after checking the number of atoms pero aminoacid in many topologies
+    # DANI: No es muy fiable de esta forma, pero sirve para ligandos mal puestos
+    ATOMS_PER_AMINOACID_LIMIT = 30
+    for residue in structure.residues:
+        # Make sure the residue name corresponds to an aminoacid
+        letter = protein_residue_name_to_letter(residue.name)
+        if letter == 'X' or residue.atom_count <= ATOMS_PER_AMINOACID_LIMIT: continue
+        raise RuntimeError(f'Residue {residue.name} in chain {name} has an aminoacid name but has more than 27 atoms. (residue {residue.index})')
+
+    # ------------------------------------------------------------------------------------------
     # Incoherent residue bonds ---------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 

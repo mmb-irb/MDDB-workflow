@@ -482,8 +482,6 @@ def get_parsed_chains (structure : 'Structure') -> list:
         for residue in chain.residues:
             # Check that residue is protein?
             letter = protein_residue_name_to_letter(residue.name)
-            if letter != 'X' and len(residue.atoms) > 27:
-                raise RuntimeError(f'Residue {residue.name} in chain {name} has an aminoacid name but has more than 27 atoms.')
             sequence += letter
             residue_indices.append(residue.index)
         sequence_object = { 'name': name, 'sequence': sequence, 'residue_indices': residue_indices }
