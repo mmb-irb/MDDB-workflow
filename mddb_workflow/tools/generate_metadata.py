@@ -6,9 +6,13 @@ from mddb_workflow.utils.auxiliar import InputError, save_json
 from mddb_workflow.utils.constants import MD_DIRECTORY
 from mddb_workflow.utils.type_hints import *
 
+from re import match
+
 # Input fields + interaction type
 METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "selection_2", "type" }
 
+# Regular expression matching formulas of single ions
+ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?$'
 
 def prepare_project_metadata (
     structure_file : 'File',
@@ -74,27 +78,31 @@ def prepare_project_metadata (
 
     # Get the system keywords
     membrane_count = membrane_map['n_mems']
-    ligand_count = len(ligand_references)
+    ligand_count = 0
+    for ligand_reference in ligand_references.values():
+        formula = ligand_reference['formula']
+        is_ion = match(ION_FORMULA, formula)
+        if not is_ion: ligand_count += 1
     system_keywords = get_system_keywords(structure, ligand_count, membrane_count)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
-    protein_references = []
-    ligand_references = []
-    inchikey_references = []
+    mapped_protein_references = []
+    mapped_ligand_references = []
+    mapped_inchikey_references = []
     references = residue_map['references']
     if references and len(references) > 0:
         for ref, ref_type in zip(references, residue_map['reference_types']):
             if ref_type == 'protein':
-                protein_references.append(ref)
+                mapped_protein_references.append(ref)
             elif ref_type == 'ligand':
-                ligand_references.append(ref)
+                mapped_ligand_references.append(ref)
             elif ref_type == 'inchikey':
-                inchikey_references.append(ref)
+                mapped_inchikey_references.append(ref)
 
     # Get ligand names if any
     forced_ligand_names = {
-        lig['name']: lig['forced_name'] for lig in ligand_references if lig.get('forced_name', False) }
+        lig['name']: lig['forced_name'] for lig in mapped_ligand_references if lig.get('forced_name', False) }
     if len(forced_ligand_names) == 0:
         forced_ligand_names = None
 
@@ -174,12 +182,12 @@ def prepare_project_metadata (
         'LINKS': input_links,
         'PDBIDS': pdb_ids,
         'FORCED_REFERENCES': input_protein_references,
-        'REFERENCES': protein_references,
+        'REFERENCES': mapped_protein_references,
         'INPUT_LIGANDS': input_ligands,
         # TODO: Ligands are now inchikeys only, remove after checking it does not break the client removing this
         'LIGANDS': [],
         'LIGANDNAMES': forced_ligand_names,
-        'INCHIKEYS': inchikey_references,
+        'INCHIKEYS': mapped_inchikey_references,
         'PROTSEQ': sequence_metadata['protein_sequences'],
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],
