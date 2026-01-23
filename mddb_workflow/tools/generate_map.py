@@ -333,9 +333,12 @@ def generate_protein_mapping (
             # Find which chain is the no referable
             # Even if multiple chains are no referable, the reference will be only one
             topology_references = topology['references']
-            no_referable_reference_index = next(
+            no_referable_reference_index = next((
                 index for index, reference in enumerate(topology_references) \
-                if reference == NO_REFERABLE_FLAG )
+                if reference == NO_REFERABLE_FLAG ), None)
+            if no_referable_reference_index is None:
+                raise RuntimeError(f'Data inconsistency in project {remote.accession}:\n' + \
+                    ' Metadata references include "noref" while the topology has none.')
             # Get all residues which are flagged as no referable
             residue_references = topology['residue_reference_indices']
             reference_residue_indices = [
@@ -494,7 +497,7 @@ def get_parsed_chains (structure : 'Structure') -> list:
 # Return also the score of the alignment
 # Return None when there is not valid alignment at all
 # Set verbose = True to see a visual summary of the sequence alignments in the logs
-def align (ref_sequence : str, new_sequence : str, verbose : bool = True) -> Optional[ tuple[list, float] ]:
+def align (ref_sequence : str, new_sequence : str, verbose : bool = False) -> Optional[ tuple[list, float] ]:
 
     if verbose: print('- REFERENCE\n' + ref_sequence + '\n- NEW\n' + new_sequence)
 
