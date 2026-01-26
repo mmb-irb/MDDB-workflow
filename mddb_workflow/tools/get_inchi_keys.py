@@ -194,11 +194,13 @@ def generate_inchikeys(
 
     results = []
     # Execute tasks in parallel
+    print(f'Processing {len(tasks)} residues to get InChI keys...')
+    debug_callback = lambda x: print(f'Processed {len(x)} residues so far...')
     with multiprocessing.Pool() as pool:
         try:
-            async_results = pool.map_async(residue_to_inchi, tasks)
-            # Add timeout (e.g., 300 seconds = 5 minutes per task)
-            results = async_results.get(300)
+            async_results = pool.map_async(residue_to_inchi, tasks,callback=debug_callback)
+            # Add timeout (e.g., 60 seconds = 1 minute per task)
+            results = async_results.get(60)
         except multiprocessing.TimeoutError:
             warn('Pool timeout - some tasks did not complete')
             pool.terminate()  # Force kill all workers
