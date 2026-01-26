@@ -1799,6 +1799,8 @@ class Structure:
             # If residue number is longer than 4 characters then we must parse to hexadecimal
             if len(residue_number) > 4:
                 residue_number = hex(residue.number)[2:].rjust(4)
+                if len(residue_number) > 4:
+                    raise RuntimeError(f'Residue number too large: {residue_number}')
             icode = residue.icode if residue.icode and len(residue.icode) else ' '
             # Make sure we have atom coordinates
             if atom.coords == None:
