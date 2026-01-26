@@ -45,7 +45,7 @@ class DatabaseLock:
 
         """
         self.db_path = Path(db_path).resolve()
-        self.lock_dir = self.db_path.with_stem('.lock_' + self.db_path.name)
+        self.lock_dir = self.db_path.with_name('.lock_' + self.db_path.name)
         self.timeout = timeout
         self.retry_interval = retry_interval
         self._lock_count = 0  # For reentrant locking
