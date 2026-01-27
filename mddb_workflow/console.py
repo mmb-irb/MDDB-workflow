@@ -358,6 +358,16 @@ def main():
                 md_dirs=args.md_dirs,
                 verbose=True
             )
+        elif args.dataset_subcommand == 'status':
+            status = dataset.get_status(args.project_path)
+            # Format and display the status nicely
+            print(f"UUID:          {status['uuid']}")
+            print(f"Path:          {status['rel_path']}")
+            print(f"State:         {status['state']}")
+            print(f"Scope:         {status['scope']}")
+            print(f"MDs:           {status['num_mds']}")
+            print(f"Last Modified: {status['last_modified']}")
+            print(f"Message:       {status['message']}")
 
         elif args.dataset_subcommand == 'show':
             df = dataset.get_dataframe(
@@ -753,6 +763,9 @@ dataset_add = dataset_subparsers.add_parser("add", formatter_class=CustomHelpFor
 dataset_add.add_argument("-p", "--paths_or_globs", nargs='*', help=ds_help['add_entries']['paths_or_globs'])
 dataset_add.add_argument("-i", "--ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
 dataset_add.add_argument("-md", "--md_dirs", nargs='*', help=ds_help['add_entries']['md_dirs'], default=[])
+# Dataset status subcommand
+dataset_add = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter, help="Show the status of a project inside the dataset.", parents=[common_ds_parser])
+dataset_add.add_argument("-p", "--project_path", help='Path to the project.')
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-qp", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
