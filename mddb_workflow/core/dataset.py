@@ -45,11 +45,17 @@ class DatabaseLock:
 
         """
         self.db_path = Path(db_path).resolve()
-        self.lock_dir = self.db_path.with_name('.lock_' + self.db_path.name)
+        self.lock_dir = self._path_to_lock_dir(self.db_path)
         self.timeout = timeout
         self.retry_interval = retry_interval
         self._lock_count = 0  # For reentrant locking
         self._current_lock_type = None
+
+    @staticmethod
+    def _path_to_lock_dir(db_path: str | Path) -> Path:
+        """Get the lock directory path for a given database path."""
+        db_path = Path(db_path).resolve()
+        return db_path.with_name('.lock_' + db_path.name)
 
     def acquire(self) -> bool:
         """Acquire the database lock using atomic directory creation."""
