@@ -380,8 +380,11 @@ def main():
                 query_state=args.query_state,
                 query_scope=args.query_scope,
             )
+            if args.n_rows != 0:
+                df = df.tail(args.n_rows)
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe
+                df.reset_index(inplace=True)
                 rich_display_dataframe(df, title="MDDB Dataset")
             except ImportError:
                 print(df)
@@ -779,6 +782,7 @@ ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['g
 # Dataset show subcommand
 ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
+ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for all rows.", default=50, type=int)
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])

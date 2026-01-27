@@ -4,7 +4,7 @@ import multiprocessing
 from dataclasses import dataclass, field
 from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import warn, save_json
+from mddb_workflow.utils.auxiliar import warn, save_json, timeout
 from mddb_workflow.utils.type_hints import *
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
@@ -87,6 +87,7 @@ def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
     return standar_cid[0]['pubchem'] == '4971'  # CID for ferroheme without Fe
 
 
+@timeout(180)
 def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str, int]:
     """Process a single residue to get its InChI key and related information."""
     resatoms, resindices = task

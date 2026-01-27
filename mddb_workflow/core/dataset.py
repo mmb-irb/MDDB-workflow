@@ -269,6 +269,9 @@ class Dataset:
         project_uuid, _ = self._read_uuid_from_cache(Path(directory).parent.as_posix())
         if not project_uuid:
             raise ValueError(f"Directory '{Path(directory).name}' is not inside a valid project directory")
+        # Ensure the parent project exists in the DB before adding MD
+        if not self.get_uuid_status(project_uuid):
+            raise ValueError(f"Project with UUID '{project_uuid}' does not exist in the database. Add the project first.")
         # Get MD UUID and add the project_uuid
         uuid, _ = self._read_uuid_from_cache(directory, make_uuid, project_uuid)
         rel_path = self._abs_to_rel(directory)
@@ -354,7 +357,7 @@ class Dataset:
         project_uuid: str = None,
         rel_path: str = None,
     ):
-        """Update or insert a project or MD's status in the database.
+        """Update or insert (upsert) a project or MD's status in the database.
 
         Args:
             uuid: UUID of the project or MD
@@ -969,6 +972,23 @@ class Dataset:
                 time.sleep(1)  # Avoid busy waiting
 
         print(f"All {total} jobs completed.")
+
+    def recount_all_mds(self, verbose: bool = False):
+        """Count all MDs for each project and update the num_mds field in the projects table."""
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            # Get all project UUIDs
+            cur.execute("SELECT uuid FROM projects")
+            project_uuids = [row[0] for row in cur.fetchall()]
+            for project_uuid in project_uuids:
+                # Count MDs for this project
+                cur.execute("SELECT COUNT(*) FROM mds WHERE project_uuid=?", (project_uuid,))
+                count = cur.fetchone()[0]
+                # Update num_mds
+                cur.execute("UPDATE projects SET num_mds=? WHERE uuid=?", (count, project_uuid))
+                if verbose:
+                    print(f"Project {project_uuid}: num_mds set to {count}")
+            self.conn.commit()
 
 
 def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path('.')) -> list[Path]:
