@@ -126,11 +126,12 @@ def prepare_project_metadata (
                 raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
             
     # Get a summary of atom/residue/chain names which are potential query targets
+    # Sort values alphabetically so later the lists are identical or the loader will complain
     # LORE: These fields were topology queries but they were innefficient
-    unique_atom_names = list(set([ atom.name for atom in structure.atoms ]))
-    unique_atom_elements = list(set([ atom.element for atom in structure.atoms ]))
-    unique_residue_names = list(set([ residue.name for residue in structure.residues ]))
-    unique_chain_names = list(set([ chain.name for chain in structure.chains ]))
+    unique_atom_names = sorted(list(set([ atom.name for atom in structure.atoms ])))
+    unique_atom_elements = sorted(list(set([ atom.element for atom in structure.atoms ])))
+    unique_residue_names = sorted(list(set([ residue.name for residue in structure.residues ])))
+    unique_chain_names = sorted(list(set([ chain.name for chain in structure.chains ])))
 
     # Get the MD type
     md_type = input_type
