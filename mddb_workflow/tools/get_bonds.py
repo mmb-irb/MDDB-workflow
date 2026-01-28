@@ -126,11 +126,14 @@ def get_bonds_reference_frame (
     reference_bonds : list[ list[int] ],
     structure : 'Structure',
     pbc_selection : 'Selection',
+    ignore_bonds : bool = False,
     patience : int = 100,  # Limit of frames to check before we surrender
     verbose : bool = False,
 ) -> Optional[int]:
     """ Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD. """
+    # If bonds were ignored then the reference frame makes no sense
+    if ignore_bonds: return 0
     # Set some atoms which are to be skipped from these test given their "fake" nature
     excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
 
