@@ -19,6 +19,9 @@ def lipid_interactions(
 
     # Check if we're dealing with coarse-grain simulations
     lipid_map = [ref for ref in inchikey_map if ref['is_lipid']]
+    if len(lipid_map) and len(lipid_map[0]['residue_indices']) == 1:
+        # This is probably a false positive lipid
+        return
     if len(cg_residues) > 0:
         data = cg_lipid_interactions(universe, snapshots, frames_limit)
     elif inchikey_map and len(inchikey_map) > 0 and lipid_map:
