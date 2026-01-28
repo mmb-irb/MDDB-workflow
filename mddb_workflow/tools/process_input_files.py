@@ -178,7 +178,7 @@ def process_input_files (
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
     # Since this is proviosonal we will make it silent
-    provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
+    provisional_cg_selection = self.project._set_cg_selection(provisional_structure, verbose=False)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
 
@@ -246,7 +246,7 @@ def process_input_files (
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
     # Since this is proviosonal we will make it silent
-    provisional_cg_selection = self._set_cg_selection(provisional_structure, verbose=False)
+    provisional_cg_selection = self.project._set_cg_selection(provisional_structure, verbose=False)
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Also we can set a provisional PBC selection
