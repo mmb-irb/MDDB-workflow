@@ -24,6 +24,8 @@ from urllib.error import HTTPError, URLError
 import urllib.request
 from subprocess import run, PIPE
 from dataclasses import asdict, is_dataclass
+import signal
+from functools import wraps
 
 
 def is_imported(module_name: str) -> bool:
@@ -779,3 +781,25 @@ def handle_http_request(request_url, error_context="request") -> Optional[str]:
 def unique (source_list : list) -> list:
     """Get a new list with unique values while conserving the order."""
     return list(dict.fromkeys(source_list))
+
+
+def timeout(seconds=60):
+    """Add a timeout to a function using signals."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Define the handler that raises an error when time is up
+            def handle_timeout(signum, frame):
+                raise TimeoutError(f"Function '{func.__name__}' timed out after {seconds} seconds.")
+
+            # Register the signal and set the alarm
+            signal.signal(signal.SIGALRM, handle_timeout)
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                # Disable the alarm regardless of success or failure
+                signal.alarm(0)
+            return result
+        return wrapper
+    return decorator

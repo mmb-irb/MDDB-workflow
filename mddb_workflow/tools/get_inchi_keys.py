@@ -4,7 +4,7 @@ import multiprocessing
 from dataclasses import dataclass, field
 from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import warn, save_json
+from mddb_workflow.utils.auxiliar import warn, save_json, timeout
 from mddb_workflow.utils.type_hints import *
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
@@ -87,6 +87,7 @@ def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
     return standar_cid[0]['pubchem'] == '4971'  # CID for ferroheme without Fe
 
 
+@timeout(180)
 def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str, int]:
     """Process a single residue to get its InChI key and related information."""
     resatoms, resindices = task
@@ -135,6 +136,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
 def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
+    parallel: bool = False,
 ) -> dict[str, InChIKeyData]:
     """Generate a dictionary mapping InChI keys to residue information for non-standard residues.
 
@@ -142,11 +144,12 @@ def generate_inchikeys(
     residues that are not classified as 'ion', 'solvent', 'nucleic', or 'protein'. For each
     identified residue, it converts the structure to RDKit format to obtain the InChI key
     and InChI string. The resulting data is stored in dictionaries to map InChI keys to residue
-    details and residue names to InChI keys. PDB coordinates are necesary to distinguish stereoisomers.
+    details and residue names to InChI keys. PDB coordinates are necessary to distinguish stereoisomers.
 
     Args:
         universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
+        parallel (bool): Whether to use multiprocessing (default False). Set to True for parallel processing (higher memory).
 
     Returns:
         dict: A dictionary mapping InChI keys to InChIKeyData objects.
@@ -193,21 +196,30 @@ def generate_inchikeys(
         tasks.append((resatoms, resindices))
 
     results = []
-    # Execute tasks in parallel
-    with multiprocessing.Pool() as pool:
-        try:
-            async_results = pool.map_async(residue_to_inchi, tasks)
-            # Add timeout (e.g., 300 seconds = 5 minutes per task)
-            results = async_results.get(300)
-        except multiprocessing.TimeoutError:
-            warn('Pool timeout - some tasks did not complete')
-            pool.terminate()  # Force kill all workers
-            pool.join()
-            raise
-        except Exception:
-            pool.terminate()
-            pool.join()
-            raise
+    if parallel:
+        # Execute tasks in parallel
+        # Use 'spawn' context to avoid fork-safety issues with threading (RDKit?)
+        # https://pythonspeed.com/articles/python-multiprocessing/
+        ctx = multiprocessing.get_context('spawn')
+        with ctx.Pool() as pool:
+            try:
+                print(f'Processing {len(tasks)} residues to get InChI keys (parallel mode)...')
+                async_results = pool.map_async(residue_to_inchi, tasks)
+                # Add timeout (e.g., 60 seconds = 1 minute per task)
+                results = async_results.get(timeout=60 * len(tasks))
+            except multiprocessing.TimeoutError:
+                warn('Pool timeout - some tasks did not complete.')
+                pool.terminate()  # Force kill all workers
+                pool.join()
+                raise
+            except Exception:
+                pool.terminate()
+                pool.join()
+                raise
+    else:
+        print(f'Processing {len(tasks)} residues to get InChI keys (sequential mode)...')
+        for task in tasks:
+            results.append(residue_to_inchi(task))
 
     # 2) Process results and build dictionaries
     inchikeys: dict[str, InChIKeyData] = {}  # To see if different name for same residue

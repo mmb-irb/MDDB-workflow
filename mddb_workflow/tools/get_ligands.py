@@ -120,6 +120,7 @@ def generate_ligand_references(
         if pubchem_id:
             automatic_references[inchikey]['pubchem'] = pubchem_id
             print(f'Found CID {pubchem_id} by direct InChIKey match.')
+            continue
         # Try catch for some weird inchis (MCV1900695, no topology)
         try:
             Chem.SanitizeMol(mol, catchErrors=False)

@@ -127,7 +127,7 @@ class TestDatabaseLock:
 
     def _paths(self, tmpdir):
         db_path = Path(tmpdir) / self.db_name
-        lock_dir = db_path.with_stem(".lock_" + db_path.name)
+        lock_dir = DatabaseLock._path_to_lock_dir(db_path)
         return db_path, lock_dir
 
     def test_database_lock_basic(self):
@@ -369,7 +369,6 @@ class TestDatabaseLock:
             assert len(results) == num_workers
 
             # Verify the lock directory is cleaned up
-            lock_dir = db_path.with_stem('.lock_')
             assert not lock_dir.exists()
 
             # Verify the project still exists and has valid state

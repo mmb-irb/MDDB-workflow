@@ -358,6 +358,16 @@ def main():
                 md_dirs=args.md_dirs,
                 verbose=True
             )
+        elif args.dataset_subcommand == 'status':
+            status = dataset.get_status(args.project_path)
+            # Format and display the status nicely
+            print(f"UUID:          {status['uuid']}")
+            print(f"Path:          {status['rel_path']}")
+            print(f"State:         {status['state']}")
+            print(f"Scope:         {status['scope']}")
+            print(f"MDs:           {status['num_mds']}")
+            print(f"Last Modified: {status['last_modified']}")
+            print(f"Message:       {status['message']}")
 
         elif args.dataset_subcommand == 'show':
             df = dataset.get_dataframe(
@@ -370,8 +380,11 @@ def main():
                 query_state=args.query_state,
                 query_scope=args.query_scope,
             )
+            if args.n_rows != 0:
+                df = df.tail(args.n_rows)
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe
+                df.reset_index(inplace=True)
                 rich_display_dataframe(df, title="MDDB Dataset")
             except ImportError:
                 print(df)
@@ -753,6 +766,9 @@ dataset_add = dataset_subparsers.add_parser("add", formatter_class=CustomHelpFor
 dataset_add.add_argument("-p", "--paths_or_globs", nargs='*', help=ds_help['add_entries']['paths_or_globs'])
 dataset_add.add_argument("-i", "--ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
 dataset_add.add_argument("-md", "--md_dirs", nargs='*', help=ds_help['add_entries']['md_dirs'], default=[])
+# Dataset status subcommand
+dataset_add = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter, help="Show the status of a project inside the dataset.", parents=[common_ds_parser])
+dataset_add.add_argument("-p", "--project_path", help='Path to the project.')
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-qp", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
@@ -766,6 +782,7 @@ ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['g
 # Dataset show subcommand
 ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
+ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for all rows.", default=50, type=int)
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])

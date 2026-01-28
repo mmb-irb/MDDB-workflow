@@ -1,7 +1,7 @@
 from mddb_workflow.utils.auxiliar import InputError, ToolError
 from mddb_workflow.utils.auxiliar import warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import is_standard_topology
-from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame
+from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame, get_pytraj_trajectory
 from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
 from mddb_workflow.utils.vmd_spells import vmd_to_pdb
 from mddb_workflow.utils.structures import Structure
@@ -14,6 +14,7 @@ from typing import *
 from scipy.io import netcdf_file
 import mdtraj as mdt
 import pytraj as pyt
+import numpy as np
 
 # Set some known message errors
 NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.'
@@ -47,7 +48,6 @@ def check_inputs(
     Some exceptional problems may be fixed from here.
     In these cases, both the exception and the modified file are returned in a final dict.
     """
-
     # Set the exceptions dict to be returned at the end
     exceptions = {}
 
@@ -94,7 +94,10 @@ def check_inputs(
             # If we do not know the error then raise it as is
             else:
                 raise error
-            
+        traj = get_pytraj_trajectory(input_topology_file.path, trajectory_file.path)
+        if np.isnan(traj.xyz).any():
+            raise InputError('Corrupted input trajectory file: some coordinates are NaN.')
+
     # Make sure the topology file is well formated
     # Check a specific problem affecting some PSF topologies
     if topology_file != MISSING_TOPOLOGY and topology_file.format == 'psf':
@@ -108,7 +111,6 @@ def check_inputs(
             exceptions[FIXED_TOPOLOGY_EXCEPTION] = fixed_topology_file
             # From now on use the fixed topology as the topology
             topology_file = fixed_topology_file
-
 
     # Get topology and trajectory atom counts
     topology_atom_count, trajectory_atom_count = get_topology_and_trajectory_atoms(topology_file, trajectory_sample)
@@ -339,12 +341,13 @@ def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 
     structure_atom_count = topology.n_atoms
     return structure_atom_count, trajectory_atom_count
 
+
 # Check if a PSF topology is properly formatted in the headers
 # Wrong-formmated topologies may still valid for NAMD tools and pytraj
 # However they failed to be read by both MDtraj and MDAnalysis
 # Pytraj may write PSF files with this problem, for instance
 # If so, an output topology file will be created with the problem fixed
-def check_and_fix_psf (input_topology_file : 'File', output_topology_file : 'File') -> bool:
+def check_and_fix_psf(input_topology_file: 'File', output_topology_file: 'File') -> bool:
     # Read the content of the PSF file
     psf_content = None
     with open(input_topology_file.path, 'r') as file:

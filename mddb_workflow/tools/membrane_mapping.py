@@ -61,6 +61,10 @@ def all_atom_membranes(
 
     if len(lipid_map) == 0:
         # no lipids found in the structure.
+        print("No lipid residues found in the structure.")
+        return membrane_map
+    if not hasattr(universe.atoms, 'charge'):
+        print("Membrane mapping requires atom charges, which are not present.")
         return membrane_map
 
     # Select only the lipids and potential membrane members

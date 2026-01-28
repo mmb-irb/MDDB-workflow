@@ -4,7 +4,7 @@ from mddb_workflow.tools.get_bonds import get_excluded_atoms_selection
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frame
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
-from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
+from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn, protein_residue_name_to_letter
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.type_hints import *
@@ -190,7 +190,7 @@ def structure_corrector(
         # Make sure the residue name corresponds to an aminoacid
         letter = protein_residue_name_to_letter(residue.name)
         if letter == 'X' or residue.atom_count <= ATOMS_PER_AMINOACID_LIMIT: continue
-        raise RuntimeError(f'Residue {residue.name} in chain {name} has an aminoacid name but has more than 27 atoms. (residue {residue.index})')
+        raise RuntimeError(f'Residue {residue.name} in chain {residue.chain.name} has an aminoacid name but has more than 27 atoms. (residue {residue.index})')
 
     # ------------------------------------------------------------------------------------------
     # Incoherent residue bonds ---------------------------------------------------------------
