@@ -55,36 +55,39 @@ class InChIKeyData:
 
 def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
     """Check if the given MDAnalysis AtomGroup corresponds to a ferroheme molecule."""
-    # Create a copy of the universe to remove the bonds safely
-    resatoms = MDAnalysis.Merge(mda_atoms)
-    resatoms.delete_bonds(resatoms.select_atoms('element Fe').bonds)
-    # Convert to basic RDKit molecule (no bond order nor formal charges)
-    mol = resatoms.select_atoms('not element Fe').convert_to.rdkit(inferrer=None)
-    # Add hydrogen to first two nitrogens in exchange
-    # for the removed Fe bonds. Which N to does not matter
-    # as we standardize later
-    mol_editable = Chem.RWMol(mol)
-    n_atoms = [at for at in mol_editable.GetAtoms() if at.GetSymbol() == 'N']
-    for n_atom in n_atoms[:2]:
-        # Add H atom bonding to N
-        h_idx = mol_editable.AddAtom(Chem.Atom('H'))
-        mol_editable.AddBond(n_atom.GetIdx(), h_idx, Chem.BondType.SINGLE)
-    # Convert back to regular molecule
-    mol_with_h = mol_editable.GetMol()
-    # rdDepictor.Compute2DCoords(mol_with_h)  # Optional: compute 2D coordinates for visualization
-    # Use MDAnalysisInferrer to get formal charge of the molecule
-    mol_mda = MDAnalysisInferrer()(mol)
-    # DetermineBondOrders can crash so we first check if the standardization
-    # gives us ferroheme directly without it
-    standar_cid = pubchem_standardization(Chem.MolToInchi(mol_mda))
-    if standar_cid and any(cid['pubchem'] in ['4971', '5353910', '25246109'] for cid in standar_cid):
-        return True
-    formal_charge = Chem.GetFormalCharge(mol_mda)
-    DetermineBondOrders(mol_with_h, charge=formal_charge, maxIterations=1000)
-    unch_mol = rdMolStandardize.ChargeParent(mol_with_h)
-    inchi = Chem.MolToInchi(unch_mol)
-    standar_cid = pubchem_standardization(inchi)
-    return standar_cid[0]['pubchem'] == '4971'  # CID for ferroheme without Fe
+    try:
+        # Create a copy of the universe to remove the bonds safely
+        resatoms = MDAnalysis.Merge(mda_atoms)
+        resatoms.delete_bonds(resatoms.select_atoms('element Fe').bonds)
+        # Convert to basic RDKit molecule (no bond order nor formal charges)
+        mol = resatoms.select_atoms('not element Fe').convert_to.rdkit(inferrer=None)
+        # Add hydrogen to first two nitrogens in exchange
+        # for the removed Fe bonds. Which N to does not matter
+        # as we standardize later
+        mol_editable = Chem.RWMol(mol)
+        n_atoms = [at for at in mol_editable.GetAtoms() if at.GetSymbol() == 'N']
+        for n_atom in n_atoms[:2]:
+            # Add H atom bonding to N
+            h_idx = mol_editable.AddAtom(Chem.Atom('H'))
+            mol_editable.AddBond(n_atom.GetIdx(), h_idx, Chem.BondType.SINGLE)
+        # Convert back to regular molecule
+        mol_with_h = mol_editable.GetMol()
+        # rdDepictor.Compute2DCoords(mol_with_h)  # Optional: compute 2D coordinates for visualization
+        # Use MDAnalysisInferrer to get formal charge of the molecule
+        mol_mda = MDAnalysisInferrer()(mol)
+        # DetermineBondOrders can crash so we first check if the standardization
+        # gives us ferroheme directly without it
+        standar_cid = pubchem_standardization(Chem.MolToInchi(mol_mda))
+        if standar_cid and any(cid['pubchem'] in ['4971', '5353910', '25246109'] for cid in standar_cid):
+            return True
+        formal_charge = Chem.GetFormalCharge(mol_mda)
+        DetermineBondOrders(mol_with_h, charge=formal_charge, maxIterations=1000)
+        unch_mol = rdMolStandardize.ChargeParent(mol_with_h)
+        inchi = Chem.MolToInchi(unch_mol)
+        standar_cid = pubchem_standardization(inchi)
+        return standar_cid[0]['pubchem'] == '4971'  # CID for ferroheme without Fe
+    except Exception:
+        return False
 
 
 @timeout(180)
@@ -113,7 +116,8 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
             inchikey = 'KABFMIBPWCXCRK-UHFFFAOYSA-L'
             inchi = 'InChI=1S/C34H34N4O4.Fe/c1-7-21-17(3)25-13-26-19(5)23(9-11-33(39)40)31(37-26)16-32-24(10-12-34(41)42)20(6)28(38-32)15-30-22(8-2)18(4)27(36-30)14-29(21)35-25;/h7-8,13-16H,1-2,9-12H2,3-6H3,(H4,35,36,37,38,39,40,41,42);/q;+2/p-2'
         else:
-            raise NotImplementedError('Non-ferroheme residues with Fe are not supported.')
+            error = 'Non-ferroheme residues with Fe are not supported.'
+            return ('', '', resindices, error)
     else:
         formal_charge = (int(resatoms.atoms.charges.sum().round())
                          if hasattr(resatoms.atoms, 'charges')
@@ -237,7 +241,7 @@ def generate_inchikeys(
     errors = {}
     for (inchikey, inchi, resindices, error) in results:
         if error:
-            errors.setdefault(error, []).append(*resindices)
+            errors.setdefault(error, []).extend(resindices)
             continue
         # Get or create the entry for this InChI key
         data = inchikeys.setdefault(inchikey, InChIKeyData(inchi=inchi))
