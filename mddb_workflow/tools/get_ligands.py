@@ -382,7 +382,10 @@ def pdb_ligand_2_pubchem_RAW_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Set the request URL
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{pdb_ligand_id}/json'
     # Run the query
-    parsed_response = json.loads(handle_http_request(request_url, "PDB ligand request"))
+    response = handle_http_request(request_url, "PDB ligand request")
+    # There may be no result for unkown atoms (e.g. UNK), ions (e.g. IOD) and some other ligands (e.g. DX9)
+    if not response: return None
+    parsed_response = json.loads(response)
     # Mine the PubChem ID
     compounds = parsed_response['PC_Compounds']
     if len(compounds) != 1:
