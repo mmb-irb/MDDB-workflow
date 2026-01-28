@@ -1,6 +1,11 @@
 from mddb_workflow.tools.nucleosomes import has_nucleosome
 from mddb_workflow.utils.type_hints import *
 
+from re import match
+
+# Regular expression matching formulas of single ions
+ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?$'
+
 # Set the keywords as constants
 # Basic keywords
 PROTEIN_KEYWORD = 'protein'
@@ -30,8 +35,9 @@ NUCLEOSOME_KEYWORD = 'nucleosome'
 # Try to assign as many keywords as possible to the current system
 def get_system_keywords (
     structure : 'Structure',
-    ligand_count : int,
-    membrane_count : int,
+    ligand_references : dict,
+    inchikey_map : list[dict],
+    membrane_map : dict,
 ) -> list[str]:
     keywords = []
 
@@ -77,9 +83,34 @@ def get_system_keywords (
     has_solvent = len(solvent_selection) > 0
     if has_solvent:
         keywords.append(SOLVENT_KEYWORD)
+
+    # Reformat the inchikey map in a more convenient manner
+    inchi_key_residue_indices = {}
+    for mapping in inchikey_map:
+        # This may not match the value in the 'inchikey' field
+        actual_inchi_key = mapping['match']['ref']['inchikey']
+        inchi_key_residue_indices[actual_inchi_key] = mapping['residue_indices']
+
+    # Get a selection of all ligands in the system
+    ligands_selection = None
+    for inchi_key, ligand_reference in ligand_references.items():
+        formula = ligand_reference['formula']
+        is_ion = match(ION_FORMULA, formula)
+        if is_ion: continue
+        # Get the ligand selection using the inchi map
+        residue_indices = inchi_key_residue_indices[inchi_key]
+        selection = structure.select_residue_indices(residue_indices)
+        if ligands_selection is None: ligands_selection = selection
+        else: ligands_selection += selection
+
+    # Set if ligands were found
+    has_ligand = bool(ligands_selection)
+    if has_ligand:
+        keywords.append(LIGAND_KEYWORD)
+
     # Other
     other_selection = structure.select_all() - protein_selection - dna_selection - rna_selection \
-        - lipids_selection - carbohydrates_selection - ions_selection
+        - lipids_selection - carbohydrates_selection - ions_selection - ligands_selection
     has_other = len(other_selection) > 0
     if has_other:
         keywords.append(OTHER_KEYWORD)
@@ -106,18 +137,15 @@ def get_system_keywords (
             keywords.append(LIPID_ONLY_KEYWORD)
         elif CARBOHYDRATE_KEYWORD in relevant_only_keywords:
             keywords.append(CARBOHYDRATE_ONLY_KEYWORD)
+        elif OTHER_KEYWORD in relevant_only_keywords:
+            keywords.append(LIGAND_ONLY_KEYWORD)
         # If there is only other then we issue no additional keyword
 
     # Set if a membrane was found
-    if membrane_count > 0:
+    membrane_count = membrane_map['n_mems']
+    has_membrane = membrane_count > 0
+    if has_membrane:
         keywords.append(MEMBRANE_KEYWORD)
-
-    # Set if ligands were found
-    if ligand_count > 0:
-        keywords.append(LIGAND_KEYWORD)
-        # If there is only ligands
-        if len(relevant_only_keywords) == 1 and OTHER_KEYWORD in relevant_only_keywords:
-            keywords.append(LIGAND_ONLY_KEYWORD)
 
     # More complicated context-dependent keywords
 

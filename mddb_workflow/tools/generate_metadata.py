@@ -6,13 +6,9 @@ from mddb_workflow.utils.auxiliar import InputError, save_json
 from mddb_workflow.utils.constants import MD_DIRECTORY
 from mddb_workflow.utils.type_hints import *
 
-from re import match
-
 # Input fields + interaction type
 METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "selection_2", "type" }
 
-# Regular expression matching formulas of single ions
-ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?$'
 
 def prepare_project_metadata (
     structure_file : 'File',
@@ -21,6 +17,7 @@ def prepare_project_metadata (
     structure : 'Structure',
     residue_map : dict,
     membrane_map : dict,
+    inchikey_map : dict,
     protein_references_file : 'File',
     pdb_ids : list[str],
     ligand_references : dict,
@@ -77,13 +74,7 @@ def prepare_project_metadata (
     counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atoms_count(structure)
 
     # Get the system keywords
-    membrane_count = membrane_map['n_mems']
-    ligand_count = 0
-    for ligand_reference in ligand_references.values():
-        formula = ligand_reference['formula']
-        is_ion = match(ION_FORMULA, formula)
-        if not is_ion: ligand_count += 1
-    system_keywords = get_system_keywords(structure, ligand_count, membrane_count)
+    system_keywords = get_system_keywords(structure, ligand_references, inchikey_map, membrane_map)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
@@ -233,7 +224,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.1',
+        'ver': '0.0.2',
     }
     # Add boxsizes only if any of them is 0
     if boxsizex > 0 and boxsizey > 0 and boxsizez > 0:
