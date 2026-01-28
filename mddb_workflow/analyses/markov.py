@@ -12,6 +12,7 @@ def markov (
     output_directory : str,
     structure : 'Structure',
     populations : list[float],
+    cg_selection : 'Selection',
     rmsd_selection : str = PROTEIN_AND_NUCLEIC,
     nodes_number : int = 20,
 ):
@@ -95,7 +96,7 @@ def markov (
         screenshot_filepath = f'{output_directory}/markov_screenshot_{str(i).zfill(2)}.jpg'
         screenshot_file = File(screenshot_filepath)
         # Generate the screenshot
-        screenshot_parameters = get_screenshot(reference_structure, screenshot_file, parameters=screenshot_parameters)
+        screenshot_parameters = get_screenshot(reference_structure, screenshot_file, cg_selection, parameters=screenshot_parameters)
     # Export the analysis data to a json file
     data = {
         'frames': highest_population_frames,

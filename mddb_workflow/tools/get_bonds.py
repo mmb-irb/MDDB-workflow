@@ -12,7 +12,10 @@ from collections import Counter
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
 
-def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Selection') -> 'Selection':
+def get_excluded_atoms_selection (
+    structure : 'Structure',
+    pbc_selection : 'Selection',
+    cg_selection : 'Selection') -> 'Selection':
     """ Set some atoms which are to be skipped from bonding tests given their "fake" nature. """
     # Get a selection of ion atoms which are not in PBC
     # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
@@ -20,7 +23,7 @@ def get_excluded_atoms_selection (structure : 'Structure', pbc_selection : 'Sele
     non_pbc_ions_selection = structure.select_ions() - pbc_selection
     # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
     # Also dummy atoms are excluded since they are not real atoms
-    excluded_atoms_selection = non_pbc_ions_selection + structure.select_cg() + structure.select_dummy()
+    excluded_atoms_selection = non_pbc_ions_selection + cg_selection + structure.select_dummy()
     return excluded_atoms_selection
 
 def do_bonds_match (
@@ -126,6 +129,7 @@ def get_bonds_reference_frame (
     reference_bonds : list[ list[int] ],
     structure : 'Structure',
     pbc_selection : 'Selection',
+    cg_selection : 'Selection',
     ignore_bonds : bool = False,
     patience : int = 100,  # Limit of frames to check before we surrender
     verbose : bool = False,
@@ -135,7 +139,7 @@ def get_bonds_reference_frame (
     # If bonds were ignored then the reference frame makes no sense
     if ignore_bonds: return 0
     # Set some atoms which are to be skipped from these test given their "fake" nature
-    excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
+    excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection, cg_selection)
 
     # If all atoms are to be excluded then set the first frame as the reference frame and stop here
     if len(excluded_atoms_selection) == len(structure.atoms):
@@ -262,6 +266,7 @@ def find_safe_bonds (
     snapshots : int,
     structure : 'Structure',
     register : 'Register',
+    cg_selection : 'Selection',
     guess_bonds : bool = False,
     ignore_bonds : bool = False,
     # Optional file with bonds sorted according a new atom order
@@ -282,8 +287,6 @@ def find_safe_bonds (
     if resorted_bonds_file != None and resorted_bonds_file.exists:
         warn('Using resorted safe bonds')
         return load_json(resorted_bonds_file.path)
-    # Get a selection including coarse grain atoms in the structure
-    cg_selection = structure.select_cg()
     # Try to get bonds from the topology before guessing
     if guess_bonds:
         print('Bonds were forced to be guessed, so bonds in the topology file will be ignored')

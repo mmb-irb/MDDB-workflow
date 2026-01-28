@@ -20,6 +20,7 @@ def structure_corrector(
     MD: 'MD',
     # Note that this is an early provisional atom selection
     pbc_selection: 'Selection',
+    cg_selection: 'Selection',
     snapshots: int,
     register: 'Register',
     mercy: list[str] | bool,
@@ -84,6 +85,7 @@ def structure_corrector(
         snapshots,
         structure,
         register,
+        cg_selection,
         guess_bonds,
         ignore_bonds
     )
@@ -105,7 +107,7 @@ def structure_corrector(
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
         # Set some atoms which are to be skipped from these test given their "fake" nature
-        excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
+        excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection, cg_selection)
         # If bonds match from the begining we are done as well
         print(f'Checking default structure bonds ({STABLE_BONDS_FLAG})')
         if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):

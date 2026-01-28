@@ -16,6 +16,7 @@ def rmsds(
     snapshots : int,
     structure : 'Structure',
     pbc_selection : 'Selection',
+    cg_selection : 'Selection',
     inchikey_map : list[dict],
     frames_limit : int = 5000,
     ):
@@ -68,9 +69,6 @@ def rmsds(
     if len(non_pbc_selections) == 0:
         print('  The RMSDs analysis will be skipped since there is nothing to analyze')
         return
-
-    # Get the coarse grain selection
-    cg_selection = structure.select_cg()
 
     # The start will be always 0 since we start with the first frame
     start = 0

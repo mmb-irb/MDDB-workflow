@@ -9,6 +9,7 @@ def get_project_screenshot (
     trajectory_file : 'File',
     snapshots: int,
     output_file : 'File',
+    cg_selection : 'Selection',
     screenshot_frame : Optional[int] = None,
     parameters : Optional[dict] = None,
 ) -> dict:
@@ -30,4 +31,4 @@ def get_project_screenshot (
         # Copy the structure to further mutate its coordinates without affecting the original
         reference_structure = structure.copy()
         reference_structure.set_new_coordinates(coordinates)
-    return get_screenshot(reference_structure, output_file, parameters)
+    return get_screenshot(reference_structure, output_file, cg_selection, parameters)

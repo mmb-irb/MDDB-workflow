@@ -381,6 +381,7 @@ def process_input_files (
         output_trajectory_file = corrected_trajectory_file,
         MD = self,
         pbc_selection = provisional_pbc_selection,
+        cg_selection = provisional_cg_selection,
         snapshots = snapshots,
         register = self.register,
         mercy = self.project.mercy,

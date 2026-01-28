@@ -21,6 +21,7 @@ def markov (
     structure : 'Structure',
     populations : list[float],
     transitions : list[list[float]],
+    cg_selection : 'Selection',
     nodes_number : int = 20,
 ):
 
@@ -87,7 +88,7 @@ def markov (
         # Set the screenshot filename
         screenshot_filename = f'markov_screenshot_{str(i).zfill(2)}.jpg'
         # Generate the screenshot
-        get_screenshot(reference_structure, screenshot_filename)
+        get_screenshot(reference_structure, screenshot_filename, cg_selection)
     # Export the analysis data to a json file
     data = {
         'frames': highest_population_frames,

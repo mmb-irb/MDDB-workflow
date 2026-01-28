@@ -19,6 +19,7 @@ def clusters_analysis(
     structure: 'Structure',
     snapshots: int,
     pbc_selection: 'Selection',
+    cg_selection : 'Selection',
     output_directory: str,
     # Set the maximum number of frames
     frames_limit: int = 1000,
@@ -229,7 +230,7 @@ def clusters_analysis(
             screenshot_file = File(screenshot_filepath)
             # Generate the screenshot
             reprint(f' Generating cluster screenshot {c+1}/{n_clusters}')
-            screenshot_parameters = get_screenshot(auxiliar_structure, screenshot_file,
+            screenshot_parameters = get_screenshot(auxiliar_structure, screenshot_file, cg_selection,
                 parameters=screenshot_parameters)
 
         # Set the output clusters which include all frames in the cluster and the main or more representative frame

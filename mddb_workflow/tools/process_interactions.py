@@ -44,6 +44,7 @@ def process_interactions (
     mercy : list[str],
     interactions_auto : str,
     pbc_selection : 'Selection',
+    cg_selection : 'Selection',
     frames_limit : int = 1000,
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
@@ -169,9 +170,6 @@ def process_interactions (
         snapshots,
         frames_limit,
     )
-
-    # Get the structure coarse grain selection for further reference
-    cg_selection = structure.select_cg()
 
     # Set if we are to have mercy when an interaction fails
     have_mercy = STABLE_INTERACTIONS_FLAG in mercy

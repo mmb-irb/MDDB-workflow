@@ -25,6 +25,7 @@ debug = False
 def get_screenshot (
     structure : 'Structure',
     output_file : 'File',
+    cg_selection : 'Selection',
     # You may pass the camera rotation, translation and zoom parameters so they are not calculated again
     # This is useful to keep screenshots coherent between different clusters/markov states
     # Note that a slight movement in the molecule may make the rotation logic here use a different angle
@@ -306,7 +307,6 @@ def get_screenshot (
     non_cartoon_selection = structure.invert_selection(cartoon_selection)
     # Also coarse grain beads have to be considered
     # We cannot paint them by their elements so we must rely in atom names or chains
-    cg_selection = structure.select_cg()
     non_cartoon_selection -= cg_selection
     # Set a file name for the VMD script file
     commands_filename_2 = '.commands_2.vmd'
