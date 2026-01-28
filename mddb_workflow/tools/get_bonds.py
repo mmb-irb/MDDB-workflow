@@ -138,7 +138,9 @@ def get_bonds_reference_frame (
     excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection)
 
     # If all atoms are to be excluded then set the first frame as the reference frame and stop here
-    if len(excluded_atoms_selection) == len(structure.atoms): return 0
+    if len(excluded_atoms_selection) == len(structure.atoms):
+        print(' All atoms are excluded from bond checks -> Setting frame 1 as reference frame')
+        return 0
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
     # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1

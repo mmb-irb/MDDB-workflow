@@ -101,7 +101,11 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
         if 'bond.SetBondType(RDBONDORDER[order])' in tb_str:
             error = f'Invalid bond order {e}, failed to convert to RDKit.'
             return ('', '', resindices, error)
-        raise e
+    except Exception:
+        try:
+            res_RD = resatoms.convert_to.rdkit(inferrer=None)
+        except Exception as e:
+            raise e
     if 'Fe' in set(resatoms.atoms.elements) and len(resatoms.atoms) > 1:
         # Metallo proteins are not well handled by RDKit/InChI so we hardcode
         # the InChI key for ferroheme that is the only case we have found

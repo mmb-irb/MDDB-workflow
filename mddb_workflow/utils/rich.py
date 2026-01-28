@@ -2,7 +2,6 @@ import contextlib
 from rich.errors import NotRenderableError
 from rich.live import Live
 from rich.spinner import Spinner
-from rich.console import Group
 import time
 import re
 
