@@ -136,6 +136,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
 def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
+    cg_selection : 'Selection',
     parallel: bool = False,
 ) -> dict[str, InChIKeyData]:
     """Generate a dictionary mapping InChI keys to residue information for non-standard residues.
@@ -170,9 +171,17 @@ def generate_inchikeys(
     tasks = []
     residues = structure.residues
 
+    # Get coarse grain atom indices
+    coarse_gran_atom_indices = set(cg_selection.atom_indices)
+
     # Fragment = residues that are bonded together
     fragments = universe.atoms.fragments
     for i, fragment in enumerate(fragments):
+
+        # If the fragment contains coarse grain regions then skip it
+        fragment_atom_indices = set([ int(index) for index in fragment.indices ])
+        if coarse_gran_atom_indices.intersection(fragment_atom_indices): continue
+
         resindices = fragment.residues.resindices.tolist()
 
         # Continue to the next fragment if any of its
@@ -185,9 +194,6 @@ def generate_inchikeys(
 
         # Select residues atoms with MDAnalysis
         resatoms = universe.residues[resindices].atoms
-        if 'Cg' in resatoms.types:
-            # Skip coarse grain residues
-            continue
         # If you pass a residue selection to a parallel worker, you a passing a whole MDAnalysis
         # universe, slowing the process down because you have to pickle the object
         # To avoid this we create

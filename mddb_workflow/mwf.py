@@ -764,69 +764,6 @@ class MD:
         return self.project._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
-    # DANI: Esto algún día habría que tratar de automatizarlo
-    def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
-        """Set the coarse grain selection."""
-        if verbose: print('Setting Coarse Grained (CG) atoms selection')
-        # If there is no inputs file then asum there is no CG selection
-        if not self.project.is_inputs_file_available():
-            if verbose: print(' No inputs file -> Asuming there is no CG at all')
-            return Selection()
-        # Otherwise we use the selection string from the inputs
-        if verbose: print(' Using selection string in the inputs file')
-        selection_string = self.input_cg_selection
-        # If the selection is empty, again, assume there is no CG selection
-        if not selection_string:
-            if verbose: print(' Empty selection -> There is no CG at all')
-            return Selection()
-        # Otherwise, process it
-        # If we have a valid input value then use it
-        elif selection_string:
-            if verbose: print(f' Selecting CG atoms "{selection_string}"')
-            parsed_selection = reference_structure.select(selection_string)
-        # If we have an input value but it is empty then we set an empty selection
-        else:
-            if verbose: print(' No CG atoms selected')
-            parsed_selection = Selection()
-        # Lof the parsed selection size
-        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
-        # Log a few of the selected residue names
-        if verbose and parsed_selection:
-            selected_residues = reference_structure.get_selection_residues(parsed_selection)
-            selected_residue_names = list(set([residue.name for residue in selected_residues]))
-            limit = 3  # Show a maximum of 3 residue names
-            example_residue_names = ', '.join(selected_residue_names[0:limit])
-            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
-            print('  e.g. ' + example_residue_names)
-        return parsed_selection
-
-    def get_cg_selection(self) -> 'Selection':
-        """Get the coarse grain atom selection."""
-        # If we already have a stored value then return it
-        if self.project._cg_selection:
-            return self.project._cg_selection
-        # Otherwise we must set the PBC selection
-        self.project._cg_selection = self._set_cg_selection(self.structure)
-        return self.project._cg_selection
-    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
-
-    # WARNING: Do not inherit project cg residues
-    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
-    def get_cg_residues(self) -> list[int]:
-        """Get indices of residues in coarse grain."""
-        # If we already have a stored value then return it
-        if self.project._cg_residues:
-            return self.project._cg_residues
-        # If there is no inputs file then asume there are no cg residues
-        if not self.cg_selection:
-            self.project._cg_residues = []
-            return self.project._cg_residues
-        # Otherwise we parse the selection and return the list of residue indices
-        self.project._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
-        print(f'CG residues "{self.input_cg_selection}" -> {len(self.project._cg_residues)} residues')
-        return self.project._cg_residues
-    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
-
     def get_populations(self) -> list[float]:
         """Get equilibrium populations from a MSM from the project."""
         return self.project.populations
@@ -1871,6 +1808,69 @@ class Project:
         return self._input_cg_selection
     input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
 
+    # DANI: Esto algún día habría que tratar de automatizarlo
+    def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
+        """Set the coarse grain selection."""
+        if verbose: print('Setting Coarse Grained (CG) atoms selection')
+        # If there is no inputs file then asum there is no CG selection
+        if not self.is_inputs_file_available():
+            if verbose: print(' No inputs file -> Asuming there is no CG at all')
+            return Selection()
+        # Otherwise we use the selection string from the inputs
+        if verbose: print(' Using selection string in the inputs file')
+        selection_string = self.input_cg_selection
+        # If the selection is empty, again, assume there is no CG selection
+        if not selection_string:
+            if verbose: print(' Empty selection -> There is no CG at all')
+            return Selection()
+        # Otherwise, process it
+        # If we have a valid input value then use it
+        elif selection_string:
+            if verbose: print(f' Selecting CG atoms "{selection_string}"')
+            parsed_selection = reference_structure.select(selection_string)
+        # If we have an input value but it is empty then we set an empty selection
+        else:
+            if verbose: print(' No CG atoms selected')
+            parsed_selection = Selection()
+        # Lof the parsed selection size
+        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
+        # Log a few of the selected residue names
+        if verbose and parsed_selection:
+            selected_residues = reference_structure.get_selection_residues(parsed_selection)
+            selected_residue_names = list(set([residue.name for residue in selected_residues]))
+            limit = 3  # Show a maximum of 3 residue names
+            example_residue_names = ', '.join(selected_residue_names[0:limit])
+            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+            print('  e.g. ' + example_residue_names)
+        return parsed_selection
+
+    def get_cg_selection(self) -> 'Selection':
+        """Get the coarse grain atom selection."""
+        # If we already have a stored value then return it
+        if self._cg_selection:
+            return self._cg_selection
+        # Otherwise we must set the PBC selection
+        self._cg_selection = self._set_cg_selection(self.structure)
+        return self._cg_selection
+    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+
+    # WARNING: Do not inherit project cg residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
+    def get_cg_residues(self) -> list[int]:
+        """Get indices of residues in coarse grain."""
+        # If we already have a stored value then return it
+        if self._cg_residues:
+            return self._cg_residues
+        # If there is no inputs file then asume there are no cg residues
+        if not self.cg_selection:
+            self._cg_residues = []
+            return self._cg_residues
+        # Otherwise we parse the selection and return the list of residue indices
+        self._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
+        print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
+        return self._cg_residues
+    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
     # Set additional values infered from input values
     # RUBEN: unused?
     def check_is_time_dependent(self) -> bool:
@@ -1947,11 +1947,6 @@ class Project:
         """Get the indices of residues in periodic boundary conditions."""
         return self.reference_md.pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
-
-    def get_cg_residues(self) -> list[int]:
-        """Get the indices of residues in coarse grain."""
-        return self.reference_md.cg_residues
-    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
     def get_snapshots(self) -> int:
         """Get the reference MD snapshots."""
