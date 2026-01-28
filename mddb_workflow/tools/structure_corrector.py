@@ -128,7 +128,8 @@ def structure_corrector(
             snapshots=snapshots,
             reference_bonds=safe_bonds,
             structure=structure,
-            pbc_selection=pbc_selection
+            pbc_selection=pbc_selection,
+            cg_selection=cg_selection,
         )
         # Update the task output so it does not have to be repeated further
         # IMPORTANT: Note that this is not always run, but only when default structure bonds are wrong
