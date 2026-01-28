@@ -55,22 +55,16 @@ def image_and_fit (
     if not image and not fit:
         return
 
-    # In order to run the imaging with PBC residues we need a .tpr file, not just the .pdb file
-    # This is because there is a '-pbc mol' step which only works with a .tpr file
+    # Using a TPR topology may provide some advantage in the imaging process
+    # This includes connectivity and atom mass data
+    # LORE: This was important back in the day to use '-pbc mol' and '-pbc whole'
+    # LORE: However we do not rely in these features anymore given they were arbitrary
     is_tpr_available = input_topology_file != MISSING_TOPOLOGY and input_topology_file.format == 'tpr'
+    # Check if we have PBC atoms
+    # LORE: We were running the '-pbc nojump' step only when no pbc atoms were present in the system
+    # LORE: However now we always run a no-jump followed by a '-pbc res' step thus recovering PBC atoms
     has_pbc_atoms = bool(pbc_selection)
-    if image and not is_tpr_available and has_pbc_atoms:
-        raise InputError('In order to image a simulation with PBC residues using Gromacs it is mandatory to provide a .tpr file')
-
-    # If we have coarse grain then we can only fit if we have a tpr file
-    # It will not work otherwise since we need atom masses
-    # For some image protocols we need to work with pdbs at some points so we directly surrender
-    if structure.select_cg():
-        if image: raise InputError('We cannot image a coarse grain simulation using Gromacs.\n'
-            ' Please remove the "-img" argument and manually image the simulation before running the workflow.')
-        if not is_tpr_available:
-            raise InputError('We cannot fit a coarse grain simulation using Gromacs without a TPR file')
-
+    
     # First of all save chains
     # Gromacs will delete chains so we need to recover them after
     chains_backup = get_chains(input_structure_file.path)
@@ -95,58 +89,57 @@ def image_and_fit (
     # Imaging --------------------------------------------------------------------------------------
 
     if image:
-        print(' Running first imaging step')
+        print(' Running imaging steps')
+
+        # Set the latest structure and trajectory files
+        # They are the ones to be used as inputs for the following steps
+        latest_structure = input_structure_file
+        latest_trajectory = input_trajectory_file
 
         # Check if coordinates are to be translated
         must_translate = translation != [0, 0, 0]
 
-        # If so run the imaging process without the '-center' flag
+        # Translate the system if requested
         if must_translate:
+            print(' Running translation')
             # WARNING: Adding '-ur compact' makes everything stay the same
-            run_gromacs(f'trjconv -s {input_structure_file.path} \
-                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
-                -trans {translation[0]} {translation[1]} {translation[2]} \
-                -pbc atom', user_input = 'System', show_error_logs = True)
-        # If no translation is required and we have a tpr then use it to make molecules whole
-        elif is_tpr_available:
-            run_gromacs(f'trjconv -s {input_topology_file.path} \
-                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
-                -pbc whole', user_input = 'System', show_error_logs = True)
-        # Otherwise, center the custom selection
-        else:
-            run_gromacs(f'trjconv -s {input_structure_file.path} \
-                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
-                -pbc atom -center -n {CENTER_INDEX_FILEPATH}',
-                user_input = f'{CENTER_SELECTION_NAME} System', show_error_logs = True)
+            run_gromacs(f'trjconv -s {latest_structure.path} \
+                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                -trans {translation[0]} {translation[1]} {translation[2]}',
+                user_input = 'System', show_error_logs = True)
+            latest_trajectory = output_trajectory_file
+            
+            # Select the first frame of the recently imaged trayectory as the new topology
+            reset_structure (
+                latest_structure.path,
+                latest_trajectory.path,
+                output_structure_file.path)
+            latest_structure = output_structure_file
 
+        # We assume that at this point (after a possible trnaslation) the first frame is "correct"
+        # This means that the different molecules are placed as desired
+        # e.g. two protein monomers are together, and not interacting across boundaries
+        # To keep things like this we will run a no-jump step
+        # DANI: The nojump step may cause artifacts, specially in already pre-imaged simulations
+        # DANI: I will disable this part by now
+        # print(' Running no-jump')
+        # run_gromacs(f'trjconv -s {latest_structure.path} \
+        #     -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+        #     -pbc nojump', user_input = 'System', show_error_logs = True)
+        # latest_trajectory = output_trajectory_file
+            
+        # Center the non-PBC region while we put all residues in the box
+        # This is critical to recover all PBC regios which were diluted because of the no-jump step
+        print(' Running ceneterd -pbc res')
+        run_gromacs(f'trjconv -s {latest_structure.path} \
+            -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+            -pbc res -center -n {CENTER_INDEX_FILEPATH}',
+            user_input = f'{CENTER_SELECTION_NAME} System', show_error_logs = True)
+        latest_trajectory = output_trajectory_file
+        
         # Select the first frame of the recently imaged trayectory as the new topology
-        reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
-
-        # If there are PBC residues then run a '-pbc mol' to make all residues stay inside the box anytime
-        if has_pbc_atoms:
-            print(' Fencing PBC molecules back to the box')
-            # Run Gromacs
-            run_gromacs(f'trjconv -s {input_topology_file.path} \
-                -f {input_trajectory_file.path} -o {output_trajectory_file.path} \
-                -pbc mol -n {CENTER_INDEX_FILEPATH}',
-                user_input = 'System', show_error_logs = True)
-
-            # Select the first frame of the recently translated and imaged trayectory as the new topology
-            reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
-
-
-        # -----------------------------------------------------------------------------------------------
-
-        # If there are no PBC residues then run a '-pbc nojump' to avoid non-sense jumping of any molecule
-        else:
-            print(' Running no-jump')
-            # Run Gromacs
-            # Expanding the box may help in some situations but there are secondary effects
-            # i.e. -box 999 999 999
-            run_gromacs(f'trjconv -s {output_structure_file.path} \
-                -f {output_trajectory_file.path} -o {output_trajectory_file.path} \
-                -pbc nojump',
-                user_input = 'System', show_error_logs = True)
+        reset_structure (latest_structure.path, latest_trajectory.path, output_structure_file.path)
+        latest_structure = output_structure_file
 
     # Fitting --------------------------------------------------------------------------------------
 
@@ -160,10 +153,8 @@ def image_and_fit (
         structure_to_fit = output_structure_file if image else input_structure_file
         trajectroy_to_fit = output_trajectory_file if image else input_trajectory_file
 
-        # If we have a TPR then use it here
-        # DANI: No estoy seguro de si funcionaría bien después de un imageado
-        # DANI: Esto siempre lo he hecho usando la estructura de la primera frame ya imageada
-        if is_tpr_available: structure_to_fit = input_topology_file
+        # Here we use the structure, not the topology, even if it is a TPR
+        # Note that using the topology would make useless the last 'nojump' process
 
         # Run Gromacs
         run_gromacs(f'trjconv -s {structure_to_fit.path} \
@@ -176,7 +167,10 @@ def image_and_fit (
         # Note that the input structure is not necessarily the output structure in this scenario
         # The fit may have been done using the topology and there may be an offset, so better dump it
         if not output_structure_file.exists:
-            reset_structure (input_structure_file.path, output_trajectory_file.path, output_structure_file.path)
+            reset_structure (
+                input_structure_file.path,
+                output_trajectory_file.path,
+                output_structure_file.path)
 
     # Recover chains
     set_chains(output_structure_file.path, chains_backup)

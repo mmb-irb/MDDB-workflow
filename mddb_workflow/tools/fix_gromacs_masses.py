@@ -42,3 +42,51 @@ def fix_gromacs_masses ():
     # Check if the backup file exists and, if not, then copy the reference
     if not local_custom_masses_file.exists:
         source_custom_masses_file.copy_to(local_custom_masses_file)
+
+# Set the symbol in the atommass file representing 'any residue name'
+ANY_RESIDUE_NAME = '???'
+# Set a header for MWF extended masses
+MWF_HEADER = '; MWF extension\n'
+
+# Extend masses in the gromacs file
+# New masses is a list of tuples with 3 values: residue name (optional), atom name, mass
+def extend_gromacs_masses (new_masses : set[tuple]):
+
+    # Get the local custom masses file
+    local_custom_masses_file = File('atommass.dat')
+    # If the file does not exist yet then create it
+    if not local_custom_masses_file.exists:
+        fix_gromacs_masses()
+    
+    # Read masses already listed in the file
+    already_modified = False
+    current_masses = {}
+    with open(local_custom_masses_file.path, 'r') as file:
+        for line in file.readlines():
+            if line == MWF_HEADER: already_modified = True
+            # Skip comment lines
+            if line[0] == ';': continue
+            # Skip empty lines
+            if line == '\n': continue
+            # Mine the mass
+            residue_name, atom_name, mass = line.split()
+            if residue_name == ANY_RESIDUE_NAME:
+                residue_name = None
+            current_masses[(residue_name, atom_name)] = mass
+    
+    # Add the new masses
+    with open(local_custom_masses_file.path, 'a') as file:
+        # Add a header for our own masses
+        # DANI: Si alguien más modifica el atommass.dat esta sección se mezclará
+        if not already_modified: file.write('; MWF extension\n')
+        # Iterate new masses
+        for new_mass in new_masses:
+            # Get the new mass values
+            residue_name, atom_name, mass = new_mass
+            if not residue_name: residue_name = None
+            # If we already have a mass value for this residue/atom combination then skip it
+            atom_config = (residue_name, atom_name)
+            if atom_config in current_masses: continue
+            # Add the new mass
+            if residue_name is None: residue_name = ANY_RESIDUE_NAME
+            file.write(f'{residue_name} {atom_name} {mass}\n')

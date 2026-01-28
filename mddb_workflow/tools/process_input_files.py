@@ -16,6 +16,7 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit
 from mddb_workflow.tools.get_charges import get_charges
+from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
 
 
@@ -253,6 +254,16 @@ def process_input_files (
     # We will make sure that the provisonal and the final PBC selections match
     # Since this is proviosonal we will make it silent
     provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
+
+    # Before we run the imaging process we must add CG atoms to the Gromacs masses file
+    # Otherwise some steps of the imaging will complain that masses are missing
+    # Set mass of CG atoms as 1.
+    # DANI: we better don't rely on masses in any Gromacs command later, or this will be silent
+    cg_fake_masses = set()
+    for atom_index in provisional_pbc_selection.atom_indices:
+        atom = provisional_structure.atoms[atom_index]
+        cg_fake_masses.add(( atom.residue.name, atom.name, 1 ))
+    extend_gromacs_masses(cg_fake_masses)
 
     # --- IMAGING AND FITTING ------------------------------------------------------------
 
