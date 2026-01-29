@@ -17,7 +17,7 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.analyses.nassa import workflow_nassa
-from mddb_workflow.core.dataset import Dataset
+from mddb_workflow.core.dataset import Dataset, State
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
@@ -370,6 +370,18 @@ def main():
             print(f"Message:       {status['message']}")
 
         elif args.dataset_subcommand == 'show':
+            if args.summary:
+                summary = dataset.get_dataframe(
+                    query_scope='project',
+                )
+                # Group by state and count
+                grouped = summary.groupby("state").size().reset_index(name="count")
+                # Sort by state order:
+                state_order = {state: index for index, state in enumerate(State)}
+                grouped['state_order'] = grouped['state'].apply(lambda x: state_order.get(State(x), -1))
+                grouped = grouped.sort_values('state_order').drop(columns=['state_order']).reset_index(drop=True)
+                print(grouped)
+                return
             df = dataset.get_dataframe(
                 uuid_length=8,
                 root_path=dataset.root_path,
@@ -380,12 +392,16 @@ def main():
                 query_state=args.query_state,
                 query_scope=args.query_scope,
             )
-            if args.n_rows != 0:
+            total = len(df)
+            if args.n_rows == 0 or args.n_rows >= total:
+                title_str = f"MDDB Dataset ({len(df)} rows)"
+            else:
                 df = df.tail(args.n_rows)
+                title_str = f"MDDB Dataset (last {args.n_rows} of {total} rows)"
             try:
                 from mddb_workflow.utils.rich import rich_display_dataframe
                 df.reset_index(inplace=True)
-                rich_display_dataframe(df, title="MDDB Dataset")
+                rich_display_dataframe(df, title=title_str)
             except ImportError:
                 print(df)
         elif args.dataset_subcommand == 'watch':
@@ -771,9 +787,9 @@ dataset_add = dataset_subparsers.add_parser("status", formatter_class=CustomHelp
 dataset_add.add_argument("-p", "--project_path", help='Path to the project.')
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
-query_parser.add_argument("-qp", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
-query_parser.add_argument("-qs", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
-query_parser.add_argument("-qsc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
+query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
+query_parser.add_argument("-st", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
+query_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
 # Dataset inputs subcommand
 ds_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter, help="Generate inputs file for MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_inputs.add_argument("-it", "--inputs_template", type=str, help=ds_help['generate_inputs_yaml']['inputs_template_path'])
@@ -784,6 +800,8 @@ ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormat
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
 ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for all rows.", default=50, type=int)
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
+ds_show.add_argument('-m', '--summary', help="Get a summary of the state of the projects.", action='store_true')
+
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 # Dataset scan subcommand

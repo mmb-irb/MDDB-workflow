@@ -51,7 +51,7 @@ def rich_display_dataframe(df, row_limit=None, title="Dataframe", only_return=Fa
     # ensure dataframe contains only string values
     df = df.astype(str)
 
-    table = Table(title=title+f" (rows: {len(df)})")
+    table = Table(title=title)
     for col in df.columns:
         table.add_column(col)
     for row in df.values:
