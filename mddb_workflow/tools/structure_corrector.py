@@ -193,7 +193,8 @@ def structure_corrector(
         # Make sure the residue name corresponds to an aminoacid
         letter = protein_residue_name_to_letter(residue.name)
         if letter == 'X' or residue.atom_count <= ATOMS_PER_AMINOACID_LIMIT: continue
-        raise RuntimeError(f'Residue {residue.name} in chain {residue.chain.name} has an aminoacid name but has more than 27 atoms. (residue {residue.index})')
+        raise TestFailure(f'Residue {residue.name} in chain {residue.chain.name} has an aminoacid' + \
+            f' name but has {residue.atom_count} atoms (residue {residue.index}).')
 
     # ------------------------------------------------------------------------------------------
     # Incoherent residue bonds ---------------------------------------------------------------
