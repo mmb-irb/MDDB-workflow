@@ -94,7 +94,7 @@ def get_system_keywords (
     # Get a selection of all ligands in the system
     ligands_selection = None
     for inchi_key, ligand_reference in ligand_references.items():
-        formula = ligand_reference['formula']
+        formula = ligand_reference.get('formula', 'missing formula')
         is_ion = match(ION_FORMULA, formula)
         if is_ion: continue
         # Get the ligand selection using the inchi map
