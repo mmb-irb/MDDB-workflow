@@ -464,56 +464,64 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{pubchem_id}/JSON/'
     parsed_response = handle_http_request(request_url, "PubChem request")
     if parsed_response is None:
-        print('WARNING: Cannot find PubChem entry for accession ' + pubchem_id)
+        warn('Cannot find PubChem entry for accession ' + pubchem_id)
         return None
     parsed_response = json.loads(parsed_response)
+    # Set part of the error message, in case we find a problem
+    error_message = f'Unexpected PubChem data structure in {request_url}\n  '
     # Mine target data: SMILES
     record = parsed_response.get('Record', None)
     if record is None:
-        raise RuntimeError('Wrong PubChem  data structure: no record: ' + request_url)
+        raise RuntimeError(error_message + 'no record')
     sections = record.get('Section', None)
     if sections is None:
-        raise RuntimeError('Wrong PubChem  data structure: no sections: ' + request_url)
+        raise RuntimeError(error_message + 'no sections')
     names_and_ids_section = next((section for section in sections if section.get('TOCHeading', None) == 'Names and Identifiers'), None)
     if names_and_ids_section is None:
-        raise RuntimeError('Wrong PubChem  data structure: no name and IDs section: ' + request_url)
+        raise RuntimeError(error_message + 'no name and IDs section')
     names_and_ids_subsections = names_and_ids_section.get('Section', None)
     if names_and_ids_subsections is None:
-        raise RuntimeError('Wrong PubChem  data structure: no name and IDs subsections: ' + request_url)
+        raise RuntimeError(error_message + 'no name and IDs subsection')
 
-    # Mine the name
+    # Mine the name from the synonims section
+    name_substance = None
     synonims = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Synonyms'), None)
-    if synonims is None:
-        descriptors = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
-        descriptors_subsections = descriptors.get('Section', None)
-        if descriptors_subsections is None:
-            raise RuntimeError('Wrong PubChem  data structure: no name and IDs subsections: ' + request_url)
-        depositor_supplied_descriptors = next((s for s in descriptors_subsections if s.get('TOCHeading', None) == 'IUPAC Name'), None)
-        name_substance = depositor_supplied_descriptors.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
-    else:
+    if synonims:
         synonims_subsections = synonims.get('Section', None)
         if synonims_subsections is None:
-            raise RuntimeError('Wrong PubChem  data structure: no name and IDs subsections: ' + request_url)
+            raise RuntimeError(error_message + 'no synonims subsection')
         depositor_supplied_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Depositor-Supplied Synonyms'), None)
         if depositor_supplied_synonims is None:
             removed_synonims = next((s for s in synonims_subsections if s.get('TOCHeading', None) == 'Removed Synonyms'), None)
             name_substance = removed_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
         else:
             name_substance = depositor_supplied_synonims.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    # If we still don't have a name then try with the IUPAC name
+    if name_substance is None:
+        descriptors = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
+        descriptors_subsections = descriptors.get('Section', None)
+        if descriptors_subsections is None:
+            raise RuntimeError(error_message + 'no descriptors subsection')
+        iupac_name_section = next((s for s in descriptors_subsections if s.get('TOCHeading', None) == 'IUPAC Name'), None)
+        if iupac_name_section:
+            name_substance = iupac_name_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    # If we still do not have a name then we assume the compound has no name
+    # This may happen (e.g. 57449604)
+    name_substance = 'Unnamed'
 
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
     if computed_descriptors_subsection is None:
-        raise RuntimeError('Wrong PubChem  data structure: no computeed descriptors: ' + request_url)
+        raise RuntimeError(error_message + 'no computed descriptors')
     canonical_smiles_section = computed_descriptors_subsection.get('Section', None)
     if canonical_smiles_section is None:
-        raise RuntimeError('Wrong PubChem  data structure: no canonical SMILES section: ' + request_url)
+        raise RuntimeError(error_message + 'no canonical SMILES section')
     canonical_smiles = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'Canonical SMILES'), None)
     if canonical_smiles is None:
         # In some cases there is no canonical SMILES but a non-canonical one could exists
         non_canonical_smiles_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'SMILES'), None)
         if non_canonical_smiles_section is None:
-            raise RuntimeError('Wrong PubChem  data structure: no canonical SMILES: ' + request_url)
+            raise RuntimeError(error_message + 'no canonical SMILES')
 
     if canonical_smiles:
         smiles = canonical_smiles.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
@@ -521,15 +529,15 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
         smiles = non_canonical_smiles_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
 
     if smiles is None:
-        raise RuntimeError('Wrong PubChem  data structure: no SMILES: ' + request_url)
+        raise RuntimeError(error_message + 'no SMILES')
 
     # Mine target data: MOLECULAR FORMULA
     molecular_formula_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Molecular Formula'), None)
     if molecular_formula_subsection is None:
-        raise RuntimeError('Wrong PubChem  data structure: no molecular formula section: ' + request_url)
+        raise RuntimeError(error_message + 'no molecular formula section')
     molecular_formula = molecular_formula_subsection.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     if molecular_formula is None:
-        raise RuntimeError('Wrong PubChem  data structure: no molecular formula: ' + request_url)
+        raise RuntimeError(error_message + 'no molecular formula')
 
     # Mine target data: PDB ID
     pdb_id = None
@@ -538,7 +546,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
     if pdb_id_subsection:
         pdb_id_subsections = pdb_id_subsection.get('Section', None)
         if pdb_id_subsections is None:
-            raise RuntimeError('Wrong PubChem  data structure: no name and IDs subsections: ' + request_url)
+            raise RuntimeError(error_message + 'no PDB IDs subsection')
         bond_structures = next((s for s in pdb_id_subsections if s.get('TOCHeading', None) == 'Protein Bound 3D Structures'), None)
         if bond_structures:
             bond_structures_section = bond_structures.get('Section', None)
@@ -546,25 +554,25 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
             if bond_structures_section:
                 ligands_structure = next((s for s in bond_structures_section if s.get('TOCHeading', None) == 'Ligands from Protein Bound 3D Structures'), None)
                 if ligands_structure is None:
-                    raise RuntimeError('Wrong PubChem  data structure: no Ligands from Protein Bound 3D Structures section: ' + request_url)
+                    raise RuntimeError(error_message + 'no Ligands from Protein Bound 3D Structures section')
                 ligands_structure_subsections = ligands_structure.get('Section', None)
                 if ligands_structure_subsections is None:
-                    raise RuntimeError('Wrong PubChem  data structure: no Ligands from Protein Bound 3D Structures subsections: ' + request_url)
+                    raise RuntimeError(error_message + 'no Ligands from Protein Bound 3D Structures section')
                 ligands_pdb = next((s for s in ligands_structure_subsections if s.get('TOCHeading', None) == 'PDBe Ligand Code'), None)
                 if ligands_pdb is None:
-                    raise RuntimeError('Wrong PubChem  data structure: no PDBe Ligand Code: ' + request_url)
+                    raise RuntimeError(error_message + 'no PDBe ligand code')
                 pdb_id = ligands_pdb.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
 
     # Mine de INCHI and INCHIKEY
     inchi_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChI'), None)
     if inchi_section is None:
-        raise RuntimeError('Wrong PubChem  data structure: no InChI: ' + request_url)
+        raise RuntimeError(error_message + 'no InChI section')
     if inchi_section:
         inchi = inchi_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
 
     inchikey_section = next((s for s in canonical_smiles_section if s.get('TOCHeading', None) == 'InChIKey'), None)
     if inchikey_section is None:
-        raise RuntimeError('Wrong PubChem  data structure: no InChIKey: ' + request_url)
+        raise RuntimeError(error_message + 'no InChI key')
     if inchikey_section:
         inchikey = inchikey_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     # Prepare the PubChem data to be returned
