@@ -1,7 +1,6 @@
 import pytraj as pyt
-import math
 from packaging.version import Version
-
+import numpy as np
 from mddb_workflow.utils.auxiliar import InputError, ToolError
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
@@ -11,12 +10,12 @@ from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 pytraj_supported_structure_formats = {'prmtop', 'pdb', 'mol2', 'psf', 'cif', 'sdf'}
 pytraj_supported_trajectory_formats = {'xtc', 'trr', 'crd', 'mdcrd', 'nc', 'dcd'}
 
-# Get the whole trajectory as a generator
+
 def get_pytraj_trajectory (
     input_topology_filename : str,
     input_trajectory_filename : str,
     atom_selection : Optional['Selection'] = None):
-
+    """Get the whole trajectory as a generator."""
     # Topology is mandatory to setup the pytraj trajectory
     if not input_topology_filename:
         raise InputError('Missing topology file to setup PyTraj trajectory')
@@ -46,14 +45,15 @@ def get_pytraj_trajectory (
 
     return pyt_trajectory
 
-# Get the reduced trajectory
-# WARNING: The final number of frames may be the specifided or less
+
 def get_reduced_pytraj_trajectory (
     input_topology_filename : str,
     input_trajectory_filename : str,
     snapshots : int,
     reduced_trajectory_frames_limit : int):
-
+    """Get the reduced trajectory.
+    WARNING: The final number of frames may be the specifided or less.
+    """
     # Set the pytraj trayectory and get the number of frames
     pt_trajectory = get_pytraj_trajectory(input_topology_filename, input_trajectory_filename)
     # WARNING: Do not read pt_trajectory.n_frames to get the number of snapshots or you will read the whole trajectory
@@ -71,12 +71,12 @@ def get_reduced_pytraj_trajectory (
     reduced_pt_trajectory = pt_trajectory[0:snapshots:frame_step]
     return reduced_pt_trajectory, frame_step, reduced_frame_count
 
+
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 def get_frames_count (
     structure_file : 'File',
     trajectory_file : 'File') -> int:
     """Get the trajectory frames count."""
-
     print('-> Counting number of frames')
 
     if not trajectory_file.exists:
@@ -109,7 +109,6 @@ get_frames_count.format_sets = [
     }
 ]
 
-# Filter topology atoms
 # DANI: Note that a PRMTOP file is not a structure but a topology
 # DANI: However it is important that the argument is called 'structure' for the format finder
 def filter_topology (
@@ -117,6 +116,7 @@ def filter_topology (
     output_structure_file : str,
     input_selection : 'Selection'
 ):
+    """Filter topology atoms."""
     # Generate a pytraj mask with the desired selection
     mask = input_selection.to_pytraj()
 
@@ -146,8 +146,11 @@ filter_topology.format_sets = [
     }
 ]
 
-# Given a corrupted NetCDF file, whose first frames may be read by pytraj, find the first corrupted frame number
+
 def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepath) -> int:
+    """Find the first corrupted frame number with NaN or all zero coordinates,
+    given a corrupted NetCDF file, whose first frames may be read by pytraj.
+    """
     # Iterload the trajectory to pytraj
     trajectory = get_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath)
     # Iterate frames until we find one frame whose last atom coordinates are all zeros
@@ -158,13 +161,15 @@ def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepa
         # Make sure there are actual coordinates here
         # If there is any problem we may have frames with coordinates full of zeros
         last_atom_coordinates = frame.xyz[-1]
-        if not last_atom_coordinates.any():
+        if not last_atom_coordinates.any() or np.isnan(frame.xyz).any():
             return f
     return None
 
-# This process is carried by pytraj, since the Gromacs average may be displaced
+
 def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_file : 'File'):
-    """Get an average structure from a trajectory."""
+    """Get an average structure from a trajectory.
+    This process is carried by pytraj, since the Gromacs average may be displaced.
+    """
     # Iterload the trajectory to pytraj
     pytraj_trajectory = get_pytraj_trajectory(structure_file.path, trajectory_file.path)
 

@@ -1,7 +1,7 @@
 from mddb_workflow.utils.auxiliar import InputError, ToolError
 from mddb_workflow.utils.auxiliar import warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import is_standard_topology
-from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame, get_pytraj_trajectory
+from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame
 from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
 from mddb_workflow.utils.vmd_spells import vmd_to_pdb
 from mddb_workflow.utils.structures import Structure
@@ -14,7 +14,7 @@ from typing import *
 from scipy.io import netcdf_file
 import mdtraj as mdt
 import pytraj as pyt
-import numpy as np
+
 
 # Set some known message errors
 NETCDF_DTYPE_ERROR = 'When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.'
@@ -87,16 +87,13 @@ def check_inputs(
             error_message = str(error)
             if error_message == NETCDF_DTYPE_ERROR:
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
+        finally:
+            for trajectory_file in input_trajectory_files:
                 pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else input_structure_file
                 first_corrupted_frame = find_first_corrupted_frame(pytraj_input_topology.path, trajectory_file.path)
-                print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
-                raise InputError('Corrupted input trajectory file')
-            # If we do not know the error then raise it as is
-            else:
-                raise error
-        traj = get_pytraj_trajectory(input_topology_file.path, trajectory_file.path)
-        if np.isnan(traj.xyz).any():
-            raise InputError('Corrupted input trajectory file: some coordinates are NaN.')
+                if first_corrupted_frame:
+                    print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
+                    raise InputError('Corrupted input trajectory file')
 
     # Make sure the topology file is well formated
     # Check a specific problem affecting some PSF topologies
@@ -304,8 +301,8 @@ def get_topology_and_trajectory_atoms(topology_file: 'File', trajectory_file: 'F
             return topology_atom_count, trajectory_atom_count
         error_match = re.match(MDTRAJ_INSERTION_CODES_ERROR, error_message)
         if error_match:
-            warn('The input topology has insertion codes.\n'+ \
-            ' Some tools may crash when reading the topology (MDtraj).\n'+ \
+            warn('The input topology has insertion codes.\n'
+            ' Some tools may crash when reading the topology (MDtraj).\n'
             ' Some tools may ignore insertion codes when reading the topology (MDAnlysis, PyTraj, VMD).')
             # Use other tool to read the topology
             # Other tools could ignore the inserion codes
@@ -342,12 +339,13 @@ def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 
     return structure_atom_count, trajectory_atom_count
 
 
-# Check if a PSF topology is properly formatted in the headers
-# Wrong-formmated topologies may still valid for NAMD tools and pytraj
-# However they failed to be read by both MDtraj and MDAnalysis
-# Pytraj may write PSF files with this problem, for instance
-# If so, an output topology file will be created with the problem fixed
 def check_and_fix_psf(input_topology_file: 'File', output_topology_file: 'File') -> bool:
+    """Check if a PSF topology is properly formatted in the headers.
+    Wrong-formmated topologies may still valid for NAMD tools and pytraj.
+    However they failed to be read by both MDtraj and MDAnalysis.
+    Pytraj may write PSF files with this problem, for instance.
+    If so, an output topology file will be created with the problem fixed.
+    """
     # Read the content of the PSF file
     psf_content = None
     with open(input_topology_file.path, 'r') as file:
