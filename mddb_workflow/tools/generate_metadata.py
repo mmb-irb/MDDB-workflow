@@ -106,6 +106,8 @@ def prepare_project_metadata (
     collections = input_collections
     if not collections:
         collections = []
+    if type(collections) == str:
+        collections = [collections]
 
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, protein_references_file, residue_map)
