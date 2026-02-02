@@ -505,9 +505,10 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
         iupac_name_section = next((s for s in descriptors_subsections if s.get('TOCHeading', None) == 'IUPAC Name'), None)
         if iupac_name_section:
             name_substance = iupac_name_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
-    # If we still do not have a name then we assume the compound has no name
-    # This may happen (e.g. 57449604)
-    name_substance = 'Unnamed'
+    if name_substance is None:
+        # If we still do not have a name then we assume the compound has no name
+        # This may happen (e.g. 57449604)
+        name_substance = 'Unnamed'
 
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
