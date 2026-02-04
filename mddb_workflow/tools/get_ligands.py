@@ -39,16 +39,18 @@ def record_pubchem_match(
     threshold: float = MINIMUM_TANIMOTO_THRESHOLD,
 ) -> None:
     """Set the pubchem id for the inchikey and compute/print Tanimoto vs descriptor_data if match_mol provided."""
+    print(f'Comparing {inchikey} {reason} with CID {pubchem_id}.')
     matched_fg = obtain_mordred_morgan_descriptors(match_mol)
-    tc = tanimoto_similarity(reference_fg['morgan_fp_bit_array'], matched_fg['morgan_fp_bit_array'])
+    tc = tanimoto_similarity(reference_fg, matched_fg['morgan_fp_bit_array'])
     # For ions, set threshold to 0.0 as TC can vary a lot with small changes
     threshold = threshold if match_mol.GetNumAtoms() > 1 else 0.0
     if tc >= threshold:
         ligand_references[inchikey]['pubchem'] = str(pubchem_id)
         ligand_references[inchikey]['tc'] = tc
-        print(f'Found CID {pubchem_id} after {reason}. Tanimoto coef. (morgan fingerprint): {tc:.3f}')
+        result_str = f'    TC above threshold {threshold}. Match accepted.'
     else:
-        print(f'Found CID {pubchem_id} after {reason}. Tanimoto coef. (morgan fingerprint): {tc:.3f}, below threshold {threshold}. Ignoring match.')
+        result_str = f'    TC below threshold {threshold}. Ignoring match.'
+    print(f'    Tanimoto coef. (morgan fingerprint): {tc:.3f}' + result_str)
     return tc >= threshold
 
 
@@ -116,6 +118,7 @@ def generate_ligand_references(
         mol = Chem.MolFromInchi(inchi, sanitize=False)
         # Original descriptors to calculate similarity later
         descriptor_data = obtain_mordred_morgan_descriptors(mol)
+        reference_fg = descriptor_data['morgan_fp_bit_array']
         automatic_references[inchikey].update(descriptor_data)
         if pubchem_id:
             automatic_references[inchikey]['pubchem'] = pubchem_id
@@ -133,43 +136,47 @@ def generate_ligand_references(
         neutral_mol = rdMolStandardize.ChargeParent(mol)
         neutral_inchikey = Chem.MolToInchiKey(neutral_mol)
         if pubchem_id := inchikey_2_pubchem(neutral_inchikey):
-            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, descriptor_data,
-                                    automatic_references, 'neutralization'):
+            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, reference_fg,
+                                    automatic_references, 'after neutralization'):
                 continue
         # 2.2. Remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(mol)
-            if record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
-                                    automatic_references, 'stereochemistry removal'):
+            if record_pubchem_match(inchikey, pubchem_id, mol, reference_fg,
+                                    automatic_references, 'after stereochemistry removal'):
                 continue
         # Neutralize charges and remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(neutral_mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(neutral_mol)
-            if record_pubchem_match(inchikey, pubchem_id, mol, descriptor_data,
-                                    automatic_references, 'neutralization + stereochemistry removal'):
+            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, reference_fg,
+                                    automatic_references, 'after neutralization + stereochemistry removal'):
                 continue
         # 2.3. Standardize molecule
         standar_id = pubchem_standardization(inchi)
         if standar_id and len(standar_id) == 1:
             standar_pubchem = standar_id[0]['pubchem']
             standar_mol = Chem.MolFromInchi(standar_id[0]['inchi'])
-            if record_pubchem_match(inchikey, standar_pubchem, standar_mol, descriptor_data,
-                                    automatic_references, 'standardization'):
+            if record_pubchem_match(inchikey, standar_pubchem, standar_mol, reference_fg,
+                                    automatic_references, 'after standardization'):
                 continue
         # 2.4. Match against PDB-derived ligands
         if pubchem_ids_from_pdb:
+            # We remove Hs to be more permissive with the matching
+            # This its okey since we can be biased towards matching to PDB ligands
+            noH_mol = Chem.RemoveHs(mol)
+            descriptor_data = obtain_mordred_morgan_descriptors(noH_mol)
+            reference_fg = descriptor_data['morgan_fp_bit_array']
             for pdb_ligand in pubchem_ids_from_pdb:
                 if not pdb_ligand.get('inchi', None):
                     ligand_data = obtain_pubchem_data_from_input(pdb_ligand)
                     pdb_ligand.update(ligand_data)
 
                 pdb_mol = Chem.MolFromInchi(pdb_ligand['inchi'])
-                tc = record_pubchem_match(inchikey, pdb_ligand['pubchem'], pdb_mol, descriptor_data,
-                                        automatic_references, 'matching against PDB-derived ligands')
-                print(f'Tanimoto coefficient against PDB ligand {pdb_ligand["pubchem"]}: {tc:.3f}')
-                if tc >= MINIMUM_TANIMOTO_THRESHOLD:
+                success = record_pubchem_match(inchikey, pdb_ligand['pubchem'], pdb_mol, reference_fg,
+                                        automatic_references, 'with PDB-derived ligand')
+                if success:
                     break
         # RUBEN: disabled as it does not work very well and it is slow
         if False:
@@ -191,10 +198,10 @@ def generate_ligand_references(
                     if not compound or not standard_inchi:
                         assert False, "PubChem similarity search did not return valid compound data"
                     simil_mol = Chem.MolFromInchi(standard_inchi)
-                    tc = record_pubchem_match(inchikey, cid, simil_mol, descriptor_data,
+                    success = record_pubchem_match(inchikey, cid, simil_mol, reference_fg,
                                         ligand_references, 'similarity search in PubChem')
-                    if tc >= MINIMUM_TANIMOTO_THRESHOLD: break
-                if tc >= MINIMUM_TANIMOTO_THRESHOLD: break
+                    if success: break
+                if success: break
 
     for inchikey, ligand_data in automatic_references.items():
         if ligand_data.get('pubchem', None):
@@ -338,7 +345,7 @@ def get_pdb_ligand_codes(pdb_id: str) -> list[str]:
     return ligand_codes
 
 
-def pdb_ligand_2_pubchem(pdb_ligand_id: str) -> Optional[str]:
+def pdb_ligand_2_pubchem(pdb_ligand_id: str) -> list:
     """Given a PDB ligand code, get its PubChem ID."""
     # Set the request query
     query = '''query molecule($id:String!){
@@ -349,10 +356,11 @@ def pdb_ligand_2_pubchem(pdb_ligand_id: str) -> Optional[str]:
     related_resources = parsed_response['rcsb_chem_comp_related']
     # It may happend that a ligand code has no related resources at all
     # e.g. ZN
-    if not related_resources: return None
-    pubchem_resource = next((resource for resource in related_resources if resource['resource_name'] == 'PubChem'), None)
-    if not pubchem_resource: return None
-    return pubchem_resource['resource_accession_code']
+    if not related_resources: return []
+    pubchem_resource = [resource['resource_accession_code']
+                        for resource in related_resources
+                        if resource['resource_name'] == 'PubChem']
+    return pubchem_resource
 
 
 def pdb_ligand_2_pubchem_RAW(pdb_ligand_id: str) -> Optional[str]:
@@ -421,7 +429,7 @@ def pdb_2_pubchem(pdb_id: str) -> list[str]:
             print(f' {ligand_code} -> No PubChem ID')
             continue
         print(f' {ligand_code} -> {pubchem_id}')
-        pubchem_ids.append(pubchem_id)
+        pubchem_ids.extend(pubchem_id)
 
     return pubchem_ids
 
@@ -603,7 +611,14 @@ def chembl_2_pubchem(chembl_id) -> Optional[str]:
 
 
 def obtain_mordred_morgan_descriptors(mol: Chem.Mol) -> dict:
-    """Calculate the Morgan fingerprint and the Mordred descriptors from a molecule."""
+    """Calculate the Morgan fingerprint and the Mordred descriptors from a molecule.
+
+    References:
+        - RDKit fingerprints: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
+        - RDKit tutorial: https://greglandrum.github.io/rdkit-blog/posts/2023-01-18-fingerprint-generator-tutorial.html
+        - Fingerpring comparison: https://pmc.ncbi.nlm.nih.gov/articles/PMC10964529/
+
+    """
     Chem.AllChem.Compute2DCoords(mol)
     mol_block = Chem.MolToMolBlock(mol)
     # We can select the different submodules of mordred descriptors, avaible in: 'https://mordred-descriptor.github.io/documentation/master/'

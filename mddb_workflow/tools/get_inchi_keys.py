@@ -144,7 +144,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
 def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
-    cg_selection : 'Selection',
+    cg_selection: 'Selection',
     parallel: bool = False,
 ) -> dict[str, InChIKeyData]:
     """Generate a dictionary mapping InChI keys to residue information for non-standard residues.
@@ -158,6 +158,7 @@ def generate_inchikeys(
     Args:
         universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
+        cg_selection (Selection): Selection object for coarse-grained regions.
         parallel (bool): Whether to use multiprocessing (default False). Set to True for parallel processing (higher memory).
 
     Returns:
@@ -187,7 +188,7 @@ def generate_inchikeys(
     for i, fragment in enumerate(fragments):
 
         # If the fragment contains coarse grain regions then skip it
-        fragment_atom_indices = set([ int(index) for index in fragment.indices ])
+        fragment_atom_indices = set([int(index) for index in fragment.indices])
         if coarse_gran_atom_indices.intersection(fragment_atom_indices): continue
 
         resindices = fragment.residues.resindices.tolist()

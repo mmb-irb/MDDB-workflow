@@ -116,10 +116,10 @@ def structure_corrector(
             return
         # Explain the problem to the user
         # Make clear this is not a problem but very normal or you will get mails from users
-        print(' There may be an atom clash or a bond overstretch in the default structure but this is normal.\n' \
-        ' An atom clash means that two non-bonded atoms are too close.\n' \
-        ' A bond overstretch means that two bonded atoms are too far away.\n' \
-        ' Now we will look for a frame which has no clashes/overstretches at all.\n' \
+        print(' There may be an atom clash or a bond overstretch in the default structure but this is normal.\n'
+        ' An atom clash means that two non-bonded atoms are too close.\n'
+        ' A bond overstretch means that two bonded atoms are too far away.\n'
+        ' Now we will look for a frame which has no clashes/overstretches at all.\n'
         ' This frame will be considered as the "reference frame".')
         # Find the first frame in the whole trajectory where safe bonds are respected
         bonds_reference_frame = get_bonds_reference_frame(
@@ -143,7 +143,7 @@ def structure_corrector(
             'pbc_selection': pbc_selection
         })
         # If there is no reference frame then stop here since there must be a problem
-        if bonds_reference_frame == None:
+        if bonds_reference_frame is None:
             print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
             must_be_killed = STABLE_BONDS_FLAG not in mercy
             if must_be_killed:
@@ -193,7 +193,7 @@ def structure_corrector(
         # Make sure the residue name corresponds to an aminoacid
         letter = protein_residue_name_to_letter(residue.name)
         if letter == 'X' or residue.atom_count <= ATOMS_PER_AMINOACID_LIMIT: continue
-        raise TestFailure(f'Residue {residue.name} in chain {residue.chain.name} has an aminoacid' + \
+        raise TestFailure(f'Residue {residue.name} in chain {residue.chain.name} has an aminoacid' +
             f' name but has {residue.atom_count} atoms (residue {residue.index}).')
 
     # ------------------------------------------------------------------------------------------
@@ -253,9 +253,9 @@ def structure_corrector(
 
     # Check if chains are missing. If so, create a new chainned structure and set it as the reference
     chains = structure.chains
-    
+
     # In case there are not chains at all
-    if len(chains) == 1 and ( chains[0].name == ' ' or chains[0].name == 'X' ):
+    if len(chains) == 1 and (chains[0].name == ' ' or chains[0].name == 'X'):
         warn('Chains are missing and they will be added')
         # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
         # Note that we rely in fragments (and thus in bonds) to guess chains
