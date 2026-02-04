@@ -55,6 +55,10 @@ def check_inputs(
     # Note that this variable may be reassigned as fixes are applied
     topology_file = input_topology_file
 
+    # Set the structure file to be checked
+    # Note that the structure file may be the topology file so it may be reassigned as well
+    structure_file = input_structure_file
+
     # Get a sample trajectory file and then check its format
     # All input trajectory files must have the same format
     trajectory_sample = input_trajectory_files[0]
@@ -66,8 +70,8 @@ def check_inputs(
         raise InputError(f'Topology {topology_file.path} has a not supported format. Try one of these: {", ".join(TOPOLOGY_SUPPORTED_FORMATS)}')
     if trajectory_sample.format not in TRAJECTORY_SUPPORTED_FORMATS:
         raise InputError(f'Trajectory {trajectory_sample.path} has a not supported format. Try one of these: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}')
-    if input_structure_file.format not in STRUCTURE_SUPPORTED_FORMATS:
-        raise InputError(f'Structure {input_structure_file.path} has a not supported format. Try one of these: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}')
+    if structure_file.format not in STRUCTURE_SUPPORTED_FORMATS:
+        raise InputError(f'Structure {structure_file.path} has a not supported format. Try one of these: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}')
 
     # Make sure the trajectory file is not corrupted
 
@@ -89,7 +93,7 @@ def check_inputs(
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
         finally:
             for trajectory_file in input_trajectory_files:
-                pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else input_structure_file
+                pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else structure_file
                 first_corrupted_frame = find_first_corrupted_frame(pytraj_input_topology.path, trajectory_file.path)
                 if first_corrupted_frame:
                     print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
@@ -106,6 +110,8 @@ def check_inputs(
             print(f'The input topology had format problem but it has been fixed in {fixed_topology_file.path}')
             exceptions[FIXED_TOPOLOGY_EXCEPTION] = fixed_topology_file
             # From now on use the fixed topology as the topology
+            if structure_file == topology_file:
+                structure_file = fixed_topology_file
             topology_file = fixed_topology_file
 
     # Get topology and trajectory atom counts
@@ -133,23 +139,25 @@ def check_inputs(
                 if guessed:
                     exceptions[FIXED_TOPOLOGY_EXCEPTION] = prefiltered_topology_file
                     # From now on use the prefiltered topology as the topology
+                    if structure_file == topology_file:
+                        structure_file = prefiltered_topology_file
                     topology_file = prefiltered_topology_file
                     topology_atom_count = trajectory_atom_count
                 else: raise InputError('Could not guess topology atom selection to match trajectory atoms count')
 
         # If the topology file is already the structure file then there is no need to check it
-        if input_structure_file == topology_file:
+        if structure_file == topology_file:
             print(f'Topology and trajectory files match in number of atoms: {trajectory_atom_count}')
             return exceptions
 
         # If the counts match then also get the structure atom count and compare
-        structure_atom_count = get_structure_atoms(input_structure_file)
+        structure_atom_count = get_structure_atoms(structure_file)
 
         # Make sure it matches the topology and trajectory atom count
         if topology_atom_count != structure_atom_count:
             raise InputError('Mismatch in the structure input file number of atoms:\n'+
                 f' Topology and trajectory -> {topology_atom_count} atoms\n' +
-                f' Structure "{input_structure_file.path}" -> {structure_atom_count} atoms')
+                f' Structure "{structure_file.path}" -> {structure_atom_count} atoms')
 
         # If we reached this point then it means everything is matching
         print(f'All input files match in number of atoms: {trajectory_atom_count}')
@@ -157,12 +165,12 @@ def check_inputs(
 
     # Otherwise it means we had not a valid topology file
     # We must use the structure to find trajectory atoms
-    structure_atom_count, trajectory_atom_count = get_structure_and_trajectory_atoms(input_structure_file, trajectory_sample)
+    structure_atom_count, trajectory_atom_count = get_structure_and_trajectory_atoms(structure_file, trajectory_sample)
 
     # Make sure their atom counts match
     if structure_atom_count != trajectory_atom_count:
         raise InputError('Mismatch in the number of atoms between input files:\n' +
-            f' Structure "{input_structure_file.path}" -> {structure_atom_count} atoms\n' +
+            f' Structure "{structure_file.path}" -> {structure_atom_count} atoms\n' +
             f' Trajectory "{trajectory_sample.path}" -> {trajectory_atom_count} atoms')
 
     # If we have a number of topology atoms then make sure it matches the structure and trajectory atoms
