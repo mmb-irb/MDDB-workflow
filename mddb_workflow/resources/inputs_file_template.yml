@@ -459,12 +459,12 @@ multimeric:
 # Set also additional collection related metadata values.
 
 # Set to which collection does this simulation belong to.
-# Currently supported collections:
-#   - cv19
-#   - mcns
-#   - abc
-#   - bigna
-#   - model
+# This allows to freely group simulations together
+# The collection may also provide additional reference data further
+# For instance a description of the whole dataset
+# If you want to include this simulation in an already exsiting collection then use its id
+# If you want to create a new "collection id" please use short ids with no weird signs
+# e.g. cv19, model, abc, ...
 
 collections:
 
