@@ -37,7 +37,7 @@ def guess_and_filter_topology (
         for mask_name, mask in AMBER_MASKS.items():
             filtered_pt_topology = pt_topology[mask]
             filtered_atoms_count = filtered_pt_topology.n_atoms
-            if verbose: print(f' {mask_name} -> {filtered_atoms_count}')
+            if verbose: print(f' {mask_name} -> {filtered_atoms_count} atoms')
             # If the filtered atom count does not match the target atom count then continue
             if filtered_atoms_count != target_atom_count: continue
             if verbose: print('  Got it!')

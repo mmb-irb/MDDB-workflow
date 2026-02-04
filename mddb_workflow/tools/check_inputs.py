@@ -99,8 +99,7 @@ def check_inputs(
     # Check a specific problem affecting some PSF topologies
     if topology_file != MISSING_TOPOLOGY and topology_file.format == 'psf':
         # Set the output fixed topology file, in case it is to be created
-        fixed_topology_filepath = f'{topology_file.basepath}/fixed.{topology_file.format}'
-        fixed_topology_file = File(fixed_topology_filepath)
+        fixed_topology_file = topology_file.get_prefixed_file('fixed.')
         had_problem = check_and_fix_psf(topology_file, fixed_topology_file)
         # If a problem was found then report the problem and save the exception
         if had_problem:
@@ -125,8 +124,7 @@ def check_inputs(
             # If the topology has more atoms than the trajectory however we may attempt to guess
             # If we guess which atoms are the ones in the trajectory then we can filter the topology
             else:
-                prefiltered_topology_filepath = f'{topology_file.basepath}/prefiltered.{topology_file.format}'
-                prefiltered_topology_file = File(prefiltered_topology_filepath)
+                prefiltered_topology_file = topology_file.get_prefixed_file('prefiltered.')
                 guessed = guess_and_filter_topology(
                     topology_file,
                     prefiltered_topology_file,
@@ -135,7 +133,8 @@ def check_inputs(
                 if guessed:
                     exceptions[FIXED_TOPOLOGY_EXCEPTION] = prefiltered_topology_file
                     # From now on use the prefiltered topology as the topology
-                    topology_file = fixed_topology_file
+                    topology_file = prefiltered_topology_file
+                    topology_atom_count = trajectory_atom_count
                 else: raise InputError('Could not guess topology atom selection to match trajectory atoms count')
 
         # If the topology file is already the structure file then there is no need to check it
