@@ -1788,6 +1788,8 @@ class Structure:
     def generate_pdb (self):
         """Generate a pdb file content with the current structure."""
         content = 'REMARK workflow generated pdb file\n'
+        if len(self.residues) >= 65536:
+            warn(f'More than 65536 residues found. Cycling residue numeration to fit to PDB 4-character limit.')
         for a, atom in enumerate(self.atoms):
             residue = atom.residue
             index = str((a+1) % 100000).rjust(5)
@@ -1798,9 +1800,9 @@ class Structure:
             residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
             # If residue number is longer than 4 characters then we must parse to hexadecimal
             if len(residue_number) > 4:
-                residue_number = hex(residue.number)[2:].rjust(4)
-                if len(residue_number) > 4:
-                    raise RuntimeError(f'Residue number too large: {residue_number}')
+                # If there is more than hex FFFF (16⁴, 65536) residues we have to cycle the numeration
+                # to fit to PDB 4-character limit. This can happen with waters before filtering them out.
+                residue_number = hex(residue.number % 65536)[2:].rjust(4)
             icode = residue.icode if residue.icode and len(residue.icode) else ' '
             # Make sure we have atom coordinates
             if atom.coords == None:
