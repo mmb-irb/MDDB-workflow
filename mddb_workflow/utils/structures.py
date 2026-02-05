@@ -273,8 +273,10 @@ class Atom:
     def guess_element (self) -> str:
         """Guess an atom element from its name and number of bonds."""
         # If the atom name is among the known dummy atoms then return a standard element for dummy atoms
-        if self.name.upper() in STANDARD_DUMMY_ATOM_NAMES:
-            return DUMMY_ATOM_ELEMENT
+        name = self.name.upper()
+        for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
+            if re.match(dummy_name, name):
+                return DUMMY_ATOM_ELEMENT
         # If the element is already the "coarse grained" flag then return this very same flag
         # WARNING: This has to be preset before guessing or the guess may fail
         if self.is_cg():
