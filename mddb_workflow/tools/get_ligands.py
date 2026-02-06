@@ -274,7 +274,6 @@ def generate_ligand_references(
     for k, v in ligand_references.items():
         if 'pubchem' not in v:
             not_matched_ligands.append((inchikeys[k].molname, inchikeys[k].resindices))
-            breakpoint()
     if not_matched_ligands:
         for k, v in not_matched_ligands:
             warn(f'Ligand {k} could not be matched to any PubChem ID. Residues: {v}')
