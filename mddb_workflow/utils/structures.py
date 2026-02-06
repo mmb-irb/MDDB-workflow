@@ -332,7 +332,8 @@ class Atom:
 
     def get_label (self) -> str:
         """Get a standard label."""
-        return f'{self.residue.label}.{self.name} (index {self.index})'
+        residue_label = self.residue.label if self.residue else 'unassigned'
+        return f'{residue_label}.{self.name} (index {self.index})'
     # The atom standard label (read only)
     label = property(get_label, None, None)
 
@@ -893,7 +894,7 @@ class Residue:
 
     def get_label (self) -> str:
         """Get a standard label."""
-        chainname = self.chain.name if self.chain.name.strip() else ''
+        chainname = self.chain.name.strip() if self.chain else ''
         return f'{chainname}{self.number}{self.icode}({self.name})'
     label = property(get_label, None, None,
                      "The residue standard label (read only)")
@@ -1796,6 +1797,7 @@ class Structure:
             name = ' ' + atom.name.ljust(3) if len(atom.name) < 4 else atom.name
             residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
             chain = atom.chain
+            if chain is None: raise RuntimeError(f'Residue {residue.label} has no chain')
             chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
             residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
             # If residue number is longer than 4 characters then we must parse to hexadecimal
