@@ -189,7 +189,7 @@ OUTPUT_DENSITY_FILENAME = 'mda.density.json'
 OUTPUT_THICKNESS_FILENAME = 'mda.thickness.json'
 OUTPUT_APL_FILENAME = 'mda.apl.json'
 OUTPUT_LIPID_ORDER_FILENAME = 'mda.lipid_order.json'
-OUTPUT_LIPID_INTERACTIONS_FILENAME  = 'mda.lipid_inter.json'
+OUTPUT_LIPID_INTERACTIONS_FILENAME = 'mda.lipid_inter.json'
 OUTPUT_CHANNELS_FILENAME = 'mda.channels.json'
 
 # Set problematic signs for directory/folder names
@@ -215,11 +215,12 @@ STABLE_INTERACTIONS_FLAG = 'interact'
 LIGANDS_MATCH_FLAG = 'ligands'
 CHAINS_ANALYSIS = 'chains'
 FAITH_BYPASS = 'faith'
+LARGE_AMINOACID_FLAG = 'largeaa'
 
 # State all the available checkings, which may be trusted
 AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG ]
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, CHAINS_ANALYSIS ]
+AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, CHAINS_ANALYSIS, LARGE_AMINOACID_FLAG ]
 
 # Set which tests are to be run when some input files are modified
 STRUCTURE_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
@@ -254,7 +255,8 @@ NICE_NAMES = {
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable',
     LIGANDS_MATCH_FLAG: 'Ligands matched residues',
-    CHAINS_ANALYSIS: 'Chains analysis'
+    CHAINS_ANALYSIS: 'Chains analysis',
+    LARGE_AMINOACID_FLAG: 'Aminoacid number of atoms check',
 }
 
 # Set the "standard" file format of every possible file extension

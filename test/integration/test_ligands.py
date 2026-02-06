@@ -19,7 +19,7 @@ def test_generate_ligand_references():
     input_ligands = [
         '5957',
         {'drugbank': 'DB00945'},
-        {'chembl': 'CHEMBL112', 'name': 'TestLigand', 'selection': 'resname LIG'}]
+        {'chembl': 'CHEMBL112', 'name': 'Paracetamol', 'selection': 'resname LIG'}]  # 'RZVAJINKPMORJF-UHFFFAOYSA-N'
     pdb_ids = ['2L94']
     test_cases = [
         # Direct InChIKey matching

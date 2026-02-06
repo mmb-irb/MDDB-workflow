@@ -87,7 +87,6 @@ def generate_ligand_references(
     4. **User-forced selections**: Respects user-specified ligand selections from
        inputs.yaml, with warnings if TC compared to original fragment is insufficient.
     """
-    ligand_references = {}
     # Check input ligands format validity
     input_ligands = input_ligands or []
     for i, ligand in enumerate(input_ligands):
@@ -107,6 +106,7 @@ def generate_ligand_references(
         inchikey = residx_2_inchikey.get(resid, None)
         if inchikey and inchikey not in ligand_keys:
             ligand_keys[inchikey][resid] = {}
+    # Create a dictionary to store the references generated without user input
     automatic_references = {key: {} for key in ligand_keys}
     pubchem_ids_from_pdb = []
     pdb_ids = pdb_ids or []
@@ -118,7 +118,7 @@ def generate_ligand_references(
         mol = Chem.MolFromInchi(inchi, sanitize=False)
         # Original descriptors to calculate similarity later
         descriptor_data = obtain_mordred_morgan_descriptors(mol)
-        reference_fg = descriptor_data['morgan_fp_bit_array']
+        ligand_fg = descriptor_data['morgan_fp_bit_array']
         automatic_references[inchikey].update(descriptor_data)
         if pubchem_id:
             automatic_references[inchikey]['pubchem'] = pubchem_id
@@ -136,21 +136,20 @@ def generate_ligand_references(
         neutral_mol = rdMolStandardize.ChargeParent(mol)
         neutral_inchikey = Chem.MolToInchiKey(neutral_mol)
         if pubchem_id := inchikey_2_pubchem(neutral_inchikey):
-            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, reference_fg,
+            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, ligand_fg,
                                     automatic_references, 'after neutralization'):
                 continue
         # 2.2. Remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(mol, options='-SNon')
         if pubchem_id := inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(mol)
-            if record_pubchem_match(inchikey, pubchem_id, mol, reference_fg,
+            if record_pubchem_match(inchikey, pubchem_id, mol, ligand_fg,
                                     automatic_references, 'after stereochemistry removal'):
                 continue
         # Neutralize charges and remove stereochemistry
-        snon_inchikey = Chem.MolToInchiKey(neutral_mol, options='-SNon')
-        if pubchem_id := inchikey_2_pubchem(snon_inchikey):
-            Chem.RemoveStereochemistry(neutral_mol)
-            if record_pubchem_match(inchikey, pubchem_id, neutral_mol, reference_fg,
+        snon_neutral_inchikey = Chem.MolToInchiKey(neutral_mol, options='-SNon')
+        if pubchem_id := inchikey_2_pubchem(snon_neutral_inchikey):
+            if record_pubchem_match(inchikey, pubchem_id, mol, ligand_fg,
                                     automatic_references, 'after neutralization + stereochemistry removal'):
                 continue
         # 2.3. Standardize molecule
@@ -158,7 +157,7 @@ def generate_ligand_references(
         if standar_id and len(standar_id) == 1:
             standar_pubchem = standar_id[0]['pubchem']
             standar_mol = Chem.MolFromInchi(standar_id[0]['inchi'])
-            if record_pubchem_match(inchikey, standar_pubchem, standar_mol, reference_fg,
+            if record_pubchem_match(inchikey, standar_pubchem, standar_mol, ligand_fg,
                                     automatic_references, 'after standardization'):
                 continue
         # 2.4. Match against PDB-derived ligands
@@ -167,14 +166,14 @@ def generate_ligand_references(
             # This its okey since we can be biased towards matching to PDB ligands
             noH_mol = Chem.RemoveHs(mol)
             descriptor_data = obtain_mordred_morgan_descriptors(noH_mol)
-            reference_fg = descriptor_data['morgan_fp_bit_array']
+            noH_ligand_fg = descriptor_data['morgan_fp_bit_array']
             for pdb_ligand in pubchem_ids_from_pdb:
                 if not pdb_ligand.get('inchi', None):
                     ligand_data = obtain_pubchem_data_from_input(pdb_ligand)
                     pdb_ligand.update(ligand_data)
 
                 pdb_mol = Chem.MolFromInchi(pdb_ligand['inchi'])
-                success = record_pubchem_match(inchikey, pdb_ligand['pubchem'], pdb_mol, reference_fg,
+                success = record_pubchem_match(inchikey, pdb_ligand['pubchem'], pdb_mol, noH_ligand_fg,
                                         automatic_references, 'with PDB-derived ligand')
                 if success:
                     break
@@ -198,7 +197,7 @@ def generate_ligand_references(
                     if not compound or not standard_inchi:
                         assert False, "PubChem similarity search did not return valid compound data"
                     simil_mol = Chem.MolFromInchi(standard_inchi)
-                    success = record_pubchem_match(inchikey, cid, simil_mol, reference_fg,
+                    success = record_pubchem_match(inchikey, cid, simil_mol, ligand_fg,
                                         ligand_references, 'similarity search in PubChem')
                     if success: break
                 if success: break
@@ -209,6 +208,7 @@ def generate_ligand_references(
 
     # 4. User-forced selections
     input_ligands_data = []
+    user_references = {}
     for input_ligand in input_ligands:
         ligand_data = obtain_pubchem_data_from_input(input_ligand)
         # If the user defined a ligand name, it will be respected and added to the metadata
@@ -229,14 +229,14 @@ def generate_ligand_references(
             if auto_data.get('pubchem') == ligand_data['pubchem']:
                 matched_inchikey = auto_inchikey
                 break
-        # If found, move from automatic_references to ligand_references
+        # If found, move from automatic_references to user_references
         if matched_inchikey:
-            ligand_references[matched_inchikey] = automatic_references.pop(matched_inchikey)
+            user_references[matched_inchikey] = automatic_references.pop(matched_inchikey)
             if forced_selection:
-                ligand_references[matched_inchikey]['resindices'] = residue_indices
+                user_references[matched_inchikey]['resindices'] = residue_indices
         elif forced_selection:
-            # If not found, create a new entry in ligand_references
-            ligand_references[ligand_data['inchikey']] = ligand_data
+            # If not found, create a new entry in user_references
+            user_references[ligand_data['inchikey']] = ligand_data
         else:
             # Add to input ligands for similarity search
             input_fg = obtain_mordred_morgan_descriptors(Chem.MolFromInchi(ligand_data['inchi']))
@@ -264,15 +264,16 @@ def generate_ligand_references(
                  f'which is below the threshold of 0.6 when compared to the matched fragment (InChIKey: {matched_inchikey}).')
 
         # Update ligand reference with input data
-        ligand_references[matched_inchikey] = input_data
+        user_references[matched_inchikey] = input_data
         automatic_references.pop(matched_inchikey)
         print(f'Matched input ligand {input_data["pubchem"]} to reference {matched_inchikey} with TC={tc:.3f}')
 
-    # Merge remaining automatic references into ligand_references
-    ligand_references.update(automatic_references)
-    not_matched_ligands = [(inchikeys[k].molname, inchikeys[k].resindices)
-                           for k, v in ligand_references.items()
-                           if 'pubchem' not in v]
+    # Merge user and automatic references into ligand_references
+    ligand_references = {**user_references, **automatic_references}
+    not_matched_ligands = []
+    for k, v in ligand_references.items():
+        if 'pubchem' not in v:
+            not_matched_ligands.append((inchikeys[k].molname, inchikeys[k].resindices))
     if not_matched_ligands:
         for k, v in not_matched_ligands:
             warn(f'Ligand {k} could not be matched to any PubChem ID. Residues: {v}')

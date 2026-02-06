@@ -506,7 +506,7 @@ def main():
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
             dict_args = vars(args)
-            del dict_args['subcommand']  # preguntar Dani ¿?
+            del dict_args['subcommand']
             # Call the actual main function
             workflow_nassa(
                     config_file_path=args.config,
