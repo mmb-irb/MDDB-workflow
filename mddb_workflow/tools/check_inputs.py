@@ -331,19 +331,40 @@ def get_structure_atoms(structure_file: 'File') -> int:
 
 def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 'File') -> tuple[int, int]:
     """Get atoms from structure and trajectory together."""
-    # Note that declaring the iterator will not fail even when there is a mismatch
-    trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
-    # We must consume the generator first value to make the error raise
-    frame = next(trajectory)
-    # Now obtain the number of atoms from the frame we just read
-    trajectory_atom_count = frame.n_atoms
-    # And still, it may happen that the topology has more atoms than the trajectory but it loads
-    # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
-    # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
-    # Two double check the match, load the topology alone with PyTraj
-    topology = pyt.load_topology(structure_file.path)
-    structure_atom_count = topology.n_atoms
-    return structure_atom_count, trajectory_atom_count
+    try:
+        # Note that declaring the iterator will not fail even when there is a mismatch
+        trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
+        # We must consume the generator first value to make the error raise
+        frame = next(trajectory)
+        # Now obtain the number of atoms from the frame we just read
+        trajectory_atom_count = frame.n_atoms
+        # And still, it may happen that the topology has more atoms than the trajectory but it loads
+        # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
+        # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
+        # Two double check the match, load the topology alone with PyTraj
+        topology = pyt.load_topology(structure_file.path)
+        structure_atom_count = topology.n_atoms
+        return structure_atom_count, trajectory_atom_count
+    except Exception as error:
+        # If the error message matches with a known error then report the problem
+        error_message = str(error)
+        error_match = re.match(MDTRAJ_ATOM_MISMATCH_ERROR, error_message)
+        if error_match:
+            structure_atom_count = int(error_match[1])
+            trajectory_atom_count = int(error_match[2])
+            return structure_atom_count, trajectory_atom_count
+        # DANI: Esto de aquí abajo no he probado nunca que pase con PDBs
+        error_match = re.match(MDTRAJ_INSERTION_CODES_ERROR, error_message)
+        if error_match:
+            warn('The input structure has insertion codes.\n'
+            ' Some tools may crash when reading the structure (MDtraj).\n'
+            ' Some tools may ignore insertion codes when reading the topology (MDAnlysis, PyTraj, VMD).')
+            # Use other tool to read the topology
+            # Other tools could ignore the inserion codes
+            # However this is not a problem here, where we only care bout the number of atoms
+            return get_topology_and_trajectory_atoms_pytraj(structure_file, trajectory_file)
+        # If we do not know the error then raise it as is
+        raise error
 
 
 def check_and_fix_psf(input_topology_file: 'File', output_topology_file: 'File') -> bool:
