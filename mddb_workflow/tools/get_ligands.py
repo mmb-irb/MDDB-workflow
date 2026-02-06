@@ -429,6 +429,7 @@ def pdb_2_pubchem(pdb_id: str) -> list[str]:
             print(f' {ligand_code} -> No PubChem ID')
             continue
         print(f' {ligand_code} -> {pubchem_id}')
+        if type(pubchem_id) == str: pubchem_id = [pubchem_id]
         pubchem_ids.extend(pubchem_id)
 
     return pubchem_ids
