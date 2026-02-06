@@ -52,6 +52,7 @@ from mddb_workflow.tools.get_project_screenshot import get_project_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files, is_amber_top
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
+from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 
 # Import local analyses
 from mddb_workflow.analyses.rmsds import rmsds
@@ -688,6 +689,7 @@ class MD:
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
+    input_dummy_selection = property(input_getter('dummy_selection'), None, None, "Selection of atoms which are not real atoms but dummy atoms (read only)")
 
     def _set_pbc_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set PBC selection.
@@ -944,6 +946,7 @@ class Project:
         filter_selection: bool | str = False,
         pbc_selection: Optional[str] = None,
         cg_selection: Optional[str] = None,
+        dummy_selection: Optional[str] = None,
         image: bool = False,
         fit: bool = False,
         translation: list[float] = [0, 0, 0],
@@ -1016,6 +1019,8 @@ class Project:
             cg_selection (Optional[str]):
                 Selection of atoms which are not actual atoms but Coarse Grained beads.
                 Selection passed through console overrides the one in inputs file.
+            dummy_selection (Optional[str]):
+                Selection of atoms which are not real atoms but dummy atoms.
             image (bool):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
             fit (bool):
@@ -1205,6 +1210,7 @@ class Project:
         # PBC selection may come from the console or from the inputs
         self._input_pbc_selection = pbc_selection
         self._input_cg_selection = cg_selection
+        self._input_dummy_selection = dummy_selection
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1241,6 +1247,7 @@ class Project:
         self._pbc_selection = None
         self._pbc_residues = None
         self._cg_selection = None
+        self._dummy_selection = None
         self._cg_residues = None
         self._reference_bonds = None
         self._topology_reader = None
@@ -1764,6 +1771,7 @@ class Project:
     input_boxtype = inputs_property('boxtype', "Input boxtype (read only)")
     input_pbc_selection = inputs_property('pbc_selection', "Input Periodic Boundary Conditions (PBC) selection (read only)")
     input_cg_selection = inputs_property('cg_selection', "Input Coarse Grained (CG) selection (read only)")
+    input_dummy_selection = inputs_property('dummy_selection', "Input dummy atoms selection (read only)")
     input_customs = inputs_property('customs', "Input custom representations (read only)")
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
     input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
@@ -1849,7 +1857,7 @@ class Project:
         # If we already have a stored value then return it
         if self._cg_selection:
             return self._cg_selection
-        # Otherwise we must set the PBC selection
+        # Otherwise we must set the CG selection
         self._cg_selection = self._set_cg_selection(self.structure)
         return self._cg_selection
     cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
@@ -1870,6 +1878,38 @@ class Project:
         print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
+    def _set_dummy_selection(self):
+        # If no input selection was passed assume there are no dummy atoms in the system
+        if not self.input_dummy_selection: return Selection()
+        # If the input dummy selection is 'auto' then guess dummy atoms from their atom names
+        if self.input_dummy_selection == 'auto':
+            # Get atom indices of all atoms with names matching a dummy atom name patter
+            atom_indices = []
+            for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
+                for atom_index, atom in enumerate(self.structure.atoms):
+                    if re.match(dummy_name, atom.name):
+                        atom_indices.append(atom_index)
+            return Selection(atom_indices)
+        # If we have and actual VMD selection then parse it
+        return self.structure.select(self.input_dummy_selection, syntax='vmd')
+
+    def get_dummy_selection(self) -> 'Selection':
+        """Get the dummy atoms selection."""
+        # If we already have a stored value then return it
+        if self._dummy_selection:
+            return self._dummy_selection
+        # Otherwise we must set the dummy selection
+        self._dummy_selection = self._set_dummy_selection()
+        # Make sure dummy atoms are listed in the gromacs masses file and, if not, set their mass as 0
+        dummy_fake_masses = set()
+        for atom_index in self._dummy_selection.atom_indices:
+            atom = self.structure.atoms[atom_index]
+            dummy_fake_masses.add(( atom.residue.name, atom.name, 0 ))
+        extend_gromacs_masses(dummy_fake_masses)
+        # Finally return the selection
+        return self._dummy_selection
+    dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 
     # Set additional values infered from input values
     # RUBEN: unused?

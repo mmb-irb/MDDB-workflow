@@ -345,7 +345,10 @@ interactions:
 #    - PCA: Sudden jumps make not sense in PCA and they eclipse non-PBC movements
 #    - SASA: Residues close to the boundary will be considered exposed to solvent while they may be not
 #    - Pockets: Residues close to the boundary may be considered to have pockets while they have not. 
-# DANI: This isn't really possible because fpocket doesn't allow you to intelligently "discard" atoms. If you remove atoms so it doesn't find pockets in them, pockets can appear in the sites occupied by those atoms. For now, we discard the entire analysis when there's something in PBC and that's it.
+# DANI: This isn't really possible because fpocket doesn't allow you to intelligently "discard" atoms.
+# DANI: If you remove atoms so it doesn't find pockets in them then
+# DANI:   pockets can appear in the sites occupied by those atoms.
+# DANI: For now, we discard the entire analysis when there's something in PBC and that's it.
 #    - Clusters: Since Clustering is RMSD-based it has the same limitations
 #
 # If this field is set to 'auto' then PBC residues are set automatically.
@@ -368,6 +371,12 @@ pbc_selection: auto
 # IMPORTANT: EXPERIMENTAL INPUT
 
 cg_selection:
+
+# Set those atoms which are not real atoms but dummy atoms thus representing other entities.
+# These dummy atoms are used in some methodologies such as alchemical bonds
+# IMPORTANT: EXPERIMENTAL INPUT
+
+dummy_selection: auto
 
 #------------------------------------------------------------------------------------------------------------
 # REPRESENTATION PARAMETERS

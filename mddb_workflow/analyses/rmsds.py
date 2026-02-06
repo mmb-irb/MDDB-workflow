@@ -17,6 +17,7 @@ def rmsds(
     structure : 'Structure',
     pbc_selection : 'Selection',
     cg_selection : 'Selection',
+    dummy_selection : 'Selection',
     inchikey_map : list[dict],
     frames_limit : int = 5000,
     ):
@@ -96,11 +97,14 @@ def rmsds(
         for group_name, group_selection in non_pbc_selections.items():
             # Set the analysis filename
             rmsd_analysis = f'rmsd.{reference_name}.{group_name.lower().replace(" ","_")}.xvg'
-            # If part of the selection has coarse grain atoms then skip mass weighting
-            # Otherwise Gromacs may fail since the atom name may not be in the atommass library
+            # If part of the selection has coarse grain or dummy atoms atoms then skip mass weighting
+            # Note that we may have already automatically added masses to the gromas atommass file
+            # Thus we could make it work, but the values may be not real since masses are not real
             has_cg = group_selection & cg_selection
+            has_dummy = group_selection & dummy_selection
+            mass_weighted = not has_cg and not has_dummy
             # Run the rmsd
-            print(f' Reference: {reference_name}, Selection: {group_name},{" NOT" if has_cg else ""} mass weighted')
+            print(f' Reference: {reference_name}, Selection: {group_name},{"" if mass_weighted else " NOT"} mass weighted')
             rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis, skip_mass_weighting=has_cg)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
@@ -110,14 +114,20 @@ def rmsds(
             data = {
                 'values': rmsd_values,
                 'reference': reference_name,
-                'group': group_name
+                'group': group_name,
+                'massw': mass_weighted,
             }
             output_analysis.append(data)
             # Remove the analysis xvg file since it is not required anymore
             remove(rmsd_analysis)
 
     # Export the analysis in json format
-    save_json({ 'start': start, 'step': step, 'data': output_analysis }, output_analysis_filepath)
+    save_json({
+        'start': start,
+        'step': step,
+        'data': output_analysis,
+        'version': '0.0.1',
+    }, output_analysis_filepath)
 
 # RMSD
 #
