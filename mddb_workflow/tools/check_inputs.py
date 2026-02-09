@@ -338,12 +338,19 @@ def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 
         frame = next(trajectory)
         # Now obtain the number of atoms from the frame we just read
         trajectory_atom_count = frame.n_atoms
-        # And still, it may happen that the topology has more atoms than the trajectory but it loads
+        # And still, it may happen that the structure has more atoms than the trajectory but it loads
         # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
         # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
-        # Two double check the match, load the topology alone with PyTraj
-        topology = pyt.load_topology(structure_file.path)
-        structure_atom_count = topology.n_atoms
+        # Two double check the match, load the topology alone with PyTraj if it supports the format
+        if structure_file.is_pytraj_supported():
+            topology = pyt.load_topology(structure_file.path)
+            structure_atom_count = topology.n_atoms
+        # If pytraj does not support the format (e.g. .gro files) then try other tools
+        elif structure_file.format == 'gro':
+            structure_atom_count = get_atom_count(structure_file)
+        # If no tool supports the format then we surrender
+        else:
+            raise RuntimeError(f'Unsupported structure format: {structure_file.format}')
         return structure_atom_count, trajectory_atom_count
     except Exception as error:
         # If the error message matches with a known error then report the problem
