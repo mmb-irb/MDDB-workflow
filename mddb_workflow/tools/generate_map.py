@@ -171,7 +171,7 @@ def generate_protein_mapping(
     tried_alignments = {chain_data['name']: [] for chain_data in protein_parsed_chains}
 
     def match_sequences() -> bool:
-        """Set a function to try to match all protein sequences with the available reference sequences.
+        """Try to match all protein sequences with the available reference sequences.
         In case of match, objects in the 'protein_parsed_chains' list are modified by adding the result.
         Finally, return True if all protein sequences were matched with the available reference sequences or False if not.
         """
@@ -435,13 +435,16 @@ def generate_protein_mapping(
             return protein_parsed_chains
     # At this point we should have macthed all sequences
     # If not, kill the process unless mercy was given
+    unmatched_chains = [chain_data['name'] for chain_data in protein_parsed_chains if not chain_data['match']['ref']]
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
-        raise InputError('BLAST failed to find a matching reference sequence for at least one protein sequence. See the warnings above.\n'
-            ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file.\n' +
+        raise InputError(f'BLAST failed to find a matching reference sequence for chains: {", ".join(unmatched_chains)}.\n'
+            ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file:\n'+
+            f'\t- forced_references:\n\t\t{unmatched_chains[0]}: noref\n' +
             ' If your system has exotic proteins whose sequences are not found in the Swiss-Prot database you may force non-curated UniProt ids.\n' +
             ' If your system has very exotic proteins whose sequence are not in UniProt you can use the "--mercy refseq" flag to skip this error.')
     warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
+    # RUBEN: se añade un warning pero si se pone como no ref en el input, no se añade? De que sirve avisar en el cliente si es algo normal
     register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
     return protein_parsed_chains
 
