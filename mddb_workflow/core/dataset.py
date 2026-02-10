@@ -403,16 +403,25 @@ class Dataset:
                         rel_path = row[0]
                     else:
                         raise ValueError("rel_path is required for new project entries")
-
-                cur.execute('''
-                    INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
-                    VALUES (?, ?, ?, ?, ?, 0)
-                    ON CONFLICT(uuid) DO UPDATE SET
-                        state=excluded.state,
-                        message=excluded.message,
-                        last_modified=excluded.last_modified,
-                        rel_path=excluded.rel_path
-                ''', (uuid, rel_path, state, message, last_modified))
+                try:
+                    cur.execute('''
+                        INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
+                        VALUES (?, ?, ?, ?, ?, 0)
+                        ON CONFLICT(uuid) DO UPDATE SET
+                            state=excluded.state,
+                            message=excluded.message,
+                            last_modified=excluded.last_modified,
+                            rel_path=excluded.rel_path
+                    ''', (uuid, rel_path, state, message, last_modified))
+                except sqlite3.IntegrityError as e:
+                    if 'UNIQUE constraint failed: projects.rel_path' in str(e):
+                        # Get the UUID of the existing project with this rel_path
+                        cur.execute("SELECT uuid FROM projects WHERE rel_path=?", (rel_path,))
+                        row = cur.fetchone()
+                        if row:
+                            existing_uuid = row[0]
+                            raise ValueError(f"rel_path '{rel_path}' already exists in database with UUID '{existing_uuid}'") from e
+                    raise
 
             self.conn.commit()
 
