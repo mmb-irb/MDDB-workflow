@@ -80,7 +80,9 @@ def get_pdb_reference (pdb_id : str) -> dict:
             chains = identifier['asym_ids']
             for chain in chains:
                 chain_uniprots[chain] = uniprot_id
-        pdb_data['chain_uniprots'] = chain_uniprots
+        # Sort chain uniprots
+        # Otherwise the loader will complain every time since the order may change
+        pdb_data['chain_uniprots'] = dict(sorted(chain_uniprots.items()))
         pdb_data['organisms'] = list(set(organisms))
     except Exception as e:
         print(f'Error when mining PDB data for {pdb_id}')
