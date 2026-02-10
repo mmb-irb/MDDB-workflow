@@ -456,6 +456,7 @@ class Dataset:
             inputs_filename: str = 'inputs.yaml',
             query_path: list[str] = ['*'],
             query_state: list[str] = [],
+            query_message: list[str] = [],
         ):
         """Generate an inputs.yaml file for the project directory based on a Jinja2 template.
 
@@ -475,13 +476,16 @@ class Dataset:
                 List of directory glob patterns to filter the projects from the dataset.
             query_state (list[str]):
                 List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
 
 
         """
         # Query projects directly from database with filters
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
-        filtered_projects = self.query_table('projects', query_path, query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
         if len(filtered_projects) == 0:
             print("No projects found matching the specified query_path and query_state filters.")
             return
@@ -598,12 +602,13 @@ class Dataset:
             elif verbose:
                 print(f"  MD already exists: {rel_path} (UUID: {uuid})")
 
-    def _build_where_clause(self, query_path: list[str] = None, query_state: list[str] = None) -> tuple[str, list]:
+    def _build_where_clause(self, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None) -> tuple[str, list]:
         """Build a SQL WHERE clause from query parameters.
 
         Args:
             query_path: List of glob patterns to filter rel_path by (uses GLOB with OR)
             query_state: List of states to filter by (uses IN clause)
+            query_message: List of glob patterns to filter message by (uses GLOB with OR)
 
         Returns:
             Tuple of (where_clause_string, parameters_list)
@@ -629,16 +634,28 @@ class Dataset:
             if glob_conditions:
                 conditions.append(f"({' OR '.join(glob_conditions)})")
 
+        if query_message:
+            # Use GLOB pattern matching for message field
+            # Supports wildcards: * (any chars), ? (single char)
+            message_conditions = []
+            for pattern in query_message:
+                if pattern and pattern != '*':
+                    message_conditions.append("message GLOB ?")
+                    params.append(pattern)
+            if message_conditions:
+                conditions.append(f"({' OR '.join(message_conditions)})")
+
         where_clause = " AND ".join(conditions) if conditions else ""
         return where_clause, params
 
-    def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None) -> list[tuple]:
+    def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None) -> list[tuple]:
         """Query an available table with optional filters.
 
         Args:
             table: Table name to query ('projects' or 'mds')
             query_path: List of glob patterns to filter rel_path by
             query_state: List of states to filter by
+            query_message: List of glob patterns to filter message by (e.g., 'URLError*')
 
         Returns:
             List of tuples with project data
@@ -648,7 +665,7 @@ class Dataset:
             raise ValueError("Table must be either 'projects' or 'mds'")
         with self.locked_storage_file:
             cur = self.conn.cursor()
-            where_clause, params = self._build_where_clause(query_path, query_state)
+            where_clause, params = self._build_where_clause(query_path, query_state, query_message)
             cols = self.project_columns if table == 'projects' else self.md_columns
             query = f"SELECT {', '.join(cols)} FROM {table}"
             if where_clause:
@@ -675,6 +692,7 @@ class Dataset:
             include_logs: bool = False,
             query_path: list[str] | str = [],
             query_state: list[str] | str = [],
+            query_message: list[str] | str = [],
             query_scope: str = None,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
@@ -689,11 +707,13 @@ class Dataset:
             include_logs (bool, optional): If True, adds 'log_file' and 'err_file' columns with HTML links to the latest log files.
             query_path (list[str] | str): If provided, filters rows whose 'rel_path' matches these glob patterns.
             query_state (list[str] | str): If provided, filters rows whose 'state' matches this value/list of values.
+            query_message (list[str] | str): If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
             query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
 
         if query_scope:
             query_scope = query_scope.lower()
@@ -710,7 +730,7 @@ class Dataset:
         dataframes = []
         for scope in scopes_to_query:
             cols = self.project_columns if scope == 'projects' else self.md_columns
-            data = self.query_table(scope, query_path, query_state)
+            data = self.query_table(scope, query_path, query_state, query_message)
             df = pd.DataFrame(data, columns=cols)
             df['scope'] = scope
             dataframes.append(df)
@@ -784,6 +804,16 @@ class Dataset:
         """Retrieve the joined DataFrame view of projects and MDs with log file links."""
         return self.get_dataframe(uuid_length=8)
 
+    def error_summary(self) -> pd.DataFrame:
+        """Return a summary of error messages for projects."""
+        df = self.dataframe
+        return (df.loc[(df['state'] == 'error') & (df['scope'] == 'projects')]
+                .groupby('message').size()
+                .reset_index(name='count')
+                .sort_values('count', ascending=False)
+                .reset_index(drop=True)
+                )
+
     def _get_latest_log_files(self, rel_path: str) -> tuple[str | None, str | None]:
         """Find the most recent .out and .err log files in the rel_path/logs directory."""
         logs_dir = Path(self._rel_to_abs(rel_path)) / 'logs'
@@ -815,6 +845,7 @@ class Dataset:
     def launch_workflow(self,
         query_path: list[str] | str = [],
         query_state: list[str] | str = [],
+        query_message: list[str] | str = [],
         n_jobs: int = 0,
         pool_size: int = 1,
         slurm: bool = False,
@@ -828,6 +859,8 @@ class Dataset:
                 If provided, filters rows whose 'rel_path' matches these glob patterns.
             query_state (list[str] | str):
                 If provided, filters rows whose 'state' matches this value/list of values.
+            query_message (list[str] | str):
+                If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
             n_jobs (int):
                 Number of jobs to launch. If 0, all jobs are launched.
             pool_size (int):
@@ -842,8 +875,6 @@ class Dataset:
                 Only print the commands without executing them.
 
         """
-        if not slurm:
-            raise NotImplementedError("Only slurm=True is currently implemented")
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
         else:
@@ -860,9 +891,14 @@ class Dataset:
         # Query projects directly from database with filters
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
-        filtered_projects = self.query_table('projects', query_path, query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
 
         n = 0
+        if debug:
+            print(f"DEBUG: Found {len(filtered_projects)} projects matching the query filters.")
+            if len(filtered_projects) > 0 and slurm:
+                print(f"DEBUG: Job will not be submitted to SLURM in debug mode, but the job script will be generated.")
         for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
             rel_path = project_dict['rel_path']
@@ -892,9 +928,9 @@ class Dataset:
             if slurm:
                 # SLURM execution
                 if debug:
-                    print(f"cd {project_dir}")
-                    print(f'# Job script: {job_script_path}')
-                    print("sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
+                    print(f'Submitting SLURM job script: {job_script_path}')
+                    # print(f"In directory {project_dir}")
+                    # print("sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
                 else:
                     print(f"Submitting SLURM job for {project_dir}")
                     subprocess.run(['sbatch',

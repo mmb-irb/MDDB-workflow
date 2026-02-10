@@ -380,7 +380,14 @@ def main():
                 state_order = {state: index for index, state in enumerate(State)}
                 grouped['state_order'] = grouped['state'].apply(lambda x: state_order.get(State(x), -1))
                 grouped = grouped.sort_values('state_order').drop(columns=['state_order']).reset_index(drop=True)
+                print('==================================================================')
+                print("Summary of project states:")
+                print('==================================================================')
                 print(grouped)
+                print('\n==================================================================')
+                print("Summary of error messages for projects:")
+                print('==================================================================')
+                print(dataset.error_summary().head(10 if args.n_rows == 50 else args.n_rows))
                 return
             df = dataset.get_dataframe(
                 uuid_length=8,
@@ -391,6 +398,7 @@ def main():
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_scope=args.query_scope,
+                query_message=args.query_message
             )
             total = len(df)
             if args.n_rows == 0 or args.n_rows >= total:
@@ -414,6 +422,7 @@ def main():
                     query_path=args.query_path,
                     query_state=args.query_state,
                     query_scope=args.query_scope,
+                    query_message=args.query_message
                 ),
                 title="Live MDDB Dataset"
             )
@@ -424,11 +433,13 @@ def main():
                 overwrite=args.overwrite,
                 query_path=args.query_path,
                 query_state=args.query_state,
+                query_scope=args.query_scope
             )
         elif args.dataset_subcommand == 'run':
             dataset.launch_workflow(
                 query_path=args.query_path,
                 query_state=args.query_state,
+                query_message=args.query_message,
                 n_jobs=args.n_jobs,
                 slurm=args.slurm,
                 job_template=args.job_template,
@@ -790,6 +801,7 @@ query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
 query_parser.add_argument("-st", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
 query_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
+query_parser.add_argument("-ms", "--query_message", type=str, default=None, help=ds_help['get_dataframe']['query_message'])
 # Dataset inputs subcommand
 ds_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter, help="Generate inputs file for MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_inputs.add_argument("-it", "--inputs_template", type=str, help=ds_help['generate_inputs_yaml']['inputs_template_path'])
