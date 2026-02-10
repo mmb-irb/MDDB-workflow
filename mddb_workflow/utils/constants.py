@@ -300,7 +300,7 @@ EXTENSION_FORMATS = {
 # Topology and trajectory file formats supported by PyTraj
 PYTRAJ_SUPPORTED_FORMATS = set([
     # Topologies
-    'prmtop', 'top', 'psf', 'pdb'
+    'prmtop', 'top', 'psf', 'pdb',
     # Trajectories
     'nc', 'crd', 'dcd', 'trr', 'xtc'
 ])
