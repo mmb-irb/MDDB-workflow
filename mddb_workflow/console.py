@@ -432,8 +432,7 @@ def main():
                 inputs_generator=args.inputs_generator,
                 overwrite=args.overwrite,
                 query_path=args.query_path,
-                query_state=args.query_state,
-                query_scope=args.query_scope
+                query_state=args.query_state
             )
         elif args.dataset_subcommand == 'run':
             dataset.launch_workflow(

@@ -24,7 +24,7 @@ from urllib.error import HTTPError, URLError
 import urllib.request
 from subprocess import run, PIPE
 from dataclasses import asdict, is_dataclass
-import signal
+import multiprocessing
 from functools import wraps
 
 
@@ -783,23 +783,49 @@ def unique (source_list : list) -> list:
     return list(dict.fromkeys(source_list))
 
 
+def _timeout_worker(func, result_queue, args, kwargs):
+    """Worker function that runs in a separate process for timeout support."""
+    try:
+        result = func(*args, **kwargs)
+        result_queue.put(('success', result))
+    except Exception as e:
+        result_queue.put(('error', e))
+
+
 def timeout(seconds=60):
-    """Add a timeout to a function using signals."""
+    """Add a timeout to a function using a separate process.
+
+    Unlike the signal-based approach, this works in:
+    - Non-main threads
+    - Multiprocessing / cluster environments
+    - Any OS (not just Unix)
+    """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Define the handler that raises an error when time is up
-            def handle_timeout(signum, frame):
+            result_queue = multiprocessing.Queue()
+            process = multiprocessing.Process(
+                target=_timeout_worker,
+                args=(func, result_queue, args, kwargs),
+            )
+            process.start()
+            process.join(timeout=seconds)
+
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+                # Force kill if it didn't terminate gracefully
+                if process.is_alive():
+                    process.kill()
+                    process.join()
                 raise TimeoutError(f"Function '{func.__name__}' timed out after {seconds} seconds.")
 
-            # Register the signal and set the alarm
-            signal.signal(signal.SIGALRM, handle_timeout)
-            signal.alarm(seconds)
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                # Disable the alarm regardless of success or failure
-                signal.alarm(0)
-            return result
+            if result_queue.empty():
+                raise RuntimeError(f"Function '{func.__name__}' terminated without returning a result.")
+
+            status, payload = result_queue.get_nowait()
+            if status == 'error':
+                raise payload
+            return payload
         return wrapper
     return decorator
