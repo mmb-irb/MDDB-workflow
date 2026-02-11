@@ -15,7 +15,7 @@ CHAINS_VERSION = '0.1'
 
 
 @retry_request
-def request_interproscan (sequence : str) -> str:
+def request_interproscan(sequence: str) -> str:
     """Get the sequence and name of the chain in the structure and request the InterProScan."""
     # Set the request URL
     request_url = 'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/run'
@@ -38,8 +38,9 @@ def request_interproscan (sequence : str) -> str:
             raise error
     return parsed_response
 
-# Check the status of the InterProScan job
-def check_interproscan_status (jobid : str) -> str:
+
+def check_interproscan_status(jobid: str) -> str:
+    """Check the status of the InterProScan job."""
     # Set the request URL
     request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/status/{jobid}'
     parsed_response = None
@@ -49,14 +50,15 @@ def check_interproscan_status (jobid : str) -> str:
     except HTTPError as error:
         print(error.read().decode())
         if error.code == 404:
-            print(f' Not found')
+            print(' Not found')
             return None
         else:
             raise ValueError('Something went wrong with the InterProScan status request: ' + request_url)
     return parsed_response
 
-# Obtain the result of the InterProScan job in json format
-def check_interproscan_result (jobid : str) -> dict:
+
+def check_interproscan_result(jobid: str) -> dict:
+    """Obtain the result of the InterProScan job in json format."""
     # Set the request URL
     request_url = f'https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{jobid}/json'
     parsed_response = None
@@ -66,7 +68,7 @@ def check_interproscan_result (jobid : str) -> dict:
     except HTTPError as error:
         print(error.read().decode())
         if error.code == 404:
-            print(f' Not found')
+            print(' Not found')
             return None
         elif error.code == 503:
             raise RemoteServiceError('InterProScan Service unavailable. Please try again later.')
@@ -74,8 +76,10 @@ def check_interproscan_result (jobid : str) -> dict:
             raise ValueError('Something went wrong with the InterProScan results request: ' + request_url)
     return parsed_response
 
-# Get the parsed chains from the structure
-def get_protein_parsed_chains (structure : 'Structure') -> list:
+
+# RUBEN: move to structure? existe get_parsed_chains que hace basicamente lo mismo
+def get_protein_parsed_chains(structure: 'Structure') -> list:
+    """Get the parsed chains from the structure."""
     parsed_chains = []
     chains = structure.chains
     # Iterate over the chains in the structure
@@ -92,15 +96,17 @@ def get_protein_parsed_chains (structure : 'Structure') -> list:
         if all(letter == 'X' for letter in sequence):
             continue
         # Create a dictionary with the chain name, sequence and residue indices that be returned
-        sequence_object = { 'name': name, 'sequence': sequence }
+        sequence_object = {'name': name, 'sequence': sequence}
         parsed_chains.append(sequence_object)
     return parsed_chains
+
 
 # Set the expected ligand data fields
 CHAIN_DATA_FIELDS = set(['sequence', 'interproscan'])
 
-# Import the chains data from a file if exists
-def import_chains (chains_references_file : 'File') -> dict:
+
+def import_chains(chains_references_file: 'File') -> dict:
+    """Import the chains data from a file if exists."""
     # Read the file
     imported_chains = load_json(chains_references_file.path)
     # Format data as the process expects to find it
@@ -110,20 +116,21 @@ def import_chains (chains_references_file : 'File') -> dict:
                 imported_chain[expected_field] = None
     return imported_chains
 
-def prepare_chain_references (
-    structure : 'Structure',
-    chains_references_file : 'File',
-    database : 'Database',
+
+def prepare_chain_references(
+    structure: 'Structure',
+    chains_references_file: 'File',
+    database: 'Database',
 ):
     """Define the main function that will be called from the main script.
     This function will get the parsed chains from the structure and request the InterProScan service
-    to obtain the data for each chain."""
-
+    to obtain the data for each chain.
+    """
     # Obtain the protein parsed chains from the structure
     protein_parsed_chains = get_protein_parsed_chains(structure)
 
     # Get unique sequences
-    protein_sequences = set([ chain['sequence'] for chain in protein_parsed_chains ])
+    protein_sequences = set([chain['sequence'] for chain in protein_parsed_chains])
 
     print(f' Found {len(protein_parsed_chains)} protein chains with {len(protein_sequences)} unique sequences')
 
@@ -138,10 +145,10 @@ def prepare_chain_references (
 
     # Iterate protein sequences
     for sequence in protein_sequences:
-        # Check if the chain data already exists in the chains file
+        # Check if the chain data already exists in the chains file
         chain_data = next((data for data in chains_data if data['sequence'] == sequence), None)
         # If we have no previous chain data then check if the sequence is already in the MDDB database
-        if chain_data == None:
+        if chain_data is None:
             chain_data = database.get_reference_data('chains', sequence)
             if chain_data is not None:
                 chains_data.append(chain_data)
@@ -151,16 +158,16 @@ def prepare_chain_references (
                 save_json(chains_data, chains_references_file.path)
         # If we still have no chain data then create a new chain data dict
         # Set an object with the results of every call to InterProScan
-        if chain_data == None:
+        if chain_data is None:
             chain_data = {
                 'sequence': sequence,
                 'interproscan': None
             }
             chains_data.append(chain_data)
         # If chain data is missing any analysis then send a job
-        # Request the InterProScan service
+        # Request the InterProScan service (sequence length must be at least 3)
         # Keep the returned job ids to check the status and get the results later
-        if chain_data['interproscan'] == None:
+        if chain_data['interproscan'] is None and len(chain_data['sequence']) > 2:
             interproscan_jobid = request_interproscan(sequence)
             interproscan_jobids[sequence] = interproscan_jobid
 
@@ -176,13 +183,13 @@ def prepare_chain_references (
     get_interproscan_results(pending_jobids, interproscan_jobids, chains_data, chains_references_file)
 
 
-def get_interproscan_results (
-    pending_jobids : list,
-    interproscan_jobids : dict,
-    chains_data : list,
-    chains_references_file : 'File',
+def get_interproscan_results(
+    pending_jobids: list,
+    interproscan_jobids: dict,
+    chains_data: list,
+    chains_references_file: 'File',
 ) -> None:
-    # Set the timeout for the InterProScan jobs
+    # Set the timeout for the InterProScan jobs
     # AGUS: a veces ha llegado a tardar ~6 minutos que es excesivo, creo que  minutos es suficiente tiempo de espera
     TIMEOUT = 300  # 5 min (seg)
     start_time = time.time()
