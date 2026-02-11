@@ -2543,6 +2543,26 @@ class Structure:
                     residue.set_chain_index(new_chain.index)
         return len(splitted_fragments) > 0
 
+    def get_parsed_chains(self, only_protein: bool = False) -> list:
+        """Get each chain name and aminoacids sequence in a topology."""
+        parsed_chains = []
+        chains = self.chains
+        for chain in chains:
+            name = chain.name
+            sequence = ''
+            residue_indices = []
+            for residue in chain.residues:
+                # Check that residue is protein?
+                letter = protein_residue_name_to_letter(residue.name)
+                sequence += letter
+                residue_indices.append(residue.index)
+            # If all residues are 'X' then it means this is not a protein
+            if only_protein and all(letter == 'X' for letter in sequence):
+                continue
+            sequence_object = {'name': name, 'sequence': sequence, 'residue_indices': residue_indices}
+            parsed_chains.append(sequence_object)
+        return parsed_chains
+
     def sort_residues (self):
         """Coherently sort residues according to the indices of the atoms they hold."""
         # Set a function to sort atoms and residues by index

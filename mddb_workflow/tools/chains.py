@@ -77,30 +77,6 @@ def check_interproscan_result(jobid: str) -> dict:
     return parsed_response
 
 
-# RUBEN: move to structure? existe get_parsed_chains que hace basicamente lo mismo
-def get_protein_parsed_chains(structure: 'Structure') -> list:
-    """Get the parsed chains from the structure."""
-    parsed_chains = []
-    chains = structure.chains
-    # Iterate over the chains in the structure
-    for chain in chains:
-        # Get the name of the chain
-        name = chain.name
-        sequence = ''
-        # Iterate over the residues in the chain
-        for residue in chain.residues:
-            # Translate the residue letter to his equivalent in the aminoacids library
-            letter = protein_residue_name_to_letter(residue.name)
-            sequence += letter
-        # If all residues are 'X' then it means this is not a protein
-        if all(letter == 'X' for letter in sequence):
-            continue
-        # Create a dictionary with the chain name, sequence and residue indices that be returned
-        sequence_object = {'name': name, 'sequence': sequence}
-        parsed_chains.append(sequence_object)
-    return parsed_chains
-
-
 # Set the expected ligand data fields
 CHAIN_DATA_FIELDS = set(['sequence', 'interproscan'])
 
@@ -127,7 +103,7 @@ def prepare_chain_references(
     to obtain the data for each chain.
     """
     # Obtain the protein parsed chains from the structure
-    protein_parsed_chains = get_protein_parsed_chains(structure)
+    protein_parsed_chains = structure.get_parsed_chains(only_protein=True)
 
     # Get unique sequences
     protein_sequences = set([chain['sequence'] for chain in protein_parsed_chains])

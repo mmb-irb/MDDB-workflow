@@ -155,7 +155,7 @@ def generate_protein_mapping(
         for k, v in imported_references.items():
             references[k] = v
     # Get the structure chain sequences
-    parsed_chains = get_parsed_chains(structure)
+    parsed_chains = structure.get_parsed_chains()
     # Find out which chains are protein
     protein_parsed_chains = []
     for chain_data in parsed_chains:
@@ -486,27 +486,6 @@ def import_references(protein_references_file: 'File') -> list:
         uniprot = reference['uniprot']
         references[uniprot] = reference
     return references
-
-
-def get_parsed_chains(structure: 'Structure') -> list:
-    """Get each chain name and aminoacids sequence in a topology.
-
-    Output format example: [ { 'sequence': 'VNLTT', 'indices': [1, 2, 3, 4, 5] }, ... ]
-    """
-    parsed_chains = []
-    chains = structure.chains
-    for chain in chains:
-        name = chain.name
-        sequence = ''
-        residue_indices = []
-        for residue in chain.residues:
-            # Check that residue is protein?
-            letter = protein_residue_name_to_letter(residue.name)
-            sequence += letter
-            residue_indices.append(residue.index)
-        sequence_object = {'name': name, 'sequence': sequence, 'residue_indices': residue_indices}
-        parsed_chains.append(sequence_object)
-    return parsed_chains
 
 
 def align(ref_sequence: str, new_sequence: str, verbose: bool = False) -> Optional[tuple[list, float]]:
