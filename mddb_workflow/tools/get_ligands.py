@@ -4,7 +4,7 @@ import json
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
-from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM
+from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG
 from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, retry_request, handle_http_request
 from mddb_workflow.utils.type_hints import *
 
@@ -271,15 +271,26 @@ def generate_ligand_references(
     # Merge user and automatic references into ligand_references
     ligand_references = {**user_references, **automatic_references}
     not_matched_ligands = []
-    for k, v in ligand_references.items():
-        if 'pubchem' not in v:
-            not_matched_ligands.append((inchikeys[k].molname, inchikeys[k].resindices))
-    if not_matched_ligands:
-        for k, v in not_matched_ligands:
-            warn(f'Ligand {k} could not be matched to any PubChem ID. Residues: {v}')
-        if LIGANDS_MATCH_FLAG not in mercy:
-            raise InputError('Provide PubChem IDs for all ligands, a PDB code where it is '
-                             f'present or use the flag "-m {LIGANDS_MATCH_FLAG}" to bypass this check.')
+    large_aa = []
+    for key, data in ligand_references.items():
+        if 'pubchem' in data: continue
+        resids = inchikeys[key].resindices
+        molname = inchikeys[key].molname
+        is_large_aa = any(structure.residues[resid].is_large_aa() for resid in resids)
+        if is_large_aa:
+            large_aa.append((molname, resids))
+        else:
+            not_matched_ligands.append((molname, resids))
+        warn(f'Ligand {molname} could not be matched to any PubChem ID{" and has an aminoacid-like structure" if is_large_aa else ""}. Residues: {resids}')
+    large_aa_fail = large_aa and LARGE_AMINOACID_FLAG not in mercy
+    not_matched_fail = not_matched_ligands and LIGANDS_MATCH_FLAG not in mercy
+    if large_aa_fail or not_matched_fail:
+        fail_msg = 'Some ligands could not be matched to PubChem IDs.\n\tPlease, provide PubChem IDs for all ligands or a PDB code where they are present.'
+        if large_aa_fail:
+            fail_msg += f'\n\tUse the flag "-m {LARGE_AMINOACID_FLAG}" to bypass the check on: ' + ', '.join([f'{name} (residues {resids})' for name, resids in large_aa])
+        if not_matched_fail:
+            fail_msg += f'\n\tUse the flag "-m {LIGANDS_MATCH_FLAG}" to bypass the check on: ' + ', '.join([f'{name} (residues {resids})' for name, resids in not_matched_ligands])
+        raise InputError(fail_msg)
 
     if not ligand_references:
         print('No ligands were matched')

@@ -14,7 +14,7 @@ from mddb_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_c
 from mddb_workflow.utils.mdt_spells import sort_trajectory_atoms
 from mddb_workflow.utils.gmx_spells import make_index, read_ndx
 from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS
-from mddb_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn
+from mddb_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn, protein_residue_name_to_letter
 from mddb_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from mddb_workflow.utils.constants import STANDARD_COUNTER_CATION_ATOM_NAMES, STANDARD_COUNTER_ANION_ATOM_NAMES
 from mddb_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
@@ -29,6 +29,7 @@ from mddb_workflow.utils.type_hints import *
 AVAILABLE_CAPS = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
 AVAILABLE_LOWS = list('abcdefghijklmnopqrstuvwxyz')
 AVAILABLE_LETTERS = AVAILABLE_CAPS + AVAILABLE_LOWS
+ATOMS_PER_AMINOACID_LIMIT = 30
 
 # Set letters to be found in alphanumerical bases
 hexadecimal_letters    = set(AVAILABLE_CAPS[:6] + AVAILABLE_LOWS[:6])
@@ -756,6 +757,14 @@ class Residue:
 
     # The residue biochemistry classification (read only)
     classification = property(get_classification, None, None)
+
+    def is_large_aa(self) -> bool:
+        """Check if this residue is a large aminoacid."""
+        # Make sure the residue name corresponds to an aminoacid
+        letter = protein_residue_name_to_letter(self.name)
+        if letter == 'X' or self.atom_count <= ATOMS_PER_AMINOACID_LIMIT:
+            return False
+        return True
 
     def get_selection (self) -> 'Selection':
         """Generate a selection for this residue."""
