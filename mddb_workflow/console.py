@@ -821,7 +821,7 @@ ds_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormat
 # # Dataset run subcommand
 ds_run = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter, help="Run the workflow for a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_run.add_argument("-n", "--n_jobs", type=int, default=0, help=ds_help['launch_workflow']['n_jobs'])
-ds_run.add_argument("-c", "--mwf_run_cmd", type=int, default=0, help=ds_help['launch_workflow']['mwf_run_cmd'])
+ds_run.add_argument("-c", "--mwf_run_cmd", type=str, help=ds_help['launch_workflow']['mwf_run_cmd'])
 ds_run.add_argument("-sl", "--slurm", action="store_true", help=ds_help['launch_workflow']['slurm'])
 ds_run.add_argument("-jt", "--job-template", help=ds_help['launch_workflow']['job_template'])
 ds_run.add_argument("--debug", action="store_true", help=ds_help['launch_workflow']['debug'])
