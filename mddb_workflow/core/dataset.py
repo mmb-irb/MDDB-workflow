@@ -10,10 +10,21 @@ import time
 import os
 import glob
 import sqlite3
+import sys
+import threading
 from pathlib import Path
 from enum import Enum
 from contextlib import contextmanager
 import importlib.util
+
+
+def _stream_output(stream, log_file_handle, output_stream):
+    """Stream output from subprocess to both log file and terminal."""
+    for line in stream:
+        output_stream.write(line)
+        output_stream.flush()
+        log_file_handle.write(line)
+        log_file_handle.flush()
 
 
 class State(Enum):
@@ -850,6 +861,7 @@ class Dataset:
         pool_size: int = 1,
         slurm: bool = False,
         job_template: str = None,
+        mwf_run_cmd: str = None,
         debug: bool = False
     ):
         """Launch the workflow for each project directory in the dataset.
@@ -871,13 +883,21 @@ class Dataset:
                 Path to the bash script or SLURM job template file. You can use Jinja2
                 templating to customize the job script using the fields of
                 the input YAML, the project directory, and whether SLURM is used.
+            mwf_run_cmd (str):
+                Custom command to run the workflow.
             debug (bool):
                 Only print the commands without executing them.
 
         """
+        # Validation: ensure proper parameters are provided
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
-        else:
+        if not slurm and not mwf_run_cmd and not job_template:
+            raise ValueError("Either mwf_run_cmd or job_template must be provided for non-SLURM execution")
+
+        # Load job template if provided
+        template_str = None
+        if job_template:
             with open(job_template, 'r') as f:
                 template_str = f.read()
 
@@ -898,7 +918,7 @@ class Dataset:
         if debug:
             print(f"DEBUG: Found {len(filtered_projects)} projects matching the query filters.")
             if len(filtered_projects) > 0 and slurm:
-                print(f"DEBUG: Job will not be submitted to SLURM in debug mode, but the job script will be generated.")
+                print("DEBUG: Job will not be submitted to SLURM in debug mode, but the job script will be generated.")
         for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
             rel_path = project_dict['rel_path']
@@ -907,21 +927,23 @@ class Dataset:
             n += 1
             if n_jobs > 0 and n > n_jobs:
                 break
-            inputs_yaml_path = os.path.join(project_dir, 'inputs.yaml')
-            inputs_config = load_yaml(inputs_yaml_path) if os.path.exists(inputs_yaml_path) else {}
+            # Generate job script from template if provided
+            if template_str:
+                inputs_yaml_path = os.path.join(project_dir, 'inputs.yaml')
+                inputs_config = load_yaml(inputs_yaml_path) if os.path.exists(inputs_yaml_path) else {}
+                template = jinja2.Template(template_str)
+                rendered_script = template.render(**inputs_config,
+                                                project_status=project_dict,
+                                                DIR=Path(project_dir).name,
+                                                slurm=slurm)
 
-            template = jinja2.Template(template_str)
-            rendered_script = template.render(**inputs_config,
-                                              project_status=project_dict,
-                                              DIR=Path(project_dir).name,
-                                              slurm=slurm)
-
-            job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
+                job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
+                with open(job_script_path, 'w') as f:
+                    f.write(rendered_script)
+                os.chmod(job_script_path, 0o755)
+            # Create logs directory if it doesn't exist
             log_dir = os.path.join(project_dir, 'logs')
             os.makedirs(log_dir, exist_ok=True)
-            with open(job_script_path, 'w') as f:
-                f.write(rendered_script)
-            os.chmod(job_script_path, 0o755)
             log_file = os.path.join(log_dir, f'mwf_{int(time.time())}.out')
             err_file = os.path.join(log_dir, f'mwf_{int(time.time())}.err')
             # Launch workflow
@@ -953,16 +975,47 @@ class Dataset:
                     })
             else:
                 # Normal Python execution (sequential)
+                command_to_run = mwf_run_cmd if mwf_run_cmd else f"bash {os.path.basename(job_script_path)}"
                 if debug:
                     print(f"cd {project_dir}")
-                    print(f"bash {project_dir}/{os.path.basename(job_script_path)}")
+                    print(f"{command_to_run}")
                     continue
                 print(f"Running job for {project_dir}")
-                with open(log_file, 'w') as out_f, open(err_file, 'w') as err_f:
-                    subprocess.run(job_script_path, cwd=project_dir, stdout=out_f, stderr=err_f)
+                self._run_sequential_job(command_to_run, project_dir, log_file, err_file)
+
         # Execute parallel jobs if any
         if parallel and jobs_to_run and not debug:
             self._run_parallel_jobs(jobs_to_run, max_concurrent=pool_size)
+
+    def _run_sequential_job(self, command_to_run: str, project_dir: str, log_file: str, err_file: str):
+        """Run a single job sequentially with real-time output to both terminal and log files."""
+        proc = subprocess.Popen(
+            command_to_run,
+            cwd=project_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            text=True,
+            bufsize=1
+        )
+
+        with open(log_file, 'w') as out_f, open(err_file, 'w') as err_f:
+            # Create threads to handle stdout and stderr
+            stdout_thread = threading.Thread(
+                target=_stream_output,
+                args=(proc.stdout, out_f, sys.stdout)
+            )
+            stderr_thread = threading.Thread(
+                target=_stream_output,
+                args=(proc.stderr, err_f, sys.stderr)
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            # Wait for threads to complete
+            stdout_thread.join()
+            stderr_thread.join()
+
+        proc.wait()
 
     def _run_parallel_jobs(self, jobs: list[dict], max_concurrent: int):
         """Run jobs in parallel and report progress.
