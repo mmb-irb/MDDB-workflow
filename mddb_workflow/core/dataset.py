@@ -436,12 +436,13 @@ class Dataset:
 
             self.conn.commit()
 
-    def remove_entry(self, directory: str | Path, verbose: bool = False):
+    def remove_entry(self, query_path: str | list[str], verbose: bool = True):
         """Remove a single project or MD entry from the database by directory."""
-        if isinstance(directory, Path):
-            directory = directory.resolve().as_posix()
-        uuid, project_uuid = self._read_uuid_from_cache(directory)
-        self.remove_entry_by_uuid(uuid, project_uuid, verbose=verbose)
+        query_path = _type_check_dir_list(query_path)
+        entries = self.query_table('projects', query_path=query_path)
+        for entry in entries:
+            uuid = entry[0]  # uuid is the first column in projects
+            self.remove_entry_by_uuid(uuid, verbose=verbose)
 
     def remove_entry_by_uuid(self, uuid: str, project_uuid: str = None, verbose: bool = False):
         """Remove a single project or MD entry from the database by UUID."""
@@ -815,6 +816,19 @@ class Dataset:
         """Retrieve the joined DataFrame view of projects and MDs with log file links."""
         return self.get_dataframe(uuid_length=8)
 
+    def summary(self) -> pd.DataFrame:
+        """Return a summary DataFrame with the count of projects in each state."""
+        df = self.get_dataframe(
+                    query_scope='project',
+        )
+        # Group by state and count
+        summary = df.groupby("state").size().reset_index(name="count")
+        # Sort by state order:
+        state_order = {state: index for index, state in enumerate(State)}
+        summary['state_order'] = summary['state'].apply(lambda x: state_order.get(State(x), -1))
+        summary = summary.sort_values('state_order').drop(columns=['state_order']).reset_index(drop=True)
+        return summary
+
     def error_summary(self) -> pd.DataFrame:
         """Return a summary of error messages for projects."""
         df = self.dataframe
@@ -892,8 +906,7 @@ class Dataset:
         # Validation: ensure proper parameters are provided
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
-        if not slurm and not mwf_run_cmd and not job_template:
-            raise ValueError("Either mwf_run_cmd or job_template must be provided for non-SLURM execution")
+        mwf_run_cmd = 'mwf run'
 
         # Load job template if provided
         template_str = None
@@ -980,7 +993,7 @@ class Dataset:
                     print(f"cd {project_dir}")
                     print(f"{command_to_run}")
                     continue
-                print(f"Running job for {project_dir}")
+                print(f"Running job for dataset entry {project_dir}")
                 self._run_sequential_job(command_to_run, project_dir, log_file, err_file)
 
         # Execute parallel jobs if any

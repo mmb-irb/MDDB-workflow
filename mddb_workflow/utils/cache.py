@@ -32,7 +32,7 @@ class Cache:
     def refresh(self):
         """Check if the cache file has changed right before we modify its content.
         If so, then we must read it again before.
-        This is checked in case the workflow is running several times in paralel
+        This is checked in case the workflow is running several times in parallel.
         """
         current_filehash = self.file.get_cksum()
         if current_filehash != self.filehash: self.load()

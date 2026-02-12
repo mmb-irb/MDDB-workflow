@@ -371,23 +371,17 @@ def main():
 
         elif args.dataset_subcommand == 'show':
             if args.summary:
-                summary = dataset.get_dataframe(
-                    query_scope='project',
-                )
-                # Group by state and count
-                grouped = summary.groupby("state").size().reset_index(name="count")
-                # Sort by state order:
-                state_order = {state: index for index, state in enumerate(State)}
-                grouped['state_order'] = grouped['state'].apply(lambda x: state_order.get(State(x), -1))
-                grouped = grouped.sort_values('state_order').drop(columns=['state_order']).reset_index(drop=True)
+                summary = dataset.summary()
                 print('==================================================================')
                 print("Summary of project states:")
                 print('==================================================================')
-                print(grouped)
+                print(summary)
+                errors = dataset.error_summary().head(10 if args.n_rows == 50 else args.n_rows)
+                if len(errors) == 0: return
                 print('\n==================================================================')
                 print("Summary of error messages for projects:")
                 print('==================================================================')
-                print(dataset.error_summary().head(10 if args.n_rows == 50 else args.n_rows))
+                print(errors)
                 return
             df = dataset.get_dataframe(
                 uuid_length=8,
@@ -793,6 +787,9 @@ dataset_add = dataset_subparsers.add_parser("add", formatter_class=CustomHelpFor
 dataset_add.add_argument("-p", "--paths_or_globs", nargs='*', help=ds_help['add_entries']['paths_or_globs'])
 dataset_add.add_argument("-i", "--ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
 dataset_add.add_argument("-md", "--md_dirs", nargs='*', help=ds_help['add_entries']['md_dirs'], default=[])
+# Dataset remove subcommand
+dataset_remove = dataset_subparsers.add_parser("remove", formatter_class=CustomHelpFormatter, help="Remove a project from the dataset storage file.", parents=[common_ds_parser])
+dataset_remove.add_argument("-p", "--query_path", help='Path to the project to be removed from the dataset.')
 # Dataset status subcommand
 dataset_add = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter, help="Show the status of a project inside the dataset.", parents=[common_ds_parser])
 dataset_add.add_argument("-p", "--project_path", help='Path to the project.')
