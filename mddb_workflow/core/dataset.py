@@ -436,13 +436,14 @@ class Dataset:
 
             self.conn.commit()
 
-    def remove_entry(self, query_path: str | list[str], verbose: bool = True):
+    def remove_entry(self, query_path: str | list[str], query_scope: str = "projects", verbose: bool = True):
         """Remove a single project or MD entry from the database by directory."""
         query_path = _type_check_dir_list(query_path)
-        entries = self.query_table('projects', query_path=query_path)
+        entries = self.query_table(query_scope, query_path=query_path)
         for entry in entries:
             uuid = entry[0]  # uuid is the first column in projects
-            self.remove_entry_by_uuid(uuid, verbose=verbose)
+            project_uuid = entry[1] if query_scope == 'mds' else None  # project_uuid is the second column in mds
+            self.remove_entry_by_uuid(uuid, project_uuid=project_uuid, verbose=verbose)
 
     def remove_entry_by_uuid(self, uuid: str, project_uuid: str = None, verbose: bool = False):
         """Remove a single project or MD entry from the database by UUID."""
@@ -867,26 +868,22 @@ class Dataset:
         """Return HTML representation for automatic Jupyter notebook display."""
         return self.dataframe.to_html(escape=False)
 
-    def launch_workflow(self,
-        query_path: list[str] | str = [],
-        query_state: list[str] | str = [],
-        query_message: list[str] | str = [],
+    def launch(self,
+        cmd: str = None,
         n_jobs: int = 0,
         pool_size: int = 1,
         slurm: bool = False,
         job_template: str = None,
-        mwf_run_cmd: str = None,
+        query_path: list[str] | str = [],
+        query_state: list[str] | str = [],
+        query_message: list[str] | str = [],
         debug: bool = False
     ):
-        """Launch the workflow for each project directory in the dataset.
+        """Launch a command for each project directory in the dataset.
 
         Args:
-            query_path (list[str] | str):
-                If provided, filters rows whose 'rel_path' matches these glob patterns.
-            query_state (list[str] | str):
-                If provided, filters rows whose 'state' matches this value/list of values.
-            query_message (list[str] | str):
-                If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
+            cmd (str):
+                Custom command to run the workflow or any other command/script.
             n_jobs (int):
                 Number of jobs to launch. If 0, all jobs are launched.
             pool_size (int):
@@ -897,8 +894,12 @@ class Dataset:
                 Path to the bash script or SLURM job template file. You can use Jinja2
                 templating to customize the job script using the fields of
                 the input YAML, the project directory, and whether SLURM is used.
-            mwf_run_cmd (str):
-                Custom command to run the workflow.
+            query_path (list[str] | str):
+                If provided, filters rows whose 'rel_path' matches these glob patterns.
+            query_state (list[str] | str):
+                If provided, filters rows whose 'state' matches this value/list of values.
+            query_message (list[str] | str):
+                If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
             debug (bool):
                 Only print the commands without executing them.
 
@@ -906,7 +907,7 @@ class Dataset:
         # Validation: ensure proper parameters are provided
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
-        mwf_run_cmd = 'mwf run'
+        cmd = 'mwf run' if cmd is None else cmd
 
         # Load job template if provided
         template_str = None
@@ -954,6 +955,7 @@ class Dataset:
                 with open(job_script_path, 'w') as f:
                     f.write(rendered_script)
                 os.chmod(job_script_path, 0o755)
+            command_to_run = cmd if cmd else f"bash {os.path.basename(job_script_path)}"
             # Create logs directory if it doesn't exist
             log_dir = os.path.join(project_dir, 'logs')
             os.makedirs(log_dir, exist_ok=True)
@@ -982,18 +984,17 @@ class Dataset:
                     jobs_to_run.append({
                         'project_dir': project_dir,
                         'rel_path': rel_path,
-                        'job_script_path': job_script_path,
+                        'command_to_run': command_to_run,
                         'log_file': log_file,
                         'err_file': err_file
                     })
             else:
                 # Normal Python execution (sequential)
-                command_to_run = mwf_run_cmd if mwf_run_cmd else f"bash {os.path.basename(job_script_path)}"
                 if debug:
                     print(f"cd {project_dir}")
                     print(f"{command_to_run}")
                     continue
-                print(f"Running job for dataset entry {project_dir}")
+                print(f"Running job for dataset entry {rel_path}")
                 self._run_sequential_job(command_to_run, project_dir, log_file, err_file)
 
         # Execute parallel jobs if any
@@ -1037,7 +1038,7 @@ class Dataset:
             jobs (list[dict]): List of job dictionaries with keys:
                 - project_dir: Full path to project directory
                 - rel_path: Relative path for display
-                - job_script_path: Path to the job script
+                - command_to_run: Command to run for the job
                 - log_file: Path to the log file
                 - err_file: Path to the error file
             max_concurrent (int): Maximum number of concurrent jobs.
@@ -1058,11 +1059,11 @@ class Dataset:
                 log_f = open(job['log_file'], 'w')
                 err_f = open(job['err_file'], 'w')
                 proc = subprocess.Popen(
-                    job['job_script_path'],
+                    job['command_to_run'],
                     cwd=job['project_dir'],
                     stdout=log_f,
                     stderr=err_f,
-                    shell=False
+                    shell=True
                 )
                 running_processes[proc] = job
                 open_files[proc] = (log_f, err_f)

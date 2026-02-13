@@ -1,7 +1,7 @@
 # This is the starter script
 
 from os import walk, mkdir, getcwd
-from os.path import exists, isdir, isabs, relpath, normpath, split, basename
+from os.path import exists, isdir, isabs, relpath, normpath, split, basename, join
 import sys
 import io
 import re
@@ -52,7 +52,6 @@ from mddb_workflow.tools.get_project_screenshot import get_project_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files, is_amber_top
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 
 # Import local analyses
 from mddb_workflow.analyses.rmsds import rmsds
@@ -928,6 +927,29 @@ class Project:
     These MDs share all or most topology and metadata.
     """
 
+    @staticmethod
+    def project_directory(directory: str) -> str:
+        """Get the project directory from the input directory."""
+        directory = normpath(directory)
+        # If it is an absolute path then make it relative to the workflow caller
+        if isabs(directory):
+            directory = relpath(directory)
+        # Make sure the directory exists
+        if not exists(directory):
+            raise InputError(f'Project directory {directory} does not exist')
+        if not isdir(directory):
+            raise InputError(f'Project directory {directory} exists and it is not a directory')
+        return directory
+
+    @staticmethod
+    def create_cache(directory: str = '.') -> Cache:
+        """Create or load the project cache. Cannot fail
+        unless the directory doesn't exist, which is a pre-condition anyway.
+        """
+        directory = Project.project_directory(directory)
+        return Cache(File(join(directory, CACHE_FILENAME)))
+
+
     def __init__(self,
         directory: str = '.',
         accession: Optional[str] = None,
@@ -1062,21 +1084,8 @@ class Project:
 
         """
         # Save input parameters
-        # Save the project directory
-        self.directory = normpath(directory)
-        # If it is an absolute path then make it relative to the workflow caller
-        if isabs(self.directory):
-            self.directory = relpath(self.directory)
-        # Save the directory name alone apart
-        if self.directory == '.':
-            self.directory_name = basename(getcwd())
-        else:
-            self.directory_name = basename(self.directory)
-        # Make sure the directory exists
-        if not exists(self.directory):
-            raise InputError(f'Project directory {self.directory} does not exist')
-        if not isdir(self.directory):
-            raise InputError(f'Project directory {self.directory} exists and it is not a directory')
+        self.directory = self.project_directory(directory)
+        self.directory_name = basename(getcwd() if self.directory == '.' else self.directory)
 
         # Set the database handler
         self.ssleep = ssleep
@@ -1497,13 +1506,14 @@ class Project:
         if self._input_topology_filepath is not None:
             return self._input_topology_filepath
 
-        def relativize_and_parse_path (input_filepath: str) -> str:
+        def relativize_and_parse_path(input_filepath: str) -> str:
             """Check and fix the input topology filepath.
             If it is an URL then set the filepath where it is to be downloaded.
             Find if the path is relative to the workflow caller directory or to the project.
             If the path exists in both contexts then priorize the project-relative one.
             Relativize the path to the workflow caller directory.
-            Also parse glob notation."""
+            Also parse glob notation.
+            """
             # If it is a URL then set the paths for the further download
             if is_url(input_filepath):
                 self._input_topology_url = input_filepath
@@ -2387,21 +2397,28 @@ class ErrorHandling:
     md_errors: list[tuple[str, str]] = []
 
     def __init__(self,
-        wf_class: Union['Project', 'MD'],
+        cache: 'Cache',
         keep_going: bool = False,
         dataset: Dataset = None,
         clear_register: bool = False,
     ):
         """Initialize the error handling."""
-        self.scope = 'Project' if isinstance(wf_class, Project) else 'MD'
-        self.md_dir = wf_class.directory if self.scope == 'MD' else None
-        self.uuids = {'uuid': wf_class.cache.retrieve('uuid'),
-                      'project_uuid': wf_class.cache.retrieve('project_uuid')}
+        self.uuids = {'uuid': cache.retrieve('uuid'),
+                      'project_uuid': cache.retrieve('project_uuid')}
+        self.is_md = True if self.uuids.get('project_uuid') else False
+        self.dir = cache.file.basepath
         self.keep_going = keep_going
         # Make the update function with partial so we do not have to repeat parameters
+        self.bind_dataset(dataset)
+        self.register = []
+        if clear_register:
+            ErrorHandling.md_errors.clear()
+
+    def bind_dataset(self, dataset: Dataset | None):
+        """Bind a dataset update function to the error handler."""
         if dataset:
             self.update_state = partial(dataset.update_status,
-                                        rel_path=dataset._abs_to_rel(wf_class.directory),
+                                        rel_path=dataset._abs_to_rel(self.dir),
                                         **self.uuids)
             if not dataset.get_uuid_status(**self.uuids):
                 # If no status is available, add a new entry
@@ -2409,9 +2426,6 @@ class ErrorHandling:
         else:
             # If no dataset is available, use a null function
             self.update_state = lambda *args, **kwargs: None
-        self.register = []
-        if clear_register:
-            ErrorHandling.md_errors.clear()
 
     def __enter__(self):
         """Enter the context manager."""
@@ -2424,9 +2438,9 @@ class ErrorHandling:
         if exc_type and issubclass(exc_type, Exception):
             error = exc_value.__class__.__name__ + ': ' + str(exc_value)
             self.update_state(state=State.ERROR, message=error)
-            if self.scope == 'MD' and self.keep_going:
+            if self.is_md and self.keep_going:
                 # Record error to print at the end of the run and continue
-                ErrorHandling.md_errors.append((self.md_dir, error))
+                ErrorHandling.md_errors.append((self.dir, error))
                 print(error)
                 return True  # Suppress exception
         else:
@@ -2460,37 +2474,39 @@ def workflow(
     # Print workflow header
     git_version = get_git_version()
     print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}){COLOR_END}')
+    # Early creation of the cache and dataset to be able to register initialization errors
+    cache = Project.create_cache(project_parameters.get('directory', '.'))
+    dataset = Dataset(dataset_path) if dataset_path else None
+    with ErrorHandling(cache, keep_going, dataset) as error_handler:
+        # Initiate the project
+        project = Project(**project_parameters)
+        project_directory_label = project.directory
+        if project_directory_label == '.':
+            project_directory_label = 'current directory'
+        # Take dataset_path inputs file (CLI has preference)
+        if not dataset and project.input_dataset:
+            dataset = Dataset(project.input_dataset)
+            error_handler.bind_dataset(dataset)
 
-    # Initiate the project
-    project = Project(**project_parameters)
-    project_directory_label = project.directory
-    if project_directory_label == '.':
-        project_directory_label = 'current directory'
-    print(f'Processing project at {project_directory_label}')
-    print(f'  {len(project.mds)} MDs are to be run')
+        print(f'Processing project at {project_directory_label}')
+        print(f'  {len(project.mds)} MDs are to be run')
 
-    # Set the tasks to be run
-    tasker = TaskResolver(
-        include=include,
-        exclude=exclude,
-        overwrite=overwrite,
-        download=download,
-        setup=setup,
-    )
-    # Set overwritables
-    project.overwritables = tasker.get_project_overwritables()
-    for md in project.mds:
-        md.overwritables = tasker.get_md_overwritables()
-
-    dataset = None
-    if dataset_path:  # From CLI argument
-        dataset = Dataset(dataset_path)
-    elif project.input_dataset:  # From project inputs file
-        dataset = Dataset(project.input_dataset)
+        # Set the tasks to be run
+        tasker = TaskResolver(
+            include=include,
+            exclude=exclude,
+            overwrite=overwrite,
+            download=download,
+            setup=setup,
+        )
+        # Set overwritables
+        project.overwritables = tasker.get_project_overwritables()
+        for md in project.mds:
+            md.overwritables = tasker.get_md_overwritables()
 
     # Run the project tasks and MD tasks as per the task resolver.
     t0 = time.time()
-    with ErrorHandling(project, keep_going, dataset, clear_register=True) as error_handler:
+    with ErrorHandling(project.cache, keep_going, dataset, clear_register=True) as error_handler:
         for task in tasker.project_tasks:
             # Get the function to be called and call it
             getter = requestables[task]
@@ -2503,7 +2519,7 @@ def workflow(
             print(f'\n{CYAN_HEADER} Processing MD at {md.directory}{COLOR_END}')
             error_handler.update_state(state=State.RUNNING, message=f'Processing MD at {md.directory}')
             # Run the MD tasks
-            with ErrorHandling(md, keep_going, dataset):
+            with ErrorHandling(md.cache, keep_going, dataset):
                 for task in tasker.md_tasks:
                     # Get the function to be called and call it
                     getter = requestables[task]

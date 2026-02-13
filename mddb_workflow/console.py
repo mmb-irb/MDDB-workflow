@@ -429,12 +429,13 @@ def main():
                 query_state=args.query_state
             )
         elif args.dataset_subcommand == 'run':
-            dataset.launch_workflow(
+            dataset.launch(
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_message=args.query_message,
                 n_jobs=args.n_jobs,
-                mwf_run_cmd=args.mwf_run_cmd,
+                pool_size=args.pool_size,
+                cmd=args.cmd,
                 slurm=args.slurm,
                 job_template=args.job_template,
                 debug=args.debug
@@ -817,8 +818,9 @@ ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpForm
 ds_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter, help="Scan a directory and add all MDDB projects to a dataset storage file.", parents=[common_ds_parser])
 # # Dataset run subcommand
 ds_run = dataset_subparsers.add_parser("run", formatter_class=CustomHelpFormatter, help="Run the workflow for a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
-ds_run.add_argument("-n", "--n_jobs", type=int, default=0, help=ds_help['launch_workflow']['n_jobs'])
-ds_run.add_argument("-c", "--mwf_run_cmd", type=str, help=ds_help['launch_workflow']['mwf_run_cmd'])
-ds_run.add_argument("-sl", "--slurm", action="store_true", help=ds_help['launch_workflow']['slurm'])
-ds_run.add_argument("-jt", "--job-template", help=ds_help['launch_workflow']['job_template'])
-ds_run.add_argument("--debug", action="store_true", help=ds_help['launch_workflow']['debug'])
+ds_run.add_argument("-n", "--n_jobs", type=int, default=0, help=ds_help['launch']['n_jobs'])
+ds_run.add_argument("-ps", "--pool_size", type=int, default=1, help=ds_help['launch']['pool_size'])
+ds_run.add_argument("-c", "--cmd", type=str, help=ds_help['launch']['cmd'])
+ds_run.add_argument("-sl", "--slurm", action="store_true", help=ds_help['launch']['slurm'])
+ds_run.add_argument("-jt", "--job-template", help=ds_help['launch']['job_template'])
+ds_run.add_argument("--debug", action="store_true", help=ds_help['launch']['debug'])

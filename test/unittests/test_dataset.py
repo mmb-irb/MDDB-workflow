@@ -44,13 +44,14 @@ def test_add_remove_entries():
             elif "proj1" in d:
                 assert status['num_mds'] == 3
         # Now remove the 'wrong' project
-        ds.remove_entry(tmpdir / "wrong", verbose=True)
+        ds.remove_entry("wrong", verbose=True)
         assert ds.get_status(tmpdir / "wrong") is None  # 'wrong' project should be removed
         # Remove specific replicas from proj0
-        ds.remove_entry(tmpdir / "proj0/replica0", verbose=True)
-        assert ds.get_status(tmpdir / "proj0")['num_mds'] == 1
-        ds.remove_entry(tmpdir / "proj1/replica0", verbose=True)
-        ds.remove_entry(tmpdir / "proj1/replica1", verbose=True)
+        assert ds.get_status(tmpdir / "proj0")['num_mds'] == 2
+        ds.remove_entry("proj0/replica0", query_scope='mds', verbose=True)
+        assert ds.get_status(tmpdir / "proj0")['num_mds'] == 1, "Expected 1 MD after removing replica0"
+        ds.remove_entry("proj1/replica0", query_scope='mds', verbose=True)
+        ds.remove_entry("proj1/replica1", query_scope='mds', verbose=True)
         assert ds.get_status(tmpdir / "proj1")['num_mds'] == 1  # One replica should remain
 
 
