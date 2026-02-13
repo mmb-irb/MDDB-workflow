@@ -10,6 +10,8 @@ from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit.Chem.rdDetermineBonds import DetermineBondOrders
 from MDAnalysis.converters.RDKitInferring import MDAnalysisInferrer
+import socket
+socket.setdefaulttimeout(120)
 
 
 @dataclass
