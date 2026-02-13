@@ -26,6 +26,7 @@ from subprocess import run, PIPE
 from dataclasses import asdict, is_dataclass
 import multiprocessing
 from functools import wraps
+import socket
 
 
 def is_imported(module_name: str) -> bool:
@@ -827,5 +828,29 @@ def timeout(seconds=60):
             if status == 'error':
                 raise payload
             return payload
+        return wrapper
+    return decorator
+
+
+def socket_timeout(seconds: int):
+    """Set socket timeout for the duration of a function call.
+
+    This is a simpler alternative to the full process-based timeout for cases where we just want to
+    ensure that network operations don't hang indefinitely.
+    This is the case for SSL handshakes in clusters where connection issues can cause long hangs.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Save the current timeout
+            old_timeout = socket.getdefaulttimeout()
+            try:
+                # Set the new timeout
+                socket.setdefaulttimeout(seconds)
+                # Execute the function
+                return func(*args, **kwargs)
+            finally:
+                # Restore the original timeout
+                socket.setdefaulttimeout(old_timeout)
         return wrapper
     return decorator
