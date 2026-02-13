@@ -4,7 +4,7 @@ import multiprocessing
 from dataclasses import dataclass, field
 from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import warn, save_json, timeout, socket_timeout
+from mddb_workflow.utils.auxiliar import warn, save_json, timeout, SocketTimeout
 from mddb_workflow.utils.type_hints import *
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
@@ -141,7 +141,6 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
     return (inchikey, inchi, resindices, error)
 
 
-@socket_timeout(120)
 def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
@@ -171,6 +170,8 @@ def generate_inchikeys(
         which can indicate mismatched residue definitions or stereoisomers.
 
     """
+    socket_timeout = SocketTimeout(120)
+    socket_timeout.start()
     try:
         universe.universe.atoms.charges
     except Exception:
@@ -303,7 +304,7 @@ def generate_inchikeys(
         key_counts = '\n'.join([f'\t{k}: {c: >4}' for k, c in counts.items()])
         warn(f'The fragment {name} has more than one InChi key:\n'
                 f'{key_counts}')
-
+    socket_timeout.stop()
     return inchikeys
 
 

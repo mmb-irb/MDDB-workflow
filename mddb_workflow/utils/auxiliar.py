@@ -832,25 +832,28 @@ def timeout(seconds=60):
     return decorator
 
 
-def socket_timeout(seconds: int):
-    """Set socket timeout for the duration of a function call.
+class SocketTimeout:
+    """Set socket timeout for a block of code.
 
     This is a simpler alternative to the full process-based timeout for cases where we just want to
     ensure that network operations don't hang indefinitely.
     This is the case for SSL handshakes in clusters where connection issues can cause long hangs.
+
+    Usage:
+        with SocketTimeout(120):
+            # Code that makes network requests
+            response = requests.get(url)
     """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Save the current timeout
-            old_timeout = socket.getdefaulttimeout()
-            try:
-                # Set the new timeout
-                socket.setdefaulttimeout(seconds)
-                # Execute the function
-                return func(*args, **kwargs)
-            finally:
-                # Restore the original timeout
-                socket.setdefaulttimeout(old_timeout)
-        return wrapper
-    return decorator
+    def __init__(self, seconds: int):
+        self.seconds = seconds
+        self.old_timeout = None
+
+    def start(self):
+        # Save the current timeout
+        self.old_timeout = socket.getdefaulttimeout()
+        # Set the new timeout
+        socket.setdefaulttimeout(self.seconds)
+
+    def stop(self):
+        # Restore the original timeout
+        socket.setdefaulttimeout(self.old_timeout)

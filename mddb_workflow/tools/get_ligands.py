@@ -5,7 +5,7 @@ from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG
-from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, retry_request, handle_http_request, socket_timeout
+from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, retry_request, handle_http_request, SocketTimeout
 from mddb_workflow.utils.type_hints import *
 
 
@@ -54,7 +54,6 @@ def record_pubchem_match(
     return tc >= threshold
 
 
-@socket_timeout(120)
 def generate_ligand_references(
     structure: 'Structure',
     cache: 'Cache',
@@ -88,6 +87,8 @@ def generate_ligand_references(
     4. **User-forced selections**: Respects user-specified ligand selections from
        inputs.yaml, with warnings if TC compared to original fragment is insufficient.
     """
+    socket_timeout = SocketTimeout(120)
+    socket_timeout.start()
     # Check input ligands format validity
     input_ligands = input_ligands or []
     for i, ligand in enumerate(input_ligands):
