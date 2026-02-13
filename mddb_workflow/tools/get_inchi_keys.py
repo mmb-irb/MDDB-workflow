@@ -4,14 +4,12 @@ import multiprocessing
 from dataclasses import dataclass, field
 from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import warn, save_json, timeout
+from mddb_workflow.utils.auxiliar import warn, save_json, timeout, socket_timeout
 from mddb_workflow.utils.type_hints import *
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit.Chem.rdDetermineBonds import DetermineBondOrders
 from MDAnalysis.converters.RDKitInferring import MDAnalysisInferrer
-import socket
-socket.setdefaulttimeout(120)
 
 
 @dataclass
@@ -143,6 +141,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
     return (inchikey, inchi, resindices, error)
 
 
+@socket_timeout(120)
 def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
