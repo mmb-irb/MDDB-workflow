@@ -1,12 +1,13 @@
 from os import remove
 from mddb_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
-from mddb_workflow.tools.get_bonds import get_excluded_atoms_selection
+from mddb_workflow.tools.get_bonds import get_excluded_atoms_selection, get_most_stable_bonds
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frame
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
-from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, LARGE_AMINOACID_FLAG
-from mddb_workflow.utils.structures import Structure
+from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
+from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG
+from mddb_workflow.utils.structures import Structure, Residue
 from mddb_workflow.utils.type_hints import *
 
 
@@ -201,6 +202,9 @@ def structure_corrector(
     # Incoherent residue bonds -----------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
+    # Set a variable to store guessed atoms, in case we need them
+    guessed_atoms_structure = None
+
     # Make sure there are no disconnected groups of atoms in every residue
     for residue in structure.residues:
         # If the residue is missing bonds then we can not check if it is coherent
@@ -211,14 +215,52 @@ def structure_corrector(
         # Otherwise we report the problem
         residue_selection = residue.get_selection()
         fragments = list(structure.find_fragments(residue_selection))
-        if len(fragments) == 0: raise RuntimeError('Do we have an empty residue?')
-        if len(fragments) == 1: raise RuntimeError('Test failed but should not')
-        warn(f'Multiple fragments in residue {residue.index}: {residue}')
+        n_fragments = len(fragments)
+        if n_fragments == 0: raise RuntimeError('Do we have an empty residue?')
+        if n_fragments == 1: raise RuntimeError('Test failed but should not')
+        warn(f'Multiple fragments ({n_fragments}) in residue {residue.index}: {residue}')
         for f, fragment in enumerate(fragments, 1):
             fragment_atoms = [structure.atoms[index] for index in fragment.atom_indices]
             atom_names = [atom.label for atom in fragment_atoms]
             print(f' Fragment {f}: {", ".join(atom_names)}')
-        raise TestFailure(f'Residue {residue.index}: {residue} is not coherent: some atoms are disconnected')
+        # DANI: There are two possible scenarios here:
+        # 1 - Independent atom fragments are in the same residue by mistake
+        # 2 - Atom bonds are wrong for some atom(s) in this residue
+        # In the first case we could simply split the residue in multiple residues to fix the problem
+        # In the second scenario we must surrender
+        # We check if we are in the first scenario by looking at the distance between atoms fragments
+        # Guess atom bonds by distance and radii
+        if not guessed_atoms_structure:
+            guessed_atoms_structure = structure.copy()
+            guessed_bonds = get_most_stable_bonds(
+                output_structure_file.path,
+                input_trajectory_file.path,
+                snapshots)
+            guessed_atoms_structure.bonds = guessed_bonds
+        # Check if the number of fragments is the same or 1 lower using the guessed bonds
+        # If the number of guessed fragments matches perfectly the actual number of fragments then we assume it is scenario 1
+        # In any other scenario we complain
+        guessed_fragments = list(guessed_atoms_structure.find_fragments(residue_selection))
+        n_guessed_fragments = len(guessed_fragments)
+        if n_guessed_fragments != n_fragments:
+            raise TestFailure(f'Residue {residue.index}: {residue} is not coherent: some atoms are disconnected')
+        print('Guessed fragments match actual fragments, so we assume bonds are correct.')
+        print('This means that multiple residues are numbered as the same residue by mistake.')
+        print('In order to solve this issue, this residue will be splitted in new renumerated residues.')
+        last_number = residue.number
+        for fragment in fragments[1:]:
+            last_number += 1
+            # Set the new residue
+            new_residue = Residue(residue.name, last_number, residue.icode)
+            structure.set_new_residue(new_residue)
+            residue.chain.add_residue(new_residue)
+            # Add fragment atoms to the new residue
+            fragment_atoms = [structure.atoms[index] for index in fragment.atom_indices]
+            for atom in fragment_atoms:
+                new_residue.add_atom(atom)
+        # Update the structure file using the corrected structure
+        print(' The structure file has been modified (splitted independent residue) -> ' + output_structure_file.filename)
+        structure.generate_pdb_file(output_structure_file.path)
 
     # ------------------------------------------------------------------------------------------
     # Incoherent atom bonds ---------------------------------------------------------------
