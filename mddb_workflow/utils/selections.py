@@ -6,7 +6,7 @@ from mddb_workflow.utils.auxiliar import ranger
 class Selection:
 
     def __init__ (self, atom_indices : Optional[ list[int] ] = None):
-        self.atom_indices = atom_indices if atom_indices != None else []
+        self.atom_indices = sorted(atom_indices) if atom_indices != None else []
 
     def __repr__ (self):
         return f'<Selection ({len(self.atom_indices)} atoms)>'
