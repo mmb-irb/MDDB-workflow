@@ -713,8 +713,8 @@ def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
         # Add the new domain to the list
         domains.append(domain)
     # Mine protein functions from Gene Ontology references
-    # Get database references
-    db_references = parsed_response['dbReferences']
+    # Get database references. It may no exist in some uniprot entries (e.g. P04058)
+    db_references = parsed_response.get('dbReferences', [])
     # Get references from Gene Ontology (GO) only
     go_references = [ref for ref in db_references if ref['type'] == 'GO']
     # A Gene Ontology entry may be one of three types:
