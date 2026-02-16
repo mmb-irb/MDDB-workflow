@@ -27,14 +27,6 @@ def pca (
     output_analysis_filepath = f'{output_directory}/{OUTPUT_PCA_FILENAME}'
     output_trajectory_projections_prefix = f'{output_directory}/{OUTPUT_PCA_PROJECTION_PREFIX}'
 
-    # If trajectory frames number is bigger than the limit we create a reduced trajectory
-    pca_trajectory_filepath, step, frames = get_reduced_trajectory(
-        structure_file,
-        trajectory_file,
-        snapshots,
-        frames_limit,
-    )
-
     # Parse the string selections
     # VMD selection syntax
     parsed_fit_selection = structure.select(pca_fit_selection, syntax='vmd')
@@ -57,6 +49,14 @@ def pca (
     if not parsed_analysis_selection:
         print(' No selection to do PCA')
         return
+
+    # If trajectory frames number is bigger than the limit we create a reduced trajectory
+    pca_trajectory_filepath, step, frames = get_reduced_trajectory(
+        structure_file,
+        trajectory_file,
+        snapshots,
+        frames_limit,
+    )
 
     # Load the trajectory
     mdtraj_trajectory = mdt.load(pca_trajectory_filepath, top=structure_file.path)
