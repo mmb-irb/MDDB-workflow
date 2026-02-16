@@ -1,17 +1,16 @@
 import pytraj as pt
 
-from mddb_workflow.utils.auxiliar import all_cases
+from mddb_workflow.utils.auxiliar import all_cases, all_charges
 from mddb_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.gmx_spells import make_index, tpr_filter, get_tpr_atom_count
 from mddb_workflow.utils.type_hints import *
 
 # Set the atom selections to be tried
-ALL_CASES_COUNTER_IONS = all_cases(STANDARD_COUNTER_ION_ATOM_NAMES)
-CHARGE_SAFE_COUNTER_IONS = [ f'{ion}?' for ion in all_cases(STANDARD_COUNTER_ION_ATOM_NAMES) ]
+ALL_COUNTER_IONS = all_charges(all_cases(STANDARD_COUNTER_ION_ATOM_NAMES))
 AMBER_MASKS = {
     'No water': f'!:{",".join(STANDARD_SOLVENT_RESIDUE_NAMES)}',
-    'No water or counter ions': f'!:{",".join(STANDARD_SOLVENT_RESIDUE_NAMES)},{",".join(CHARGE_SAFE_COUNTER_IONS)}'
+    'No water or counter ions': f'!:{",".join(STANDARD_SOLVENT_RESIDUE_NAMES)},{",".join(ALL_COUNTER_IONS)}'
 }
 
 GROMACS_MASKS = {

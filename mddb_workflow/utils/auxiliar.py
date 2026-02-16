@@ -130,6 +130,21 @@ def all_cases(names: list[str] | set[str]) -> set[str]:
         all_names += [all_upper, all_lower, one_upper]
     return set(all_names)
 
+def all_charges(names: list[str] | set[str]) -> set[str]:
+    """Given a list or set of names.
+
+    Return a set with all charge-posibilites:
+    - No charge
+    - Positive charge (+)
+    - Negative charge (-)
+
+    """
+    all_names = []
+    for name in names:
+        positive = name + '+'
+        negative = name + '-'
+        all_names += [name, positive, negative]
+    return set(all_names)
 
 def residue_name_to_letter(residue_name: str) -> str:
     """Given a residue name, return its single letter."""
