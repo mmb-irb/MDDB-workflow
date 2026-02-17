@@ -1,6 +1,6 @@
 import requests
 from functools import lru_cache
-from mddb_workflow.utils.auxiliar import warn
+from mddb_workflow.utils.auxiliar import warn, retry_request
 from mddb_workflow.utils.type_hints import *
 
 
@@ -55,6 +55,7 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
     return lipid_references
 
 
+@retry_request
 @lru_cache(maxsize=None)
 def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     """Search the InChI keys in LIPID MAPS."""
@@ -90,6 +91,7 @@ def get_swisslipids_info(entity_id) -> dict:
         return False
 
 
+@retry_request
 @lru_cache(maxsize=None)
 def is_in_swisslipids(inchikey, only_first_layer=False) -> dict:
     """Search the InChI keys in SwissLipids.

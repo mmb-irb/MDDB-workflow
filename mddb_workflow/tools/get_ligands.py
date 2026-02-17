@@ -98,16 +98,18 @@ def generate_ligand_references(
         elif type(ligand) is str:
             raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
     # Get non-lipid inchikeys
-    ligand_keys = {key: {} for key in inchikeys if key not in lipid_references.keys()}
+    ligand_keys = [key for key in inchikeys if key not in lipid_references.keys()]
     residx_2_inchikey = {resid: inchikey
                          for inchikey, data in inchikeys.items()
                          for resid in data.resindices}
+    # Convert membrane_map['no_mem_lipid'] to residue indices
+    no_mem_lipid = set([structure.atoms[atom_index].residue.index for atom_index in membrane_map['no_mem_lipid']])
     # Add non-membrane lipid inchikeys
-    for resid in membrane_map['no_mem_lipid']:
+    for resid in no_mem_lipid:
         # Some residues may not have InChIKeys (e.g. CG)
         inchikey = residx_2_inchikey.get(resid, None)
         if inchikey and inchikey not in ligand_keys:
-            ligand_keys[inchikey][resid] = {}
+            ligand_keys.append(inchikey)
     # Create a dictionary to store the references generated without user input
     automatic_references = {key: {} for key in ligand_keys}
     pubchem_ids_from_pdb = []

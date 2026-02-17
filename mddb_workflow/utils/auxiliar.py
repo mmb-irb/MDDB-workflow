@@ -853,11 +853,6 @@ class SocketTimeout:
     This is a simpler alternative to the full process-based timeout for cases where we just want to
     ensure that network operations don't hang indefinitely.
     This is the case for SSL handshakes in clusters where connection issues can cause long hangs.
-
-    Usage:
-        with SocketTimeout(120):
-            # Code that makes network requests
-            response = requests.get(url)
     """
     def __init__(self, seconds: int):
         self.seconds = seconds
