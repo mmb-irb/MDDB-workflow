@@ -298,7 +298,6 @@ def generate_ligand_references(
 
     if not ligand_references:
         print('No ligands were matched')
-
     return ligand_references
 
 
@@ -532,8 +531,9 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
             name_substance = iupac_name_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
     if name_substance is None:
         # If we still do not have a name then we assume the compound has no name
+        # We get the title found on the page
         # This may happen (e.g. 57449604)
-        name_substance = 'Unnamed'
+        name_substance = record.get('RecordTitle', 'Unnamed')
 
     # Mine the SMILES
     computed_descriptors_subsection = next((s for s in names_and_ids_subsections if s.get('TOCHeading', None) == 'Computed Descriptors'), None)
