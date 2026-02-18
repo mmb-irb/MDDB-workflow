@@ -48,6 +48,12 @@ def generate_membrane_mapping(
         membrane_map = all_atom_membranes(lipid_map, structure_file, universe)
     if membrane_map['n_mems'] > 0:
         save_json(membrane_map, output_file.path)
+    # Print leaflets stats
+    for mem_idx, mem_data in membrane_map['mems'].items():
+        n_top = len(mem_data['leaflets']['top'])
+        n_bot = len(mem_data['leaflets']['bot'])
+        print(f"Membrane {mem_idx}: {n_top} lipids in top leaflet, {n_bot} lipids in bottom leaflet.")
+    print(f"{len(membrane_map['no_mem_lipid'])} lipid atoms not assigned to any membrane.")
     return membrane_map
 
 

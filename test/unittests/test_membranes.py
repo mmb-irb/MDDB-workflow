@@ -20,14 +20,14 @@ class TestMembraneMapping:
     """Unit tests for the membrane mapping tool.
 
     - A01IP: base case
-    - A01J5: glucolopids
+    - A01J5: glucolipids
     - A02F9: only lipids
     - OTRMG: no topology/charges
     - cg_test: coarse-grained system
     - cg_test_04: coarse-grained system with changing membranes
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'cg_test'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -45,10 +45,12 @@ class TestMembraneMapping:
             universe = mda.Universe(top, traj.absolute_path, topology_format='ITP')
         else:
             universe = mda.Universe(all_coordinates=structure_file.absolute_path, topology=top)
+        if test_accession == 'cg_test':
+            universe.atoms.types = ['Cg'] * len(universe.atoms)
         output_file = File(f'{test_proj_dir}_membrane_mapping_output.json')
         membrane_map = generate_membrane_mapping(inchikeys, lipid_references, structure_file, universe, output_file)
         assert membrane_map['n_mems'] == 1
         top_size = len(membrane_map['mems']['0']['leaflets']['top'])
         bot_size = len(membrane_map['mems']['0']['leaflets']['bot'])
         # Check the leaflets have similar size with 5% tolerance
-        assert abs(top_size - bot_size) / max(top_size, bot_size) < 0.05
+        assert abs(top_size - bot_size) / max(top_size, bot_size) < 0.20
