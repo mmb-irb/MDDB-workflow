@@ -86,10 +86,10 @@ def get_mda_universe_from_stopology(
     return Universe(mda_topology, coordinates_file)
 
 
-def get_mda_universe(structure_file: 'File',                # To load in MDAnalysis
-                      trajectory_file: 'File',              # To load in MDAnalysis
-                      reference_bonds: list[list[int]],     # To set the bonds
-                      charges: list[float]) -> 'Universe':  # To set the charges
+def get_mda_universe(structure_file: 'File',               # To load in MDAnalysis
+                     trajectory_file: 'File',              # To load in MDAnalysis
+                     reference_bonds: list[list[int]],     # To set the bonds
+                     charges: list[float]) -> 'Universe':  # To set the charges
     """Create a MDAnalysis universe using data in the workflow."""
     # Make MDAnalysis warnings and logs grey
     print(GREY_HEADER, end='\r')
@@ -106,6 +106,10 @@ def get_mda_universe(structure_file: 'File',                # To load in MDAnaly
     # Set the charges
     if charges and charges != MISSING_CHARGES and len(charges) > 0:
         universe.add_TopologyAttr('charges', np.array(charges, dtype=np.float32))
+
+    # No elements can happen if we use the faith flag
+    if not hasattr(universe.atoms, 'elements'):
+        universe.guess_TopologyAttrs(to_guess=['elements'])
     print(COLOR_END, end='\r')
     return universe
 

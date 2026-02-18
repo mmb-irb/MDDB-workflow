@@ -253,12 +253,12 @@ def load_json(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
         raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
 
 
-def save_json(content, filepath: str, indent: Optional[int] = None):
+def save_json(content, filepath: str, indent: Optional[int] = None, separators: Optional[tuple] = None):
     """Save a JSON with additional logic to better handle problems."""
     try:
         with open(filepath, 'w') as file:
             serialized_content = json_serializer(content)
-            json.dump(serialized_content, file, indent=indent)
+            json.dump(serialized_content, file, indent=indent, separators=separators)
     except Exception as error:
         # Rename the JSON file since it will be half written thus giving problems when loaded
         os.rename(filepath, filepath + '.wrong')

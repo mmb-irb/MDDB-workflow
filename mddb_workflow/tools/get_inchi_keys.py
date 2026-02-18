@@ -172,9 +172,7 @@ def generate_inchikeys(
     """
     socket_timeout = SocketTimeout(120)
     socket_timeout.start()
-    try:
-        universe.universe.atoms.charges
-    except Exception:
+    if not hasattr(universe.atoms, 'charges'):
         warn('Topology file does not have charges, InChI keys may be unreliable.')
 
     # 1) Prepare residue data for parallel processing
