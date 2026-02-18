@@ -254,10 +254,8 @@ class Dataset:
             cache = load_json(cache_file)
             uuid = cache.get('uuid')
             project_uuid = cache.get('project_uuid')
-            if not uuid:
-                raise ValueError(f"No 'uuid' found in cache file '{cache_file}'. This may be an old project."
-                                 " Update the cache by running the workflow.")
-            return uuid, project_uuid
+            if uuid:
+                return uuid, project_uuid
         if make_uuid:
             cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
             uuid = cache.retrieve('uuid')
@@ -764,11 +762,11 @@ class Dataset:
         if 'num_mds' in df_joined.columns:
             df_joined['num_mds'] = df_joined['num_mds'].apply(lambda x: int(x) if isinstance(x, float) and not pd.isna(x) else x)
         # Optionally make rel_path relative to root_path
-        if root_path is not None:
-            root_path = os.path.abspath(root_path)
-            df_joined['rel_path'] = df_joined['rel_path'].apply(
-                lambda x: os.path.relpath(Path(x).resolve(), root_path)
-            )
+        # if root_path is not None:
+        #     root_path = os.path.abspath(root_path)
+        #     df_joined['rel_path'] = df_joined['rel_path'].apply(
+        #         lambda x: os.path.relpath(Path(x).resolve(), root_path)
+        #     )
 
         # Optionally truncate uuid and project_uuid columns for display
         if uuid_length is not None and uuid_length > 0:

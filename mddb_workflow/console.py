@@ -799,7 +799,7 @@ query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
 query_parser.add_argument("-st", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
 query_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
-query_parser.add_argument("-ms", "--query_message", type=str, default=None, help=ds_help['get_dataframe']['query_message'])
+query_parser.add_argument("-ms", "--query_message", nargs='*', default=[], help=ds_help['get_dataframe']['query_message'])
 # Dataset inputs subcommand
 ds_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter, help="Generate inputs file for MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_inputs.add_argument("-it", "--inputs_template", type=str, help=ds_help['generate_inputs_yaml']['inputs_template_path'])
