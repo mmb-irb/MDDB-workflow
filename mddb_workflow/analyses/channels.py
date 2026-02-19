@@ -1,41 +1,31 @@
-from biobb_mem.mdanalysis_biobb.mda_hole import mda_hole
+import re
+import numpy as np
+from mdahole2.analysis import HoleAnalysis
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json
 from mddb_workflow.utils.constants import OUTPUT_CHANNELS_FILENAME
 from mddb_workflow.utils.type_hints import *
-import re
-import numpy as np
 
 
 def channels(
-    structure_file: 'File',
-    trajectory_file: 'File',
+    universe: 'Universe',
     output_directory: str,
     membrane_map: dict,
     snapshots: int,
     frames_limit: int
 ):
-    """Analyze channels in a membrane protein using MDAnalysis' mda_hole."""
+    """Analyze channels in a membrane protein using MDAnalysis mda_hole."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping channels analysis')
         return
-
+    if universe.select_atoms('protein').n_atoms == 0:
+        print('-> No protein found, skipping channels analysis')
+        return
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-
-    prop = {
-        'select': 'protein',
-        'steps': frame_step,
-        'sample': 0.2,
-        'dot_density': 13,
-        'disable_logs': True,
-        'disable_sandbox': True,
-    }
-
-    mda_hole(input_top_path=structure_file.path,
-            input_traj_path=trajectory_file.path,
-            output_hole_path=output_directory + '/hole.vmd',
-            output_csv_path=output_directory + '/mda.hole_profile.csv',
-            properties=prop)
+    hole = HoleAnalysis(universe)
+    hole.run(step=frame_step)
+    hole.create_vmd_surface(output_directory + '/hole.vmd', dot_density=13)
+    hole.delete_temporary_files()
 
     with open(output_directory + '/hole.vmd', 'r') as f:
         lines = f.readlines()

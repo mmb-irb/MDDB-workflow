@@ -12,6 +12,7 @@ import os
 def area_per_lipid(
     structure_file: 'File',
     trajectory_file: 'File',
+    universe: 'Universe',
     output_directory: str,
     membrane_map: dict
 ):
@@ -19,7 +20,10 @@ def area_per_lipid(
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping area per lipid analysis')
         return
-
+    if universe.select_atoms('protein').n_atoms == 0:
+        print('-> Analysis not implemented yet without protein. Skipping channels analysis')
+        # TODO: shere should be APL without protein, but fatslim_apl is not working without a selection, so we skip it for now
+        return
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_APL_FILENAME}'
 
