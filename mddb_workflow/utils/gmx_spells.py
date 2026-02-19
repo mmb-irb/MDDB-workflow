@@ -41,23 +41,22 @@ def run_gromacs(
     # Otherwise it may happen that gromacs runs in less than 1 seconds and the start time is higher
     start_time = time().__trunc__()
 
+    # If error is to be shown the color it in grey
+    # This is usually used to see progress logs
+    if show_error_logs: print(GREY_HEADER)
+
     # Set the gromacs process
-    # Note that at this point the command is not yet run
     process = run([ GROMACS_EXECUTABLE, *command.split(), '-quiet' ],
         stdin = user_input_process.stdout if user_input else None,
         stdout = PIPE, stderr = PIPE if not show_error_logs else None)
 
-    # If error is to be shown the color it in grey
-    # This is usually used to see progress logs
-    if show_error_logs: print(GREY_HEADER, end='\r')
-
-    # Consume the gromacs process output thus running the command
+    # Get the gromacs process output
     output_logs = process.stdout.decode()
-    # Consume also error logs, but this will not run the command again
+    # Get also error logs if necessary
     error_logs = process.stderr.decode() if not show_error_logs else None
 
     # End the grey coloring
-    if show_error_logs: print(COLOR_END, end='\r')
+    if show_error_logs: print(COLOR_END)
 
     # In case the expected output is set as 'auto' we must guess it from the command
     # Normally output comes after the '-o' option
