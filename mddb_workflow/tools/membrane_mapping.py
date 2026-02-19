@@ -244,12 +244,17 @@ def display_membrane_mapping(mem_map: str, pdb: str):
     top = f"@{','.join(map(str, mem_map['mems']['0']['leaflets']['top']))}"
     bot = f"@{','.join(map(str, mem_map['mems']['0']['leaflets']['bot']))}"
     no_mem = f"@{','.join(map(str, mem_map['no_mem_lipid']))}"
+    polar_top = f"@{','.join(map(str, mem_map['mems']['0']['polar_atoms']['top']))}"
+    polar_bot = f"@{','.join(map(str, mem_map['mems']['0']['polar_atoms']['bot']))}"
 
     view = nv.show_file(pdb)
     view.clear(0)
     # view.clear(1)
     view.add_point(selection='not protein', color='green', scale=1.5)
     view.add_point(selection=f'{top}', color='blue')
-    view.add_point(selection=f'{bot}', color='red')
-    view.add_point(selection=no_mem, color='yellow', scale=0.5)
+    view.add_point(selection=f'{bot}', color='yellow')
+    view.add_point(selection=no_mem, color='red', scale=0.5)
+    view.add_point(selection='protein', color='black', scale=0.5)
+    view.add_ball_and_stick(selection=polar_top, color='cyan', aspectRatio=4)
+    view.add_ball_and_stick(selection=polar_bot, color='orange', aspectRatio=4)
     return view

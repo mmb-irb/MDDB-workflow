@@ -1,7 +1,7 @@
 import pytraj as pyt
 from packaging.version import Version
 import numpy as np
-from mddb_workflow.utils.auxiliar import InputError, ToolError
+from mddb_workflow.utils.auxiliar import InputError, ToolError, catch_sigsegv
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
@@ -22,7 +22,8 @@ def get_pytraj_trajectory (
 
     # Set the pytraj trayectory and get the number of frames
     # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atoms later
-    pyt_trajectory = pyt.iterload(input_trajectory_filename, input_topology_filename)
+    pyt_trajectory = catch_sigsegv(pyt.iterload, (input_trajectory_filename, input_topology_filename), 
+                                   context=' while loading trajectory with PyTraj')
 
     # WARNING: This extra line prevents the error "Segment violation (core dumped)" in some pdbs
     # This happens with some random pdbs which pytraj considers to have 0 Mols
