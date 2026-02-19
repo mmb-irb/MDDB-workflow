@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
-from mddb_workflow.utils.auxiliar import save_json, load_json
+from mddb_workflow.utils.auxiliar import save_json, load_json, warn
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
 from mddb_workflow.utils.type_hints import *
 from contextlib import redirect_stdout
@@ -83,14 +83,33 @@ def all_atom_membranes(
         return membrane_map
     mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str, (lipid_ridx)))})')
 
-    # for better leaflet assignation we only use polar atoms
-    charges = abs(np.array([atom.charge for atom in universe.atoms]))
-    polar_atoms = []
-    for ridx in mem_candidates.residues.resindices:
-        res = universe.residues[ridx]
-        res_ch = charges[res.atoms.ix]
-        max_ch_idx = np.argmax(res_ch)
-        polar_atoms.append(res.atoms[max_ch_idx].index)
+    # For better leaflet assignation we only use polar atoms
+    if not hasattr(universe.atoms, 'charges'):
+        warn("Atom charges not found, guessing headgroups by name.")
+        polar_atoms = []
+        for residue in mem_candidates.residues:
+            if residue.resname == 'CHL':
+                polar_atoms.append(residue.atoms.select_atoms('name O*').indices[0])
+            else:
+                # '(resname CHL and element O*) or (resname PA and name P*)'
+                PO_candidates = residue.atoms.select_atoms('name P*')
+                # Check if only bonded to oxygen atoms, if so, it is likely a phosphate group and we select the P atom as polar atom
+                if len(PO_candidates) == 1:
+                    bonded_atoms = np.unique(PO_candidates[0].bonds.to_indices().flatten())
+                    bond_elements = universe.atoms[bonded_atoms].elements
+                    if set(bond_elements) == {'O', 'P'}:
+                        polar_atoms.append(PO_candidates[0].index)
+                        continue
+                warn(f"Could not find polar atom for residue {residue.resname} {residue.resid}. Skipping analysis")
+                return membrane_map
+    else:
+        charges = abs(np.array([atom.charge for atom in universe.atoms]))
+        polar_atoms = []
+        for ridx in mem_candidates.residues.resindices:
+            res = universe.residues[ridx]
+            res_ch = charges[res.atoms.ix]
+            max_ch_idx = np.argmax(res_ch)
+            polar_atoms.append(res.atoms[max_ch_idx].index)
     polar_atoms = np.array(polar_atoms)
     headgroup_sel = f'(index {" ".join(map(str, (polar_atoms)))})'
     # Run FATSLiM to find the membranes

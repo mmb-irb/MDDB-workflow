@@ -1,9 +1,23 @@
-from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping
 from mddb_workflow.mwf import Project, MD, input_files
+from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping
+from mddb_workflow.utils.auxiliar import save_json
+from mddb_workflow.utils.mda_spells import get_mda_universe
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 import MDAnalysis as mda
 import pytest
+
+
+def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = False):
+    """Generate test cases by filtering the cache data."""
+    cache = Cache(File(cache_str))
+    keep = ['inchikeys_task_output', 'lipmap_task_output']
+    if keep_refbonds:
+        keep.append('refbonds_task_output')
+    to_delete = [k for k in cache.data.keys() if k not in keep]
+    for k in to_delete:
+        cache.delete(k)
+    save_json(cache.data, test_file, indent=None, separators=(',', ': '))
 
 
 def download_project(project: 'Project'):
@@ -27,7 +41,7 @@ class TestMembraneMapping:
     - cg_test_04: coarse-grained system with changing membranes
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'cg_test'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -39,10 +53,12 @@ class TestMembraneMapping:
         inchikeys = cache.data['inchikeys_task_output']
         lipid_references = cache.data['lipmap_task_output']
         top = project.input_topology_file.absolute_path
-        traj = project.mds[0].input_trajectory_files[0]
+        trajectory_file = project.mds[0].input_trajectory_files[0]
         structure_file = project.mds[0].input_structure_file
         if top.endswith('.top'):
-            universe = mda.Universe(top, traj.absolute_path, topology_format='ITP')
+            universe = mda.Universe(top, trajectory_file.absolute_path, topology_format='ITP')
+        elif top.endswith('.json'):
+            universe = get_mda_universe(structure_file, trajectory_file, cache.data['refbonds_task_output'], charges=None)
         else:
             universe = mda.Universe(all_coordinates=structure_file.absolute_path, topology=top)
         if test_accession == 'cg_test':
