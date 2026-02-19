@@ -313,8 +313,8 @@ def generate_inchi_references(
     output_file: 'File',
 ) -> list[dict]:
     """Generate InChI references for the database."""
-    inchikey_references = []
-    inchikey_map = []
+    inchikey_references = []  # For the database
+    inchikey_map = []  # For the workflow
     for inchikey, res_data in inchikeys.items():
         # If there is force ligands, the inchikey may have changed
         ref_inchikey = ligand_references.get(inchikey, {}).get('inchikey', inchikey)
@@ -324,7 +324,7 @@ def generate_inchi_references(
             'inchi': ref_inchi,
             'swisslipids': lipid_references.get(inchikey, {}).get('swisslipids', {}),
             'lipidmaps': lipid_references.get(inchikey, {}).get('lipidmaps', {}),
-            'pubchem': ligand_references.get(inchikey, {}),
+            'ligand': ligand_references.get(inchikey, None),
         })
         # Sort dictionary entries for consistency when uploading to database
         for k, v in inchikey_references[-1].items():
@@ -335,9 +335,7 @@ def generate_inchi_references(
         resindices = ligand_references.get(inchikey, {}).get('resindices', list(map(int, res_data.resindices)))
         inchikey_map.append({
             'inchikey': ref_inchikey,
-            'name': list(res_data.resnames)[0],  # For rmsds
-            # 'inchi': ref_inchi,
-            # 'fragments': res_data.fragments,
+            'name': list(res_data.resnames)[0],  # For rmsds workflow analysis
             'residue_indices': resindices,
             'is_lipid': inchikey in lipid_references,
             'match': {

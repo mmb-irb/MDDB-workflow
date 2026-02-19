@@ -79,7 +79,7 @@ def generate_residue_mapping(
                     continue
                 residue_reference_indices[residue_index] = reference_index
                 residue_reference_numbers[residue_index] = residue_number
-        if reference_type in ['inchikey']:
+        if reference_type == 'inchikey':
             for residue_index in data['residue_indices']:
                 residue_reference_indices[int(residue_index)] = reference_index
 
