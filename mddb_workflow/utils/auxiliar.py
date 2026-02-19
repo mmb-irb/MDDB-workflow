@@ -25,7 +25,6 @@ import urllib.request
 from subprocess import run, PIPE
 from dataclasses import asdict, is_dataclass
 import multiprocessing
-import signal
 from functools import wraps
 import socket
 
@@ -875,29 +874,3 @@ class SocketTimeout:
     def stop(self):
         # Restore the original timeout
         socket.setdefaulttimeout(self.old_timeout)
-
-
-def catch_sigsegv(func, args, context=''):
-    """Catch a SIGSEGV signal when running a function in a separate process."""
-    def wrapper(queue, *args):
-        try:
-            result = func(*args)
-            queue.put(result)
-        except Exception as e:
-            queue.put(e)
-
-    queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=wrapper, args=(queue, *args))
-    p.start()
-    p.join(timeout=30)  # timeout to prevent hanging
-
-    if p.exitcode != 0:
-        if signal.SIGSEGV == abs(p.exitcode):
-            raise SegmentationFault("Process crashed - Segmentation fault" + context)
-        else:
-            raise Exception(f"Process exited with code {p.exitcode}")
-    else:
-        result = queue.get()
-        if isinstance(result, Exception):
-            raise result
-        return result

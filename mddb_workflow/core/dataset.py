@@ -1054,6 +1054,7 @@ class Dataset:
             # Start new jobs if we have capacity
             while pending_jobs and len(running_processes) < max_concurrent:
                 job = pending_jobs.pop(0)
+                print(f"Starting job for {job['rel_path']} ({len(running_processes)+1}/{total})")
                 log_f = open(job['log_file'], 'w')
                 err_f = open(job['err_file'], 'w')
                 proc = subprocess.Popen(

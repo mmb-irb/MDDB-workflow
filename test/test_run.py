@@ -16,11 +16,11 @@ class TestRunAll:
 
     - A0001: base case
     - A01IP: for membrane analyses
-    - A01V7: for only ligand
+    - A025N: for only ligand
 
     """
 
-    @pytest.fixture(scope='class', params=['A0001', 'A01IP', 'A01V7'])
+    @pytest.fixture(scope='class', params=['A0001', 'A01IP', 'A025N'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param

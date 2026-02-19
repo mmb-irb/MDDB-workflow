@@ -1,11 +1,13 @@
 import pytraj as pyt
 from packaging.version import Version
 import numpy as np
-from mddb_workflow.utils.auxiliar import InputError, ToolError, catch_sigsegv
+from mddb_workflow.utils.auxiliar import InputError, ToolError, SegmentationFault
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
+import subprocess
+import sys
 # Set pytraj supported formats
 pytraj_supported_structure_formats = {'prmtop', 'pdb', 'mol2', 'psf', 'cif', 'sdf'}
 pytraj_supported_trajectory_formats = {'xtc', 'trr', 'crd', 'mdcrd', 'nc', 'dcd'}
@@ -19,6 +21,17 @@ def get_pytraj_trajectory (
     # Topology is mandatory to setup the pytraj trajectory
     if not input_topology_filename:
         raise InputError('Missing topology file to setup PyTraj trajectory')
+
+    # Quick check for segmentation fault that happen with some topologies (MDBind 5a5s)
+    result = subprocess.run(
+        [sys.executable, "-c",
+         f"import pytraj as pt; pt.load_topology('{input_topology_filename}')"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == -11:  # SIGSEGV
+        raise SegmentationFault("SIGSEGV while loading topology with pytraj")
 
     # Set the pytraj trayectory and get the number of frames
     # NEVER FORGET: The pytraj iterload does not accept a mask, but we can strip atoms later
