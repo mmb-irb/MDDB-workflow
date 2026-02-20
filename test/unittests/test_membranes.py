@@ -36,7 +36,7 @@ class TestMembraneMapping:
     - A01IP: base case
     - A01J5: glucolipids
     - A02F9: only lipids
-    - OTRMG: no topology/charges
+    - OTRMG: no topology/charges, this should fail with the current implementation, leaflets are not similar size when they should
     - cg_test: coarse-grained system
     - cg_test_04: coarse-grained system with changing membranes
 

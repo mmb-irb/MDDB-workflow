@@ -81,13 +81,13 @@ def all_atom_membranes(
     if len(lipid_ridx) == 0:
         # no lipids found in the structure.
         return membrane_map
-    mem_candidates = universe.select_atoms(f'(resindex {" ".join(map(str, (lipid_ridx)))})')
+    all_lipids = universe.select_atoms(f'(resindex {" ".join(map(str, (lipid_ridx)))})')
 
     # For better leaflet assignation we only use polar atoms
     if not hasattr(universe.atoms, 'charges'):
         warn("Atom charges not found, guessing headgroups by name.")
         polar_atoms = []
-        for residue in mem_candidates.residues:
+        for residue in all_lipids.residues:
             if residue.resname == 'CHL':
                 polar_atoms.append(residue.atoms.select_atoms('name O*').indices[0])
             else:
@@ -105,7 +105,7 @@ def all_atom_membranes(
     else:
         charges = abs(np.array([atom.charge for atom in universe.atoms]))
         polar_atoms = []
-        for ridx in mem_candidates.residues.resindices:
+        for ridx in all_lipids.residues.resindices:
             res = universe.residues[ridx]
             res_ch = charges[res.atoms.ix]
             max_ch_idx = np.argmax(res_ch)
@@ -134,7 +134,7 @@ def all_atom_membranes(
     # Save the membrane mapping as a JSON file
     n_mems = len(mem_map) // 2
     membrane_map['n_mems'] = n_mems
-    no_mem_lipids = set(mem_candidates.atoms.indices)
+    no_mem_lipids = set(all_lipids.atoms.indices)
     for i in range(n_mems):
         # and they are not assigned to any membrane. FATSLiM indexes start at 1
         bot = (np.array(mem_map[f'membrane_{i + 1}_leaflet_1']) - 1).tolist()  # JSON does not support numpy arrays
