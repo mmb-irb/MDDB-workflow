@@ -40,6 +40,7 @@ def process_interactions(
     structure_file: 'File',
     trajectory_file: 'File',
     structure: 'Structure',
+    inchikey_map: list[dict],
     snapshots: int,
     output_directory: str,
     mercy: list[str],
@@ -279,6 +280,7 @@ def process_interactions(
 
     # Print an empty line for the next reprint
     print()
+    ligands_selection = structure.select_ligands(inchikey_map)
     # Check input interactions to be correct
     for i, interaction in enumerate(valid_interactions, 1):
         name = interaction["name"]
@@ -299,8 +301,15 @@ def process_interactions(
         # WARNING: However we could have different types in different MDs, if the interaction is different
         agent_1_classification = structure.get_selection_classification(agent_1_selection)
         agent_2_classification = structure.get_selection_classification(agent_2_selection)
+        if ligands_selection and (agent_1_selection & ligands_selection):
+            agent_1_classification = 'ligand'
+        if ligands_selection and (agent_2_selection & ligands_selection):
+            agent_2_classification = 'ligand'
         alphabetically_sorted = sorted([agent_1_classification, agent_2_classification])
         interaction['type'] = f'{alphabetically_sorted[0]}-{alphabetically_sorted[1]}'
+        # Hardcode some interaction types with its common names
+        if alphabetically_sorted == ['ligand', 'protein']:
+            interaction['type'] = 'protein-ligand'
 
     # Create interaction duplicates to avoid mutating the already processed interactions
     # Then fill these duplicates only with those fields to be uploaded to the database

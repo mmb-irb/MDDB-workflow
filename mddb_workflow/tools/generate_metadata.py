@@ -73,7 +73,7 @@ def prepare_project_metadata (
     counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atoms_count(structure)
 
     # Get the system keywords
-    system_keywords = get_system_keywords(structure, ligand_references, inchikey_map, membrane_map)
+    system_keywords = get_system_keywords(structure, inchikey_map, membrane_map)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map

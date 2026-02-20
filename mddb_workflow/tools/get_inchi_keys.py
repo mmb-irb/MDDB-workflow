@@ -2,14 +2,19 @@ import MDAnalysis
 import traceback
 import multiprocessing
 from dataclasses import dataclass, field
-from mddb_workflow.tools.get_ligands import pubchem_standardization
-from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import warn, save_json, timeout, SocketTimeout
+from mddb_workflow.tools.get_ligands import pubchem_standardization
+from mddb_workflow.utils.selections import Selection
+from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.type_hints import *
+from re import match
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit.Chem.rdDetermineBonds import DetermineBondOrders
 from MDAnalysis.converters.RDKitInferring import MDAnalysisInferrer
+
+# Regular expression matching formulas of single ions
+ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?\d?$'
 
 
 @dataclass
@@ -310,6 +315,8 @@ def generate_inchi_references(
     inchikeys: dict[str, 'InChIKeyData'],
     lipid_references: dict[str, dict],
     ligand_references: dict[str, dict],
+    membrane_map: dict,
+    structure: 'Structure',
     output_file: 'File',
 ) -> list[dict]:
     """Generate InChI references for the database."""
@@ -338,7 +345,28 @@ def generate_inchi_references(
             'name': list(res_data.resnames)[0],  # For rmsds workflow analysis
             'residue_indices': resindices,
             'is_lipid': inchikey in lipid_references,
+            'is_ligand': False,  # Updated later
             'generated_inchikey': inchikey,  # Original inchikey generated from the structure
         })
     save_json(inchikey_references, output_file.path)
+
+    # Use inchikeys to 'classify' residues as ligands
+    no_mem_lipid = Selection(membrane_map['no_mem_lipid'])
+    for inchikey_data in inchikey_map:
+        inchikey = inchikey_data['generated_inchikey']
+        if inchikey not in ligand_references:
+            continue
+        # Skip ions
+        formula = ligand_references[inchikey].get('formula', 'missing formula')
+        is_ion = match(ION_FORMULA, formula)
+        if is_ion:
+            continue
+        if inchikey_data['is_lipid']:
+            ligand_selection = structure.select_residue_indices(inchikey_data['residue_indices'])
+            # Take only the lipids that are not part of a membrane (fatty-like ligands)
+            no_mem_ligand_selection = ligand_selection and no_mem_lipid
+            # If most of the lipid is in a membrane, we do not mark it as a ligand
+            if len(no_mem_ligand_selection) / len(ligand_selection) < 0.5:
+                continue
+        inchikey_data['is_ligand'] = True
     return inchikey_map

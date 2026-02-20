@@ -1,11 +1,5 @@
 from mddb_workflow.tools.nucleosomes import has_nucleosome
-from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
-
-from re import match
-
-# Regular expression matching formulas of single ions
-ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?\d?$'
 
 # Set the keywords as constants
 # Basic keywords
@@ -36,7 +30,6 @@ NUCLEOSOME_KEYWORD = 'nucleosome'
 # Changes in the function can be tested with: pytest -k "TestRunAll and pmeta" -s
 def get_system_keywords(
     structure: 'Structure',
-    ligand_references: dict,
     inchikey_map: list[dict],
     membrane_map: dict,
 ) -> list[str]:
@@ -62,30 +55,7 @@ def get_system_keywords(
     if has_rna:
         keywords.append(RNA_KEYWORD)
     # Ligands
-    ligands_selection = Selection()
-    no_mem_lipid = Selection(membrane_map['no_mem_lipid'])
-    for inchikey_data in inchikey_map:
-        inchikey = inchikey_data['generated_inchikey']
-        if inchikey not in ligand_references:
-            continue
-        # Skip ions
-        formula = ligand_references[inchikey].get('formula', 'missing formula')
-        is_ion = match(ION_FORMULA, formula)
-        if is_ion:
-            continue
-        ligand_selection = structure.select_residue_indices(inchikey_data['residue_indices'])
-        if inchikey_data['is_lipid']:
-            # Take only the lipids that are not part of a membrane (fatty-like ligands)
-            no_mem_ligand_selection = ligand_selection and no_mem_lipid
-            # If most of the lipid is not in a membrane, we consider it a ligand
-            if len(no_mem_ligand_selection) / len(ligand_selection) > 0.5:
-                ligands_selection = no_mem_ligand_selection
-            else:
-                # Otherwise, all lipids will be treated as membrane components
-                # so no ligand keyword used for free lipids from membranes
-                continue
-        ligands_selection += ligand_selection
-    # Set if ligands were found
+    ligands_selection = structure.select_ligands(inchikey_map)
     has_ligand = bool(ligands_selection)
     if has_ligand:
         keywords.append(LIGAND_KEYWORD)

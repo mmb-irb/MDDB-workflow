@@ -1995,6 +1995,14 @@ class Structure:
     def select_carbohydrates (self) -> 'Selection':
         """Select carbohydrates."""
         return self.select_by_classification('carbohydrate')
+    
+    def select_ligands (self, inchikey_map: list[dict]) -> 'Selection':
+        """Get a selection of all the ligand residues in the system based on the inchikey map."""
+        ligands_selection = Selection()
+        for inchikey_data in inchikey_map:
+            if inchikey_data['is_ligand']:
+                ligands_selection += self.select_residue_indices(inchikey_data['residue_indices'])
+        return ligands_selection
 
     def select_pbc_guess (self) -> 'Selection':
         """Return a selection of the typical PBC atoms: solvent, counter ions and lipids.
