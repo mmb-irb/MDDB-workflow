@@ -60,8 +60,7 @@ def prepare_project_metadata (
     input_cv19_abs : bool,
     input_cv19_nanobs : bool,
     ):
-    """ Prepare a JSON file with all project metadata. """
-
+    """Prepare a JSON file with all project metadata."""
     # Find out the box size (x, y and z)
     (boxsizex, boxsizey, boxsizez) = get_box_size(
         structure_file.path, trajectory_file.path)
@@ -126,7 +125,7 @@ def prepare_project_metadata (
         for chain in chainnames.keys():
             if chain not in structure_chains:
                 raise InputError(f'Chain {chain} from chainnames does not exist in the structure')
-            
+
     # Get a summary of atom/residue/chain names which are potential query targets
     # Sort values alphabetically so later the lists are identical or the loader will complain
     # LORE: These fields were topology queries but they were innefficient
@@ -260,6 +259,7 @@ def prepare_project_metadata (
     # Write metadata to a file
     save_json(metadata, output_file.path)
 
+
 metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
     'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES',
     'REFERENCES', 'INPUT_LIGANDS', 'LIGANDS', 'LIGANDNAMES', 'PROTSEQ', 'NUCLSEQ', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
@@ -268,6 +268,7 @@ metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', '
     'MULTIMERIC', 'COLLECTIONS', 'WARNINGS', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'CV19_UNIT', 'CV19_STARTCONF',
     'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
 ])
+
 
 def generate_md_metadata (
     md_inputs : dict,
@@ -278,7 +279,6 @@ def generate_md_metadata (
     output_file : 'File'
     ):
     """Produce the MD metadata file to be uploaded to the database."""
-
     # Mine name and directory from MD inputs
     name = md_inputs.get('name', None)
     directory = md_inputs.get(MD_DIRECTORY, None)

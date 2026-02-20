@@ -1,10 +1,11 @@
 from mddb_workflow.tools.nucleosomes import has_nucleosome
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
 
 from re import match
 
 # Regular expression matching formulas of single ions
-ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?$'
+ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?\d?$'
 
 # Set the keywords as constants
 # Basic keywords
@@ -31,14 +32,17 @@ LIGAND_KEYWORD = 'ligand'
 # More complex keywords
 NUCLEOSOME_KEYWORD = 'nucleosome'
 
-# System keywords are useful to find different types of systems later in the browser
-# Try to assign as many keywords as possible to the current system
-def get_system_keywords (
-    structure : 'Structure',
-    ligand_references : dict,
-    inchikey_map : list[dict],
-    membrane_map : dict,
+
+# Changes in the function can be tested with: pytest -k "TestRunAll and pmeta" -s
+def get_system_keywords(
+    structure: 'Structure',
+    ligand_references: dict,
+    inchikey_map: list[dict],
+    membrane_map: dict,
 ) -> list[str]:
+    """System keywords are useful to find different types of systems later in the browser
+    Try to assign as many keywords as possible to the current system.
+    """
     keywords = []
 
     # Basic system keywords inferred from the nature of the residues
@@ -57,13 +61,44 @@ def get_system_keywords (
     has_rna = len(rna_selection) > 0
     if has_rna:
         keywords.append(RNA_KEYWORD)
+    # Ligands
+    ligands_selection = Selection()
+    no_mem_lipid = Selection(membrane_map['no_mem_lipid'])
+    for inchikey_data in inchikey_map:
+        inchikey = inchikey_data['generated_inchikey']
+        if inchikey not in ligand_references:
+            continue
+        # Skip ions
+        formula = ligand_references[inchikey].get('formula', 'missing formula')
+        is_ion = match(ION_FORMULA, formula)
+        if is_ion:
+            continue
+        ligand_selection = structure.select_residue_indices(inchikey_data['residue_indices'])
+        if inchikey_data['is_lipid']:
+            # Take only the lipids that are not part of a membrane (fatty-like ligands)
+            no_mem_ligand_selection = ligand_selection and no_mem_lipid
+            # If most of the lipid is not in a membrane, we consider it a ligand
+            if len(no_mem_ligand_selection) / len(ligand_selection) > 0.5:
+                ligands_selection = no_mem_ligand_selection
+            else:
+                # Otherwise, all lipids will be treated as membrane components
+                # so no ligand keyword used for free lipids from membranes
+                continue
+        ligands_selection += ligand_selection
+    # Set if ligands were found
+    has_ligand = bool(ligands_selection)
+    if has_ligand:
+        keywords.append(LIGAND_KEYWORD)
     # Lipids
-    lipids_selection = structure.select_lipids()
+    lipids_selection = structure.select_lipids() - ligands_selection
     has_lipids = len(lipids_selection) > 0
     if has_lipids:
         keywords.append(LIPID_KEYWORD)
     # Carbohydrates
     carbohydrates_selection = structure.select_carbohydrates()
+    # For small systems we treat carbohydrates as ligands
+    if len(ligands_selection) / len(structure.atoms) > 0.9:
+        carbohydrates_selection = carbohydrates_selection - ligands_selection
     has_carbohydrates = len(carbohydrates_selection) > 0
     if has_carbohydrates:
         keywords.append(CARBOHYDRATE_KEYWORD)
@@ -83,43 +118,17 @@ def get_system_keywords (
     has_solvent = len(solvent_selection) > 0
     if has_solvent:
         keywords.append(SOLVENT_KEYWORD)
-
-    # Reformat the inchikey map in a more convenient manner
-    inchi_key_residue_indices = {}
-    for mapping in inchikey_map:
-        # This may not match the value in the 'inchikey' field
-        actual_inchi_key = mapping['match']['ref']['inchikey']
-        inchi_key_residue_indices[actual_inchi_key] = mapping['residue_indices']
-
-    # Get a selection of all ligands in the system
-    ligands_selection = None
-    for inchi_key, ligand_reference in ligand_references.items():
-        formula = ligand_reference.get('formula', 'missing formula')
-        is_ion = match(ION_FORMULA, formula)
-        if is_ion: continue
-        # Get the ligand selection using the inchi map
-        residue_indices = inchi_key_residue_indices[inchi_key]
-        selection = structure.select_residue_indices(residue_indices)
-        if ligands_selection is None: ligands_selection = selection
-        else: ligands_selection += selection
-
-    # Set if ligands were found
-    has_ligand = bool(ligands_selection)
-    if has_ligand:
-        keywords.append(LIGAND_KEYWORD)
-
     # Other
     other_selection = structure.select_all() - protein_selection - dna_selection - rna_selection \
-        - lipids_selection - carbohydrates_selection - ions_selection - ligands_selection
+        - lipids_selection - carbohydrates_selection - ions_selection - ligands_selection - solvent_selection
     has_other = len(other_selection) > 0
     if has_other:
         keywords.append(OTHER_KEYWORD)
 
     # Set the "only" keywords
-    
     # Set the solvent-only conditions first
     solvent_part_keywords = set([SOLVENT_KEYWORD, COUNTER_ION_KEYWORD, NON_COUNTER_ION_KEYWORD])
-    if all( keyword in solvent_part_keywords for keyword in keywords ):
+    if all(keyword in solvent_part_keywords for keyword in keywords):
         keywords.append(SOLVENT_ONLY_KEYWORD)
 
     # The rest of only-keywords do not care about solvent
@@ -137,7 +146,7 @@ def get_system_keywords (
             keywords.append(LIPID_ONLY_KEYWORD)
         elif CARBOHYDRATE_KEYWORD in relevant_only_keywords:
             keywords.append(CARBOHYDRATE_ONLY_KEYWORD)
-        elif OTHER_KEYWORD in relevant_only_keywords:
+        elif LIGAND_KEYWORD in relevant_only_keywords:
             keywords.append(LIGAND_ONLY_KEYWORD)
         # If there is only other then we issue no additional keyword
 

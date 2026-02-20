@@ -40,7 +40,7 @@ def lipid_order(
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     for ref in inchikey_map:
         if not ref['is_lipid']: continue
-        inchikey = ref['match']['ref']['inchikey']
+        inchikey = ref['generated_inchikey']
         # Take the first residue of the reference
         res = universe.residues[ref['residue_indices'][0]]
         # If not the cholesterol inchikey

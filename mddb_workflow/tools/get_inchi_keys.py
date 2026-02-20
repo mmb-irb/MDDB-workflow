@@ -334,13 +334,11 @@ def generate_inchi_references(
         # Get residue indices from ligand forced selections if available
         resindices = ligand_references.get(inchikey, {}).get('resindices', list(map(int, res_data.resindices)))
         inchikey_map.append({
-            'inchikey': ref_inchikey,
+            'inchikey': ref_inchikey,  # InChI with the possible corrections to find the ligand reference
             'name': list(res_data.resnames)[0],  # For rmsds workflow analysis
             'residue_indices': resindices,
             'is_lipid': inchikey in lipid_references,
-            'match': {
-                'ref': {'inchikey': inchikey}
-            }
+            'generated_inchikey': inchikey,  # Original inchikey generated from the structure
         })
     save_json(inchikey_references, output_file.path)
     return inchikey_map

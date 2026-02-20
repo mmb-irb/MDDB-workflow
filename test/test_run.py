@@ -5,7 +5,7 @@ import pytest
 import requests
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.utils.auxiliar import InputError
+from mddb_workflow.utils.auxiliar import InputError, load_json
 from mddb_workflow.mwf import project_requestables, md_requestables
 from mddb_workflow.console import main
 
@@ -39,6 +39,17 @@ class TestRunAll:
         """Test that each project task runs without errors."""
         project.overwritables = {project_task}
         project_requestables[project_task](project)
+        if project_task == 'pmeta':
+            # Check that the pmeta directory was created
+            pmeta_dir = os.path.join(project.directory, 'metadata.json')
+            metadata = load_json(pmeta_dir)
+            syskeys = {
+                'A0001': ['protein', 'protein only'],
+                'A01IP': ['protein', 'ligand', 'lipid', 'carbohydrate', 'membrane'],
+                'A025N': ['ligand', 'ligand only'],
+                'A02F9': ['lipid', 'solvent', 'lipid only', 'membrane']
+            }
+            assert metadata['SYSKEYS'] == syskeys[project.accession]
 
     @pytest.mark.parametrize('md_task', md_requestables.keys())
     def test_md_task(self, project: 'Project', md_task: str, capsys):
