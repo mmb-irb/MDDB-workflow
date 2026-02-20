@@ -29,26 +29,27 @@ UPLOAD_FIELDS = {
 # Set the flag used to label failed interactions
 FAILED_INTERACTION_FLAG = 'failed'
 
+
 # Find interfaces by computing a minimum distance between residues along the trajectory
 # Residues are filtered by minimum distance along the trajectory
 # Interface residues are listed apart
 # The heavy results of interactions are stored in a json file which is uploaded to the database independently
 # In addition, this file may be used to force interactions with custom interface residues manually
-def process_interactions (
-    input_interactions : Optional[list],
-    structure_file : 'File',
-    trajectory_file : 'File',
-    structure : 'Structure',
-    snapshots : int,
-    output_directory : str,
-    mercy : list[str],
-    interactions_auto : str,
-    pbc_selection : 'Selection',
-    cg_selection : 'Selection',
-    frames_limit : int = 1000,
+def process_interactions(
+    input_interactions: Optional[list],
+    structure_file: 'File',
+    trajectory_file: 'File',
+    structure: 'Structure',
+    snapshots: int,
+    output_directory: str,
+    mercy: list[str],
+    interactions_auto: str,
+    pbc_selection: 'Selection',
+    cg_selection: 'Selection',
+    frames_limit: int = 1000,
     # Percent of frames where an interaction must have place (from 0 to 1)
     # If the interactions fails to pass the cutoff then the workflow is killed and the user is warned
-    interaction_cutoff : float = 0.1,
+    interaction_cutoff: float = 0.1,
     ) -> list:
     """Find the residues of each interacting agent.
     It can automatically detect interactions based on chain names or ligand information, or use a predefined list of interactions.
@@ -57,24 +58,24 @@ def process_interactions (
     interactions = []
 
     # If there are no interactions then stop here
-    if input_interactions == None: return []
+    if input_interactions is None: return []
     # If interactions is not a list then make it a list of it
     # if it is already a list then copy it to avoid mutating the original
     if type(input_interactions) == list:
-        interactions = [ *input_interactions ]
+        interactions = [*input_interactions]
     else:
         interactions = [input_interactions]
     # If interactions is an empty list then stop here
     if len(input_interactions) == 0: return []
 
     # Get explicit interactions (not keywords)
-    # Duplicate input interactions to avoid modifying the originals
+    # Duplicate input interactions to avoid modifying the originals
     explicit_interactions = [
-        { k:v for k,v in inter.items() } for inter in interactions if type(inter) == dict ]
+        {k: v for k, v in inter.items()} for inter in interactions if type(inter) == dict]
 
     # Since this is the first time we read the input interactions, we must make sure they are correct
     # Make sure there are no interactions with the same name
-    interaction_names = [ interaction['name'] for interaction in explicit_interactions ]
+    interaction_names = [interaction['name'] for interaction in explicit_interactions]
     if len(set(interaction_names)) < len(interaction_names):
         raise InputError('Interactions must have unique names')
     # Check input interactions to have every expected field and make sure they are coherent
@@ -103,17 +104,17 @@ def process_interactions (
             f'This means that the atom selection in agent 1 ({input_agent_1_selection})' +
             f' and the atom selection in agent 2 ({input_agent_2_selection}) aim for' +
             f' {len(overlap)} atoms in common.' +
-            f' This is not supported since it makes no sense in this context ' +
-            f'to check the interaction of a group of atoms against themselves.\n'
-            f'Please change the atom selections for this interaction.')
+             ' This is not supported since it makes no sense in this context ' +
+             'to check the interaction of a group of atoms against themselves.\n'
+             'Please change the atom selections for this interaction.')
 
     # Get keywords from the input interactions
     # Right now the only supported instruction is 'auto'
-    keyword_interactions = set([ inter for inter in interactions if type(inter) == str ])
+    keyword_interactions = set([inter for inter in interactions if type(inter) == str])
 
     # If the iauto argument is used from the console then add it here
     if interactions_auto:
-        keyword_interactions.add( f'auto "{interactions_auto}"' )
+        keyword_interactions.add(f'auto "{interactions_auto}"')
 
     # Now process keyword interactions
     for keyword in keyword_interactions:
@@ -126,7 +127,7 @@ def process_interactions (
         # All the structure is used by default if no selection is passed
         # Note that an interaction is set by every possible combination of pairs of chains
         if header == 'auto':
-            print(f' Processing interactions automatically')
+            print(' Processing interactions automatically')
             if len(options) > 1: raise InputError('Automatic interactions support one selection only.\n'+
                 f' Your instruction was: auto {" ".join(options)}\n'+
                 f' Did you forget to add the quotes maybe? Try this: auto "{" ".join(options)}"')
@@ -225,7 +226,7 @@ def process_interactions (
             continue
 
         # Iterate interaction agents
-        for agent in ['1','2']:
+        for agent in ['1', '2']:
             # Get agent name and selection for logging purposes
             agent_name = interaction['agent_' + agent]
             agent_selection = interaction['selection_' + agent]
@@ -252,8 +253,8 @@ def process_interactions (
 
         # If one of the agents is fully made of strong bonds then the interaction is not valid
         strong_bonded_atoms = set(sum(strong_bonds, []))
-        if all( index in strong_bonded_atoms for index in agent_1_selection.atom_indices ) or \
-           all( index in strong_bonded_atoms for index in agent_2_selection.atom_indices ):
+        if all(index in strong_bonded_atoms for index in agent_1_selection.atom_indices) or \
+           all(index in strong_bonded_atoms for index in agent_2_selection.atom_indices):
             warn(f'Interaction "{interaction_name}" is not valid since one of the agents is fully bonded to the other agent.\n'
                  'This may be due to wrong selections or a wrong interaction to be considered.\n'
                  'This interaction will be ignored and will not appear in further analyses')
@@ -269,7 +270,7 @@ def process_interactions (
         print(f'{interaction_name} (time: {pretty_frames_percent} %) -> {interface_residue_indices}')
 
     # Filter away interactions which have failed
-    valid_interactions = [ inte for inte in explicit_interactions if not inte.get(FAILED_INTERACTION_FLAG, False) ]
+    valid_interactions = [inte for inte in explicit_interactions if not inte.get(FAILED_INTERACTION_FLAG, False)]
     interaction_count = len(valid_interactions)
     print(f'There is a total of {interaction_count} valid interactions')
 
@@ -305,26 +306,27 @@ def process_interactions (
     # Then fill these duplicates only with those fields to be uploaded to the database
     file_interactions = []
     for interaction in valid_interactions:
-        file_interaction = { key: value for key, value in interaction.items() if key in UPLOAD_FIELDS }
+        file_interaction = {key: value for key, value in interaction.items() if key in UPLOAD_FIELDS}
         file_interactions.append(file_interaction)
 
     # Write them to disk
-    save_json(file_interactions, output_analysis_filepath, indent = 4)
+    save_json(file_interactions, output_analysis_filepath, indent=4)
 
     # Finally return the processed interactions
     return valid_interactions
 
-# Set an auxiliar function to add residue indices to an interactions object
-def add_residues_indices (interaction : dict, structure : 'Structure'):
+
+def add_residues_indices(interaction: dict, structure: 'Structure'):
+    """Add residue indices to an interactions object."""
     # Iterate interaction agents
-    for agent in ['1','2']:
+    for agent in ['1', '2']:
         # Get interaction atom indices
         atom_indices = interaction[f'atom_indices_{agent}']
         # Now parse atom indices to residue indices for those analysis which work with residues
-        residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in atom_indices ])))
+        residue_indices = sorted(list(set([structure.atoms[atom_index].residue_index for atom_index in atom_indices])))
         interaction[f'residue_indices_{agent}'] = residue_indices
         # Get interaction interface atom indices
         interface_atom_indices = interaction[f'interface_atom_indices_{agent}']
         # Then with interface atoms/residues
-        interface_residue_indices = sorted(list(set([ structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices ])))
+        interface_residue_indices = sorted(list(set([structure.atoms[atom_index].residue_index for atom_index in interface_atom_indices])))
         interaction[f'interface_residue_indices_{agent}'] = interface_residue_indices
