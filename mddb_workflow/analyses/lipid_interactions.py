@@ -15,6 +15,9 @@ def lipid_interactions(
     frames_limit: int = 100
 ):
     """Lipid-protein interactions analysis."""
+    if universe.select_atoms('protein').n_atoms == 0:
+        print('-> No protein found, skipping channels analysis')
+        return
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
 
     # Check if we're dealing with coarse-grain simulations
