@@ -71,7 +71,7 @@ def aa_lipid_interactions(universe, snapshots, frames_limit, lipid_map):
     for lipid in lipid_map:
         # Convert lipid residue indices to array indices
         lipid_idx = [residx_2_idx[residx] for residx in lipid['residue_indices']]
-        data[lipid['match']['ref']['inchikey']] = ocupancy_arrs[:, lipid_idx].sum(1).tolist()
+        data[lipid['inchikey']] = ocupancy_arrs[:, lipid_idx].sum(1).tolist()
 
     return data
 
