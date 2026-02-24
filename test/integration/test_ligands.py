@@ -74,7 +74,14 @@ def test_generate_ligand_references():
         found = ligand_references[case[0]]['pubchem']
         assert found in case[2], f"Ligand {case[0]} found with CID {found} instead of {case[2]}."
 
-    inchirefs = generate_inchi_references(inchimap, {}, ligand_references, File('inchiout.json'))
+    inchirefs = generate_inchi_references(
+        inchikeys=inchimap,
+        lipid_references={},
+        ligand_references=ligand_references,
+        membrane_map={'no_mem_lipid': []},
+        structure=mwf_stc,
+        output_file=File('inchiout.json')
+    )
     residue_map = generate_residue_mapping([], inchirefs, mwf_stc)
     assert 'ZKHQWZAMYRWXGA-KQYNXXCUSA-N' in residue_map['references'],\
         'ZKHQWZAMYRWXGA-KQYNXXCUSA-J should be transformed to ZKHQWZAMYRWXGA-KQYNXXCUSA-N'
