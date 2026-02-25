@@ -156,6 +156,10 @@ def prepare_project_metadata (
             if link.get('name', None) == None: raise InputError('Links must have a name')
             if link.get('url', None) == None: raise InputError('Links must have a URL')
 
+    # Make sure the version is a string
+    # Note that in some cases it may be a numeric value (e.g. 5.1)
+    program_version = str(input_version)
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -165,7 +169,7 @@ def prepare_project_metadata (
         'GROUPS': input_groups,
         'CONTACT': input_contact,
         'PROGRAM': input_program,
-        'VERSION': input_version,
+        'VERSION': program_version,
         'TYPE': md_type,
         'METHOD': input_method,
         'LICENSE': input_license,
