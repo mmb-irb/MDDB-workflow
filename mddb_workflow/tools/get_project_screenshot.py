@@ -3,18 +3,20 @@ from mddb_workflow.utils.auxiliar import InputError
 from mddb_workflow.utils.mdt_spells import get_frame
 from mddb_workflow.utils.type_hints import *
 
-def get_project_screenshot (
-    structure : 'Structure',
-    structure_file : 'File',
-    trajectory_file : 'File',
+
+def get_project_screenshot(
+    structure: 'Structure',
+    structure_file: 'File',
+    trajectory_file: 'File',
     snapshots: int,
-    output_file : 'File',
-    cg_selection : 'Selection',
-    screenshot_frame : Optional[int] = None,
-    parameters : Optional[dict] = None,
+    output_file: 'File',
+    cg_selection: 'Selection',
+    screenshot_frame: Optional[int] = None,
+    parameters: Optional[dict] = None,
 ) -> dict:
     """Project screenshot is usually made with the reference frame, thus using the main structure.
-    However the user may pass a custom frame."""
+    However the user may pass a custom frame.
+    """
     reference_structure = structure
     # If a frame is passed then we must create an auxiliar structure with the pertinent coordinates
     if screenshot_frame is not None:

@@ -348,7 +348,7 @@ def get_screenshot (
             # Change the default representation model to CPK (ball and stick)
             file.write('mol representation cpk \n')
             # Change the default atom coloring method setting to Chain
-            file.write('mol color chain \n')
+            file.write('mol color name \n')
             # Set the default atom selection to atoms to be represented as CPK
             file.write(f'mol selection "{cg_selection.to_vmd()}" \n')
             # Change the current material of the representation of the molecule
