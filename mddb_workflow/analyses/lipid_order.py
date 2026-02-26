@@ -39,7 +39,7 @@ def lipid_order(
         order_parameters_dict = aa_lipid_order(universe, inchikey_map, snapshots, frame_step)
 
     # Save the data
-    data = {'data': order_parameters_dict}
+    data = {'data': order_parameters_dict, 'version': '0.1.0'}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     save_json(data, output_analysis_filepath)
 
