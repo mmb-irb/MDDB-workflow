@@ -1,13 +1,16 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key
-from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME
+from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
+from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, OUTPUT_LIPID_ORDER_FILENAME
 from mddb_workflow.utils.type_hints import *
 import numpy as np
 import MDAnalysis
+import re
+import os
 
 
 def lipid_order(
     universe: 'MDAnalysis.Universe',
+    topology_file: 'File',
     output_directory: str,
     membrane_map: dict,
     inchikey_map: list[dict],
@@ -29,15 +32,21 @@ def lipid_order(
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('-> Skipping lipid order analysis')
         return
-    if len(cg_residues) > 0:
-        # RUBEN: se puede hacer con gorder pero hace falta topology con bonds
-        print('-> Skipping lipid order analysis. Not implemented for CG models')
-        return
-    # Set the main output filepath
-    output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
-
-    order_parameters_dict = {}
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
+    if len(cg_residues) > 0:
+        order_parameters_dict = cg_lipid_order(universe, topology_file, output_directory, frame_step)
+    else:
+        order_parameters_dict = aa_lipid_order(universe, inchikey_map, snapshots, frame_step)
+
+    # Save the data
+    data = {'data': order_parameters_dict}
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
+    save_json(data, output_analysis_filepath)
+
+
+def aa_lipid_order(universe, inchikey_map, snapshots, frame_step):
+    """Calculate lipid order parameters for all-atom simulations."""
+    order_parameters_dict = {}
     for ref in inchikey_map:
         if not ref['is_lipid']: continue
         inchikey = ref['generated_inchikey']
@@ -81,9 +90,93 @@ def lipid_order(
                 'atoms': C_names,
                 'avg': order_parameters.tolist(),
                 'std': serrors.tolist()}
-    # Save the data
-    data = {'data': order_parameters_dict}
-    save_json(data, output_analysis_filepath)
+    return order_parameters_dict
+
+
+def cg_lipid_order(universe, topology_file, output_directory, frame_step):
+    """Calculate lipid order parameters for coarse-grain simulations using gorder.
+
+    Runs gorder's CGOrder analysis on the universe trajectory, then parses the
+    YAML output into the same format as the all-atom lipid_order output:
+        { inchikey: { "0": { atoms: [...], avg: [...], std: [...] }, ... } }
+
+    Each chain is identified by the trailing letter of the CG bead name
+    (e.g. C1A, C2A → chain 'A'; C1B, C2B → chain 'B').
+    """
+    import yaml
+    import gorder
+
+    lipid_residues = [
+        resname for resname in LIPIDS_RESIDUE_NAMES
+        if universe.select_atoms(f'resname {resname}').n_atoms > 0
+    ]
+
+    if not lipid_residues:
+        print('-> No lipid residues found for coarse-grain analysis')
+        return {}
+
+    trajectory_file = universe.trajectory.filename
+    if topology_file.format not in ['tpr', 'gro']:
+        # Supported formats: https://vachalab.github.io/gorder-manual/other_structure.html
+        warn('Coarse-grain lipid order analysis requires a TPR o GRO topology file.')
+        return {}
+
+    yaml_out = os.path.join(output_directory, 'lorder.yaml')
+
+    try:
+        analysis = gorder.Analysis(
+            structure=topology_file.absolute_path,
+            trajectory=trajectory_file,
+            analysis_type=gorder.analysis_types.CGOrder('@membrane'),
+            estimate_error=gorder.estimate_error.EstimateError(),
+            step=frame_step,
+            output_yaml=yaml_out,
+            handle_pbc=False,
+        )
+        results = analysis.run()
+        results.write()
+
+        with open(yaml_out, 'r') as f:
+            gorder_data = yaml.safe_load(f)
+    finally:
+        if os.path.exists(yaml_out):
+            os.remove(yaml_out)
+
+    order_parameters_dict = {}
+
+    # Pattern matching CG tail bead names: C<digit(s)><chain_letter>
+    _tail_bond_re = re.compile(r'^[A-Z0-9]+\s+\w+\s+\(\d+\)\s+-\s+[A-Z0-9]+\s+(C\d+([A-Z]))\s+\(\d+\)')
+
+    for resname, res_data in gorder_data.items():
+        if resname in ('average order',):
+            continue
+        if not isinstance(res_data, dict) or 'order parameters' not in res_data:
+            continue
+
+        # Group bonds by chain letter, preserving bead order
+        chains: dict[str, list[tuple[str, float]]] = {}
+        for bond_label, bond_data in res_data['order parameters'].items():
+            m = _tail_bond_re.match(bond_label)
+            if m is None:
+                continue
+            bead_name = m.group(1)   # e.g. "C1A"
+            chain_letter = m.group(2)  # e.g. "A"
+            total = bond_data.get('total', {})
+            value = total.get('mean', float('nan')) if isinstance(total, dict) else float(total)
+            error = total.get('error', 0.0) if isinstance(total, dict) else 0.0
+            chains.setdefault(chain_letter, []).append((bead_name, value, error))
+
+        if not chains:
+            continue
+
+        order_parameters_dict[resname] = {}
+        for chain_idx, (chain_letter, bonds) in enumerate(sorted(chains.items())):
+            order_parameters_dict[resname][str(chain_idx)] = {
+                'atoms': [b[0] for b in bonds],
+                'avg': [b[1] for b in bonds],
+                'std': [b[2] for b in bonds],
+            }
+    return order_parameters_dict
 
 
 def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list[list[int]]:
