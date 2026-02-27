@@ -1,11 +1,14 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, OUTPUT_LIPID_ORDER_FILENAME
+from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names, get_cg_acyl_chains
 from mddb_workflow.utils.type_hints import *
 import numpy as np
 import MDAnalysis
 import re
 import os
+import yaml
+import gorder
 
 
 def lipid_order(
@@ -33,39 +36,58 @@ def lipid_order(
         print('-> No membranes found, skipping lipid order analysis')
         return
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
+    # Choose the method according to the type of lipids present
     if len(cg_residues) > 0:
-        order_parameters_dict = cg_lipid_order(universe, topology_file, output_directory, frame_step)
+        # Check supported formats: https://vachalab.github.io/gorder-manual/other_structure.html
+        if topology_file.format not in ['tpr', 'gro']:
+            warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection.')
+            return {}
+        # We will save one example residue used to extract the carbon chains
+        lipids = []
+        for resname in LIPIDS_RESIDUE_NAMES:
+            lipid_ag = universe.select_atoms(f'resname {resname}')
+            if lipid_ag.n_atoms > 0:
+                lipids.append(lipid_ag.residues[0])
+        # Heuristic: if the residues have more than 40 atoms, assume United Atom.
+        is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids)
+        if is_united_atom:
+            order_parameters_dict = ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids)
+        else:
+            order_parameters_dict = cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids)
     else:
-        order_parameters_dict = aa_lipid_order(universe, inchikey_map, snapshots, frame_step)
-
+        lipids = [ref for ref in inchikey_map if ref['is_lipid']]
+        order_parameters_dict = aa_lipid_order(universe, snapshots, frame_step, lipids)
+    # Output can be empty due to hardcoded lipid residue names for CG/UA
+    if not order_parameters_dict:
+        warn('Something went wrong with the lipid order analysis, no order parameters were calculated. '
+             'This can be due to no lipids being found with the hardcoded residue names. '
+             'Please check the logs for warnings.')
+        return
     # Save the data
     data = {'data': order_parameters_dict, 'version': '0.1.0'}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     save_json(data, output_analysis_filepath)
 
 
-def aa_lipid_order(universe, inchikey_map, snapshots, frame_step):
+def aa_lipid_order(universe, snapshots, frame_step, lipids):
     """Calculate lipid order parameters for all-atom simulations."""
     order_parameters_dict = {}
-    for ref in inchikey_map:
-        if not ref['is_lipid']: continue
+    for ref in lipids:
         inchikey = ref['generated_inchikey']
         # Take the first residue of the reference
         res = universe.residues[ref['residue_indices'][0]]
         # If not the cholesterol inchikey
         if inchikey != 'HVYWMOMLDIMFJA-DPAQBDIFSA-N':
             # Lipids can have multiple acyl chains
-            carbon_groups = get_all_acyl_chains(res)
+            tail_C_names = get_acyl_chain_atom_names(res, sort_key=natural_sort_key)
         else:
-            carbon_groups = [res.atoms.select_atoms(
-                'element C and bonded element H').indices]
+            tail_C_names = [sorted(
+                [a.name for a in res.atoms.select_atoms('element C and bonded element H')],
+                key=natural_sort_key)]
 
         order_parameters_dict[inchikey] = {}
         # For every 'tail'
-        for chain_idx, group in enumerate(carbon_groups):
-            atoms = res.universe.atoms[group]
-            C_names = sorted([atom.name for atom in atoms],
-                             key=natural_sort_key)
+        for tail_idx, C_names in enumerate(tail_C_names):
             # Find all C-H bonds indices
             ch_pairs = find_CH_bonds(universe, ref["residue_indices"], C_names)
             # Initialize the order parameters to sum over the trajectory
@@ -86,14 +108,14 @@ def aa_lipid_order(universe, inchikey_map, snapshots, frame_step):
                          for C_name in C_names]) / n - 0.5
             serrors = 1.5 * np.array([costheta_sums[C_name].std()
                                      for C_name in C_names]) / n
-            order_parameters_dict[inchikey][str(chain_idx)] = {
+            order_parameters_dict[inchikey][str(tail_idx)] = {
                 'atoms': C_names,
                 'avg': order_parameters.tolist(),
                 'std': serrors.tolist()}
     return order_parameters_dict
 
 
-def cg_lipid_order(universe, topology_file, output_directory, frame_step):
+def cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids):
     """Calculate lipid order parameters for coarse-grain simulations using gorder.
 
     Runs gorder's CGOrder analysis on the universe trajectory, then parses the
@@ -103,129 +125,147 @@ def cg_lipid_order(universe, topology_file, output_directory, frame_step):
     Each chain is identified by the trailing letter of the CG bead name
     (e.g. C1A, C2A → chain 'A'; C1B, C2B → chain 'B').
     """
-    import yaml
-    import gorder
-
-    lipid_residues = [
-        resname for resname in LIPIDS_RESIDUE_NAMES
-        if universe.select_atoms(f'resname {resname}').n_atoms > 0
-    ]
-
-    if not lipid_residues:
-        print('-> No lipid residues found for coarse-grain analysis')
-        return {}
-
-    trajectory_file = universe.trajectory.filename
-    if topology_file.format not in ['tpr', 'gro']:
-        # Supported formats: https://vachalab.github.io/gorder-manual/other_structure.html
-        warn('Coarse-grain lipid order analysis requires a TPR o GRO topology file.')
-        return {}
-
     yaml_out = os.path.join(output_directory, 'lorder.yaml')
+    analysis = gorder.Analysis(
+        structure=topology_file.absolute_path,
+        trajectory=universe.trajectory.filename,
+        analysis_type=gorder.analysis_types.CGOrder('@membrane'),
+        estimate_error=gorder.estimate_error.EstimateError(),
+        step=frame_step,
+        output_yaml=yaml_out,
+        handle_pbc=False,
+    )
+    results = analysis.run()
+    results.write()
 
-    try:
-        analysis = gorder.Analysis(
-            structure=topology_file.absolute_path,
-            trajectory=trajectory_file,
-            analysis_type=gorder.analysis_types.CGOrder('@membrane'),
-            estimate_error=gorder.estimate_error.EstimateError(),
-            step=frame_step,
-            output_yaml=yaml_out,
-            handle_pbc=False,
-        )
-        results = analysis.run()
-        results.write()
+    with open(yaml_out, 'r') as f:
+        gorder_data = yaml.safe_load(f)
+    if os.path.exists(yaml_out):
+        os.remove(yaml_out)
 
-        with open(yaml_out, 'r') as f:
-            gorder_data = yaml.safe_load(f)
-    finally:
-        if os.path.exists(yaml_out):
-            os.remove(yaml_out)
+    # Build tails from universe: resname -> list of ordered bead-name lists (one per chain)
+    tails: dict[str, list[list[str]]] = {}
+    for residue in lipids:
+        tails[residue.resname] = get_cg_acyl_chains(residue)
 
+    # Pattern for extracting bead name from gorder bond labels
+    _tail_bond_re = re.compile(r'^[A-Z0-9]+\s+\w+\s+\(\d+\)\s+-\s+[A-Z0-9]+\s+(C\d+[A-Z])\s+\(\d+\)')
     order_parameters_dict = {}
-
-    # Pattern matching CG tail bead names: C<digit(s)><chain_letter>
-    _tail_bond_re = re.compile(r'^[A-Z0-9]+\s+\w+\s+\(\d+\)\s+-\s+[A-Z0-9]+\s+(C\d+([A-Z]))\s+\(\d+\)')
-
     for resname, res_data in gorder_data.items():
         if resname in ('average order',):
             continue
         if not isinstance(res_data, dict) or 'order parameters' not in res_data:
             continue
 
-        # Group bonds by chain letter, preserving bead order
-        chains: dict[str, list[tuple[str, float]]] = {}
+        # Parse per-bead order parameters from bond labels
+        parsed: dict[str, tuple[float, float]] = {}
         for bond_label, bond_data in res_data['order parameters'].items():
             m = _tail_bond_re.match(bond_label)
             if m is None:
                 continue
             bead_name = m.group(1)   # e.g. "C1A"
-            chain_letter = m.group(2)  # e.g. "A"
             total = bond_data.get('total', {})
             value = total.get('mean', float('nan')) if isinstance(total, dict) else float(total)
             error = total.get('error', 0.0) if isinstance(total, dict) else 0.0
-            chains.setdefault(chain_letter, []).append((bead_name, value, error))
+            parsed[bead_name] = (value, error)
 
-        if not chains:
+        if not parsed:
             continue
 
+        # Map beads to pre-built chains
         order_parameters_dict[resname] = {}
-        for chain_idx, (chain_letter, bonds) in enumerate(sorted(chains.items())):
-            order_parameters_dict[resname][str(chain_idx)] = {
-                'atoms': [b[0] for b in bonds],
-                'avg': [b[1] for b in bonds],
-                'std': [b[2] for b in bonds],
-            }
+        for chain_idx, chain_beads in enumerate(tails.get(resname, [])):
+            chain_atoms, chain_avgs, chain_stds = [], [], []
+            for bead_name in chain_beads:
+                if bead_name in parsed:
+                    val, err = parsed[bead_name]
+                    chain_atoms.append(bead_name)
+                    chain_avgs.append(val)
+                    chain_stds.append(err)
+            if chain_atoms:
+                order_parameters_dict[resname][str(chain_idx)] = {
+                    'atoms': chain_atoms,
+                    'avg': chain_avgs,
+                    'std': chain_stds,
+                }
     return order_parameters_dict
 
 
-def get_all_acyl_chains(residue: 'MDAnalysis.Residue') -> list[list[int]]:
-    """Find all groups of connected Carbon atoms within a residue, including cyclic structures.
+def ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids):
+    """Calculate lipid order parameters for united-atom simulations using gorder.
 
-    Args:
-    residue (MDAnalysis.core.groups.Residue): The residue to analyze
+    Runs gorder's UAOrder analysis on the universe trajectory, then parses the
+    YAML output into the same format as the other lipid_order outputs:
+        { resname: { "0": { atoms: [...], avg: [...], std: [...] } } }
 
-    Returns:
-        list
-            A list of lists, where each inner list contains atom indices of
-            connected Carbon atoms forming a distinct group
-
+    All heavy atoms with C-H order contributions are collected per residue into
+    a single chain (index "0"), preserving the order they appear in the YAML.
     """
-    def explore_carbon_group(start_atom, visited):
-        """Explore a connected group of carbons."""
-        to_visit = [start_atom]
-        group = set()
-        while to_visit:
-            current_atom = to_visit.pop(0)
-            if current_atom.index in visited:
-                continue
-            visited.add(current_atom.index)
-            if current_atom.element == 'C':
-                group.add(current_atom.index)
-                # Add all bonded carbon atoms to the visit queue
-                for bond in current_atom.bonds:
-                    for bonded_atom in bond.atoms:
-                        if (bonded_atom.element == 'C' and
-                                bonded_atom.index not in visited):
-                            to_visit.append(bonded_atom)
-        return list(group)
+    yaml_out = os.path.join(output_directory, 'lorder.yaml')
+    analysis = gorder.Analysis(
+        structure=topology_file.absolute_path,
+        trajectory=universe.trajectory.filename,
+        analysis_type=gorder.analysis_types.UAOrder('@membrane'),
+        estimate_error=gorder.estimate_error.EstimateError(),
+        step=frame_step,
+        output_yaml=yaml_out,
+        handle_pbc=False,
+    )
+    results = analysis.run()
+    results.write()
 
-    # Get all Carbon atoms in the residue
-    carbon_atoms = residue.atoms.select_atoms('element C')
-    visited = set()
-    # Remove ester carbons (without hydrogens)
-    for at in carbon_atoms:
-        if 'H' not in at.bonded_atoms.elements:
-            visited.add(at.index)
-    carbon_groups = []
-    # Find all distinct groups of connected carbons
-    for carbon in carbon_atoms:
-        if carbon.index not in visited:
-            # Get all carbons connected to this one
-            connected_carbons = explore_carbon_group(carbon, visited)
-            if len(connected_carbons) > 6:  # Only add non-empty groups
-                carbon_groups.append(sorted(connected_carbons))
-    return carbon_groups
+    with open(yaml_out, 'r') as f:
+        gorder_data = yaml.safe_load(f)
+    if os.path.exists(yaml_out):
+        os.remove(yaml_out)
+
+    # Build tails: resname -> list of ordered atom-name arrays (one per acyl chain)
+    tails: dict[str, list] = {}
+    for residue in lipids:
+        residue.atoms.select_atoms('name C*').elements = 'C'  # Override element to Carbon
+        tails[residue.resname] = get_acyl_chain_atom_names(residue, removeHs=False)
+
+    # Parse YAML: for each resname build a flat map atom_name -> (mean, error)
+    order_parameters_dict = {}
+    _atom_re = re.compile(r'^(\S+)\s+(\S+)\s+\((\d+)\)$')
+
+    for resname, res_data in gorder_data.items():
+        if resname == 'average order':
+            continue
+        if not isinstance(res_data, dict) or 'order parameters' not in res_data:
+            continue
+
+        parsed: dict[str, tuple[float, float]] = {}
+        for atom_label, atom_data in res_data['order parameters'].items():
+            m = _atom_re.match(atom_label)
+            if m is None:
+                continue
+            atom_name = m.group(2)
+            total = atom_data.get('total', {})
+            value = total.get('mean', float('nan')) if isinstance(total, dict) else float(total)
+            error = total.get('error', 0.0) if isinstance(total, dict) else 0.0
+            parsed[atom_name] = (value, error)
+
+        if not parsed:
+            continue
+
+        order_parameters_dict[resname] = {}
+        for chain_idx, tail_atoms in enumerate(tails.get(resname, [])):
+            chain_atoms, chain_avgs, chain_stds = [], [], []
+            for atom_name in tail_atoms:
+                if atom_name in parsed:
+                    val, err = parsed[atom_name]
+                    chain_atoms.append(atom_name)
+                    chain_avgs.append(val)
+                    chain_stds.append(err)
+            if chain_atoms:
+                order_parameters_dict[resname][str(chain_idx)] = {
+                    'atoms': chain_atoms,
+                    'avg': chain_avgs,
+                    'std': chain_stds,
+                }
+
+    return order_parameters_dict
 
 
 def find_CH_bonds(universe, lipid_resindices, atom_names):

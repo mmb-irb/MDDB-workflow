@@ -12,6 +12,7 @@ def generate_membrane_mapping(
     lipid_references: dict[str, dict],
     structure_file: 'File',
     universe: 'Universe',
+    cg_residues: list[int],
     output_file: 'File',
 ) -> dict:
     """Generate a list of residue numbers of membrane components from a given structure and topology file.
@@ -21,6 +22,7 @@ def generate_membrane_mapping(
         lipid_references: Dictionary mapping InChI keys to lipid database references.
         structure_file: File object representing the structure file (e.g., PDB, GRO).
         universe: MDAnalysis Universe object containing the structure and topology.
+        cg_residues: List of residue indices for coarse-grained residues.
         output_file: Output JSON file to save membrane mapping.
 
     Returns:
@@ -42,18 +44,22 @@ def generate_membrane_mapping(
     if not universe: raise RuntimeError('Missing universe')
     # Select only the lipids from the InChIKeyData
     lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
-    if 'Cg' in universe.atoms.types:
+    if len(cg_residues) > 0:
         membrane_map = coarse_grain_membranes(structure_file, universe)
     else:
         membrane_map = all_atom_membranes(lipid_map, structure_file, universe)
     if membrane_map['n_mems'] > 0:
         save_json(membrane_map, output_file.path)
     # Print leaflets stats
+    print(f'{membrane_map["n_mems"]} membrane/s found. ')
     for mem_idx, mem_data in membrane_map['mems'].items():
         n_top = len(mem_data['leaflets']['top'])
         n_bot = len(mem_data['leaflets']['bot'])
-        print(f"Membrane {mem_idx}: {n_top} lipids in top leaflet, {n_bot} lipids in bottom leaflet.")
-    print(f"{len(membrane_map['no_mem_lipid'])} lipid atoms not assigned to any membrane.")
+        print(f"Membrane {mem_idx}:\n"
+              f"    - Top leaflet: {n_top} lipids\n"
+              f"    - Bottom leaflet: {n_bot} lipids")
+    if len(membrane_map['no_mem_lipid']) > 0:
+        print(f"Unassigned lipids: {len(membrane_map['no_mem_lipid'])}.")
     return membrane_map
 
 
@@ -171,9 +177,6 @@ def all_atom_membranes(
         }
 
     membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
-    # Print the results and save the membrane mapping
-    no_mem_lipids_str = f'{len(glclipid_ridx)} lipid/s not assigned to any membrane.' if len(glclipid_ridx) > 0 else ''
-    print(f'{n_mems} membrane/s found. ' + no_mem_lipids_str)
     return membrane_map
 
 
@@ -244,11 +247,6 @@ def coarse_grain_membranes(structure_file: 'File', universe: 'Universe') -> dict
         }
 
     membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
-
-    # Print results
-    no_mem_lipids_str = f'{len(no_mem_lipids)} lipid atoms not assigned to any membrane.' if len(no_mem_lipids) > 0 else ''
-    print(f'{n_mems} membrane/s found in coarse-grained system. ' + no_mem_lipids_str)
-
     return membrane_map
 
 

@@ -2273,7 +2273,7 @@ class TaskResolver:
         'network': ['resmap', 'ligmap', 'lipmap', 'chains', 'pdbs', 'memmap'],
         'minimal': ['pmeta', 'mdmeta', 'stopology'],
         'interdeps': ['inter', 'pairwise', 'hbonds', 'energies', 'perres', 'clusters', 'dist'],
-        'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter', 'channels']
+        'membs': ['memmap', 'density', 'thickness', 'apl', 'lorder', 'linter']  # 'channels' is disable for now
     }
     # Default analyses to be run when no task is specified
     DEFAULT_ANALYSES = [

@@ -39,6 +39,7 @@ class TestMembraneMapping:
     - OTRMG: no topology/charges, this should fail with the current implementation, leaflets are not similar size when they should
     - cg_test: coarse-grained system
     - cg_test_04: coarse-grained system with changing membranes
+    - A01J7: united atoms
 
     """
     @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test'])

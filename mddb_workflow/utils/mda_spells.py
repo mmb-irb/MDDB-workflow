@@ -1,3 +1,4 @@
+import re
 import json
 import numpy as np
 import pickle
@@ -6,6 +7,7 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
 from mddb_workflow.utils.auxiliar import MISSING_CHARGES, MISSING_BONDS
 
+import MDAnalysis
 from MDAnalysis.topology.TPRParser import TPRParser
 # from MDAnalysis.topology.PDBParser import PDBParser # for class reference
 from MDAnalysis.core.universe import Universe
@@ -131,3 +133,171 @@ def get_tpr_bonds_mdanalysis(tpr_filepath: str) -> list[tuple[int, int]]:
     topology = parser.parse()
     bonds = list(topology.bonds.values)
     return bonds
+
+
+def get_all_acyl_chains(residue: 'MDAnalysis.Residue', min_length=6, removeHs=True) -> list[list[int]]:
+    """Find all groups of connected Carbon atoms within a residue, including cyclic structures.
+
+    Returns:
+        list
+            A list of lists, where each inner list contains atom indices of
+            connected Carbon atoms forming a distinct group
+
+    """
+    def explore_carbon_group(start_atom, visited):
+        """Explore a connected group of carbons."""
+        to_visit = [start_atom]
+        group = set()
+        while to_visit:
+            current_atom = to_visit.pop(0)
+            if current_atom.index in visited:
+                continue
+            visited.add(current_atom.index)
+            if current_atom.element == 'C':
+                group.add(current_atom.index)
+                # Add all bonded carbon atoms to the visit queue
+                for bond in current_atom.bonds:
+                    for bonded_atom in bond.atoms:
+                        if (bonded_atom.element == 'C' and
+                                bonded_atom.index not in visited):
+                            to_visit.append(bonded_atom)
+        return list(group)
+
+    # Get all Carbon atoms in the residue
+    carbon_atoms = residue.atoms.select_atoms('element C')
+    visited = set()
+    if removeHs:
+        # Remove ester carbons (without hydrogens)
+        for at in carbon_atoms:
+            if 'H' not in at.bonded_atoms.elements:
+                visited.add(at.index)
+    carbon_groups = []
+    # Find all distinct groups of connected carbons
+    for carbon in carbon_atoms:
+        if carbon.index not in visited:
+            # Get all carbons connected to this one
+            connected_carbons = explore_carbon_group(carbon, visited)
+            if len(connected_carbons) >= min_length:  # Only add non-empty groups
+                carbon_groups.append(sorted(connected_carbons))
+    return carbon_groups
+
+
+def get_acyl_chain_atom_names(
+    residue: 'MDAnalysis.Residue',
+    removeHs: bool = True,
+    sort_key=None,
+) -> list[list[str]]:
+    """Get atom names for each acyl chain in a lipid residue.
+
+    Returns:
+        List of lists of atom name strings, one per chain.
+
+    """
+    chains = get_all_acyl_chains(residue, removeHs=removeHs)
+    result = []
+    for chain in chains:
+        names = list(residue.universe.atoms[sorted(chain)].names)
+        if sort_key is not None:
+            names = sorted(names, key=sort_key)
+        result.append(names)
+    return result
+
+
+def get_tail_atom_group(residue: 'MDAnalysis.Residue', include_hydrogens: bool = True) -> 'MDAnalysis.AtomGroup':
+    """Get the tail (acyl chain) AtomGroup for a lipid residue.
+
+    Finds connected carbon chains via `get_all_acyl_chains` and optionally
+    includes bonded hydrogen atoms.
+
+    Args:
+        residue: An MDAnalysis Residue representing a single lipid molecule.
+        include_hydrogens: If True, hydrogen atoms bonded to tail carbons are
+            included in the returned AtomGroup.
+
+    Returns:
+        AtomGroup containing the tail atoms of the lipid.
+
+    """
+    chains = get_all_acyl_chains(residue)
+    tail_idx = [idx for chain in chains for idx in chain]
+    if not tail_idx:
+        return residue.atoms[[]]  # empty AtomGroup
+    tail_ag = residue.universe.atoms[tail_idx]
+    if include_hydrogens:
+        h_indices = [
+            bonded.index
+            for atom in tail_ag.atoms
+            for bonded in atom.bonded_atoms
+            if bonded.name.startswith('H')
+        ]
+        if h_indices:
+            tail_ag = tail_ag | residue.universe.atoms[h_indices]
+    return tail_ag
+
+
+def get_head_tail_split(
+    residue: 'MDAnalysis.Residue',
+    include_hydrogens: bool = True,
+) -> tuple['MDAnalysis.AtomGroup', 'MDAnalysis.AtomGroup']:
+    """Split a lipid residue into headgroup and tail AtomGroups.
+
+    Args:
+        residue: An MDAnalysis Residue representing a single lipid molecule.
+        include_hydrogens: Forwarded to `get_tail_atom_group`.
+
+    Returns:
+        (head_ag, tail_ag) tuple of AtomGroups.
+
+    """
+    tail_ag = get_tail_atom_group(residue, include_hydrogens=include_hydrogens)
+    head_ag = residue.atoms - tail_ag
+    return head_ag, tail_ag
+
+
+# Regex matching CG tail bead names: C<digit(s)><chain letter> (e.g. C1A, C3B)
+CG_TAIL_NAME_RE = re.compile(r'^C\d+[A-Z]$')
+
+
+def get_cg_acyl_chains(residue: 'MDAnalysis.Residue') -> list[list[str]]:
+    """Get CG acyl chain bead names grouped by chain letter.
+
+    Identifies tail beads using `CG_TAIL_NAME_RE` and groups them by their
+    trailing chain letter (e.g. C1A, C2A -> chain 'A').
+
+    Args:
+        residue: An MDAnalysis Residue representing a single CG lipid molecule.
+
+    Returns:
+        List of lists of bead name strings, one per chain (sorted by chain letter).
+
+    """
+    chains: dict[str, list[str]] = {}
+    for atom in residue.atoms:
+        m = CG_TAIL_NAME_RE.match(atom.name)
+        if m:
+            chain_letter = atom.name[-1]
+            chains.setdefault(chain_letter, []).append(atom.name)
+    return [names for _, names in sorted(chains.items())]
+
+
+def get_cg_head_tail_split(
+    residue: 'MDAnalysis.Residue',
+) -> tuple['MDAnalysis.AtomGroup', 'MDAnalysis.AtomGroup']:
+    """Split a coarse-grain lipid residue into headgroup and tail AtomGroups.
+
+    Tail beads are identified via `get_cg_acyl_chains` using the CG naming
+    convention: C<digit(s)><chain letter> (e.g. C1A, C3B).
+
+    Args:
+        residue: An MDAnalysis Residue representing a single CG lipid molecule.
+
+    Returns:
+        (head_ag, tail_ag) tuple of AtomGroups.
+
+    """
+    chains = get_cg_acyl_chains(residue)
+    tail_names = {name for chain in chains for name in chain}
+    mask = np.array([atom.name in tail_names for atom in residue.atoms])
+    tail_ag = residue.atoms[mask]
+    head_ag = residue.atoms[~mask]
+    return head_ag, tail_ag
