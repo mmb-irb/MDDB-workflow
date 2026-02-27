@@ -8,15 +8,15 @@ from mddb_workflow.utils.type_hints import *
 
 
 def channels(
+    membrane_map: dict,
     universe: 'Universe',
     output_directory: str,
-    membrane_map: dict,
     snapshots: int,
     frames_limit: int
 ):
     """Analyze channels in a membrane protein using MDAnalysis mda_hole."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> Skipping channels analysis')
+        print('-> No membranes found, skipping channels analysis')
         return
     if universe.select_atoms('protein').n_atoms == 0:
         print('-> No protein found, skipping channels analysis')

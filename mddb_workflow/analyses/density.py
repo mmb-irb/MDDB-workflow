@@ -6,10 +6,10 @@ import pytraj as pt
 
 
 def density(
+    membrane_map: dict,
     structure_file: 'File',
     trajectory_file: 'File',
     output_directory: str,
-    membrane_map: dict,
     structure: 'Structure',
     snapshots: int,
     density_types=['number', 'mass', 'charge', 'electron'],
@@ -17,7 +17,7 @@ def density(
 ):
     """Membrane density analysis."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> Skipping density analysis')
+        print('-> No membranes found, skipping density analysis')
         return
 
     # Set the main output filepath

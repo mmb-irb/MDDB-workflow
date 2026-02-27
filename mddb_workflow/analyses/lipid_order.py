@@ -12,7 +12,6 @@ def lipid_order(
     universe: 'MDAnalysis.Universe',
     topology_file: 'File',
     output_directory: str,
-    membrane_map: dict,
     inchikey_map: list[dict],
     cg_residues: list[int],
     snapshots: int,
@@ -30,7 +29,7 @@ def lipid_order(
 
     """
     if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> Skipping lipid order analysis')
+        print('-> No membranes found, skipping lipid order analysis')
         return
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     if len(cg_residues) > 0:
