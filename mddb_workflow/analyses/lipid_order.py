@@ -9,6 +9,7 @@ import os
 
 
 def lipid_order(
+    membrane_map: dict,
     universe: 'MDAnalysis.Universe',
     topology_file: 'File',
     output_directory: str,

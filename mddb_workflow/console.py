@@ -17,7 +17,7 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.analyses.nassa import workflow_nassa
-from mddb_workflow.core.dataset import Dataset, State
+from mddb_workflow.core.dataset import Dataset
 
 expected_project_args = set(Project.__init__.__code__.co_varnames)
 
@@ -325,7 +325,7 @@ def main():
         missing_any_bonds = any(bond == MISSING_BONDS for bond in structure.bonds)
         # If we are missing any bond then we can not run the per-fragment logic
         if missing_any_bonds and not args.letter:
-            raise InputError('Cannot run the per-fragment logic with missing bonds.\n' + \
+            raise InputError('Cannot run the per-fragment logic with missing bonds.\n' +
                 '  Please either specify a chain letter (-let) or provide a bonds source topology (-bs).')
         # Select atom accoridng to inputs
         selection = structure.select(args.selection_string, args.selection_syntax) if args.selection_string else structure.select_all()
@@ -339,14 +339,14 @@ def main():
         if not hasattr(args, 'dataset_subcommand') or not args.dataset_subcommand:
             ds_parser.print_help()
             return
-        # If dataset_path is not provided, search for *.db file
+        # If dataset_path is not provided, search for *.db or *.sql file
         if (not hasattr(args, 'dataset_path') or not args.dataset_path):
-            db_files = glob.glob("*.db")
+            db_files = glob.glob("*.db") + glob.glob("*.sql")
             if db_files:
                 args.dataset_path = db_files[0]
                 print(f"Using dataset file: {args.dataset_path}")
             else:
-                print("No dataset_path provided and no *.db file found in the current directory.")
+                print("No dataset_path provided and no *.db or *.sql file found in the current directory.")
                 ds_parser.print_help()
                 return
 

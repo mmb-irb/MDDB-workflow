@@ -144,13 +144,12 @@ class DatabaseLock:
 
 class Dataset:
     """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
-    # TODO: log_file, err_file, group_id
     common_columns = ['state', 'message', 'last_modified']
     project_columns = ['uuid', 'rel_path', 'num_mds'] + common_columns
     md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
     date_format = "%H:%M:%S %d-%m-%Y"
 
-    def __init__(self, dataset_path: str, lock_timeout: float = 30.0):
+    def __init__(self, dataset_path: str = 'mwf_ds.sql', lock_timeout: float = 30.0):
         """Initialize the Dataset object and connect to SQLite DB.
 
         Args:
