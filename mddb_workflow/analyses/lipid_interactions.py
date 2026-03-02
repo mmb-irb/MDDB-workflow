@@ -122,14 +122,20 @@ def _iterate_protein_residues(universe, snapshots, frames_limit, lipid_group, ac
 def aa_lipid_interactions(universe, lipid_map, iterator):
     """Atomistic lipid-protein interactions analysis."""
     lipids_residx = [residue_idx for lipid in lipid_map for residue_idx in lipid['residue_indices']]
+    inchikeys = [lipid['inchikey'] for lipid in lipid_map for residue_idx in lipid['residue_indices']]
     lipid_group = universe.select_atoms(f'resindex {" ".join(map(str, lipids_residx))}')
 
     # Pre-compute headgroup and tail AtomGroups per lipid residue (topology is static)
     head_atoms = {}  # lipid_residx -> AtomGroup of headgroup atoms
     tail_atoms = {}  # lipid_residx -> AtomGroup of acyl-chain atoms
-    for lipid_residx in lipids_residx:
+    for lipid_residx, inchikey in zip(lipids_residx, inchikeys):
         residue = universe.select_atoms(f'resindex {lipid_residx}').residues[0]
-        head_ag, tail_ag = get_head_tail_split(residue)
+        if inchikey == 'HVYWMOMLDIMFJA-DPAQBDIFSA-N':
+            # Special case for cholesterol: use the O-H atom as headgroup and the rest as tail
+            head_ag = residue.atoms.select_atoms('element O and bonded element H')
+            tail_ag = residue.atoms - head_ag
+        else:
+            head_ag, tail_ag = get_head_tail_split(residue)
         head_atoms[lipid_residx] = head_ag
         tail_atoms[lipid_residx] = tail_ag
     # Map each lipid residue index to its lipid type (inchikey index) for binary-per-frame scoring
