@@ -22,10 +22,8 @@ def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = F
 
 def download_project(project: 'Project'):
     """Download the project files."""
-    project.overwritables = {'itopology'}
     input_files['itopology'](project)
     md: MD = project.mds[0]
-    md.overwritables = {'istructure', 'itrajectory'}
     input_files['istructure'](md)
     input_files['itrajectory'](md)
 
@@ -61,11 +59,16 @@ class TestMembraneMapping:
         elif top.endswith('.json'):
             universe = get_mda_universe(structure_file, trajectory_file, cache.data['refbonds_task_output'], charges=None)
         else:
-            universe = mda.Universe(all_coordinates=structure_file.absolute_path, topology=top)
-        if test_accession == 'cg_test':
-            universe.atoms.types = ['Cg'] * len(universe.atoms)
+            universe = mda.Universe(top, trajectory_file.absolute_path)
+        cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession == 'cg_test' else []
         output_file = File(f'{test_proj_dir}_membrane_mapping_output.json')
-        membrane_map = generate_membrane_mapping(inchikeys, lipid_references, structure_file, universe, output_file)
+        membrane_map = generate_membrane_mapping(
+            inchikeys,
+            lipid_references,
+            universe,
+            cg_selection,
+            output_file
+        )
         assert membrane_map['n_mems'] == 1
         top_size = len(membrane_map['mems']['0']['leaflets']['top'])
         bot_size = len(membrane_map['mems']['0']['leaflets']['bot'])

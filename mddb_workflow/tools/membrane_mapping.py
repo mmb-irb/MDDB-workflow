@@ -1,16 +1,13 @@
-import os
 import numpy as np
-from biobb_mem.fatslim.fatslim_membranes import fatslim_membranes, parse_index
+from MDAnalysis.analysis.leaflet import LeafletFinder
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
 from mddb_workflow.utils.type_hints import *
-from contextlib import redirect_stdout
 
 
 def generate_membrane_mapping(
     inchikeys: dict[str, 'InChIKeyData'],
     lipid_references: dict[str, dict],
-    structure_file: 'File',
     universe: 'Universe',
     cg_residues: list[int],
     output_file: 'File',
@@ -43,51 +40,40 @@ def generate_membrane_mapping(
     """
     if not universe: raise RuntimeError('Missing universe')
     # Select only the lipids from the InChIKeyData
-    lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
     if len(cg_residues) > 0:
-        membrane_map = coarse_grain_membranes(structure_file, universe)
+        headgroup_ag = coarse_grain_headgroups(universe)
+        membrane_map = find_leaflets(universe, headgroup_ag)
     else:
-        membrane_map = all_atom_membranes(lipid_map, structure_file, universe)
+        lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
+        headgroup_ag = all_atom_headgroups(lipid_map, universe)
+        membrane_map = find_leaflets(universe, headgroup_ag)
+
     if membrane_map['n_mems'] > 0:
         save_json(membrane_map, output_file.path)
-    # Print leaflets stats
-    print(f'{membrane_map["n_mems"]} membrane/s found. ')
-    for mem_idx, mem_data in membrane_map['mems'].items():
-        n_top = len(mem_data['leaflets']['top'])
-        n_bot = len(mem_data['leaflets']['bot'])
-        print(f"Membrane {mem_idx}:\n"
-              f"    - Top leaflet: {n_top} lipids\n"
-              f"    - Bottom leaflet: {n_bot} lipids")
-    if len(membrane_map['no_mem_lipid']) > 0:
-        print(f"Unassigned lipids: {len(membrane_map['no_mem_lipid'])}.")
     return membrane_map
 
 
-def all_atom_membranes(
+def all_atom_headgroups(
     lipid_map: dict[str, 'InChIKeyData'],
-    structure_file: 'File',
     universe: 'Universe',
 ) -> dict:
-    """Generate membrane mapping for all-atom systems using FATSLiM."""
-    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': []}
-
+    """Extract the headgroup atoms for all lipids in the system using the most charged atom.
+    In case of missing charges, it will try to guess the headgroup based on the residue name.
+    """
     if len(lipid_map) == 0:
         # no lipids found in the structure.
         print("No lipid residues found in the structure.")
-        return membrane_map
+        return None
 
     # Select only the lipids and potential membrane members
-    lipid_ridx = []
-    glclipid_ridx = []
+    lipid_resindices = []
     for ref in lipid_map.values():
-        lipid_ridx.extend(ref.resindices)
-        if ref.moltype == 'fragment':
-            glclipid_ridx.extend(ref.fragments)
+        lipid_resindices.extend(ref.resindices)
     # if no lipids are found, we save the empty mapping and return
-    if len(lipid_ridx) == 0:
+    if len(lipid_resindices) == 0:
         # no lipids found in the structure.
-        return membrane_map
-    all_lipids = universe.select_atoms(f'(resindex {" ".join(map(str, (lipid_ridx)))})')
+        return None
+    all_lipids = universe.select_atoms(f'(resindex {" ".join(map(str, (lipid_resindices)))})')
 
     # For better leaflet assignation we only use polar atoms
     if not hasattr(universe.atoms, 'charges'):
@@ -107,146 +93,81 @@ def all_atom_membranes(
                         polar_atoms.append(PO_candidates[0].index)
                         continue
                 warn(f"Could not find polar atom for residue {residue.resname} {residue.resid}. Skipping analysis")
-                return membrane_map
+                return None
     else:
+        print("Using atom charges to find polar atoms for leaflet assignment.")
         charges = abs(np.array([atom.charge for atom in universe.atoms]))
         polar_atoms = []
-        for ridx in all_lipids.residues.resindices:
+        for ridx in all_lipids.residues.resindices:  # take only one per fragment
             res = universe.residues[ridx]
             res_ch = charges[res.atoms.ix]
             max_ch_idx = np.argmax(res_ch)
             polar_atoms.append(res.atoms[max_ch_idx].index)
     polar_atoms = np.array(polar_atoms)
-    headgroup_sel = f'(index {" ".join(map(str, (polar_atoms)))})'
-    # Run FATSLiM to find the membranes
-    prop = {
-        'selection': headgroup_sel,
-        'cutoff': 2.2,
-        'ignore_no_box': True,
-        'disable_logs': True,
-        'return_hydrogen': True,
-        # Do not copy the input file to the sandbox
-        'disable_sandbox': True,
-    }
-    output_ndx_path = "tmp_mem_map.ndx"
-    print(' Running BioBB FATSLiM Membranes')
-    with redirect_stdout(None):
-        fatslim_membranes(input_top_path=structure_file.absolute_path,
-                          output_ndx_path=output_ndx_path,
-                          properties=prop)
-    # Parse the output to get the membrane mapping
-    mem_map = parse_index(output_ndx_path)
-    os.remove(output_ndx_path)
-    # Save the membrane mapping as a JSON file
-    n_mems = len(mem_map) // 2
-    membrane_map['n_mems'] = n_mems
-    no_mem_lipids = set(all_lipids.atoms.indices)
-    for i in range(n_mems):
-        # and they are not assigned to any membrane. FATSLiM indexes start at 1
-        bot = (np.array(mem_map[f'membrane_{i + 1}_leaflet_1']) - 1).tolist()  # JSON does not support numpy arrays
-        top = (np.array(mem_map[f'membrane_{i + 1}_leaflet_2']) - 1).tolist()
-        top_ridx = universe.atoms[top].residues.resindices
-        bot_ridx = universe.atoms[bot].residues.resindices
-        # Some polar atoms from the glucids are to far from the polar atoms of the lipids
-        top = set(top)
-        bot = set(bot)
-        remove_ridx = []
-        for grp in glclipid_ridx:
-            if np.in1d(grp, top_ridx).any():
-                top.update(universe.residues[grp].atoms.indices)
-                remove_ridx.append(grp)
-                continue
-            if np.in1d(grp, bot_ridx).any():
-                bot.update(universe.residues[grp].atoms.indices)
-                remove_ridx.append(grp)
-        for grp in remove_ridx:
-            glclipid_ridx.remove(grp)
-        # Remove lipids not assigned to any membrane
-        no_mem_lipids -= top
-        no_mem_lipids -= bot
-        # Check in which leaflets each of the polar atoms is and save them
-        membrane_map['mems'][str(i)] = {
-            'leaflets': {
-                'bot': list(map(int, bot)),
-                'top': list(map(int, top))
-            },
-            'polar_atoms': {
-                'bot': polar_atoms[np.in1d(polar_atoms, list(bot))].tolist(),
-                'top': polar_atoms[np.in1d(polar_atoms, list(top))].tolist()
-            }
-        }
-
-    membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
-    return membrane_map
+    headgroup_ag = universe.atoms[polar_atoms]
+    return headgroup_ag
 
 
-def coarse_grain_membranes(structure_file: 'File', universe: 'Universe') -> dict:
-    """Generate membrane mapping for coarse-grained systems using residue names and P atoms as headgroups."""
-    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': []}
-
+def coarse_grain_headgroups(universe: 'Universe') -> dict:
+    """Generate membrane mapping for coarse-grained systems using MDAnalysis LeafletFinder with P atoms as headgroups."""
     # Find all lipid residues in the system
-    lipid_residues = []
+    lipid_atoms = headgroup_ag = universe.atoms[[]]
     for resname in LIPIDS_RESIDUE_NAMES:
-        lipids = universe.select_atoms(f'resname {resname}')
-        if len(lipids) > 0:
-            lipid_residues.append(resname)
+        lipid = universe.select_atoms(f'resname {resname}')
+        if len(lipid) > 0:
+            lipid_atoms += lipid.atoms
 
-    if len(lipid_residues) == 0:
-        print("No coarse-grained lipid residues found in the structure.")
+    if len(lipid_atoms) == 0:
+        print("No coarse-grained lipid atoms found in the structure.")
+        return None
+    print(f"Found {len(lipid_atoms.residues)} lipid residues by name.")
+    # Use P atoms as headgroups for LeafletFinder
+    headgroup_ag = lipid_atoms.select_atoms('name P*')
+    return headgroup_ag
+
+
+def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None) -> dict:
+    """Find leaflets using MDAnalysis LeafletFinder and generate membrane mapping."""
+    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': '0.2.0'}
+    if not headgroup_ag:
+        print("No headgroup atoms found, cannot assign leaflets.")
         return membrane_map
-
-    # Select P atoms (headgroups) from lipid residues
-    headgroup_atoms = f'resname {" ".join(lipid_residues)} and name P*'
-
-    # Run FATSLiM to find the membranes
-    prop = {
-        'selection': headgroup_atoms,
-        'cutoff': 2.5,  # Slightly larger cutoff for CG systems
-        'ignore_no_box': True,
-        'disable_logs': True,
-        'disable_sandbox': True,
-    }
-
-    output_ndx_path = "tmp_cg_mem_map.ndx"
-    print(' Running BioBB FATSLiM Membranes for coarse-grained system')
-
-    # with redirect_stdout(None):
-    fatslim_membranes(input_top_path=structure_file.absolute_path,
-                      output_ndx_path=output_ndx_path,
-                      properties=prop)
-
-    # Parse the output to get the membrane mapping
-    mem_map = parse_index(output_ndx_path)
-    os.remove(output_ndx_path)
-
-    # Process the membrane mapping
-    n_mems = len(mem_map) // 2
+    print(' Running MDAnalysis LeafletFinder')
+    L = LeafletFinder(universe, headgroup_ag)
+    leaflets = []
+    no_mem_lipids = []
+    for group in L.groups():
+        # 30 lipids like in FATSLiM
+        if len(group) > 30:
+            leaflets.append(group)
+        else:
+            no_mem_lipids.extend(group.residues.resindices)
+    n_mems = len(leaflets) // 2
     membrane_map['n_mems'] = n_mems
 
-    all_lipid_atoms = universe.select_atoms(f'resname {" ".join(lipid_residues)}')
-    no_mem_lipids = set(all_lipid_atoms.atoms.indices)
-
     for i in range(n_mems):
-        # FATSLiM indexes start at 1, convert to 0-based
-        bot_atoms = (np.array(mem_map[f'membrane_{i + 1}_leaflet_1']) - 1).tolist()
-        top_atoms = (np.array(mem_map[f'membrane_{i + 1}_leaflet_2']) - 1).tolist()
-
-        # Remove assigned atoms from no_mem_lipids
-        no_mem_lipids -= set(bot_atoms)
-        no_mem_lipids -= set(top_atoms)
-
-        membrane_map['mems'][str(i)] = {
+        # Check in which leaflets each of the polar atoms is and save them
+        memb_data = {
             'leaflets': {
-                'bot': bot_atoms,
-                'top': top_atoms
+                'bot': leaflets[i * 2].residues.atoms.indices.tolist(),
+                'top': leaflets[i * 2 + 1].residues.atoms.indices.tolist()
             },
             'polar_atoms': {
-                'bot': universe.atoms[bot_atoms].select_atoms('name P*').indices.tolist(),
-                'top': universe.atoms[top_atoms].select_atoms('name P*').indices.tolist()
+                'bot': leaflets[i * 2].atoms.indices.tolist(),
+                'top': leaflets[i * 2 + 1].atoms.indices.tolist()
             }
         }
+        membrane_map['mems'][str(i)] = memb_data
+        # Print leaflets stats
+        print(f"Membrane {i}:\n"
+              f"    - Top leaflet: {len(memb_data['polar_atoms']['top'])} lipids\n"
+              f"    - Bottom leaflet: {len(memb_data['polar_atoms']['bot'])} lipids")
 
-    membrane_map['no_mem_lipid'] = list(map(int, no_mem_lipids))
+    if len(no_mem_lipids) > 0:
+        print(f"Unassigned lipids: {len(no_mem_lipids)}.")
+        no_mem_lipids = universe.residues[no_mem_lipids].atoms.indices.tolist()
+    membrane_map['no_mem_lipid'] = no_mem_lipids
+
     return membrane_map
 
 
