@@ -134,7 +134,7 @@ def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str
             # Try/except because DetermineBondOrders can fail
             try:
                 res_RD_copy = Chem.Mol(res_RD)
-                DetermineBondOrders(res_RD_copy, charge=formal_charge)
+                DetermineBondOrders(res_RD_copy, charge=formal_charge, maxIterations=1000)
                 res_RD = res_RD_copy
             except Exception:
                 pass
