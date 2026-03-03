@@ -291,11 +291,17 @@ class Atom:
         # Find a obvios element name in the atom name
         element = self.get_name_suggested_element()
         # CA may refer to calcium or alpha carbon, so the number of atoms in the residue is decisive
-        if element == 'Ca' and self.residue.atom_count >= 2:
+        if element == 'Ca' and self.residue.atom_count > 1:
             return 'C'
         # NA may refer to sodium or some ligand nitrogen, so the number of atoms in the residue is decisive
-        if element == 'Na' and self.residue.atom_count >= 2:
+        if element == 'Na' and self.residue.atom_count > 1:
             return 'N'
+        # HG may refer to mercury, but is normally a hydrogen
+        if element == 'Hg' and self.residue.atom_count > 1:
+            return 'H'
+        # CD may refer to cadmium, but it is normally a delta C
+        if element == 'Cd' and self.residue.atom_count > 1:
+            return 'C'
         return element
 
     def get_name_suggested_element (self) -> str:
