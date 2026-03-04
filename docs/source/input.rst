@@ -282,7 +282,7 @@ Simulation metadata
 Simulation parameters.
 
 .. tip::
- Someday this will be automatically mined.
+   Someday this will be automatically mined.
 
 
 
@@ -467,7 +467,10 @@ These residues are excluded in the follwoing analyses:
 - Pockets: Residues close to the boundary may be considered to have pockets while they have not.
 
 .. tip::
- This isn't really possible because fpocket doesn't allow you to intelligently "discard" atoms. If you remove atoms so it doesn't find pockets in them, pockets can appear in the sites occupied by those atoms. For now, we discard the entire analysis when there's something in PBC and that's it.
+   This isn't really possible because fpocket doesn't allow you to intelligently "discard" atoms.
+   If you remove atoms so it doesn't find pockets in them then
+   pockets can appear in the sites occupied by those atoms.
+   For now, we discard the entire analysis when there's something in PBC and that's it.
 
 - Clusters: Since Clustering is RMSD-based it has the same limitations
 
@@ -498,6 +501,19 @@ Set those atoms which are not actual "atoms" but coarse grained (CG) beads.
  EXPERIMENTAL INPUT
 
 
+
+``dummy_selection``
+~~~~~~~~~~~~~~~~~~~
+
+Set those atoms which are not real atoms but dummy atoms thus representing other entities.
+These dummy atoms are used in some methodologies such as alchemical bonds
+
+.. warning::
+ EXPERIMENTAL INPUT
+
+
+
+Default: ``auto``
 
 Representation parameters
 -------------------------
@@ -588,7 +604,7 @@ This field was requested by the referees.
 Its only use for now is as a parameter in project queries.
 
 .. tip::
- This is temporary, it would be best to automate it.
+   This is temporary, it would be best to automate it.
 
 
 
@@ -607,17 +623,12 @@ Set also additional collection related metadata values.
 ~~~~~~~~~~~~~~~
 
 Set to which collection does this simulation belong to.
-Currently supported collections:
-
-- cv19
-
-- mcns
-
-- abc
-
-- bigna
-
-- model
+This allows to freely group simulations together
+The collection may also provide additional reference data further
+For instance a description of the whole dataset
+If you want to include this simulation in an already exsiting collection then use its id
+If you want to create a new "collection id" please use short ids with no weird signs
+e.g. cv19, model, abc, ...
 
 ``cv19_unit``
 ~~~~~~~~~~~~~
@@ -730,4 +741,9 @@ If there is not an MD which is more important than others then simply set the fi
 ::
 
 	mdref: 0
+
+``dataset_path``
+~~~~~~~~~~~~~~~~
+
+Path to the dataset storage file for the Dataset object.
 

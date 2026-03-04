@@ -209,7 +209,7 @@ def process_interactions(
                 interaction[FAILED_INTERACTION_FLAG] = True
                 continue
             meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'
-            print(f'Interaction "{interaction_name}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent}).\n'
+            print(f'Interaction "{interaction_name}" is not reaching the frames percent cutoff of {interaction_cutoff} ({pretty_frames_percent} %).\n'
                 f'This means the interaction {meaning_log}.\n'
                 'Check agent selections are correct or consider removing this interaction from the inputs.\n'
                 f'   - Agent 1 selection: {interaction["selection_1"]}\n'

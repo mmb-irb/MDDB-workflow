@@ -347,7 +347,7 @@ interactions:
 #    - Pockets: Residues close to the boundary may be considered to have pockets while they have not. 
 # DANI: This isn't really possible because fpocket doesn't allow you to intelligently "discard" atoms.
 # DANI: If you remove atoms so it doesn't find pockets in them then
-# DANI:   pockets can appear in the sites occupied by those atoms.
+# DANI: pockets can appear in the sites occupied by those atoms.
 # DANI: For now, we discard the entire analysis when there's something in PBC and that's it.
 #    - Clusters: Since Clustering is RMSD-based it has the same limitations
 #

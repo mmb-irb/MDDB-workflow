@@ -15,8 +15,22 @@ def replace_special_markers(text):
         text = text.replace(
             "LORE:", "\n.. note::\n").strip() + "\n\n"
     elif "DANI:" in text:
-        text = text.replace(
-            "DANI:", "\n.. tip::\n").strip() + "\n\n"
+        # Collect consecutive DANI: lines into a single tip block
+        lines = text.split('\n')
+        result_lines = []
+        i = 0
+        while i < len(lines):
+            if 'DANI:' in lines[i]:
+                tip_content = []
+                while i < len(lines) and 'DANI:' in lines[i]:
+                    tip_content.append('   ' + lines[i].replace('DANI:', '').strip())
+                    i += 1
+                result_lines.append('\n.. tip::')
+                result_lines.extend(tip_content)
+            else:
+                result_lines.append(lines[i])
+                i += 1
+        text = '\n'.join(result_lines).strip() + "\n\n"
     return text
 
 

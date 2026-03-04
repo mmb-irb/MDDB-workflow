@@ -633,15 +633,16 @@ for flags, kwargs in run_parser_checks_args:
 
 # Set a list with the alias of all requestable dependencies
 choices = sorted(list(requestables.keys()) + list(TaskResolver.DEPENDENCY_FLAGS.keys()))
-task_groups = [
-  "download: Check/download input files (already ran with analyses)",
-  "setup: Process and test input files (already ran with analyses)",
-  "meta: Run project and MD metadata analyses",
-  "network: Run dependencies which require internet connection",
-  "minimal: Run dependencies required by the web client to work",
-  "interdeps: Run interactions and all its dependent analyses",
-  "membs: Run all membrane-related analyses",
-]
+task_groups_help = {
+    "download": "Download missing input files (already ran with analyses)",
+    "setup": "Process and test input files (already ran with analyses)",
+    "meta": "Run project and MD metadata analyses",
+    "network": "Run dependencies which require internet connection",
+    "minimal": "Run dependencies required by the web client to work",
+    "interdeps": "Run interactions and all its dependent analyses",
+    "membs": "Run all membrane-related analyses",
+}
+task_groups = [f'{flag}: {description}' for flag, description in task_groups_help.items()]
 assert len(TaskResolver.DEPENDENCY_FLAGS.keys()) == len(task_groups), "The number of dependency flags and task groups must be the same"
 
 run_parser_analysis_group = run_parser.add_argument_group('TASKS OPTIONS',

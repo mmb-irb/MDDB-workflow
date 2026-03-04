@@ -4,6 +4,7 @@ import sys
 import inspect
 from pathlib import Path
 from mddb_workflow.mwf import project_requestables, md_requestables, TaskResolver, Task
+from mddb_workflow.console import task_groups_help
 
 # Add the repository root to the Python path so we can import modules
 repo_root = Path('..').resolve()
@@ -135,7 +136,7 @@ def generate_task_docs():
     rst_content += "These are predefined groups of tasks that can be specified with a single flag.\n\n"
 
     for flag, tasks in TaskResolver.DEPENDENCY_FLAGS.items():
-        rst_content += f"* ``{flag}``: {', '.join([f'``{t}``' for t in tasks])}.\n\n"
+        rst_content += f"* ``{flag}`` ({', '.join([f'``{t}``' for t in tasks])}): {task_groups_help[flag].lower()}.\n\n"
 
     return rst_content
 
