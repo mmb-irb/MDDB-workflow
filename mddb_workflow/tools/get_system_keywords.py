@@ -66,8 +66,8 @@ def get_system_keywords(
         keywords.append(LIPID_KEYWORD)
     # Carbohydrates
     carbohydrates_selection = structure.select_carbohydrates()
-    # For small systems we treat carbohydrates as ligands
-    if len(ligands_selection) / len(structure.atoms) > 0.9:
+    # If there is only one carbohydrate, treat it as a ligand
+    if len(structure.get_selection_residues(carbohydrates_selection)) == 1:
         carbohydrates_selection = carbohydrates_selection - ligands_selection
     has_carbohydrates = len(carbohydrates_selection) > 0
     if has_carbohydrates:

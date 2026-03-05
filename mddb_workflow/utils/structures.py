@@ -2065,23 +2065,23 @@ class Structure:
         return Selection([ atom_index for atom_index in atom_indices if atom_index != None ])
 
     def get_selection_residue_indices (self, selection : 'Selection') -> list[int]:
-        """Given a selection, get a list of residue indices for residues implicated.
+        """Given an atom selection, get a list of residue indices for residues implicated.
         Note that if a single atom from the residue is in the selection then the residue index is returned."""
         return list(set([ self.atoms[atom_index].residue_index for atom_index in selection.atom_indices ]))
 
     def get_selection_residues (self, selection : 'Selection') -> list['Residue']:
-        """Given a selection, get a list of residues implicated.
+        """Given an atom selection, get a list of residues implicated.
         Note that if a single atom from the residue is in the selection then the residue is returned."""
         residue_indices = self.get_selection_residue_indices(selection)
         return [ self.residues[index] for index in residue_indices ]
 
     def get_selection_chain_indices (self, selection : 'Selection') -> list[int]:
-        """Given a selection, get a list of chain indices for chains implicated.
+        """Given an atom selection, get a list of chain indices for chains implicated.
         Note that if a single atom from the chain is in the selection then the chain index is returned."""
         return list(set([ self.atoms[atom_index].chain_index for atom_index in selection.atom_indices ]))
 
     def get_selection_chains (self, selection : 'Selection') -> list['Chain']:
-        """Given a selection, get a list of chains implicated.
+        """Given an atom selection, get a list of chains implicated.
         Note that if a single atom from the chain is in the selection then the chain is returned."""
         chain_indices = self.get_selection_chain_indices(selection)
         return [ self.chains[index] for index in chain_indices ]
