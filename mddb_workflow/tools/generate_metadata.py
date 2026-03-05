@@ -158,7 +158,9 @@ def prepare_project_metadata (
 
     # Make sure the version is a string
     # Note that in some cases it may be a numeric value (e.g. 5.1)
-    program_version = str(input_version)
+    program_version = input_version
+    if type(program_version) in { float, int }:
+        program_version = str(program_version)
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
