@@ -217,7 +217,8 @@ def find_all_corrupted_frames (input_topology_filepath : str, input_trajectory_f
         if not atom_coordinates.all():
             corrupted_frames.append(f)
     corrupted_frames_count = len(corrupted_frames)
-    print(f' Found {corrupted_frames_count} corrupted frames.')
+    # Add some extra spaces to hide the previous log
+    print(f' Found {corrupted_frames_count} corrupted frames.                          ')
     if corrupted_frames_count > 0:
         print(f' First corrupted frame: {corrupted_frames[0]}')
     return corrupted_frames
