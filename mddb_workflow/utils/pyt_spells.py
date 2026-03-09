@@ -159,24 +159,68 @@ filter_topology.format_sets = [
     }
 ]
 
+# This value is used in NetCDF to represent a missing value or NaN
+# We must declare it as a numpy's float64 since this is the type of pytraj coordinates
+# Thus we can directly compare numpy's float64 equality
+NETCDF_MISSING_VALUE = np.float64(9.969209968386869e+36)
 
-def find_first_corrupted_frame (input_topology_filepath, input_trajectory_filepath) -> int:
+def find_first_corrupted_frame (input_topology_filepath : str, input_trajectory_filepath : str) -> Optional[int]:
     """Find the first corrupted frame number with NaN or all zero coordinates,
     given a corrupted NetCDF file, whose first frames may be read by pytraj.
     """
+    print('Checking NetCDF integrity')
     # Iterload the trajectory to pytraj
     trajectory = get_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath)
     # Iterate frames until we find one frame whose last atom coordinates are all zeros
     frame_iterator = iter(trajectory.iterframe())
     expected_frames = trajectory.n_frames
     for f, frame in enumerate(frame_iterator, 1):
-        print(f'Reading frame {f}/{expected_frames}', end='\r')
+        print(f' Reading frame {f}/{expected_frames}', end='\r')
+        atom_coordinates = frame.xyz
         # Make sure there are actual coordinates here
-        # If there is any problem we may have frames with coordinates full of zeros
-        last_atom_coordinates = frame.xyz[-1]
-        if not last_atom_coordinates.any() or np.isnan(frame.xyz).any():
+        # If there is any problem we may have frames with coordinates full of "wrong" values
+        # First check for missing values, which may be created by cpptraj
+        if np.isin(NETCDF_MISSING_VALUE, atom_coordinates):
+            print(f' Found missing values in frame {f}')
+            return f
+        # Make sure there are no literal NaNs
+        if np.isnan(frame.xyz).any():
+            print(f' Found NaN values in frame {f}')
+            return f
+        # Make sure there are no "falsy" values like zeros or nulls
+        if not atom_coordinates.all():
+            print(f' Found zero or falsy values in frame {f}')
             return f
     return None
+
+def find_all_corrupted_frames (input_topology_filepath : str, input_trajectory_filepath : str) -> list[int]:
+    """Find all corrupted frame numbers with NaN or zero coordinates. Frame numbers will be in order."""
+    print('Checking NetCDF integrity')
+    corrupted_frames = []
+    # Iterload the trajectory to pytraj
+    trajectory = get_pytraj_trajectory(input_topology_filepath, input_trajectory_filepath)
+    # Iterate frames until we find one frame whose last atom coordinates are all zeros
+    frame_iterator = iter(trajectory.iterframe())
+    expected_frames = trajectory.n_frames
+    for f, frame in enumerate(frame_iterator, 1):
+        print(f' Reading frame {f}/{expected_frames}', end='\r')
+        atom_coordinates = frame.xyz
+        # Make sure there are actual coordinates here
+        # If there is any problem we may have frames with coordinates full of "wrong" values
+        # First check for missing values, which may be created by cpptraj
+        if np.isin(NETCDF_MISSING_VALUE, atom_coordinates):
+            corrupted_frames.append(f)
+        # Make sure there are no literal NaNs
+        if np.isnan(frame.xyz).any():
+            corrupted_frames.append(f)
+        # Make sure there are no "falsy" values like zeros or nulls
+        if not atom_coordinates.all():
+            corrupted_frames.append(f)
+    corrupted_frames_count = len(corrupted_frames)
+    print(f' Found {corrupted_frames_count} corrupted frames.')
+    if corrupted_frames_count > 0:
+        print(f' First corrupted frame: {corrupted_frames[0]}')
+    return corrupted_frames
 
 
 def get_average_structure (structure_file : 'File', trajectory_file : 'File', output_file : 'File'):

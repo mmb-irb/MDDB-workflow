@@ -1,7 +1,7 @@
 from mddb_workflow.utils.auxiliar import InputError, ToolError
 from mddb_workflow.utils.auxiliar import warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import is_standard_topology
-from mddb_workflow.utils.pyt_spells import find_first_corrupted_frame
+from mddb_workflow.utils.pyt_spells import find_all_corrupted_frames
 from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
 from mddb_workflow.utils.vmd_spells import vmd_to_pdb
 from mddb_workflow.utils.structures import Structure
@@ -74,13 +74,13 @@ def check_inputs(
         raise InputError(f'Structure {structure_file.path} has a not supported format. Try one of these: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}')
 
     # Make sure the trajectory file is not corrupted
-
-    # Check if reading the trajectory raises the following error
-    # ValueError: When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.
-    # This error may happen with NetCDF files and it is a bit shady
-    # Some tools may be able to read the first frames of the corrupted file: VMD and pytraj
-    # Some other tools will instantly fail to read it: MDtraj and MDAnalysis
+    # NetCDF files may have a variety of problems which are specific to this format
     if trajectory_sample.format == 'nc':
+        # Check if reading the trajectory raises the following error
+        # ValueError: When changing to a larger dtype, its size must be a divisor of the total size in bytes of the last axis of the array.
+        # This error may happen with NetCDF files and it is a bit shady
+        # Some tools may be able to read the first frames of the corrupted file: VMD and pytraj
+        # Some other tools will instantly fail to read it: MDtraj and MDAnalysis
         try:
             # Iterate trajectory files
             for trajectory_file in input_trajectory_files:
@@ -91,13 +91,12 @@ def check_inputs(
             error_message = str(error)
             if error_message == NETCDF_DTYPE_ERROR:
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
-        finally:
-            for trajectory_file in input_trajectory_files:
-                pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else structure_file
-                first_corrupted_frame = find_first_corrupted_frame(pytraj_input_topology.path, trajectory_file.path)
-                if first_corrupted_frame:
-                    print(f' However some tools may be able to read the first {first_corrupted_frame} frames: VMD and PyTraj')
-                    raise InputError('Corrupted input trajectory file')
+        for trajectory_file in input_trajectory_files:
+            pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else structure_file
+            corrupted_frames = find_all_corrupted_frames(pytraj_input_topology.path, trajectory_file.path)
+            if corrupted_frames:
+                print(f' However some tools may still be able to read a part or the total of it.')
+                raise InputError(f'Corrupted input trajectory file {trajectory_file.path}.')
 
     # Make sure the topology file is well formated
     # Check a specific problem affecting some PSF topologies
