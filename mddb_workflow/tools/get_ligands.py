@@ -372,10 +372,13 @@ def pdb_ligand_2_pubchem(pdb_ligand_id: str) -> list:
     # It may happend that a ligand code has no related resources at all
     # e.g. ZN
     if not related_resources: return []
-    pubchem_resource = [resource['resource_accession_code']
-                        for resource in related_resources
-                        if resource['resource_name'] == 'PubChem']
-    return pubchem_resource
+    pubchem_resource = set()
+    for resource in related_resources:
+        if resource['resource_name'] == 'PubChem':
+            pubchem_resource.add(resource['resource_accession_code'])
+        elif resource['resource_name'] == 'DrugBank':
+            pubchem_resource.add(drugbank_2_pubchem(resource['resource_accession_code']))
+    return list(pubchem_resource)
 
 
 def pdb_ligand_2_pubchem_RAW(pdb_ligand_id: str) -> Optional[str]:
