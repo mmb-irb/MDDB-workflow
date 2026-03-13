@@ -119,11 +119,11 @@ class TestRunFlags:
             '-dir', working_directory,
             '-top', 'raw_topology.tpr',
             '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
-            '-i', 'setup', 'rmsds',
+            '-i', 'setup', 'rmsds', 'dist',
         ]
 
-        with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
-            main()
+        # with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
+        main()
 
         os.chdir(test_data_dir)
 

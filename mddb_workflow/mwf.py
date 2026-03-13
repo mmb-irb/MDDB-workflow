@@ -497,8 +497,9 @@ class MD:
         self._md_inputs = {MD_NAME: new_md_name,
                            MD_DIRECTORY: relpath(self.directory, self.project.directory)}
         # Update the inputs file with the new MD inputs
-        mds = self.project.inputs.get('mds', [])
-        if mds is None: mds = []
+        mds = []
+        if self.project.is_inputs_file_available():
+            mds = self.project.inputs.get('mds', [])
         new_mds_inputs = [*mds, self._md_inputs]
         self.project.update_inputs('mds', new_mds_inputs)
         return self._md_inputs
@@ -1731,11 +1732,12 @@ class Project:
         # Check if the value of this input was forced from command line
         if name in self.forced_inputs:
             return self.forced_inputs[name]
-        # Get the input value from the inputs file
-        value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
-        # If we had a value then return it
-        if value != MISSING_INPUT_EXCEPTION:
-            return value
+        if self.is_inputs_file_available():
+            # Get the input value from the inputs file
+            value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
+            # If we had a value then return it
+            if value != MISSING_INPUT_EXCEPTION:
+                return value
         # If the field is not specified in the inputs file then set a defualt value
         default_value = DEFAULT_INPUT_VALUES.get(name, None)
         # Warn the user about this
