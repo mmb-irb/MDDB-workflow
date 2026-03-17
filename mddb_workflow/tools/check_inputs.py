@@ -6,11 +6,12 @@ from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count,
 from mddb_workflow.utils.vmd_spells import vmd_to_pdb
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
+from mddb_workflow.utils.cache import get_cached_function
+from mddb_workflow.utils.type_hints import *
 
 from mddb_workflow.tools.guess_and_filter import guess_and_filter_topology
 
 import re
-from typing import *
 from scipy.io import netcdf_file
 import mdtraj as mdt
 import pytraj as pyt
@@ -42,7 +43,8 @@ FIXED_TOPOLOGY_EXCEPTION = Exception('Fixed topology')
 def check_inputs(
     input_structure_file: 'File',
     input_trajectory_files: list['File'],
-    input_topology_file: Union['File', Exception]) -> dict:
+    input_topology_file: Union['File', Exception],
+    cache : 'Cache') -> dict:
     """Check input files coherence and integrity.
     If there is any problem then raises an input error.
     Some exceptional problems may be fixed from here.
@@ -91,10 +93,19 @@ def check_inputs(
             error_message = str(error)
             if error_message == NETCDF_DTYPE_ERROR:
                 warn(f'Corrupted trajectory file {trajectory_file.path}')
+        # Get a cached version of the function to check for frame corruption
+        cached_find_all_corrupted_frames = get_cached_function(find_all_corrupted_frames, cache)
         for trajectory_file in input_trajectory_files:
             pytraj_input_topology = topology_file if topology_file != MISSING_TOPOLOGY else structure_file
-            corrupted_frames = find_all_corrupted_frames(pytraj_input_topology.path, trajectory_file.path)
-            if corrupted_frames:
+            # Get corrupted frames in the trajectory
+            print(f'Checking NetCDF integrity in {trajectory_file.path}')
+            corrupted_frames = cached_find_all_corrupted_frames(
+                pytraj_input_topology.path, trajectory_file.path)
+            corrupted_frames_count = len(corrupted_frames)
+            # Add some extra spaces to hide the previous log
+            print(f' Found {corrupted_frames_count} corrupted frames.                          ')
+            if corrupted_frames_count > 0:
+                print(f' First corrupted frame: {corrupted_frames[0]}')
                 print(f' However some tools may still be able to read a part or the total of it.')
                 raise InputError(f'Corrupted input trajectory file {trajectory_file.path}.')
 

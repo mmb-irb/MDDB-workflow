@@ -110,7 +110,7 @@ def process_input_files (
 
     # Check input files match in number of atoms
     # Here we have not standarized the format so we must check differently with every format
-    exceptions = check_inputs(input_structure_file, input_trajectory_files, input_topology_file)
+    exceptions = check_inputs(input_structure_file, input_trajectory_files, input_topology_file, self.cache)
 
     # There is a chance that the inputs checker has fixed or prefiltered the topology to match trajectory
     # If this is the case then use the fixed/prefiltered topology from now on
