@@ -186,18 +186,25 @@ class Atom:
         
     chain : 'Chain' = property(get_chain, set_chain, None, "The atom chain")
 
-    def get_bonds (self, skip_ions : bool = False, skip_dummies : bool = False) -> Optional[ list[int] ]:
+    def get_bonds (self,
+        skip_ions : bool = False,
+        skip_dummies : bool = False,
+        only_residue : bool = False,
+        safe : bool = True,
+        ) -> Optional[ list[int] ]:
         """Get indices of other atoms in the structure which are covalently bonded to this atom."""
         if not self.structure:
             raise ValueError('The atom has not a structure defined')
         if self.index == None:
             raise ValueError('The atom has not an index defined')
-        bonds = self.structure.bonds[self.index]
+        bonds = self.structure.get_bonds(safe)[self.index]
         # If the skip ions argument is passed then remove atom indices of supported ion atoms
         if skip_ions:
             bonds = list(set(bonds) - self.structure.ion_atom_indices)
         if skip_dummies:
             bonds = list(set(bonds) - self.structure.dummy_atom_indices)
+        if only_residue:
+            bonds = list(set(bonds).intersection(set(self.residue.atom_indices)))
         return bonds
 
     # Atoms indices of atoms in the structure which are covalently bonded to this atom
@@ -285,26 +292,37 @@ class Atom:
         # WARNING: This has to be preset before guessing or the guess may fail
         if self.is_cg():
             return CG_ATOM_ELEMENT
-        # If the name is SOD and it is a lonely atom then it is clearly sodium, not sulfur
-        if self.name.upper() == 'SOD' and self.residue.atom_count == 1:
-            return 'Na'
-        # If the name is POT and it is a lonely atom then it is clearly potassium, not phosphor
-        if self.name.upper() == 'POT' and self.residue.atom_count == 1:
-            return 'K'
+        # Get the normalized atom name
+        atom_name = self.name.upper()
         # Find a obvios element name in the atom name
         element = self.get_name_suggested_element()
-        # CA may refer to calcium or alpha carbon, so the number of atoms in the residue is decisive
-        if element == 'Ca' and self.residue.atom_count > 1:
-            return 'C'
-        # NA may refer to sodium or some ligand nitrogen, so the number of atoms in the residue is decisive
-        if element == 'Na' and self.residue.atom_count > 1:
-            return 'N'
-        # HG may refer to mercury, but is normally a hydrogen
-        if element == 'Hg' and self.residue.atom_count > 1:
-            return 'H'
-        # CD may refer to cadmium, but it is normally a delta C
-        if element == 'Cd' and self.residue.atom_count > 1:
-            return 'C'
+        # Check if the atom is single
+        # Being alone in the residue is the most clear sign
+        # WARNING: However someone may have set several ions in a single residue
+        # WARNING: If the atom is not alone in the residue then make sure it is connected to its partners
+        is_single_atom = self.residue.atom_count == 1 or len(self.get_bonds(only_residue=True, safe=False)) == 0
+        # If it is a single atom then we assume it is an ion
+        if is_single_atom:
+            # If the name is SOD then it is clearly sodium, not sulfur
+            if atom_name == 'SOD':
+                return 'Na'
+            # If the name is POT then it is clearly potassium, not phosphor
+            if atom_name == 'POT':
+                return 'K'
+        # Otherwise we asume it is a polymeric atom
+        else:
+            # If the name is CA then it is an alpha carbon, not a calcium
+            if element == 'Ca':
+                return 'C'
+            # If the name is CD then it is an delta carbon, not a cadmium
+            if element == 'Cd':
+                return 'C'
+            # If the name is NA then it is an alpha nitrogen, not a sodium
+            if element == 'Na':
+                return 'N'
+            # If the name is HG then it is an gamma hydrogen, not a mercury
+            if element == 'Hg':
+                return 'H'
         return element
 
     def get_name_suggested_element (self) -> str:
@@ -608,8 +626,7 @@ class Residue:
         # -------------------------------------------------------------------------------------------------------
         # At this point we need atoms to have elements fixed
         # WARNING: missing elements would result in silent failure to recognize some classifications
-        if self.structure._fixed_atom_elements == False:
-            self.structure.fix_atom_elements()
+        self.structure.fix_atom_elements()
         # Solvent is water molecules
         # First rely on the residue name
         if self.name in STANDARD_SOLVENT_RESIDUE_NAMES:
@@ -1165,6 +1182,7 @@ class Structure:
             self.set_new_chain(chain)
         # --- Set other internal variables ---
         # Set bonds between atoms
+        self._unsafe_bonds = None
         self._bonds = None
         # Set fragments of bonded atoms
         self._fragments = None
@@ -1189,13 +1207,28 @@ class Structure:
     def __repr__ (self):
         return f'<Structure ({self.atom_count} atoms)>'
 
-    def get_bonds (self) -> list[ list[int] ]:
-        """Get the bonds between atoms."""
+    def get_bonds (self, safe : bool = True) -> list[ list[int] ]:
+        """
+        Get the bonds between atoms.
+        The safe argument makes sure elemnts are corrected before the calculation.
+        Note that elements are important since atom radii are taken in count to calculate bonds.
+        """
         # Return the stored value, if exists
+        # If we already have safe bonds then it makes no sense to use unsafe bonds
         if self._bonds:
             return self._bonds
+        # If bonds are not to be safe
+        if not safe:
+            # Return the stored value, if exists
+            if self._unsafe_bonds:
+                return self._unsafe_bonds
+            # If not, we must calculate the bonds using vmd
+            self._unsafe_bonds = self.find_covalent_bonds(safe_elements=False)
+            return self._unsafe_bonds
         # If not, we must calculate the bonds using vmd
-        self._bonds = self.get_covalent_bonds()
+        self._bonds = self.find_covalent_bonds()
+        # Since we already have safe bonds we get rid of unsafe bonds, in case they exist
+        self._unsafe_bonds = None
         return self._bonds
     def set_bonds (self, bonds : list[ list[int] ]):
         """Force specific bonds."""
@@ -1742,6 +1775,9 @@ class Structure:
             bool:
                 Return True if any element was modified or False if not.
         """
+        # If elements were already fixed then skip this process
+        if self._fixed_atom_elements: return False
+        # Track if any elements were modified or added
         modified = False
         added = False
         # Save the wrong guesses for a final report
@@ -2971,13 +3007,16 @@ class Structure:
                 return True
         return False
 
-    def get_covalent_bonds (self, selection : Optional['Selection'] = None) -> list[ list[int] ]:
+    def find_covalent_bonds (self,
+        selection : Optional['Selection'] = None,
+        safe_elements : bool = True,
+        ) -> list[ list[int] ]:
         """Get all atomic covalent (strong) bonds.
         Bonds are defined as a list of atom indices for each atom in the structure.
         Rely on VMD logic to do so."""
         # It is important to fix elements before trying to fix bonds, since elements have an impact on bonds
         # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
-        self.fix_atom_elements()
+        if safe_elements: self.fix_atom_elements()
         # Generate a pdb strucutre to feed vmd
         auxiliar_pdb_filepath = '.structure.pdb'
         self.generate_pdb_file(auxiliar_pdb_filepath)

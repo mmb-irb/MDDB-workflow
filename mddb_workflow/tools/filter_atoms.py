@@ -7,7 +7,7 @@ import pytraj as pt
 from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology
-from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter, pdb_filter
+from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
 from mddb_workflow.utils.vmd_spells import vmd_converter
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_charges import get_raw_charges
@@ -77,11 +77,9 @@ def filter_atoms (
             index_filename,
             filter_group_name)
         # Filter the structure
-        pdb_filter(
-            input_structure_file.path,
-            output_structure_file.path,
-            index_filename,
-            filter_group_name)
+        input_structure = Structure.from_pdb_file(input_structure_file.path)
+        output_structure = input_structure.filter(keep_selection)
+        output_structure.generate_pdb_file(output_structure_file.path)
 
     # Filter topology according to the file format
     if input_topology_file != MISSING_TOPOLOGY and input_topology_file.exists:

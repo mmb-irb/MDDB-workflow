@@ -560,7 +560,10 @@ def pdb_filter (
     filter_group_name : str
 ):
     """ Filter atoms in a pdb file.
-    This method conserves maximum resolution and chains. """
+    This method conserves maximum resolution and chains.
+    DEPRECATED: Gromacs assigns elements when missing and the guessing logic is limited
+    The structure further may fix these elements but then we see a lot of warnings which are nonsense
+    """
     # Filter the PDB
     run_gromacs(f'editconf -f {input_pdb_filepath} -o {output_pdb_filepath} \
                 -n {index_filepath}', user_input = filter_group_name)
