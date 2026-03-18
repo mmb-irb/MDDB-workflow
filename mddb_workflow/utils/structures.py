@@ -211,10 +211,13 @@ class Atom:
     def get_selection (self) -> 'Selection':
         """Generate a selection for this atom."""
         return Selection([self.index])
+    
+    def clone (self) -> 'Atom':
+        return Atom(self.name, self.element, self.coords)
 
     def copy (self) -> 'Atom':
         """Make a copy of the current atom."""
-        atom_copy = Atom(self.name, self.element, self.coords)
+        atom_copy = self.clone()
         atom_copy._structure = self._structure
         atom_copy._index = self._index
         atom_copy._residue_index = self._residue_index
@@ -400,7 +403,7 @@ class Residue:
         # Update residue atoms
         for atom in self.atoms:
             atom._residue_index = index
-        # Update residue chain
+        # Update residue chain (this is unefficient)
         chain_residue_index = self.chain._residue_indices.index(self._index)
         self.chain._residue_indices[chain_residue_index] = index
         # Finally update self index
@@ -776,9 +779,12 @@ class Residue:
         """Generate a selection for this residue."""
         return Selection(self.atom_indices)
 
+    def clone (self) -> 'Residue':
+        return Residue(self.name, self.number, self.icode)
+
     def copy (self) -> 'Residue':
         """Make a copy of the current residue."""
-        residue_copy = Residue(self.name, self.number, self.icode)
+        residue_copy = self.clone()
         residue_copy._structure = self._structure
         residue_copy._index = self._index
         residue_copy._atom_indices = self._atom_indices
@@ -1101,9 +1107,12 @@ class Chain:
         """Generate a selection for this chain."""
         return Selection(self.atom_indices)
 
+    def clone (self) -> 'Chain':
+        return Chain(self.name)
+    
     def copy (self) -> 'Chain':
         """Make a copy of the current chain."""
-        chain_copy = Chain(self.name)
+        chain_copy = self.clone()
         chain_copy._structure = self._structure
         chain_copy._index = self._index
         chain_copy.residue_indices = self.residue_indices
@@ -1325,9 +1334,13 @@ class Structure:
         if residue.chain: residue.chain.remove_residue(residue)
         # Get the current index of the residue to be purged
         purged_index = residue.index
+        # Removing the residue from the list implies having to resort some residues
         # Residues and their atoms below this index are not to be modified
         # Residues and their atoms over this index must be renumerated
-        # DANI: This last step may be very unefficient for long structures
+        # DANI: This last step may be very unefficient for large structures
+        # DANI: If you have to purge a few residues this is probably fine
+        # DANI: However if you have to purge many residues you should think of a different approach
+        # DANI: Probably it is better to instantiate a brand new structure with the correct residues
         for affected_residue in self.residues[purged_index+1:]:
             # Chaging the index automatically changes all residues atoms '_residue_index' values
             # Chaging the index automatically changes its corresponding index in residue chain '_residue_indices'
@@ -1808,6 +1821,37 @@ class Structure:
         content = 'REMARK workflow generated pdb file\n'
         if len(self.residues) >= 65536:
             warn(f'More than 65536 residues found. Cycling residue numeration to fit to PDB 4-character limit.')
+        # If any chain name has mote than 1 character then we can not write it as is in the PDB
+        # We must decide a plan before proceeding and warn the user about this
+        chain_names_map = None
+        chain_names = set([ chain.name for chain in self.chains ])
+        long_chain_name = next((chain_name for chain_name in chain_names if len(chain_name) > 1), None)
+        if long_chain_name:
+            # Keep short chain names as they are
+            short_chain_names = [ chain_name for chain_name in chain_names if len(chain_name) == 1 ]
+            chain_names_map = { chain_name: chain_name for chain_name in short_chain_names }
+            used_chain_names = set(chain_names_map.values())
+            # Issue new chain names for those which are too long
+            # Try to make them coherent, but if it is not possible then just get the next available letter
+            long_chain_names = [ chain_name for chain_name in chain_names if len(chain_name) > 1 ]
+            for chain_name in long_chain_names:
+                # Atempt to use the first letter as chain name
+                shorten_chain_name = chain_name[0]
+                # If this is already in use then simply get the next available letter in the alphabet
+                # If we run out of letters then leave chain names blank
+                if shorten_chain_name in used_chain_names:
+                    shorten_chain_name = next((name for name in AVAILABLE_LETTERS if name not in used_chain_names), ' ')
+                # Add the shorten name to the map and set it as already used
+                used_chain_names.add(shorten_chain_name)
+                chain_names_map[chain_name] = shorten_chain_name
+            # Warn the user about the chain renaming
+            warn(f'Chain names with more than 1 character (e.g. "{long_chain_name}")' + \
+                ' are not supported in PDB format. Chains will be renamed to fit in.')
+            if len(chain_names) > len(AVAILABLE_LETTERS):
+                warn('There are more chains in the structure than letters in the alphabet.' + \
+                    ' Some chain names will be left blank.')
+            print(chain_names_map)
+        # Iterate atoms as we write them to the output content
         for a, atom in enumerate(self.atoms):
             residue = atom.residue
             index = str((a+1) % 100000).rjust(5)
@@ -1815,7 +1859,8 @@ class Structure:
             residue_name = residue.name.ljust(4) if residue else 'XXX'.ljust(4)
             chain = atom.chain
             if chain is None: raise RuntimeError(f'Residue {residue.label} has no chain')
-            chain_name = chain.name if chain.name and len(chain.name) == 1 else 'X'
+            # Set the chain name using the chain names map, if any
+            chain_name = chain_names_map[chain.name] if chain_names_map else chain.name
             residue_number = str(residue.number).rjust(4) if residue else '0'.rjust(4)
             # If residue number is longer than 4 characters then we must parse to hexadecimal
             if len(residue_number) > 4:
@@ -2967,6 +3012,62 @@ class Structure:
         structure_copy = Structure(atom_copies, residue_copies, chain_copies)
         structure_copy.bonds = self.copy_bonds()
         return structure_copy
+    
+    def get_rechained_structure (self, atom_chain_map : list) -> 'Structure':
+        """Given a chain map, copy this structure but applying the new chain map"""
+        # Make sure the atom chain map has the proper length
+        if len(atom_chain_map) != self.atom_count:
+            raise ValueError(f'Atom chain map has {len(atom_chain_map)} values while the structure has {self.atom_count} atoms')
+        # Remake the structure atom by atom using the new chains
+        rechained_atoms = []
+        rechained_residues = []
+        new_chains = []
+        # Save new chains and residues also in dictionaries only to find them faster
+        name_chains = {}
+        label_residues = {}
+        # Keep track of the last issued residue index
+        residue_index = 0
+        # Ierate atoms
+        for atom_index, atom in enumerate(self.atoms):
+            # Clone the atom
+            new_atom = atom.clone()
+            rechained_atoms.append(new_atom)
+            # Get the corresponding new chain
+            new_chain_name = atom_chain_map[atom_index]
+            new_chain = name_chains.get(new_chain_name, None)
+            # DANI: If we always check for an already existing chain there will never be repeated chains
+            # DANI: However we may create chains with unconnected atoms silently (they were separated in the PDB)
+            # DANI: For this reason we must only consider the last processed chain
+            if new_chain and new_chain != new_chains[-1]:
+                new_chain = None
+            # If the parsed chain was not yet instantiated then do it now
+            if not new_chain:
+                new_chain = Chain(name=new_chain_name)
+                new_chains.append(new_chain)
+                name_chains[new_chain_name] = new_chain
+            # Set the new rechained residue
+            old_residue = atom.residue
+            new_residue_label = (new_chain_name, old_residue.number, old_residue.icode)
+            # DANI: If we always check for an already existing residue there will never be repeated residues
+            # DANI: However we may create residues with unconnected atoms silently (they were separated in the PDB)
+            # DANI: For this reason we must only consider the last processed residue
+            new_residue = label_residues.get(new_residue_label, None)
+            if new_residue and new_residue != rechained_residues[-1]:
+                new_residue = None
+            # If the parsed residue was not yet instantiated then do it now
+            if not new_residue:
+                # Instantiate the new parsed residue
+                new_residue = old_residue.clone()
+                rechained_residues.append(new_residue)
+                label_residues[new_residue_label] = new_residue
+                # Add current residue to the parsed chain
+                new_chain.residue_indices.append(residue_index)
+                residue_index += 1
+            # Add the current atom index to the residue
+            new_residue.atom_indices.append(atom_index)
+        rechained_structure = Structure(rechained_atoms, rechained_residues, new_chains)
+        rechained_structure.bonds = self.copy_bonds()
+        return rechained_structure
 
     # DANI: No lo he testeado en profundidad
     def merge (self, other : 'Structure') -> 'Structure':
