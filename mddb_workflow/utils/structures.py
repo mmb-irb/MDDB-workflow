@@ -1850,7 +1850,6 @@ class Structure:
             if len(chain_names) > len(AVAILABLE_LETTERS):
                 warn('There are more chains in the structure than letters in the alphabet.' + \
                     ' Some chain names will be left blank.')
-            print(chain_names_map)
         # Iterate atoms as we write them to the output content
         for a, atom in enumerate(self.atoms):
             residue = atom.residue
