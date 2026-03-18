@@ -497,9 +497,10 @@ class MD:
         self._md_inputs = {MD_NAME: new_md_name,
                            MD_DIRECTORY: relpath(self.directory, self.project.directory)}
         # Update the inputs file with the new MD inputs
-        mds = []
         if self.project.is_inputs_file_available():
             mds = self.project.inputs.get('mds', [])
+        if not mds:
+            mds = []
         new_mds_inputs = [*mds, self._md_inputs]
         self.project.update_inputs('mds', new_mds_inputs)
         return self._md_inputs
