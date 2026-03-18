@@ -301,3 +301,9 @@ def get_cg_head_tail_split(
     tail_ag = residue.atoms[mask]
     head_ag = residue.atoms[~mask]
     return head_ag, tail_ag
+
+# Get an atom to chain name map from a topology
+# DISCLAIMER: Tested with PSF files only
+def get_atom_to_chain_map (topology_file : 'File') -> list[str]:
+    universe = Universe(topology_file.path)
+    return [ atom.segid for atom in universe.atoms ]

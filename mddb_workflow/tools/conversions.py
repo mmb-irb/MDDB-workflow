@@ -10,7 +10,9 @@ from mddb_workflow.utils.mdt_spells import merge_and_convert_trajectories as mdt
 from mddb_workflow.utils.mdt_spells import merge_and_convert_trajectories_alternative as mdt_merge_and_convert_trajectories_alternative
 from mddb_workflow.utils.mdt_spells import merge_and_convert_trajectories_unefficient as mdt_merge_and_convert_trajectories_unefficient
 from mddb_workflow.utils.vmd_spells import merge_and_convert_trajectories as vmd_merge_and_convert_trajectories
+from mddb_workflow.utils.mda_spells import get_atom_to_chain_map
 from mddb_workflow.utils.auxiliar import InputError, warn
+from mddb_workflow.utils.structures import Structure
 
 # Set functions to performe structure conversions
 # These functions must have 'input_structure_filename' and 'output_structure_filename' keywords
@@ -139,6 +141,28 @@ def convert (
                 input_structure_filename=input_structure_file.path,
                 output_structure_filename=output_structure_file.path
             )
+        # If the input file has chains then make sure they are respected in the output file
+        # This is specially critical for input with long-named chains and outputs with 1-letter chains
+        # e.g. PSF has 4-letter chain names (called segments) while PDB has 1-letter chain names
+        # When these files are converted the output chain names may be not coherent
+        # e.g. VMD sets output chain names using the first letter of the input chain names
+        #      This is a problem for different chains the name of which starts with the same letter
+        #      These chains are "merged" thus leading to further problems
+        if input_structure_format == 'psf' and output_structure_format == 'pdb':
+            # Get a atom-to-chain map of the original topology
+            input_chain_map = get_atom_to_chain_map(input_structure_file)
+            # Load the output structure and get its chain map
+            structure = Structure.from_pdb_file(output_structure_file.path)
+            # Make sure the output structure has as many chains as the input
+            do_chains_match = len(input_chain_map) == structure.chain_count
+            # If chains don't match then remake the structure using the old chains
+            # NEVER FORGET: Changing chains of an already existing structure is very unefficient
+            # NEVER FORGET: Specially with large structures, and here we did not filter yet
+            # NEVER FORGET: It is more efficient to reinstantiate the structure from scratch
+            if not do_chains_match:
+                structure = structure.get_rechained_structure(input_chain_map)
+                structure.generate_pdb_file(output_structure_file.path)
+
     convert_structure()
 
     def convert_trajectory ():
