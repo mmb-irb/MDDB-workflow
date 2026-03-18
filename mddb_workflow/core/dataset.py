@@ -946,6 +946,7 @@ class Dataset:
                 rendered_script = template.render(**inputs_config,
                                                 project_status=project_dict,
                                                 DIR=Path(project_dir).name,
+                                                PATH=Path(project_dir),
                                                 slurm=slurm)
 
                 job_script_path = os.path.join(project_dir, 'mwf_slurm_job.sh')
