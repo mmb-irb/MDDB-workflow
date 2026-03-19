@@ -306,7 +306,7 @@ def get_topology_and_trajectory_atoms(topology_file: 'File', trajectory_file: 'F
             # For PDB trajectories takes a lot of memory in MDtraj, 14GB for a 950MB (100000 frames) trajectory
             # Known issue marked as wont-fix (https://github.com/mdtraj/mdtraj/issues/1172), so we use PyTraj instead
             trajectory = pyt.iterload(trajectory_path)
-            trajectory_atom_count = trajectory.n_atomsss
+            trajectory_atom_count = trajectory.n_atoms
         # And still, it may happen that the topology has more atoms than the trajectory but it loads
         # MDtraj may silently load as many coordinates as possible and discard the rest of atoms in topology
         # This behaviour has been observed with a gromacs .top topology and a PDB used as trajectory
