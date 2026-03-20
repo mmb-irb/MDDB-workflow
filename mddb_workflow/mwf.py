@@ -207,7 +207,7 @@ class MD:
         if self._input_structure_filepath is not None:
             return self._input_structure_filepath
 
-        def relativize_and_parse_path (input_filepath: str) -> Optional[str]:
+        def relativize_and_parse_path(input_filepath: str) -> Optional[str]:
             """Find out if a path is relative to MD directories or to the project directory.
 
             To do so just check if the file exists in any of those.
@@ -238,7 +238,7 @@ class MD:
             # 1 - Path is relative to the MD directory
             # 2 - Path is relative to the project directory
             # 3 - Path is relative to the workflow caller directory
-            available_contexts = unique([ self.directory, self.project.directory, '.' ])
+            available_contexts = unique([self.directory, self.project.directory, '.'])
             for available_context in available_contexts:
                 context_filepath = normpath(f'{available_context}/{input_filepath}')
                 glob_parse = parse_glob(context_filepath)
@@ -322,7 +322,8 @@ class MD:
 
         def relativize_and_parse_paths(input_filepaths: list[str]) -> list[str]:
             """Check and fix input trajectory filepaths.
-            Also relativize paths to the workflow caller directory and parse glob notation."""
+            Also relativize paths to the workflow caller directory and parse glob notation.
+            """
             checked_paths = input_filepaths
             # Input trajectory filepaths may be both a list or a single string
             # However we must keep a list
@@ -372,10 +373,10 @@ class MD:
             # 1 - Path is relative to the MD directory
             # 2 - Path is relative to the project directory
             # 3 - Path is relative to the workflow caller directory
-            available_contexts = unique([ self.directory, self.project.directory, '.' ])
+            available_contexts = unique([self.directory, self.project.directory, '.'])
             for available_context in available_contexts:
                 # Get paths relative to the current context
-                context_filepaths = [ normpath(f'{available_context}/{path}') for path in checked_paths ]
+                context_filepaths = [normpath(f'{available_context}/{path}') for path in checked_paths]
                 # In case there are glob characters we must parse the paths
                 parsed_paths = parse_all_glob(context_filepaths)
                 # Check we successfully defined some trajectory file
@@ -401,7 +402,7 @@ class MD:
         self._input_trajectory_filepaths = relativize_and_parse_paths(input_trajectory_filepaths)
         # Save the parsed value in the inputs file
         # Note that the path must be relative to the project, no matter where the workflow is run
-        project_relative_paths = [ relpath(path, self.project.directory) for path in self._input_trajectory_filepaths ]
+        project_relative_paths = [relpath(path, self.project.directory) for path in self._input_trajectory_filepaths]
         self.project.update_inputs(
             f'mds.{self.index}.input_trajectory_filepaths',
             project_relative_paths)
@@ -496,6 +497,7 @@ class MD:
         new_md_name = directory_2_name(self.directory)
         self._md_inputs = {MD_NAME: new_md_name,
                            MD_DIRECTORY: relpath(self.directory, self.project.directory)}
+        mds = []
         # Update the inputs file with the new MD inputs
         if self.project.is_inputs_file_available():
             mds = self.project.inputs.get('mds', [])
@@ -951,7 +953,6 @@ class Project:
         directory = Project.project_directory(directory)
         return Cache(File(join(directory, CACHE_FILENAME)))
 
-
     def __init__(self,
         directory: str = '.',
         accession: Optional[str] = None,
@@ -1129,7 +1130,7 @@ class Project:
             # Check if the path is relative to the project or to the workflow caller directory
             self.inputs_filepath = self.pathify(inputs_filepath)
             if not exists(self.inputs_filepath):
-                self.inputs_filepath = normpath(inputs_filepath) 
+                self.inputs_filepath = normpath(inputs_filepath)
                 if not exists(self.inputs_filepath):
                     raise InputError(f'Inputs file {inputs_filepath} is nowhere to be found')
         # If we have a remote accession to download data from then we also set the inputs filename accordingly
@@ -1395,8 +1396,8 @@ class Project:
         md_count = len(self.mds)
         if md_count <= self.reference_md_index:
             message_end = 'there is only 1 MD' if md_count == 1 else f'there are only {md_count} MDs'
-            raise InputError(f'Reference MD index is {self.reference_md_index} but {message_end}.\n' \
-                ' Note that the index of the reference MD is 0-based, so the first MD is "0".\n' \
+            raise InputError(f'Reference MD index is {self.reference_md_index} but {message_end}.\n'
+                ' Note that the index of the reference MD is 0-based, so the first MD is "0".\n'
                 ' Please change or leave blank the field "mdref" in the inputs file.')
         self._reference_md = self.mds[self.reference_md_index]
         return self._reference_md
@@ -1538,7 +1539,7 @@ class Project:
             # Now iterate the different possible contexts in the following order:
             # 1 - Path is relative to the project directory
             # 2 - Path is relative to the workflow caller directory
-            available_contexts = unique([ self.directory, '.' ])
+            available_contexts = unique([self.directory, '.'])
             for available_context in available_contexts:
                 context_filepath = normpath(f'{available_context}/{input_filepath}')
                 if not is_glob(context_filepath):
@@ -1569,7 +1570,7 @@ class Project:
                 '  Some analyses such us the interaction energies will be skiped.')
         # If we have an input topology filepath then process it
         # WARNING: the yaml parser automatically converts 'no' to False
-        if input_topology_filepath == False or input_topology_filepath.lower() in {'no', 'not', 'na'}:
+        if input_topology_filepath is False or input_topology_filepath.lower() in {'no', 'not', 'na'}:
             self._input_topology_filepath = MISSING_TOPOLOGY
             return self._input_topology_filepath
         # Relativize and glob-parse the input filepath
@@ -1895,7 +1896,7 @@ class Project:
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
     # This function is called for the first time while in the 'inpro' task
     # Thus this function is called when we still have no structure, but we us a provisional structure
-    def _set_dummy_selection(self, reference_structure: 'Structure', verbose : bool = True):
+    def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = True):
         if verbose: print('Setting dummy atoms selection')
         # If no input selection was passed assume there are no dummy atoms in the system
         if not self.input_dummy_selection:
@@ -1936,9 +1937,9 @@ class Project:
             return True
         elif self.input_type == 'ensemble':
             return False
-        raise InputError(f'Not supported input "type" value: {self.input_type}.' + \
-            ' It must be either "trajectory" or "ensemble".\n' + \
-            ' Please consider editting the inputs file or adding the input through command line.\n' + \
+        raise InputError(f'Not supported input "type" value: {self.input_type}.' +
+            ' It must be either "trajectory" or "ensemble".\n' +
+            ' Please consider editting the inputs file or adding the input through command line.\n' +
             ' e.g. -fin type trajectory')
     is_time_dependent = property(check_is_time_dependent, None, None, "Check if trajectory frames are time dependent (read only)")
 
