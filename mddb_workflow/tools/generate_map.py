@@ -8,7 +8,7 @@ from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoRefer
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
-from mddb_workflow.utils.constants import AVAILABLE_LETTERS
+from mddb_workflow.utils.constants import PROTEIN_RESIDUE_LETTERS
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
@@ -506,15 +506,14 @@ def align(ref_sequence: str, new_sequence: str, verbose: bool = False) -> Option
     if all([letter == 'X' for letter in new_sequence]):
         return None
     
-    # Make sure all characters in both sequences are in the alphabet
-    # Otherwise stop here because the aligner will complain
-    alphabet_letters = set(AVAILABLE_LETTERS)
-    ref_seq_non_alphabet_letter = next((letter for letter in ref_sequence if letter not in alphabet_letters), None)
+    # Make sure all characters in both sequences belong to valid aminoacids or are X
+    # Otherwise stop here because the aligner will complain -> e.g. sequences containing 'U'
+    ref_seq_non_alphabet_letter = next((letter for letter in ref_sequence if letter not in PROTEIN_RESIDUE_LETTERS), None)
     if ref_seq_non_alphabet_letter is not None:
-        raise ValueError(f'Found non alphabetical character ({ref_seq_non_alphabet_letter}) in reference sequence: {ref_sequence}')
-    new_seq_non_alphabet_letter = next((letter for letter in new_sequence if letter not in alphabet_letters), None)
+        raise ValueError(f'Found non supported letter ({ref_seq_non_alphabet_letter}) in reference sequence: {ref_sequence}')
+    new_seq_non_alphabet_letter = next((letter for letter in new_sequence if letter not in PROTEIN_RESIDUE_LETTERS), None)
     if new_seq_non_alphabet_letter is not None:
-        raise ValueError(f'Found non alphabetical character ({new_seq_non_alphabet_letter}) in new sequence: {new_sequence}')
+        raise ValueError(f'Found non supported letter ({new_seq_non_alphabet_letter}) in new sequence: {new_sequence}')
 
     # Return the new sequence as best aligned as possible with the reference sequence
     # alignments = pairwise2.align.localds(ref_sequence, new_sequence, MatrixInfo.blosum62, -10, -0.5)
@@ -795,6 +794,12 @@ def pdb_to_uniprot(pdb_id: str) -> list[str | NoReferableException]:
             # e.g. nucleic acids -> (DC)(DA)(DA)(DC)(DC)(DG)(DC)(DA)(DA)(DC)
             # We simply replace these special residues by X in the sequence
             sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
+            # Also, single letters aimed for nucleic acids with no amino acid equivalent must be removed
+            # Otheriwse they will make the aligner fail -> e.g. 'U'
+            sequence_letters = set(sequence)
+            for letter in sequence_letters:
+                if letter not in PROTEIN_RESIDUE_LETTERS:
+                    sequence = sequence.replace(letter, 'X')
         # Get the uniprot ids associated to this polymer (or chain)
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
         uniprots = identifier.get('uniprot_ids', None)

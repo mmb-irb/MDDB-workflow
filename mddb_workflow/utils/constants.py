@@ -435,6 +435,8 @@ PROTEIN_RESIDUE_NAME_LETTERS = {
     'VALN': 'V',
     'VALC': 'V',
 }
+# Get all aminoacid possible letters together
+PROTEIN_RESIDUE_LETTERS = set([ *PROTEIN_RESIDUE_NAME_LETTERS.values(), 'X' ])
 # Nucleotides
 DNA_RESIDUE_NAME_LETTERS = {
     'DA': 'A',
