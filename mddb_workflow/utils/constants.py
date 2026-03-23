@@ -38,7 +38,7 @@ TEXT_EDITORS = {
     'VScode': 'code',
 }
 # Keep only those editor which are already installed
-AVAILABLE_TEXT_EDITORS = { name: command for name, command in TEXT_EDITORS.items() if which(command) }
+AVAILABLE_TEXT_EDITORS = {name: command for name, command in TEXT_EDITORS.items() if which(command)}
 
 # Set dates format
 DATE_STYLE = '%d-%m-%Y %H:%M:%S'
@@ -55,9 +55,9 @@ PROTEIN_AND_NUCLEIC_BACKBONE = "(protein and name N CA C) or (nucleic and name P
 # Inputs file
 DEFAULT_INPUTS_FILENAME = 'inputs.yaml'
 ACCEPTED_INPUT_FILENAMES = [
-    DEFAULT_INPUTS_FILENAME, # The default
-    'inputs.yml', # Another extension of yaml files
-    'inputs.json' # Legacy inputs file
+    DEFAULT_INPUTS_FILENAME,  # The default
+    'inputs.yml',  # Another extension of yaml files
+    'inputs.json'  # Legacy inputs file
 ]
 
 # Default input values used when the value is not specified
@@ -180,7 +180,7 @@ OUTPUT_SASA_FILENAME = 'mda.sasa.json'
 OUTPUT_ENERGIES_FILENAME = 'mda.energies.json'
 OUTPUT_DIHEDRAL_ENERGIES_FILENAME = 'mda.dihenergies.json'
 OUTPUT_POCKETS_FILENAME = 'mda.pockets.json'
-OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket' # WARNING: If this is changed then the pockets function must be updated as well
+OUTPUT_POCKET_STRUCTURES_PREFIX = 'mdf.pocket'  # WARNING: If this is changed then the pockets function must be updated as well
 OUTPUT_HELICAL_PARAMETERS_FILENAME = 'mda.helical.json'
 OUTPUT_MARKOV_FILENAME = 'mda.markov.json'
 OUTPUT_PROVENANCE_FILENAME = 'mda.provenance.json'
@@ -218,9 +218,9 @@ FAITH_BYPASS = 'faith'
 LARGE_AMINOACID_FLAG = 'largeaa'
 
 # State all the available checkings, which may be trusted
-AVAILABLE_CHECKINGS = [ STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG ]
+AVAILABLE_CHECKINGS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG]
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [ CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, CHAINS_ANALYSIS, LARGE_AMINOACID_FLAG ]
+AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, CHAINS_ANALYSIS, LARGE_AMINOACID_FLAG]
 
 # Set which tests are to be run when some input files are modified
 STRUCTURE_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
@@ -269,7 +269,7 @@ EXTENSION_FORMATS = {
     'prmtop': 'prmtop',
     'parm7': 'prmtop',
     'prm7': 'prmtop',
-    'txt': 'txt', # charges.txt
+    'txt': 'txt',  # charges.txt
     # Structures
     'pdb': 'pdb',
     'gro': 'gro',
@@ -336,14 +336,14 @@ PYTRAJ_PARM_FORMAT = {
 # DANI: Rb was found in PDB 3GGK
 
 # Set elements which are always "bonded"
-SUPPORTED_POLYMER_ELEMENTS = set([ 'C', 'N', 'O', 'H', 'P', 'S', 'D' ])
+SUPPORTED_POLYMER_ELEMENTS = set(['C', 'N', 'O', 'H', 'P', 'S', 'D'])
 # Set elements which may be found both "bonded" or "alone"
 SUPPORTED_COORDINATED_ELEMENTS = set([
     'Zn', 'Fe', 'Ni', 'Mn', 'Co', 'Lu', 'U', 'Cu',
     'V', 'Al', 'Ba', 'Be', 'F', 'Te', 'Hg', 'Cd',
 ])
 # Set elements which are always "alone"
-SUPPORTED_ION_ELEMENTS = set([ 'K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl', 'Rb', 'Cs' ])
+SUPPORTED_ION_ELEMENTS = set(['K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl', 'Rb', 'Cs'])
 SUPPORTED_ELEMENTS = {
     *SUPPORTED_POLYMER_ELEMENTS,
     *SUPPORTED_COORDINATED_ELEMENTS,
@@ -353,82 +353,82 @@ SUPPORTED_ELEMENTS = {
 # Set a dictionaries with all residue names and their equivalent letters
 # Amino acids
 PROTEIN_RESIDUE_NAME_LETTERS = {
-    'ALA':'A',
-    'ALAN':'A',
-    'ALAC':'A',
-    'ARG':'R',
-    'ARGN':'R',
-    'ARGC':'R',
-    'ASN':'N',
-    'ASNN':'N',
-    'ASNC':'N',
-    'ASP':'D',
-    'ASPN':'D',
-    'ASPC':'D',
-    'CYS':'C',
-    'CYSN':'C',
-    'CYSC':'C',
-    'CYH':'C',
-    'CSH':'C',
-    'CSS':'C',
-    'CYX':'C',
-    'CYP':'C',
-    'GLN':'Q',
-    'GLNN':'Q',
-    'GLNC':'Q',
-    'GLU':'E',
-    'GLUN':'E',
-    'GLUC':'E',
-    'GLUP':'E',
-    'GLY':'G',
-    'GLYN':'G',
-    'GLYC':'G',
-    'HIS':'H',
-    'HISN':'H',
-    'HISC':'H',
-    'HID':'H',
-    'HIE':'H',
-    'HIP':'H',
-    'HSD':'H',
-    'HSE':'H',
-    'ILE':'I',
-    'ILEN':'I',
-    'ILEC':'I',
-    'ILU':'I',
-    'LEU':'L',
-    'LEUN':'L',
-    'LEUC':'L',
-    'LYS':'K',
-    'LYSN':'K',
-    'LYSC':'K',
-    'MET':'M',
-    'METN':'M',
-    'METC':'M',
-    'PHE':'F',
-    'PHEN':'F',
-    'PHEC':'F',
-    'PRO':'P',
-    'PRON':'P',
-    'PROC':'P',
-    'PRØ':'P',
-    'PR0':'P',
-    'PRZ':'P',
-    'SER':'S',
-    'SERN':'S',
-    'SERC':'S',
-    'THR':'T',
-    'THRN':'T',
-    'THRC':'R',
-    'TRP':'W',
-    'TRPN':'W',
-    'TRPC':'W',
-    'TRY':'W',
-    'TYR':'Y',
-    'TYRN':'Y',
-    'TYRC':'Y',
-    'VAL':'V',
-    'VALN':'V',
-    'VALC':'V',
+    'ALA': 'A',
+    'ALAN': 'A',
+    'ALAC': 'A',
+    'ARG': 'R',
+    'ARGN': 'R',
+    'ARGC': 'R',
+    'ASN': 'N',
+    'ASNN': 'N',
+    'ASNC': 'N',
+    'ASP': 'D',
+    'ASPN': 'D',
+    'ASPC': 'D',
+    'CYS': 'C',
+    'CYSN': 'C',
+    'CYSC': 'C',
+    'CYH': 'C',
+    'CSH': 'C',
+    'CSS': 'C',
+    'CYX': 'C',
+    'CYP': 'C',
+    'GLN': 'Q',
+    'GLNN': 'Q',
+    'GLNC': 'Q',
+    'GLU': 'E',
+    'GLUN': 'E',
+    'GLUC': 'E',
+    'GLUP': 'E',
+    'GLY': 'G',
+    'GLYN': 'G',
+    'GLYC': 'G',
+    'HIS': 'H',
+    'HISN': 'H',
+    'HISC': 'H',
+    'HID': 'H',
+    'HIE': 'H',
+    'HIP': 'H',
+    'HSD': 'H',
+    'HSE': 'H',
+    'ILE': 'I',
+    'ILEN': 'I',
+    'ILEC': 'I',
+    'ILU': 'I',
+    'LEU': 'L',
+    'LEUN': 'L',
+    'LEUC': 'L',
+    'LYS': 'K',
+    'LYSN': 'K',
+    'LYSC': 'K',
+    'MET': 'M',
+    'METN': 'M',
+    'METC': 'M',
+    'PHE': 'F',
+    'PHEN': 'F',
+    'PHEC': 'F',
+    'PRO': 'P',
+    'PRON': 'P',
+    'PROC': 'P',
+    'PRØ': 'P',
+    'PR0': 'P',
+    'PRZ': 'P',
+    'SER': 'S',
+    'SERN': 'S',
+    'SERC': 'S',
+    'THR': 'T',
+    'THRN': 'T',
+    'THRC': 'R',
+    'TRP': 'W',
+    'TRPN': 'W',
+    'TRPC': 'W',
+    'TRY': 'W',
+    'TYR': 'Y',
+    'TYRN': 'Y',
+    'TYRC': 'Y',
+    'VAL': 'V',
+    'VALN': 'V',
+    'VALC': 'V',
 }
 # Nucleotides
 DNA_RESIDUE_NAME_LETTERS = {
@@ -479,7 +479,7 @@ NUCLEIC_RESIDUE_NAME_LETTERS = {
     'G5': 'G',
 }
 # All of them together
-RESIDUE_NAME_LETTERS = { **PROTEIN_RESIDUE_NAME_LETTERS, **NUCLEIC_RESIDUE_NAME_LETTERS }
+RESIDUE_NAME_LETTERS = {**PROTEIN_RESIDUE_NAME_LETTERS, **NUCLEIC_RESIDUE_NAME_LETTERS}
 
 # Lipid common residue names
 # Source: https://github.com/NMRLipids/Databank/blob/main/Scripts/DatabankLib/settings/molecules.py#L10
@@ -491,7 +491,7 @@ FATTY_RESIDUE_NAMES = {
     "SAPI", "SAPI24", "SAPI25", "SLPI", "CER", "CER180", "DHMDMAB", "SLiPC", "SM16",
     "SM18", "TOCL", "TLCL_0H", "TMCL", "GM1", "DPPGK", "GB3", "BOG"
 }
-STEROID_RESIDUE_NAMES = { "CHL", "CHL1", "CHOL", "DCHOL" }
+STEROID_RESIDUE_NAMES = {"CHL", "CHL1", "CHOL", "DCHOL"}
 LIPIDS_RESIDUE_NAMES = FATTY_RESIDUE_NAMES.union(STEROID_RESIDUE_NAMES)
 
 # Set typical residue names to guess what residues are
@@ -517,13 +517,13 @@ NOT_FOUND_FLAG = 'notfound'
 PDB_ID_FORMAT = r'^[1-9]{1}[a-zA-Z0-9]{3}$'
 
 # Available analysis for NASSA
-NASSA_ANALYSES_LIST = [ 'bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff' ]
+NASSA_ANALYSES_LIST = ['bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff']
 
 # Set the correponding canals archives (.ser) for each NASSA analysis
 NASSA_ANALYSES_CANALS = {
-    #'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
-    'coordist': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist','chiW', 'chiC'],
+    # 'bconf': ['epsilC', 'epsilW', 'zetaC', 'zetaW'],
+    'coordist': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist', 'chiW', 'chiC'],
     'bpcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
-    #'crdcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
+    # 'crdcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
     'stiff': ['stretch', 'shear', 'buckle', 'stagger', 'propel', 'opening', 'chiW', 'chiC']
 }
