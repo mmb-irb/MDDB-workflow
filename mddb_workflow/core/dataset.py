@@ -12,6 +12,7 @@ import glob
 import sqlite3
 import sys
 import threading
+import shutil
 from pathlib import Path
 from enum import Enum
 from contextlib import contextmanager
@@ -144,7 +145,7 @@ class DatabaseLock:
 
 class Dataset:
     """Class to manage and process a dataset of MDDB projects and their MDs (replicas/subprojects) using a central SQLite database."""
-    common_columns = ['state', 'message', 'last_modified']
+    common_columns = ['state', 'message', 'process_id', 'slurm_job_id', 'last_modified']
     project_columns = ['uuid', 'rel_path', 'num_mds'] + common_columns
     md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
     date_format = "%H:%M:%S %d-%m-%Y"
@@ -200,6 +201,8 @@ class Dataset:
                     num_mds INTEGER DEFAULT 0,
                     state TEXT,
                     message TEXT,
+                    process_id INTEGER,
+                    slurm_job_id TEXT,
                     last_modified TEXT
                 )
             ''')
@@ -213,10 +216,18 @@ class Dataset:
                     rel_path TEXT UNIQUE NOT NULL,
                     state TEXT,
                     message TEXT,
+                    process_id INTEGER,
+                    slurm_job_id TEXT,
                     last_modified TEXT,
                     FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE
                 )
             ''')
+
+            # Backward compatibility: add runtime tracking columns to existing databases.
+            self._ensure_column_exists(cur, 'projects', 'process_id', 'INTEGER')
+            self._ensure_column_exists(cur, 'projects', 'slurm_job_id', 'TEXT')
+            self._ensure_column_exists(cur, 'mds', 'process_id', 'INTEGER')
+            self._ensure_column_exists(cur, 'mds', 'slurm_job_id', 'TEXT')
 
             # Create triggers to automatically maintain num_mds count
             # Trigger on INSERT: increment num_mds when a new MD is added
@@ -242,6 +253,115 @@ class Dataset:
             ''')
 
             self.conn.commit()
+
+    @staticmethod
+    def _ensure_column_exists(cur: sqlite3.Cursor, table: str, column: str, column_type: str):
+        """Add a column to an existing table if it doesn't exist."""
+        cur.execute(f"PRAGMA table_info({table})")
+        columns = {row[1] for row in cur.fetchall()}
+        if column not in columns:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+
+    @staticmethod
+    def _is_pid_running(process_id: int | str | None) -> bool | None:
+        """Return whether a PID is alive in the current host namespace."""
+        if process_id in (None, ''):
+            return None
+        try:
+            pid = int(process_id)
+        except (TypeError, ValueError):
+            return None
+        if pid <= 0:
+            return None
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    @staticmethod
+    def _check_active_slurm_jobs(job_ids: list[str]) -> dict[str, bool]:
+        """Check active SLURM jobs with a single squeue call.
+
+        Returns an empty dict if squeue is unavailable or fails.
+        """
+        unique_job_ids = sorted({str(job_id).strip() for job_id in job_ids if str(job_id).strip()})
+        if not unique_job_ids:
+            return {}
+        if shutil.which('squeue') is None:
+            return {}
+
+        cmd = ['squeue', '-h', '-o', '%A', '-j', ','.join(unique_job_ids)]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return {}
+
+        if result.returncode != 0:
+            return {}
+
+        active_jobs = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+        return {job_id: job_id in active_jobs for job_id in unique_job_ids}
+
+    def _is_running_entry_active(self, process_id: int | str | None, slurm_job_id: str | None, active_slurm_jobs: dict[str, bool]) -> bool | None:
+        """Determine whether a RUNNING entry is still active."""
+        slurm_value = str(slurm_job_id).strip() if slurm_job_id else ''
+        if slurm_value and slurm_value in active_slurm_jobs:
+            return active_slurm_jobs[slurm_value]
+
+        pid_state = self._is_pid_running(process_id)
+        if pid_state is not None:
+            return pid_state
+
+        return None
+
+    @staticmethod
+    def _stale_running_message(process_id: int | str | None, slurm_job_id: str | None) -> str:
+        """Build a clear status message for externally terminated jobs."""
+        details = []
+        if process_id not in (None, ''):
+            details.append(f"pid={process_id}")
+        if slurm_job_id not in (None, ''):
+            details.append(f"slurm_job_id={slurm_job_id}")
+        details_text = f" ({', '.join(details)})" if details else ''
+        return (
+            f"Workflow process is no longer running{details_text}. "
+            "Likely terminated externally (e.g. SLURM time limit, OOM, or manual cancellation)."
+        )
+
+    def _refresh_running_entries(self, scopes: list[str] | None = None):
+        """Mark stale RUNNING entries as ERROR when backing process/job no longer exists."""
+        scopes = scopes or ['projects', 'mds']
+        running_entries: list[tuple[str, dict]] = []
+
+        for table in scopes:
+            cols = self.project_columns if table == 'projects' else self.md_columns
+            for row in self.query_table(table, query_state=[State.RUNNING.value]):
+                running_entries.append((table, dict(zip(cols, row))))
+
+        if not running_entries:
+            return
+
+        slurm_job_ids = [entry['slurm_job_id'] for _, entry in running_entries if entry.get('slurm_job_id')]
+        active_slurm_jobs = self._check_active_slurm_jobs(slurm_job_ids)
+
+        for table, entry in running_entries:
+            is_active = self._is_running_entry_active(
+                entry.get('process_id'),
+                entry.get('slurm_job_id'),
+                active_slurm_jobs,
+            )
+            if is_active is False:
+                self.update_status(
+                    uuid=entry['uuid'],
+                    project_uuid=entry.get('project_uuid') if table == 'mds' else None,
+                    state=State.ERROR,
+                    message=self._stale_running_message(entry.get('process_id'), entry.get('slurm_job_id')),
+                )
 
     def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
         """Read UUID and project_uuid from cache file in the given directory."""
@@ -330,6 +450,7 @@ class Dataset:
 
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
         """Retrieve a project or MD's status from the database by UUID."""
+        status = None
         with self.locked_storage_file:
             cur = self.conn.cursor()
             if project_uuid:
@@ -338,18 +459,33 @@ class Dataset:
                 row = cur.fetchone()
                 if row:
                     columns = [desc[0] for desc in cur.description]
-                    result = dict(zip(columns, row))
-                    result['scope'] = 'MD'
-                    return result
+                    status = dict(zip(columns, row))
+                    status['scope'] = 'MD'
             else:
                 # This is a project entry
                 cur.execute("SELECT * FROM projects WHERE uuid=?", (uuid,))
                 row = cur.fetchone()
                 if row:
                     columns = [desc[0] for desc in cur.description]
-                    result = dict(zip(columns, row))
-                    result['scope'] = 'Project'
-                    return result
+                    status = dict(zip(columns, row))
+                    status['scope'] = 'Project'
+
+        if status and status.get('state') == State.RUNNING.value:
+            active_slurm_jobs = self._check_active_slurm_jobs([status.get('slurm_job_id')])
+            is_active = self._is_running_entry_active(
+                status.get('process_id'),
+                status.get('slurm_job_id'),
+                active_slurm_jobs,
+            )
+            if is_active is False:
+                self.update_status(
+                    uuid=uuid,
+                    project_uuid=project_uuid,
+                    state=State.ERROR,
+                    message=self._stale_running_message(status.get('process_id'), status.get('slurm_job_id')),
+                )
+                return self.get_uuid_status(uuid, project_uuid)
+        return status
 
     def get_status(self, directory: str | Path):
         """Retrieve a project or MD's status from the database by directory path."""
@@ -381,6 +517,13 @@ class Dataset:
                 state = state.value
             last_modified = time.strftime(self.date_format, time.localtime())
 
+            if state == State.RUNNING.value:
+                process_id = os.getpid()
+                slurm_job_id = os.environ.get('SLURM_JOB_ID')
+            else:
+                process_id = None
+                slurm_job_id = None
+
             if project_uuid:
                 # This is an MD entry
                 if rel_path is None:
@@ -393,14 +536,16 @@ class Dataset:
                         raise ValueError("rel_path is required for new MD entries")
 
                 cur.execute('''
-                    INSERT INTO mds (uuid, project_uuid, rel_path, state, message, last_modified)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO mds (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(uuid) DO UPDATE SET
                         state=excluded.state,
                         message=excluded.message,
+                        process_id=excluded.process_id,
+                        slurm_job_id=excluded.slurm_job_id,
                         last_modified=excluded.last_modified,
                         rel_path=excluded.rel_path
-                ''', (uuid, project_uuid, rel_path, state, message, last_modified))
+                ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
             else:
                 # This is a project entry
                 if rel_path is None:
@@ -413,14 +558,16 @@ class Dataset:
                         raise ValueError("rel_path is required for new project entries")
                 try:
                     cur.execute('''
-                        INSERT INTO projects (uuid, rel_path, state, message, last_modified, num_mds)
-                        VALUES (?, ?, ?, ?, ?, 0)
+                        INSERT INTO projects (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified, num_mds)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
                         ON CONFLICT(uuid) DO UPDATE SET
                             state=excluded.state,
                             message=excluded.message,
+                            process_id=excluded.process_id,
+                            slurm_job_id=excluded.slurm_job_id,
                             last_modified=excluded.last_modified,
                             rel_path=excluded.rel_path
-                    ''', (uuid, rel_path, state, message, last_modified))
+                    ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
                     if 'UNIQUE constraint failed: projects.rel_path' in str(e):
                         # Get the UUID of the existing project with this rel_path
@@ -735,6 +882,9 @@ class Dataset:
                 raise ValueError("query_scope must be either 'project'/'p' or 'md'/'m'")
         else:
             scopes_to_query = ['projects', 'mds']
+
+        # Keep persisted status in sync with real process state before displaying.
+        self._refresh_running_entries(scopes=scopes_to_query)
 
         # Query data directly from SQLite with filters applied
         dataframes = []

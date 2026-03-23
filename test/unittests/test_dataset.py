@@ -376,5 +376,62 @@ class TestDatabaseLock:
             ds = Dataset(dataset_path=str(db_path))
             status = ds.get_status(str(project_dir))
             assert status is not None
-            assert status['state'] == State.RUNNING.value
+            assert status['state'] == State.ERROR.value
+            assert 'no longer running' in status['message'].lower()
             ds.close()
+
+
+def _set_running_status_from_child(db_path: str, project_dir: str, ready_queue=None, hold_event=None):
+    """Set a project status to RUNNING from a child process."""
+    ds = Dataset(dataset_path=str(db_path))
+    status = ds.get_status(str(project_dir))
+
+    ds.update_status(
+        uuid=status['uuid'],
+        state=State.RUNNING,
+        message='Running workflow...',
+    )
+
+    if ready_queue is not None:
+        ready_queue.put('ready')
+    if hold_event is not None:
+        hold_event.wait(timeout=30)
+    ds.close()
+
+
+@pytest.mark.unit_int
+def test_running_project_lifecycle_reconciles_to_error_when_process_dies():
+    """Project stays RUNNING while child is alive, then reconciles to ERROR after exit."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        db_path = tmpdir / "dataset.db"
+        project_dir = tmpdir / "proj1"
+        project_dir.mkdir()
+
+        ds = Dataset(dataset_path=str(db_path))
+        ds.add_project(str(project_dir), make_uuid=True)
+        ready_queue = multiprocessing.Queue()
+        hold_event = multiprocessing.Event()
+        child = multiprocessing.Process(
+            target=_set_running_status_from_child,
+            args=(str(db_path), str(project_dir), ready_queue, hold_event),
+        )
+        child.start()
+        assert ready_queue.get(timeout=10) == 'ready', "Child process did not signal ready in time"
+
+        _ = ds.get_dataframe(query_scope='project')
+        updated = ds.get_status(str(project_dir))
+        assert updated is not None
+        assert updated['state'] == State.RUNNING.value
+
+        hold_event.set()  # Allow child to exit
+        child.join(timeout=10)  # Wait for child to exit
+        assert child.exitcode == 0
+
+        # Once process exits, next refresh should reconcile RUNNING -> ERROR.
+        _ = ds.get_dataframe(query_scope='project')
+        updated = ds.get_status(str(project_dir))
+        assert updated is not None
+        assert updated['state'] == State.ERROR.value
+        assert 'no longer running' in updated['message'].lower()
+        ds.close()
