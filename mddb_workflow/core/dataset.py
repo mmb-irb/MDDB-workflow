@@ -951,6 +951,10 @@ class Dataset:
             df_joined['log_file'] = log_files
             df_joined['err_file'] = err_files
 
+        # Remove internal runtime tracking columns from display (kept in DB for reconciliation)
+        cols_to_drop = ['process_id', 'slurm_job_id']
+        df_joined = df_joined.drop(columns=[c for c in cols_to_drop if c in df_joined.columns])
+
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
         if not query_scope and 'project_uuid' in cols:
