@@ -326,6 +326,11 @@ PYTRAJ_PARM_FORMAT = {
     'pdb': 'PDBFILE'
 }
 
+# Set letters in the alphabet
+AVAILABLE_CAPS = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+AVAILABLE_LOWS = list('abcdefghijklmnopqrstuvwxyz')
+AVAILABLE_LETTERS = AVAILABLE_CAPS + AVAILABLE_LOWS
+
 # Elements supported while correcting atom elements
 # DANI: Ba was found in PDB 1J6S
 # DANI: Lu was found in PDB 1DUH

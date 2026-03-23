@@ -22,13 +22,11 @@ from mddb_workflow.utils.constants import STANDARD_DUMMY_ATOM_NAMES, DUMMY_ATOM_
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import DNA_RESIDUE_NAME_LETTERS, RNA_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import FATTY_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
+from mddb_workflow.utils.constants import AVAILABLE_CAPS, AVAILABLE_LOWS, AVAILABLE_LETTERS
 from mddb_workflow.utils.type_hints import *
 
 
-# Set all available chains according to pdb standards
-AVAILABLE_CAPS = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-AVAILABLE_LOWS = list('abcdefghijklmnopqrstuvwxyz')
-AVAILABLE_LETTERS = AVAILABLE_CAPS + AVAILABLE_LOWS
+# Set some specific constants
 ATOMS_PER_AMINOACID_LIMIT = 30
 
 # Set letters to be found in alphanumerical bases

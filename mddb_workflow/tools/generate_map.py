@@ -8,6 +8,7 @@ from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoRefer
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
+from mddb_workflow.utils.constants import AVAILABLE_LETTERS
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 
@@ -504,6 +505,16 @@ def align(ref_sequence: str, new_sequence: str, verbose: bool = False) -> Option
     # Then an array filled with None is returned
     if all([letter == 'X' for letter in new_sequence]):
         return None
+    
+    # Make sure all characters in both sequences are in the alphabet
+    # Otherwise stop here because the aligner will complain
+    alphabet_letters = set(AVAILABLE_LETTERS)
+    ref_seq_non_alphabet_letter = next((letter for letter in ref_sequence if letter not in alphabet_letters), None)
+    if ref_seq_non_alphabet_letter is not None:
+        raise ValueError(f'Found non alphabetical character ({ref_seq_non_alphabet_letter}) in reference sequence: {ref_sequence}')
+    new_seq_non_alphabet_letter = next((letter for letter in new_sequence if letter not in alphabet_letters), None)
+    if new_seq_non_alphabet_letter is not None:
+        raise ValueError(f'Found non alphabetical character ({new_seq_non_alphabet_letter}) in new sequence: {new_sequence}')
 
     # Return the new sequence as best aligned as possible with the reference sequence
     # alignments = pairwise2.align.localds(ref_sequence, new_sequence, MatrixInfo.blosum62, -10, -0.5)
