@@ -40,7 +40,7 @@ class TestMembraneMapping:
     - A01J7: united atoms
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A01J7'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -60,7 +60,7 @@ class TestMembraneMapping:
             universe = get_mda_universe(structure_file, trajectory_file, cache.data['refbonds_task_output'], charges=None)
         else:
             universe = mda.Universe(top, trajectory_file.absolute_path)
-        cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession == 'cg_test' else []
+        cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession in ['cg_test', 'A01J7'] else []
         output_file = File(f'{test_proj_dir}_membrane_mapping_output.json')
         membrane_map = generate_membrane_mapping(
             inchikeys,
