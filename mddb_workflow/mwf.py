@@ -1820,13 +1820,13 @@ class Project:
             # If there is a directory and not a name then issue a name using the directory
             if directory is None:
                 directory = name_2_directory(name)
-                md_inputs['directory'] = directory
-                self.update_inputs(f'mds.{md_index}.directory', directory)
+                md_inputs['mdir'] = directory
+                self.update_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
             # And vice versa
             if name is None:
                 name = directory_2_name(directory)
                 md_inputs['name'] = name
-                self.update_inputs(f'mds.{md_index}.name', name)
+                self.update_inputs(f'mds.{md_index}.{MD_NAME}', name)
             # Add current names and directories to the counts
             current_name_count = names.get(name, 0)
             names[name] = current_name_count + 1
@@ -1838,7 +1838,7 @@ class Project:
             if name_count == 1: continue
             warn(f'There are {name_count} MDs with the same name: {name}.')
             repeats = True
-        for directory, directory_count in names.items():
+        for directory, directory_count in directories.items():
             if directory_count == 1: continue
             warn(f'There are {directory_count} MDs with the same directory: {directory}.')
             repeats = True
@@ -1878,6 +1878,7 @@ class Project:
             return None
         # Otherwise, find it in the inputs
         # Get the input value, whose key must exist
+        print('YESSSSS')
         self._input_cg_selection = self.get_input('cg_selection')
         return self._input_cg_selection
     input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
