@@ -1745,8 +1745,13 @@ class Project:
                 return value
         # If the field is not specified in the inputs file then set a defualt value
         default_value = DEFAULT_INPUT_VALUES.get(name, None)
-        # Warn the user about this
-        warn(f'Missing input "{name}" -> Using default value: {default_value}')
+        # Warn the user about this a value we are about to assign automatically
+        # If the value is None then it means there is no default value
+        if default_value is not None:
+            warn(f'Missing input "{name}" -> Using default value: {default_value}')
+        # If there is an additional warning then display it here
+        additional_warning = DEFAULT_INPUT_VALUE_WARNINGS.get(name, None)
+        if additional_warning is not None: warn(additional_warning)
         return default_value
 
     def inputs_property(name: str, doc: str = ""):
@@ -1785,9 +1790,6 @@ class Project:
     input_ensemble = inputs_property('ensemble', "Input ensemble (read only)")
     input_water = inputs_property('wat', "Input water force field (read only)")
     input_boxtype = inputs_property('boxtype', "Input boxtype (read only)")
-    input_pbc_selection = inputs_property('pbc_selection', "Input Periodic Boundary Conditions (PBC) selection (read only)")
-    input_cg_selection = inputs_property('cg_selection', "Input Coarse Grained (CG) selection (read only)")
-    input_dummy_selection = inputs_property('dummy_selection', "Input dummy atoms selection (read only)")
     input_customs = inputs_property('customs', "Input custom representations (read only)")
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
     input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
@@ -1849,9 +1851,7 @@ class Project:
     input_mds = property(get_input_mds, None, None, "Input MDs configuration (read only)")
 
     def get_input_pbc_selection(self) -> Optional[str]:
-        """PBC selection may come from the console or from the inputs file.
-        Console has priority over the inputs file.
-        """
+        """The original user input Periodic Boundary Conditions selection."""
         # If we have an internal value then return it
         if self._input_pbc_selection:
             return self._input_pbc_selection
@@ -1866,9 +1866,7 @@ class Project:
     input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
     def get_input_cg_selection(self) -> Optional[str]:
-        """CG selection may come from the console or from the inputs file.
-        Console has priority over the inputs file.
-        """
+        """The original user input Coarse Grain selection."""
         # If we have an internal value then return it
         if self._input_cg_selection:
             return self._input_cg_selection
@@ -1881,6 +1879,21 @@ class Project:
         self._input_cg_selection = self.get_input('cg_selection')
         return self._input_cg_selection
     input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
+
+    def get_input_dummy_selection(self) -> Optional[str]:
+        """The original user input dummy atoms selection."""
+        # If we have an internal value then return it
+        if self._input_dummy_selection:
+            return self._input_dummy_selection
+        # As an exception, we avoid asking for the inputs file if it is not available
+        # This input is required for some early processing steps where we do not need the inputs file for anything else
+        if not self.is_inputs_file_available():
+            return None
+        # Otherwise, find it in the inputs
+        # Get the input value, whose key must exist
+        self._input_dummy_selection = self.get_input('dummy_selection')
+        return self._input_dummy_selection
+    input_dummy_selection = property(get_input_dummy_selection, None, None, "The original user input dummy atoms selection (read only)")
 
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':

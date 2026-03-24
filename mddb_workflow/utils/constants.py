@@ -65,6 +65,19 @@ ACCEPTED_INPUT_FILENAMES = [
 DEFAULT_INPUT_VALUES = {
     'license': 'This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License',
     'linkcense': 'https://creativecommons.org/licenses/by/4.0/',
+    # Important selections
+    # Return an explicit "none" with meaning in VMD syntax
+    # Otherwise if we return a real None the value seem unassigned and is "recalculated" more than once
+    'pbc_selection': 'none',
+    'cg_selection': 'none',
+    'dummy_selection': 'none',
+}
+
+# An additional message to be displayed when inputs are set by default
+DEFAULT_INPUT_VALUE_WARNINGS = {
+    'pbc_selection': 'Assuming there are no atoms under Periodic Boundary Conditions (PBC) in the system',
+    'cg_selection': 'Assuming there are no Coarse Grain (CG) beads in the system but it is full atomistic',
+    'dummy_selection': 'Assuming there are no "dummy" atoms in the system',
 }
 
 # Resource files which are always part of the workflow
