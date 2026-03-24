@@ -468,7 +468,7 @@ class MD:
         # If we have MD inputs in the inputs file then use them
         if self.project.input_mds:
             # Iterate over the different MD inputs to find out each directory
-            # We must find the MD inputs whcih belong to this specific MD according to this directory
+            # We must find the MD inputs which belong to this specific MD according to this directory
             for md in self.project.input_mds:
                 # Skip removed directories
                 # If it is a removed MD then we must handle it apart
@@ -1200,6 +1200,8 @@ class Project:
         # Set the standard topology file
         self._standard_topology_file = None
 
+        # Set the MD configuration
+        self._input_mds = None
         # Set the MD directories
         self._md_directories = []
         if md_directories:
@@ -1340,6 +1342,7 @@ class Project:
         self._md_directories = []
         # Use the MDs from the inputs file when available
         if self.is_inputs_file_available() and self.input_mds:
+            # Iterate MDs
             for input_md in self.input_mds:
                 # If it is a removed MD then we must handle it apart
                 was_removed = input_md.get(MD_REMOVED, False)
@@ -1759,7 +1762,6 @@ class Project:
     input_protein_references = inputs_property('forced_references', "Uniprot IDs to be used first when aligning protein sequences (read only)")
     input_pdb_ids = inputs_property('pdb_ids', "Protein Data Bank IDs used for the setup of the system (read only)")
     input_type = inputs_property('type', "Set if its a trajectory or an ensemble (read only)")
-    input_mds = inputs_property('mds', "Input MDs configuration (read only)")
     input_ligands = inputs_property('ligands', "Input ligand references (read only)")
     input_force_fields = inputs_property('ff', "Input force fields (read only)")
     input_collections = inputs_property('collections', "Input collections (read only)")
@@ -1795,6 +1797,56 @@ class Project:
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
     input_cv19_abs = inputs_property('cv19_abs', "Input Covid-19 antibodies (read only)")
     input_cv19_nanobs = inputs_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
+
+    def get_input_mds (self) -> dict:
+        """Input MDs configuration"""
+        # If we have an internal value then return it
+        if self._input_mds is not None:
+            return self._input_mds
+        # Otherwise, find it in the inputs
+        self._input_mds = self.get_input('mds')
+        # Run a few checks to make sure all inputs are coherent
+        # Make sure all input MDs have unique name and directory
+        names = {}
+        directories = {}
+        for md_index, md_inputs in enumerate(self._input_mds):
+            # Make sure the MD has at least a name or a directory
+            directory = md_inputs.get(MD_DIRECTORY, None)
+            name = md_inputs.get(MD_NAME, None)
+            if not directory and not name:
+                raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' + \
+                    ' Please define at least one of them.')
+            # Now fill the gaps
+            # If there is a directory and not a name then issue a name using the directory
+            if directory is None:
+                directory = name_2_directory(name)
+                md_inputs['directory'] = directory
+                self.update_inputs(f'mds.{md_index}.directory', directory)
+            # And vice versa
+            if name is None:
+                name = directory_2_name(directory)
+                md_inputs['name'] = name
+                self.update_inputs(f'mds.{md_index}.name', name)
+            # Add current names and directories to the counts
+            current_name_count = names.get(name, 0)
+            names[name] = current_name_count + 1
+            current_directory_count = directories.get(directory, 0)
+            directories[directory] = current_directory_count + 1
+        # If there were any duplicates then report it
+        repeats = False
+        for name, name_count in names.items():
+            if name_count == 1: continue
+            warn(f'There are {name_count} MDs with the same name: {name}.')
+            repeats = True
+        for directory, directory_count in names.items():
+            if directory_count == 1: continue
+            warn(f'There are {directory_count} MDs with the same directory: {directory}.')
+            repeats = True
+        if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' + \
+            ' All MD names and directories must be unique.')
+        return self._input_mds
+        
+    input_mds = property(get_input_mds, None, None, "Input MDs configuration (read only)")
 
     def get_input_pbc_selection(self) -> Optional[str]:
         """PBC selection may come from the console or from the inputs file.
