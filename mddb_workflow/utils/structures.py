@@ -2363,6 +2363,11 @@ class Structure:
         # As the last step, fix repeated chains
         # RUBEN: sacar esta parte ya que se hace luego en el structure_corrector?
         self.check_repeated_chains(fix_chains=True)
+        # If at the very end of the process we still have only one chain X then set it as chain A
+        # Otherwise it will look like it is still missing chains
+        # This means the whole system is a single ligand or "other"
+        if self.chain_count == 1 and self.chains[0].name == 'X':
+            self.chainer(letter='A')
 
     def raw_protein_chainer (self):
         """This is an alternative system to find protein chains (anything else is chained as 'X').
