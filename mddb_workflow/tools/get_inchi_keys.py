@@ -2,7 +2,7 @@ import MDAnalysis
 import traceback
 import multiprocessing
 from dataclasses import dataclass, field
-from mddb_workflow.utils.auxiliar import warn, save_json, timeout, SocketTimeout
+from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout
 from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
@@ -95,7 +95,6 @@ def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
         return False
 
 
-@timeout(180)
 def residue_to_inchi(task: tuple['MDAnalysis.AtomGroup', int]) -> tuple[str, str, int]:
     """Process a single residue to get its InChI key and related information."""
     resatoms, resindices = task

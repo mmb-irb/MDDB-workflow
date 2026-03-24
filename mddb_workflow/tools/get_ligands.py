@@ -377,7 +377,11 @@ def pdb_ligand_2_pubchem(pdb_ligand_id: str) -> list:
         if resource['resource_name'] == 'PubChem':
             pubchem_resource.add(resource['resource_accession_code'])
         elif resource['resource_name'] == 'DrugBank':
-            pubchem_resource.add(drugbank_2_pubchem(resource['resource_accession_code']))
+            try:
+                pubchem_resource.add(drugbank_2_pubchem(resource['resource_accession_code']))
+            except Exception as e:
+                # This error only happend with ferroheme (DB18267)
+                print(f'Error occurred while processing DrugBank ID {resource["resource_accession_code"]}: {e}')
     return list(pubchem_resource)
 
 
