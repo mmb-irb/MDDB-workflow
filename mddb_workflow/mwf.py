@@ -1878,7 +1878,6 @@ class Project:
             return None
         # Otherwise, find it in the inputs
         # Get the input value, whose key must exist
-        print('YESSSSS')
         self._input_cg_selection = self.get_input('cg_selection')
         return self._input_cg_selection
     input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
