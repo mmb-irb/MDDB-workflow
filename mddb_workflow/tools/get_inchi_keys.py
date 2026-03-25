@@ -207,6 +207,9 @@ def generate_inchikeys(
 
         # Select residues atoms with MDAnalysis
         resatoms = universe.residues[resindices].atoms
+        # Skip residues that only contain dummy atoms (Dm) as tey have no element and RDKit breaks
+        if set(resatoms.types) == {'Dm'}:
+            continue
         # If you pass a residue selection to a parallel worker, you a passing a whole MDAnalysis
         # universe, slowing the process down because you have to pickle the object
         # To avoid this we create
