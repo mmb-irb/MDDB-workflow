@@ -1800,13 +1800,13 @@ class Project:
     input_cv19_abs = inputs_property('cv19_abs', "Input Covid-19 antibodies (read only)")
     input_cv19_nanobs = inputs_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
 
-    def get_input_mds (self) -> dict:
-        """Input MDs configuration"""
+    def get_input_mds(self) -> dict:
+        """Get the input MDs configuration."""
         # If we have an internal value then return it
         if self._input_mds is not None:
             return self._input_mds
         # Otherwise, find it in the inputs
-        self._input_mds = self.get_input('mds')
+        self._input_mds = self.get_input('mds') or []
         # Run a few checks to make sure all inputs are coherent
         # Make sure all input MDs have unique name and directory
         names = {}
@@ -1816,7 +1816,7 @@ class Project:
             directory = md_inputs.get(MD_DIRECTORY, None)
             name = md_inputs.get(MD_NAME, None)
             if not directory and not name:
-                raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' + \
+                raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' +
                     ' Please define at least one of them.')
             # Now fill the gaps
             # If there is a directory and not a name then issue a name using the directory
@@ -1844,14 +1844,14 @@ class Project:
             if directory_count == 1: continue
             warn(f'There are {directory_count} MDs with the same directory: {directory}.')
             repeats = True
-        if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' + \
+        if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' +
             ' All MD names and directories must be unique.')
         return self._input_mds
-        
+
     input_mds = property(get_input_mds, None, None, "Input MDs configuration (read only)")
 
     def get_input_pbc_selection(self) -> Optional[str]:
-        """The original user input Periodic Boundary Conditions selection."""
+        """Get the original user input Periodic Boundary Conditions selection."""
         # If we have an internal value then return it
         if self._input_pbc_selection:
             return self._input_pbc_selection
@@ -1866,7 +1866,7 @@ class Project:
     input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
 
     def get_input_cg_selection(self) -> Optional[str]:
-        """The original user input Coarse Grain selection."""
+        """Get the original user input Coarse Grain selection."""
         # If we have an internal value then return it
         if self._input_cg_selection:
             return self._input_cg_selection
@@ -1881,7 +1881,7 @@ class Project:
     input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
 
     def get_input_dummy_selection(self) -> Optional[str]:
-        """The original user input dummy atoms selection."""
+        """Get the original user input dummy atoms selection."""
         # If we have an internal value then return it
         if self._input_dummy_selection:
             return self._input_dummy_selection
