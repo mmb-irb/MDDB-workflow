@@ -15,7 +15,7 @@ from scipy.optimize import linear_sum_assignment
 import numpy as np
 
 # Set the expected ligand data fields
-LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'morgan', 'mordred', 'pdbid', 'inchikey'])
+LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'pdbid', 'inchikey'])
 MINIMUM_TANIMOTO_THRESHOLD = 0.3
 
 
@@ -394,7 +394,7 @@ def pdb_ligand_2_pubchem_RAW(pdb_ligand_id: str) -> Optional[str]:
     # Run the query
     parsed_response = handle_http_request(request_url, "PDB ligand request")
     # Mine the PubChem ID out of the whole response
-    pattern = re.compile('pubchem.ncbi.nlm.nih.gov\/compound\/([0-9]*)\"')
+    pattern = re.compile(r'pubchem.ncbi.nlm.nih.gov\/compound\/([0-9]*)"')
     match = re.search(pattern, parsed_response)
     # If there is no PubChem ID then return none
     # This is normal for some ligands such as counter ions (e.g. LI)
