@@ -22,6 +22,7 @@ def structure_corrector(
     # Note that this is an early provisional atom selection
     pbc_selection: 'Selection',
     cg_selection: 'Selection',
+    dummy_selection: 'Selection',
     snapshots: int,
     register: 'Register',
     mercy: list[str] | bool,
@@ -211,9 +212,9 @@ def structure_corrector(
         # We assume it is and continue
         if residue.is_missing_any_bonds(): continue
         # If the residue is coherent then continue
-        if residue.is_coherent(): continue
+        if residue.is_coherent(exclude_selection=dummy_selection): continue
         # Otherwise we report the problem
-        residue_selection = residue.get_selection()
+        residue_selection = residue.get_selection() - dummy_selection
         fragments = list(structure.find_fragments(residue_selection))
         n_fragments = len(fragments)
         if n_fragments == 0: raise RuntimeError('Do we have an empty residue?')

@@ -578,15 +578,20 @@ class Residue:
     def is_missing_any_bonds (self) -> bool:
         return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
 
-    def is_coherent (self) -> bool:
-        """Make sure atoms within the residue are all bonded."""
+    def is_coherent (self, exclude_selection : 'Selection') -> bool:
+        """Make sure atoms within the residue are all bonded.
+        You may exclude some atoms by passing a selection.
+        This is useful to exclude atoms which may be naturally disconnected such some dummy atoms."""
         # If bonds are missing then just say everything is
         if self.is_missing_any_bonds():
             raise RuntimeError('Trying to check if residue with missing bonds is coherent')
+        # Exclude the requested atoms from the test
         residue_selection = self.get_selection()
+        if exclude_selection: residue_selection -= exclude_selection
+        # Make sure the first fragment already includes all atoms in the residue (but the excluded ones)
         residue_fragments = self.structure.find_fragments(residue_selection)
         first_residue_fragment = next(residue_fragments)
-        return len(first_residue_fragment) == self.atom_count
+        return len(first_residue_fragment) == len(residue_selection)
 
     def get_classification (self) -> str:
         """

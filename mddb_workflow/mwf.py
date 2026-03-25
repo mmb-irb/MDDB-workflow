@@ -1976,7 +1976,11 @@ class Project:
                 for atom_index, atom in enumerate(reference_structure.atoms):
                     if re.match(dummy_name, atom.name):
                         atom_indices.append(atom_index)
-            if verbose: print(f' {len(atom_indices)} dummy atoms were found')
+            dummy_atoms_count = len(atom_indices)
+            if verbose:
+                print(f' {dummy_atoms_count} dummy atoms were found')
+                example = reference_structure.atoms[atom_indices[0]] if dummy_atoms_count > 0 else None
+                if example: print(f' e.g. {example.label}')
             return Selection(atom_indices)
         # If we have and actual VMD selection then parse it
         parsed_selection = reference_structure.select(self.input_dummy_selection, syntax='vmd')

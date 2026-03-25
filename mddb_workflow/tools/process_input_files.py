@@ -250,8 +250,8 @@ def process_input_files (
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
-    # Since this is proviosonal we will make it silent
-    provisional_dummy_selection = self.project._set_dummy_selection(provisional_structure, verbose=False)
+    dummy_selection = self.project._set_dummy_selection(provisional_structure)
+    self.project._dummy_selection = dummy_selection
 
     # Before we run the imaging process we must add CG atoms and dummy atoms to the Gromacs masses file
     # Otherwise some steps of the imaging will complain that masses are missing
@@ -262,14 +262,14 @@ def process_input_files (
         atom = provisional_structure.atoms[atom_index]
         fake_masses.add(( atom.residue.name, atom.name, 1 ))
     # Set mass of dummy atoms as 0.
-    for atom_index in provisional_dummy_selection.atom_indices:
+    for atom_index in dummy_selection.atom_indices:
         atom = provisional_structure.atoms[atom_index]
         fake_masses.add(( atom.residue.name, atom.name, 0 ))
     # Finally modify the gromacs atommass file
     if len(fake_masses) > 0:
         if provisional_cg_selection:
             print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
-        if provisional_dummy_selection:
+        if dummy_selection:
             print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
         extend_gromacs_masses(fake_masses)
 
@@ -396,6 +396,7 @@ def process_input_files (
         MD = self,
         pbc_selection = provisional_pbc_selection,
         cg_selection = provisional_cg_selection,
+        dummy_selection = dummy_selection,
         snapshots = snapshots,
         register = self.register,
         mercy = self.project.mercy,
