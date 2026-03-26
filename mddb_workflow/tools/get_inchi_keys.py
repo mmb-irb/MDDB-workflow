@@ -328,11 +328,12 @@ def generate_inchi_references(
         # If there is force ligands, the inchikey may have changed
         ref_inchikey = ligand_references.get(inchikey, {}).get('inchikey', inchikey)
         ref_inchi = ligand_references.get(inchikey, {}).get('inchi', res_data.inchi)
+        lipid_data = lipid_references.get(inchikey, {})
         inchikey_references.append({
             'inchikey': ref_inchikey,
             'inchi': ref_inchi,
-            'swisslipids': lipid_references.get(inchikey, {}).get('swisslipids', {}),
-            'lipidmaps': lipid_references.get(inchikey, {}).get('lipidmaps', {}),
+            'swisslipids': lipid_data.get('swisslipids'),
+            'lipidmaps': lipid_data.get('lipidmaps'),
             'ligand': ligand_references.get(inchikey, None),
         })
         # Sort dictionary entries for consistency when uploading to database

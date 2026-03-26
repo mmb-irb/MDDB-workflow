@@ -88,7 +88,7 @@ def get_swisslipids_info(entity_id) -> dict:
     if response.status_code == 200:
         return response.json()
     else:
-        return False
+        return None
 
 
 @retry_request
@@ -107,4 +107,4 @@ def is_in_swisslipids(inchikey, only_first_layer=False) -> dict:
         data['synonyms'] = detailed_data.get('synonyms', [])
         return data
     else:
-        return False
+        return None
