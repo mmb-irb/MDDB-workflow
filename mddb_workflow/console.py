@@ -104,6 +104,7 @@ class CustomArgumentParser(ArgumentParser):
     """Extends the ArgumentParser to handle subcommands and errors more gracefully."""
 
     def error(self, message):
+        """Override the default error method to show subcommand-specific help if a subcommand is detected."""
         # Check for subcommand in sys.argv
         import sys
         # Extract subcommand from command line if it exists
@@ -489,9 +490,9 @@ def main():
             if args.all:
                 if not args.seq_path:
                     raise InputError('Please, if all option is selected provide the path to the sequences (--seq_path)')
-            # If all the flags are correctly set, we can run the analysis
+            # If all the flags are correctly set, we can run the analysis
             workflow_nassa(
-                config_file_path=None,  # The configuration file is not needed in this case because we are going to run the helical parameters analysis so it will be created then
+                config_file_path=None,  # The configuration file is not needed in this case because we are going to run the helical parameters analysis so it will be created then
                 analysis_names=args.analysis_names,
                 overwrite=args.overwrite,
                 overwrite_nassa=args.overwrite_nassa,

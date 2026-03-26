@@ -176,7 +176,7 @@ class File:
         return File(self.basepath + '/' + target_filepath)
 
     def set_symlink_to(self, other_file: 'File', force: bool = False):
-        """Set this file a symlink to another file.
+        """Set this file as symlink from another file.
         Use the "force" argument to delete an already existing file/symlink.
         """
         # Self file must not exist
