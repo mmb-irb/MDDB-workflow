@@ -8,15 +8,25 @@ from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILE
 from mddb_workflow.utils.type_hints import *
 
 # When downloading files, set the chunk size in bytes
-CHUNK_SIZE = 1024 * 1024 # 1 MB
+CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 # Create a system to skip SSL certificates authentication
 NO_SSL_CONTEXT = ssl.create_default_context()
 NO_SSL_CONTEXT.check_hostname = False
 NO_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
+
 class Remote:
-    def __init__(self, database : 'Database', accession : str, context = None):
+    """Class to handle remote projects in the database."""
+    def __init__(self, database: 'Database', accession: str, context=None):
+        """Initialize the remote project handler.
+
+        Args:
+            database: Database handler to access the database.
+            accession: Accession of the remote project to be handled.
+            context: SSL context to be used in the requests.
+
+        """
         # Set the URL
         self.database = database
         self.accession = accession
@@ -29,12 +39,13 @@ class Remote:
         # Download project data to make sure we have database access and the project exists
         self.get_project_data()
 
-    def __str__ (self) -> str:
+    def __str__(self) -> str:
         return f'< Remote {self.project_url} >'
 
-    # Get project data
-    # This is only used to make sure the project exists by now
-    def get_project_data (self) -> dict:
+    def get_project_data(self) -> dict:
+        """Get project data.
+        This is only used to make sure the project exists by now.
+        """
         # Return the internal value if we already have it
         if self._project_data != None:
             return self._project_data
@@ -60,13 +71,13 @@ class Remote:
             raise Exception(f'Something went wrong when requesting project data: {self.project_url}')
     project_data = property(get_project_data, None, None, "Project data (read only)")
 
-    # Number of snapshots in the remote trajectory
-    def get_snaphsots (self):
+    def get_snaphsots(self):
+        """Get the number of snapshots in the remote trajectory."""
         return self._project_data['metadata']['mdFrames']
     snapshots = property(get_snaphsots, None, None, "Number of snapshots in the remote trajectory (read only)")
 
-    # Get available files in the remove project
-    def get_available_files (self):
+    def get_available_files(self):
+        """Get the available files in the remote project."""
         # Return the internal value if we already have it
         if self._available_files != None:
             return self._available_files
@@ -80,7 +91,7 @@ class Remote:
         return self._available_files
     available_files = property(get_available_files, None, None, "Remote available files (read only)")
 
-    def download_file (self, target_filename : str, output_file : 'File'):
+    def download_file(self, target_filename: str, output_file: 'File'):
         """Download a specific file from the project/files endpoint."""
         request_url = f'{self.project_url}/files/{target_filename}'
         print(f'Downloading file "{target_filename}" in {output_file.path}\n')
@@ -97,10 +108,11 @@ class Remote:
             # If we don't know the error then simply say something went wrong
             raise Exception(f'Something went wrong when downloading file "{target_filename}" in {request_url}')
 
-    # Download the project standard topology
-    def get_standard_topology (self):
+    def get_standard_topology(self):
+        """Get the standard topology of the project."""
+        # Download the project standard topology
         request_url = self.project_url + '/topology'
-        print(f'Downloading standard topology\n')
+        print('Downloading standard topology\n')
         try:
             response = urllib.request.urlopen(request_url, context=self.context)
             content = json.loads(response.read())
@@ -108,8 +120,9 @@ class Remote:
         except Exception as error:
             raise Exception(f'Something went wrong when downloading the standard topology: {request_url} with error: {error}')
 
-    # Download the project standard topology
-    def download_standard_topology (self, output_file : 'File'):
+    def download_standard_topology(self, output_file: 'File'):
+        """Download the standard topology of the project."""
+        # Download the project standard topology
         request_url = self.project_url + '/topology'
         print(f'Downloading standard topology ({output_file.path})\n')
         try:
@@ -119,8 +132,9 @@ class Remote:
         except Exception as error:
             raise Exception(f'Something went wrong when downloading the standard topology: {request_url} with error: {error}')
 
-    # Download the standard structure
-    def download_standard_structure (self, output_file : 'File'):
+    def download_standard_structure(self, output_file: 'File'):
+        """Download the standard structure of the project."""
+        # Download the standard structure
         request_url = self.project_url + '/structure'
         print(f'Downloading standard structure ({output_file.path})\n')
         try:
@@ -130,14 +144,14 @@ class Remote:
         except Exception as error:
             raise Exception(f'Something went wrong when downloading the standard structure: {request_url} with error: {error}')
 
-    # Download the main trajectory
-    def download_trajectory (self,
-        output_file : 'File',
-        frame_selection : Optional[str] = None,
-        atom_selection : Optional[str] = None,
-        format : Optional[str] = None
+    def download_trajectory(self,
+        output_file: 'File',
+        frame_selection: Optional[str] = None,
+        atom_selection: Optional[str] = None,
+        format: Optional[str] = None
     ):
-        if  [frame_selection, atom_selection, format] == [None,None,'xtc']:
+        """Download the main trajectory."""
+        if [frame_selection, atom_selection, format] == [None, None, 'xtc']:
             # If we dont have a specific request, we can download the main trajectory
             # directly from the trajectory.xtc file so it is faster
             request_url = f'{self.project_url}/files/trajectory.xtc'
@@ -163,8 +177,8 @@ class Remote:
         if incomplete_trajectory.exists: incomplete_trajectory.remove()
         try:
             response = urllib.request.urlopen(request_url, context=self.context)
-            pbar = tqdm(unit = 'B', unit_scale = True, unit_divisor = 1024,
-                        miniters = 1, desc = ' Progress', leave=False)
+            pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024,
+                        miniters=1, desc=' Progress', leave=False)
             with open(incomplete_trajectory.path, 'wb') as file:
                 while True:
                     chunk = response.read(CHUNK_SIZE)
@@ -176,12 +190,13 @@ class Remote:
         # Once the trajectory is fully downloaded we change its filename
         incomplete_trajectory.rename_to(output_file)
 
-    # Get the inputs file name with the source format
-    def get_inputs_file_source_filename (self) -> str:
+    def get_inputs_file_source_filename(self) -> str:
+        """Get the inputs file name with the source format."""
         return f'source_{self.database.alias}_{self.accession}_{DEFAULT_INPUTS_FILENAME}'
 
-    # Download the inputs file
-    def download_inputs_file (self, output_file : 'File'):
+    def download_inputs_file(self, output_file: 'File'):
+        """Download the inputs file."""
+        # Download the inputs file
         request_url = self.project_url + '/inputs'
         # In case this is a json file we must specify the format in the query
         is_json = output_file.format == 'json'
@@ -198,10 +213,10 @@ class Remote:
         # If this is a json file then rewrite the inputs file in a pretty formatted way (with indentation)
         if is_json:
             file_content = load_json(output_file.path)
-            save_json(file_content, output_file.path, indent = 4)
+            save_json(file_content, output_file.path, indent=4)
 
-    # Get analysis data
     def download_analysis_data(self, analysis_type: str, output_file: 'File'):
+        """Download analysis data."""
         request_url = f'{self.project_url}/analyses/{analysis_type}'
         print(f'Downloading {analysis_type} analysis data\n')
         try:
@@ -214,8 +229,17 @@ class Remote:
         except Exception as error:
             raise Exception(f'Something went wrong when retrieving {analysis_type} analysis: {request_url} with error: {error}')
 
+
 class Database:
-    def __init__(self, url: str, no_ssl_authentication : bool = False):
+    """Class to handle database operations."""
+    def __init__(self, url: str, no_ssl_authentication: bool = False):
+        """Initialize the database handler.
+
+        Args:
+            url: URL of the database (e.g. https://irb-dev.mddbr.eu/api/)
+            no_ssl_authentication: If True, SSL certificates will not be authenticated.
+
+        """
         if '://' not in url:
             raise InputError(f'Invalid database URL "{url}"')
         self.url = url
@@ -227,13 +251,15 @@ class Database:
         # Set the context
         self.context = NO_SSL_CONTEXT if no_ssl_authentication else None
 
-    def __str__ (self) -> str:
+    def __str__(self) -> str:
         return f'< Database {self.url} >'
 
-    # Check if the database is alive
-    # WARNING: Note that this function requires internet connection
-    # WARNING: Do not run in by default
-    def is_alive (self) -> bool:
+    def is_alive(self) -> bool:
+        """Check if the database is alive.
+
+        WARNING: Note that this function requires internet connection.
+        WARNING: Do not run in by default.
+        """
         try:
             response = urllib.request.urlopen(self.url, context=self.context)
             response.read(1)
@@ -263,12 +289,12 @@ class Database:
             # Unknown error
             return False
 
-    # Instantiate the remote project handler
-    def get_remote_project (self, accession : str) -> Remote:
+    def get_remote_project(self, accession: str) -> Remote:
+        """Instantiate the remote project handler."""
         return Remote(self, accession, context=self.context)
 
-    # Check if the required sequence is already in the MDDB database
-    def get_reference_data (self, reference : str, id : str) -> Optional[dict]:
+    def get_reference_data(self, reference: str, id: str) -> Optional[dict]:
+        """Check if the required sequence is already in the MDDB database."""
         # Make sure the database is alive (and thus the provided database URL is valid)
         # If not then we return None and allow the workflow to keep going
         # Probably if the reference can not be obtained the workflow will generate it again
