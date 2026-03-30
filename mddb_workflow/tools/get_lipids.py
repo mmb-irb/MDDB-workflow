@@ -60,7 +60,6 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
 def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     """Search the InChI keys in LIPID MAPS."""
     if not inchikey: raise RuntimeError('Empty inchikey')
-    headers = {'accept': 'json'}
     # https://www.lipidmaps.org/resources/rest
     # Output item = physchem, is the only one that returns data for the inchi key
     # for only the two first layers (main and atom connection)
@@ -68,8 +67,8 @@ def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     # https://www.inchi-trust.org/about-the-inchi-standard/
     # Or https://www.rhea-db.org/help/inchi-inchikey#What_is_an_InChIKey_
     key = inchikey[:14] if only_first_layer else inchikey
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all"
-    response = requests.get(url, headers=headers)
+    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all/json"
+    response = requests.get(url)
     if response.status_code == 200:
         js = response.json()
         if js != []:
