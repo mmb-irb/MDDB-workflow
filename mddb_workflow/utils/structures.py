@@ -1689,7 +1689,7 @@ class Structure:
             parsed_chains.append(parsed_chain)
         # Setup the structure
         structure = cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
-        # Add bonds and charges which are also available in a topology
+        # Add bonds which are also available in a topology
         atom_count = len(mdanalysis_universe.atoms)
         atom_bonds = [ [] for i in range(atom_count) ]
         for bond in mdanalysis_universe.bonds:
@@ -1698,7 +1698,8 @@ class Structure:
             atom_bonds[a].append(int(b))
             atom_bonds[b].append(int(a))
         structure.bonds = atom_bonds
-        structure.charges = list(mdanalysis_universe._topology.charges.values)
+        # DANI: Las cargas mejor que no estén en la estructura, sino que se obtengan del workflow
+        # structure.charges = list(mdanalysis_universe._topology.charges.values)
         return structure
 
     @classmethod

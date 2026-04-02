@@ -805,6 +805,11 @@ def unique (source_list : list) -> list:
     """Get a new list with unique values while conserving the order."""
     return list(dict.fromkeys(source_list))
 
+def list_values_match (list_a : list, list_b : list) -> bool:
+    """Given two lists, check if all their values perfectly match in the same order."""
+    for value_a, value_b in zip(list_a, list_b):
+        if value_a != value_b: return False
+    return True
 
 def _timeout_worker(func, result_queue, args, kwargs):
     """Worker function that runs in a separate process for timeout support."""

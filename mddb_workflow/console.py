@@ -566,7 +566,7 @@ run_parser_input_args = [
     (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']+f'\nSupported formats: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}.'}),
     (['-dir', '--directory'], {'default': '.', 'help': project_init_help['directory']}),
     (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
-    (['-md', '--md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['md_config']}),
+    (['-md', '--input_md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['input_md_config']}),
     (['-mdref', '--reference_md_index'], {'type': int, 'default': None, 'help': project_init_help['reference_md_index']}),
     (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
     (['-url', '--database_url'], {'default': DEFAULT_API_URL, 'help': project_init_help['database_url']}),
