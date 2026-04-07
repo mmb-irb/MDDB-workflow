@@ -109,7 +109,7 @@ class Remote:
             return self._available_files
         # Otherwise request the available files to the API
         request_url = self.project_url + '/files'
-        self._get_file(request_url, 'available files')
+        self._available_files = self._get_file(request_url, 'available files')
         return self._available_files
     available_files = property(get_available_files, None, None, "Remote available files (read only)")
 
@@ -134,7 +134,7 @@ class Remote:
         """Get the standard topology of the project."""
         # Download the project standard topology
         request_url = self.project_url + '/topology'
-        self._get_file(request_url, 'standard topology')
+        return self._get_file(request_url, 'standard topology')
 
     def download_standard_topology(self, output_file: 'File'):
         """Download the standard topology of the project."""
