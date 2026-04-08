@@ -20,7 +20,7 @@ from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
 
 
-def is_amber_top (input_topology_file : 'File') -> bool:
+def is_amber_top(input_topology_file: 'File') -> bool:
     """Check if a .top file is from Amber.
     Returns True if it is Amber, False if it is Gromacs.
     """
@@ -43,28 +43,28 @@ def is_amber_top (input_topology_file : 'File') -> bool:
         raise InputError('Unable to infer topology format from first five lines')
 
 
-def process_input_files (
-    input_structure_file : 'File',
-    input_trajectory_files : list['File'],
-    input_topology_file : 'File',
+def process_input_files(
+    input_structure_file: 'File',
+    input_trajectory_files: list['File'],
+    input_topology_file: 'File',
     # Output
-    output_directory : str,
-    output_topology_file : 'File',
-    output_structure_file : 'File',
-    output_trajectory_file : 'File',
+    output_directory: str,
+    output_topology_file: 'File',
+    output_structure_file: 'File',
+    output_trajectory_file: 'File',
     # Processing parameters
-    filter_selection : str,
-    image : bool,
-    fit : bool,
-    translation : list[float],
+    filter_selection: str,
+    image: bool,
+    fit: bool,
+    translation: list[float],
     # Make sure the MD is used only to set values or use its functions, but not to get values
     # Values must be passed separately as inputs so the task can identify when inputs change
-    self : 'MD',
+    self: 'MD',
     # Get the task which is calling this function
     # Thus we may know which inputs have changed compared to previous runs
-    task : 'Task',
+    task: 'Task',
     # The faith argument
-    faith : bool,
+    faith: bool,
 ):
     """Process input files to generate the processed files.
     This process corrects and standarizes the topology, the trajectory and the structure.
@@ -75,7 +75,7 @@ def process_input_files (
     self._processed = True
 
     # Input trajectories should have all the same format
-    input_trajectory_formats = set([ trajectory_file.format for trajectory_file in input_trajectory_files ])
+    input_trajectory_formats = set([trajectory_file.format for trajectory_file in input_trajectory_files])
     if len(input_trajectory_formats) > 1:
         raise InputError('All input trajectory files must have the same format')
 
@@ -141,7 +141,7 @@ def process_input_files (
     else:
         converted_trajectory_file = File(f'{output_directory}/{CONVERTED_TRAJECTORY}')
     # Join all input trajectory paths
-    input_trajectory_paths = [ trajectory_file.path for trajectory_file in input_trajectory_files ]
+    input_trajectory_paths = [trajectory_file.path for trajectory_file in input_trajectory_files]
 
     # Set an intermeidate file for the trajectory while it is being converted
     # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
@@ -155,10 +155,10 @@ def process_input_files (
     if not converted_structure_file.exists or not converted_trajectory_file.exists:
         print(' * Converting and merging')
         convert(
-            input_structure_filepath = input_structure_file.path,
-            output_structure_filepath = converted_structure_file.path,
-            input_trajectory_filepaths = input_trajectory_paths,
-            output_trajectory_filepath = incompleted_converted_trajectory_file.path,
+            input_structure_filepath=input_structure_file.path,
+            output_structure_filepath=converted_structure_file.path,
+            input_trajectory_filepaths=input_trajectory_paths,
+            output_trajectory_filepath=incompleted_converted_trajectory_file.path,
         )
         # Once converted, rename the trajectory file as completed
         # If the converted trajectory already exists then it means it is the input trajectory
@@ -215,19 +215,19 @@ def process_input_files (
     # Note that for this specific step only filtering is important
     previous_filtered_parameters = self.cache.retrieve(FILTERED)
     same_filtered_parameters = previous_filtered_parameters == filter_selection
-    
+
     # Filter atoms in structure, trajectory and topology if required and not done yet
     if must_filter and (missing_filter_output or not same_filtered_parameters):
         print(' * Filtering atoms')
         filter_atoms(
-            input_structure_file = converted_structure_file,
-            input_trajectory_file = converted_trajectory_file,
-            input_topology_file = input_topology_file, # We use input topology
-            output_structure_file = filtered_structure_file,
-            output_trajectory_file = incompleted_filtered_trajectory_file,
-            output_topology_file = filtered_topology_file, # We genereate the definitive topology
-            reference_structure = provisional_structure,
-            filter_selection = filter_selection,
+            input_structure_file=converted_structure_file,
+            input_trajectory_file=converted_trajectory_file,
+            input_topology_file=input_topology_file,  # We use input topology
+            output_structure_file=filtered_structure_file,
+            output_trajectory_file=incompleted_filtered_trajectory_file,
+            output_topology_file=filtered_topology_file,  # We genereate the definitive topology
+            reference_structure=provisional_structure,
+            filter_selection=filter_selection,
         )
         # Once filetered, rename the trajectory file as completed
         # If the filtered trajectory already exists then it means it is the input trajectory
@@ -260,11 +260,11 @@ def process_input_files (
     # DANI: we better don't rely on masses in any Gromacs command later, or this will be silent
     for atom_index in provisional_cg_selection.atom_indices:
         atom = provisional_structure.atoms[atom_index]
-        fake_masses.add(( atom.residue.name, atom.name, 1 ))
+        fake_masses.add((atom.residue.name, atom.name, 1))
     # Set mass of dummy atoms as 0.
     for atom_index in dummy_selection.atom_indices:
         atom = provisional_structure.atoms[atom_index]
-        fake_masses.add(( atom.residue.name, atom.name, 0 ))
+        fake_masses.add((atom.residue.name, atom.name, 0))
     # Finally modify the gromacs atommass file
     if len(fake_masses) > 0:
         if provisional_cg_selection:
@@ -315,16 +315,16 @@ def process_input_files (
     if must_image and (missing_imaged_output or not same_imaged_parameters):
         print(' * Imaging and fitting')
         image_and_fit(
-            input_structure_file = filtered_structure_file,
-            input_trajectory_file = filtered_trajectory_file,
-            input_topology_file = filtered_topology_file, # This is optional if there are no PBC residues
-            output_structure_file = imaged_structure_file,
-            output_trajectory_file = incompleted_imaged_trajectory_file,
-            image = image,
-            fit = fit,
-            translation = translation,
-            structure = provisional_structure,
-            pbc_selection = provisional_pbc_selection
+            input_structure_file=filtered_structure_file,
+            input_trajectory_file=filtered_trajectory_file,
+            input_topology_file=filtered_topology_file,  # This is optional if there are no PBC residues
+            output_structure_file=imaged_structure_file,
+            output_trajectory_file=incompleted_imaged_trajectory_file,
+            image=image,
+            fit=fit,
+            translation=translation,
+            structure=provisional_structure,
+            pbc_selection=provisional_pbc_selection
         )
         # Once imaged, rename the trajectory file as completed
         # If the imaged trajectory already exists then it means it is the input trajectory
@@ -336,7 +336,7 @@ def process_input_files (
         self.cache.update(IMAGED, [image, fit, *translation])
         # Update the provisional strucutre coordinates
         imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
-        imaged_structure_coords = [ atom.coords for atom in imaged_structure.atoms ]
+        imaged_structure_coords = [atom.coords for atom in imaged_structure.atoms]
         provisional_structure.set_new_coordinates(imaged_structure_coords)
 
     # --- CORRECTING STRUCTURE ------------------------------------------------------------
@@ -388,21 +388,21 @@ def process_input_files (
     # This function reads and or modifies the following MD variables:
     #   snapshots, reference_bonds, register, cache, mercy, trust
     structure_corrector(
-        structure = provisional_structure,
-        input_trajectory_file = imaged_trajectory_file,
-        input_topology_file = filtered_topology_file,
-        output_structure_file = corrected_structure_file,
-        output_trajectory_file = corrected_trajectory_file,
-        MD = self,
-        pbc_selection = provisional_pbc_selection,
-        cg_selection = provisional_cg_selection,
-        dummy_selection = dummy_selection,
-        snapshots = snapshots,
-        register = self.register,
-        mercy = self.project.mercy,
-        trust = self.project.trust,
-        guess_bonds = self.project.guess_bonds,
-        ignore_bonds = self.project.ignore_bonds,
+        structure=provisional_structure,
+        input_trajectory_file=imaged_trajectory_file,
+        input_topology_file=filtered_topology_file,
+        output_structure_file=corrected_structure_file,
+        output_trajectory_file=corrected_trajectory_file,
+        MD=self,
+        pbc_selection=provisional_pbc_selection,
+        cg_selection=provisional_cg_selection,
+        dummy_selection=dummy_selection,
+        snapshots=snapshots,
+        register=self.register,
+        mercy=self.project.mercy,
+        trust=self.project.trust,
+        guess_bonds=self.project.guess_bonds,
+        ignore_bonds=self.project.ignore_bonds,
     )
 
     # If the corrected output exists then use it
@@ -461,7 +461,7 @@ def process_input_files (
     if input_structure_file == output_structure_file:
         task.cache_cksums['input_structure_file'] = get_cksum_id(output_structure_file)
     if len(input_trajectory_files) == 1 and input_trajectory_files[0] == output_trajectory_file:
-        task.cache_cksums['input_trajectory_files'] = get_cksum_id([ output_trajectory_file ])
+        task.cache_cksums['input_trajectory_files'] = get_cksum_id([output_trajectory_file])
     if input_topology_file == output_topology_file:
         task.cache_cksums['input_topology_file'] = get_cksum_id(output_topology_file)
 
@@ -490,7 +490,7 @@ def process_input_files (
     # --- Cleanup intermediate files
 
     # Set a list of input files to NOT be removed
-    inputs_files = set([ input_structure_file, *input_trajectory_files, input_topology_file ])
+    inputs_files = set([input_structure_file, *input_trajectory_files, input_topology_file])
     # We must make sure an intermediate file is not actually an input file before deleting it
     removable_files = intermediate_files - inputs_files
     # Now delete every removable file
