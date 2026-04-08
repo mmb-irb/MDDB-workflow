@@ -372,7 +372,7 @@ def process_input_files (
     # In such case, bonds and charges must be resorted as well and saved apart to keep values coherent
     # Bonds are calculated during the structure corrector but atom charges must be extracted no
     charges = get_charges(filtered_topology_file)
-    self.project.get_charges.prefill(self.project, charges, {
+    self.get_charges.prefill(self, charges, {
         'topology_file': filtered_topology_file
     })
 

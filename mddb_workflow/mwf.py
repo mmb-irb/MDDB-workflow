@@ -19,7 +19,7 @@ from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_M
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
-from mddb_workflow.utils.auxiliar import is_standard_topology, unique, list_values_match
+from mddb_workflow.utils.auxiliar import is_standard_topology, unique, get_first_list_values_missmatch
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -209,6 +209,10 @@ class MD:
     def __repr__(self):
         """Return a string representation of the MD object."""
         return f'<MD "{self.name}">'
+    
+    def __str__(self):
+        """Return a string representation of the MD object."""
+        return f'MD "{self.name}"'
 
     def pathify(self, filename_or_relative_path: str) -> str:
         """Given a filename or relative path, add the MD directory path at the beginning."""
@@ -281,13 +285,17 @@ class MD:
         # If this value was passed through command line then it would be set as the internal value already
         if self.arg_input_topology_filepath:
             input_topology_filepath = self.arg_input_topology_filepath
-        # If the inputs file is available and has has the value then use it
+        # If the inputs file is available and has the value then use it
         elif self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            input_topology_filepath = self.get_input('input_topology_filepath')
+            input_topology_filepath = self.get_input(MD_INPUT_TOPOLOGY_FILEPATH)
+        # If this is the project and all MDs have an input topology then set the reference MD topology as the project topology
+        if input_topology_filepath is None and self == self.project and all(md.get_input_topology_filepath() for md in self.mds):
+            input_topology_filepath = self.reference_md.get_input_topology_filepath()
         # If we have no input topology at this point then we surrender
         if input_topology_filepath is None:
-            raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
+            raise InputError('Missing input topology file path in the project and in at least one MD.\n' +
+                '  Please provide a topology file using the "-top" argument.\n' +
                 '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
                 '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
                 '  Some analyses such us the interaction energies will be skiped.')
@@ -301,7 +309,7 @@ class MD:
         # Update the input topology filepath in the inputs file, in case it is not matching
         # Note that the path must be relative to the project, no matter where the workflow is run
         project_relative_path = relpath(self._input_topology_filepath, self.project_directory)
-        self.update_inputs('input_topology_filepath', project_relative_path)
+        self.update_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
         return self._input_topology_filepath
 
     def get_input_topology_file(self) -> Optional[File]:
@@ -412,14 +420,14 @@ class MD:
         # If we have a value passed through the inputs file has the value
         elif self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            input_structure_filepath = self.get_input('input_structure_filepath')
+            input_structure_filepath = self.get_input(MD_INPUT_STRUCTURE_FILEPATH)
         # Find out if it is relative to MD directories or to the project directory
         if input_structure_filepath:
             self._input_structure_filepath = relativize_and_parse_path(input_structure_filepath)
             # Save or update the parsed value in the inputs file
             # Note that the path must be relative to the project, no matter where the workflow is run
             project_relative_path = relpath(self._input_structure_filepath, self.project_directory)
-            self.project.update_inputs('input_structure_filepath', project_relative_path)
+            self.project.update_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
             return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
@@ -547,7 +555,7 @@ class MD:
         # Check if the inputs file has the value
         elif self.is_inputs_file_available():
             # Get the input value
-            input_trajectory_filepaths = self.get_input('input_trajectory_filepaths')
+            input_trajectory_filepaths = self.get_input(MD_INPUT_TRAJECTORY_FILEPATHS)
         # If there is no trajectory available then we surrender
         if input_trajectory_filepaths is None:
             raise InputError('There is not input trajectory at all')
@@ -556,7 +564,7 @@ class MD:
         # Save the parsed value in the inputs file
         # Note that the path must be relative to the project, no matter where the workflow is run
         project_relative_paths = [relpath(path, self.project_directory) for path in self._input_trajectory_filepaths]
-        self.update_inputs('input_trajectory_filepaths', project_relative_paths)
+        self.update_inputs(MD_INPUT_TRAJECTORY_FILEPATHS, project_relative_paths)
         return self._input_trajectory_filepaths
 
     def get_input_trajectory_files(self) -> list[File]:
@@ -1299,6 +1307,10 @@ class Project:
             if input_md_config:
                 raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove any "-md" argument or the "-proj" argument.')
+            
+        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
+        if input_md_config and (md_directories or input_trajectory_filepaths):
+            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
 
         # Set the inputs file
         self.inputs_filepath = None
@@ -1461,10 +1473,6 @@ class Project:
 
         # Set the MD configuration
 
-        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
-        if input_md_config and (md_directories or input_trajectory_filepaths):
-            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
-
         # Get MD configuration from the inputs file, if any
         self.md_config = self.get_input('mds') or []
 
@@ -1508,14 +1516,14 @@ class Project:
                         else:
                             has_structure = True
                 # Finally set the input topology, structure and trajectories files
-                input_topology_filepath = arg_config[1] if has_topology else self.arg_input_topology_filepath
-                input_structure_filepath = arg_config[1] if has_structure else self.arg_input_structure_filepath
-                input_trajectory_filepaths = arg_config[2:] if has_structure or has_topology else arg_config[1:]
+                md_input_topology_filepath = arg_config[1] if has_topology else self.arg_input_topology_filepath
+                md_input_structure_filepath = arg_config[1] if has_structure else self.arg_input_structure_filepath
+                md_input_trajectory_filepaths = arg_config[2:] if has_structure or has_topology else arg_config[1:]
                 # Add the input files to the MD configuration
                 config.update({
-                    'input_topology_filepath' : input_topology_filepath,
-                    'input_structure_filepath' : input_structure_filepath,
-                    'input_trajectory_filepaths' : input_trajectory_filepaths,
+                    MD_INPUT_TOPOLOGY_FILEPATH : md_input_topology_filepath,
+                    MD_INPUT_STRUCTURE_FILEPATH : md_input_structure_filepath,
+                    MD_INPUT_TRAJECTORY_FILEPATHS : md_input_trajectory_filepaths,
                 })
 
         # Second scenario
@@ -1538,6 +1546,15 @@ class Project:
                     config = { MD_DIRECTORY: directory }
                     self.md_config.append(config)
 
+        # Add the generic topology, structure or trajectory arguments, if any, to the MD config
+        for config in self.md_config:
+            if self.arg_input_topology_filepath:
+                config[MD_INPUT_TOPOLOGY_FILEPATH] = self.arg_input_topology_filepath
+            if self.arg_input_structure_filepath:
+                config[MD_INPUT_STRUCTURE_FILEPATH] = self.arg_input_structure_filepath
+            if self.arg_input_trajectory_filepaths:
+                config[MD_INPUT_TRAJECTORY_FILEPATHS] = self.arg_input_trajectory_filepaths
+
         # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
         self._check_md_config()
             
@@ -1548,6 +1565,10 @@ class Project:
     def __repr__(self):
         """Return a string representation of the Project object."""
         return '<Project>'
+    
+    def __str__(self):
+        """Return a string representation of the MD object."""
+        return f'project'
     
     def _check_md_config (self):
         """Check input MDs configuration, make sure input is coherent and fill the gaps."""
@@ -1645,9 +1666,9 @@ class Project:
             # Instantiate the MD
             md = MD(
                 project=self, name=config[MD_NAME], number=n, directory=config[MD_DIRECTORY],
-                input_topology_filepath=config.get('input_topology_filepath', None),
-                input_structure_filepath=config.get('input_structure_filepath', None),
-                input_trajectory_filepaths=config.get('input_trajectory_filepaths', None),
+                input_topology_filepath=config.get(MD_INPUT_TOPOLOGY_FILEPATH, None),
+                input_structure_filepath=config.get(MD_INPUT_STRUCTURE_FILEPATH, None),
+                input_trajectory_filepaths=config.get(MD_INPUT_TRAJECTORY_FILEPATHS, None),
             )
             self._mds.append(md)
         return self._mds
@@ -2043,7 +2064,6 @@ class Project:
         if topology_filepath != self.reference_md.get_topology_filepath():
             # Iterate MDs until we find one using the project topology
             for md in self.mds:
-                print(md.get_topology_filepath())
                 if md.get_topology_filepath() == topology_filepath:
                     topology_reference_md = md
                     break
@@ -2083,29 +2103,40 @@ class Project:
         # Iterate other MDs and make sure their structures match in a set of fields we expect to be constant
         # Note that other MDs may be based in different input structure and input topology files
         for other_md in other_mds:
-            print(other_md)
             other_structure = other_md.structure
+            # If the structure is literally the same then skip the check
+            # This means this MD is using the same input files as the reference MD thus using as well the same structure
+            if other_structure is reference_structure: continue
             # Set a generic error message to be displayed as a header in different scenarios
             error_message_header = f'The structure in MD "{other_md.name}" does not match the structure in the reference MD "{self.reference_md.name}".\n'
+            # Make sure the number of atoms, residues and chains match
+            if reference_structure.atom_count != other_structure.atom_count:
+                raise InputError(error_message_header + f' The structure has {other_structure.atom_count} atoms while the reference structure has {reference_structure.atom_count} atoms".\n' + error_message_tail)
+            if reference_structure.residue_count != other_structure.residue_count:
+                raise InputError(error_message_header + f' The structure has {other_structure.residue_count} residues while the reference structure has {reference_structure.residue_count} residues".\n' + error_message_tail)
+            if reference_structure.chain_count != other_structure.chain_count:
+                raise InputError(error_message_header + f' The structure has {other_structure.chain_count} chains while the reference structure has {reference_structure.chain_count} chains".\n' + error_message_tail)
             # Compare atoms one by one
             for reference_atom, other_atom in zip(reference_structure.atoms, other_structure.atoms):
                 for field in [ 'name', 'element', 'residue_index' ]:
-                    if reference_atom[field] == other_atom[field]: continue
+                    if getattr(reference_atom, field) == getattr(other_atom, field): continue
                     raise InputError(error_message_header + f' Atom {other_atom.label} does not match the reference atom {reference_atom.label} in the field "{field}".\n' + error_message_tail)
             # Compare residues one by one
             for reference_residue, other_residue in zip(reference_structure.residues, other_structure.residues):
                 for field in [ 'name', 'number', 'icode', 'chain_index' ]:
-                    if reference_residue[field] == other_residue[field]: continue
+                    if getattr(reference_residue, field) == getattr(other_residue, field): continue
                     raise InputError(error_message_header + f' Residue {other_residue.label} does not match the reference residue {reference_residue.label} in the field "{field}".\n' + error_message_tail)
             # Compare chains one by one
             for reference_chain, other_chain in zip(reference_structure.chains, other_structure.chains):
                 for field in [ 'name' ]:
-                    if reference_chain[field] == other_chain[field]: continue
+                    if getattr(reference_chain, field) == getattr(other_chain, field): continue
                     raise InputError(error_message_header + f' Chain {other_chain.name} does not match the reference chain {reference_chain.name} in the field "{field}".\n' + error_message_tail)
             # Compare other structure properties
             # Compare atom bonds
-            if not list_values_match(reference_structure.bonds, other_structure.bonds):
-                raise InputError(error_message_header + f' Atom bonds do not match.\n' + error_message_tail)
+            for atom_index, (reference_atom_bonds, other_atom_bonds) in enumerate(zip(reference_structure.bonds, other_structure.bonds)):
+                if set(reference_atom_bonds) == set(other_atom_bonds): continue
+                missmatch_atom = reference_structure.atoms[atom_index]
+                raise InputError(error_message_header + f' Atom bonds do not match: {missmatch_atom.label} -> {reference_atom_bonds} while in the reference structure is {other_atom_bonds}.\n' + error_message_tail)
         # If we made it this far then there are not inconsistencies between structure
         return reference_structure
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")

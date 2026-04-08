@@ -807,9 +807,19 @@ def unique (source_list : list) -> list:
 
 def list_values_match (list_a : list, list_b : list) -> bool:
     """Given two lists, check if all their values perfectly match in the same order."""
+    # If lists do not match in length then we are done already
+    if len(list_a) != len(list_b):
+        return False
+    # Iterate pairs of values
     for value_a, value_b in zip(list_a, list_b):
         if value_a != value_b: return False
     return True
+
+def get_first_list_values_missmatch (list_a : list, list_b : list) -> bool:
+    """Given two lists, find the first value which does not match between them. Return None if there is no missmatch"""
+    for index, (value_a, value_b) in enumerate(zip(list_a, list_b)):
+        if value_a != value_b: return index, value_a, value_b
+    return None
 
 def _timeout_worker(func, result_queue, args, kwargs):
     """Worker function that runs in a separate process for timeout support."""
