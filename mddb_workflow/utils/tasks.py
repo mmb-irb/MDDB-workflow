@@ -275,7 +275,7 @@ class Task:
             and not exists(final_output_directory)
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
-        print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}){COLOR_END}')
+        print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}) in {parent}{COLOR_END}')
         # If the task is to be run again because an inputs changed then let the user know
         if any_input_changed and had_cache and not forced_overwrite:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])

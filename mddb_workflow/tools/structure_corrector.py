@@ -171,7 +171,7 @@ def structure_corrector(
     check_stable_bonds()
 
     # Write safe bonds back to the MD
-    MD.project.get_reference_bonds.prefill(MD.project, safe_bonds, {
+    MD.get_reference_bonds.prefill(MD, safe_bonds, {
         'topology_file': input_topology_file,
         'structure_file': output_structure_file,
         'trajectory_file': input_trajectory_file,
@@ -179,6 +179,7 @@ def structure_corrector(
         'snapshots': snapshots,
         'structure': structure,
         'register': register,
+        'cg_selection': cg_selection, 
         'guess_bonds': guess_bonds,
         'ignore_bonds': ignore_bonds,
     })
@@ -457,7 +458,7 @@ def structure_corrector(
             # DANI: Debería funcionar pero puede tener algun bug
             charges = get_charges(input_topology_file)
             resorted_charges = [charges[index] for index in structure.new_atom_order]
-            MD.project.get_charges.prefill(MD.project, resorted_charges, {
+            MD.get_charges.prefill(MD, resorted_charges, {
                 'topology_file': input_topology_file
             })
             save_json(resorted_charges, MD.project.resorted_charges_file.path, indent=4)
