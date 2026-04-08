@@ -57,16 +57,12 @@ def test_generate_ligand_references():
 
     ]
     inchimap = {case[0]: InChIKeyData(inchi=case[1], resnames=set([1])) for case in test_cases}
-    lipid_references = {}
-    memmap = {'no_mem_lipid': []}
 
     ligand_references = generate_ligand_references(
         mwf_stc, cache,
         input_ligands,
         pdb_ids,
         inchimap,
-        lipid_references,
-        memmap
     )
     assert 'RZVAJINKPMORJF-UHFFFAOYSA-N' in ligand_references, "Forced CHEMBL112 not found"
     assert len(ligand_references) == len(test_cases) + 1
