@@ -289,9 +289,10 @@ class MD:
         elif self.is_inputs_file_available():
             # Get the input value, whose key must exist
             input_topology_filepath = self.get_input(MD_INPUT_TOPOLOGY_FILEPATH)
-        # If this is the project and all MDs have an input topology then set the reference MD topology as the project topology
+        # If this is the project and all MDs have an input topology then set the project topology as missing
+        # This should give no problems since this topology is not to be used
         if input_topology_filepath is None and self == self.project and all(md.get_input_topology_filepath() for md in self.mds):
-            input_topology_filepath = self.reference_md.get_input_topology_filepath()
+            input_topology_filepath = 'no'
         # If we have no input topology at this point then we surrender
         if input_topology_filepath is None:
             raise InputError('Missing input topology file path in the project and in at least one MD.\n' +
