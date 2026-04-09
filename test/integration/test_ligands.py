@@ -7,14 +7,21 @@ from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 import pytest
 import pathlib
 
+# Set up paths
+data_dir = pathlib.Path(__file__).parent.parent / 'data'
+test_dir = data_dir / 'output/test_ligands'
+
 
 @pytest.mark.unit_int
 def test_generate_ligand_references():
     """Test the generate_ligand_references function."""
-    pdb_file = pathlib.Path(__file__).parent.parent / 'data/input/structures/cin_A000V_structure.pdb'
+    test_dir.mkdir(parents=True, exist_ok=True)
+    pdb_file = data_dir / 'input/structures/cin_A000V_structure.pdb'
 
     mwf_stc = Structure.from_file(str(pdb_file))
-    cache = Cache(File('cache_ligands.json'))
+    cache_file = File((test_dir / 'cache_ligands.json').as_posix())
+    if cache_file.exists: cache_file.remove()
+    cache = Cache(cache_file)
     # TODO: make test of forced selection of a ligands from the inputs.yaml
     input_ligands = [
         '5957',
@@ -70,20 +77,19 @@ def test_generate_ligand_references():
         found = ligand_references[case[0]]['pubchem']
         assert found in case[2], f"Ligand {case[0]} found with CID {found} instead of {case[2]}."
 
+    inchi_file = File((test_dir / 'inchiout.json').as_posix())
+    if inchi_file.exists: inchi_file.remove()
     inchirefs = generate_inchi_references(
         inchikeys=inchimap,
         lipid_references={},
         ligand_references=ligand_references,
         membrane_map={'no_mem_lipid': []},
         structure=mwf_stc,
-        output_file=File('inchiout.json')
+        output_file=inchi_file
     )
     residue_map = generate_residue_mapping([], inchirefs, mwf_stc)
     assert 'ZKHQWZAMYRWXGA-KQYNXXCUSA-N' in residue_map['references'],\
         'ZKHQWZAMYRWXGA-KQYNXXCUSA-J should be transformed to ZKHQWZAMYRWXGA-KQYNXXCUSA-N'
-    # Cleanup
-    pathlib.Path('cache_ligands.json').unlink()
-    pathlib.Path('inchiout.json').unlink()
 
 
 if __name__ == '__main__':

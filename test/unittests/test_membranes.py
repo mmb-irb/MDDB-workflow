@@ -5,7 +5,13 @@ from mddb_workflow.utils.mda_spells import get_mda_universe
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 import MDAnalysis as mda
+import pathlib
 import pytest
+import shutil
+
+# Set up paths
+data_dir = pathlib.Path(__file__).parent.parent / 'data'
+test_dir = data_dir / 'output/test_membranes'
 
 
 def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = False):
@@ -45,10 +51,16 @@ class TestMembraneMapping:
         """Fixture to provide different test accessions."""
         return request.param
 
-    def test_generate_membrane_mapping(self, project: 'Project', test_accession, test_proj_dir, test_data_dir):
+    def test_generate_membrane_mapping(self, project: 'Project', test_accession, test_data_dir):
         """Test the generate_membrane_mapping function."""
+        test_dir.mkdir(parents=True, exist_ok=True)
         download_project(project)
-        cache = Cache(File(f'{test_data_dir}/input/caches/{test_accession}_memmap.json'))
+        cache_src = f'{test_data_dir}/input/caches/{test_accession}_memmap.json'
+        cache_cpy = f'{test_dir}/{test_accession}_cache.json'
+        cache_file = File(cache_cpy)
+        if cache_file.exists: cache_file.remove()
+        shutil.copy(cache_src, cache_cpy)
+        cache = Cache(File(cache_cpy))
         inchikeys = cache.data['inchikeys_task_output']
         lipid_references = cache.data['lipmap_task_output']
         top = project.input_topology_file.absolute_path
@@ -61,7 +73,8 @@ class TestMembraneMapping:
         else:
             universe = mda.Universe(top, trajectory_file.absolute_path)
         cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession in ['cg_test', 'A01J7'] else []
-        output_file = File(f'{test_proj_dir}_membrane_mapping_output.json')
+        output_file = File((test_dir / f'{test_accession}_membrane_mapping_output.json').as_posix())
+        if output_file.exists: output_file.remove()
         membrane_map = generate_membrane_mapping(
             inchikeys,
             lipid_references,
