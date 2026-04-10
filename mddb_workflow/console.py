@@ -360,6 +360,9 @@ def main():
                 verbose=True,
                 overwrite=args.overwrite,
             )
+        elif args.dataset_subcommand == 'remove':
+            dataset.remove_entry(args.query_path)
+
         elif args.dataset_subcommand == 'status':
             status = dataset.get_status(args.project_path)
             # Format and display the status nicely
@@ -370,7 +373,6 @@ def main():
             print(f"MDs:           {status['num_mds']}")
             print(f"Last Modified: {status['last_modified']}")
             print(f"Message:       {status['message']}")
-
         elif args.dataset_subcommand == 'show':
             if args.summary:
                 summary = dataset.summary()
