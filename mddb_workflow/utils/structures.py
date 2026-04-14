@@ -2227,7 +2227,7 @@ class Structure:
             return "mix"
 
     def filter (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':
-        """Create a new structure from the current using a selection to filter atoms."""
+        """Create a new structure from the current using a selection to filter the atoms we want to keep."""
         if not selection: raise RuntimeError('No selection was passed')
         # In case the selection is not an actual Selection, but a string, parse the string into a Selection
         if type(selection) == str:
@@ -2306,6 +2306,11 @@ class Structure:
                     residue_indices.append(new_index)
             chain.residue_indices = residue_indices
         return Structure(atoms=new_atoms, residues=new_residues, chains=new_chains)
+    
+    def filter_away (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':
+        """Create a new structure from the current using a selection to filter the atoms we want to remove."""
+        inverted_selection = self.invert_selection(selection)
+        return self.filter(inverted_selection, selection_syntax)
 
     def chainer (self,
                  selection : Optional['Selection'] = None,
