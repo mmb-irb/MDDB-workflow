@@ -1,16 +1,18 @@
-from mddb_workflow.utils.auxiliar import warn, save_json, MISSING_CHARGES
+from mddb_workflow.utils.auxiliar import warn, save_json, list_values_match, MISSING_CHARGES
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from mddb_workflow.utils.type_hints import *
 
 def generate_topology (
     structure : 'Structure',
-    charges : list[int],
+    md_charges : list[list[float]],
     residue_map : dict,
     pbc_residues : list[int],
     cg_residues : list[int],
     output_file : 'File'
 ):
     """ Prepare the standard topology file to be uploaded to the database. """
+
+    # We assume that the structure will be coherent among MDs but note that this is actually checked
 
     # The structure will be a bunch of arrays
     # Atom data
@@ -62,11 +64,44 @@ def generate_topology (
     for index, chain in enumerate(structure_chains):
         chain_names[index] = chain.name
 
-    # Check we have charges and, if not, set charges as None (i.e. null for mongo)
-    has_charges = charges != MISSING_CHARGES and charges != None and len(charges) > 0
-    atom_charges = charges if has_charges else None
-    if not atom_charges:
-        warn('Topology is missing atom charges')
+    # Make a map of different possible values for each MD
+    md_charges_map = []
+    unique_md_charges = []
+    for charges in md_charges:
+        index_match = None
+        # Check we have charges and, if not, set charges as None (i.e. null for mongo)
+        has_charges = charges != MISSING_CHARGES and charges != None and len(charges) > 0
+        atom_charges = charges if has_charges else None
+        # Check if these charges were found already
+        for previous_index, previous_charges in enumerate(unique_md_charges):
+            # We must check if charges match
+            # If variable type is different then continue
+            if type(atom_charges) != type(previous_charges): continue
+            # Check if it is the same exact list
+            # This may happen if lists come from the project
+            # If not then comparte if charges match perfectly with previous values
+            if atom_charges == previous_charges or (has_charges and list_values_match(atom_charges, previous_charges)):
+                index_match = previous_index
+                break
+        # If there was no match then this is a new set of unique atom charges
+        if index_match is None:
+            index_match = len(unique_md_charges)
+            unique_md_charges.append(atom_charges)
+        # Add the current matched index to the map list
+        md_charges_map.append(index_match)
+    # If there is only one possible value then keep it as the atom charges
+    n_md_charges = len(unique_md_charges)
+    if n_md_charges == 1:
+        atom_charges = unique_md_charges[0]
+        if not atom_charges:
+            warn('Topology is missing atom charges')
+    # If there are different values then keep the map
+    elif n_md_charges > 1:
+        atom_charges = {
+            'mdmap': md_charges_map,
+            'values': unique_md_charges,
+        }
+    else: raise RuntimeError('No MD charges')
 
     # Setup the final output
     topology = {

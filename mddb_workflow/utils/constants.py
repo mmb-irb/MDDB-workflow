@@ -94,6 +94,9 @@ ENERGIES_DEBUG_SCRIPT_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/get_energies_sum.py'
 MD_NAME = 'name'
 MD_DIRECTORY = 'mdir'
 MD_REMOVED = 'removed'
+MD_INPUT_TOPOLOGY_FILEPATH = 'input_topology_filepath'
+MD_INPUT_STRUCTURE_FILEPATH = 'input_structure_filepath'
+MD_INPUT_TRAJECTORY_FILEPATHS = 'input_trajectory_filepaths'
 
 # Input config file for the NASSA analysis
 DEFAULT_NASSA_CONFIG_FILENAME = 'nassa.json'
@@ -104,8 +107,6 @@ DEFAULT_TRANSITIONS_FILENAME = 'transitions.json'
 
 # An old system for when original topology is very wrong and charges must be provided manually
 RAW_CHARGES_FILENAME = 'charges.txt'
-# Accepted topology formats for atomic charges mining
-ACCEPTED_TOPOLOGY_FORMATS = ['tpr', 'top', 'psf', 'prmtop', 'prm7']
 
 # Input files processing intermediate steps
 # We name differenlty every intermediate file and we never rename/overwrite any input or intermediate file
@@ -271,6 +272,12 @@ NICE_NAMES = {
     CHAINS_ANALYSIS: 'Chains analysis',
     LARGE_AMINOACID_FLAG: 'Aminoacid number of atoms check',
 }
+
+# List supported formats
+TOPOLOGY_SUPPORTED_FORMATS = {'tpr', 'top', 'prmtop', 'psf'}
+TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr', 'nc', 'dcd', 'crd', 'pdb', 'rst7'}
+STRUCTURE_SUPPORTED_FORMATS = {*TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro'}
+GROMACS_TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr'}
 
 # Set the "standard" file format of every possible file extension
 # Note that some formats have different possible extension (e.g. nc, cdf, netcdf)

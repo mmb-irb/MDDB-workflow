@@ -7,6 +7,8 @@ from mddb_workflow.utils.vmd_spells import vmd_to_pdb
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.cache import get_cached_function
+from mddb_workflow.utils.constants import TOPOLOGY_SUPPORTED_FORMATS, TRAJECTORY_SUPPORTED_FORMATS
+from mddb_workflow.utils.constants import STRUCTURE_SUPPORTED_FORMATS, GROMACS_TRAJECTORY_SUPPORTED_FORMATS
 from mddb_workflow.utils.type_hints import *
 
 from mddb_workflow.tools.guess_and_filter import guess_and_filter_topology
@@ -26,12 +28,6 @@ GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntraje
 GROMACS_ATOM_COUNT_CHECK = r'# Atoms  ([0-9]*)'
 PSF_HEADER_PATTERN = r'^\s*[0-9]* ![A-Z]*'
 EMPTY_LINE = '\n'
-
-# List supported formats
-TOPOLOGY_SUPPORTED_FORMATS = {'tpr', 'top', 'prmtop', 'psf'}
-TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr', 'nc', 'dcd', 'crd', 'pdb', 'rst7'}
-STRUCTURE_SUPPORTED_FORMATS = {*TOPOLOGY_SUPPORTED_FORMATS, 'pdb', 'gro'}
-GROMACS_TRAJECTORY_SUPPORTED_FORMATS = {'xtc', 'trr'}
 
 # Auxiliar PDB file which may be generated to load non supported restart files
 AUXILIAR_PDB_FILE = '.auxiliar.pdb'

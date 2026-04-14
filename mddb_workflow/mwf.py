@@ -19,7 +19,7 @@ from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_M
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
-from mddb_workflow.utils.auxiliar import is_standard_topology, unique
+from mddb_workflow.utils.auxiliar import is_standard_topology, unique, get_first_list_values_missmatch
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -101,8 +101,10 @@ class MD:
 
     def __init__(self,
         project: 'Project',
+        name : str,
         number: int,
         directory: str,
+        input_topology_filepath : str,
         input_structure_filepath: str,
         input_trajectory_filepaths: list[str],
     ):
@@ -120,6 +122,12 @@ class MD:
         self.project = project
         if not project:
             raise Exception('Project is mandatory to instantiate a new MD')
+        # Save the project directory
+        # This variable has its twin in the project class
+        # This is important to make some functions work in both classes at the same time
+        self.project_directory = self.project.directory
+        # Save the name
+        self.name = name
         # Save the MD number and index
         self.number = number
         self.index = number - 1
@@ -133,7 +141,7 @@ class MD:
         self.directory = normpath(directory)
         # Now set the director relative to the project
         self.directory = self.project.pathify(self.directory)
-        if normpath(self.directory) == normpath(self.project.directory):
+        if normpath(self.directory) == normpath(self.project_directory):
             raise InputError(f'MD {self.number} has the same directory as the project: {self.directory}')
         # Save the directory name alone apart
         self.directory_location, self.directory_name = split(self.directory)
@@ -141,6 +149,16 @@ class MD:
             mkdir(self.directory)
         elif not isdir(self.directory):
             raise InputError(f'MD directory {self.directory} already exists and it is not a directory')
+        # Save the input topology filepath and set the input topology file
+        # Note that even if the input topology path is passed we do not check it exists
+        # Never forget we can donwload some input files from the database on the fly
+        self.arg_input_topology_filepath = input_topology_filepath
+        self._input_topology_filepath = None
+        self._input_topology_url = None
+        # Set the internal variable for the input topology file, to be assigned later
+        self._input_topology_file = None
+        # Store also the output topology filepath
+        self._topology_filepath = None
         # Save the input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
@@ -159,8 +177,10 @@ class MD:
         self._input_trajectory_files = None
 
         # Other values which may be found/calculated on demand
-        self._md_inputs = None
+        self.md_inputs = self.project.md_config[self.index]
         self._structure = None
+        self._topology_reader = None
+        self._dihedrals = None
 
         # Tests
         self._trajectory_integrity = None
@@ -186,18 +206,162 @@ class MD:
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
 
-        # Get MD inputs just to fill the inputs' "mds" value
-        # Some functions may fail otherwise when its value is missing
-        if self.project.is_inputs_file_available():
-            self.get_md_inputs()
-
     def __repr__(self):
         """Return a string representation of the MD object."""
-        return 'MD'
+        return f'<MD "{self.name}">'
+    
+    def __str__(self):
+        """Return a string representation of the MD object."""
+        return f'MD "{self.name}"'
 
     def pathify(self, filename_or_relative_path: str) -> str:
         """Given a filename or relative path, add the MD directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
+    
+    # Input topology file ------------
+
+    def get_input_topology_filepath(self) -> Optional[str]:
+        """Get the input topology filepath from the inputs or try to guess it.
+
+        If the input topology filepath is a 'no' flag then we consider there is no topology at all
+        So far we extract atom charges and atom bonds from the topology file
+        In this scenario we can keep working but there are some consecuences:
+
+            1. Analysis using atom charges such as 'energies' will be skipped
+            2. The standard topology file will not include atom charges
+            3. Bonds will be guessed from atom radii and distance along multiple frames
+        """
+        # If we already have an internal value calculated then return it
+        if self._input_topology_filepath is not None:
+            return self._input_topology_filepath
+
+        def relativize_and_parse_path(input_filepath: str) -> str:
+            """Check and fix the input topology filepath.
+            If it is an URL then set the filepath where it is to be downloaded.
+            Find if the path is relative to the workflow caller directory or to the project.
+            If the path exists in both contexts then priorize the project-relative one.
+            Relativize the path to the workflow caller directory.
+            Also parse glob notation.
+            """
+            # If it is a URL then set the paths for the further download
+            if is_url(input_filepath):
+                self._input_topology_url = input_filepath
+                source_filename = url_to_source_filename(input_filepath)
+                source_filepath = self.pathify(source_filename)
+                return source_filepath
+            # Check if it is an absolute path
+            if isabs(input_filepath):
+                abs_glob_parse = parse_glob(input_filepath)
+                # If we had multiple results then we complain
+                if len(abs_glob_parse) > 1:
+                    raise InputError(f'Multiple topologies found with "{input_filepath}": {", ".join(abs_glob_parse)}')
+                # If we had no results then we complain
+                if len(abs_glob_parse) == 0:
+                    if self.remote:
+                        warn('Spread syntax is not supported to download remote files')
+                    raise InputError(f'No topology found with "{input_filepath}"')
+                abs_parsed_filepath = abs_glob_parse[0]
+                return abs_parsed_filepath
+            # Now iterate the different possible contexts in the following order:
+            # 1 - Path is relative to the MD directory
+            # 2 - Path is relative to the project directory
+            # 3 - Path is relative to the workflow caller directory
+            available_contexts = unique([self.directory, self.project_directory, '.'])
+            for available_context in available_contexts:
+                context_filepath = normpath(f'{available_context}/{input_filepath}')
+                if not is_glob(context_filepath):
+                    if not exists(context_filepath): continue
+                    return context_filepath
+                # If there is glob pattern then parse it
+                parsed_filepaths = glob(context_filepath)
+                if len(parsed_filepaths) == 1:
+                    return parsed_filepaths[0]
+                if len(parsed_filepaths) > 1:
+                    raise InputError(f'Multiple topologies found with "{context_filepath}": {", ".join(parsed_filepaths)}')
+            # If we found no topology file in any context then we complain
+            raise InputError(f'Input topology {input_filepath} is nowhere to be found.')
+        # Set the input topology filepath
+        input_topology_filepath = None
+        # If this value was passed through command line then it would be set as the internal value already
+        if self.arg_input_topology_filepath:
+            input_topology_filepath = self.arg_input_topology_filepath
+        # If the inputs file is available and has the value then use it
+        elif self.is_inputs_file_available():
+            # Get the input value, whose key must exist
+            input_topology_filepath = self.get_input(MD_INPUT_TOPOLOGY_FILEPATH)
+        # If this is the project and all MDs have an input topology then set the project topology as missing
+        # This should give no problems since this topology is not to be used
+        if input_topology_filepath is None and self == self.project and all(md.get_input_topology_filepath() for md in self.mds):
+            input_topology_filepath = 'no'
+        # If we have no input topology at this point then we surrender
+        if input_topology_filepath is None:
+            raise InputError('Missing input topology file path in the project and in at least one MD.\n' +
+                '  Please provide a topology file using the "-top" argument.\n' +
+                '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
+                '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
+                '  Some analyses such us the interaction energies will be skiped.')
+        # If we have an input topology filepath then process it
+        # WARNING: the yaml parser automatically converts 'no' to False
+        if input_topology_filepath is False or input_topology_filepath.lower() in {'no', 'not', 'na'}:
+            self._input_topology_filepath = MISSING_TOPOLOGY
+            return self._input_topology_filepath
+        # Relativize and glob-parse the input filepath
+        self._input_topology_filepath = relativize_and_parse_path(input_topology_filepath)
+        # Update the input topology filepath in the inputs file, in case it is not matching
+        # Note that the path must be relative to the project, no matter where the workflow is run
+        project_relative_path = relpath(self._input_topology_filepath, self.project_directory)
+        self.update_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
+        return self._input_topology_filepath
+
+    def get_input_topology_file(self) -> Optional[File]:
+        """Get the input topology file.
+        If the file is not found try to download it.
+        """
+        # If we already have a value then return it
+        if self._input_topology_file is not None:
+            return self._input_topology_file
+        # Set the input topology filepath
+        input_topology_filepath = self.get_input_topology_filepath()
+        # If the input filepath is None then it menas we must proceed without a topology
+        if input_topology_filepath == MISSING_TOPOLOGY:
+            self._input_topology_file = MISSING_TOPOLOGY
+            return self._input_topology_file
+        # If no input is passed then we check the inputs file
+        # Set the file
+        input_topology_file = File(input_topology_filepath)
+        # If there is a topology URL then we may donwload the topology first
+        input_topology_url = self._input_topology_url
+        if input_topology_url and not input_topology_file.exists:
+            original_filename = input_topology_url.split('/')[-1]
+            # If there is a remote then use it
+            if self.remote:
+                # If the topology filename is the standard topology filename then use the topology endpoint instead
+                if original_filename == STANDARD_TOPOLOGY_FILENAME:
+                    self.remote.download_standard_topology(input_topology_file)
+                # Otherwise download the input strucutre file by its filename
+                else:
+                    self.remote.download_file(original_filename, input_topology_file)
+                # In case the topology is a '.top' file we consider it is a Gromacs topology
+                # It may come with additional itp files we must download as well
+                if input_topology_file.format == 'top':
+                    # Find available .itp files and download each of them
+                    itp_filenames = [filename for filename in self.remote.available_files if filename[-4:] == '.itp']
+                    for itp_filename in itp_filenames:
+                        itp_filepath = self.pathify(itp_filename)
+                        itp_file = File(itp_filepath)
+                        self.remote.download_file(itp_file.filename, itp_file)
+            # Otherwise use the URL as is
+            else:
+                if input_topology_file.format == 'top':
+                    warn('Automatic download of itp files is not supported without the "-proj" argument.' +
+                         ' Thus if the topology has associated itp files they will not be downloaded.')
+                download_file(input_topology_url, input_topology_file)
+        # If the file finally exists then we are done
+        if input_topology_file.exists:
+            self._input_topology_file = input_topology_file
+            return self._input_topology_file
+        raise InputError(f'Missing input topology file "{input_topology_file.path}"')
+    input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
     # Input structure file ------------
 
@@ -238,7 +402,7 @@ class MD:
             # 1 - Path is relative to the MD directory
             # 2 - Path is relative to the project directory
             # 3 - Path is relative to the workflow caller directory
-            available_contexts = unique([self.directory, self.project.directory, '.'])
+            available_contexts = unique([self.directory, self.project_directory, '.'])
             for available_context in available_contexts:
                 context_filepath = normpath(f'{available_context}/{input_filepath}')
                 glob_parse = parse_glob(context_filepath)
@@ -255,26 +419,24 @@ class MD:
         if self.arg_input_structure_filepath:
             input_structure_filepath = self.arg_input_structure_filepath
         # If we have a value passed through the inputs file has the value
-        elif self.project.is_inputs_file_available():
+        elif self.is_inputs_file_available():
             # Get the input value, whose key must exist
-            input_structure_filepath = self.get_input('input_structure_filepath')
+            input_structure_filepath = self.get_input(MD_INPUT_STRUCTURE_FILEPATH)
         # Find out if it is relative to MD directories or to the project directory
         if input_structure_filepath:
             self._input_structure_filepath = relativize_and_parse_path(input_structure_filepath)
             # Save or update the parsed value in the inputs file
             # Note that the path must be relative to the project, no matter where the workflow is run
-            project_relative_path = relpath(self._input_structure_filepath, self.project.directory)
-            self.project.update_inputs(
-                f'mds.{self.index}.input_structure_filepath',
-                project_relative_path)
+            project_relative_path = relpath(self._input_structure_filepath, self.project_directory)
+            self.project.update_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
             return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
         # Note that topology input filepath must exist and an input error will raise otherwise
         # However if we are using the standard topology file we can not extract the PDB from it (yet)
-        if self.project.input_topology_file != MISSING_TOPOLOGY and \
-            not is_standard_topology(self.project.input_topology_file):
-            return self.project.input_topology_file.path
+        if self.input_topology_file != MISSING_TOPOLOGY and \
+            not is_standard_topology(self.input_topology_file):
+            return self.input_topology_file.path
         # If we can not use the topology either then surrender
         raise InputError('There is not input structure at all')
 
@@ -373,7 +535,7 @@ class MD:
             # 1 - Path is relative to the MD directory
             # 2 - Path is relative to the project directory
             # 3 - Path is relative to the workflow caller directory
-            available_contexts = unique([self.directory, self.project.directory, '.'])
+            available_contexts = unique([self.directory, self.project_directory, '.'])
             for available_context in available_contexts:
                 # Get paths relative to the current context
                 context_filepaths = [normpath(f'{available_context}/{path}') for path in checked_paths]
@@ -392,9 +554,9 @@ class MD:
         if self.arg_input_trajectory_filepaths:
             input_trajectory_filepaths = self.arg_input_trajectory_filepaths
         # Check if the inputs file has the value
-        elif self.project.is_inputs_file_available():
+        elif self.is_inputs_file_available():
             # Get the input value
-            input_trajectory_filepaths = self.get_input('input_trajectory_filepaths')
+            input_trajectory_filepaths = self.get_input(MD_INPUT_TRAJECTORY_FILEPATHS)
         # If there is no trajectory available then we surrender
         if input_trajectory_filepaths is None:
             raise InputError('There is not input trajectory at all')
@@ -402,10 +564,8 @@ class MD:
         self._input_trajectory_filepaths = relativize_and_parse_paths(input_trajectory_filepaths)
         # Save the parsed value in the inputs file
         # Note that the path must be relative to the project, no matter where the workflow is run
-        project_relative_paths = [relpath(path, self.project.directory) for path in self._input_trajectory_filepaths]
-        self.project.update_inputs(
-            f'mds.{self.index}.input_trajectory_filepaths',
-            project_relative_paths)
+        project_relative_paths = [relpath(path, self.project_directory) for path in self._input_trajectory_filepaths]
+        self.update_inputs(MD_INPUT_TRAJECTORY_FILEPATHS, project_relative_paths)
         return self._input_trajectory_filepaths
 
     def get_input_trajectory_files(self) -> list[File]:
@@ -459,56 +619,6 @@ class MD:
         raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
-    def get_md_inputs(self) -> dict:
-        """Get MD specific inputs."""
-        # If we already have a value stored then return it
-        if self._md_inputs:
-            return self._md_inputs
-        # Otherwise we must find its value
-        # If we have MD inputs in the inputs file then use them
-        if self.project.input_mds:
-            # Iterate over the different MD inputs to find out each directory
-            # We must find the MD inputs which belong to this specific MD according to this directory
-            for md in self.project.input_mds:
-                # Skip removed directories
-                # If it is a removed MD then we must handle it apart
-                was_removed = md.get(MD_REMOVED, False)
-                if was_removed: continue
-                # Get the directory according to the inputs
-                directory = md.get(MD_DIRECTORY, None)
-                name = md.get(MD_NAME, None)
-                if not directory and not name:
-                    raise InputError('There is a MD with no name and no directory. Please define at least one of them.')
-                # Make sure we have a directory
-                if not directory:
-                    directory = name_2_directory(name)
-                check_md_directory(directory)
-                # If the directory matches then this is our MD inputs
-                if self.project.pathify(directory) == self.directory:
-                    # Make sure we have a name
-                    if not name:
-                        name = directory_2_name(directory)
-                        md[MD_NAME] = name
-                    # Save the MD inputs and return them
-                    self._md_inputs = md
-                    return self._md_inputs
-        # If this MD directory has not associated inputs then it means it was passed through command line
-        # We set a new MD inputs for it
-        new_md_name = directory_2_name(self.directory)
-        self._md_inputs = {MD_NAME: new_md_name,
-                           MD_DIRECTORY: relpath(self.directory, self.project.directory)}
-        mds = []
-        # Update the inputs file with the new MD inputs
-        if self.project.is_inputs_file_available():
-            mds = self.project.inputs.get('mds', [])
-        if not mds:
-            mds = []
-        new_mds_inputs = [*mds, self._md_inputs]
-        self.project.update_inputs('mds', new_mds_inputs)
-        return self._md_inputs
-
-    md_inputs = property(get_md_inputs, None, None, "MD specific inputs (read only)")
-
     def get_input(self, name: str):
         """Get a specific 'input' value from MD inputs."""
         value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
@@ -516,6 +626,22 @@ class MD:
         if value != MISSING_INPUT_EXCEPTION:
             return value
         return self.project.get_input(name)
+    
+    def update_inputs (self, key: str, new_value):
+        """Permanently update current MD inputs in the inputs file. Do it only if the project value is not already the same."""
+        # Check if the project value is already this value
+        # If so then there is no need to update this value specifically for the MD
+        project_value = self.project.get_input(key)
+        if project_value == new_value: return
+        nested_key = f'mds.{self.index}.{key}'
+        self.project.update_inputs(nested_key, new_value)
+
+    def is_inputs_file_available(self) -> bool:
+        """Set a function to check if inputs file is available.
+        Note that asking for it when it is not available will lead to raising an input error.
+        This function is inherited from the project
+        """
+        return self.project.is_inputs_file_available()
 
     # ---------------------------------
 
@@ -586,9 +712,43 @@ class MD:
 
     # Processed files ----------------------------------------------------
 
+    def inherit_topology_filename(self) -> Optional[str]:
+        """Set the expected output topology filename given the input topology filename.
+        Note that topology formats are conserved.
+        """
+        # If there is no topology at all
+        if self.input_topology_file == MISSING_TOPOLOGY:
+            return MISSING_TOPOLOGY
+        # Get the filename
+        filename = self.input_topology_file.filename
+        if not filename: raise RuntimeError('Unnamed file?')
+        # If it is the raw charges file then return it as is
+        if filename == RAW_CHARGES_FILENAME:
+            return filename
+        # Get the format
+        standard_format = self.input_topology_file.format
+        # If it is a .top topology then we have to check if it is a gromacs or an amber topology
+        if is_amber_top(self.input_topology_file):
+            standard_format = 'prmtop'
+        return 'topology.' + standard_format
+
     def get_topology_filepath(self) -> str:
         """Get the processed topology file path."""
-        return self.project.get_topology_filepath()
+        # If we have a stored value then return it
+        if self._topology_filepath:
+            return self._topology_filepath
+        # Otherwise we must find it
+        inherited_filename = self.inherit_topology_filename()
+        if inherited_filename == MISSING_TOPOLOGY:
+            self._topology_filepath = MISSING_TOPOLOGY
+        else:
+            # If the input topology is also the project input topology then keep the output in the project directory
+            # Otherwise keep the output in the MD directory
+            if self.input_topology_file == self.project.input_topology_file:
+                self._topology_filepath = self.project.pathify(inherited_filename)
+            else:
+                self._topology_filepath = self.pathify(inherited_filename)
+        return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
     # Run the actual processing to generate output processed files out of input raw files
@@ -601,16 +761,12 @@ class MD:
         })
 
     # Output main files
+    get_topology_file = input_files_processing.get_output_file_getter('output_topology_file')
+    topology_file = property(get_topology_file, None, None, "Topology file (read only)")
     get_structure_file = input_files_processing.get_output_file_getter('output_structure_file')
     structure_file = property(get_structure_file, None, None, "Structure file (read only)")
     get_trajectory_file = input_files_processing.get_output_file_getter('output_trajectory_file')
     trajectory_file = property(get_trajectory_file, None, None, "Trajectory file (read only)")
-
-    def get_topology_file(self) -> 'File':
-        """Get the processed topology from the project."""
-        return self.project.get_topology_file()
-    topology_file = property(get_topology_file, None, None,
-                             "Topology filename from the project (read only)")
 
     # ---------------------------------------------------------------------------------
     # Others values which may be found/calculated and files to be generated on demand
@@ -620,10 +776,23 @@ class MD:
     get_snapshots = Task('frames', 'Count trajectory frames', get_frames_count)
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
-    def get_reference_bonds(self) -> list[list[int]]:
-        """Get the reference bonds."""
-        return self.project.reference_bonds
+    def get_check_stable_bonds(self) -> bool:
+        """Check if we must check stable bonds."""
+        # Set if stable bonds have to be checked
+        must_check = STABLE_BONDS_FLAG not in self.project.trust
+        # If this analysis has been already passed then we can trust structure bonds
+        if self.register.tests.get(STABLE_BONDS_FLAG, None) is True:
+            must_check = False
+        return must_check
+    must_check_stable_bonds = property(get_check_stable_bonds, None, None, "Check if we must check stable bonds (read only)")
+
+    # Reference bonds
+    get_reference_bonds = Task('refbonds', 'Reference bonds', find_safe_bonds)
     reference_bonds = property(get_reference_bonds, None, None, "Atom bonds to be trusted (read only)")
+
+    # Atom charges
+    get_charges = Task('charges', 'Getting atom charges', get_charges)
+    charges = property(get_charges, None, None, "Atom charges (read only)")
 
     def get_structure(self) -> 'Structure':
         """Get the parsed structure."""
@@ -702,7 +871,7 @@ class MD:
         if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
         selection_string = None
         # If there is inputs file then get the input pbc selection
-        if self.project.is_inputs_file_available():
+        if self.is_inputs_file_available():
             if verbose: print(' Using selection string in the inputs file')
             selection_string = self.input_pbc_selection
         # If there is no inputs file we guess PBC atoms automatically
@@ -784,14 +953,27 @@ class MD:
         return self.project.protein_map
     protein_map = property(get_protein_map, None, None, "Residues mapping (read only)")
 
-    def get_charges(self) -> list[float]:
-        """Get the residues mapping from the project."""
-        return self.project.charges
-    charges = property(get_charges, None, None, "Residues charges (read only)")
-
     # Reference frame
     get_reference_frame = Task('reframe', 'Reference frame', get_bonds_reference_frame)
     reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
+
+    def get_topology_reader(self) -> 'Topology':
+        """Get the topology data reader."""
+        # If we already have a stored value then return it
+        if self._topology_reader: return self._topology_reader
+        # Instantiate the topology reader
+        self._topology_reader = Topology(self.topology_file)
+        return self._topology_reader
+    topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
+
+    def get_dihedrals(self) -> list[dict]:
+        """Get the topology dihedrals."""
+        # If we already have a stored value then return it
+        if self._dihedrals: return self._dihedrals
+        # Calculate the dihedrals otherwise
+        self._dihedrals = self.topology_reader.get_dihedrals_data()
+        return self._dihedrals
+    dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
 
     # ---------------------------------------------------------------------------------
     # Tests
@@ -932,7 +1114,7 @@ class Project:
     """
 
     @staticmethod
-    def project_directory(directory: str) -> str:
+    def get_project_directory(directory: str) -> str:
         """Get the project directory from the input directory."""
         directory = normpath(directory)
         # If it is an absolute path then make it relative to the workflow caller
@@ -950,7 +1132,7 @@ class Project:
         """Create or load the project cache. Cannot fail
         unless the directory doesn't exist, which is a pre-condition anyway.
         """
-        directory = Project.project_directory(directory)
+        directory = Project.get_project_directory(directory)
         return Cache(File(join(directory, CACHE_FILENAME)))
 
     def __init__(self,
@@ -962,7 +1144,7 @@ class Project:
         input_structure_filepath: Optional[str] = None,
         input_trajectory_filepaths: Optional[list[str]] = None,
         md_directories: Optional[list[str]] = None,
-        md_config: Optional[list[list[str]]] = None,
+        input_md_config: Optional[list[list[str]]] = None,
         reference_md_index: Optional[int] = None,
         forced_inputs: Optional[list[list[str]]] = None,
         populations_filepath: str = DEFAULT_POPULATIONS_FILENAME,
@@ -1012,7 +1194,7 @@ class Project:
                 Path or glob pattern to the different MD directories.
                 Each directory is to contain an independent trajectory and structure.
                 Several output files will be generated in every MD directory.
-            md_config (Optional[list[list[str]]]):
+            input_md_config (Optional[list[list[str]]]):
                 Configuration of a specific MD. You may declare as many as you want.
                 Every MD requires a directory name and at least one trajectory path.
                 The structure is -md <directory> <trajectory_1> <trajectory_2> ...
@@ -1087,8 +1269,13 @@ class Project:
 
         """
         # Save input parameters
-        self.directory = self.project_directory(directory)
+        self.directory = self.get_project_directory(directory)
         self.directory_name = basename(getcwd() if self.directory == '.' else self.directory)
+
+        # Save some additional variables which have their twins in the MD class
+        # This is important to make some functions work in both classes at the same time
+        self.project = self
+        self.project_directory = self.directory
 
         # Set the database handler
         self.ssleep = ssleep
@@ -1118,9 +1305,13 @@ class Project:
             if md_directories:
                 raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-mdir" argument or the "-proj" argument.')
-            if md_config:
+            if input_md_config:
                 raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove any "-md" argument or the "-proj" argument.')
+            
+        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
+        if input_md_config and (md_directories or input_trajectory_filepaths):
+            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
 
         # Set the inputs file
         self.inputs_filepath = None
@@ -1165,24 +1356,8 @@ class Project:
         self._input_topology_url = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
-        self.input_structure_filepath = input_structure_filepath
-        self.input_trajectory_filepaths = input_trajectory_filepaths
-
-        # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
-        if md_config and (md_directories or input_trajectory_filepaths):
-            raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
-        # Save the MD configurations
-        self.md_config = md_config
-        # Make sure MD configuration has the correct format
-        if self.md_config:
-            # Make sure all MD configurations have at least 3 values each
-            for mdc in self.md_config:
-                if len(mdc) < 2:
-                    raise InputError('Wrong MD configuration: the patter is -md <directory> <trajectory> <trajectory 2> ...')
-            # Make sure there are no duplictaed MD directories
-            md_directories = [mdc[0] for mdc in self.md_config]
-            if len(md_directories) > len(set(md_directories)):
-                raise InputError('There are duplicated MD directories. Every directory behind every "-md" must be unique.')
+        self.arg_input_structure_filepath = input_structure_filepath
+        self.arg_input_trajectory_filepaths = input_trajectory_filepaths
 
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
@@ -1194,28 +1369,11 @@ class Project:
         self._aiida_data_file = File(self.aiida_data_filepath) if aiida_data_filepath else None
 
         # Set the processed topology filepath, which depends on the input topology filename
-        # Note that this file is different from the standard topology, although it may be standard as well
+        # Note that this file is different from the standard topology
         self._topology_filepath = None
 
         # Set the standard topology file
         self._standard_topology_file = None
-
-        # Set the MD configuration
-        self._input_mds = None
-        # Set the MD directories
-        self._md_directories = []
-        if md_directories:
-            for dir in md_directories:
-                if is_glob(dir):
-                    self._md_directories.extend(glob(dir))
-                else:
-                    self._md_directories.append(dir)
-        # Check input MDs are correct to far
-        if self._md_directories:
-            self.check_md_directories()
-        # Set the reference MD
-        self._reference_md = None
-        self._reference_md_index = reference_md_index
 
         # Set the rest of inputs
         # Note that the filter selection variable is not handled here at all
@@ -1314,65 +1472,153 @@ class Project:
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
 
+        # Set the MD configuration
+
+        # Get MD configuration from the inputs file, if any
+        self.md_config = self.get_input('mds') or []
+
+        # Add or overwrite possible MD inputs from the inputs file with the console arguments
+
+        # First scenario argument: the new way
+        self.arg_md_config = input_md_config
+        # Second scenario argument: the old way
+        self.arg_md_directories = md_directories
+
+        # First scenario
+        if self.arg_md_config:
+            # Make sure all MD configurations have at least 2 values each
+            for mdc in self.arg_md_config:
+                if len(mdc) >= 2: continue
+                raise InputError('Wrong MD configuration: the patter is -md <directory> <trajectory> <trajectory 2> ...')
+            # Make sure there are no duplicated MD directories
+            arg_md_directories = [mdc[0] for mdc in self.arg_md_config]
+            if len(arg_md_directories) > len(set(arg_md_directories)):
+                raise InputError('There are duplicated MD directories. Every directory behind every "-md" must be unique.')
+            # Iterate MD config entries and add / merge them with the already existing MD config
+            for n, arg_config in enumerate(self.arg_md_config, 1):
+                directory = arg_config[0]
+                # Find if there is already a MD configuration for this directory
+                config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
+                # Otherwise create a new one and add it to the list
+                if config is None:
+                    config = { MD_DIRECTORY: directory }
+                    self.md_config.append(config)
+                # An input topoloy/structure for a specific MD may be passed before the trajectory
+                # In order to tell if the topology/structure was passed we check input file formats
+                # Note that PDB format is both a structure and a trajectory supported format
+                has_structure = False
+                has_topology = False
+                if len(arg_config) > 2:
+                    first_sample = File(arg_config[1])
+                    second_sample = File(arg_config[2])
+                    if first_sample.format != second_sample.format:
+                        if first_sample.format in TOPOLOGY_SUPPORTED_FORMATS:
+                            has_topology = True
+                        else:
+                            has_structure = True
+                # Finally set the input topology, structure and trajectories files
+                md_input_topology_filepath = arg_config[1] if has_topology else self.arg_input_topology_filepath
+                md_input_structure_filepath = arg_config[1] if has_structure else self.arg_input_structure_filepath
+                md_input_trajectory_filepaths = arg_config[2:] if has_structure or has_topology else arg_config[1:]
+                # Add the input files to the MD configuration
+                config.update({
+                    MD_INPUT_TOPOLOGY_FILEPATH : md_input_topology_filepath,
+                    MD_INPUT_STRUCTURE_FILEPATH : md_input_structure_filepath,
+                    MD_INPUT_TRAJECTORY_FILEPATHS : md_input_trajectory_filepaths,
+                })
+
+        # Second scenario
+        elif self.arg_md_directories:
+            warn('The "-mdir" argument is deprecated. Please consider using the "-md" argument. Use the "--help" argument to see how it works.')
+            parsed_md_directories = []
+            # Parse any glob notation
+            for dir in md_directories:
+                if is_glob(dir):
+                    parsed_md_directories.extend(glob(dir))
+                else:
+                    parsed_md_directories.append(dir)
+            # For each parsed MD directory, check if it is already defined in the config file
+            # If not then add a new config for this
+            for dir in parsed_md_directories:
+                # Find if there is already a MD configuration for this directory
+                config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
+                # Otherwise create a new one and add it to the list
+                if config is None:
+                    config = { MD_DIRECTORY: directory }
+                    self.md_config.append(config)
+
+        # Add the generic topology, structure or trajectory arguments, if any, to the MD config
+        for config in self.md_config:
+            if self.arg_input_topology_filepath:
+                config[MD_INPUT_TOPOLOGY_FILEPATH] = self.arg_input_topology_filepath
+            if self.arg_input_structure_filepath:
+                config[MD_INPUT_STRUCTURE_FILEPATH] = self.arg_input_structure_filepath
+            if self.arg_input_trajectory_filepaths:
+                config[MD_INPUT_TRAJECTORY_FILEPATHS] = self.arg_input_trajectory_filepaths
+
+        # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
+        self._check_md_config()
+            
+        # Set the reference MD
+        self._reference_md = None
+        self._reference_md_index = reference_md_index
+
     def __repr__(self):
         """Return a string representation of the Project object."""
-        return 'Project'
+        return '<Project>'
+    
+    def __str__(self):
+        """Return a string representation of the MD object."""
+        return f'project'
+    
+    def _check_md_config (self):
+        """Check input MDs configuration, make sure input is coherent and fill the gaps."""
+        # There must be at least one MD confiuration
+        if len(self.md_config) == 0:
+            raise InputError('There must be at least one MD')
+        # Run a few checks to make sure all inputs are coherent
+        # Make sure all input MDs have unique name and directory
+        names = {}
+        directories = {}
+        for md_index, md_inputs in enumerate(self.md_config):
+            # Make sure the MD has at least a name or a directory
+            directory = md_inputs.get(MD_DIRECTORY, None)
+            name = md_inputs.get(MD_NAME, None)
+            if not directory and not name:
+                raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' +
+                    ' Please define at least one of them.')
+            # Now fill the gaps
+            # If there is a directory and not a name then issue a name using the directory
+            if directory is None:
+                directory = name_2_directory(name)
+                md_inputs['mdir'] = directory
+                self.update_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
+            # And vice versa
+            if name is None:
+                name = directory_2_name(directory)
+                md_inputs['name'] = name
+                self.update_inputs(f'mds.{md_index}.{MD_NAME}', name)
+            # Add current names and directories to the counts
+            current_name_count = names.get(name, 0)
+            names[name] = current_name_count + 1
+            current_directory_count = directories.get(directory, 0)
+            directories[directory] = current_directory_count + 1
+        # If there were any duplicates then report it
+        repeats = False
+        for name, name_count in names.items():
+            if name_count == 1: continue
+            warn(f'There are {name_count} MDs with the same name: {name}.')
+            repeats = True
+        for directory, directory_count in directories.items():
+            if directory_count == 1: continue
+            warn(f'There are {directory_count} MDs with the same directory: {directory}.')
+            repeats = True
+        if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' +
+            ' All MD names and directories must be unique.')
 
     def pathify(self, filename_or_relative_path: str) -> str:
         """Given a filename or relative path, add the project directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
-
-    def check_md_directories(self):
-        """Check MD directories to be right.
-        If there is any problem then directly raise an input error.
-        """
-        # Check there is at least one MD
-        if len(self._md_directories) < 1:
-            raise InputError('There must be at least one MD')
-        # Check there are not duplicated MD directories
-        if len(set(self._md_directories)) != len(self._md_directories):
-            raise InputError('There are duplicated MD directories')
-
-    def get_md_directories(self) -> list:
-        """Get MD directories."""
-        # If MD directories are already declared then return them
-        if self._md_directories:
-            return self._md_directories
-        # Otherwise use the default MDs
-        self._md_directories = []
-        # Use the MDs from the inputs file when available
-        if self.is_inputs_file_available() and self.input_mds:
-            # Iterate MDs
-            for input_md in self.input_mds:
-                # If it is a removed MD then we must handle it apart
-                was_removed = input_md.get(MD_REMOVED, False)
-                if was_removed:
-                    self._md_directories.append(REMOVED_MD)
-                    continue
-                # Get the directory according to the inputs
-                directory = input_md.get(MD_DIRECTORY, None)
-                if directory:
-                    check_md_directory(directory)
-                # If no directory is specified in the inputs then guess it from the MD name
-                else:
-                    name = input_md['name']
-                    if not name:
-                        name = 'unnamed'
-                    directory = name_2_directory(name)
-                self._md_directories.append(directory)
-        # Otherwise, guess MD directories by checking which directories include a register file
-        else:
-            available_directories = sorted(next(walk(self.directory))[1])
-            for directory in available_directories:
-                if exists(directory + '/' + REGISTER_FILENAME):
-                    self._md_directories.append(directory)
-            # If we found no MD directory then it means MDs were never declared before
-            if len(self._md_directories) == 0:
-                raise InputError('Impossible to know which are the MD directories. '
-                    'You can either declare them using the "-md" option or by providing an inputs file')
-        self.check_md_directories()
-        return self._md_directories
-    md_directories = property(get_md_directories, None, None, "MD directories (read only)")
 
     def get_reference_md_index(self) -> int:
         """Get the reference MD index."""
@@ -1413,47 +1659,19 @@ class Project:
             return self._mds
         # Now instantiate a new MD for each declared MD and save the reference MD
         self._mds = []
-        # New system with MD configurations (-md)
-        if self.md_config:
-            for n, config in enumerate(self.md_config, 1):
-                directory = config[0]
-                # RUBEN: add deprecation warning for the old format?
-                # LEGACY
-                # In a previous version, the md config argument also holded the structure
-                # This was the second argument, so we check if we have more than 2 arguments
-                # If this is the case, then check if the second argument has different format
-                # Note that PDB format is also a trajectory supported format
-                has_structure = False
-                if len(config) > 2:
-                    first_sample = File(config[1])
-                    second_sample = File(config[2])
-                    if first_sample.format != second_sample.format:
-                        has_structure = True
-                # Finally set the input structure and trajectories
-                input_structure_filepath = config[1] if has_structure else self.input_structure_filepath
-                input_trajectory_filepaths = config[2:] if has_structure else config[1:]
-                # Define the MD
-                md = MD(
-                    project=self, number=n, directory=directory,
-                    input_structure_filepath=input_structure_filepath,
-                    input_trajectory_filepaths=input_trajectory_filepaths,
-                )
-                self._mds.append(md)
-        # This is when the MDs are passed through inputs file
-        # Also for the old command line system (-mdir, -stru -traj)
-        else:
-            for n, md_directory in enumerate(self.md_directories, 1):
-                # If it is a removed MD then we must handle it apart
-                if md_directory == REMOVED_MD:
-                    self._mds.append(REMOVED_MD)
-                    continue
-                # Instantiate the MD handler and add it to the list
-                md = MD(
-                    project=self, number=n, directory=md_directory,
-                    input_structure_filepath=self.input_structure_filepath,
-                    input_trajectory_filepaths=self.input_trajectory_filepaths,
-                )
-                self._mds.append(md)
+        for n, config in enumerate(self.md_config, 1):
+            # If it is a removed MD then we must handle it apart
+            if config == REMOVED_MD:
+                self._mds.append(REMOVED_MD)
+                continue
+            # Instantiate the MD
+            md = MD(
+                project=self, name=config[MD_NAME], number=n, directory=config[MD_DIRECTORY],
+                input_topology_filepath=config.get(MD_INPUT_TOPOLOGY_FILEPATH, None),
+                input_structure_filepath=config.get(MD_INPUT_STRUCTURE_FILEPATH, None),
+                input_trajectory_filepaths=config.get(MD_INPUT_TRAJECTORY_FILEPATHS, None),
+            )
+            self._mds.append(md)
         return self._mds
     mds: list[MD] = property(get_mds, None, None, "Available MDs (read only)")
 
@@ -1495,157 +1713,24 @@ class Project:
         return self._inputs_file
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
-    # Topology filename ------------
+    # Input topology file ------------
 
-    def get_input_topology_filepath(self) -> Optional[str]:
-        """Get the input topology filepath from the inputs or try to guess it.
-
-        If the input topology filepath is a 'no' flag then we consider there is no topology at all
-        So far we extract atom charges and atom bonds from the topology file
-        In this scenario we can keep working but there are some consecuences:
-
-            1. Analysis using atom charges such as 'energies' will be skipped
-            2. The standard topology file will not include atom charges
-            3. Bonds will be guessed
-        """
-        # If we already have an internal value calculated then return it
-        if self._input_topology_filepath is not None:
-            return self._input_topology_filepath
-
-        def relativize_and_parse_path(input_filepath: str) -> str:
-            """Check and fix the input topology filepath.
-            If it is an URL then set the filepath where it is to be downloaded.
-            Find if the path is relative to the workflow caller directory or to the project.
-            If the path exists in both contexts then priorize the project-relative one.
-            Relativize the path to the workflow caller directory.
-            Also parse glob notation.
-            """
-            # If it is a URL then set the paths for the further download
-            if is_url(input_filepath):
-                self._input_topology_url = input_filepath
-                source_filename = url_to_source_filename(input_filepath)
-                source_filepath = self.pathify(source_filename)
-                return source_filepath
-            # Check if it is an absolute path
-            if isabs(input_filepath):
-                abs_glob_parse = parse_glob(input_filepath)
-                # If we had multiple results then we complain
-                if len(abs_glob_parse) > 1:
-                    raise InputError(f'Multiple topologies found with "{input_filepath}": {", ".join(abs_glob_parse)}')
-                # If we had no results then we complain
-                if len(abs_glob_parse) == 0:
-                    if self.remote:
-                        warn('Spread syntax is not supported to download remote files')
-                    raise InputError(f'No topology found with "{input_filepath}"')
-                abs_parsed_filepath = abs_glob_parse[0]
-                return abs_parsed_filepath
-            # Now iterate the different possible contexts in the following order:
-            # 1 - Path is relative to the project directory
-            # 2 - Path is relative to the workflow caller directory
-            available_contexts = unique([self.directory, '.'])
-            for available_context in available_contexts:
-                context_filepath = normpath(f'{available_context}/{input_filepath}')
-                if not is_glob(context_filepath):
-                    if not exists(context_filepath): continue
-                    return context_filepath
-                # If there is glob pattern then parse it
-                parsed_filepaths = glob(context_filepath)
-                if len(parsed_filepaths) == 1:
-                    return parsed_filepaths[0]
-                if len(parsed_filepaths) > 1:
-                    raise InputError(f'Multiple topologies found with "{context_filepath}": {", ".join(parsed_filepaths)}')
-            # If we found no topology file in any context then we complain
-            raise InputError(f'Input topology {input_filepath} is nowhere to be found.')
-        # Set the input topology filepath
-        input_topology_filepath = None
-        # If this value was passed through command line then it would be set as the internal value already
-        if self.arg_input_topology_filepath:
-            input_topology_filepath = self.arg_input_topology_filepath
-        # If the inputs file is available and has has the value then use it
-        elif self.is_inputs_file_available():
-            # Get the input value, whose key must exist
-            input_topology_filepath = self.get_input('input_topology_filepath')
-        # If we have no input topology at this point then we surrender
-        if input_topology_filepath is None:
-            raise InputError('Missing input topology file path. Please provide a topology file using the "-top" argument.\n' +
-                '  Note that you may run the workflow without a topology file. To do so, use the "-top no" argument.\n' +
-                '  However this has implications since we usually mine atom charges and bonds from the topology file.\n' +
-                '  Some analyses such us the interaction energies will be skiped.')
-        # If we have an input topology filepath then process it
-        # WARNING: the yaml parser automatically converts 'no' to False
-        if input_topology_filepath is False or input_topology_filepath.lower() in {'no', 'not', 'na'}:
-            self._input_topology_filepath = MISSING_TOPOLOGY
-            return self._input_topology_filepath
-        # Relativize and glob-parse the input filepath
-        self._input_topology_filepath = relativize_and_parse_path(input_topology_filepath)
-        # Update the input topology filepath in the inputs file, in case it is not matching
-        # Note that the path must be relative to the project, no matter where the workflow is run
-        project_relative_path = relpath(self._input_topology_filepath, self.directory)
-        self.update_inputs('input_topology_filepath', project_relative_path)
-        return self._input_topology_filepath
-
-    def get_input_topology_file(self) -> Optional[File]:
-        """Get the input topology file.
-        If the file is not found try to download it.
-        """
-        # If we already have a value then return it
-        if self._input_topology_file is not None:
-            return self._input_topology_file
-        # Set the input topology filepath
-        input_topology_filepath = self.get_input_topology_filepath()
-        # If the input filepath is None then it menas we must proceed without a topology
-        if input_topology_filepath == MISSING_TOPOLOGY:
-            self._input_topology_file = MISSING_TOPOLOGY
-            return self._input_topology_file
-        # If no input is passed then we check the inputs file
-        # Set the file
-        input_topology_file = File(input_topology_filepath)
-        # If there is a topology URL then we may donwload the topology first
-        input_topology_url = self._input_topology_url
-        if input_topology_url and not input_topology_file.exists:
-            original_filename = input_topology_url.split('/')[-1]
-            # If there is a remote then use it
-            if self.remote:
-                # If the topology filename is the standard topology filename then use the topology endpoint instead
-                if original_filename == STANDARD_TOPOLOGY_FILENAME:
-                    self.remote.download_standard_topology(input_topology_file)
-                # Otherwise download the input strucutre file by its filename
-                else:
-                    self.remote.download_file(original_filename, input_topology_file)
-                # In case the topology is a '.top' file we consider it is a Gromacs topology
-                # It may come with additional itp files we must download as well
-                if input_topology_file.format == 'top':
-                    # Find available .itp files and download each of them
-                    itp_filenames = [filename for filename in self.remote.available_files if filename[-4:] == '.itp']
-                    for itp_filename in itp_filenames:
-                        itp_filepath = self.pathify(itp_filename)
-                        itp_file = File(itp_filepath)
-                        self.remote.download_file(itp_file.filename, itp_file)
-            # Otherwise use the URL as is
-            else:
-                if input_topology_file.format == 'top':
-                    warn('Automatic download of itp files is not supported without the "-proj" argument.' +
-                         ' Thus if the topology has associated itp files they will not be downloaded.')
-                download_file(input_topology_url, input_topology_file)
-        # If the file finally exists then we are done
-        if input_topology_file.exists:
-            self._input_topology_file = input_topology_file
-            return self._input_topology_file
-        raise InputError(f'Missing input topology file "{input_topology_file.path}"')
+    # Inherit MD function which should work the same for the project
+    # LORE: They were project functions before, when multiple topologies were not supported
+    get_input_topology_filepath = MD.get_input_topology_filepath
+    get_input_topology_file = MD.get_input_topology_file
     input_topology_file = property(get_input_topology_file, None, None, "Input topology file (read only)")
 
     def get_input_structure_file(self) -> File:
-        """Get the input structure filename."""
-        # When calling this function make sure all MDs have the file or try to download it
+        """Get the input structure file."""
         return self.reference_md._input_structure_file
-    input_structure_file = property(get_input_structure_file, None, None, "Input structure filename for each MD (read only)")
+    input_structure_file = property(get_input_structure_file, None, None, "Input structure file for each MD (read only)")
 
     def get_input_trajectory_files(self) -> list[File]:
-        """Get the input trajectory filename(s) from the inputs.
-        If file(s) are not found try to download it.
-        """
+        """Get the input trajectory file(s) from the reference MD.
+        If file(s) are not found then try to download them."""
         return self.reference_md._input_trajectory_files
-    input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames for each MD (read only)")
+    input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory files for each MD (read only)")
 
     def get_populations_file(self) -> Optional[File]:
         """Get the MSM equilibrium populations file."""
@@ -1799,56 +1884,6 @@ class Project:
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
     input_cv19_abs = inputs_property('cv19_abs', "Input Covid-19 antibodies (read only)")
     input_cv19_nanobs = inputs_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
-
-    def get_input_mds(self) -> dict:
-        """Get the input MDs configuration."""
-        # If we have an internal value then return it
-        if self._input_mds is not None:
-            return self._input_mds
-        # Otherwise, find it in the inputs
-        self._input_mds = self.get_input('mds') or []
-        # Run a few checks to make sure all inputs are coherent
-        # Make sure all input MDs have unique name and directory
-        names = {}
-        directories = {}
-        for md_index, md_inputs in enumerate(self._input_mds):
-            # Make sure the MD has at least a name or a directory
-            directory = md_inputs.get(MD_DIRECTORY, None)
-            name = md_inputs.get(MD_NAME, None)
-            if not directory and not name:
-                raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' +
-                    ' Please define at least one of them.')
-            # Now fill the gaps
-            # If there is a directory and not a name then issue a name using the directory
-            if directory is None:
-                directory = name_2_directory(name)
-                md_inputs['mdir'] = directory
-                self.update_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
-            # And vice versa
-            if name is None:
-                name = directory_2_name(directory)
-                md_inputs['name'] = name
-                self.update_inputs(f'mds.{md_index}.{MD_NAME}', name)
-            # Add current names and directories to the counts
-            current_name_count = names.get(name, 0)
-            names[name] = current_name_count + 1
-            current_directory_count = directories.get(directory, 0)
-            directories[directory] = current_directory_count + 1
-        # If there were any duplicates then report it
-        repeats = False
-        for name, name_count in names.items():
-            if name_count == 1: continue
-            warn(f'There are {name_count} MDs with the same name: {name}.')
-            repeats = True
-        for directory, directory_count in directories.items():
-            if directory_count == 1: continue
-            warn(f'There are {directory_count} MDs with the same directory: {directory}.')
-            repeats = True
-        if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' +
-            ' All MD names and directories must be unique.')
-        return self._input_mds
-
-    input_mds = property(get_input_mds, None, None, "Input MDs configuration (read only)")
 
     def get_input_pbc_selection(self) -> Optional[str]:
         """Get the original user input Periodic Boundary Conditions selection."""
@@ -2014,43 +2049,30 @@ class Project:
 
     # Processed files ----------------------------------------------------
 
-    def inherit_topology_filename(self) -> Optional[str]:
-        """Set the expected output topology filename given the input topology filename.
-        Note that topology formats are conserved.
-        """
-        # If there is no topology at all
-        if self.input_topology_file == MISSING_TOPOLOGY:
-            return MISSING_TOPOLOGY
-        # Get the filename
-        filename = self.input_topology_file.filename
-        if not filename: raise RuntimeError('Unnamed file?')
-        # If it is the raw charges file then return it as is
-        if filename == RAW_CHARGES_FILENAME:
-            return filename
-        # Get the format
-        standard_format = self.input_topology_file.format
-        # If it is a .top topology then we have to check if it is a gromacs or an amber topology
-        if is_amber_top(self.input_topology_file):
-            standard_format = 'prmtop'
-        return 'topology.' + standard_format
+    # Inherit MD function which should work the same for the project
+    # LORE: They were project functions before, when multiple topologies were not supported
+    inherit_topology_filename = MD.inherit_topology_filename
+    get_topology_filepath = MD.get_topology_filepath
 
-    def get_topology_filepath(self) -> str:
-        """Get the processed topology file path."""
-        # If we have a stored value then return it
-        if self._topology_filepath:
-            return self._topology_filepath
-        # Otherwise we must find it
-        inherited_filename = self.inherit_topology_filename()
-        if inherited_filename == MISSING_TOPOLOGY:
-            self._topology_filepath = MISSING_TOPOLOGY
-        else:
-            self._topology_filepath = self.pathify(inherited_filename)
-        return self._topology_filepath
-    topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
-
+    # DANI: No se ha provado en profundidad
     def get_topology_file(self) -> 'File':
         """Get the processed topology from the reference MD."""
-        getter = self.reference_md.input_files_processing.get_output_file_getter('output_topology_file')
+        # Given a scenario where different MDs may have different topologies, find the MD to be used as reference for the topology
+        # By default we set the reference MD
+        topology_reference_md = self.reference_md
+        # However if there is an input topology filepath for the project and it does not match with the reference MD then we must change
+        topology_filepath = self.get_topology_filepath()
+        if topology_filepath != self.reference_md.get_topology_filepath():
+            # Iterate MDs until we find one using the project topology
+            for md in self.mds:
+                if md.get_topology_filepath() == topology_filepath:
+                    topology_reference_md = md
+                    break
+            # If no MD was found then surrender here
+            if topology_reference_md == self.reference_md:
+                raise RuntimeError(f'There is no MD using the project topology "{topology_filepath}"')
+        # Now call the 'inpro' getter from the topology reference MD
+        getter = topology_reference_md.input_files_processing.get_output_file_getter('output_topology_file')
         return getter(self.reference_md)
     topology_file = property(get_topology_file, None, None, "Topology file (read only)")
 
@@ -2069,8 +2091,55 @@ class Project:
     # ---------------------------------------------------------------------------------
 
     def get_structure(self) -> 'Structure':
-        """Get the parsed structure from the reference MD."""
-        return self.reference_md.structure
+        """Get a reference structure.
+        Use the reference MD structure but make sure there are no inconsistency with other MDs."""
+        # Get the structure form the reference MD
+        reference_structure = self.reference_md.structure
+        # Get the rest of MDs
+        other_mds = [ md for md in self.mds if md is not self.reference_md ]
+        if len(other_mds) == 0: return reference_structure
+        # Set a generic error message to be displayed as a tail in different scenarios
+        error_message_tail = ' All replicas in the same project must have identical systems.\n' + \
+            ' If you have different systems please consider arranging a different project for each system.'
+        # Iterate other MDs and make sure their structures match in a set of fields we expect to be constant
+        # Note that other MDs may be based in different input structure and input topology files
+        for other_md in other_mds:
+            other_structure = other_md.structure
+            # If the structure is literally the same then skip the check
+            # This means this MD is using the same input files as the reference MD thus using as well the same structure
+            if other_structure is reference_structure: continue
+            # Set a generic error message to be displayed as a header in different scenarios
+            error_message_header = f'The structure in MD "{other_md.name}" does not match the structure in the reference MD "{self.reference_md.name}".\n'
+            # Make sure the number of atoms, residues and chains match
+            if reference_structure.atom_count != other_structure.atom_count:
+                raise InputError(error_message_header + f' The structure has {other_structure.atom_count} atoms while the reference structure has {reference_structure.atom_count} atoms".\n' + error_message_tail)
+            if reference_structure.residue_count != other_structure.residue_count:
+                raise InputError(error_message_header + f' The structure has {other_structure.residue_count} residues while the reference structure has {reference_structure.residue_count} residues".\n' + error_message_tail)
+            if reference_structure.chain_count != other_structure.chain_count:
+                raise InputError(error_message_header + f' The structure has {other_structure.chain_count} chains while the reference structure has {reference_structure.chain_count} chains".\n' + error_message_tail)
+            # Compare atoms one by one
+            for reference_atom, other_atom in zip(reference_structure.atoms, other_structure.atoms):
+                for field in [ 'name', 'element', 'residue_index' ]:
+                    if getattr(reference_atom, field) == getattr(other_atom, field): continue
+                    raise InputError(error_message_header + f' Atom {other_atom.label} does not match the reference atom {reference_atom.label} in the field "{field}".\n' + error_message_tail)
+            # Compare residues one by one
+            for reference_residue, other_residue in zip(reference_structure.residues, other_structure.residues):
+                for field in [ 'name', 'number', 'icode', 'chain_index' ]:
+                    if getattr(reference_residue, field) == getattr(other_residue, field): continue
+                    raise InputError(error_message_header + f' Residue {other_residue.label} does not match the reference residue {reference_residue.label} in the field "{field}".\n' + error_message_tail)
+            # Compare chains one by one
+            for reference_chain, other_chain in zip(reference_structure.chains, other_structure.chains):
+                for field in [ 'name' ]:
+                    if getattr(reference_chain, field) == getattr(other_chain, field): continue
+                    raise InputError(error_message_header + f' Chain {other_chain.name} does not match the reference chain {reference_chain.name} in the field "{field}".\n' + error_message_tail)
+            # Compare other structure properties
+            # Compare atom bonds
+            for atom_index, (reference_atom_bonds, other_atom_bonds) in enumerate(zip(reference_structure.bonds, other_structure.bonds)):
+                if set(reference_atom_bonds) == set(other_atom_bonds): continue
+                missmatch_atom = reference_structure.atoms[atom_index]
+                raise InputError(error_message_header + f' Atom bonds do not match: {missmatch_atom.label} -> {reference_atom_bonds} while in the reference structure is {other_atom_bonds}.\n' + error_message_tail)
+        # If we made it this far then there are not inconsistencies between structure
+        return reference_structure
     structure = property(get_structure, None, None, "Parsed structure from the reference MD (read only)")
 
     def get_pbc_residues(self) -> list[int]:
@@ -2093,40 +2162,20 @@ class Project:
         return self.reference_md.interactions
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
-    def get_check_stable_bonds(self) -> bool:
-        """Check if we must check stable bonds."""
-        # Set if stable bonds have to be checked
-        must_check = STABLE_BONDS_FLAG not in self.trust
-        # If this analysis has been already passed then we can trust structure bonds
-        if self.register.tests.get(STABLE_BONDS_FLAG, None) is True:
-            must_check = False
-        return must_check
-    must_check_stable_bonds = property(get_check_stable_bonds, None, None, "Check if we must check stable bonds (read only)")
-
-    # Reference bonds
-    get_reference_bonds = Task('refbonds', 'Reference bonds', find_safe_bonds)
-    reference_bonds = property(get_reference_bonds, None, None, "Atom bonds to be trusted (read only)")
-
-    # Atom charges
-    get_charges = Task('charges', 'Getting atom charges', get_charges)
+    # DANI: Arreglo cutre para que las cosas funcionen
+    def get_charges (self):
+        return self.reference_md.charges
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
-    def get_topology_reader(self) -> 'Topology':
-        """Get the topology data reader."""
-        # If we already have a stored value then return it
-        if self._topology_reader: return self._topology_reader
-        # Instantiate the topology reader
-        self._topology_reader = Topology(self.topology_file)
-        return self._topology_reader
-    topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
+    def get_md_charges (self):
+        return [ md.charges for md in self.mds ]
+    md_charges = property(get_md_charges, None, None, "Atom charges from each MD (read only)")
 
-    def get_dihedrals(self) -> list[dict]:
-        """Get the topology dihedrals."""
-        # If we already have a stored value then return it
-        if self._dihedrals: return self._dihedrals
-        # Calculate the dihedrals otherwise
-        self._dihedrals = self.topology_reader.get_dihedrals_data()
-        return self._dihedrals
+    # Topology reader (early stage)
+    get_topology_reader = MD.get_topology_reader
+    topology_reader = property(get_topology_reader, None, None, "Topology reader (read only)")
+    # Dihedrals
+    get_dihedrals = MD.get_dihedrals
     dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
 
     def get_populations(self) -> Optional[list[float]]:
