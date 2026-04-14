@@ -35,7 +35,7 @@ def get_atoms_count (structure : 'Structure') -> tuple:
     total_ions = len(structure.select_ions())
     non_counter_ions = total_ions - counter_ions
     # Other atoms which do not fail in any of the previous sections
-    other_atoms = system_atoms - protein_atoms - dna_atoms - rna_atoms - lipid_atoms - carbohydrates_atoms - total_ions
+    other_atoms = system_atoms - protein_atoms - dna_atoms - rna_atoms - lipid_atoms - carbohydrates_atoms - solvent_atoms - total_ions
 
     # Display a summary of atom and residue counts
     print('Atom and residue counts:')
