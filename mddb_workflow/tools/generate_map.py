@@ -620,15 +620,16 @@ def normalize_protein_sequence (sequence : str) -> str:
     # e.g. 6ME2, entity 1 -> ... DRYLYI(YCM)HSLKYD ...
     # e.g. nucleic acids -> (DC)(DA)(DA)(DC)(DC)(DG)(DC)(DA)(DA)(DC)
     # We simply replace these special residues by X in the sequence
-    sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
+    normalized_sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
     # Also, single letters aimed for nucleic acids with no amino acid equivalent must be removed
     # Otheriwse they will make the aligner fail -> e.g. 'U'
     # Also you may encounter non-standard letters in UniProt, although this is not usual
     # e.g. P02678 -> letter 'B'
-    sequence_letters = set(sequence)
+    sequence_letters = set(normalized_sequence)
     for letter in sequence_letters:
         if letter not in PROTEIN_RESIDUE_LETTERS:
-            sequence = sequence.replace(letter, 'X')
+            normalized_sequence = normalized_sequence.replace(letter, 'X')
+    return normalized_sequence
 
 def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
     """Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database."""
