@@ -611,6 +611,24 @@ def blast(sequence: str) -> Optional[str]:
     print('Result: ' + accession)
     return accession
 
+def normalize_protein_sequence (sequence : str) -> str:
+    """Given a protein sequence, make sure al letters ar standard aminacids. Replace anything else with X."""
+    # WARNING: some PDB polymers/chains may have a "special" sequence
+    # It may combine one-letter code with 2/3-letter code in parenthesis
+    # These are special aminoacids or other type of residues such as nucleotides
+    # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
+    # e.g. 6ME2, entity 1 -> ... DRYLYI(YCM)HSLKYD ...
+    # e.g. nucleic acids -> (DC)(DA)(DA)(DC)(DC)(DG)(DC)(DA)(DA)(DC)
+    # We simply replace these special residues by X in the sequence
+    sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
+    # Also, single letters aimed for nucleic acids with no amino acid equivalent must be removed
+    # Otheriwse they will make the aligner fail -> e.g. 'U'
+    # Also you may encounter non-standard letters in UniProt, although this is not usual
+    # e.g. P02678 -> letter 'B'
+    sequence_letters = set(sequence)
+    for letter in sequence_letters:
+        if letter not in PROTEIN_RESIDUE_LETTERS:
+            sequence = sequence.replace(letter, 'X')
 
 def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
     """Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database."""
@@ -663,6 +681,8 @@ def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
     organism = parsed_response['organism']['names'][0]['value']
     # Get the aminoacids sequence
     sequence = parsed_response['sequence']['sequence']
+    if sequence:
+        sequence = normalize_protein_sequence(sequence)
     # Get interesting regions to be highlighted in the client
     domains = []
     # WARNING: Some uniprot entries are missing features (e.g. O27908)
@@ -786,20 +806,7 @@ def pdb_to_uniprot(pdb_id: str) -> list[str | NoReferableException]:
         entity = polymer.get('entity_poly', None)
         sequence = entity.get('pdbx_seq_one_letter_code', None) if entity else None
         if sequence:
-            # WARNING: some polymers/chains may have a "special" sequence
-            # It may combine one-letter code with 2/3-letter code in parenthesis
-            # These are special aminoacids or other type of residues such as nucleotides
-            # e.g. 5JMO, entity 3 -> (DKA)RVK(AR7)(0QE)
-            # e.g. 6ME2, entity 1 -> ... DRYLYI(YCM)HSLKYD ...
-            # e.g. nucleic acids -> (DC)(DA)(DA)(DC)(DC)(DG)(DC)(DA)(DA)(DC)
-            # We simply replace these special residues by X in the sequence
-            sequence = re.sub(r'\([0-9A-Z]{2,3}\)', 'X', sequence)
-            # Also, single letters aimed for nucleic acids with no amino acid equivalent must be removed
-            # Otheriwse they will make the aligner fail -> e.g. 'U'
-            sequence_letters = set(sequence)
-            for letter in sequence_letters:
-                if letter not in PROTEIN_RESIDUE_LETTERS:
-                    sequence = sequence.replace(letter, 'X')
+           sequence = normalize_protein_sequence(sequence)
         # Get the uniprot ids associated to this polymer (or chain)
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
         uniprots = identifier.get('uniprot_ids', None)
