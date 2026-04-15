@@ -143,6 +143,8 @@ class Task:
         # If so then return the stored vale
         output = self._get_parent_output(parent)
         if output != MISSING_VALUE_EXCEPTION: return output
+        # Set the task full label for the outputs
+        task_full_label = f'{self.flag} ({self.name}) in {parent}'
         # Process the task function arguments
         processed_args = {}
         # Get the task function expected arguments
@@ -262,7 +264,7 @@ class Task:
                 print(f'existing output files: {not writes_output_files or all_existing_or_naturally_missing_output_files}')
             # If we already have the expected output then we can skip the task at all
             if satisfied_output:
-                print(f'{GREY_HEADER}-> Task {self.flag} ({self.name}) already completed{COLOR_END}')
+                print(f'{GREY_HEADER}-> Task {task_full_label} already completed{COLOR_END}')
                 return output
         # If we are at this point then we are missing some output so we must proceed to run the task
         # Use the final output directory instead of the incomplete one if exists
@@ -275,7 +277,7 @@ class Task:
             and not exists(final_output_directory)
         if missing_incomplete_output: mkdir(incomplete_output_directory)
         # Finally call the function
-        print(f'{GREEN_HEADER}-> Running task {self.flag} ({self.name}) in {parent}{COLOR_END}')
+        print(f'{GREEN_HEADER}-> Running task {task_full_label}{COLOR_END}')
         # If the task is to be run again because an inputs changed then let the user know
         if any_input_changed and had_cache and not forced_overwrite:
             changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
