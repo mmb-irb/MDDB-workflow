@@ -25,7 +25,8 @@ def xvg_parse (filename : str, columns : list) -> dict:
             # Splits are saved in as many columns as specified
             splits = line.split()
             for s, split in enumerate(splits):
-                data[s].append(float(split))
+                parsed_split = float(split) if '.' in split else int(split)
+                data[s].append(parsed_split)
     # Create the formatted dict to be returned
     results = {}
     for c, column in enumerate(columns):

@@ -10,7 +10,7 @@ import numpy
 
 # This is a residual file produced by the sasa analysis
 # It must be deleted after each
-AREA_FILENAME = 'area.xvg'
+RESIDUAL_AREA_FILENAME = 'area.xvg'
 
 def sasa(
     structure_file: 'File',
@@ -31,26 +31,18 @@ def sasa(
     # Set the output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_SASA_FILENAME}'
 
-    # For this analysis me must filter out hydrogens
-    heavy_atoms_selection = '( not name "H.*" )'
-
-    # Execute the atom selection over the structure
-    structure_selection = structure.select(heavy_atoms_selection, syntax='vmd')
-
-    # At this point the number of residues between the original and the non-hydrogens structure should match
-    # We rely on this, so we must check
-    filtered_structure = structure.filter(structure_selection)
-    filtered_residues_count = len(filtered_structure.residues)
-    original_residues_count = len(structure.residues)
-    if filtered_residues_count != original_residues_count:
-        raise ValueError('The number of residues does not match after filtering out hydrogens')
+    # Get the solvent selection so we can further exclude it
+    # Note that the solvent would ironically cover the SAS regions
+    solvent_selection = structure.select_water_and_counter_ions()
+    # Select heavy atoms only thus skipping hydrogens
+    sasa_selection = structure.select_heavy_atoms() - solvent_selection
 
     # Convert the structure selection to a ndx file
-    selection_name = 'sasa'
-    ndx_selection = structure_selection.to_ndx(selection_name)
-    ndx_filename = 'indices.ndx'
+    sasa_selection_name = 'sasa'
+    sasa_ndx_selection = sasa_selection.to_ndx(sasa_selection_name)
+    ndx_filename = f'{output_directory}/indices.ndx'
     with open(ndx_filename, 'w') as file:
-        file.write(ndx_selection)
+        file.write(sasa_ndx_selection)
 
     # We must exclude PBC residues (e.g. membranes) from sasa results
     # PBC residues close to the boundary will always have unrealistic sasa values
@@ -67,26 +59,32 @@ def sasa(
         # WARNING: We want the SASA per residue, and this could be obtained replacing '-oa' per -'or'
         # WARNING: However, residues are not enumerated the same in Gromacs and other tools (e.g. pytraj)
         # For this reason we must always rely on atom numeration, which is the same along different tools
-        current_frame_sasa = f'sasa{f}.xvg'
-        run_gromacs(f'sasa -s {current_frame} -oa {current_frame_sasa} \
-            -n {ndx_filename} -surface 0', expected_output_filepath = current_frame_sasa)
+        # Note that the '-surface' argument sets what atoms are present during the calculation
+        # Thus we must use this arguments to remove solvent, but not PBC regions
+        # Set the main output filepath
+        current_frame_sasa = f'{output_directory}/sasa{f}.xvg'
+        # Set a residual output filepath
+        residual_area_filepath = f'{output_directory}{RESIDUAL_AREA_FILENAME}'
+        # If not defined, then by default it creates a 'area.xvg' file where we are running the workflow
+        run_gromacs(f'sasa -s {current_frame} -oa {current_frame_sasa} -o {residual_area_filepath}\
+            -n {ndx_filename} -surface {sasa_selection_name}', expected_output_filepath = current_frame_sasa)
 
         # Mine the sasa results (.xvg file)
-        # Hydrogen areas are not recorded in the xvg file
+        # Areas from excluded atoms are not recorded in the xvg file
         sasa = xvg_parse(current_frame_sasa, ['n', 'area', 'sd'])
         # Restructure data by adding all atoms sas per residue
         atom_numbers = sasa['n']
         atom_areas = sasa['area']
         sas_per_residues = [0.0] * len(structure.residues)
         for atom_number, atom_area in zip(atom_numbers, atom_areas):
-            atom_index = int(atom_number) - 1
+            atom_index = atom_number - 1
             atom = structure.atoms[atom_index]
             residue_index = atom.residue_index
             sas_per_residues[residue_index] += atom_area
         sasa_per_frame.append(sas_per_residues)
         # Delete current frame files before going for the next frame
         os.remove(current_frame_sasa)
-        os.remove(AREA_FILENAME)
+        os.remove(residual_area_filepath)
 
     # Remove the indices file since it is not required anymore
     os.remove(ndx_filename)
@@ -128,6 +126,7 @@ def sasa(
         'saspf': saspf,
         'means': means,
         'stdvs': stdvs,
+        'version': '0.0.1',
     }
 
     # Export the analysis in json format
