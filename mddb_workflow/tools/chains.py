@@ -6,7 +6,7 @@ from urllib.request import urlopen
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 
-from mddb_workflow.utils.auxiliar import warn, load_json, save_json, protein_residue_name_to_letter, retry_request
+from mddb_workflow.utils.auxiliar import warn, load_json, save_json, retry_request
 from mddb_workflow.utils.auxiliar import RemoteServiceError
 from mddb_workflow.utils.type_hints import *
 

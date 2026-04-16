@@ -1,63 +1,64 @@
-from typing import List, Optional
+from typing import Optional
 
 from mddb_workflow.utils.auxiliar import ranger
 
-# A selection is a list of atom indices from a structure
-class Selection:
 
-    def __init__ (self, atom_indices : Optional[ list[int] ] = None):
+class Selection:
+    """List of atom indices from a structure."""
+
+    def __init__(self, atom_indices: Optional[list[int]] = None):
         self.atom_indices = sorted(atom_indices) if atom_indices != None else []
 
-    def __repr__ (self):
+    def __repr__(self):
         return f'<Selection ({len(self.atom_indices)} atoms)>'
 
-    def __hash__ (self):
+    def __hash__(self):
         return hash(tuple(self.atom_indices))
 
-    def __len__ (self):
+    def __len__(self):
         return len(self.atom_indices)
 
-    # Return true if there is at least one atom index on the selection and false otherwise
-    def __bool__ (self):
+    def __bool__(self):
+        """Return true if there is at least one atom index on the selection and false otherwise."""
         return len(self.atom_indices) > 0
 
-    # Two selections are equal if they have the same atom indices
-    def __eq__ (self, other):
+    def __eq__(self, other):
+        """Two selections are equal if they have the same atom indices."""
         if not isinstance(other, self.__class__):
             return False
         return set(self.atom_indices) == set(other.atom_indices)
 
-    # Return a new selection with atom indices from both self and the other selection
-    def __add__ (self, other):
+    def __add__(self, other):
+        """Return a new selection with atom indices from both self and the other selection."""
         return self.merge(other)
 
-    # Return a new selection with self atom indices except for those atom indices in other
-    def __sub__ (self, other):
+    def __sub__(self, other):
+        """Return a new selection with self atom indices except for those atom indices in other."""
         return self.substract(other)
 
-    # Return a new selection with the intersection of both selections
-    def __and__ (self, other):
+    def __and__(self, other):
+        """Return a new selection with the intersection of both selections."""
         return self.intersection(other)
 
-    # Return a new selection with atom indices from both self and the other selection (same as add)
-    def __or__ (self, other):
+    def __or__(self, other):
+        """Return a new selection with atom indices from both self and the other selection (same as add)."""
         return self.merge(other)
 
-    # Return a new selection made of self and other selection atom indices
-    def merge (self, other : Optional['Selection']) -> 'Selection':
+    def merge(self, other: Optional['Selection']) -> 'Selection':
+        """Return a new selection made of self and other selection atom indices."""
         if not other:
             return self
-        unique_atom_indices = list(set( self.atom_indices + other.atom_indices ))
+        unique_atom_indices = list(set(self.atom_indices + other.atom_indices))
         return Selection(unique_atom_indices)
 
-    # Return a new selection made of self and not other selection atom indices
-    def substract (self, other : Optional['Selection']) -> 'Selection':
+    def substract(self, other: Optional['Selection']) -> 'Selection':
+        """Return a new selection with self atom indices except for those atom indices in other."""
         if not other: return self
         remaining_atom_indices = list(set(self.atom_indices) - set(other.atom_indices))
         return Selection(remaining_atom_indices)
 
-    # Return a new selection with the intersection of both selections
-    def intersection (self, other : Optional['Selection']) -> 'Selection':
+    def intersection(self, other: Optional['Selection']) -> 'Selection':
+        """Return a new selection with the intersection of both selections."""
         if not other:
             return Selection()
         self_atom_indices = set(self.atom_indices)
@@ -65,45 +66,49 @@ class Selection:
         intersection_atom_indices = list(self_atom_indices.intersection(other_atom_indices))
         return Selection(intersection_atom_indices)
 
-    def to_mdanalysis (self) -> str:
+    def to_mdanalysis(self) -> str:
+        """Produce an MDAnalysis selection."""
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get MDAnalysis selection from an empty selection')
-        return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
+        return 'index ' + ' '.join([str(index) for index in self.atom_indices])
 
-    def to_pytraj (self) -> str:
+    def to_pytraj(self) -> str:
+        """Produce a PyTraj selection."""
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get PyTraj selection from an empty selection')
         # NEVER FORGET: Pytraj counts atoms starting at 1, not at 0
-        indices = [ index + 1 for index in self.atom_indices ]
+        indices = [index + 1 for index in self.atom_indices]
         # Make ranges for atoms in a row
         return '@' + ranger(indices)
 
-    def to_ngl (self) -> str:
-        return '@' + ','.join([ str(index) for index in self.atom_indices ])
+    def to_ngl(self) -> str:
+        """Produce an NGL selection."""
+        return '@' + ','.join([str(index) for index in self.atom_indices])
 
-    def to_list (self) -> list[int]:
+    def to_list(self) -> list[int]:
         """Return a copy of the atom indices as a list."""
         return self.atom_indices.copy()
 
-    # Get a string made of all indexes separated by underscores
-    # This string can be then passed as a bash argument and easily parsed by other programms
-    # Indices can start from 0 or from 1
-    def to_bash (self, one_start : bool = False) -> str:
+    def to_bash(self, one_start: bool = False) -> str:
+        """Get a string made of all indexes separated by underscores.
+        This string can be then passed as a bash argument and easily parsed by other programms.
+        Indices can start from 0 or from 1.
+        """
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get Bash selection from an empty selection')
         if one_start:
-            return '_'.join([ str(index + 1) for index in self.atom_indices ])
+            return '_'.join([str(index + 1) for index in self.atom_indices])
         else:
-            return '_'.join([ str(index) for index in self.atom_indices ])
+            return '_'.join([str(index) for index in self.atom_indices])
 
-    # Produce a vmd selection in tcl format
-    def to_vmd (self) -> str:
+    def to_vmd(self) -> str:
+        """Produce a vmd selection in tcl format."""
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get VMD selection from an empty selection')
-        return 'index ' + ' '.join([ str(index) for index in self.atom_indices ])
+        return 'index ' + ' '.join([str(index) for index in self.atom_indices])
 
-    # Produce the content of gromacs ndx file
-    def to_ndx (self, selection_name : str = 'Selection') -> str:
+    def to_ndx(self, selection_name: str = 'Selection') -> str:
+        """Produce the content of gromacs ndx file."""
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get NDX selection from an empty selection')
         # Add a header
@@ -128,8 +133,8 @@ class Selection:
         content += '\n'
         return content
 
-    # Create a gromacs ndx file
-    def to_ndx_file (self, selection_name : str = 'Selection', output_filepath : str = 'index.ndx'):
+    def to_ndx_file(self, selection_name: str = 'Selection', output_filepath: str = 'index.ndx'):
+        """Create a gromacs ndx file."""
         index_content = self.to_ndx(selection_name)
         with open(output_filepath, 'w') as file:
             file.write(index_content)
