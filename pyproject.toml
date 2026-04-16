@@ -35,14 +35,16 @@ include-package-data = true
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
 testpaths = ["test"]
-addopts = "-rsx -v --durations=10"
+addopts = "-rfsx -v --durations=10"
 
 [tool.ruff.lint]
 # E,W: pycodestyle, F: pyflakes, D: pydocstyle
 select = ["D", "E", "F", "W"] 
-ignore = ["E501", "F403", "F405", "E226", "E701", "E702", "E711","E721", "D204", "D205", "D100"]
+ignore = ["E501", "F403", "F405", "E226", "E701", "E702", "E711", "E721",
+    "D105", "D107", "D204", "D205", "D100"]
 fixable = ["D202", "D209", "D210", "D212", "D413", "E251", "E261",
  "E201", "E202", "E203", "E211", "E225", "E231", "E302", "E305", "W"]
 preview = true

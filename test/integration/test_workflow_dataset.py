@@ -1,8 +1,7 @@
-import shutil
+import pytest
 import pathlib
 from contextlib import contextmanager
 from unittest.mock import patch
-import pytest
 
 import mddb_workflow.utils.auxiliar as aux
 from mddb_workflow.mwf import workflow
@@ -12,45 +11,21 @@ import mddb_workflow.mwf as mwf
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
-dummy_dir = data_dir / 'input/dummy'
-test_dir = data_dir / 'output/test_workflow_handler'
-project_dir = test_dir / 'project'
-
-
-def setup_test_project(num_replicas=2):
-    """Set up a test project with specified number of replicas."""
-    # Remove old test folder and create a new one
-    shutil.rmtree(test_dir, ignore_errors=True)
-    test_dir.mkdir(parents=True, exist_ok=True)
-    project_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy necessary files
-    shutil.copy(dummy_dir / "inputs.yaml", project_dir)
-    shutil.copy(dummy_dir / "gromacs/ala_ala.tpr", project_dir)
-
-    # Create replica directories
-    md_config = []
-    for i in range(1, num_replicas + 1):
-        replica_dir = project_dir / f"replica_{i}"
-        replica_dir.mkdir(exist_ok=True)
-        shutil.copy(dummy_dir / "gromacs/raw_trajectory.xtc", replica_dir)
-        md_config.append([f'replica_{i}', 'raw_trajectory.xtc'])
-
-    return md_config
+test_fld = data_dir / 'output/test_workflow_handler'
 
 
 @contextmanager
-def run_workflow_with_mock_task(mock_task, dataset_path=None):
+def run_workflow_with_mock_task(mock_task, setup_dummy_project, dataset_path=None):
     """Context manager to run workflow with a mock task."""
     with patch.dict(mwf.requestables, {'mock_task': mock_task}):
         with patch.dict(mwf.md_requestables, {'mock_task': mock_task}):
-            md_config = setup_test_project(num_replicas=2)
+            md_config = setup_dummy_project(test_fld, n_replicas=2, copy_inputs=True)
             print(md_config)
             workflow(
                 project_parameters={
                     'input_topology_filepath': 'ala_ala.tpr',
-                    'md_config': md_config,
-                    'directory': str(project_dir),
+                    'input_md_config': md_config,
+                    'directory': str(test_fld),
                 },
                 include=['mock_task'],
                 dataset_path=dataset_path,
@@ -62,16 +37,16 @@ def run_workflow_with_mock_task(mock_task, dataset_path=None):
 class TestDatasetIntegration:
     """Test the Dataset integration with the workflow."""
 
-    def test_entries_are_added_to_dataset(self):
+    def test_entries_are_added_to_dataset(self, setup_dummy_project):
         """Test that project and MD entries are added to the dataset."""
         # Create a temporary database
-        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
+        db_path = pathlib.Path(test_fld) / 'test_dataset.db'
 
         try:
             def mock_task(md):
                 pass  # Do nothing
 
-            with run_workflow_with_mock_task(mock_task, dataset_path=db_path):
+            with run_workflow_with_mock_task(mock_task, setup_dummy_project, dataset_path=db_path):
                 pass
 
             # Check that entries were added
@@ -83,7 +58,7 @@ class TestDatasetIntegration:
             assert len(ds.mds_table) == 2
 
             # Check project entry
-            project_status = ds.get_status(project_dir)
+            project_status = ds.get_status(test_fld)
 
             assert project_status is not None
             assert project_status['state'] == State.DONE.value
@@ -91,13 +66,13 @@ class TestDatasetIntegration:
             assert project_status['num_mds'] == 2
 
             # Check MD entries
-            md1_status = ds.get_status(project_dir/'replica_1')
+            md1_status = ds.get_status(test_fld/'replica_1')
             assert md1_status is not None
             assert 'replica_1' in md1_status['rel_path']
             assert md1_status['state'] == State.DONE.value
             assert md1_status['message'] == 'Done!'
 
-            md2_status = ds.get_status(project_dir/'replica_2')
+            md2_status = ds.get_status(test_fld/'replica_2')
             assert md2_status is not None
             assert 'replica_2' in md2_status['rel_path']
             assert md2_status['state'] == State.DONE.value
@@ -107,9 +82,9 @@ class TestDatasetIntegration:
             # Clean up
             db_path.unlink(missing_ok=True)
 
-    def test_running_state_during_execution(self):
+    def test_running_state_during_execution(self, setup_dummy_project):
         """Test that state is set to RUNNING during task execution."""
-        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
+        db_path = pathlib.Path(test_fld) / 'test_dataset.db'
 
         try:
             # Track states seen during execution
@@ -130,13 +105,13 @@ class TestDatasetIntegration:
 
                 # Also check project state on first MD
                 if md.directory.endswith('replica_1'):
-                    project_status = ds.get_status(project_dir)
+                    project_status = ds.get_status(test_fld)
                     if project_status:
                         # If we are running the MD tasks, the project tasks have finished
                         states_seen['project'].append(project_status['state'])
                         assert project_status['state'] == State.RUNNING.value
 
-            with run_workflow_with_mock_task(mock_task, dataset_path=db_path):
+            with run_workflow_with_mock_task(mock_task, setup_dummy_project, dataset_path=db_path):
                 pass
 
             # Verify that we actually checked the RUNNING states
@@ -147,21 +122,21 @@ class TestDatasetIntegration:
             # After workflow completes, check final states are DONE
             ds = Dataset(db_path)
 
-            project_status = ds.get_status(project_dir)
+            project_status = ds.get_status(test_fld)
             assert project_status['state'] == State.DONE.value
 
-            md1_status = ds.get_status(project_dir/'replica_1')
+            md1_status = ds.get_status(test_fld/'replica_1')
             assert md1_status['state'] == State.DONE.value
 
-            md2_status = ds.get_status(project_dir/'replica_2')
+            md2_status = ds.get_status(test_fld/'replica_2')
             assert md2_status['state'] == State.DONE.value
 
         finally:
             db_path.unlink(missing_ok=True)
 
-    def test_state_transitions_on_error(self):
+    def test_state_transitions_on_error(self, setup_dummy_project):
         """Test that states transition to ERROR when workflow fails."""
-        db_path = pathlib.Path(test_dir) / 'test_dataset.db'
+        db_path = pathlib.Path(test_fld) / 'test_dataset.db'
 
         try:
             call_count = [0]
@@ -171,25 +146,25 @@ class TestDatasetIntegration:
                     raise aux.TestFailure("Simulated error in replica 1")
 
             with pytest.raises(aux.TestFailure):
-                with run_workflow_with_mock_task(mock_task, dataset_path=db_path):
+                with run_workflow_with_mock_task(mock_task, setup_dummy_project, dataset_path=db_path):
                     pass
 
             # Check final states
             ds = Dataset(db_path)
             # Check project entry
-            project_status = ds.get_status(project_dir)
+            project_status = ds.get_status(test_fld)
 
             assert project_status is not None
             assert project_status['state'] == State.ERROR.value
 
             # First MD should be ERROR
-            md1_status = ds.get_status(project_dir/'replica_1')
+            md1_status = ds.get_status(test_fld/'replica_1')
             assert md1_status['state'] == State.ERROR.value
             assert 'TestFailure' in md1_status['message']
             assert 'Simulated error in replica 1' in md1_status['message']
 
             # Second MD should be DONE (keep_going=False)
-            md2_status = ds.get_status(project_dir/'replica_2')
+            md2_status = ds.get_status(test_fld/'replica_2')
             assert md2_status is None
 
         finally:

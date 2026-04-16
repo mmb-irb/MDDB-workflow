@@ -1,11 +1,12 @@
 import os, shutil, pytest
+from pathlib import Path
 from mddb_workflow.mwf import Project
 from mddb_workflow.utils.constants import *
 
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--all-marks",
+        "--all",
         action="store_true",
         default=False,
         help="Run all marked tests (CI, unit_int, release)"
@@ -19,7 +20,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--all-marks"):
+    if config.getoption("--all"):
         # When --all-marks is used, select tests with any of these marks
         mark_names = {"CI", "unit_int", "release"}
         selected = []
@@ -67,3 +68,27 @@ def project(test_proj_dir: str, test_accession: str):
     n_frames = 8 if test_accession == "seq001-1" else 5
     project = Project(directory=test_proj_dir, accession=test_accession, sample_trajectory=n_frames)
     return project
+
+
+@pytest.fixture
+def setup_dummy_project(test_data_dir):
+    """Factory fixture to create a two-replica project layout for tests."""
+    def _setup(test_fld: Path, traj="raw_trajectory", n_replicas=2, copy_inputs=True):
+        dummy_dir = Path(test_data_dir) / 'input/dummy'
+        # Remove old test folder and create a new one
+        shutil.rmtree(test_fld, ignore_errors=True)
+        test_fld.mkdir(parents=True, exist_ok=True)
+        # Copy required input files
+        if copy_inputs:
+            shutil.copy(dummy_dir / "inputs.yaml", test_fld)
+        shutil.copy(dummy_dir / "gromacs/ala_ala.tpr", test_fld)
+
+        # Create two replica directories
+        md_config = []
+        for i in range(1, n_replicas + 1):
+            (test_fld / f"replica_{i}").mkdir(exist_ok=True)
+            shutil.copy(dummy_dir / f"gromacs/{traj}.xtc", test_fld / f"replica_{i}")
+            md_config.append([f"replica_{i}", "raw_trajectory.xtc"])
+        return md_config
+
+    return _setup
