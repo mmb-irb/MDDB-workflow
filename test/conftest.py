@@ -21,7 +21,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--all"):
-        # When --all-marks is used, select tests with any of these marks
+        # When --all is used, select tests with any of these marks
         mark_names = {"CI", "unit_int", "release"}
         selected = []
         for item in items:
