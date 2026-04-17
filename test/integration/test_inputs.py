@@ -10,7 +10,7 @@ from mddb_workflow.console import main
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
 test_fld = data_dir / 'output/test_inputs'
 
-
+@pytest.mark.CI
 class TestInputs:
     """Test the inputs subcommand and its integration with the workflow."""
 
