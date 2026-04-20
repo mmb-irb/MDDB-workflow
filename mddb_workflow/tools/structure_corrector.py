@@ -154,14 +154,14 @@ def structure_corrector(
             register.add_warning(STABLE_BONDS_FLAG, ('Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.\n'
                 'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
             return
-        # Set also the safe bonds frame structure to mine its coordinates
-        safe_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, bonds_reference_frame)
-        safe_bonds_frame_structure = Structure.from_pdb_file(safe_bonds_frame_filename)
-        # Set all coordinates in the main structure by copying the safe bonds frame coordinates
-        for atom_1, atom_2 in zip(structure.atoms, safe_bonds_frame_structure.atoms):
+        # Set also the stable bonds frame structure to mine its coordinates
+        stable_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, bonds_reference_frame)
+        stable_bonds_frame_structure = Structure.from_pdb_file(stable_bonds_frame_filename)
+        # Set all coordinates in the main structure by copying the stable bonds frame coordinates
+        for atom_1, atom_2 in zip(structure.atoms, stable_bonds_frame_structure.atoms):
             atom_1.coords = atom_2.coords
-        # Remove the safe bonds frame since it is not required anymore
-        remove(safe_bonds_frame_filename)
+        # Remove the stable bonds frame since it is not required anymore
+        remove(stable_bonds_frame_filename)
         # Set the modified variable as true since we have changes the structure
         # Update the structure file using the corrected structure
         print(' The structure file has been modified (stable bonds) -> ' + output_structure_file.filename)

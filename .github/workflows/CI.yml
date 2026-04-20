@@ -77,5 +77,5 @@ jobs:
       - name: Run all tests
         if: github.event_name == 'schedule'
         shell: bash -l {0}
-        run: pytest --all-marks
+        run: pytest --all
         timeout-minutes: 60

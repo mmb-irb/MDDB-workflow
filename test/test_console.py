@@ -77,7 +77,10 @@ class TestConsoleIntegration:
 
 @pytest.mark.CI
 class TestSubcommands:
-    """Test the subcommands of the console interface."""
+    """Test the subcommands of the console interface.
+    
+    Note: mwf inputs is tested separately in integration/test_inputs.py.
+    """
 
     def test_run(self, test_data_dir: str):
         """Test that the workflow runs without errors, simulating console execution."""
@@ -99,17 +102,6 @@ class TestSubcommands:
                     '-filt', 'chain A']
         main()
         os.chdir(test_data_dir)
-
-    def test_inputs(self, test_data_dir: str):
-        """Test that the inputs subcommand creates an inputs.yaml file."""
-        # We change the directory because the inputs command expects to be run in the output directory
-        # TODO add a flag to specify the input directory
-        cwd = os.getcwd()
-        os.chdir(test_data_dir + '/output')
-        sys.argv = ['mddb_workflow', 'inputs', '-ed', 'none']
-        main()
-        os.chdir(cwd)
-        assert os.path.exists(f'{test_data_dir}/output/inputs.yaml')
 
     def clean_run_assert(self, test_data_dir: str, outputs: list = [], args: list = []):
         """Run a command and assert outputs are created."""

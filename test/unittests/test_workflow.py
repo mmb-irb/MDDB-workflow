@@ -1,4 +1,3 @@
-import shutil
 import pathlib
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -11,26 +10,7 @@ import mddb_workflow.mwf as mwf
 
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
-dummy_dir = data_dir / 'input/dummy'
 test_fld = data_dir / 'output/test_workflow'
-
-
-def setup_two_replica_project(traj1="raw_trajectory", traj2="raw_trajectory"):
-    """Set up a test project with two replicas."""
-    # Remove old test folder and create a new one
-    shutil.rmtree(test_fld, ignore_errors=True)
-    test_fld.mkdir(parents=True, exist_ok=True)
-
-    # Copy necessary files
-    shutil.copy(dummy_dir / "inputs.yaml", test_fld)
-    shutil.copy(dummy_dir / "gromacs/ala_ala.tpr", test_fld)
-
-    # Create two replica directories
-    (test_fld / "replica_1").mkdir(exist_ok=True)
-    (test_fld / "replica_2").mkdir(exist_ok=True)
-    shutil.copy(dummy_dir / f"gromacs/{traj1}.xtc", test_fld / "replica_1")
-    shutil.copy(dummy_dir / f"gromacs/{traj2}.xtc", test_fld / "replica_2")
-
 
 @contextmanager
 def run_workflow_with_mock_task(mock_task, keep_going=True):
@@ -41,7 +21,7 @@ def run_workflow_with_mock_task(mock_task, keep_going=True):
             workflow(
                 project_parameters={
                     'input_topology_filepath': 'ala_ala.tpr',
-                    'md_config': [['replica_1', 'raw_trajectory.xtc'],
+                    'input_md_config': [['replica_1', 'raw_trajectory.xtc'],
                                   ['replica_2', 'raw_trajectory.xtc']],
                     'directory': str(test_fld),
                 },
@@ -54,9 +34,9 @@ def run_workflow_with_mock_task(mock_task, keep_going=True):
 class TestReplicaErrorHandling:
     """Test the error handling in the workflow for MD replicas."""
 
-    def test_workflow_no_keep_going(self, capsys):
+    def test_workflow_no_keep_going(self, capsys, setup_dummy_project):
         """Test that non-TestFailure exceptions are re-raised and not caught."""
-        setup_two_replica_project()
+        setup_dummy_project(test_fld)
 
         call_count = [0]
         def mock_task(md):
@@ -72,9 +52,9 @@ class TestReplicaErrorHandling:
         print(f"Caught exception: {exc_info.value}")
         assert call_count[0] == 1, "Only first replica should have been attempted before exception"
 
-    def test_workflow_continues_after_replica_error(self, capsys):
+    def test_workflow_continues_after_replica_error(self, capsys, setup_dummy_project):
         """Test that workflow continues processing other MDs when one fails."""
-        setup_two_replica_project()
+        setup_dummy_project(test_fld)
 
         # Nonlocal to allow modification in nested function
         call_count = [0]
@@ -93,9 +73,9 @@ class TestReplicaErrorHandling:
         assert "Finished with errors in MD replicas" in captured.out
         assert call_count[0] == 2, "Both replicas should have been processed"
 
-    def test_workflow_collects_multiple_replica_errors(self, capsys):
+    def test_workflow_collects_multiple_replica_errors(self, capsys, setup_dummy_project):
         """Test that workflow collects errors from multiple failing replicas."""
-        setup_two_replica_project()
+        setup_dummy_project(test_fld)
 
         call_count = [0]
         def mock_task(md):
@@ -111,9 +91,9 @@ class TestReplicaErrorHandling:
         assert "Finished with errors in MD replicas" in captured.out
         assert call_count[0] == 2, "Both replicas should have been attempted"
 
-    def test_workflow_succeeds_without_errors(self, capsys):
+    def test_workflow_succeeds_without_errors(self, capsys, setup_dummy_project):
         """Test that workflow prints 'Done!' when no errors occur."""
-        setup_two_replica_project()
+        setup_dummy_project(test_fld)
 
         call_count = [0]
         def mock_task(md):
