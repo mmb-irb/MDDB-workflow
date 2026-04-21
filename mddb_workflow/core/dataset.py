@@ -382,16 +382,16 @@ class Dataset:
             return uuid, project_uuid
         return None, None
 
-    def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False, overwrite: bool = False):
+    def add_project(self, directory: str, make_uuid: bool = False, verbose: bool = False):
         """Add a single project entry to the database."""
         uuid, _ = self._read_uuid_from_cache(directory, make_uuid=make_uuid)
         rel_path = self._abs_to_rel(directory)
-        if overwrite or not self.get_uuid_status(uuid):
+        if not self.get_uuid_status(uuid):
             if verbose:
                 print(f"Adding project: {rel_path} (UUID: {uuid})")
-            self.update_status(uuid, state=State.NEW, message='No information recorded yet.', rel_path=rel_path, overwrite=overwrite)
+            self.update_status(uuid, state=State.NEW, message='No information recorded yet.', rel_path=rel_path)
 
-    def add_md(self, directory: str, make_uuid: bool = False, verbose: bool = False, overwrite: bool = False):
+    def add_md(self, directory: str, make_uuid: bool = False, verbose: bool = False):
         """Add a single MD entry to the database."""
         # Get the project UUID from the parent directory in case is not already cached
         project_uuid, _ = self._read_uuid_from_cache(Path(directory).parent.as_posix())
@@ -405,17 +405,16 @@ class Dataset:
         rel_path = self._abs_to_rel(directory)
         if not project_uuid:
             raise ValueError(f"Directory '{directory}' does not appear to be an MD")
-        if overwrite or not self.get_uuid_status(uuid, project_uuid):
+        if not self.get_uuid_status(uuid, project_uuid):
             if verbose:
                 print(f"Adding MD: {rel_path} (UUID: {uuid}, Project UUID: {project_uuid})")
-            self.update_status(uuid, state=State.NEW, message='No information recorded yet.', project_uuid=project_uuid, rel_path=rel_path, overwrite=overwrite)
+            self.update_status(uuid, state=State.NEW, message='No information recorded yet.', project_uuid=project_uuid, rel_path=rel_path)
 
     def add_entries(self,
         paths_or_globs: list[str] | str,
         ignore_dirs: list[str] | str = [],
         md_dirs: list[str] | str = [],
         verbose: bool = True,
-        overwrite: bool = False,
     ):
         """Add multiple project and MD entries to the database from given paths or glob patterns.
 
@@ -424,7 +423,6 @@ class Dataset:
             ignore_dirs (list[str]): List of directory paths or glob patterns to ignore.
             md_dirs (list[str]): List of directory paths or glob patterns to identify MDs within each project.
             verbose (bool): Whether to print verbose output.
-            overwrite (bool): Whether to replace existing entries with the same rel_path.
 
         """
         # Normalize str inputs to lists
@@ -443,12 +441,12 @@ class Dataset:
                 if verbose: print(f"Warning: Project directory {rel_path} does not exist. Skipping.")
                 continue
             # Add project row (num_mds will be set automatically by triggers when MDs are added)
-            self.add_project(project_dir, make_uuid=True, verbose=verbose, overwrite=overwrite)
+            self.add_project(project_dir, make_uuid=True, verbose=verbose)
             # Count MDs in this project
             project_md_dirs = [md for md in _resolve_directory_patterns(md_dirs, root_path=project_dir) if md.is_dir()]
             # Add MDs (replicas/subprojects) rows (triggers will auto-increment num_mds)
             for md_dir_path in project_md_dirs:
-                self.add_md(md_dir_path, make_uuid=True, verbose=verbose, overwrite=overwrite)
+                self.add_md(md_dir_path, make_uuid=True, verbose=verbose)
 
     def get_uuid_status(self, uuid: str, project_uuid: str = None):
         """Retrieve a project or MD's status from the database by UUID."""
@@ -501,8 +499,7 @@ class Dataset:
         state: State | str,
         message: str,
         project_uuid: str = None,
-        rel_path: str = None,
-        overwrite: bool = False,
+        rel_path: str = None
     ):
         """Update or insert (upsert) a project or MD's status in the database.
 
@@ -553,21 +550,17 @@ class Dataset:
                     ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
                     if 'UNIQUE constraint failed: mds.rel_path' in str(e):
+                        # In case of rel_path collision, remove the existing entry and insert the new one
+                        # This is the same as saying we maintain the rel_path and updating the uuid
                         cur.execute("SELECT uuid FROM mds WHERE rel_path=?", (rel_path,))
                         row = cur.fetchone()
                         if row:
                             existing_uuid = row[0]
-                            if overwrite:
-                                cur.execute("DELETE FROM mds WHERE uuid=?", (existing_uuid,))
-                                cur.execute('''
-                                    INSERT INTO mds (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
-                            else:
-                                raise ValueError(
-                                    f"rel_path '{rel_path}' already exists in database with UUID '{existing_uuid}'. "
-                                    "Use overwrite=True to replace it."
-                                ) from e
+                            cur.execute("DELETE FROM mds WHERE uuid=?", (existing_uuid,))
+                            cur.execute('''
+                                INSERT INTO mds (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                     else:
                         raise
             else:
@@ -593,24 +586,20 @@ class Dataset:
                             rel_path=excluded.rel_path
                     ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
+                    # Handling rel_path collision like for MDs
                     if 'UNIQUE constraint failed: projects.rel_path' in str(e):
                         # Get the UUID of the existing project with this rel_path
                         cur.execute("SELECT uuid FROM projects WHERE rel_path=?", (rel_path,))
                         row = cur.fetchone()
                         if row:
                             existing_uuid = row[0]
-                            if overwrite:
-                                # Replacing project automatically removes linked MD rows via ON DELETE CASCADE.
-                                cur.execute("DELETE FROM projects WHERE uuid=?", (existing_uuid,))
-                                cur.execute('''
-                                    INSERT INTO projects (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified, num_mds)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-                                ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
-                            else:
-                                raise ValueError(
-                                    f"rel_path '{rel_path}' already exists in database with UUID '{existing_uuid}'. "
-                                    "Use overwrite=True to replace it."
-                                ) from e
+                            # Replacing project automatically removes linked MD rows via ON DELETE CASCADE.
+                            cur.execute("DELETE FROM projects WHERE uuid=?", (existing_uuid,))
+                            cur.execute('''
+                                INSERT INTO projects (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified, num_mds)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                            ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
+
                     else:
                         raise
 
