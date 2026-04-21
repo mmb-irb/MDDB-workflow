@@ -223,8 +223,9 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
             atom = structure.atoms[atom_index]
             residue_index = atom.residue_index
             sas_per_residues[residue_index] += atom_area
-        # Round to thousands
-        sas_per_residues = [ round_to_thousandths(sas) for sas in sas_per_residues ]
+        # To make is standard with the rest of analyses we pass the results from nm² to A²
+        # We also round the final values to thousands
+        sas_per_residues = [ round_to_thousandths(sas * 100) for sas in sas_per_residues ]
         pdb_chains_sas[chain.name] = sas_per_residues
         # Remove files which are no longer required
         os.remove(ndx_filename)
