@@ -358,7 +358,6 @@ def main():
                 ignore_dirs=args.ignore_dirs,
                 md_dirs=args.md_dirs,
                 verbose=True,
-                overwrite=args.overwrite,
             )
         elif args.dataset_subcommand == 'remove':
             dataset.remove_entry(args.query_path)
@@ -388,8 +387,7 @@ def main():
                 print(errors)
                 return
             df = dataset.get_dataframe(
-                uuid_length=8,
-                root_path=dataset.root_path,
+                show_id=args.show_id,
                 sort_by=args.sort_by,
                 asc=True,
                 include_logs=args.include_logs,
@@ -793,7 +791,6 @@ dataset_add = dataset_subparsers.add_parser("add", formatter_class=CustomHelpFor
 dataset_add.add_argument("-p", "--paths_or_globs", nargs='*', help=ds_help['add_entries']['paths_or_globs'])
 dataset_add.add_argument("-i", "--ignore_dirs", nargs='*', help=ds_help['add_entries']['ignore_dirs'], default=[])
 dataset_add.add_argument("-md", "--md_dirs", nargs='*', help=ds_help['add_entries']['md_dirs'], default=[])
-dataset_add.add_argument("-o", "--overwrite", action='store_true', help=ds_help['add_entries']['overwrite'])
 # Dataset remove subcommand
 dataset_remove = dataset_subparsers.add_parser("remove", formatter_class=CustomHelpFormatter, help="Remove a project from the dataset storage file.", parents=[common_ds_parser])
 dataset_remove.add_argument("-p", "--query_path", help='Path to the project to be removed from the dataset.')
@@ -817,6 +814,7 @@ ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by
 ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for all rows.", default=50, type=int)
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 ds_show.add_argument('-m', '--summary', help="Get a summary of the state of the projects.", action='store_true')
+ds_show.add_argument('-id', '--show_id', help="Show UUIDs.", action='store_true')
 
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])

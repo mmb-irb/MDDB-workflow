@@ -867,8 +867,7 @@ class Dataset:
         return self.query_table('mds')
 
     def get_dataframe(self,
-            uuid_length=None,
-            root_path=None,
+            show_id=False,
             sort_by='last_modified',
             asc=False,
             include_logs: bool = False,
@@ -882,7 +881,7 @@ class Dataset:
         Adds a 'scope' column to indicate if the row is from a project or an MD.
 
         Args:
-            uuid_length (int, optional): If provided, truncates 'uuid' and 'project_uuid' columns to this length for display.
+            show_id (bool, optional): If provided, shows 'uuid' and 'project_uuid' columns.
             root_path (str, optional): If provided, show the absolute paths relative to this root path.
             sort_by (str, optional): Column name to sort the final DataFrame by. Defaults to 'rel_path'.
             asc (bool, optional): Whether to sort in ascending order. Defaults to True.
@@ -942,15 +941,9 @@ class Dataset:
         #         lambda x: os.path.relpath(Path(x).resolve(), root_path)
         #     )
 
-        # Optionally truncate uuid and project_uuid columns for display
-        if uuid_length is not None and uuid_length > 0:
-            # Truncate index (uuid)
-            df_joined.index = df_joined.index.map(lambda x: x[:uuid_length] if isinstance(x, str) else x)
-            # Truncate project_uuid column if present
-            if 'project_uuid' in df_joined.columns:
-                df_joined['project_uuid'] = df_joined['project_uuid'].apply(
-                    lambda x: x[:uuid_length] if isinstance(x, str) and x else x
-                )
+        if not show_id:
+            df_joined.reset_index(inplace=True)
+            df_joined = df_joined.drop(columns=['uuid', 'project_uuid'], errors='ignore')
 
         # Optionally add log file columns with HTML links
         if include_logs:
@@ -982,9 +975,13 @@ class Dataset:
 
         # Change the order of the columns to have 'scope' first
         cols = df_joined.columns.tolist()
-        if not query_scope and 'project_uuid' in cols:
-            cols.insert(0, cols.pop(cols.index('project_uuid')))
-            cols.insert(1, cols.pop(cols.index('scope')))
+        if not query_scope:
+            cols.insert(0, cols.pop(cols.index('scope')))
+            if 'project_uuid' in cols:
+                cols.insert(0, cols.pop(cols.index('project_uuid')))
+        else:
+            cols.remove('scope')
+
         df_joined = df_joined[cols]
         return df_joined
 
