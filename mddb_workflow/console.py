@@ -5,6 +5,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAc
 from textwrap import wrap, dedent
 import re
 import glob
+import pandas as pd
 from mddb_workflow.mwf import workflow, Project, requestables, TaskResolver
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
@@ -380,6 +381,7 @@ def main():
                 print('==================================================================')
                 print(summary)
                 errors = dataset.error_summary().head(10 if args.n_rows == 50 else args.n_rows)
+                pd.set_option('display.max_rows', len(errors) + 1)
                 if len(errors) == 0: return
                 print('\n==================================================================')
                 print("Summary of error messages for projects:")
