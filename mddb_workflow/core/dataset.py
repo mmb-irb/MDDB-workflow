@@ -13,7 +13,6 @@ import sqlite3
 import sys
 import threading
 import shutil
-import difflib
 from pathlib import Path
 from enum import Enum
 from contextlib import contextmanager
@@ -1008,60 +1007,11 @@ class Dataset:
         summary = summary.sort_values('state_order').drop(columns=['state_order']).reset_index(drop=True)
         return summary
 
-    @staticmethod
-    def _merge_similar_messages(messages: list[str], placeholder: str = 'XXX') -> str:
-        """Merge similar messages, replacing differing segments with a placeholder."""
-        if not messages:
-            return ''
-        if len(messages) == 1:
-            return messages[0]
-
-        def merge_two(msg_a: str, msg_b: str) -> str:
-            """Merge two strings keeping equal blocks and masking diffs."""
-            matcher = difflib.SequenceMatcher(a=msg_a, b=msg_b)
-            merged: list[str] = []
-            last_is_placeholder = False
-
-            for tag, a0, a1, _b0, _b1 in matcher.get_opcodes():
-                if tag == 'equal':
-                    block = msg_a[a0:a1]
-                    if block:
-                        merged.append(block)
-                        last_is_placeholder = False
-                else:
-                    if not last_is_placeholder:
-                        merged.append(placeholder)
-                        last_is_placeholder = True
-
-            return ''.join(merged)
-
-        template = messages[0]
-        for message in messages[1:]:
-            template = merge_two(template, message)
-        return template
-
-    def error_summary(self, similar_n: int = 0) -> pd.DataFrame:
-        """Return a summary of project error messages.
-
-        Args:
-            similar_n: If provided and > 0, aggregate errors by the first ``similar_n``
-                characters of each message, while preserving a full-message template
-                where differing segments are replaced by ``XXX``.
-
-        """
+    def error_summary(self) -> pd.DataFrame:
+        """Return a summary of error messages for projects."""
         df = self.dataframe
-        df = df.loc[(df['state'] == 'error') & (df['scope'] == 'projects')]
-        df = df.copy()
-        df['message'] = df['message'].fillna('')
-
-        if similar_n > 0:
-            df['group_key'] = df['message'].str[:similar_n]
-            grouped = (df.groupby('group_key', as_index=False)
-                       .agg(count=('message', 'size'),
-                            message=('message', lambda msgs: self._merge_similar_messages(msgs.tolist()))))
-            return grouped[['message', 'count']].sort_values('count', ascending=False).reset_index(drop=True)
-
-        return (df.groupby('message').size()
+        return (df.loc[(df['state'] == 'error') & (df['scope'] == 'projects')]
+                .groupby('message').size()
                 .reset_index(name='count')
                 .sort_values('count', ascending=False)
                 .reset_index(drop=True)
