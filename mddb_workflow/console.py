@@ -411,7 +411,6 @@ def main():
         elif args.dataset_subcommand == 'watch':
             from mddb_workflow.utils.rich import watch_dataframe
             watch_dataframe(lambda: dataset.get_dataframe(
-                    uuid_length=8,
                     root_path=dataset.root_path,
                     sort_by='last_modified',
                     asc=False,
