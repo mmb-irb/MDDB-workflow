@@ -39,6 +39,7 @@ def request_interproscan(sequence: str) -> str:
     return parsed_response
 
 
+@retry_request
 def check_interproscan_status(jobid: str) -> str:
     """Check the status of the InterProScan job."""
     # Set the request URL
@@ -57,6 +58,7 @@ def check_interproscan_status(jobid: str) -> str:
     return parsed_response
 
 
+@retry_request
 def check_interproscan_result(jobid: str) -> dict:
     """Obtain the result of the InterProScan job in json format."""
     # Set the request URL

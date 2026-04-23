@@ -772,7 +772,8 @@ def retry_request(func):
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout,
                     requests.exceptions.RequestException,
-                    http.client.RemoteDisconnected) as e:
+                    http.client.RemoteDisconnected,
+                    TimeoutError) as e:
                 last_exception = e
                 if attempt < MAX_RETRIES - 1:
                     print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
