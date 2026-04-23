@@ -31,6 +31,7 @@ def _stream_output(stream, log_file_handle, output_stream):
 class State(Enum):
     """Enumeration of possible workflow states."""
     NEW = 'new'
+    WAITING = 'waiting'
     RUNNING = 'running'
     ERROR = 'error'
     DONE = 'done'
@@ -1146,6 +1147,7 @@ class Dataset:
                     # print("sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
                 else:
                     print(f"Submitting SLURM job for {project_dir}")
+                    self.update_status(project_dict['uuid'], state=State.WAITING, message='Job submitted to SLURM')
                     subprocess.run(['sbatch',
                                     '--output=logs/mwf_%j.out',
                                     '--error=logs/mwf_%j.err',
