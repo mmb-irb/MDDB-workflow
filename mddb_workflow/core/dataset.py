@@ -194,6 +194,9 @@ class Dataset:
         with self.locked_storage_file:
             cur = self.conn.cursor()
             # Create projects table
+            # - uuid allows to track projects even if they are moved
+            # - rel_path is unique so in case of collision we update the uuid
+            #   This can happen when ressetting the cache
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     uuid TEXT PRIMARY KEY NOT NULL,
@@ -988,7 +991,7 @@ class Dataset:
     @property
     def dataframe(self) -> 'pd.DataFrame':
         """Retrieve the joined DataFrame view of projects and MDs with log file links."""
-        return self.get_dataframe(uuid_length=8)
+        return self.get_dataframe()
 
     def summary(self) -> pd.DataFrame:
         """Return a summary DataFrame with the count of projects in each state."""
@@ -1032,7 +1035,6 @@ class Dataset:
         from IPython.display import HTML, display
         # Ensure include_logs is True for display
         kwargs.setdefault('include_logs', True)
-        kwargs.setdefault('uuid_length', 8)
         df = self.get_dataframe(**kwargs)
         html = df.to_html(escape=False)
         display(HTML(html))
