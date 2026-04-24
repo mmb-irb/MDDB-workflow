@@ -1475,7 +1475,12 @@ class Project:
         # Set the MD configuration
 
         # Get MD configuration from the inputs file, if any
-        self.md_config = self.get_input('mds') or []
+        self.md_config = self.get_input('mds')
+        if self.md_config is None:
+            # MDs must be a list, or it will cause further problems
+            # To avoid this fix the problem both internally and in the inputs file
+            self.md_config = []
+            self.update_inputs(f'mds', self.md_config)
 
         # Add or overwrite possible MD inputs from the inputs file with the console arguments
 
