@@ -72,7 +72,7 @@ genbadge coverage --name "Coverage" --input-file coverage/coverage.xml  --output
 
 When ready to make a new release, follow these steps:
 
-0. Update the version number in `pyproject.toml`.
+0. Update the version number in `pyproject.toml` and include a description of the changes in the [change log](./docs/source/change_log.rst) file.
 
 1. Merge the master branch into the release branch. Add `[skip tests]` to the commit message to skip the CI tests:
 

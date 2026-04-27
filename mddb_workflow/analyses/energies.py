@@ -520,7 +520,7 @@ def energies (
     non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
 
     # Load backup data in case there is a backup file
-    if energies_backup.exists:
+    if energies_backup.exists and energies_backup.size > 0:
         print(' Recovering energies backup')
         interactions_data = load_json(energies_backup.path)
     else:

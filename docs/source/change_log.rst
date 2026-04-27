@@ -7,6 +7,31 @@ All notable changes to this project will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.9] - 2026-04-27
+=====================
+
+Added
+-----
+- Add dataset summary, status, scan, inputs, and remove workflow commands
+- Add project and MD log links in dataset views
+- Add waiting state handling for SLURM jobs
+- Add membrane analysis support for united-atom and coarse-grained systems
+
+Changed
+-------
+- Refactor dataset storage around SQLite-backed projects and MD entries
+- Update dataset behavior to overwrite entries with the same ``rel_path`` by default and hide UUIDs in ``show``
+- Improve topology, ligand, and reference handling, including missing bonds, dummy atoms, and lipid/PubChem lookups
+- Improve workflow task naming, task tracking, and error handling across the console
+- Switch PDB trajectory handling to PyTraj to reduce memory usage
+
+Fixed
+-----
+- Fix dataset summaries, empty MD inputs, and inconsistent input handling
+- Fix SAS and solvent handling in structure and screenshot generation
+- Fix ligand and reference edge cases, including null Mordred values and missing PubChem mappings
+- Fix runtime robustness issues around retries, timeouts, multiprocessing, and database locking
+
 [0.1.8] - 2025-12-03
 =====================
 

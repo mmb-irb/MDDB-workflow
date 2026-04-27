@@ -176,3 +176,19 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a $TAG_NAME -m "Release $TAG_NAME"
           git push origin $TAG_NAME
+
+      - name: Create GitHub release
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          TAG_NAME="v${{ steps.get_version.outputs.version }}"
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          awk -v tag="${TAG_NAME#v}" '
+            BEGIN { capture = 0; skip_heading = 0 }
+            $0 ~ "^\\[" tag "\\] - " { capture = 1; skip_heading = 1; next }
+            capture && skip_heading { skip_heading = 0; next }
+            capture && $0 ~ "^\\[[0-9]+\\.[0-9]+\\.[0-9]+\\]" { exit }
+            capture { print }
+          ' docs/source/change_log.rst > "$NOTES_FILE"
+          gh release create "$TAG_NAME" --title "$TAG_NAME" --notes-file "$NOTES_FILE"

@@ -815,7 +815,7 @@ class MD:
         # 3. Ignored ions which may cause clashes
         self._structure.bonds = self.reference_bonds
         return self._structure
-    structure = property(get_structure, None, None, "Parsed structure (read only)")
+    structure: Structure = property(get_structure, None, None, "Parsed structure (read only)")
 
     # First frame PDB file
     get_first_frame = Task('firstframe', 'Get first frame structure',
