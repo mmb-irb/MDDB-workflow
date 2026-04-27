@@ -18,6 +18,7 @@ class TestInputs:
         """Test that the inputs subcommand creates an inputs.yaml file."""
         # We change the directory because the inputs command expects to be run in the output directory
         cwd = os.getcwd()
+        os.makedirs(test_fld, exist_ok=True)
         os.chdir(test_fld)
         sys.argv = ['mddb_workflow', 'inputs', '-ed', 'none']
         main()
