@@ -25,7 +25,13 @@ docs = [
 mwf = "mddb_workflow.console:main"
 
 [tool.setuptools]
-packages = ["mddb_workflow", "mddb_workflow.analyses", "mddb_workflow.tools", "mddb_workflow.utils"]
+packages = [
+    "mddb_workflow", 
+    "mddb_workflow.analyses", 
+    "mddb_workflow.core",
+    "mddb_workflow.tools", 
+    "mddb_workflow.utils"
+]
 include-package-data = true
 
 [tool.setuptools.package-data]

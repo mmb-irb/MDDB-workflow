@@ -6,7 +6,7 @@ lg = RDLogger.logger()
 lg.setLevel(RDLogger.ERROR)
 
 name = "mddb_workflow"
-__all__ = ["resources", "tools", "utils"]
+__all__ = ["analysis", "core", "resources", "tools", "utils"]
 
 try:
     from importlib.metadata import version
