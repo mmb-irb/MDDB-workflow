@@ -201,6 +201,8 @@ def find_all_corrupted_frames (input_topology_filepath : str, input_trajectory_f
     # Iterate frames until we find one frame whose last atom coordinates are all zeros
     frame_iterator = iter(trajectory.iterframe())
     expected_frames = trajectory.n_frames
+    if expected_frames == 0:
+        raise InputError('Something is wrong when the trajectory, no frames were found')
     for f, frame in enumerate(frame_iterator, 1):
         print(f' Reading frame {f}/{expected_frames}', end='\r')
         atom_coordinates = frame.xyz
