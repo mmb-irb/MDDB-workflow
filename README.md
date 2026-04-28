@@ -7,9 +7,7 @@
 [![Read the Docs (version)](https://img.shields.io/readthedocs/mddb-workflow/latest)](https://mddb-workflow.readthedocs.io/en/latest/)
 [![Coverage)](https://raw.githubusercontent.com/mmb-irb/MDDB-workflow/refs/heads/gh-pages/coverage/coveragebadge.svg)](https://mmb-irb.github.io/MDDB-workflow/coverage/)
 
-The aim for this tools is to process raw MD data and obtain standard structure and trajectory files.
-These files next to some additional author inputs are analyzed.
-Both standard files and analysis results are to be uploaded to the database using the [loader](https://github.com/mmb-irb/MDDB-loader). After that, results can be visualized on the [MDposit](https://mdposit.mddbr.eu/) client.
+The **MDDB Workflow** is a tool that standardizes, validates, and analyzes molecular dynamics projects by converting raw simulation outputs into normalized structure and trajectory files and running automated QA and analysis pipelines. Results and metadata are packaged for ingestion into the MDDB via the [loader](https://github.com/mmb-irb/MDDB-loader), making them immediately viewable in the [MDposit client](https://mdposit.mddbr.eu/). The workflow is designed to run reproducibly on a laptop, in containers, or on HPC systems, supporting multiple input formats, automated checks, and flexible deployment.
 
 ## Installation
 
