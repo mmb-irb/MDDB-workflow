@@ -436,7 +436,9 @@ def generate_protein_mapping(
             return protein_parsed_chains
     # At this point we should have macthed all sequences
     # If not, kill the process unless mercy was given
-    unmatched_chains = [chain_data['name'] for chain_data in protein_parsed_chains if not chain_data['match']['ref']]
+    unmatched_chains = [chain_data['name'] 
+                        for chain_data in protein_parsed_chains 
+                        if chain_data['match']['ref'] == NOT_FOUND_FLAG]
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
         raise InputError(f'BLAST failed to find a matching reference sequence for chains: {", ".join(unmatched_chains)}.\n'
