@@ -101,10 +101,10 @@ def get_pdb_reference (pdb_id : str) -> dict:
         sequence = chain_seq[chain]
         # Get the uniprot reference, including the reference sequence
         uniprot_reference = get_uniprot_reference(uniprot_id)
-        reference_sequence = uniprot_reference['sequence']
+        reference_sequence = uniprot_reference['sequence'] if uniprot_reference else None
         # Align the PDB sequence against the uniprot reference sequence to know the reference residue numeration
         residue_numeration = None
-        align_match = align(reference_sequence, sequence) if sequence else None
+        align_match = align(reference_sequence, sequence) if sequence and reference_sequence else None
         if not align_match:
             warn(f'PDB {pdb_id} has a polymer tagged with the UniProt {uniprot_id} but its reference sequence does not match.')
             chain_residues_uniprot_numeration[chain] = 'Missmatched'
