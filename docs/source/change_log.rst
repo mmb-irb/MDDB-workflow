@@ -7,6 +7,14 @@ All notable changes to this project will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.1.10] - 2026-04-28
+=====================
+
+Fixed
+-----
+- Fix module import issues in CLI and dataset commands
+
+
 [0.1.9] - 2026-04-27
 =====================
 
