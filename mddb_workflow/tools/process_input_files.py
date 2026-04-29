@@ -168,7 +168,8 @@ def process_input_files(
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
     # Since this is proviosonal we will make it silent
-    provisional_cg_selection = self.project._set_cg_selection(provisional_structure, verbose=False)
+    self.project._set_cg_selection(provisional_structure, verbose=False)
+    provisional_cg_selection = self.project.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
 
@@ -236,32 +237,12 @@ def process_input_files(
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
     # Since this is proviosonal we will make it silent
-    provisional_cg_selection = self.project._set_cg_selection(provisional_structure, verbose=False)
+    self.project._set_cg_selection(provisional_structure, verbose=False)
+    provisional_cg_selection = self.project.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
-    dummy_selection = self.project._set_dummy_selection(provisional_structure)
-    self.project._dummy_selection = dummy_selection
-
-    # Before we run the imaging process we must add CG atoms and dummy atoms to the Gromacs masses file
-    # Otherwise some steps of the imaging will complain that masses are missing
-    fake_masses = set()
-    # Set mass of CG atoms as 1.
-    # DANI: we better don't rely on masses in any Gromacs command later, or this will be silent
-    for atom_index in provisional_cg_selection.atom_indices:
-        atom = provisional_structure.atoms[atom_index]
-        fake_masses.add((atom.residue.name, atom.name, 1))
-    # Set mass of dummy atoms as 0.
-    for atom_index in dummy_selection.atom_indices:
-        atom = provisional_structure.atoms[atom_index]
-        fake_masses.add((atom.residue.name, atom.name, 0))
-    # Finally modify the gromacs atommass file
-    if len(fake_masses) > 0:
-        if provisional_cg_selection:
-            print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
-        if dummy_selection:
-            print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
-        extend_gromacs_masses(fake_masses)
+    self.project._set_dummy_selection(provisional_structure)
 
     # Also we can set a provisional PBC selection
     # This selection is useful both for imaging/fitting and for the correction
@@ -386,7 +367,7 @@ def process_input_files(
         MD=self,
         pbc_selection=provisional_pbc_selection,
         cg_selection=provisional_cg_selection,
-        dummy_selection=dummy_selection,
+        dummy_selection=self.project.dummy_selection,
         snapshots=snapshots,
         register=self.register,
         mercy=self.project.mercy,
@@ -455,9 +436,20 @@ def process_input_files(
     if input_topology_file == output_topology_file:
         task.cache_cksums['input_topology_file'] = get_cksum_id(output_topology_file)
 
-    # --- Definitive PBC selection ---
+    # --- Definitive selections ---
 
-    # Now that we have the corrected structure we can set the definitive PBC atoms
+    # Now that we have the corrected structure we can set the definitive atom selections
+
+    # Set the final structure
+    final_structure = Structure.from_pdb_file(output_structure_file.path)
+    self.project._set_cg_selection(final_structure, verbose=False)
+    final_cg_selection = self.project.cg_selection
+
+    if final_cg_selection != provisional_cg_selection:
+        raise InputError('Coarse grain selection is not consistent after correcting the structure. '
+            'Please consider using a different CG selection. '
+            'Avoid relying in atom distances or elements to avoid this problem.')
+
     # Make sure the selection is identical to the provisional selection
     if self.pbc_selection != provisional_pbc_selection:
         raise InputError('PBC selection is not consistent after correcting the structure. '

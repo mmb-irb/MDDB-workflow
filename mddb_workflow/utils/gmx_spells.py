@@ -25,8 +25,7 @@ def run_gromacs(
     - Missing output checks
     Then return both output and error logs. """
 
-    # Run a fix for gromacs if not done before
-    # Note that this is run always at the moment the code is read, no matter the command or calling origin
+    # Run a fix for gromacs masses if not done before
     fix_gromacs_masses()
 
     # In case we have user input we must open a process to then pipe it in the gromacs process

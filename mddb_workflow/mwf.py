@@ -53,6 +53,7 @@ from mddb_workflow.tools.get_project_screenshot import get_project_screenshot
 from mddb_workflow.tools.process_input_files import process_input_files
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
+from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 
 # Import local analyses
 from mddb_workflow.analyses.rmsds import rmsds
@@ -1359,7 +1360,8 @@ class Project:
         # Do not parse them to files yet, let this to the MD class
         self.arg_input_structure_filepath = input_structure_filepath
         self.arg_input_trajectory_filepaths = input_trajectory_filepaths
-
+        # GROMACS masses file
+        self._gromacs_masses_file = None
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
         self._populations_file = File(self.populations_filepath)
@@ -1939,46 +1941,58 @@ class Project:
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set the coarse grain selection."""
-        if verbose: print('Setting Coarse Grained (CG) atoms selection')
-        # If there is no inputs file then asum there is no CG selection
-        if not self.is_inputs_file_available():
-            if verbose: print(' No inputs file -> Asuming there is no CG at all')
-            return Selection()
-        # Otherwise we use the selection string from the inputs
-        if verbose: print(' Using selection string in the inputs file')
-        selection_string = self.input_cg_selection
-        # If the selection is empty, again, assume there is no CG selection
-        if not selection_string:
-            if verbose: print(' Empty selection -> There is no CG at all')
-            return Selection()
-        # Otherwise, process it
-        # If we have a valid input value then use it
-        elif selection_string:
-            if verbose: print(f' Selecting CG atoms "{selection_string}"')
-            parsed_selection = reference_structure.select(selection_string)
-        # If we have an input value but it is empty then we set an empty selection
-        else:
-            if verbose: print(' No CG atoms selected')
-            parsed_selection = Selection()
-        # Lof the parsed selection size
-        if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
-        # Log a few of the selected residue names
-        if verbose and parsed_selection:
-            selected_residues = reference_structure.get_selection_residues(parsed_selection)
-            selected_residue_names = list(set([residue.name for residue in selected_residues]))
-            limit = 3  # Show a maximum of 3 residue names
-            example_residue_names = ', '.join(selected_residue_names[0:limit])
-            if len(selected_residue_names) > limit: example_residue_names += ', etc.'
-            print('  e.g. ' + example_residue_names)
-        return parsed_selection
+        def parse_cg_selection () -> 'Selection':
+            if verbose: print('Setting Coarse Grained (CG) atoms selection')
+            # If there is no inputs file then asum there is no CG selection
+            if not self.is_inputs_file_available():
+                if verbose: print(' No inputs file -> Asuming there is no CG at all')
+                return Selection()
+            # Otherwise we use the selection string from the inputs
+            if verbose: print(' Using selection string in the inputs file')
+            selection_string = self.input_cg_selection
+            # If the selection is empty, again, assume there is no CG selection
+            if not selection_string:
+                if verbose: print(' Empty selection -> There is no CG at all')
+                return Selection()
+            # Otherwise, process it
+            # If we have a valid input value then use it
+            elif selection_string:
+                if verbose: print(f' Selecting CG atoms "{selection_string}"')
+                parsed_selection = reference_structure.select(selection_string)
+            # If we have an input value but it is empty then we set an empty selection
+            else:
+                if verbose: print(' No CG atoms selected')
+                parsed_selection = Selection()
+            # Lof the parsed selection size
+            if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
+            # Log a few of the selected residue names
+            if verbose and parsed_selection:
+                selected_residues = reference_structure.get_selection_residues(parsed_selection)
+                selected_residue_names = list(set([residue.name for residue in selected_residues]))
+                limit = 3  # Show a maximum of 3 residue names
+                example_residue_names = ', '.join(selected_residue_names[0:limit])
+                if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+                print('  e.g. ' + example_residue_names)
+            return parsed_selection
+        # Save the parsed coarse grain selection
+        self._cg_selection = parse_cg_selection()
+        # If there are no coarse grain atoms then stop here
+        if not self._cg_selection: return
+        # Update gromacs masses by setting fake masses for coarse grain beads: 1
+        print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
+        fake_masses = set()
+        for atom_index in self._cg_selection.atom_indices:
+            atom = reference_structure.atoms[atom_index]
+            fake_masses.add((atom.residue.name, atom.name, 1))
+        extend_gromacs_masses(fake_masses)
 
     def get_cg_selection(self) -> 'Selection':
         """Get the coarse grain atom selection."""
         # If we already have a stored value then return it
-        if self._cg_selection:
+        if self._cg_selection is not None:
             return self._cg_selection
         # Otherwise we must set the CG selection
-        self._cg_selection = self._set_cg_selection(self.structure)
+        self._set_cg_selection(self.structure)
         return self._cg_selection
     cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
@@ -1987,7 +2001,7 @@ class Project:
     def get_cg_residues(self) -> list[int]:
         """Get indices of residues in coarse grain."""
         # If we already have a stored value then return it
-        if self._cg_residues:
+        if self._cg_residues is not None:
             return self._cg_residues
         # If there is no inputs file then asume there are no cg residues
         if not self.cg_selection:
@@ -2000,41 +2014,53 @@ class Project:
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
 
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
-    # This function is called for the first time while in the 'inpro' task
+    # This function may be called for the first time while in the 'inpro' task
     # Thus this function is called when we still have no structure, but we us a provisional structure
     def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = True):
-        if verbose: print('Setting dummy atoms selection')
-        # If no input selection was passed assume there are no dummy atoms in the system
-        if not self.input_dummy_selection:
-            if verbose: print(' Empty selection -> There are no dummy atoms at all')
-            return Selection()
-        # If the input dummy selection is 'auto' then guess dummy atoms from their atom names
-        if self.input_dummy_selection == 'auto':
-            if verbose: print(' Guessing dummy atoms by their atom names')
-            # Get atom indices of all atoms with names matching a dummy atom name patter
-            atom_indices = []
-            for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
-                for atom_index, atom in enumerate(reference_structure.atoms):
-                    if re.match(dummy_name, atom.name):
-                        atom_indices.append(atom_index)
-            dummy_atoms_count = len(atom_indices)
-            if verbose:
-                print(f' {dummy_atoms_count} dummy atoms were found')
-                example = reference_structure.atoms[atom_indices[0]] if dummy_atoms_count > 0 else None
-                if example: print(f' e.g. {example.label}')
-            return Selection(atom_indices)
-        # If we have and actual VMD selection then parse it
-        parsed_selection = reference_structure.select(self.input_dummy_selection, syntax='vmd')
-        if verbose: print(f' Parsed dummy atoms selection has {len(parsed_selection)} atoms')
-        return parsed_selection
+        def parse_dummy_selection () -> 'Selection':
+            if verbose: print('Setting dummy atoms selection')
+            # If no input selection was passed assume there are no dummy atoms in the system
+            if not self.input_dummy_selection:
+                if verbose: print(' Empty selection -> There are no dummy atoms at all')
+                return Selection()
+            # If the input dummy selection is 'auto' then guess dummy atoms from their atom names
+            if self.input_dummy_selection == 'auto':
+                if verbose: print(' Guessing dummy atoms by their atom names')
+                # Get atom indices of all atoms with names matching a dummy atom name patter
+                atom_indices = []
+                for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
+                    for atom_index, atom in enumerate(reference_structure.atoms):
+                        if re.match(dummy_name, atom.name):
+                            atom_indices.append(atom_index)
+                dummy_atoms_count = len(atom_indices)
+                if verbose:
+                    print(f' {dummy_atoms_count} dummy atoms were found')
+                    example = reference_structure.atoms[atom_indices[0]] if dummy_atoms_count > 0 else None
+                    if example: print(f' e.g. {example.label}')
+                return Selection(atom_indices)
+            # If we have and actual VMD selection then parse it
+            parsed_selection = reference_structure.select(self.input_dummy_selection, syntax='vmd')
+            if verbose: print(f' Parsed dummy atoms selection has {len(parsed_selection)} atoms')
+            return parsed_selection
+        # Save the parsed dummy selection
+        self._dummy_selection = parse_dummy_selection()
+        # If there are no dummy atoms then stop here
+        if not self._dummy_selection: return
+        # Update gromacs masses by setting fake masses for dummy atoms: 0
+        print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
+        fake_masses = set()
+        for atom_index in self._dummy_selection.atom_indices:
+            atom = reference_structure.atoms[atom_index]
+            fake_masses.add((atom.residue.name, atom.name, 0))
+        extend_gromacs_masses(fake_masses)
 
     def get_dummy_selection(self) -> 'Selection':
         """Get the dummy atoms selection."""
         # If we already have a stored value then return it
-        if self._dummy_selection:
+        if self._dummy_selection is not None:
             return self._dummy_selection
         # Otherwise we must set the dummy selection
-        self._dummy_selection = self._set_dummy_selection(self.structure)
+        self._set_dummy_selection(self.structure)
         # Finally return the selection
         return self._dummy_selection
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
