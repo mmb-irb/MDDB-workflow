@@ -96,10 +96,10 @@ def filter_atoms (
     # Save created symlinks to remove them at then of the process
     symlink_files = []
     if input_structure_file and input_structure_file.extension != input_structure_file.format:
-        input_structure_file = input_structure_file.get_standard_file()
+        input_structure_file = input_structure_file.standarize()
         symlink_files.append(input_structure_file)
     if input_trajectory_file and input_trajectory_file.extension != input_trajectory_file.format:
-        input_trajectory_file = input_trajectory_file.get_standard_file()
+        input_trajectory_file = input_trajectory_file.standarize()
         symlink_files.append(input_trajectory_file)
 
     # Filter the structure if an output structure file was provided

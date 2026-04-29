@@ -25,6 +25,7 @@ from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.topologies import Topology
 from mddb_workflow.utils.file import File
+from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.database import Database
 from mddb_workflow.utils.pyt_spells import get_frames_count, get_average_structure
 from mddb_workflow.utils.selections import Selection
@@ -49,7 +50,7 @@ from mddb_workflow.tools.generate_topology import generate_topology
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.remove_trash import remove_trash
 from mddb_workflow.tools.get_project_screenshot import get_project_screenshot
-from mddb_workflow.tools.process_input_files import process_input_files, is_amber_top
+from mddb_workflow.tools.process_input_files import process_input_files
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
@@ -728,7 +729,7 @@ class MD:
         # Get the format
         standard_format = self.input_topology_file.format
         # If it is a .top topology then we have to check if it is a gromacs or an amber topology
-        if is_amber_top(self.input_topology_file):
+        if self.input_topology_file.extension == 'top' and is_amber_topology(self.input_topology_file):
             standard_format = 'prmtop'
         return 'topology.' + standard_format
 

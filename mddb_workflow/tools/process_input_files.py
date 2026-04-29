@@ -6,6 +6,7 @@ from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECT
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SNAPSHOTS_FLAG
 from mddb_workflow.utils.constants import FAITH_BYPASS
 from mddb_workflow.utils.file import File
+from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.pyt_spells import get_frames_count
 from mddb_workflow.utils.arg_cksum import get_cksum_id
@@ -18,29 +19,6 @@ from mddb_workflow.tools.image_and_fit import image_and_fit
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
-
-
-def is_amber_top(input_topology_file: 'File') -> bool:
-    """Check if a .top file is from Amber.
-    Returns True if it is Amber, False if it is Gromacs.
-    """
-    # If we are missing the topology then there is nothing to do here
-    if input_topology_file == MISSING_TOPOLOGY: return False
-    # If the file is not a .top topology then there is nothing to do here
-    if input_topology_file.extension != 'top': return False
-    # Read a few first lines of the topology file
-    with open(input_topology_file.path, 'r') as f:
-        lines = f.readlines(5)
-        # If all non-empty first words are '%' assume Amber (.prmtop)
-        first_words = {line.split()[0] for line in lines if line.strip()}
-        if '%VERSION' in first_words:
-            return True
-        # If any line starts with ';' or '[' assume Gromacs (.top)
-        first_chars = {word[0] for word in first_words}
-        if any(c in (';', '[') for c in first_chars):
-            return False
-        # Otherwise we cannot decide
-        raise InputError('Unable to infer topology format from first five lines')
 
 
 def process_input_files(
@@ -90,35 +68,47 @@ def process_input_files(
         return
     self.register.remove_warnings(FAITH_BYPASS)
 
-    # --- TOPOLOGY FORMAT ASSUMTION ---------------------------------------------------------
+    # --- TOPOLOGY FORMAT CHECK ---------------------------------------------------------
 
-    # Make a super fast check and an assumption
+    # There is a chance that the input topology changes at the very beginning
+    # To handle this we create a new variable so we don't have to mutate the input_topology_file variable
+    # WARNING: It is also crucial not to set an intermediate file as the input file since symlinks may remian at the end
+    # WARNING: Since the 'incomplete_inpro' directory changes the name to 'inpro' at the end this would break all paths
+    initial_topology_file = input_topology_file
+
     # Topologies with the .top extension for us are considered Gromacs topology format
     # However it is usual than Amber topologies (ideally .prmtop) are also '.top'
-    # So if the trajectory is Amber and the topology is .top then assume it is Amber
-    if is_amber_top(input_topology_file):
-        # Creating a topology symlink/copy with the correct extension
-        warn('Topology is .top but the trajectory is from Amber. It is assumed the topology is .prmtop')
-        reformatted_topology_file = input_topology_file.reformat('prmtop')
-        output_topology_file.path = output_topology_file.extensionless_filepath + '.prmtop'
+    # So if we have .top input topology read it to make sure which is its format
+    # If it is an amber topology then change its extension to .prmtop
+    # The extension is also important for some external tools (e.g. VMD)
+    if initial_topology_file != MISSING_TOPOLOGY and initial_topology_file.extension == 'top' and is_amber_topology(initial_topology_file):
+        warn('Input topology has extension .top, which is ambiguous since it may refer to GROMACS topologies as well. ' \
+            'Since it is an amber topology the outputs will have extension .prmtop to avoid ambiguity.')
+        # Change the final output topology format
+        output_topology_file = output_topology_file.get_reformated_file('prmtop')
+        # Create a input topology symlink/copy with the correct extension so we can feed it to other programs without problems
+        reformatted_topology_file = initial_topology_file.get_reformated_file('prmtop').get_relocated_file(output_directory)
+        reformatted_topology_file.set_symlink_to(initial_topology_file)
+        # Change the final output topology format
+        output_topology_file = output_topology_file.get_reformated_file('prmtop')
         # Replace input files
-        if input_structure_file == input_topology_file:
+        if input_structure_file == initial_topology_file:
             input_structure_file = reformatted_topology_file
-        input_topology_file = reformatted_topology_file
+        initial_topology_file = reformatted_topology_file
 
-    # --- FIRST CHECK -----------------------------------------------------------------------
+    # --- ATOM COUNTS MATCH CHECK -----------------------------------------------------------------------
 
     # Check input files match in number of atoms
     # Here we have not standarized the format so we must check differently with every format
-    exceptions = check_inputs(input_structure_file, input_trajectory_files, input_topology_file, self.cache)
+    exceptions = check_inputs(input_structure_file, input_trajectory_files, initial_topology_file, self.cache)
 
     # There is a chance that the inputs checker has fixed or prefiltered the topology to match trajectory
     # If this is the case then use the fixed/prefiltered topology from now on
     fixed_topology = exceptions.get(FIXED_TOPOLOGY_EXCEPTION, None)
     if fixed_topology:
-        if input_structure_file == input_topology_file:
+        if input_structure_file == initial_topology_file:
             input_structure_file = fixed_topology
-        input_topology_file = fixed_topology
+        initial_topology_file = fixed_topology
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
 
@@ -196,7 +186,7 @@ def process_input_files(
         filtered_structure_file = converted_structure_file
         filtered_trajectory_file = converted_trajectory_file
     # Note that this is the only step affecting topology and thus here we output the definitive topology
-    filtered_topology_file = output_topology_file if must_filter else input_topology_file
+    filtered_topology_file = output_topology_file if must_filter else initial_topology_file
 
     # Set an intermeidate file for the trajectory while it is being filtered
     # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while filtering
@@ -222,7 +212,7 @@ def process_input_files(
         filter_atoms(
             input_structure_file=converted_structure_file,
             input_trajectory_file=converted_trajectory_file,
-            input_topology_file=input_topology_file,  # We use input topology
+            input_topology_file=initial_topology_file,  # We use input topology
             output_structure_file=filtered_structure_file,
             output_trajectory_file=incompleted_filtered_trajectory_file,
             output_topology_file=filtered_topology_file,  # We genereate the definitive topology
@@ -430,17 +420,17 @@ def process_input_files(
         # This means it was already the input file and no changes were made
         if processed_file == output_file: continue
         # There is a chance that the input files have not been modified
-        # This means the input format has already the output format and it is not to be imaged, fitted or corrected
-        # However we need the output files to exist and we dont want to rename the original ones to conserve them
+        # This means the input format has already the output format and it is not to be filtered, imaged, fitted or corrected
+        # However we need the output files to exist and we dont want to rename the original ones since we want to conserve them
         # In order to not duplicate data, we will setup a symbolic link to the input files with the output filepaths
-        if processed_file == input_file:
+        if processed_file == input_file or processed_file.is_symlink_to(input_file):
             output_file.set_symlink_to(input_file, force=True)
         # Otherwise rename the last intermediate file as the output file
         else:
             # In case the processed file is a symlink we must make sure the symlink is not made to a intermediate step
             # Intermediate steps will be removed further and thus the symlink would break
-            # If the symlinks points to the input file there is no problem though
             if processed_file.is_symlink():
+                # Get the target file where the symlink points to
                 target_file = processed_file.get_symlink()
                 if target_file in intermediate_files:
                     target_file.rename_to(output_file)

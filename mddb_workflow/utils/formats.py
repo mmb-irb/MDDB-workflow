@@ -1,6 +1,8 @@
 import os
-from typing import Optional, Callable, Generator
 from inspect import getfullargspec
+
+from mddb_workflow.utils.auxiliar import InputError
+from mddb_workflow.utils.type_hints import *
 
 def get_format (filename : str) -> str:
     """ Get a filename format. """
@@ -392,3 +394,23 @@ def get_pytraj_parm_format (filename : str) -> str:
     if is_pdb(filename):
         return 'PDBFILE'
     raise ValueError('The file ' + filename + ' format is not supported')
+
+def is_amber_topology(topology_file: 'File') -> bool:
+    """Check if a topology file is from Amber.
+    This is used to identifiy files with the .top extension.
+    These files may be both gromacs and amber topologies.
+    Returns True if it is Amber or False if it is Gromacs.
+    """
+    # Read a few first lines of the topology file
+    with open(topology_file.path, 'r') as f:
+        lines = f.readlines(5)
+        # If all non-empty first words are '%' assume Amber (.prmtop)
+        first_words = {line.split()[0] for line in lines if line.strip()}
+        if '%VERSION' in first_words:
+            return True
+        # If any line starts with ';' or '[' assume Gromacs (.top)
+        first_chars = {word[0] for word in first_words}
+        if any(c in (';', '[') for c in first_chars):
+            return False
+        # Otherwise we cannot decide
+        raise InputError(f'Unable to infer topology format from first five lines of {topology_file.path}')

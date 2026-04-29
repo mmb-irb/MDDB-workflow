@@ -80,10 +80,10 @@ def convert (
     # Save created symlinks to remove them at then of the process
     symlink_files = []
     if input_structure_file and input_structure_file.extension != input_structure_file.format:
-        input_structure_file = input_structure_file.get_standard_file()
+        input_structure_file = input_structure_file.standarize()
         symlink_files.append(input_structure_file)
     if trajectory_sample and trajectory_sample.extension != trajectory_sample.format:
-        input_trajectory_files = [ trajectory_file.get_standard_file() for trajectory_file in input_trajectory_files ]
+        input_trajectory_files = [ trajectory_file.standarize() for trajectory_file in input_trajectory_files ]
         symlink_files += input_trajectory_files
         trajectory_sample = input_trajectory_files[0]
 

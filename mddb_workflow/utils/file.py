@@ -143,22 +143,47 @@ class File:
         """Remove the file."""
         remove(self.path)
 
-    def get_standard_file(self) -> 'File':
-        """Given a file who has non-standard extension of a supported format we set a symlink with the standard extension."""
-        # If current file already has the extension then there is nothing to return
-        if self.extension == self.format:
-            return self
-        return self.reformat(self.format)
+    def get_reformated_file(self, new_extension: str) -> 'File':
+        """Given a file and a new extension get a new file with that extension."""
+        # Set the filename with the standard extension and initiate the file
+        reformatted_filepath = f'{self.extensionless_filepath}.{new_extension}'
+        reformatted_file = File(reformatted_filepath)
+        return reformatted_file
 
     def reformat(self, new_extension: str) -> 'File':
         """Given a file and a new extension we set a symlink from a new file with that extension."""
-        # Set the filename with the standard extension and initiate the file
-        reformatted_filename = f'{self.extensionless_filepath}.{new_extension}'
-        reformatted_file = File(reformatted_filename)
+        # Get the reformatted file
+        reformatted_file = self.get_reformated_file(new_extension)
         # If standard file does not exist then set a symlink
         if not reformatted_file.exists:
             reformatted_file.set_symlink_to(self)
         return reformatted_file
+    
+    def get_standard_file(self) -> 'File':
+        """Given a file who has non-standard extension of a supported format, get a new file with the standard extension."""
+        # If current file already has the extension then there is nothing to return
+        if self.extension == self.format:
+            return self
+        return self.get_reformated_file(self.format)
+    
+    def standarize(self) -> 'File':
+        """Given a file who has non-standard extension of a supported format, set a symlink with the standard extension."""
+        # If current file already has the extension then there is nothing to return
+        if self.extension == self.format:
+            return self
+        return self.reformat(self.format)
+    
+    def get_relocated_file(self, new_basepath: str) -> 'File':
+        """Given a file and a new path, set the filename after the new path."""
+        relocated_filepath = f'{new_basepath}/{self.filename}'
+        relocated_file = File(relocated_filepath)
+        return relocated_file
+    
+    def get_renamed_file(self, new_name: str) -> 'File':
+        """Given a file and a new path, set the filename after the new path."""
+        relocated_filepath = f'{self.basepath}/{new_name}'
+        relocated_file = File(relocated_filepath)
+        return relocated_file
 
     def get_prefixed_file(self, prefix: str) -> 'File':
         """Get a prefixed file using this file name as the name base."""
@@ -195,8 +220,14 @@ class File:
         symlink(relative_path, self.path)
 
     def is_symlink(self) -> bool:
-        """Check if a file is already a symlink."""
+        """Check if a file is a symlink."""
         return islink(self.path)
+    
+    def is_symlink_to(self, other_file: 'File') -> bool:
+        """Check if a file is a symlink and points to another specific file."""
+        if not islink(self.path): return False
+        target_file = self.get_symlink()
+        return target_file == other_file
 
     def copy_to(self, other_file: 'File'):
         """Copy a file to another."""
