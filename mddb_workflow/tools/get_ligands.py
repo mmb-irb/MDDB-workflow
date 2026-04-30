@@ -267,18 +267,18 @@ def generate_ligand_references(
         molname = inchikeys[key].molname
         is_large_aa = any(structure.residues[resid].is_large_aa() for resid in resids)
         if is_large_aa:
-            large_aa.append((molname, resids))
+            large_aa.append((molname, resids, key))
         else:
-            not_matched_ligands.append((molname, resids))
+            not_matched_ligands.append((molname, resids, key))
         warn(f'Ligand {molname} could not be matched to any PubChem ID{" and has an aminoacid-like structure" if is_large_aa else ""}. Residues: {resids}')
     large_aa_fail = large_aa and LARGE_AMINOACID_FLAG not in mercy
     not_matched_fail = not_matched_ligands and LIGANDS_MATCH_FLAG not in mercy
     if large_aa_fail or not_matched_fail:
         fail_msg = 'Some ligands could not be matched to PubChem IDs.\n\tPlease, provide PubChem IDs for all ligands or a PDB code where they are present.'
         if large_aa_fail:
-            fail_msg += f'\n\tUse the flag "-m {LARGE_AMINOACID_FLAG}" to bypass the check on: ' + ', '.join([f'{name} (residues {resids})' for name, resids in large_aa])
+            fail_msg += f'\n\tUse the flag "-m {LARGE_AMINOACID_FLAG}" to bypass the check on: ' + ', '.join([f'{name} - {key} (residues {resids})' for name, resids, key in large_aa])
         if not_matched_fail:
-            fail_msg += f'\n\tUse the flag "-m {LIGANDS_MATCH_FLAG}" to bypass the check on: ' + ', '.join([f'{name} (residues {resids})' for name, resids in not_matched_ligands])
+            fail_msg += f'\n\tUse the flag "-m {LIGANDS_MATCH_FLAG}" to bypass the check on: ' + ', '.join([f'{name} - {key} (residues {resids})' for name, resids, key in not_matched_ligands])
         raise InputError(fail_msg)
 
     if not ligand_references:
