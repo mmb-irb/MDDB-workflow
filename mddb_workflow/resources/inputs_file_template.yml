@@ -139,6 +139,7 @@ accession:
 # These links are displayed in the overview page.
 # MolSSI uses this field to find simulations in our database and place the embed viewer in their website.
 # You must fit to the standard when adding a new MolSSI simulation.
+# If ping is set to true then the API will ping the correspoding URL every time the project is accessed.
 # NOTE: This field has no effect in our workflow BUT others may rely on it.
 #
 # Example:
@@ -147,6 +148,7 @@ accession:
 #     url: https://data.source.org/
 #   - name: Second data source
 #     url: https://mydata.com/
+#     ping: true
 
 links:
 
