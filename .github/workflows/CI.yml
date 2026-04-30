@@ -9,6 +9,7 @@ on:
     paths:
       - 'mddb_workflow/**'
       - 'envs/environment.yml'
+      - 'test/**'
   pull_request:
     branches: [ master ]
     paths:

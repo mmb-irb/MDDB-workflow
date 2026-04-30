@@ -7,6 +7,7 @@ from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 import pytest
 import pathlib
 import shutil
+
 # Set up paths
 data_dir = pathlib.Path(__file__).parent.parent / 'data'
 test_dir = data_dir / 'output/test_ligands'
