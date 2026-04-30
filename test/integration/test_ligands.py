@@ -16,13 +16,13 @@ test_dir = data_dir / 'output/test_ligands'
 @pytest.mark.CI
 def test_generate_ligand_references():
     """Test the generate_ligand_references function."""
-    if test_dir.exists: shutil.rmtree(test_dir)
+    if test_dir.parent.exists() and test_dir.exists():
+        shutil.rmtree(test_dir)
     test_dir.mkdir(parents=True, exist_ok=True)
     pdb_file = data_dir / 'input/structures/cin_A000V_structure.pdb'
 
     mwf_stc = Structure.from_file(str(pdb_file))
     cache_file = File((test_dir / 'cache_ligands.json').as_posix())
-    if cache_file.exists: cache_file.remove()
     cache = Cache(cache_file)
     # TODO: make test of forced selection of a ligands from the inputs.yaml
     input_ligands = [
