@@ -1,5 +1,6 @@
 import re
 import json
+import time
 
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
@@ -27,6 +28,34 @@ def _make_get_request(url: str) -> requests.Response:
 @retry_request
 def _make_post_request(url, payload):
     return requests.post(url, data=payload, timeout=30)
+
+
+def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context: str = None) -> Optional[dict]:
+    """Make a request to PubChem API, with retries and error handling.
+
+    Args:
+        url (str): The URL to make the request to.
+        error_context (str): Context for error messages. If not given, return None.
+        payload (Optional[dict]): The payload to send in a POST request. If None, a GET request will be made.
+
+    """
+    if payload is None:
+        r = _make_get_request(url)
+    else:
+        r = _make_post_request(url, payload)
+    # Add a small sleep if we are in the green zone to avoid hitting the rate limit
+    # https://pubchem.ncbi.nlm.nih.gov/docs/dynamic-request-throttling
+    throttling = r.headers['X-Throttling-Control'].split()[-2]
+    if throttling == 'Yellow':
+        time.sleep(0.2)
+    elif throttling == 'Red':
+        time.sleep(1)
+    if r.status_code == 200:
+        return r.json()
+    elif error_context:
+        raise ValueError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + ")")
+    else:
+        return None
 
 
 def record_pubchem_match(
@@ -600,23 +629,52 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
 def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
     """Given a DrugBank ID, request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{drugbank_id}/JSON'
-    r = _make_get_request(url)
-    if r.ok:
-        data = r.json()
-        return str(data['PC_Compounds'][0]['id']['id']['cid'])
-    else:
-        raise ValueError("Something went wrong with the DrugBank to PubChem request (error " + str(r.status_code) + ")")
+    data = make_pubchem_request(url, "DrugBank to PubChem")
+    return str(data['PC_Compounds'][0]['id']['id']['cid'])
 
 
 def chembl_2_pubchem(chembl_id) -> Optional[str]:
     """Given a ChemBL ID, use the uniprot API to request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/xref/RegistryID/{chembl_id}/cids/JSON'
-    r = _make_get_request(url)
-    if r.ok:
-        data = r.json()
-        return str(data['IdentifierList']['CID'][0])
-    else:
-        raise ValueError("Something went wrong with the ChEMBL to PubChem request (error " + str(r.status_code) + ")")
+    data = make_pubchem_request(url, "ChemBL to PubChem")
+    return str(data['IdentifierList']['CID'][0])
+
+
+@lru_cache(maxsize=None)
+def inchikey_2_pubchem(inchikey: str, conectivity_only=False) -> Optional[str]:
+    """Given an InChIKey, get the PubChem CID."""
+    inchikey = inchikey.split('-')[0] if conectivity_only else inchikey
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
+    data = make_pubchem_request(url)
+    if data:
+        if conectivity_only:
+            return [str(cid) for cid in data['IdentifierList']['CID']]
+        else:
+            return str(data['IdentifierList']['CID'][0])
+    return None
+
+
+@lru_cache(maxsize=None)
+def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
+    """Try PubChem standardization service to write things like the bonds from aromatic rings in the same order.
+    You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8.
+    """
+    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
+    data = make_pubchem_request(url, payload={'inchi': inchi})
+    if data:
+        results = []
+        for compound in data['PC_Compounds']:
+            if compound['id']['id']['cid']:
+                cid = str(compound['id']['id']['cid'])
+            else:
+                continue
+            standard_inchi = None
+            for prop in compound['props']:
+                if prop['urn']['label'] == 'InChI':
+                    standard_inchi = prop['value']['sval']
+            results.append({'pubchem': cid, 'inchi': standard_inchi})
+        return results
+    return None
 
 
 def obtain_mordred_morgan_descriptors(mol: Chem.Mol) -> dict:
@@ -707,48 +765,6 @@ def obtain_pubchem_data_from_input(ligand: dict) -> dict[str, Optional[str]]:
     # Add PubChem data to ligand data
     ligand_data = {**ligand_data, **pubchem_data}
     return ligand_data
-
-
-@lru_cache(maxsize=None)
-def inchikey_2_pubchem(inchikey: str, conectivity_only=False) -> Optional[str]:
-    """Given an InChIKey, get the PubChem CID."""
-    inchikey = inchikey.split('-')[0] if conectivity_only else inchikey
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
-
-    r = _make_get_request(url)
-    if r.ok:
-        data = r.json()
-        if conectivity_only:
-            return [str(cid) for cid in data['IdentifierList']['CID']]
-        else:
-            return str(data['IdentifierList']['CID'][0])
-    return None
-
-
-@lru_cache(maxsize=None)
-def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
-    """Try PubChem standardization service to write things like the bonds from aromatic rings in the same order.
-
-    You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8
-    """
-    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-
-    r = _make_post_request(url, payload={'inchi': inchi})
-    if r.ok:
-        data = r.json()
-        results = []
-        for compound in data['PC_Compounds']:
-            if compound['id']['id']['cid']:
-                cid = str(compound['id']['id']['cid'])
-            else:
-                continue
-            standard_inchi = None
-            for prop in compound['props']:
-                if prop['urn']['label'] == 'InChI':
-                    standard_inchi = prop['value']['sval']
-            results.append({'pubchem': cid, 'inchi': standard_inchi})
-        return results
-    return None
 
 
 def print_molecule_terminal(mol: Chem.Mol):
