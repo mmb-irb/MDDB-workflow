@@ -34,7 +34,7 @@ dependencies:
   # mordred compatible with new numpy versions
   - mordredcommunity 
   # Membrane proteins analysis
-  - bioconda::biobb_mem=5.1.2
+  - bioconda::biobb_mem >=5.2.0
   - requests # To check is molecules is in LIPID MAPS
   # AGUS: por problemas en el cluster con certificados y requests, la versión de 'openssl' 
   # AGUS: tiene que ser forzada porque la 3.5 (la más nueva) da conflictos
