@@ -46,6 +46,7 @@ def energies (
     structure : 'Structure',
     interactions : list,
     charges : list,
+    cg_selection : 'Selection',
     snapshots : int,
     frames_limit : int = 100,
     verbose : bool = False,
@@ -55,6 +56,24 @@ def energies (
     # Make sure we have interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
+        return
+    
+    # Skip interactions with coarse grain regions
+    cg_atom_indices = set(cg_selection.atom_indices)
+    aa_interactions = []
+    for interaction in interactions:
+        has_cg = False
+        for agent in ['1', '2']:
+            atom_indices = interaction[f'atom_indices_{agent}']
+            if set(atom_indices).intersection(cg_atom_indices):
+                has_cg = True
+                break
+        if has_cg: continue
+        aa_interactions.append(interaction)
+
+    # If there are not atomistic interactions then we are done
+    if len(aa_interactions) == 0:
+        print('No atomistic interactions')
         return
 
     # Make sure we have charges
