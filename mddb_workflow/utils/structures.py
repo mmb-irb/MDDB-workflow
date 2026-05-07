@@ -315,8 +315,8 @@ class Atom:
             # If the name is CD then it is an delta carbon, not a cadmium
             if element == 'Cd':
                 return 'C'
-            # If the name is NA then it is an alpha nitrogen, not a sodium
-            if element == 'Na':
+            # If the name is NA/NI then it is an alpha nitrogen, not a sodium/nickel
+            if element in ['Na', 'Ni']:
                 return 'N'
             # If the name is HG then it is an gamma hydrogen, not a mercury
             if element == 'Hg':
