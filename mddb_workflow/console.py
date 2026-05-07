@@ -1,5 +1,5 @@
 from os.path import exists
-from shutil import copyfile
+from shutil import copyfile, get_terminal_size
 from subprocess import call
 from argparse import ArgumentParser, RawTextHelpFormatter, Action, _SubParsersAction
 from textwrap import wrap, dedent
@@ -376,16 +376,18 @@ def main():
         elif args.dataset_subcommand == 'show':
             if args.summary:
                 summary = dataset.summary()
-                print('==================================================================')
+                width = get_terminal_size((80, 20)).columns
+                print('=' * width)
                 print("Summary of project states:")
-                print('==================================================================')
+                print('=' * width)
                 print(summary)
                 errors = dataset.error_summary().head(10 if args.n_rows == 50 else args.n_rows)
-                pd.set_option('display.max_rows', len(errors) + 1)
                 if len(errors) == 0: return
-                print('\n==================================================================')
+                pd.set_option('display.max_rows', len(errors) + 1)
+                pd.set_option('display.max_colwidth', width - 10)
+                print('=' * width)
                 print("Summary of error messages for projects:")
-                print('==================================================================')
+                print('=' * width)
                 print(errors)
                 return
             df = dataset.get_dataframe(
