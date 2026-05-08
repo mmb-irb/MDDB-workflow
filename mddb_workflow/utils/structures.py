@@ -1767,7 +1767,7 @@ class Structure:
         return len(self.chains)
     chain_count = property(get_chain_count, None, None, "Number of chains in the structure (read only)")
 
-    def fix_atom_elements (self, trust : bool = True) -> bool:
+    def fix_atom_elements (self, trust : bool = True, show_warnings : bool = True) -> bool:
         """Fix atom elements by guessing them when missing.
         Set all elements with the first letter upper and the second (if any) lower.
         Also check if atom elements are coherent with atom names.
@@ -1811,10 +1811,12 @@ class Structure:
         # Warn the user about anormalies
         for report, count in reports.items():
             atom_name, atom_element, guess = report
-            warn(f"Suspicious element for atom {atom_name}: {atom_element} -> shoudn't it be {guess}? ({count} occurrences)")
+            if show_warnings:
+                warn(f"Suspicious element for atom {atom_name}: {atom_element} -> shoudn't it be {guess}? ({count} occurrences)")
         # Warn the user that some elements were modified
-        if modified: warn('Atom elements have been modified')
-        if added: warn('Atom elements were missing and have been added')
+        if show_warnings:
+            if modified: warn('Atom elements have been modified')
+            if added: warn('Atom elements were missing and have been added')
         # Set atom elements as fixed in order to avoid repeating this process
         self._fixed_atom_elements = True
         return modified or added
@@ -1856,11 +1858,11 @@ class Structure:
         return self._dummy_atom_indices
     dummy_atom_indices = property(get_dummy_atom_indices, None, None, "Atom indices for what we consider dummy atoms")
 
-    def generate_pdb (self):
+    def generate_pdb (self, show_warnings : bool = True):
         """Generate a pdb file content with the current structure."""
         content = 'REMARK workflow generated pdb file\n'
         if len(self.residues) >= 65536:
-            warn(f'More than 65536 residues found. Cycling residue numeration to fit to PDB 4-character limit.')
+            if show_warnings: warn(f'More than 65536 residues found. Cycling residue numeration to fit to PDB 4-character limit.')
         # If any chain name has mote than 1 character then we can not write it as is in the PDB
         # We must decide a plan before proceeding and warn the user about this
         chain_names_map = None
@@ -1885,10 +1887,12 @@ class Structure:
                 used_chain_names.add(shorten_chain_name)
                 chain_names_map[chain_name] = shorten_chain_name
             # Warn the user about the chain renaming
-            warn(f'Chain names with more than 1 character (e.g. "{long_chain_name}")' + \
+            if show_warnings:
+                raise ValueError('Hold up')
+                warn(f'Chain names with more than 1 character (e.g. "{long_chain_name}")' + \
                 ' are not supported in PDB format. Chains will be renamed to fit in.')
             if len(chain_names) > len(AVAILABLE_LETTERS):
-                warn('There are more chains in the structure than letters in the alphabet.' + \
+                if show_warnings: warn('There are more chains in the structure than letters in the alphabet.' + \
                     ' Some chain names will be left blank.')
         # Iterate atoms as we write them to the output content
         for a, atom in enumerate(self.atoms):
@@ -1920,9 +1924,9 @@ class Structure:
             content += atom_line
         return content
 
-    def generate_pdb_file (self, pdb_filepath : str):
+    def generate_pdb_file (self, pdb_filepath : str, show_warnings : bool = True):
         """Generate a pdb file with current structure."""
-        pdb_content = self.generate_pdb()
+        pdb_content = self.generate_pdb(show_warnings=show_warnings)
         with open(pdb_filepath, "w") as file:
             file.write(pdb_content)
 
@@ -3021,10 +3025,10 @@ class Structure:
         Rely on VMD logic to do so."""
         # It is important to fix elements before trying to fix bonds, since elements have an impact on bonds
         # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
-        if safe_elements: self.fix_atom_elements()
+        if safe_elements: self.fix_atom_elements(show_warnings=False)
         # Generate a pdb strucutre to feed vmd
         auxiliar_pdb_filepath = '.structure.pdb'
-        self.generate_pdb_file(auxiliar_pdb_filepath)
+        self.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False)
         # Get covalent bonds between both residue atoms
         covalent_bonds = get_covalent_bonds(auxiliar_pdb_filepath, selection)
         # For every atom in CG, replace its bonds with a class which will raise and error when read

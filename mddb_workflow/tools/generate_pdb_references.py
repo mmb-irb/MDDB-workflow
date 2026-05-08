@@ -2,13 +2,13 @@ import os
 import json
 import urllib.request
 
-from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, request_pdb_data, round_to_thousandths, warn
+from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, request_pdb_data, round_to_thousandths, warn, reprint
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
 from mddb_workflow.tools.xvg_parse import xvg_parse
-from mddb_workflow.tools.generate_map import normalize_protein_sequence, get_uniprot_reference, align
+from mddb_workflow.tools.generate_map import get_uniprot_reference, align
 
 
 def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
@@ -22,7 +22,9 @@ def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
             previous_pdb_references[pdb_id] = pdb_reference
     # Mine PDB data for every PDB id
     pdb_references = []
-    for pdb_id in pdb_ids:
+    pdb_count = len(pdb_ids)
+    for p, pdb_id in enumerate(pdb_ids, 1):
+        print(f'Processing PDB {pdb_id} ({p}/{pdb_count})')
         # Find if we already have this PDB id among hte previous references
         pdb_reference = previous_pdb_references.get(pdb_id, None)
         if pdb_reference:
@@ -98,7 +100,10 @@ def get_pdb_reference (pdb_id : str) -> dict:
     # Iterate protein chains
     for chain, uniprot_id in chain_uniprots.items():
         # Get the chain sequence
-        sequence = chain_seq[chain]
+        sequence = chain_seq.get(chain, RemoteServiceError)
+        # DANI: This happened with PDB 2AW4 (deprecated to 4V4Q), where chains were wrongly annotated regarding the structure
+        if sequence is RemoteServiceError:
+            raise RemoteServiceError(f'Unexpected annotations in PDB {pdb_id}: Chain {chain} is annotated as protein but it is not.')
         # Get the uniprot reference, including the reference sequence
         uniprot_reference = get_uniprot_reference(uniprot_id)
         reference_sequence = uniprot_reference['sequence'] if uniprot_reference else None
@@ -190,14 +195,17 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath)
     # Now export it to PDB so gromacs can read it
     auxiliar_pdb_filepath = f'.{pdb_id}.pdb'
-    structure.generate_pdb_file(auxiliar_pdb_filepath)
+    structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings = False)
     # Target only protein chains
     protein_selection = structure.select_protein()
     protein_chains = structure.get_selection_chains(protein_selection)
+    chain_count = len(protein_chains)
     # Keep the SAS of every chain
     pdb_chains_sas = {}
+    print()
     # Iterate PDB chains
-    for chain in protein_chains:
+    for c, chain in enumerate(protein_chains,1 ):
+        reprint(f' Calculating SAS for chain {chain.name} ({c}/{chain_count})')
         # Run a SAS analysis only for this specific chain
         # Convert the chain selection to a ndx file
         chain_selection = chain.get_selection()
