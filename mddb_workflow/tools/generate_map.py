@@ -70,12 +70,6 @@ def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
     return Alignment(sequences=alignment.sequences, coordinates=new_coords)
 
 
-# Map the structure aminoacids sequences against the standard reference sequences
-# References are uniprot accession ids and they are optional
-# For each reference, align the reference sequence with the topology sequence
-# Chains which do not match any reference sequence will be blasted
-# Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast
-# NEVER FORGET: This system relies on the fact that topology chains are not repeated
 def generate_protein_mapping(
     structure: 'Structure',
     protein_references_file: 'File',
@@ -87,7 +81,13 @@ def generate_protein_mapping(
     input_protein_references: list | dict = [],
     pdb_ids: list[str] = [],
 ) -> dict:
-    """Map the structure aminoacids sequences against the Uniprot reference sequences."""
+    """Map the structure aminoacids sequences against the Uniprot reference sequences.
+    References are uniprot accession ids and they are optional.
+    For each reference, align the reference sequence with the topology sequence.
+    Chains which do not match any reference sequence will be blasted.
+    Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast.
+    NEVER FORGET: This system relies on the fact that topology chains are not repeated.
+    """
     # Remove previous warnings, if any
     register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
     # Forced references must be list or dict
@@ -438,7 +438,7 @@ def generate_protein_mapping(
     # If not, kill the process unless mercy was given
     unmatched_chains = [chain_data['name'] 
                         for chain_data in protein_parsed_chains 
-                        if chain_data['match']['ref'] == NOT_FOUND_FLAG]
+                        if chain_data['match']['ref'] == NOT_FOUND_FLAG or chain_data['match']['ref'] is None]
     must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
     if must_be_killed:
         raise InputError(f'BLAST failed to find a matching reference sequence for chains: {", ".join(unmatched_chains)}.\n'
