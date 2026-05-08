@@ -25,7 +25,7 @@ def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
     pdb_count = len(pdb_ids)
     for p, pdb_id in enumerate(pdb_ids, 1):
         print(f'Processing PDB {pdb_id} ({p}/{pdb_count})')
-        # Find if we already have this PDB id among hte previous references
+        # Find if we already have this PDB id among the previous references
         pdb_reference = previous_pdb_references.get(pdb_id, None)
         if pdb_reference:
             pdb_references.append(pdb_reference)
@@ -193,6 +193,7 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     download_mmcif(pdb_id, auxiliar_mmcif_filepath)
     # Load the structure
     structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath)
+    structure._fixed_atom_elements = True
     # Now export it to PDB so gromacs can read it
     auxiliar_pdb_filepath = f'.{pdb_id}.pdb'
     structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings = False)
