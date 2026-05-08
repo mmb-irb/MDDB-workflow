@@ -19,6 +19,9 @@ NO_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 WORKFLOW_REQUEST_SOURCE_HEADER = 'x-mddb-request-source'
 WORKFLOW_REQUEST_SOURCE_VALUE = 'workflow'
 
+# Set the URL of the global server, including the available nodes
+GLOBAL_SERVER_URL = 'https://mdposit.mddbr.eu/api/'
+
 
 def workflow_urlopen(url, *args, **kwargs):
     """Set a workflow header for metrics urllib.request.urlopen."""
@@ -230,19 +233,42 @@ class Database:
             no_ssl_authentication: If True, SSL certificates will not be authenticated.
 
         """
-        if '://' not in url:
-            raise InputError(f'Invalid database URL "{url}"')
-        self.url = url
+        # Set the context
+        self.context = NO_SSL_CONTEXT if no_ssl_authentication else None
+        # Set the database API URL
+        if '://' in url:
+            self.url = url
+        # If this is not an URL then it may be an alias from a remote node
+        else:
+            # Get available nodes from the remote
+            nodes = self.get_available_nodes()
+            # Check if the requested URL is actually a node alias
+            target_node = nodes.get(url, None)
+            # If not then we complain
+            if target_node is None:
+                message = f'Invalid database URL "{url}". Available URLs:\n'
+                for node_alias, node_config in nodes.items():
+                    message += f' - {node_alias} ({node_config["name"]}) -> {node_config["url"]}\n'
+                raise InputError(message)
+            # If there is a matching alias then use its URL
+            self.url = target_node['url']
         # If the URL already includes /rest/... then clean this part away
         if '/rest' in self.url:
             self.url = self.url.split('/rest')[0] + '/'
         # Set an alias for this database
         self.alias = self.url.split('://')[1].split('.')[0].split('-')[0]
-        # Set the context
-        self.context = NO_SSL_CONTEXT if no_ssl_authentication else None
 
     def __str__(self) -> str:
         return f'< Database {self.url} >'
+    
+    def get_available_nodes(self) -> dict[str, str]:
+        nodes_url = f'{GLOBAL_SERVER_URL}rest/current/nodes'
+        try:
+            response = workflow_urlopen(nodes_url, context=self.context)
+            nodes_data = json.loads(response.read())
+            return { node['alias']: { 'name': node['name'], 'url': node['api_url'] } for node in nodes_data }
+        except Exception as error:
+            raise Exception(f'Something went wrong when requesting nodes data ({nodes_url}) with error "{error}"')
 
     def is_alive(self) -> bool:
         """Check if the database is alive.
