@@ -397,12 +397,20 @@ def ranger(numbers: list[int]) -> str:
 
 def otherwise(values: list) -> Generator[tuple, None, None]:
     """Set a special iteration system.
-    Return one value of the array and a new array with all other values for each value.
+    Return one value of the list and a new list with all other values for each value.
     """
     for v, value in enumerate(values):
         others = values[0:v] + values[v+1:]
         yield value, others
 
+def pairwise (values : list) -> Generator[tuple, None, None]:
+    """Set a special iteration system.
+    Return every possible pair of values in the list.
+    """
+    n_values = len(values)
+    for i in range(n_values):
+        for j in range(i + 1, n_values):
+            yield values[i], values[j]
 
 # List files in a directory
 def list_files(directory: str) -> list[str]:

@@ -380,6 +380,19 @@ cg_selection:
 
 dummy_selection: auto
 
+# Set forced molecule classifications (e.g. protein, nucleic, etc.)
+# This fields is particularly useful when dealing with systems where not even standard residue names are respected
+# This may happen in some "strongly customized" coarse grains
+# IMPORTANT: EXPERIMENTAL INPUT
+#
+# Example:
+#
+# forced_class_selections:
+#   protein: not resname ADX
+#   other: resname ADX
+
+forced_class_selections:
+
 #------------------------------------------------------------------------------------------------------------
 # REPRESENTATION PARAMETERS
 #------------------------------------------------------------------------------------------------------------

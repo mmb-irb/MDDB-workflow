@@ -172,6 +172,10 @@ def process_input_files(
     provisional_cg_selection = self.project.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
+    # Set also provisional forced class selections and apply them to the provisional structure
+    # This may be important for the automatic filtering
+    self.project._set_forced_class_selections(provisional_structure, verbose=False)
+    provisional_structure.force_classifications(self.project.forced_class_selections)
 
     # --- FILTERING ATOMS ------------------------------------------------------------
 
@@ -243,6 +247,11 @@ def process_input_files(
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
     self.project._set_dummy_selection(provisional_structure)
+
+    # Set also provisional forced class selections and apply them to the provisional structure
+    # This may be important for the automatic filtering
+    self.project._set_forced_class_selections(provisional_structure, verbose=False)
+    provisional_structure.force_classifications(self.project.forced_class_selections)
 
     # Also we can set a provisional PBC selection
     # This selection is useful both for imaging/fitting and for the correction

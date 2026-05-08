@@ -20,7 +20,6 @@ def prepare_project_metadata (
     inchikey_map : dict,
     protein_references_file : 'File',
     pdb_ids : list[str],
-    ligand_references : dict,
     input_protein_references : list[str] | dict,
     input_ligands : list[dict],
     interactions : list[dict],
@@ -51,6 +50,7 @@ def prepare_project_metadata (
     input_boxtype : str,
     input_pbc_selection : str,
     input_cg_selection : str,
+    input_forced_class_selections: dict[str, str],
     input_customs : list[dict],
     input_orientation : list[float],
     input_multimeric : list[str],
@@ -197,6 +197,9 @@ def prepare_project_metadata (
         'FF': forcefields,
         'WAT': input_water,
         'BOXTYPE': input_boxtype,
+        'BOXSIZEX': boxsizex,
+        'BOXSIZEY': boxsizey,
+        'BOXSIZEZ': boxsizez,
         'SYSTATS': system_atoms,
         'SYSTRES': system_residues,
         'PROTATS': protein_atoms,
@@ -219,6 +222,7 @@ def prepare_project_metadata (
         'INTERACTIONS': metadata_interactions,
         'PBC_SELECTION': input_pbc_selection,
         'CG_SELECTION': input_cg_selection,
+        'FORCED_CLASS_SELECTION': input_forced_class_selections,
         'CHAINNAMES': chainnames,
         'CUSTOMS': input_customs,
         'ORIENTATION': input_orientation,
@@ -234,11 +238,14 @@ def prepare_project_metadata (
         # Beware, we already have a VERSION field for the PROGRAM version
         'ver': '0.0.2',
     }
-    # Add boxsizes only if any of them is 0
-    if boxsizex > 0 and boxsizey > 0 and boxsizez > 0:
-        metadata['BOXSIZEX'] = boxsizex
-        metadata['BOXSIZEY'] = boxsizey
-        metadata['BOXSIZEZ'] = boxsizez
+    # Let the boxsizes only if all of them are available (they may be 0)
+    if not boxsizex or not boxsizey or not boxsizez:
+        del metadata['BOXSIZEX']
+        del metadata['BOXSIZEY']
+        del metadata['BOXSIZEZ']
+    # Let the forced class selection only if it is present, since it is a rare input
+    if input_forced_class_selections is None:
+        del metadata['FORCED_CLASS_SELECTION']
     # Add collection specific fields
     if 'cv19' in collections:
         cv19_unit = input_cv19_unit

@@ -797,7 +797,10 @@ class Residue:
         return Selection(self.atom_indices)
 
     def clone (self) -> 'Residue':
-        return Residue(self.name, self.number, self.icode)
+        cloned_residue = Residue(self.name, self.number, self.icode)
+        # Keep the original classification, it may have been forced
+        cloned_residue._classification = self._classification
+        return cloned_residue
 
     def copy (self) -> 'Residue':
         """Make a copy of the current residue."""
@@ -2241,11 +2244,7 @@ class Structure:
         for new_index, original_index in enumerate(selection.atom_indices):
             # Make a copy of the selected atom in order to not modify the original one
             original_atom = self.atoms[original_index]
-            new_atom = Atom(
-                name=original_atom.name,
-                element=original_atom.element,
-                coords=original_atom.coords,
-            )
+            new_atom = original_atom.clone()
             new_atoms.append(new_atom)
             # Save old and new indices in order to reconfigure all indices later
             new_atom_indices[original_index] = new_index
@@ -2259,11 +2258,7 @@ class Structure:
         for new_index, original_index in enumerate(selected_residue_indices):
             # Make a copy of the selected residue in order to not modify the original one
             original_residue = self.residues[original_index]
-            new_residue = Residue(
-                name=original_residue.name,
-                number=original_residue.number,
-                icode=original_residue.icode,
-            )
+            new_residue = original_residue.clone()
             new_residues.append(new_residue)
             # Save old and new indices in order to reconfigure all indices later
             new_residue_indices[original_index] = new_index
@@ -2277,9 +2272,7 @@ class Structure:
         for new_index, original_index in enumerate(selected_chain_indices):
             # Make a copy of the selected chain in order to not modify the original one
             original_chain = self.chains[original_index]
-            new_chain = Chain(
-                name=original_chain.name,
-            )
+            new_chain = original_chain.clone()
             new_chains.append(new_chain)
             # Save old and new indices in order to reconfigure all indices later
             new_chain_indices[original_index] = new_index
@@ -2302,6 +2295,7 @@ class Structure:
                 if new_index != None:
                     residue_indices.append(new_index)
             chain.residue_indices = residue_indices
+        # DANI: Faltan los bonds
         return Structure(atoms=new_atoms, residues=new_residues, chains=new_chains)
     
     def filter_away (self, selection : Union['Selection', str], selection_syntax : str = 'vmd') -> 'Structure':
@@ -3147,6 +3141,7 @@ class Structure:
         merged_atoms = self_atom_copies + other_atom_copies
         merged_residues = self_residue_copies + other_residue_copies
         merged_chains = self_chain_copies + other_chain_copies
+        # DANI: Faltan los bonds
         return Structure(merged_atoms, merged_residues, merged_chains)
 
     def find_rings (self, max_ring_size : int, selection : Optional[Selection] = None) -> list[ list[Atom] ]:
@@ -3222,6 +3217,13 @@ class Structure:
     def has_cg (self) -> bool:
         """Ask if the structure has at least one coarse grain atom/residue."""
         return any(atom.element == CG_ATOM_ELEMENT for atom in self.atoms)
+    
+    def force_classifications (self, classifications : dict[str, 'Selection']):
+        "Apply a set of forced residue classifications"
+        for classification, selection in classifications.items():
+            selection_residues = self.get_selection_residues(selection)
+            for residue in selection_residues:
+                residue._classification = classification
 
 
 # =========================

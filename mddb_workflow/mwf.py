@@ -19,7 +19,7 @@ from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_M
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
-from mddb_workflow.utils.auxiliar import is_standard_topology, unique, get_first_list_values_missmatch
+from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -816,6 +816,9 @@ class MD:
         # 2. Stable bonds test failed and we had mercy
         # 3. Ignored ions which may cause clashes
         self._structure.bonds = self.reference_bonds
+        # Apply forced class selections, if any
+        if self.project.forced_class_selections:
+            self._structure.force_classifications(self.project.forced_class_selections)
         return self._structure
     structure: Structure = property(get_structure, None, None, "Parsed structure (read only)")
 
@@ -864,6 +867,7 @@ class MD:
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
     input_dummy_selection = property(input_getter('dummy_selection'), None, None, "Selection of atoms which are not real atoms but dummy atoms (read only)")
+    input_forced_class_selections = property(input_getter('forced_class_selections'), None, None, "Custom forced selections for molecular classification (read only)")
 
     def _set_pbc_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set PBC selection.
@@ -1156,6 +1160,7 @@ class Project:
         pbc_selection: Optional[str] = None,
         cg_selection: Optional[str] = None,
         dummy_selection: Optional[str] = None,
+        forced_class_selections: Optional[dict] = None,
         image: bool = False,
         fit: bool = False,
         translation: list[float] = [0, 0, 0],
@@ -1230,6 +1235,8 @@ class Project:
                 Selection passed through console overrides the one in inputs file.
             dummy_selection (Optional[str]):
                 Selection of atoms which are not real atoms but dummy atoms.
+            forced_class_selections:
+                Custom forced selections for molecular classification.
             image (bool):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
             fit (bool):
@@ -1386,6 +1393,7 @@ class Project:
         self._input_pbc_selection = pbc_selection
         self._input_cg_selection = cg_selection
         self._input_dummy_selection = dummy_selection
+        self._input_forced_class_selections = forced_class_selections
         self.image = image
         self.fit = fit
         self.translation = translation
@@ -1423,6 +1431,7 @@ class Project:
         self._pbc_residues = None
         self._cg_selection = None
         self._dummy_selection = None
+        self._forced_class_selections = None
         self._cg_residues = None
         self._reference_bonds = None
         self._topology_reader = None
@@ -1938,6 +1947,21 @@ class Project:
         return self._input_dummy_selection
     input_dummy_selection = property(get_input_dummy_selection, None, None, "The original user input dummy atoms selection (read only)")
 
+    def get_input_forced_class_selections(self) -> Optional[str]:
+        """Get the original user input dummy atoms selection."""
+        # If we have an internal value then return it
+        if self._input_forced_class_selections:
+            return self._input_forced_class_selections
+        # As an exception, we avoid asking for the inputs file if it is not available
+        # This input is required for some early processing steps where we do not need the inputs file for anything else
+        if not self.is_inputs_file_available():
+            return None
+        # Otherwise, find it in the inputs
+        # Get the input value, whose key must exist
+        self._input_forced_class_selections = self.get_input('forced_class_selections')
+        return self._input_forced_class_selections
+    input_forced_class_selections = property(get_input_forced_class_selections, None, None, "The original input custom forced selections for molecular classification (read only)")
+
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set the coarse grain selection."""
@@ -1979,7 +2003,7 @@ class Project:
         # If there are no coarse grain atoms then stop here
         if not self._cg_selection: return
         # Update gromacs masses by setting fake masses for coarse grain beads: 1
-        print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
+        if verbose: print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
         fake_masses = set()
         for atom_index in self._cg_selection.atom_indices:
             atom = reference_structure.atoms[atom_index]
@@ -2064,6 +2088,42 @@ class Project:
         # Finally return the selection
         return self._dummy_selection
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
+
+    def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):
+        """Parse forced class selections"""
+        if self.input_forced_class_selections is None: return
+        if verbose: print('Processing input forced class selections')
+        parsed_class_selections = {}
+        # Iterate input forced class selections
+        for classification, selection_string in self.input_forced_class_selections.items():
+            parsed_selection = reference_structure.select(selection_string)
+            if verbose: print(f' "{classification}" selection has {len(parsed_selection)} atoms.')
+            if not parsed_selection:
+                raise InputError(f'Empty forced class selection "{classification}": {selection_string}')
+            parsed_class_selections[classification] = parsed_selection
+        # Make sure there are no overlaps
+        for (class_a, selection_a), (class_b, selection_b) in pairwise(list(parsed_class_selections.items())):
+            selection_a_residues_indices = set(reference_structure.get_selection_residue_indices(selection_a))
+            selection_b_residues_indices = set(reference_structure.get_selection_residue_indices(selection_b))
+            intersection = selection_a_residues_indices.intersection(selection_b_residues_indices)
+            if intersection:
+                raise InputError('There is an overlap in the forced class selections:\n' + \
+                    f' "{class_a}" selection ({self.input_forced_class_selections[class_a]})' + \
+                    f' and "{class_b}" selection ({self.input_forced_class_selections[class_b]})' + \
+                    f' have {len(intersection)} residues in common. There must be no overlaps.')
+        # Set the final value
+        self._forced_class_selections = parsed_class_selections
+
+    def get_forced_class_selections(self) -> dict[str, 'Selection']:
+        """Get the dummy atoms selection."""
+        # If we already have a stored value then return it
+        if self._forced_class_selections is not None:
+            return self._forced_class_selections
+        # Otherwise we must set the dummy selection
+        self._set_forced_class_selections(self.structure)
+        # Finally return the selection
+        return self._forced_class_selections
+    forced_class_selections = property(get_forced_class_selections, None, None, "Custom forced selections for molecular classification (read only)")
 
     # Set additional values infered from input values
     # RUBEN: unused?
