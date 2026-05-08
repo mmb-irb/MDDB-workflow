@@ -364,9 +364,10 @@ AVAILABLE_LETTERS = AVAILABLE_CAPS + AVAILABLE_LOWS
 # Set elements which are always "bonded"
 SUPPORTED_POLYMER_ELEMENTS = set(['C', 'N', 'O', 'H', 'P', 'S', 'D'])
 # Set elements which may be found both "bonded" or "alone"
+# Transition elements should always be coordinated
 SUPPORTED_COORDINATED_ELEMENTS = set([
     'Zn', 'Fe', 'Ni', 'Mn', 'Co', 'Lu', 'U', 'Cu',
-    'V', 'Al', 'Ba', 'Be', 'F', 'Te', 'Hg', 'Cd',
+    'V', 'Al', 'Ba', 'Be', 'F', 'Te', 'Hg', 'Cd', 'W', 'Ta'
 ])
 # Set elements which are always "alone"
 SUPPORTED_ION_ELEMENTS = set(['K', 'Cl', 'Na', 'Mg', 'Br', 'I', 'Ca', 'Tb', 'Ag', 'Tl', 'Rb', 'Cs'])
