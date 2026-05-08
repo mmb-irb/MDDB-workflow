@@ -4,7 +4,7 @@ import urllib.request
 import numpy as np
 import re
 
-from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, NoReferableException, retry_request
+from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, RequestError, NoReferableException, retry_request
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -650,10 +650,10 @@ def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
             warn('Cannot find UniProt entry for accession ' + uniprot_accession)
             return None
         print('Error when requesting ' + request_url)
-        raise RuntimeError(f'Something went wrong with the Uniprot request (error {error.code})')
-    except:
+        raise RequestError(f'Something went wrong with the Uniprot request (error {error.code})')
+    except Exception as error:
         print('Error when requesting ' + request_url)
-        raise RuntimeError(f'Something went very wrong with the Uniprot request')
+        raise RequestError(f'Something went very wrong with the Uniprot request ({str(error)})')
     # If we have not a response at this point then it may mean we are trying to access an obsolete entry (e.g. P01607)
     if parsed_response == None:
         warn('Cannot find UniProt entry for accession ' + uniprot_accession)

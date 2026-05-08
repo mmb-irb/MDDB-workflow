@@ -65,6 +65,9 @@ class RemoteServiceError (QuietException):
     """Quite exception for when the problem comes from a remote service."""
     pass
 
+class RequestError (QuietException):
+    """Quite exception for when the problem comes from an HTTP request."""
+    pass
 
 class ForcedStop (QuietException):
     """Quite exception for when we stop the workflow in purpose."""

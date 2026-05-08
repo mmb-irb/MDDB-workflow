@@ -6,7 +6,7 @@ from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG
-from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, retry_request, handle_http_request, SocketTimeout
+from mddb_workflow.utils.auxiliar import InputError, RequestError, request_pdb_data, warn, retry_request, handle_http_request, SocketTimeout
 from mddb_workflow.utils.type_hints import *
 
 
@@ -53,7 +53,7 @@ def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context
     if r.status_code == 200:
         return r.json()
     elif error_context:
-        raise ValueError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + ")")
+        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + ")")
     else:
         return None
 
