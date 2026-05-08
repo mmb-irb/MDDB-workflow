@@ -2114,11 +2114,14 @@ class Project:
         # Set the final value
         self._forced_class_selections = parsed_class_selections
 
-    def get_forced_class_selections(self) -> dict[str, 'Selection']:
+    def get_forced_class_selections(self) -> dict[str, 'Selection'] | None:
         """Get the dummy atoms selection."""
         # If we already have a stored value then return it
         if self._forced_class_selections is not None:
             return self._forced_class_selections
+        # If there is no input forced class selections then skip this process already
+        if self.input_forced_class_selections is None:
+            return None
         # Otherwise we must set the dummy selection
         self._set_forced_class_selections(self.structure)
         # Finally return the selection
