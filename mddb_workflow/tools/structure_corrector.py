@@ -213,10 +213,14 @@ def structure_corrector(
         # We assume it is and continue
         if residue.is_missing_any_bonds(): continue
         # If the residue is coherent then continue
-        if residue.is_coherent(exclude_selection=dummy_selection): continue
+        # WARNING: We cannot exclude dummy atoms here, since a dummy atom may connect groups of non-dummy atoms
+        # e.g. Martini Coarse Grain POPC residues
+        if residue.is_coherent(): continue
         # Otherwise we report the problem
         residue_selection = residue.get_selection() - dummy_selection
-        fragments = list(structure.find_fragments(residue_selection))
+        # WARNING: At this point we must get rid of fragments which are all made of dummy atoms
+        # These dummy atoms may be dissconnected from the residue entirely
+        fragments = list(structure.find_fragments(residue_selection, exclude_dummy_fragments=True))
         n_fragments = len(fragments)
         if n_fragments == 0: raise RuntimeError('Do we have an empty residue?')
         if n_fragments == 1: raise RuntimeError('Test failed but should not')
@@ -242,7 +246,7 @@ def structure_corrector(
         # Check if the number of fragments is the same or 1 lower using the guessed bonds
         # If the number of guessed fragments matches perfectly the actual number of fragments then we assume it is scenario 1
         # In any other scenario we complain
-        guessed_fragments = list(guessed_atoms_structure.find_fragments(residue_selection))
+        guessed_fragments = list(guessed_atoms_structure.find_fragments(residue_selection, exclude_dummy_fragments=True))
         n_guessed_fragments = len(guessed_fragments)
         if n_guessed_fragments != n_fragments:
             raise TestFailure(f'Residue {residue.index}: {residue} is not coherent: some atoms are disconnected')

@@ -575,20 +575,20 @@ class Residue:
     def is_missing_any_bonds (self) -> bool:
         return any(atom.bonds == MISSING_BONDS for atom in self.atoms)
 
-    def is_coherent (self, exclude_selection : 'Selection') -> bool:
-        """Make sure atoms within the residue are all bonded.
-        You may exclude some atoms by passing a selection.
-        This is useful to exclude atoms which may be naturally disconnected such some dummy atoms."""
+    def is_coherent (self) -> bool:
+        """Make sure atoms within the residue are all bonded."""
         # If bonds are missing then just say everything is
         if self.is_missing_any_bonds():
             raise RuntimeError('Trying to check if residue with missing bonds is coherent')
         # Exclude the requested atoms from the test
+        # WARNING: We cannot exclude dummy atoms here, since a dummy atom may connect groups of non-dummy atoms
+        # e.g. Martini Coarse Grain POPC residues
         residue_selection = self.get_selection()
-        if exclude_selection: residue_selection -= exclude_selection
-        # Make sure the first fragment already includes all atoms in the residue (but the excluded ones)
-        residue_fragments = self.structure.find_fragments(residue_selection)
-        first_residue_fragment = next(residue_fragments)
-        return len(first_residue_fragment) == len(residue_selection)
+        # Make sure there is only one fragment
+        # WARNING: If there is more than one fragemnt then we must rid of fragments which are all made of dummy atoms
+        # These dummy atoms may be dissconnected from the residue entirely
+        residue_fragments = list(self.structure.find_fragments(residue_selection, exclude_dummy_fragments=True))
+        return len(residue_fragments) == 1
 
     def get_classification (self) -> str:
         """
@@ -1254,6 +1254,7 @@ class Structure:
     def find_fragments (self,
         selection : Optional['Selection'] = None,
         coherent : bool = True,
+        exclude_dummy_fragments : bool = False,
         atom_bonds : Optional[list[list[int]]] = None,
     ) -> Generator['Selection', None, None]:
         """Find fragments in a selection of atoms. A fragment is a selection of
@@ -1266,6 +1267,8 @@ class Structure:
         For convenience, bonds between non-consecutive residues are excluded from this logic.
         This is useful to ignore disulfide bonds.
         May also help to properly find chains in CG simulations where chains may be bonded.
+
+        There is also a flag to exclude fragments which are made of dummy atoms only
         """
         # If there is no selection we consider all atoms
         if not selection: selection = self.select_all()
@@ -1307,6 +1310,9 @@ class Structure:
                 bonds += next_new_bonds
                 fragment_atom_indices.append(next_atom_index)
                 del atom_indexed_covalent_bonds[next_atom_index]
+            # If dummy fragments are to be excluded then we must check if the whole fragment is made entirely of dummy atoms
+            if exclude_dummy_fragments is True:
+                if all(atom_index in self.dummy_atom_indices for atom_index in fragment_atom_indices): continue
             yield Selection(fragment_atom_indices)
 
     def find_whole_fragments (self, selection : 'Selection') -> Generator['Selection', None, None]:
