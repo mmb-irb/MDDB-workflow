@@ -793,6 +793,9 @@ def retry_request(func):
             except (HTTPError, URLError) as e:
                 raise e
         raise last_exception
+    # Retain the original function's name and docstring
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
     return wrapper
 
 
