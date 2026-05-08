@@ -20,6 +20,8 @@ WORKFLOW_REQUEST_SOURCE_HEADER = 'x-mddb-request-source'
 WORKFLOW_REQUEST_SOURCE_VALUE = 'workflow'
 
 # Set the URL of the global server, including the available nodes
+GLOBAL_SERVER_ALIAS = 'global'
+GLOBAL_SERVER_NAME = 'MDposit'
 GLOBAL_SERVER_URL = 'https://mdposit.mddbr.eu/api/'
 
 
@@ -240,8 +242,11 @@ class Database:
             self.url = url
         # If this is not an URL then it may be an alias from a remote node
         else:
+            # Check if the user is requesting for the global database
             # Get available nodes from the remote
-            nodes = self.get_available_nodes()
+            available_nodes = self.get_available_nodes()
+            # Add the global node as an option
+            nodes = { GLOBAL_SERVER_ALIAS: { 'name': GLOBAL_SERVER_NAME, 'url': GLOBAL_SERVER_URL }, **available_nodes }
             # Check if the requested URL is actually a node alias
             target_node = nodes.get(url, None)
             # If not then we complain
