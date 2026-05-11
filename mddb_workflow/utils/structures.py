@@ -1229,16 +1229,20 @@ class Structure:
             self._unsafe_bonds = self.find_covalent_bonds(safe_elements=False)
             return self._unsafe_bonds
         # If not, we must calculate the bonds using vmd
-        self._bonds = self.find_covalent_bonds()
+        bonds = self.find_covalent_bonds()
+        self.set_bonds(bonds)
         # Since we already have safe bonds we get rid of unsafe bonds, in case they exist
         self._unsafe_bonds = None
-        return self._bonds
+        return bonds
     def set_bonds (self, bonds : list[ list[int] ]):
-        """Force specific bonds."""
+        """Set structure bonds."""
         self._bonds = bonds
         # Reset fragments
         self._fragments = None
-    bonds = property(get_bonds, set_bonds, None, "The structure bonds")
+    def del_bonds (self):
+        """Delete structure bonds."""
+        self.set_bonds(None)
+    bonds = property(get_bonds, set_bonds, del_bonds, "The structure bonds")
 
     def get_fragments (self) -> list['Selection']:
         """Get the groups of atoms which are covalently bonded."""
@@ -2868,7 +2872,7 @@ class Structure:
                 for residue in self.residues:
                     residue._atom_indices = [ new_atom_indices.index(atom_index) for atom_index in residue._atom_indices ]
                 # Bonds must be reset since atom indices have changes
-                self._bonds = None
+                del self.bonds
                 # Prepare the trajectory atom sorter which must be returned
                 # Include atom indices already so the user has to provide only the structure and trajectory filepaths
                 def trajectory_atom_sorter (
