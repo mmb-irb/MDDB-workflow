@@ -183,6 +183,12 @@ class MD:
         self._structure = None
         self._topology_reader = None
         self._dihedrals = None
+        self._pbc_selection = None
+        self._pbc_residues = None
+        self._cg_selection = None
+        self._dummy_selection = None
+        self._forced_class_selections = None
+        self._cg_residues = None
 
         # Tests
         self._trajectory_integrity = None
@@ -817,8 +823,8 @@ class MD:
         # 3. Ignored ions which may cause clashes
         self._structure.bonds = self.reference_bonds
         # Apply forced class selections, if any
-        if self.project.forced_class_selections:
-            self._structure.force_classifications(self.project.forced_class_selections)
+        if self.forced_class_selections:
+            self._structure.force_classifications(self.forced_class_selections)
         return self._structure
     structure: Structure = property(get_structure, None, None, "Parsed structure (read only)")
 
@@ -864,10 +870,18 @@ class MD:
 
     # Assign the MD input getters
     input_interactions = property(input_getter('interactions'), None, None, "Interactions to be analyzed (read only)")
+    # The following selection values should be system-specific, so they should be unique in the project
+    # However there would be no technical problem if they were different between MDs
     input_pbc_selection = property(input_getter('pbc_selection'), None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = property(input_getter('cg_selection'), None, None, "Selection of atoms which are not actual atoms but coarse grain beads (read only)")
     input_dummy_selection = property(input_getter('dummy_selection'), None, None, "Selection of atoms which are not real atoms but dummy atoms (read only)")
     input_forced_class_selections = property(input_getter('forced_class_selections'), None, None, "Custom forced selections for molecular classification (read only)")
+
+    # IMPORTANT: Note than input selections (periodic boundary conditions, coarse grain, dummy, forced class, etc.) are handled per MD
+    # This may seem wrong since system-specific selections should be handled per project, and not per MD
+    # However they all require a structure to be set and using the "project structure" implies getting the structure of every MD
+    # To make things faster and more efficient, every MD process these selections using its own structure
+    # Note that the project selections then are checked to be coherent among all MDs
 
     def _set_pbc_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set PBC selection.
@@ -920,11 +934,11 @@ class MD:
     def get_pbc_selection(self) -> 'Selection':
         """Get the periodic boundary conditions atom selection."""
         # If we already have a stored value then return it
-        if self.project._pbc_selection is not None:
-            return self.project._pbc_selection
+        if self._pbc_selection is not None:
+            return self._pbc_selection
         # Otherwise we must set the PBC selection
-        self.project._pbc_selection = self._set_pbc_selection(self.structure)
-        return self.project._pbc_selection
+        self._pbc_selection = self._set_pbc_selection(self.structure)
+        return self._pbc_selection
     pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
     # WARNING: Do not inherit project pbc residues
@@ -932,17 +946,180 @@ class MD:
     def get_pbc_residues(self) -> list[int]:
         """Get indices of residues in periodic boundary conditions."""
         # If we already have a stored value then return it
-        if self.project._pbc_residues:
-            return self.project._pbc_residues
+        if self._pbc_residues:
+            return self._pbc_residues
         # If there is no inputs file then asume there are no PBC residues
         if not self.pbc_selection:
-            self.project._pbc_residues = []
-            return self.project._pbc_residues
+            self._pbc_residues = []
+            return self._pbc_residues
         # Otherwise we parse the selection and return the list of residue indices
-        self.project._pbc_residues = self.structure.get_selection_residue_indices(self.pbc_selection)
-        print(f'PBC residues "{self.input_pbc_selection}" -> {len(self.project._pbc_residues)} residues')
-        return self.project._pbc_residues
+        self._pbc_residues = self.structure.get_selection_residue_indices(self.pbc_selection)
+        print(f'PBC residues "{self.input_pbc_selection}" -> {len(self._pbc_residues)} residues')
+        return self._pbc_residues
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
+
+    # DANI: Esto algún día habría que tratar de automatizarlo
+    def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
+        """Set the coarse grain selection."""
+        def parse_cg_selection () -> 'Selection':
+            if verbose: print('Setting Coarse Grained (CG) atoms selection')
+            # Get the input selection string
+            selection_string = self.input_cg_selection
+            # If the selection is empty, again, assume there is no CG selection
+            if not selection_string:
+                if verbose: print(' Empty selection -> There is no CG at all')
+                return Selection()
+            # Otherwise, process it
+            # If we have a valid input value then use it
+            elif selection_string:
+                if verbose: print(f' Selecting CG atoms "{selection_string}"')
+                parsed_selection = reference_structure.select(selection_string)
+            # If we have an input value but it is empty then we set an empty selection
+            else:
+                if verbose: print(' No CG atoms selected')
+                parsed_selection = Selection()
+            # Lof the parsed selection size
+            if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
+            # Log a few of the selected residue names
+            if verbose and parsed_selection:
+                selected_residues = reference_structure.get_selection_residues(parsed_selection)
+                selected_residue_names = list(set([residue.name for residue in selected_residues]))
+                limit = 3  # Show a maximum of 3 residue names
+                example_residue_names = ', '.join(selected_residue_names[0:limit])
+                if len(selected_residue_names) > limit: example_residue_names += ', etc.'
+                print('  e.g. ' + example_residue_names)
+            return parsed_selection
+        # Save the parsed coarse grain selection
+        self._cg_selection = parse_cg_selection()
+        # If there are no coarse grain atoms then stop here
+        if not self._cg_selection: return
+        # Update gromacs masses by setting fake masses for coarse grain beads: 1
+        if verbose: print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
+        fake_masses = set()
+        for atom_index in self._cg_selection.atom_indices:
+            atom = reference_structure.atoms[atom_index]
+            fake_masses.add((atom.residue.name, atom.name, 1))
+        extend_gromacs_masses(fake_masses)
+
+    def get_cg_selection(self) -> 'Selection':
+        """Get the coarse grain atom selection."""
+        # If we already have a stored value then return it
+        if self._cg_selection is not None:
+            return self._cg_selection
+        # Otherwise we must set the CG selection
+        self._set_cg_selection(self.structure)
+        return self._cg_selection
+    cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+
+    # WARNING: Do not inherit project cg residues
+    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
+    def get_cg_residues(self) -> list[int]:
+        """Get indices of residues in coarse grain."""
+        # If we already have a stored value then return it
+        if self._cg_residues is not None:
+            return self._cg_residues
+        # If there is no inputs file then asume there are no cg residues
+        if not self.cg_selection:
+            self._cg_residues = []
+            return self._cg_residues
+        # Otherwise we parse the selection and return the list of residue indices
+        self._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
+        print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
+        return self._cg_residues
+    cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
+    # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
+    # This function may be called for the first time while in the 'inpro' task
+    # Thus this function is called when we still have no structure, but we us a provisional structure
+    def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = True):
+        def parse_dummy_selection () -> 'Selection':
+            if verbose: print('Setting dummy atoms selection')
+            # If no input selection was passed assume there are no dummy atoms in the system
+            if not self.input_dummy_selection:
+                if verbose: print(' Empty selection -> There are no dummy atoms at all')
+                return Selection()
+            # If the input dummy selection is 'auto' then guess dummy atoms from their atom names
+            if self.input_dummy_selection == 'auto':
+                if verbose: print(' Guessing dummy atoms by their atom names')
+                # Get atom indices of all atoms with names matching a dummy atom name patter
+                atom_indices = []
+                for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
+                    for atom_index, atom in enumerate(reference_structure.atoms):
+                        if re.match(dummy_name, atom.name):
+                            atom_indices.append(atom_index)
+                dummy_atoms_count = len(atom_indices)
+                if verbose:
+                    print(f' {dummy_atoms_count} dummy atoms were found')
+                    example = reference_structure.atoms[atom_indices[0]] if dummy_atoms_count > 0 else None
+                    if example: print(f' e.g. {example.label}')
+                return Selection(atom_indices)
+            # If we have and actual VMD selection then parse it
+            parsed_selection = reference_structure.select(self.input_dummy_selection, syntax='vmd')
+            if verbose: print(f' Parsed dummy atoms selection has {len(parsed_selection)} atoms')
+            return parsed_selection
+        # Save the parsed dummy selection
+        self._dummy_selection = parse_dummy_selection()
+        # If there are no dummy atoms then stop here
+        if not self._dummy_selection: return
+        # Update gromacs masses by setting fake masses for dummy atoms: 0
+        print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
+        fake_masses = set()
+        for atom_index in self._dummy_selection.atom_indices:
+            atom = reference_structure.atoms[atom_index]
+            fake_masses.add((atom.residue.name, atom.name, 0))
+        extend_gromacs_masses(fake_masses)
+
+    def get_dummy_selection(self) -> 'Selection':
+        """Get the dummy atoms selection."""
+        # If we already have a stored value then return it
+        if self._dummy_selection is not None:
+            return self._dummy_selection
+        # Otherwise we must set the dummy selection
+        self._set_dummy_selection(self.structure)
+        # Finally return the selection
+        return self._dummy_selection
+    dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
+
+    def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):
+        """Parse forced class selections"""
+        if self.input_forced_class_selections is None: return
+        if verbose: print('Processing input forced class selections')
+        parsed_class_selections = {}
+        # Iterate input forced class selections
+        for classification, selection_string in self.input_forced_class_selections.items():
+            parsed_selection = reference_structure.select(selection_string)
+            if verbose: print(f' "{classification}" selection has {len(parsed_selection)} atoms.')
+            if not parsed_selection:
+                raise InputError(f'Empty forced class selection "{classification}": {selection_string}')
+            parsed_class_selections[classification] = parsed_selection
+        # Make sure there are no overlaps
+        for (class_a, selection_a), (class_b, selection_b) in pairwise(list(parsed_class_selections.items())):
+            selection_a_residues_indices = set(reference_structure.get_selection_residue_indices(selection_a))
+            selection_b_residues_indices = set(reference_structure.get_selection_residue_indices(selection_b))
+            intersection = selection_a_residues_indices.intersection(selection_b_residues_indices)
+            if intersection:
+                raise InputError('There is an overlap in the forced class selections:\n' + \
+                    f' "{class_a}" selection ({self.input_forced_class_selections[class_a]})' + \
+                    f' and "{class_b}" selection ({self.input_forced_class_selections[class_b]})' + \
+                    f' have {len(intersection)} residues in common. There must be no overlaps.')
+        # Set the final value
+        self._forced_class_selections = parsed_class_selections
+
+    def get_forced_class_selections(self) -> dict[str, 'Selection'] | None:
+        """Get the forced class atoms selection."""
+        # If we already have a stored value then return it
+        if self._forced_class_selections is not None:
+            return self._forced_class_selections
+        # If there is no input forced class selections then skip this process already
+        if self.input_forced_class_selections is None:
+            return None
+        # Otherwise we must set the forced class selection
+        self._set_forced_class_selections(self.structure)
+        # Finally return the selection
+        return self._forced_class_selections
+    forced_class_selections = property(get_forced_class_selections, None, None, "Custom forced selections for molecular classification (read only)")
+
+    # Other input files
 
     def get_populations(self) -> list[float]:
         """Get equilibrium populations from a MSM from the project."""
@@ -1430,9 +1607,9 @@ class Project:
         self._pbc_selection = None
         self._pbc_residues = None
         self._cg_selection = None
+        self._cg_residues = None
         self._dummy_selection = None
         self._forced_class_selections = None
-        self._cg_residues = None
         self._reference_bonds = None
         self._topology_reader = None
         self._dihedrals = None
@@ -1896,134 +2073,32 @@ class Project:
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
     input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
     input_dataset = inputs_property('dataset_path', "Dataset storage file. (read only)")
+    input_pbc_selection = inputs_property('pbc_selection', "Selection of atoms which are still in periodic boundary conditions (read only)")
+    input_cg_selection = inputs_property('cg_selection', "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
+    input_dummy_selection = inputs_property('dummy_selection', "The original user input dummy atoms selection (read only)")
+    input_forced_class_selections = inputs_property('forced_class_selections',  "The original input custom forced selections for molecular classification (read only)")
     # Additional topic-specific inputs
     input_cv19_unit = inputs_property('cv19_unit', "Input Covid-19 Unit (read only)")
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
     input_cv19_abs = inputs_property('cv19_abs', "Input Covid-19 antibodies (read only)")
     input_cv19_nanobs = inputs_property('cv19_nanobs', "Input Covid-19 nanobodies (read only)")
 
-    def get_input_pbc_selection(self) -> Optional[str]:
-        """Get the original user input Periodic Boundary Conditions selection."""
-        # If we have an internal value then return it
-        if self._input_pbc_selection:
-            return self._input_pbc_selection
-        # As an exception, we avoid asking for the inputs file if it is not available
-        # This input is required for some early processing steps where we do not need the inputs file for anything else
-        if not self.is_inputs_file_available():
-            return None
-        # Otherwise, find it in the inputs
-        # Get the input value, whose key must exist
-        self._input_pbc_selection = self.get_input('pbc_selection')
-        return self._input_pbc_selection
-    input_pbc_selection = property(get_input_pbc_selection, None, None, "Selection of atoms which are still in periodic boundary conditions (read only)")
-
-    def get_input_cg_selection(self) -> Optional[str]:
-        """Get the original user input Coarse Grain selection."""
-        # If we have an internal value then return it
-        if self._input_cg_selection:
-            return self._input_cg_selection
-        # As an exception, we avoid asking for the inputs file if it is not available
-        # This input is required for some early processing steps where we do not need the inputs file for anything else
-        if not self.is_inputs_file_available():
-            return None
-        # Otherwise, find it in the inputs
-        # Get the input value, whose key must exist
-        self._input_cg_selection = self.get_input('cg_selection')
-        return self._input_cg_selection
-    input_cg_selection = property(get_input_cg_selection, None, None, "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
-
-    def get_input_dummy_selection(self) -> Optional[str]:
-        """Get the original user input dummy atoms selection."""
-        # If we have an internal value then return it
-        if self._input_dummy_selection:
-            return self._input_dummy_selection
-        # As an exception, we avoid asking for the inputs file if it is not available
-        # This input is required for some early processing steps where we do not need the inputs file for anything else
-        if not self.is_inputs_file_available():
-            return None
-        # Otherwise, find it in the inputs
-        # Get the input value, whose key must exist
-        self._input_dummy_selection = self.get_input('dummy_selection')
-        return self._input_dummy_selection
-    input_dummy_selection = property(get_input_dummy_selection, None, None, "The original user input dummy atoms selection (read only)")
-
-    def get_input_forced_class_selections(self) -> Optional[str]:
-        """Get the original user input dummy atoms selection."""
-        # If we have an internal value then return it
-        if self._input_forced_class_selections:
-            return self._input_forced_class_selections
-        # As an exception, we avoid asking for the inputs file if it is not available
-        # This input is required for some early processing steps where we do not need the inputs file for anything else
-        if not self.is_inputs_file_available():
-            return None
-        # Otherwise, find it in the inputs
-        # Get the input value, whose key must exist
-        self._input_forced_class_selections = self.get_input('forced_class_selections')
-        return self._input_forced_class_selections
-    input_forced_class_selections = property(get_input_forced_class_selections, None, None, "The original input custom forced selections for molecular classification (read only)")
-
-    # DANI: Esto algún día habría que tratar de automatizarlo
-    def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
-        """Set the coarse grain selection."""
-        def parse_cg_selection () -> 'Selection':
-            if verbose: print('Setting Coarse Grained (CG) atoms selection')
-            # If there is no inputs file then asum there is no CG selection
-            if not self.is_inputs_file_available():
-                if verbose: print(' No inputs file -> Asuming there is no CG at all')
-                return Selection()
-            # Otherwise we use the selection string from the inputs
-            if verbose: print(' Using selection string in the inputs file')
-            selection_string = self.input_cg_selection
-            # If the selection is empty, again, assume there is no CG selection
-            if not selection_string:
-                if verbose: print(' Empty selection -> There is no CG at all')
-                return Selection()
-            # Otherwise, process it
-            # If we have a valid input value then use it
-            elif selection_string:
-                if verbose: print(f' Selecting CG atoms "{selection_string}"')
-                parsed_selection = reference_structure.select(selection_string)
-            # If we have an input value but it is empty then we set an empty selection
-            else:
-                if verbose: print(' No CG atoms selected')
-                parsed_selection = Selection()
-            # Lof the parsed selection size
-            if verbose: print(f' Parsed CG selection has {len(parsed_selection)} atoms')
-            # Log a few of the selected residue names
-            if verbose and parsed_selection:
-                selected_residues = reference_structure.get_selection_residues(parsed_selection)
-                selected_residue_names = list(set([residue.name for residue in selected_residues]))
-                limit = 3  # Show a maximum of 3 residue names
-                example_residue_names = ', '.join(selected_residue_names[0:limit])
-                if len(selected_residue_names) > limit: example_residue_names += ', etc.'
-                print('  e.g. ' + example_residue_names)
-            return parsed_selection
-        # Save the parsed coarse grain selection
-        self._cg_selection = parse_cg_selection()
-        # If there are no coarse grain atoms then stop here
-        if not self._cg_selection: return
-        # Update gromacs masses by setting fake masses for coarse grain beads: 1
-        if verbose: print('Coarse Grain beads may be added to the gromacs masses file with mass = 1.')
-        fake_masses = set()
-        for atom_index in self._cg_selection.atom_indices:
-            atom = reference_structure.atoms[atom_index]
-            fake_masses.add((atom.residue.name, atom.name, 1))
-        extend_gromacs_masses(fake_masses)
-
     def get_cg_selection(self) -> 'Selection':
-        """Get the coarse grain atom selection."""
+        """Get the coarse grain atom selection. Make sure it is coherent among all MDs."""
         # If we already have a stored value then return it
         if self._cg_selection is not None:
             return self._cg_selection
-        # Otherwise we must set the CG selection
-        self._set_cg_selection(self.structure)
+        # Otherwise we must set the selection
+        # Make sure it is coherent among all MDs
+        unique_md_selections = set([ md.cg_selection for md in self.mds ])
+        if len(unique_md_selections) > 1:
+            raise InputError('Coarse grain selection is not coherent among MDs. Please change the input value.')
+        self._cg_selection = self.reference_md.cg_selection
         return self._cg_selection
     cg_selection = property(get_cg_selection, None, None, "Periodic boundary conditions atom selection (read only)")
 
-    # WARNING: Do not inherit project cg residues
-    # WARNING: It may trigger all the processing logic of the reference MD when there is no need
     def get_cg_residues(self) -> list[int]:
-        """Get indices of residues in coarse grain."""
+        """Get indices of coarse grain residues. Make sure they are coherent among all MDs."""
         # If we already have a stored value then return it
         if self._cg_residues is not None:
             return self._cg_residues
@@ -2031,102 +2106,21 @@ class Project:
         if not self.cg_selection:
             self._cg_residues = []
             return self._cg_residues
-        # Otherwise we parse the selection and return the list of residue indices
-        self._cg_residues = self.structure.get_selection_residue_indices(self.cg_selection)
+        # Otherwise we must set the list of residues
+        # Get a sample from the reference MD and make a copy to prevent further mutation
+        reference_cg_residues = [ residue_index for residue_index in self.reference_md.cg_residues ]
+        # Make sure this is coherent among all MDs
+        reference_set = set(reference_cg_residues)
+        for md in self.mds:
+            # Skip the reference MD since we are using its residues
+            if md is self.reference_md: continue
+            md_set = set(md.cg_residues)
+            if reference_set != md_set:
+                raise ValueError('Coarse grain residues are not coherent among MDs.')
+        self._cg_residues = reference_cg_residues
         print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
-
-    # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
-    # This function may be called for the first time while in the 'inpro' task
-    # Thus this function is called when we still have no structure, but we us a provisional structure
-    def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = True):
-        def parse_dummy_selection () -> 'Selection':
-            if verbose: print('Setting dummy atoms selection')
-            # If no input selection was passed assume there are no dummy atoms in the system
-            if not self.input_dummy_selection:
-                if verbose: print(' Empty selection -> There are no dummy atoms at all')
-                return Selection()
-            # If the input dummy selection is 'auto' then guess dummy atoms from their atom names
-            if self.input_dummy_selection == 'auto':
-                if verbose: print(' Guessing dummy atoms by their atom names')
-                # Get atom indices of all atoms with names matching a dummy atom name patter
-                atom_indices = []
-                for dummy_name in STANDARD_DUMMY_ATOM_NAMES:
-                    for atom_index, atom in enumerate(reference_structure.atoms):
-                        if re.match(dummy_name, atom.name):
-                            atom_indices.append(atom_index)
-                dummy_atoms_count = len(atom_indices)
-                if verbose:
-                    print(f' {dummy_atoms_count} dummy atoms were found')
-                    example = reference_structure.atoms[atom_indices[0]] if dummy_atoms_count > 0 else None
-                    if example: print(f' e.g. {example.label}')
-                return Selection(atom_indices)
-            # If we have and actual VMD selection then parse it
-            parsed_selection = reference_structure.select(self.input_dummy_selection, syntax='vmd')
-            if verbose: print(f' Parsed dummy atoms selection has {len(parsed_selection)} atoms')
-            return parsed_selection
-        # Save the parsed dummy selection
-        self._dummy_selection = parse_dummy_selection()
-        # If there are no dummy atoms then stop here
-        if not self._dummy_selection: return
-        # Update gromacs masses by setting fake masses for dummy atoms: 0
-        print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
-        fake_masses = set()
-        for atom_index in self._dummy_selection.atom_indices:
-            atom = reference_structure.atoms[atom_index]
-            fake_masses.add((atom.residue.name, atom.name, 0))
-        extend_gromacs_masses(fake_masses)
-
-    def get_dummy_selection(self) -> 'Selection':
-        """Get the dummy atoms selection."""
-        # If we already have a stored value then return it
-        if self._dummy_selection is not None:
-            return self._dummy_selection
-        # Otherwise we must set the dummy selection
-        self._set_dummy_selection(self.structure)
-        # Finally return the selection
-        return self._dummy_selection
-    dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
-
-    def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):
-        """Parse forced class selections"""
-        if self.input_forced_class_selections is None: return
-        if verbose: print('Processing input forced class selections')
-        parsed_class_selections = {}
-        # Iterate input forced class selections
-        for classification, selection_string in self.input_forced_class_selections.items():
-            parsed_selection = reference_structure.select(selection_string)
-            if verbose: print(f' "{classification}" selection has {len(parsed_selection)} atoms.')
-            if not parsed_selection:
-                raise InputError(f'Empty forced class selection "{classification}": {selection_string}')
-            parsed_class_selections[classification] = parsed_selection
-        # Make sure there are no overlaps
-        for (class_a, selection_a), (class_b, selection_b) in pairwise(list(parsed_class_selections.items())):
-            selection_a_residues_indices = set(reference_structure.get_selection_residue_indices(selection_a))
-            selection_b_residues_indices = set(reference_structure.get_selection_residue_indices(selection_b))
-            intersection = selection_a_residues_indices.intersection(selection_b_residues_indices)
-            if intersection:
-                raise InputError('There is an overlap in the forced class selections:\n' + \
-                    f' "{class_a}" selection ({self.input_forced_class_selections[class_a]})' + \
-                    f' and "{class_b}" selection ({self.input_forced_class_selections[class_b]})' + \
-                    f' have {len(intersection)} residues in common. There must be no overlaps.')
-        # Set the final value
-        self._forced_class_selections = parsed_class_selections
-
-    def get_forced_class_selections(self) -> dict[str, 'Selection'] | None:
-        """Get the forced class atoms selection."""
-        # If we already have a stored value then return it
-        if self._forced_class_selections is not None:
-            return self._forced_class_selections
-        # If there is no input forced class selections then skip this process already
-        if self.input_forced_class_selections is None:
-            return None
-        # Otherwise we must set the forced class selection
-        self._set_forced_class_selections(self.structure)
-        # Finally return the selection
-        return self._forced_class_selections
-    forced_class_selections = property(get_forced_class_selections, None, None, "Custom forced selections for molecular classification (read only)")
 
     # Set additional values infered from input values
     # RUBEN: unused?

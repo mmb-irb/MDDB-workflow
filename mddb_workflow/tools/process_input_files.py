@@ -168,15 +168,15 @@ def process_input_files(
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
     # Since this is proviosonal we will make it silent
-    self.project._set_cg_selection(provisional_structure, verbose=False)
-    provisional_cg_selection = self.project.cg_selection
+    self._set_cg_selection(provisional_structure, verbose=False)
+    provisional_cg_selection = self.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set also provisional forced class selections and apply them to the provisional structure
     # This may be important for the automatic filtering
-    self.project._set_forced_class_selections(provisional_structure, verbose=False)
-    if self.project.forced_class_selections:
-        provisional_structure.force_classifications(self.project.forced_class_selections)
+    self._set_forced_class_selections(provisional_structure, verbose=False)
+    if self.forced_class_selections:
+        provisional_structure.force_classifications(self.forced_class_selections)
 
     # --- FILTERING ATOMS ------------------------------------------------------------
 
@@ -242,18 +242,18 @@ def process_input_files(
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
     # Since this is proviosonal we will make it silent
-    self.project._set_cg_selection(provisional_structure, verbose=False)
-    provisional_cg_selection = self.project.cg_selection
+    self._set_cg_selection(provisional_structure, verbose=False)
+    provisional_cg_selection = self.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
     # Set the selection of dummy atoms already
-    self.project._set_dummy_selection(provisional_structure)
+    self._set_dummy_selection(provisional_structure)
 
     # Set also provisional forced class selections and apply them to the provisional structure
     # This may be important for the automatic filtering
-    self.project._set_forced_class_selections(provisional_structure, verbose=False)
-    if self.project.forced_class_selections:
-        provisional_structure.force_classifications(self.project.forced_class_selections)
+    self._set_forced_class_selections(provisional_structure, verbose=False)
+    if self.forced_class_selections:
+        provisional_structure.force_classifications(self.forced_class_selections)
 
     # Also we can set a provisional PBC selection
     # This selection is useful both for imaging/fitting and for the correction
@@ -378,7 +378,7 @@ def process_input_files(
         MD=self,
         pbc_selection=provisional_pbc_selection,
         cg_selection=provisional_cg_selection,
-        dummy_selection=self.project.dummy_selection,
+        dummy_selection=self.dummy_selection,
         snapshots=snapshots,
         register=self.register,
         mercy=self.project.mercy,
@@ -453,8 +453,8 @@ def process_input_files(
 
     # Set the final structure
     final_structure = Structure.from_pdb_file(output_structure_file.path)
-    self.project._set_cg_selection(final_structure, verbose=False)
-    final_cg_selection = self.project.cg_selection
+    self._set_cg_selection(final_structure, verbose=False)
+    final_cg_selection = self.cg_selection
 
     if final_cg_selection != provisional_cg_selection:
         raise InputError('Coarse grain selection is not consistent after correcting the structure. '
