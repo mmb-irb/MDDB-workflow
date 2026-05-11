@@ -65,7 +65,7 @@ def test_generate_ligand_references():
          ['5957']),  # Workflow finds 5461108, Atp(4-)
 
     ]
-    inchimap = {case[0]: InChIKeyData(inchi=case[1], resnames=set([1])) for case in test_cases}
+    inchimap = {case[0]: InChIKeyData(inchi=case[1], resnames=set([1]), molname='MOL') for case in test_cases}
 
     ligand_references = generate_ligand_references(
         mwf_stc, cache,

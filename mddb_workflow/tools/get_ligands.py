@@ -20,16 +20,15 @@ LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'fo
 MINIMUM_TANIMOTO_THRESHOLD = 0.3
 
 
-@retry_request
 def _make_get_request(url: str) -> requests.Response:
     return requests.get(url, timeout=30)
 
 
-@retry_request
 def _make_post_request(url, payload):
     return requests.post(url, data=payload, timeout=30)
 
 
+@retry_request
 def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context: str = None) -> Optional[dict]:
     """Make a request to PubChem API, with retries and error handling.
 
@@ -45,15 +44,20 @@ def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context
         r = _make_post_request(url, payload)
     # Add a small sleep if we are in the green zone to avoid hitting the rate limit
     # https://pubchem.ncbi.nlm.nih.gov/docs/dynamic-request-throttling
-    throttling = r.headers['X-Throttling-Control'].split()[-2]
-    if throttling == 'Yellow':
+    throttling = r.headers.get('X-Throttling-Control', 'No throttling').split(',')[0]
+
+    if 'Yellow' in throttling:
         time.sleep(0.2)
-    elif throttling == 'Red':
+    elif 'Red' in throttling:
+        time.sleep(0.5)
+    elif 'Black' in throttling:
         time.sleep(1)
     if r.status_code == 200:
         return r.json()
     elif error_context:
-        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + ")")
+        if 'temporarily unable' in r.text:
+            raise requests.exceptions.ConnectionError(f"PubChem is temporarily unable to process requests. Please try again later.")
+        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text)
     else:
         return None
 
@@ -507,11 +511,7 @@ def pdbs_2_pubchems(pdb_ids: list[str], cache: 'Cache') -> list[dict]:
 def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
     """Given a PubChem ID, use the uniprot API to request its data and then mine what is needed for the database."""
     request_url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{pubchem_id}/JSON/'
-    parsed_response = handle_http_request(request_url, "PubChem request")
-    if parsed_response is None:
-        warn('Cannot find PubChem entry for accession ' + pubchem_id)
-        return None
-    parsed_response = json.loads(parsed_response)
+    parsed_response = make_pubchem_request(request_url, error_context=f'PubChem data request for CID {pubchem_id}')
     # Set part of the error message, in case we find a problem
     error_message = f'Unexpected PubChem data structure in {request_url}\n  '
     # Mine target data: SMILES
@@ -759,8 +759,6 @@ def obtain_pubchem_data_from_input(ligand: dict) -> dict[str, Optional[str]]:
 
     # Request ligand data from pubchem
     pubchem_data = get_pubchem_data(ligand_data['pubchem'])
-    if not pubchem_data:
-        raise RuntimeError('No PubChem data avilable')
 
     # Add PubChem data to ligand data
     ligand_data = {**ligand_data, **pubchem_data}

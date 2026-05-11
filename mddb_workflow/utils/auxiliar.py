@@ -813,12 +813,12 @@ def handle_http_request(request_url, error_context="request") -> Optional[str]:
     except HTTPError as error:
         if error.code == 404:
             return None
-        raise ValueError(f'Something went wrong with the {error_context} (error {error.code})')
+        raise RequestError(f'Something went wrong with the {error_context} (error {error.code})')
     except URLError as error:
         # Convert SSL/timeout URLErrors to TimeoutError so @retry_request decorator retries them
         if 'ssl' in str(error.reason).lower() and 'timed out' in str(error.reason).lower():
             raise TimeoutError(str(error.reason))
-        raise ValueError(f'Something went wrong with the {error_context}: {error.reason}')
+        raise RequestError(f'Something went wrong with the {error_context}: {error.reason}')
 
 
 def unique (source_list : list) -> list:
