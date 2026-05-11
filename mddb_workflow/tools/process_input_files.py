@@ -435,7 +435,7 @@ def process_input_files(
     # Save the internal variables
     self._structure_file = output_structure_file
     self._trajectory_file = output_trajectory_file
-    self.project._topology_file = output_topology_file
+    self._topology_file = output_topology_file
 
     # If the input and output file have the same name then overwrite input cksums
     # Thus we avoid this task to run forever
