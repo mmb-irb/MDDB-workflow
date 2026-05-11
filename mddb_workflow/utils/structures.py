@@ -1580,15 +1580,18 @@ class Structure:
             values = line.split()
             # If this is not atom line then we are done
             if len(values) == 0 or values[0] not in atom_headers: continue
+            # WARNING: The atom header is not safe enought
+            # Some other header data are free texts which may include these words
+            # To make it a bit safer we check that the atom number is present as well, although we don't need it
+            atom_number = values[1]
+            if not atom_number.isnumeric(): continue
             # Get the atom model number if a model number was passed
             # Note that then model is a number greater than 0
             if model:
                 model_number = int(values[20])
-                # If the model number odes not match then skip it
+                # If the model number does not match then skip it
                 if model != model_number: continue
             # Mine atom data
-            # Next value is just the atom number, we do not need it
-            # atom_number = values[1]
             # Mine the atom element
             element = values[2]
             # Mine the atom name
