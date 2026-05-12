@@ -248,6 +248,9 @@ def prepare_project_metadata (
     # Let the forced class selection only if it is present, since it is a rare input
     if input_forced_class_selections is None:
         del metadata['FORCED_CLASS_SELECTION']
+    # Remove metadditions since they are not common
+    if input_metadditions is None:
+        del metadata['METADDITIONS']
     # Add collection specific fields
     if 'cv19' in collections:
         cv19_unit = input_cv19_unit
