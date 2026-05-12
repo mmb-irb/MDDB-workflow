@@ -54,6 +54,7 @@ def prepare_project_metadata (
     input_customs : list[dict],
     input_orientation : list[float],
     input_multimeric : list[str],
+    input_metadditions : dict,
     # Additional topic-specific inputs
     input_cv19_unit : str,
     input_cv19_startconf : str,
@@ -200,6 +201,7 @@ def prepare_project_metadata (
         'BOXSIZEX': boxsizex,
         'BOXSIZEY': boxsizey,
         'BOXSIZEZ': boxsizez,
+        'METADDITIONS': input_metadditions,
         'SYSTATS': system_atoms,
         'SYSTRES': system_residues,
         'PROTATS': protein_atoms,
@@ -272,14 +274,13 @@ def prepare_project_metadata (
     # Write metadata to a file
     save_json(metadata, output_file.path)
 
-
-metadata_fields = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
-    'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'PDBIDS', 'FORCED_REFERENCES',
-    'REFERENCES', 'INPUT_LIGANDS', 'LIGANDS', 'LIGANDNAMES', 'PROTSEQ', 'NUCLSEQ', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
-    'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'SYSTATS', 'PROTATS', 'PROT', 'DPPC', 'SOL', 'NA', 'CL',
-    'INTERACTIONS', 'PBC_SELECTION', 'CHAINNAMES', 'MEMBRANES', 'CUSTOMS', 'ORIENTATION', 'PTM',
-    'MULTIMERIC', 'COLLECTIONS', 'WARNINGS', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'CV19_UNIT', 'CV19_STARTCONF',
-    'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
+# Set which metadata fields may be specified for a specific MD thus overwritting project metadata
+# Note than not all fields are allawed since some fields make no sense if as long as replicas have the same system (e.g. uniprots)
+METADATA_FIELDS = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
+    'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
+    'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'INTERACTIONS', 'PBC_SELECTION',
+    'CHAINNAMES', 'CUSTOMS', 'ORIENTATION', 'PTM', 'MULTIMERIC', 'METADDITIONS', 'WARNINGS',
+    'CV19_UNIT', 'CV19_STARTCONF', 'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
 ])
 
 
@@ -314,9 +315,9 @@ def generate_md_metadata (
     if directory:
         del other_md_inputs[MD_DIRECTORY]
 
-    # Inherit all metadata fields
+    # Search for other metadata inputs specific for this MD
     metadata = {}
-    for field in metadata_fields:
+    for field in METADATA_FIELDS:
         input_field = field.lower()
         field_value = other_md_inputs.get(input_field, None)
         if field_value:

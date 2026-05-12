@@ -571,3 +571,22 @@ mdref:
 # Path to the dataset storage file for the Dataset object.
 
 dataset_path:
+
+#------------------------------------------------------------------------------------------------------------
+# ADDITIONAL METADATA
+#------------------------------------------------------------------------------------------------------------
+
+# Set any additional metadata
+# Field names and values are fully costumizable
+# This data will be stored in the database, in the project metadata, and they will be accessible to read
+# This data will be also recovered when downloading the inputs file from the API
+# However these fields will have no further effects on the workflow, API or web client
+# API queries based on these fields are supported but the integration in the client is limited
+#
+# Example:
+#
+# add_meta:
+#   my_custom_field: 42
+#   my_custom_field_2: whatever
+
+metadditions:

@@ -2077,6 +2077,7 @@ class Project:
     input_cg_selection = inputs_property('cg_selection', "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
     input_dummy_selection = inputs_property('dummy_selection', "The original user input dummy atoms selection (read only)")
     input_forced_class_selections = inputs_property('forced_class_selections',  "The original input custom forced selections for molecular classification (read only)")
+    input_metadditions = inputs_property('metadditions',  "Author-customizable metadata additional fields (read only)")
     # Additional topic-specific inputs
     input_cv19_unit = inputs_property('cv19_unit', "Input Covid-19 Unit (read only)")
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
