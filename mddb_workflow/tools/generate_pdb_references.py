@@ -3,6 +3,7 @@ import json
 import urllib.request
 
 from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, request_pdb_data, round_to_thousandths, warn, reprint
+from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
@@ -10,6 +11,8 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.xvg_parse import xvg_parse
 from mddb_workflow.tools.generate_map import get_uniprot_reference, align
 
+# Set a flag for chains which are made entirley of alpha carbons only
+CA_ONLY = 'alpha carbons only'
 
 def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
     """Prepare the PDB references json file to be uploaded to the database."""
@@ -103,7 +106,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
         sequence = chain_seq.get(chain, RemoteServiceError)
         # DANI: This happened with PDB 2AW4 (deprecated to 4V4Q), where chains were wrongly annotated regarding the structure
         if sequence is RemoteServiceError:
-            raise RemoteServiceError(f'Unexpected annotations in PDB {pdb_id}: Chain {chain} is annotated as protein but it is not.')
+            raise RemoteServiceError(f'Unexpected annotations in PDB {pdb_id}: Chain {chain} is annotated as protein but it is not recognized as such in the structure.')
         # Get the uniprot reference, including the reference sequence
         uniprot_reference = get_uniprot_reference(uniprot_id)
         reference_sequence = uniprot_reference['sequence'] if uniprot_reference else None
@@ -184,6 +187,7 @@ def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
 
 # Set a residual output filepath
 RESIDUAL_AREA_FILENAME = '.residual_area.xvg'
+
 def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     """Calculate the solvent accessible surface in the PDB structure as reference."""
     # Download the structure
@@ -203,6 +207,20 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     chain_count = len(protein_chains)
     # Keep the SAS of every chain
     pdb_chains_sas = {}
+    # Keep also the chain sequence
+    # Note that the sequence coming from the GraphQL is the reference sequence, including also the endings
+    # And only god knows how to ask GraphQL to get the actual present sequence in the PDB structure
+    # In order to get the real sequence we read it directly from the parsed structure
+    pdb_chains_seq = {}
+    # We have encountered some PDB entries with alpha carbons only (e.g. 2AKH, 2AKI)
+    # The structure will not identify these chains as proteins although they are annotated as such in the PDB
+    # We can not calculate SAS over these chains anyway but we must identify them to further handle them
+    for chain in structure.chains:
+        if chain.classification == 'protein': continue
+        if all([ atom.name == 'CA' for atom in chain.atoms ]) and all([ residue.name in PROTEIN_RESIDUE_NAME_LETTERS for residue in chain.residues ]):
+            pdb_chains_sas[chain.name] = CA_ONLY
+            # Save the sequence as well, which is based in residue names so it should be correct
+            pdb_chains_seq[chain.name] = chain.get_sequence()
     print()
     # Iterate PDB chains
     for c, chain in enumerate(protein_chains,1 ):
@@ -236,17 +254,12 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
         # We also round the final values to thousands
         sas_per_residues = [ round_to_thousandths(sas * 100) for sas in sas_per_residues ]
         pdb_chains_sas[chain.name] = sas_per_residues
+        # Save the sequence as well
+        pdb_chains_seq[chain.name] = chain.get_sequence()
         # Remove files which are no longer required
         os.remove(ndx_filename)
         os.remove(current_chain_sasa)
         os.remove(RESIDUAL_AREA_FILENAME)
-    # Keep also the chain sequence
-    # Note that the sequence coming from the GraphQL is the reference sequence, including also the endings
-    # And only god knows how to ask GraphQL to get the actual present sequence in the PDB structure
-    # In order to get the structure we read it directly from the parsed structure
-    pdb_chains_seq = {}
-    for chain in protein_chains:
-        pdb_chains_seq[chain.name] = chain.get_sequence()
     # Remove the auxiliar file
     os.remove(auxiliar_pdb_filepath)
     os.remove(auxiliar_mmcif_filepath)
