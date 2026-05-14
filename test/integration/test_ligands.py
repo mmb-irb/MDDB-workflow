@@ -13,7 +13,7 @@ data_dir = pathlib.Path(__file__).parent.parent / 'data'
 test_dir = data_dir / 'output/test_ligands'
 
 
-@pytest.mark.unit_int
+# @pytest.mark.unit_int
 def test_generate_ligand_references():
     """Test the generate_ligand_references function."""
     if test_dir.parent.exists() and test_dir.exists():
