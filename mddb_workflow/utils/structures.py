@@ -1559,7 +1559,7 @@ class Structure:
 
     # https://biopandas.github.io/biopandas/tutorials/Working_with_mmCIF_Structures_in_DataFrames/
     @classmethod
-    def from_mmcif (cls, mmcif_content : str, model : Optional[int] = None, author_notation : bool = False):
+    def from_mmcif (cls, mmcif_content : str, model : int = 1, author_notation : bool = False):
         """Set the structure from mmcif.
         You may filter the content for a specific model.
         You may ask for the author notation instead of the standarized notation for legacy reasons.
@@ -1591,10 +1591,9 @@ class Structure:
             if not atom_number.isnumeric(): continue
             # Get the atom model number if a model number was passed
             # Note that then model is a number greater than 0
-            if model:
-                model_number = int(values[20])
-                # If the model number does not match then skip it
-                if model != model_number: continue
+            model_number = int(values[20])
+            # If the model number does not match then skip it
+            if model != model_number: continue
             # Mine atom data
             # Mine the atom element
             element = values[2]
@@ -1653,10 +1652,13 @@ class Structure:
             # Add current atom to the parsed residue
             atom_index += 1
             parsed_residue.atom_indices.append(atom_index)
+        # Make sure at least one atom was parsed
+        if len(parsed_atoms) == 0:
+            raise ValueError(f'No atoms were parsed with model {model} from mmCIF content.')
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
 
     @classmethod
-    def from_mmcif_file (cls, mmcif_filepath : str, model : Optional[int] = None, author_notation : bool = False):
+    def from_mmcif_file (cls, mmcif_filepath : str, model : int = 1, author_notation : bool = False):
         """Set the structure from a mmcif file."""
         mmcif_file = File(mmcif_filepath)
         if not mmcif_file.exists:
