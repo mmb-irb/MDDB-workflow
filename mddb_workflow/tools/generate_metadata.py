@@ -19,7 +19,7 @@ def prepare_project_metadata (
     membrane_map : dict,
     inchikey_map : dict,
     protein_references_file : 'File',
-    pdb_ids : list[str],
+    pdb_references : list[dict],
     input_protein_references : list[str] | dict,
     input_ligands : list[dict],
     interactions : list[dict],
@@ -163,6 +163,10 @@ def prepare_project_metadata (
     if type(program_version) in { float, int }:
         program_version = str(program_version)
 
+    # Get the reference PDB ids
+    # Note that may differ from the input PDB ids since obsolete entries are replaced automatically
+    final_pdb_ids = [ pdb_references['id'] for pdb_references in pdb_references ]
+
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
     metadata = {
@@ -180,7 +184,7 @@ def prepare_project_metadata (
         'CITATION': input_citation,
         'THANKS': input_thanks,
         'LINKS': input_links,
-        'PDBIDS': pdb_ids,
+        'PDBIDS': final_pdb_ids,
         'FORCED_REFERENCES': input_protein_references,
         'REFERENCES': mapped_protein_references,
         'INPUT_LIGANDS': input_ligands,

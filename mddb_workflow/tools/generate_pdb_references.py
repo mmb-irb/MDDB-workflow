@@ -14,7 +14,7 @@ from mddb_workflow.tools.generate_map import get_uniprot_reference, align
 # Set a flag for chains which are made entirley of alpha carbons only
 CA_ONLY = 'alpha carbons only'
 
-def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
+def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File') -> list[dict]:
     """Prepare the PDB references json file to be uploaded to the database."""
     # If we already have PDB references then load them
     previous_pdb_references = {}
@@ -38,8 +38,7 @@ def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File'):
         pdb_references.append(pdb_reference)
     # Write references to a json file
     save_json(pdb_references, pdb_references_file.path, indent = 4)
-    # DANI: There is no need to return PDB references since it is not used in the workflow
-    #return pdb_references
+    return pdb_references
 
 # Download PDB data from the PDB API
 def get_pdb_reference (pdb_id : str) -> dict:
@@ -61,9 +60,11 @@ def get_pdb_reference (pdb_id : str) -> dict:
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
+    # Note that the PDB id of the result may be different since obsolete PDBs are automatically replaced
+    final_pdb_id = parsed_response['rcsb_id']
     # Mine data
     pdb_data = {}
-    pdb_data['id'] = parsed_response['rcsb_id']
+    pdb_data['id'] = final_pdb_id
     pdb_data['title'] = parsed_response['struct']['title']
     pdb_data['class'] = parsed_response['struct_keywords']['pdbx_keywords']
     pdb_data['authors'] = [ author['name'] for author in parsed_response['audit_author'] ]
@@ -87,7 +88,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
         uniprots = identifier.get('uniprot_ids', None)
         if not uniprots: continue
         if len(uniprots) > 1:
-            warn(f'PDB {pdb_id} has multiple uniprots: {uniprots}. Using only the first one')
+            warn(f'PDB {final_pdb_id} has multiple uniprots: {uniprots}. Using only the first one')
         uniprot_id = uniprots[0]
         # Get all chains with this configuration
         chains = identifier['asym_ids']
@@ -97,7 +98,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
     pdb_data['chain_uniprots'] = chain_uniprots
     # Download the structure and calculate the solvent accessible surface in the PDB structure as reference
     # Do it for protein chains only and get also their aminoacid sequences
-    chain_sas, chain_seq = calculate_pdb_chain_sas(pdb_id)
+    chain_sas, chain_seq = calculate_pdb_chain_sas(final_pdb_id)
     # Find the UniProt reference numeration for every residue in the sequence
     chain_residues_uniprot_numeration = {}
     # Iterate protein chains
@@ -106,7 +107,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
         sequence = chain_seq.get(chain, RemoteServiceError)
         # DANI: This happened with PDB 2AW4 (deprecated to 4V4Q), where chains were wrongly annotated regarding the structure
         if sequence is RemoteServiceError:
-            raise RemoteServiceError(f'Unexpected annotations in PDB {pdb_id}: Chain {chain} is annotated as protein but it is not recognized as such in the structure.')
+            raise RemoteServiceError(f'Unexpected annotations in PDB {final_pdb_id}: Chain {chain} is annotated as protein but it is not recognized as such in the structure.')
         # Get the uniprot reference, including the reference sequence
         uniprot_reference = get_uniprot_reference(uniprot_id)
         reference_sequence = uniprot_reference['sequence'] if uniprot_reference else None
@@ -114,7 +115,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
         residue_numeration = None
         align_match = align(reference_sequence, sequence) if sequence and reference_sequence else None
         if not align_match:
-            warn(f'PDB {pdb_id} has a polymer tagged with the UniProt {uniprot_id} but its reference sequence does not match.')
+            warn(f'PDB {final_pdb_id} has a polymer tagged with the UniProt {uniprot_id} but its reference sequence does not match.')
             chain_residues_uniprot_numeration[chain] = 'Missmatched'
             continue
         residue_numeration, score = align_match

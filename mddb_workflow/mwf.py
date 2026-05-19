@@ -2321,6 +2321,7 @@ class Project:
     get_pdb_references = Task('pdbs', 'Prepare PDB references',
         prepare_pdb_references, output_filenames={'pdb_references_file': PDB_REFERENCES_FILENAME})
     pdb_references_file = get_pdb_references.get_output_file_getter('pdb_references_file')
+    pdb_references = property(get_pdb_references, None, None, "PDB references (read only)")
 
     # Map the structure aminoacids sequences against the Uniprot reference sequences
     get_protein_map = Task('protmap', 'Protein residues mapping', generate_protein_mapping,

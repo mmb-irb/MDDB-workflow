@@ -623,9 +623,10 @@ def request_pdb_data(pdb_id: str, query: str) -> dict:
     if parsed_response is None:
         new_pdb_id = request_replaced_pdb(pdb_id)
         if new_pdb_id:
+            warn(f'PDB {pdb_id} is obsolete. {new_pdb_id} will be used instead.')
             parsed_response = request_pdb_data(new_pdb_id, query)
         else:
-            print(f'PDB id {pdb_id} not found')
+            warn(f'PDB id {pdb_id} not found')
     return parsed_response
 
 
