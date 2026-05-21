@@ -68,15 +68,15 @@ def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     # Or https://www.rhea-db.org/help/inchi-inchikey#What_is_an_InChIKey_
     key = inchikey[:14] if only_first_layer else inchikey
     url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all/json"
-    response = requests.get(url)
+    headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'}
+    response = requests.get(url, headers=headers)
     if response.status_code == 200:
         js = response.json()
         if js != []:
             return js
-        else:
-            return False
     else:
-        print(f"Error for {inchikey}: {response.status_code}")
+        print(f"Error for {inchikey}: {response.status_code}: {response.reason}")
+    return False
 
 
 def get_swisslipids_info(entity_id) -> dict:
