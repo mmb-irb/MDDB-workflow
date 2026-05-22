@@ -1,6 +1,6 @@
 # This is the starter script
 
-from os import walk, mkdir, getcwd
+from os import mkdir, getcwd
 from os.path import exists, isdir, isabs, relpath, normpath, split, basename, join
 import sys
 import io
@@ -103,10 +103,10 @@ class MD:
 
     def __init__(self,
         project: 'Project',
-        name : str,
+        name: str,
         number: int,
         directory: str,
-        input_topology_filepath : str,
+        input_topology_filepath: str,
         input_structure_filepath: str,
         input_trajectory_filepaths: list[str],
     ):
@@ -114,8 +114,10 @@ class MD:
 
         Args:
             project (Project): The parent project this MD belongs to.
+            name (str): The name of the MD.
             number (int): The number of the MD according to its accession.
             directory (str): The local directory where the MD takes place.
+            input_topology_filepath (str): The input topology file path.
             input_structure_filepath (str): The input structure file path.
             input_trajectory_filepaths (list[str]): The input trajectory file paths.
 
@@ -217,7 +219,7 @@ class MD:
     def __repr__(self):
         """Return a string representation of the MD object."""
         return f'<MD "{self.name}">'
-    
+
     def __str__(self):
         """Return a string representation of the MD object."""
         return f'MD "{self.name}"'
@@ -225,7 +227,7 @@ class MD:
     def pathify(self, filename_or_relative_path: str) -> str:
         """Given a filename or relative path, add the MD directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
-    
+
     # Input topology file ------------
 
     def get_input_topology_filepath(self) -> Optional[str]:
@@ -634,8 +636,8 @@ class MD:
         if value != MISSING_INPUT_EXCEPTION:
             return value
         return self.project.get_input(name)
-    
-    def update_inputs (self, key: str, new_value):
+
+    def update_inputs(self, key: str, new_value):
         """Permanently update current MD inputs in the inputs file. Do it only if the project value is not already the same."""
         # Check if the project value is already this value
         # If so then there is no need to update this value specifically for the MD
@@ -645,9 +647,9 @@ class MD:
         self.project.update_inputs(nested_key, new_value)
 
     def is_inputs_file_available(self) -> bool:
-        """Set a function to check if inputs file is available.
+        """Check if inputs file is available.
         Note that asking for it when it is not available will lead to raising an input error.
-        This function is inherited from the project
+        This function is inherited from the project.
         """
         return self.project.is_inputs_file_available()
 
@@ -961,7 +963,7 @@ class MD:
     # DANI: Esto algún día habría que tratar de automatizarlo
     def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set the coarse grain selection."""
-        def parse_cg_selection () -> 'Selection':
+        def parse_cg_selection() -> 'Selection':
             if verbose: print('Setting Coarse Grained (CG) atoms selection')
             # Get the input selection string
             selection_string = self.input_cg_selection
@@ -1032,7 +1034,7 @@ class MD:
     # This function may be called for the first time while in the 'inpro' task
     # Thus this function is called when we still have no structure, but we us a provisional structure
     def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = True):
-        def parse_dummy_selection () -> 'Selection':
+        def parse_dummy_selection() -> 'Selection':
             if verbose: print('Setting dummy atoms selection')
             # If no input selection was passed assume there are no dummy atoms in the system
             if not self.input_dummy_selection:
@@ -1081,7 +1083,7 @@ class MD:
     dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 
     def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):
-        """Parse forced class selections"""
+        """Parse forced class selections."""
         if self.input_forced_class_selections is None: return
         if verbose: print('Processing input forced class selections')
         parsed_class_selections = {}
@@ -1098,9 +1100,9 @@ class MD:
             selection_b_residues_indices = set(reference_structure.get_selection_residue_indices(selection_b))
             intersection = selection_a_residues_indices.intersection(selection_b_residues_indices)
             if intersection:
-                raise InputError('There is an overlap in the forced class selections:\n' + \
-                    f' "{class_a}" selection ({self.input_forced_class_selections[class_a]})' + \
-                    f' and "{class_b}" selection ({self.input_forced_class_selections[class_b]})' + \
+                raise InputError('There is an overlap in the forced class selections:\n' +
+                    f' "{class_a}" selection ({self.input_forced_class_selections[class_a]})' +
+                    f' and "{class_b}" selection ({self.input_forced_class_selections[class_b]})' +
                     f' have {len(intersection)} residues in common. There must be no overlaps.')
         # Set the final value
         self._forced_class_selections = parsed_class_selections
@@ -1494,7 +1496,7 @@ class Project:
             if input_md_config:
                 raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove any "-md" argument or the "-proj" argument.')
-            
+
         # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
         if input_md_config and (md_directories or input_trajectory_filepaths):
             raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
@@ -1669,7 +1671,7 @@ class Project:
             # MDs must be a list, or it will cause further problems
             # To avoid this fix the problem both internally and in the inputs file
             self.md_config = []
-            self.update_inputs(f'mds', self.md_config)
+            self.update_inputs('mds', self.md_config)
 
         # Add or overwrite possible MD inputs from the inputs file with the console arguments
 
@@ -1695,7 +1697,7 @@ class Project:
                 config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
                 # Otherwise create a new one and add it to the list
                 if config is None:
-                    config = { MD_DIRECTORY: directory }
+                    config = {MD_DIRECTORY: directory}
                     self.md_config.append(config)
                 # An input topoloy/structure for a specific MD may be passed before the trajectory
                 # In order to tell if the topology/structure was passed we check input file formats
@@ -1716,9 +1718,9 @@ class Project:
                 md_input_trajectory_filepaths = arg_config[2:] if has_structure or has_topology else arg_config[1:]
                 # Add the input files to the MD configuration
                 config.update({
-                    MD_INPUT_TOPOLOGY_FILEPATH : md_input_topology_filepath,
-                    MD_INPUT_STRUCTURE_FILEPATH : md_input_structure_filepath,
-                    MD_INPUT_TRAJECTORY_FILEPATHS : md_input_trajectory_filepaths,
+                    MD_INPUT_TOPOLOGY_FILEPATH: md_input_topology_filepath,
+                    MD_INPUT_STRUCTURE_FILEPATH: md_input_structure_filepath,
+                    MD_INPUT_TRAJECTORY_FILEPATHS: md_input_trajectory_filepaths,
                 })
 
         # Second scenario
@@ -1738,7 +1740,7 @@ class Project:
                 config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
                 # Otherwise create a new one and add it to the list
                 if config is None:
-                    config = { MD_DIRECTORY: directory }
+                    config = {MD_DIRECTORY: directory}
                     self.md_config.append(config)
 
         # Add the generic topology, structure or trajectory arguments, if any, to the MD config
@@ -1752,7 +1754,7 @@ class Project:
 
         # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
         self._check_md_config()
-            
+
         # Set the reference MD
         self._reference_md = None
         self._reference_md_index = reference_md_index
@@ -1760,12 +1762,12 @@ class Project:
     def __repr__(self):
         """Return a string representation of the Project object."""
         return '<Project>'
-    
+
     def __str__(self):
         """Return a string representation of the MD object."""
-        return f'project'
-    
-    def _check_md_config (self):
+        return 'project'
+
+    def _check_md_config(self):
         """Check input MDs configuration, make sure input is coherent and fill the gaps."""
         # There must be at least one MD confiuration
         if len(self.md_config) == 0:
@@ -1922,7 +1924,8 @@ class Project:
 
     def get_input_trajectory_files(self) -> list[File]:
         """Get the input trajectory file(s) from the reference MD.
-        If file(s) are not found then try to download them."""
+        If file(s) are not found then try to download them.
+        """
         return self.reference_md._input_trajectory_files
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory files for each MD (read only)")
 
@@ -2076,8 +2079,8 @@ class Project:
     input_pbc_selection = inputs_property('pbc_selection', "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = inputs_property('cg_selection', "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")
     input_dummy_selection = inputs_property('dummy_selection', "The original user input dummy atoms selection (read only)")
-    input_forced_class_selections = inputs_property('forced_class_selections',  "The original input custom forced selections for molecular classification (read only)")
-    input_metadditions = inputs_property('metadditions',  "Author-customizable metadata additional fields (read only)")
+    input_forced_class_selections = inputs_property('forced_class_selections', "The original input custom forced selections for molecular classification (read only)")
+    input_metadditions = inputs_property('metadditions', "Author-customizable metadata additional fields (read only)")
     # Additional topic-specific inputs
     input_cv19_unit = inputs_property('cv19_unit', "Input Covid-19 Unit (read only)")
     input_cv19_startconf = inputs_property('cv19_startconf', "Input Covid-19 starting conformation (read only)")
@@ -2091,7 +2094,7 @@ class Project:
             return self._cg_selection
         # Otherwise we must set the selection
         # Make sure it is coherent among all MDs
-        unique_md_selections = set([ md.cg_selection for md in self.mds ])
+        unique_md_selections = set([md.cg_selection for md in self.mds])
         if len(unique_md_selections) > 1:
             raise InputError('Coarse grain selection is not coherent among MDs. Please change the input value.')
         self._cg_selection = self.reference_md.cg_selection
@@ -2109,7 +2112,7 @@ class Project:
             return self._cg_residues
         # Otherwise we must set the list of residues
         # Get a sample from the reference MD and make a copy to prevent further mutation
-        reference_cg_residues = [ residue_index for residue_index in self.reference_md.cg_residues ]
+        reference_cg_residues = [residue_index for residue_index in self.reference_md.cg_residues]
         # Make sure this is coherent among all MDs
         reference_set = set(reference_cg_residues)
         for md in self.mds:
@@ -2182,11 +2185,12 @@ class Project:
 
     def get_structure(self) -> 'Structure':
         """Get a reference structure.
-        Use the reference MD structure but make sure there are no inconsistency with other MDs."""
+        Use the reference MD structure but make sure there are no inconsistency with other MDs.
+        """
         # Get the structure form the reference MD
         reference_structure = self.reference_md.structure
         # Get the rest of MDs
-        other_mds = [ md for md in self.mds if md is not self.reference_md ]
+        other_mds = [md for md in self.mds if md is not self.reference_md]
         if len(other_mds) == 0: return reference_structure
         # Set a generic error message to be displayed as a tail in different scenarios
         error_message_tail = ' All replicas in the same project must have identical systems.\n' + \
@@ -2209,17 +2213,17 @@ class Project:
                 raise InputError(error_message_header + f' The structure has {other_structure.chain_count} chains while the reference structure has {reference_structure.chain_count} chains".\n' + error_message_tail)
             # Compare atoms one by one
             for reference_atom, other_atom in zip(reference_structure.atoms, other_structure.atoms):
-                for field in [ 'name', 'element', 'residue_index' ]:
+                for field in ['name', 'element', 'residue_index']:
                     if getattr(reference_atom, field) == getattr(other_atom, field): continue
                     raise InputError(error_message_header + f' Atom {other_atom.label} does not match the reference atom {reference_atom.label} in the field "{field}".\n' + error_message_tail)
             # Compare residues one by one
             for reference_residue, other_residue in zip(reference_structure.residues, other_structure.residues):
-                for field in [ 'name', 'number', 'icode', 'chain_index' ]:
+                for field in ['name', 'number', 'icode', 'chain_index']:
                     if getattr(reference_residue, field) == getattr(other_residue, field): continue
                     raise InputError(error_message_header + f' Residue {other_residue.label} does not match the reference residue {reference_residue.label} in the field "{field}".\n' + error_message_tail)
             # Compare chains one by one
             for reference_chain, other_chain in zip(reference_structure.chains, other_structure.chains):
-                for field in [ 'name' ]:
+                for field in ['name']:
                     if getattr(reference_chain, field) == getattr(other_chain, field): continue
                     raise InputError(error_message_header + f' Chain {other_chain.name} does not match the reference chain {reference_chain.name} in the field "{field}".\n' + error_message_tail)
             # Compare other structure properties
@@ -2253,12 +2257,12 @@ class Project:
     interactions = property(get_processed_interactions, None, None, "Processed interactions (read only)")
 
     # DANI: Arreglo cutre para que las cosas funcionen
-    def get_charges (self):
+    def get_charges(self):
         return self.reference_md.charges
     charges = property(get_charges, None, None, "Atom charges (read only)")
 
-    def get_md_charges (self):
-        return [ md.charges for md in self.mds ]
+    def get_md_charges(self):
+        return [md.charges for md in self.mds]
     md_charges = property(get_md_charges, None, None, "Atom charges from each MD (read only)")
 
     # Topology reader (early stage)
