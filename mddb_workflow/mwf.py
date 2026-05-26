@@ -1672,6 +1672,8 @@ class Project:
             # To avoid this fix the problem both internally and in the inputs file
             self.md_config = []
             self.update_inputs('mds', self.md_config)
+        # Purge removed MDs from the list
+        self.md_config = [ c for c in self.md_config if not c.get(MD_REMOVED, False) ]
 
         # Add or overwrite possible MD inputs from the inputs file with the console arguments
 
@@ -1777,6 +1779,8 @@ class Project:
         names = {}
         directories = {}
         for md_index, md_inputs in enumerate(self.md_config):
+            # Skip removed MDs
+            if md_inputs.get(MD_REMOVED, False): continue
             # Make sure the MD has at least a name or a directory
             directory = md_inputs.get(MD_DIRECTORY, None)
             name = md_inputs.get(MD_NAME, None)
