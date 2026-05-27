@@ -1,16 +1,38 @@
-from biobb_mem.lipyphilic_biobb.lpp_zpositions import lpp_zpositions, frame_df
-from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
+from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_THICKNESS_FILENAME
 from mddb_workflow.utils.type_hints import *
-from contextlib import redirect_stdout
-import os
+from lipyphilic.analysis.z_positions import ZPositions
+import numpy as np
+from MDAnalysis.transformations import translate, set_dimensions
+
+
+def set_box(u: 'Universe') -> np.ndarray:
+    """Set the box dimensions of the universe based on the positions of the atoms."""
+    # Initialize min and max positions with extreme values
+    min_pos = np.full(3, np.inf)
+    max_pos = np.full(3, -np.inf)
+
+    # Iterate over all frames to find the overall min and max positions
+    for ts in u.trajectory:
+        positions = u.atoms.positions
+        min_pos = np.minimum(min_pos, positions.min(axis=0))
+        max_pos = np.maximum(max_pos, positions.max(axis=0))
+
+    # Calculate the dimensions of the box
+    box_dimensions = max_pos - min_pos
+    zshift = -min_pos[2]  # Shift to ensure the minimum z is at 0
+    transformations = [
+        set_dimensions([*box_dimensions, 90, 90, 90]),
+        translate(np.array([0.0, 0.0, zshift]))
+    ]
+    u.trajectory.add_transformations(*transformations)
+    return zshift
 
 
 def thickness(
     membrane_map: dict,
-    structure_file: 'File',
-    trajectory_file: 'File',
+    universe: 'Universe',
     output_directory: str,
     snapshots: int,
     frames_limit: int = 100):
@@ -19,55 +41,51 @@ def thickness(
         print('-> No membranes found, skipping thickness analysis')
         return
 
-    # Set the main output filepath
-    output_analysis_filepath = f'{output_directory}/{OUTPUT_THICKNESS_FILENAME}'
-
-    tj, frame_step, frames_count = get_reduced_pytraj_trajectory(
-        structure_file.path, trajectory_file.path, snapshots, frames_limit)
+    frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
     head_sel = []
     for n in range(membrane_map['n_mems']):
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
         head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
     head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
-    prop = {
-        'lipid_sel': head_sel_mda,
-        'steps': frame_step,
-        'height_sel': head_sel_mda,
-        'ignore_no_box': True,
-        'disable_logs': True,
-        'disable_sandbox': True,
-    }
-    print(' Running BioBB LiPyphilic ZPositions')
-    with redirect_stdout(None):
-        lpp_zpositions(input_top_path=structure_file.path,
-                       input_traj_path=trajectory_file.path,
-                       output_positions_path='.zpositions.csv',
-                       properties=prop)
-    df = frame_df('.zpositions.csv')  # Per frame data
-    os.remove('.zpositions.csv')
+    print(' Running LiPyphilic ZPositions')
+    u_copy = universe.copy()
+    zshift = set_box(u_copy)
+    positions = ZPositions(u_copy, head_sel_mda, head_sel_mda, return_midpoint=True)
+    positions.run(step=frame_step)
 
-    # Calculate the mean z position of midplane wrt the box axis using pytraj
-    midplane_z = []
-    for i in range(0, frames_count):
-        frame = tj[i]
-        selected_atoms = frame[head_sel]
-        mean_z = selected_atoms.mean(axis=0)[2]
-        midplane_z.append(float(mean_z))
-    # Save the data
+    # Calculate the mean z position of midplane wrt the box axis
+    midplane_z = positions.memb_midpoint.flatten() - zshift
+    zpos = positions.z_positions
+    # All postive/negative of each frame
+    zpos_per_frame = [zpos[:, fr][zpos[:, fr] > 0] for fr in range(frame_count)]
+    zneg_per_frame = [zpos[:, fr][zpos[:, fr] < 0] for fr in range(frame_count)]
+    # Mean and std per frame
+    zpos_means = [zpos_frame.mean() for zpos_frame in zpos_per_frame]
+    zneg_means = [zneg_frame.mean() for zneg_frame in zneg_per_frame]
+    zpos_stds = [zpos_frame.std() for zpos_frame in zpos_per_frame]
+    zneg_stds = [zneg_frame.std() for zneg_frame in zneg_per_frame]
+
+    # Calculate the mean and std of the z positions of the head groups
     data = {'data': {
-        'frame': df.index.tolist(),
-        'mean_positive': df['mean_positive'].tolist(),
-        'mean_negative': df['mean_negative'].tolist(),
-        'std_positive': df['std_positive'].tolist(),
-        'std_negative': df['std_negative'].tolist(),
-        'thickness': df['thickness'].tolist(),
-        'std_thickness': df['std_thickness'].tolist(),
+        'mean_positive': zpos_means,
+        'mean_negative': zneg_means,
+        'std_positive': zpos_stds,
+        'std_negative': zneg_stds,
+        'thickness': [zpos_mean - zneg_mean for zpos_mean, zneg_mean in zip(zpos_means, zneg_means)],
+        # Sum of standard deviations
+        'std_thickness': np.sqrt([zpos_std**2 for zpos_std in zpos_stds] + [zneg_std**2 for zneg_std in zneg_stds]),
         'midplane_z': midplane_z,
-        'step': frame_step
-        }
+        },
+        'version': '0.1.0',
     }
+    # Convert any numpy arrays to lists for JSON serialization
+    for key in data['data']:
+        data['data'][key] = data['data'][key].tolist() if isinstance(data['data'][key], np.ndarray) else data['data'][key]
+    # Save the results to a JSON file
+    output_analysis_filepath = f'{output_directory}/{OUTPUT_THICKNESS_FILENAME}'
     save_json(data, output_analysis_filepath)
+    return data
 
 
 def plot_thickness(output_analysis_filepath):
