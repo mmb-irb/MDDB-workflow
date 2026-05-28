@@ -1701,6 +1701,8 @@ class Project:
                 if config is None:
                     config = {MD_DIRECTORY: directory}
                     self.md_config.append(config)
+                    # Update inputs with the current MD or further writes to this MD will fail
+                    self.update_inputs('mds', self.md_config)
                 # An input topoloy/structure for a specific MD may be passed before the trajectory
                 # In order to tell if the topology/structure was passed we check input file formats
                 # Note that PDB format is both a structure and a trajectory supported format
