@@ -1,74 +1,112 @@
-import re
-import numpy as np
-from mdahole2.analysis import HoleAnalysis
-from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
-from mddb_workflow.utils.auxiliar import save_json
+from pathlib import Path
+import MDAnalysis as mda
+import subprocess
+from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
+from mddb_workflow.utils.auxiliar import save_json, load_json
+from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import OUTPUT_CHANNELS_FILENAME
 from mddb_workflow.utils.type_hints import *
+import json
+
+
+def _parse_chap_residue_fractions(pdb_file: Path) -> dict[str, list[float]]:
+    """Parse residue-level pore-lining and pore-facing fractions from CHAP output."""
+    # https://www.channotation.org/docs/contents_pdb_file/
+    residue_fractions = {}
+    if not Path(pdb_file).exists():
+        return residue_fractions
+    pore_lining = []
+    pore_facing = []
+    residue_keys = []
+    with open(pdb_file, 'r') as pdb_handle:
+        for line in pdb_handle:
+            if not line.startswith(('ATOM', 'HETATM')):
+                continue
+
+            chain_id = line[21].strip() or '_'
+            residue_index = line[22:26].strip()
+            insertion_code = line[26].strip()
+            residue_key = f'{chain_id}:{residue_index}{insertion_code}' if insertion_code else f'{chain_id}:{residue_index}'
+
+            if residue_key in residue_keys:
+                continue
+
+            residue_keys.append(residue_key)
+            pore_lining.append(float(line[54:60]))
+            pore_facing.append(float(line[60:66]))
+
+    return {'pore_lining': pore_lining, 'pore_facing': pore_facing}
 
 
 def channels(
     membrane_map: dict,
     universe: 'Universe',
     output_directory: str,
+    thickness_analysis: dict,
     snapshots: int,
     frames_limit: int
 ):
     """Analyze channels in a membrane protein using MDAnalysis mda_hole."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> No membranes found, skipping channels analysis')
+        print('  -> No membranes found, skipping channels analysis')
         return
     if universe.select_atoms('protein').n_atoms == 0:
-        print('-> No protein found, skipping channels analysis')
+        print('  -> No protein found, skipping channels analysis')
         return
-    frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
-    hole = HoleAnalysis(universe)
-    hole.run(step=frame_step)
-    hole.create_vmd_surface(output_directory + '/hole.vmd', dot_density=13)
-    hole.delete_temporary_files()
+    print('  -> Running channels analysis')
+    frame = 0
+    top = thickness_analysis['data']['mean_positive'][frame] + thickness_analysis['data']['midplane_z'][frame]
+    bot = thickness_analysis['data']['mean_negative'][frame] + thickness_analysis['data']['midplane_z'][frame]
+    # Select protein between membrane planes
+    TM_at = universe.select_atoms(f'protein and prop z > {bot} and prop z < {top}').residues.atoms
+    with mda.selections.gromacs.SelectionWriter(f'{output_directory}/membrane_atoms.ndx', mode='w') as ndx:
+        ndx.write(universe.select_atoms('protein').atoms, name='Protein')
+        ndx.write(TM_at, name='membrane_atoms')
+    pdb = Path(universe.filename).absolute()
+    reduced_trajectory_file, frame_step, n_frames = get_reduced_trajectory(
+        input_topology_file=File(universe.filename),
+        input_trajectory_file=File(universe.trajectory.filename),
+        snapshots=snapshots,
+        reduced_trajectory_frames_limit=frames_limit
+    )
+    # TODO: find better fallbacks values
+    cmd = ("chap",
+           "-f", str(Path(reduced_trajectory_file).absolute()),
+           "-s", str(pdb),
+           "-n", "membrane_atoms.ndx",
+           "-sel-pathway", "0",
+           "-pf-sel-ipp", "1",
+           "-hydrophob-fallback", "-0.568",  # hardcoded value for histidine forms
+           "-pf-vdwr-fallback", "0.2",       # hardcoded value for biggest radiues
+           "-out-num-points", "200",
+           "-out-detailed"
+    )
+    cmd = ' '.join(cmd)
+    print('  -> Running command:', cmd)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=output_directory)
+    if result.returncode != 0:
+        failt_str = 'Pore radius at initial probe position is infinite'
+        if failt_str in result.stderr:
+            print('  -> No channels found.')
+            return
+        # Temporal raise to detect and fix possible issues with CHAP execution,
+        # but we should handle this more gracefully in the future
+        raise RuntimeError(f'CHAP command failed with return code {result.returncode}. Stderr: {result.stderr}')
+    output = load_json(f'{output_directory}/output.json')
+    stream = f'{output_directory}/stream_output.json'
+    stream_data = []
+    # Each line in the stream output is a JSON object
+    with open(stream, 'r') as f:
+        for line in f:
+            stream_data.append(json.loads(line))
 
-    with open(output_directory + '/hole.vmd', 'r') as f:
-        lines = f.readlines()
-
-    # Find lines with triangle coordinates
-    trinorms = []
-    for i, line in enumerate(lines):
-        if i > 3 and 'set triangle' in line:
-            vmd_set = re.sub(r'set triangles\(\d+\)', '', line)  # Remove set triangles(i)
-            vmd_set = re.sub(r'\{(\s*-?\d[^\s]*)(\s*-?\d[^\s]*)(\s*-?\d[^}]*)\}', r'[\1,\2,\3]', vmd_set)  # Convert { x y z } to [x,y,z]
-            vmd_set = vmd_set.replace('{', '[').replace('}', ']')  # Convert { to [ and } to ]
-            vmd_set = re.sub(r'\]\s*\[', '], [', vmd_set)  # Add commas between brackets
-            vmd_set = eval(vmd_set.strip())  # Evaluate string as list
-            # different hole colors
-            trinorms.append(vmd_set)
-    # Create a list of positions, colors, and normals
-    assert frame_count == len(trinorms), f'Frame count {frame_count} does not match trinorms length {len(trinorms)}'
-    data = {}
-    for frame in range(frame_count):
-        poss = []
-        cols = [0, 0, 0]
-        z_range = 0
-        for i in range(3):  # RGB
-            # Get triangle coordinates for this frame and color
-            # Red are low radiues, green medium, blue high
-            trinorms_cl = np.array(trinorms[frame][i])  # (N, 6, 3) # 6: 3 positions + 3 normals, 3: vertex
-            if len(trinorms_cl) == 0:
-                continue
-            pos = trinorms_cl[:, :3, :]
-            z_range = max(pos[..., 2].max() - pos[..., 2].min(), z_range)
-            poss.append(pos.flatten())
-            cols[i] = pos.size
-        poss = np.concatenate(poss)
-        if z_range < 40:
-            # failed to find channel on this frame
-            continue
-        # compute cumulative offsets for colors
-        data[frame] = {
-            'position': poss.tolist(),
-            'color_offset': np.cumsum(cols).tolist(),
-        }
-    if len(data) == 0:
-        print('-> No channels found')
-        return
-    data_to_save = {'data': data, 'n_frames': frame_count}
+    data_to_save = {
+        'data': {
+            'output': output,
+            'stream': stream_data,
+            'pore_residues': _parse_chap_residue_fractions(
+                f"{output_directory}/output.pdb"),
+        },
+        'version': '0.1.0',
+    }
     save_json(data_to_save, output_directory + '/' + OUTPUT_CHANNELS_FILENAME)

@@ -52,12 +52,11 @@ def energies (
     verbose : bool = False,
     debug : bool = False):
     """Perform the electrostatic and vdw energies analysis for each pair of interaction agents."""
-
     # Make sure we have interactions
     if not interactions or len(interactions) == 0:
         print('No interactions were specified')
         return
-    
+
     # Skip interactions with coarse grain regions
     cg_atom_indices = set(cg_selection.atom_indices)
     aa_interactions = []
@@ -464,7 +463,7 @@ def energies (
                 debug_script = File(f'{output_directory}/{debug_script_filename}')
                 copyfile(debug_script_source.path, debug_script.path)
                 # Copy in the energies folder the VDM parameters input file
-                debug_vdw_filename = vdw_source.fiename
+                debug_vdw_filename = vdw_source.filename
                 debug_vdw_parameters = File(f'{output_directory}/{debug_vdw_filename}')
                 copyfile(vdw_source.path, debug_vdw_parameters.path)
                 # Set auxiliar output filenames

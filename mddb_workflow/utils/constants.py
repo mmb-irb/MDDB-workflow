@@ -14,7 +14,7 @@ GLOBALS = {
 }
 
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
-GROMACS_EXECUTABLE_COMMON_NAMES = ['gmx', 'gmx_mpi']
+GROMACS_EXECUTABLE_COMMON_NAMES = ['gmx_mddb', 'gmx', 'gmx_mpi']
 # Set the name of the environmental variable which is read by the workflow to know the gromacs path
 GROMACS_ENV = 'MWF_GMX'
 # Set the gromacs executable path
@@ -458,7 +458,7 @@ PROTEIN_RESIDUE_NAME_LETTERS = {
     'VALC': 'V',
 }
 # Get all aminoacid possible letters together
-PROTEIN_RESIDUE_LETTERS = set([ *PROTEIN_RESIDUE_NAME_LETTERS.values(), 'X' ])
+PROTEIN_RESIDUE_LETTERS = set([ *PROTEIN_RESIDUE_NAME_LETTERS.values(), 'X'])
 # Nucleotides
 DNA_RESIDUE_NAME_LETTERS = {
     'DA': 'A',

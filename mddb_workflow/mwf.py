@@ -1265,8 +1265,8 @@ class MD:
         density, {'frames_limit': 1000})
 
     # Membrane thickness analysis
-    run_thickness_analysis = Task('thickness', 'Membrane thickness analysis',
-        thickness, {'frames_limit': 100})
+    get_thickness_analysis = Task('thickness', 'Membrane thickness analysis', thickness, {'frames_limit': 100})
+    thickness_analysis = property(get_thickness_analysis, None, None, "Membrane thickness analysis")
 
     # Area per lipid analysis
     run_apl_analysis = Task('apl', 'Membrane area per lipid analysis', area_per_lipid)

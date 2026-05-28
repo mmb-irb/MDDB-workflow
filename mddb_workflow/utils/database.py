@@ -265,7 +265,7 @@ class Database:
 
     def __str__(self) -> str:
         return f'< Database {self.url} >'
-    
+
     def get_available_nodes(self) -> dict[str, str]:
         nodes_url = f'{GLOBAL_SERVER_URL}rest/current/nodes'
         try:
