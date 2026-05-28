@@ -1903,7 +1903,6 @@ class Structure:
                 chain_names_map[chain_name] = shorten_chain_name
             # Warn the user about the chain renaming
             if show_warnings:
-                raise ValueError('Hold up')
                 warn(f'Chain names with more than 1 character (e.g. "{long_chain_name}")' + \
                 ' are not supported in PDB format. Chains will be renamed to fit in.')
             if len(chain_names) > len(AVAILABLE_LETTERS):
