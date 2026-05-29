@@ -94,7 +94,7 @@ ENERGIES_DEBUG_SCRIPT_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/get_energies_sum.py'
 # Expected MD inputs
 MD_NAME = 'name'
 MD_DIRECTORY = 'mdir'
-MD_REMOVED = 'removed'
+MD_REMOVED_FLAG = 'removed'
 MD_INPUT_TOPOLOGY_FILEPATH = 'input_topology_filepath'
 MD_INPUT_STRUCTURE_FILEPATH = 'input_structure_filepath'
 MD_INPUT_TRAJECTORY_FILEPATHS = 'input_trajectory_filepaths'

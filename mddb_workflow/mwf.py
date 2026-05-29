@@ -1673,7 +1673,7 @@ class Project:
             self.md_config = []
             self.update_inputs('mds', self.md_config)
         # Purge removed MDs from the list
-        self.md_config = [ c for c in self.md_config if not c.get(MD_REMOVED, False) ]
+        self.md_config = [ REMOVED_MD if c.get(MD_REMOVED_FLAG, False) else c for c in self.md_config ]
 
         # Add or overwrite possible MD inputs from the inputs file with the console arguments
 
@@ -1782,7 +1782,7 @@ class Project:
         directories = {}
         for md_index, md_inputs in enumerate(self.md_config):
             # Skip removed MDs
-            if md_inputs.get(MD_REMOVED, False): continue
+            if md_inputs == REMOVED_MD: continue
             # Make sure the MD has at least a name or a directory
             directory = md_inputs.get(MD_DIRECTORY, None)
             name = md_inputs.get(MD_NAME, None)
@@ -1861,17 +1861,17 @@ class Project:
             return self._mds
         # Now instantiate a new MD for each declared MD and save the reference MD
         self._mds = []
-        for n, config in enumerate(self.md_config, 1):
+        for md_index, md_inputs in enumerate(self.md_config, 1):
             # If it is a removed MD then we must handle it apart
-            if config == REMOVED_MD:
+            if md_inputs == REMOVED_MD:
                 self._mds.append(REMOVED_MD)
                 continue
             # Instantiate the MD
             md = MD(
-                project=self, name=config[MD_NAME], number=n, directory=config[MD_DIRECTORY],
-                input_topology_filepath=config.get(MD_INPUT_TOPOLOGY_FILEPATH, None),
-                input_structure_filepath=config.get(MD_INPUT_STRUCTURE_FILEPATH, None),
-                input_trajectory_filepaths=config.get(MD_INPUT_TRAJECTORY_FILEPATHS, None),
+                project=self, name=md_inputs[MD_NAME], number=md_index, directory=md_inputs[MD_DIRECTORY],
+                input_topology_filepath=md_inputs.get(MD_INPUT_TOPOLOGY_FILEPATH, None),
+                input_structure_filepath=md_inputs.get(MD_INPUT_STRUCTURE_FILEPATH, None),
+                input_trajectory_filepaths=md_inputs.get(MD_INPUT_TRAJECTORY_FILEPATHS, None),
             )
             self._mds.append(md)
         return self._mds
