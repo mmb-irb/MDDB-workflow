@@ -2588,10 +2588,7 @@ class TaskResolver:
                 for task in self.overwrite:
                     # Make sure the task to be overwriten is among the tasks to be run
                     if task not in self.tasks:
-                        raise InputError(
-                            f'Task "{task}" is to be overwritten but it is not in the tasks list. '
-                            'Either include it or do not exclude it'
-                        )
+                        self.tasks.append(task)
                     self._overwritables.add(task)
             else:
                 raise ValueError('Not supported overwrite type')
