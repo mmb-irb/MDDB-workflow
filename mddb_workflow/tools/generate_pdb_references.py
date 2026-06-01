@@ -2,14 +2,14 @@ import os
 import json
 import urllib.request
 
-from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, request_pdb_data, round_to_thousandths, warn, reprint
+from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json
+from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
 from mddb_workflow.tools.xvg_parse import xvg_parse
-from mddb_workflow.tools.generate_map import get_uniprot_reference, align
 
 # Set a flag for chains which are made entirley of alpha carbons only
 CA_ONLY = 'alpha carbons only'
@@ -98,31 +98,10 @@ def get_pdb_reference (pdb_id : str) -> dict:
     pdb_data['chain_uniprots'] = chain_uniprots
     # Download the structure and calculate the solvent accessible surface in the PDB structure as reference
     # Do it for protein chains only and get also their aminoacid sequences
-    chain_sas, chain_seq = calculate_pdb_chain_sas(final_pdb_id)
-    # Find the UniProt reference numeration for every residue in the sequence
-    chain_residues_uniprot_numeration = {}
-    # Iterate protein chains
-    for chain, uniprot_id in chain_uniprots.items():
-        # Get the chain sequence
-        sequence = chain_seq.get(chain, RemoteServiceError)
-        # DANI: This happened with PDB 2AW4 (deprecated to 4V4Q), where chains were wrongly annotated regarding the structure
-        if sequence is RemoteServiceError:
-            raise RemoteServiceError(f'Unexpected annotations in PDB {final_pdb_id}: Chain {chain} is annotated as protein but it is not recognized as such in the structure.')
-        # Get the uniprot reference, including the reference sequence
-        uniprot_reference = get_uniprot_reference(uniprot_id)
-        reference_sequence = uniprot_reference['sequence'] if uniprot_reference else None
-        # Align the PDB sequence against the uniprot reference sequence to know the reference residue numeration
-        residue_numeration = None
-        align_match = align(reference_sequence, sequence) if sequence and reference_sequence else None
-        if not align_match:
-            warn(f'PDB {final_pdb_id} has a polymer tagged with the UniProt {uniprot_id} but its reference sequence does not match.')
-            chain_residues_uniprot_numeration[chain] = 'Missmatched'
-            continue
-        residue_numeration, score = align_match
-        chain_residues_uniprot_numeration[chain] = residue_numeration
+    chain_sas, chain_seq, pdb_chains_num = calculate_pdb_chain_sas(final_pdb_id)
     # Finally assign these values to the reference data
     pdb_data['chain_seq'] = chain_seq
-    pdb_data['chain_resnum'] = chain_residues_uniprot_numeration
+    pdb_data['chain_resnum'] = pdb_chains_num
     pdb_data['chain_sas'] = chain_sas
     # Sort all dictionaries
     # Otherwise the loader will complain about a change every time since the order may change
@@ -130,7 +109,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
         if type(value) == dict:
             pdb_data[key] = dict(sorted(value.items()))
     # Set a version number so new references can replace old references
-    pdb_data['version'] = '0.0.1'
+    pdb_data['version'] = '0.0.2'
     return pdb_data
 
 # Set service URLs to be requested
@@ -197,7 +176,8 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     auxiliar_mmcif_filepath = f'.{pdb_id}.cif'
     download_mmcif(pdb_id, auxiliar_mmcif_filepath)
     # Load the structure
-    structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath)
+    # Ask for the author numeration to make things compatible with the PDBe
+    structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath, author_notation=True)
     structure._fixed_atom_elements = True
     # Now export it to PDB so gromacs can read it
     auxiliar_pdb_filepath = f'.{pdb_id}.pdb'
@@ -213,6 +193,8 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     # And only god knows how to ask GraphQL to get the actual present sequence in the PDB structure
     # In order to get the real sequence we read it directly from the parsed structure
     pdb_chains_seq = {}
+    # Keep also the residue numeration
+    pdb_chains_num = {}
     # We have encountered some PDB entries with alpha carbons only (e.g. 2AKH, 2AKI)
     # The structure will not identify these chains as proteins although they are annotated as such in the PDB
     # We can not calculate SAS over these chains anyway but we must identify them to further handle them
@@ -224,7 +206,7 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
             pdb_chains_seq[chain.name] = chain.get_sequence()
     print()
     # Iterate PDB chains
-    for c, chain in enumerate(protein_chains,1 ):
+    for c, chain in enumerate(protein_chains, 1):
         reprint(f' Calculating SAS for chain {chain.name} ({c}/{chain_count})')
         # Run a SAS analysis only for this specific chain
         # Convert the chain selection to a ndx file
@@ -257,6 +239,9 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
         pdb_chains_sas[chain.name] = sas_per_residues
         # Save the sequence as well
         pdb_chains_seq[chain.name] = chain.get_sequence()
+        # And the residue numeration
+        residue_numbers = [ f'{residue.number}{residue.icode}' for residue in chain.residues ]
+        pdb_chains_num[chain.name] = residue_numbers
         # Remove files which are no longer required
         os.remove(ndx_filename)
         os.remove(current_chain_sasa)
@@ -264,7 +249,7 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     # Remove the auxiliar file
     os.remove(auxiliar_pdb_filepath)
     os.remove(auxiliar_mmcif_filepath)
-    return pdb_chains_sas, pdb_chains_seq
+    return pdb_chains_sas, pdb_chains_seq, pdb_chains_num
     
 def download_mmcif (pdb_id : str, output_filepath : str):
     """Download a mmCIF file corresponding to a PDB entry."""
