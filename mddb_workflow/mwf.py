@@ -2100,7 +2100,7 @@ class Project:
             return self._cg_selection
         # Otherwise we must set the selection
         # Make sure it is coherent among all MDs
-        unique_md_selections = set([md.cg_selection for md in self.mds])
+        unique_md_selections = set([md.cg_selection for md in self.mds if md is not REMOVED_MD])
         if len(unique_md_selections) > 1:
             raise InputError('Coarse grain selection is not coherent among MDs. Please change the input value.')
         self._cg_selection = self.reference_md.cg_selection
@@ -2204,6 +2204,7 @@ class Project:
         # Iterate other MDs and make sure their structures match in a set of fields we expect to be constant
         # Note that other MDs may be based in different input structure and input topology files
         for other_md in other_mds:
+            if other_md == REMOVED_MD: continue
             other_structure = other_md.structure
             # If the structure is literally the same then skip the check
             # This means this MD is using the same input files as the reference MD thus using as well the same structure
