@@ -121,15 +121,14 @@ def image_and_fit (
         # e.g. two protein monomers are together, and not interacting across boundaries
         # To keep things like this we will run a no-jump step
         # DANI: The nojump step may cause artifacts, specially in already pre-imaged simulations
-        # DANI: I will disable this part by now
-        # print(' Running no-jump')
-        # run_gromacs(f'trjconv -s {latest_structure.path} \
-        #     -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-        #     -pbc nojump', user_input = 'System', show_error_logs = True)
-        # latest_trajectory = output_trajectory_file
+        print(' Running no-jump')
+        run_gromacs(f'trjconv -s {latest_structure.path} \
+            -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+            -pbc nojump', user_input = 'System', show_error_logs = True)
+        latest_trajectory = output_trajectory_file
             
         # Center the non-PBC region while we put all residues in the box
-        # This is critical to recover all PBC regios which were diluted because of the no-jump step
+        # This is critical to recover all PBC regions which were diluted because of the no-jump step
         print(' Running ceneterd -pbc res')
         run_gromacs(f'trjconv -s {latest_structure.path} \
             -f {latest_trajectory.path} -o {output_trajectory_file.path} \
