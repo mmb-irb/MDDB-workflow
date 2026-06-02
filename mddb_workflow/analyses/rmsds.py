@@ -1,6 +1,6 @@
 from mddb_workflow.tools.xvg_parse import xvg_parse
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from mddb_workflow.utils.auxiliar import save_json
+from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath
 from mddb_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_RMSDS_FILENAME
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
@@ -96,7 +96,8 @@ def rmsds(
         reference_name = REFERENCE_LABELS[reference.filename]
         for group_name, group_selection in non_pbc_selections.items():
             # Set the analysis filename
-            rmsd_analysis = f'rmsd.{reference_name}.{group_name.lower().replace(" ","_")}.xvg'
+            rmsd_analysis_filename = f'rmsd.{reference_name}.{group_name.lower().replace(" ","_")}.xvg'
+            rmsd_analysis_filepath = get_auxiliar_filepath(rmsd_analysis_filename)
             # If part of the selection has coarse grain or dummy atoms atoms then skip mass weighting
             # Note that we may have already automatically added masses to the gromas atommass file
             # Thus we could make it work, but the values may be not real since masses are not real
@@ -105,9 +106,9 @@ def rmsds(
             mass_weighted = not has_cg and not has_dummy
             # Run the rmsd
             print(f' Reference: {reference_name}, Selection: {group_name},{"" if mass_weighted else " NOT"} mass weighted')
-            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis, skip_mass_weighting=has_cg)
+            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis_filepath, skip_mass_weighting=has_cg)
             # Read and parse the output file
-            rmsd_data = xvg_parse(rmsd_analysis, ['times', 'values'])
+            rmsd_data = xvg_parse(rmsd_analysis_filepath, ['times', 'values'])
             # Format the mined data and append it to the overall output
             # Multiply by 10 since rmsd comes in nanometers (nm) and we want it in Ångstroms (Å)
             rmsd_values = [ v*10 for v in rmsd_data['values'] ]
@@ -119,7 +120,7 @@ def rmsds(
             }
             output_analysis.append(data)
             # Remove the analysis xvg file since it is not required anymore
-            remove(rmsd_analysis)
+            remove(rmsd_analysis_filepath)
 
     # Export the analysis in json format
     save_json({
@@ -142,14 +143,14 @@ def rmsd (
     # Convert the selection to a ndx file gromacs can read
     selection_name = 'rmsd_selection'
     ndx_selection = selection.to_ndx(selection_name)
-    ndx_filename = '.rmsd.ndx'
-    with open(ndx_filename, 'w') as file:
+    ndx_filepath = get_auxiliar_filepath('.rmsd.ndx')
+    with open(ndx_filepath, 'w') as file:
         file.write(ndx_selection)
 
     # Run Gromacs
     run_gromacs(f'rms -s {reference_filepath} -f {trajectory_filepath} \
-        -o {output_analysis_filepath} -n {ndx_filename} {"-mw no" if skip_mass_weighting else ""}',
+        -o {output_analysis_filepath} -n {ndx_filepath} {"-mw no" if skip_mass_weighting else ""}',
         user_input = f'{selection_name} {selection_name}')
 
     # Remove the ndx file
-    remove(ndx_filename)
+    remove(ndx_filepath)

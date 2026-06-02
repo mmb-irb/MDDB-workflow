@@ -1,5 +1,5 @@
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory, get_reduced_pytraj_trajectory
-from mddb_workflow.utils.auxiliar import reprint
+from mddb_workflow.utils.auxiliar import reprint, get_auxiliar_filepath
 from tqdm import tqdm
 import os
 from typing import Optional
@@ -35,8 +35,6 @@ def get_pdb_frames (
     )
 
     def frames_generator():
-        # Get the current directory at this point and use it to delete old files, in case we change the directory
-        cwd = os.getcwd()
         # Create a progress bar
         n_frames = min(frames_count, patience)
         if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=n_frames, unit='frame')
@@ -50,12 +48,12 @@ def get_pdb_frames (
             # Update the current frame log
             if pbar_bool: pbar.update(1); pbar.refresh()
             else: reprint(f'Frame {frame_number+1} ({f+1} / {n_frames})')
-            current_frame = f'{cwd}/{output_frames_prefix}{frame_number+1}.pdb'
+            current_frame_filepath = get_auxiliar_filepath(f'{output_frames_prefix}{frame_number+1}.pdb')
             single_frame_trajectory = reduced_trajectory[f:f+1]
-            pt.write_traj(current_frame, single_frame_trajectory, overwrite=True)
-            yield current_frame
+            pt.write_traj(current_frame_filepath, single_frame_trajectory, overwrite=True)
+            yield current_frame_filepath
             # Delete current frame file before going for the next frame
-            os.remove(current_frame)
+            os.remove(current_frame_filepath)
 
     return frames_generator(), frames_step, frames_count
 
@@ -70,6 +68,6 @@ def get_pdb_frame (
     # Load the trajectory using pytraj
     trajectory = get_pytraj_trajectory(topology_filename, trajectory_filename)
     trajectory_frame = trajectory[frame:frame+1]
-    trajectory_frame_filename = f'frame{frame}.pdb'
-    pt.write_traj(trajectory_frame_filename, trajectory_frame, overwrite=True)
-    return trajectory_frame_filename
+    trajectory_frame_filepath = get_auxiliar_filepath(f'frame{frame}.pdb')
+    pt.write_traj(trajectory_frame_filepath, trajectory_frame, overwrite=True)
+    return trajectory_frame_filepath

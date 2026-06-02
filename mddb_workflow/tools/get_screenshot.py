@@ -5,17 +5,13 @@ from PIL import Image
 import math
 import numpy as np
 
-from mddb_workflow.utils.auxiliar import ToolError, InputError
+from mddb_workflow.utils.auxiliar import ToolError, InputError, get_auxiliar_filepath
 from mddb_workflow.utils.type_hints import *
 
 # The Convex Hull is a polygon which covers all the given point and Convex Hull is the smallest polygon.
 # SciPy provides a method "scipy. spatial. ConvexHull()" to create a Convex Hull
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import cdist
-
-# Auxiliar files
-AUXILIAR_PDB_FILENAME = '.screenshot_structure.pdb'
-AUXILIAR_TGA_FILENAME = '.transition_screenshot.tga'
 
 # Use this to draw some shapes as references in the screenshot
 # This is useful for debugging purposes only
@@ -39,13 +35,17 @@ def get_screenshot (
         print(output_file)
         raise InputError(f'You must provide a .jpg file name. {output_file.format} format is not supported')
     
+    # Set the auxiliar files
+    auxiliar_pdb_filepath = get_auxiliar_filepath('.screenshot_structure.pdb')
+    auxiliar_tga_filepath = get_auxiliar_filepath('.transition_screenshot.tga')
+    
     # Set the solvent selection and totally remove it from the structure
     # This way not only we hide it from the representation, but we also prevent the center to be far away from the camera
     solvent_selection = structure.select_water_and_counter_ions()
     filter_structure = structure.filter_away(solvent_selection)
 
     # Produce a PDB file to feed VMD
-    filter_structure.generate_pdb_file(AUXILIAR_PDB_FILENAME)
+    filter_structure.generate_pdb_file(auxiliar_pdb_filepath)
 
     # Number of pixels to scale in x
     x_number_pixels = 350
@@ -65,10 +65,10 @@ def get_screenshot (
     # Prepare a Tcl script in order to execute different commands in the terminal of VMD
 
     # Generate a file name for the commands file
-    commands_filename_1 = '.commands_1.vmd'
+    commands_filename_1 = get_auxiliar_filepath('.commands_1.vmd')
 
     # Set a file to save the result obtained when calculating the center
-    center_filename = '.center_point_filename.txt'
+    center_filename = get_auxiliar_filepath('.center_point_filename.txt')
     with open(commands_filename_1, "w") as file:
         # Select the whole molecule
         file.write('set sel [atomselect 0 all] \n')
@@ -83,7 +83,7 @@ def get_screenshot (
     # Run VMD
     process = run([
         "vmd",
-        AUXILIAR_PDB_FILENAME,
+        auxiliar_pdb_filepath,
         "-e",
         commands_filename_1,
         "-dispdev",
@@ -314,7 +314,7 @@ def get_screenshot (
     # We cannot paint them by their elements so we must rely in atom names or chains
     non_cartoon_selection -= cg_selection
     # Set a file name for the VMD script file
-    commands_filename_2 = '.commands_2.vmd'
+    commands_filename_2 = get_auxiliar_filepath('.commands_2.vmd')
 
     # Now write the VMD script for the rotation
     with open(commands_filename_2, "w") as file:
@@ -399,14 +399,14 @@ def get_screenshot (
             # file.write('draw line {' + tuple_to_vmd(min_ypoint) + '} {' + tuple_to_vmd(max_ypoint) + '}\n')
 
         # Finally generate the image from the current view
-        file.write(f'render TachyonInternal {AUXILIAR_TGA_FILENAME} \n')
+        file.write(f'render TachyonInternal {auxiliar_tga_filepath} \n')
         # Exit VMD
         file.write('exit\n')
 
     # Run VMD
     process = run([
         "vmd",
-        AUXILIAR_PDB_FILENAME,
+        auxiliar_pdb_filepath,
         "-e",
         commands_filename_2,
         "-dispdev",
@@ -414,20 +414,20 @@ def get_screenshot (
     ], stdout=PIPE, stderr=PIPE)
     logs = process.stdout.decode()
     # If the output file does not exist at this point then it means something went wrong with VMD
-    if not exists(AUXILIAR_TGA_FILENAME):
+    if not exists(auxiliar_tga_filepath):
         print(logs)
         error_logs = process.stderr.decode()
         print(error_logs)
         raise ToolError('Something went wrong with VMD while taking the screenshot')
 
-    im = Image.open(AUXILIAR_TGA_FILENAME)
+    im = Image.open(auxiliar_tga_filepath)
     # converting to jpg
     rgb_im = im.convert("RGB")
     # exporting the image
     rgb_im.save(output_file.path)
 
     # Remove trash files
-    trash_files = [ AUXILIAR_PDB_FILENAME, commands_filename_1, commands_filename_2, AUXILIAR_TGA_FILENAME, center_filename ]
+    trash_files = [ auxiliar_pdb_filepath, commands_filename_1, commands_filename_2, auxiliar_tga_filepath, center_filename ]
     for trash_file in trash_files:
         remove(trash_file)
 

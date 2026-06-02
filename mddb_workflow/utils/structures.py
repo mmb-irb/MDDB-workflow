@@ -15,6 +15,7 @@ from mddb_workflow.utils.mdt_spells import sort_trajectory_atoms
 from mddb_workflow.utils.gmx_spells import make_index, read_ndx
 from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn, protein_residue_name_to_letter
+from mddb_workflow.utils.auxiliar import get_auxiliar_filepath, download_mmcif
 from mddb_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
 from mddb_workflow.utils.constants import STANDARD_COUNTER_CATION_ATOM_NAMES, STANDARD_COUNTER_ANION_ATOM_NAMES
 from mddb_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
@@ -25,6 +26,10 @@ from mddb_workflow.utils.constants import FATTY_RESIDUE_NAMES, STEROID_RESIDUE_N
 from mddb_workflow.utils.constants import AVAILABLE_CAPS, AVAILABLE_LOWS, AVAILABLE_LETTERS
 from mddb_workflow.utils.type_hints import *
 
+# Get the path of the auxiliar structure file to be used by this class when it needs to write to disk
+# Note that this must be requested from a function, or the globals may be not updated
+def get_auxiliar_pdb_filepath () -> str:
+    return get_auxiliar_filepath('.auxiliar_structure.pdb')
 
 # Set some specific constants
 ATOMS_PER_AMINOACID_LIMIT = 30
@@ -1670,6 +1675,21 @@ class Structure:
         with open(mmcif_filepath, 'r') as file:
             mmcif_content = file.read()
         return cls.from_mmcif(mmcif_content, model, author_notation)
+    
+    @classmethod
+    def from_pdb_id (cls, pdb_id : str, model : int = 1, author_notation : bool = False):
+        """Download and parse the structure from a PDB entry."""
+        # Download the structure
+        # Download the mmcif instead of the PDB to avoid having problems
+        # Some PDB entries may be not available in PDB format anymore
+        auxiliar_mmcif_filepath = get_auxiliar_filepath(f'.{pdb_id}.cif')
+        download_mmcif(pdb_id, auxiliar_mmcif_filepath)
+        # Parse the mmCIF file
+        structure = cls.from_mmcif_file(auxiliar_mmcif_filepath, model=model, author_notation=author_notation)
+        # Cleanup the auxiliar file
+        os.remove(auxiliar_mmcif_filepath)
+        # Return the structure instance
+        return structure
 
     @classmethod
     def from_mdanalysis (cls, mdanalysis_universe):
@@ -1950,7 +1970,7 @@ class Structure:
         if not is_imported('pytraj'):
             raise InputError('Missing dependency error: pytraj')
         # Generate a pdb file from the current structure to feed pytraj
-        pdb_filepath = '.structure.pdb'
+        pdb_filepath = get_auxiliar_filepath('.structure.pdb')
         self.generate_pdb_file(pdb_filepath)
         pytraj_topology = pytraj.load_topology(filename = pdb_filepath)
         os.remove(pdb_filepath)
@@ -1964,7 +1984,7 @@ class Structure:
         - pytraj"""
         if syntax == 'vmd':
             # Generate a pdb for vmd to read it
-            auxiliar_pdb_filepath = '.structure.pdb'
+            auxiliar_pdb_filepath = get_auxiliar_pdb_filepath()
             self.generate_pdb_file(auxiliar_pdb_filepath)
             # Use vmd to find atom indices
             atom_indices = get_vmd_selection_atom_indices(auxiliar_pdb_filepath, selection_string)
@@ -1984,7 +2004,7 @@ class Structure:
             return Selection(atom_indices)
         if syntax == 'gmx':
             # Generate a pdb strucutre to feed gmx
-            auxiliar_pdb_filepath = '.structure.pdb'
+            auxiliar_pdb_filepath = get_auxiliar_pdb_filepath()
             self.generate_pdb_file(auxiliar_pdb_filepath)
             auxiliar_pdb_file = File(auxiliar_pdb_filepath)
             # Create the index file with the current atom selection
@@ -3041,7 +3061,7 @@ class Structure:
         # VMD logic to find bonds relies in the atom element to set the covalent bond distance cutoff
         if safe_elements: self.fix_atom_elements(show_warnings=False)
         # Generate a pdb strucutre to feed vmd
-        auxiliar_pdb_filepath = '.structure.pdb'
+        auxiliar_pdb_filepath = get_auxiliar_pdb_filepath()
         self.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False)
         # Get covalent bonds between both residue atoms
         covalent_bonds = get_covalent_bonds(auxiliar_pdb_filepath, selection)

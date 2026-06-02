@@ -2698,8 +2698,11 @@ def workflow(
     # Print workflow header
     git_version = get_git_version()
     print(f'\n{CYAN_HEADER}Running MDDB workflow ({git_version}){COLOR_END}')
+    # Store the working directory in the cache, for those auxiliar functions which may not have the context
+    working_directory = project_parameters.get('directory', '.')
+    GLOBALS['working_directory'] = working_directory
     # Early creation of the cache and dataset to be able to register initialization errors
-    cache = Project.create_cache(project_parameters.get('directory', '.'))
+    cache = Project.create_cache(working_directory)
     dataset = Dataset(dataset_path) if dataset_path else None
     with ErrorHandling(cache, keep_going, dataset) as error_handler:
         # Initiate the project

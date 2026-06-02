@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 
-from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json
+from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, get_auxiliar_filepath
 from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.structures import Structure
@@ -170,17 +170,12 @@ RESIDUAL_AREA_FILENAME = '.residual_area.xvg'
 
 def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     """Calculate the solvent accessible surface in the PDB structure as reference."""
-    # Download the structure
-    # Download the mmcif instead of the PDB to avoid having problems
-    # Some PDB entries may be not available in PDB format anymore
-    auxiliar_mmcif_filepath = f'.{pdb_id}.cif'
-    download_mmcif(pdb_id, auxiliar_mmcif_filepath)
-    # Load the structure
+    # Load the structure from the PDB
     # Ask for the author numeration to make things compatible with the PDBe
-    structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath, author_notation=True)
+    structure = Structure.from_pdb_id(pdb_id, author_notation=True)
     structure._fixed_atom_elements = True
     # Now export it to PDB so gromacs can read it
-    auxiliar_pdb_filepath = f'.{pdb_id}.pdb'
+    auxiliar_pdb_filepath = get_auxiliar_filepath(f'.{pdb_id}.pdb')
     structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings = False)
     # Target only protein chains
     protein_selection = structure.select_protein()
@@ -204,6 +199,8 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
             pdb_chains_sas[chain.name] = CA_ONLY
             # Save the sequence as well, which is based in residue names so it should be correct
             pdb_chains_seq[chain.name] = chain.get_sequence()
+    # Set the residual area filepath
+    residual_area_filepath = get_auxiliar_filepath(RESIDUAL_AREA_FILENAME)
     print()
     # Iterate PDB chains
     for c, chain in enumerate(protein_chains, 1):
@@ -213,13 +210,13 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
         chain_selection = chain.get_selection()
         sasa_selection_name = f'chain_{chain.name}'
         sasa_ndx_selection = chain_selection.to_ndx(sasa_selection_name)
-        ndx_filename = f'.indices.ndx'
+        ndx_filename = get_auxiliar_filepath(f'.indices.ndx')
         with open(ndx_filename, 'w') as file:
             file.write(sasa_ndx_selection)
         # Set the main output filepath
-        current_chain_sasa = f'sasa_{chain.name}.xvg'
+        current_chain_sasa = get_auxiliar_filepath(f'.sasa_{pdb_id}_{chain.name}.xvg')
         # If not defined, then by default it creates a 'area.xvg' file where we are running the workflow
-        run_gromacs(f'sasa -s {auxiliar_pdb_filepath} -oa {current_chain_sasa} -o {RESIDUAL_AREA_FILENAME}\
+        run_gromacs(f'sasa -s {auxiliar_pdb_filepath} -oa {current_chain_sasa} -o {residual_area_filepath}\
             -n {ndx_filename} -surface {sasa_selection_name}', expected_output_filepath = current_chain_sasa)
         # Mine the sasa results (.xvg file)
         # Areas from excluded atoms are not recorded in the xvg file
@@ -245,20 +242,7 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
         # Remove files which are no longer required
         os.remove(ndx_filename)
         os.remove(current_chain_sasa)
-        os.remove(RESIDUAL_AREA_FILENAME)
+        os.remove(residual_area_filepath)
     # Remove the auxiliar file
     os.remove(auxiliar_pdb_filepath)
-    os.remove(auxiliar_mmcif_filepath)
     return pdb_chains_sas, pdb_chains_seq, pdb_chains_num
-    
-def download_mmcif (pdb_id : str, output_filepath : str):
-    """Download a mmCIF file corresponding to a PDB entry."""
-    request_url = f'https://files.rcsb.org/download/{pdb_id}.cif'
-    try:
-        parsed_response = None
-        with urllib.request.urlopen(request_url) as response:
-            parsed_response = response.read().decode("utf-8")
-        with open(output_filepath, 'w') as file:
-            file.write(parsed_response)
-    except Exception as error:
-        raise Exception(f'Something went wrong when downloading {pdb_id} structure: {request_url} with error: {error}')

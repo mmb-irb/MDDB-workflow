@@ -3,6 +3,7 @@
 
 from os import remove
 
+from mddb_workflow.utils.auxiliar import get_auxiliar_filepath
 from mddb_workflow.utils.gmx_spells import run_gromacs
 
 # Set the box analysis filename
@@ -19,15 +20,17 @@ def get_box_size(
     input_topology_filename: str,
     input_trajectory_filename: str,
 ) -> tuple:
+    # Set the output box filepath
+    box_analysis_filepath = get_auxiliar_filepath(BOX_ANALYSIS)
     # Generate the box analysis
     # WARNING: Do not use the first_frame here instead of the trajectory
     # In modified topologies the first frame pdb may have lost box size data
     run_gromacs(f'traj -s {input_topology_filename} -f {input_trajectory_filename} \
-                -ob {BOX_ANALYSIS} -b 0 -e 0', user_input = 'System',
-                expected_output_filepath = BOX_ANALYSIS)
+                -ob {box_analysis_filepath} -b 0 -e 0', user_input = 'System',
+                expected_output_filepath = box_analysis_filepath)
     # Read the box analysis and get the desired data
     boxsizex, boxsizey, boxsizez = "", "", ""
-    with open(BOX_ANALYSIS, 'r') as file:
+    with open(box_analysis_filepath, 'r') as file:
         for line in file:
             if line.startswith(("#", "@")) == False:
                 # Simulation box 'x' size
@@ -37,7 +40,7 @@ def get_box_size(
                 # Simulation box 'z' size
                 boxsizez = float(line.split()[3])
     # Remove the box analysis
-    remove(BOX_ANALYSIS)
+    remove(box_analysis_filepath)
     # Display it
     print(f'Box size: ({boxsizex},{boxsizey},{boxsizez})')
     # Return gromacs logs

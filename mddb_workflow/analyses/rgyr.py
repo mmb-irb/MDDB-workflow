@@ -3,14 +3,10 @@ from numpy import mean, std
 
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.tools.xvg_parse import xvg_parse
-from mddb_workflow.utils.auxiliar import save_json
+from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath
 from mddb_workflow.utils.constants import OUTPUT_RGYR_FILENAME
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
-
-# Set an auxiliar data filename
-rgyr_data_filename = '.rgyr_data.xvg'
-
 
 def rgyr(
     structure_file: 'File',
@@ -40,16 +36,18 @@ def rgyr(
         return
     selection_name = 'pbc_atoms'
     ndx_selection = not_pbc_selection.to_ndx(selection_name)
-    ndx_filename = '.not_pbc.ndx'
-    with open(ndx_filename, 'w') as file:
+    ndx_filepath = get_auxiliar_filepath('.not_pbc.ndx')
+    with open(ndx_filepath, 'w') as file:
         file.write(ndx_selection)
 
+    # Set the output filepath
+    rgyr_data_filepath = get_auxiliar_filepath('.rgyr_data.xvg')
     # Run Gromacs
     run_gromacs(f'gyrate -s {structure_file.path} -f {reduced_trajectory_filepath} \
-        -o {rgyr_data_filename} -n {ndx_filename} -mode geometry', user_input=selection_name)
+        -o {rgyr_data_filepath} -n {ndx_filepath} -mode geometry', user_input=selection_name)
 
     # Read the output file and parse it
-    raw_rgyr_data = xvg_parse(rgyr_data_filename, ['times', 'rgyr', 'rgyrx', 'rgyry', 'rgyrz'])
+    raw_rgyr_data = xvg_parse(rgyr_data_filepath, ['times', 'rgyr', 'rgyrx', 'rgyry', 'rgyrz'])
 
     # Format data
     rgyr_data = {
@@ -92,5 +90,5 @@ def rgyr(
     save_json(rgyr_data, output_analysis_filepath)
 
     # Remove residual files
-    remove(rgyr_data_filename)
-    remove(ndx_filename)
+    remove(rgyr_data_filepath)
+    remove(ndx_filepath)

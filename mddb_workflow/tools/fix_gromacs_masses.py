@@ -1,3 +1,4 @@
+from mddb_workflow.utils.auxiliar import get_auxiliar_filepath
 from mddb_workflow.utils.constants import GROMACS_MASSES_FILENAME, GROMACS_CUSTOM_MASSES_FILEPATH
 from mddb_workflow.utils.file import File
 
@@ -34,10 +35,16 @@ def fix_gromacs_masses ():
     source_custom_masses_file = File(GROMACS_CUSTOM_MASSES_FILEPATH)
 
     # Set the path to a local copy of the workflow custom masses file
+    # LORE: 
     # According to Justin Lemkul:
     # "All GROMACS programs will read relevant database files from the working directory
     # before referencing them from $GMXLIB."
-    local_custom_masses_file = File(GROMACS_MASSES_FILENAME)
+    # However we can not write the file in the local directory where the workflow is run
+    # We may have no write permissions in the current directory
+    # Note that the workflow may include a --dir argument
+    # To solve this, we change the GMXLIB environmental variable later
+    local_custom_masses_filepath = get_auxiliar_filepath(GROMACS_MASSES_FILENAME)
+    local_custom_masses_file = File(local_custom_masses_filepath)
 
     # This was a symlink before
     # Make sure any reamining symlinks are removed
@@ -60,7 +67,8 @@ MWF_HEADER = '; MWF extension\n'
 def extend_gromacs_masses (new_masses : set[tuple]):
 
     # Get the local custom masses file
-    local_custom_masses_file = File(GROMACS_MASSES_FILENAME)
+    local_custom_masses_filepath = get_auxiliar_filepath(GROMACS_MASSES_FILENAME)
+    local_custom_masses_file = File(local_custom_masses_filepath)
     # If the file does not exist yet then create it
     if not local_custom_masses_file.exists:
         fix_gromacs_masses()

@@ -9,7 +9,8 @@ from subprocess import run, PIPE, STDOUT
 
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.utils.auxiliar import warn, ToolError, InputError
+from mddb_workflow.utils.auxiliar import warn, ToolError, InputError, get_auxiliar_filepath
+from mddb_workflow.utils.constants import GLOBALS
 
 # Set characters to be escaped since they have a meaning in TCL
 TCL_RESERVED_CHARACTERS = ['"','[',']']
@@ -21,8 +22,10 @@ def escape_tcl_selection (selection : str) -> str:
         escaped_selection = escaped_selection.replace(character, '\\' + character)
     return escaped_selection
 
-# Set the script filename with all commands to be passed to vmd
-commands_filename = '.commands.vmd'
+# Get the path of the auxiliar commands file to be used to call VMD with a preset of instructions
+# Note that this must be requested from a function, or the globals may be not updated
+def get_auxiliar_commands_filepath () -> str:
+    return get_auxiliar_filepath('.commands.vmd')
 
 # List all the vmd supported trajectory formats
 vmd_supported_structure_formats = {'pdb', 'prmtop', 'psf', 'parm', 'gro'} # DANI: Esto lo he hecho rápido, hay muchas más
@@ -73,7 +76,8 @@ def vmd_converter (
         raise RuntimeError(f'Not supported VMD writer for output format {output_file.format}')
 
     # Prepare a script for VMD to run. This is Tcl language
-    with open(commands_filename, "w") as file:
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # Load only the first frame of the trajectory
         file.write(f'animate read {vmd_trajectory_format} {input_trajectory_filepath} end 1\n')
         # Select the specified atoms
@@ -88,7 +92,7 @@ def vmd_converter (
         "vmd",
         input_structure_or_topology_filepath,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE)
@@ -100,7 +104,7 @@ def vmd_converter (
         error_logs = vmd_process.stderr.decode()
         print(error_logs)
         raise ToolError('Something went wrong with VMD')
-    os.remove(commands_filename)
+    os.remove(commands_filepath)
 
 # Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file
 def vmd_to_pdb (
@@ -162,7 +166,8 @@ def chainer (
     if not exists(input_pdb_filename):
         raise InputError(f'The file {input_pdb_filename} does not exist')
 
-    with open(commands_filename, "w") as file:
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # Select the specified atoms and set the specified chain
         file.write(f'set atoms [atomselect top "{escaped_atom_selection}"]\n')
         # In case chain letter is not a letter but the 'fragment' flag, asign chains by fragment
@@ -194,7 +199,7 @@ def chainer (
         "vmd",
         input_pdb_filename,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -205,7 +210,7 @@ def chainer (
         raise ToolError('Something went wrong with VMD')
 
     # Remove the vmd commands file
-    os.remove(commands_filename)
+    os.remove(commands_filepath)
 
 def merge_and_convert_trajectories (
     input_structure_filename : Optional[str],
@@ -230,7 +235,8 @@ def merge_and_convert_trajectories (
     # Prepare a script for the VMD to automate the data parsing. This is Tcl lenguage
     # In addition, if chains are missing, this script asigns chains by fragment
     # Fragments are atom groups which are not connected by any bond
-    with open(commands_filename, "w") as file:
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # Select all atoms
         file.write('set all [atomselect top "all"]\n')
         # Write the current trajectory in the specified format format
@@ -244,7 +250,7 @@ def merge_and_convert_trajectories (
         "vmd",
         *inputs,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=STDOUT).stdout.decode() # Redirect errors to the output in order to dont show them in console
@@ -255,7 +261,7 @@ def merge_and_convert_trajectories (
         raise ToolError('Something went wrong with VMD')
 
     # Remove the vmd commands file
-    os.remove(commands_filename)
+    os.remove(commands_filepath)
 
 # Set function supported formats
 merge_and_convert_trajectories.format_sets = [
@@ -289,8 +295,9 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
 
     # Prepare a script for VMD to run. This is Tcl language
     # The output of the script will be written to a txt file
-    atom_indices_filename = '.vmd_output.txt'
-    with open(commands_filename, "w") as file:
+    atom_indices_filename = get_auxiliar_filepath('.vmd_output.txt')
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # Select the specified atoms
         file.write(f'set selection [atomselect top "{escaped_selection}"]\n')
         # Save atom indices from the selection
@@ -305,7 +312,7 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
         "vmd",
         input_structure_filename,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -323,7 +330,7 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
     atom_indices = [ int(i) for i in raw_atom_indices.split() ]
 
     # Remove trahs files
-    trash_files = [ commands_filename, atom_indices_filename ]
+    trash_files = [ commands_filepath, atom_indices_filename ]
     for trash_file in trash_files:
         os.remove(trash_file)
 
@@ -339,8 +346,9 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
         vmd_selection = selection.to_vmd()
 
     # Prepare a script for the VMD to automate the commands. This is Tcl lenguage
-    output_bonds_file = '.bonds.txt'
-    with open(commands_filename, "w") as file:
+    output_bonds_file = get_auxiliar_filepath('.bonds.txt')
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # Select atoms
         file.write(f'set atoms [atomselect top "{vmd_selection}"]\n')
         # Save covalent bonds
@@ -355,7 +363,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
         "vmd",
         structure_filename,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -370,7 +378,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
         raw_bonds = file.read()
 
     # Remove vmd files since they are no longer usefull
-    for f in [ commands_filename, output_bonds_file ]:
+    for f in [ commands_filepath, output_bonds_file ]:
         os.remove(f)
 
     # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
@@ -429,7 +437,8 @@ def get_covalent_bonds_between (
     output_index_1_file = '.index1.txt'
     output_index_2_file = '.index2.txt'
     output_bonds_file = '.bonds.ext'
-    with open(commands_filename, "w") as file:
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # Select the specified atoms in selection 1
         file.write(f'set sel1 [atomselect top "{parsed_selection_1}"]\n')
         # Save all atom index in the selection
@@ -456,7 +465,7 @@ def get_covalent_bonds_between (
         "vmd",
         structure_filename,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -475,7 +484,7 @@ def get_covalent_bonds_between (
         raw_index_2 = file.read()
 
     # Remove vmd files since they are no longer usefull
-    for f in [ commands_filename, output_index_1_file, output_index_2_file, output_bonds_file ]:
+    for f in [ commands_filepath, output_index_1_file, output_index_2_file, output_bonds_file ]:
         os.remove(f)
 
     # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
@@ -563,8 +572,8 @@ def get_interface_atom_indices (
     total_frames_filename = '.nframes.txt'
 
     # Prepare a script for VMD to run. This is Tcl language
-    commands_filename = '.commands.vmd'
-    with open(commands_filename, "w") as file:
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
         # -------------------------------------------
         # First get the whole selection atom indices
         # -------------------------------------------
@@ -640,7 +649,7 @@ def get_interface_atom_indices (
         input_structure_filepath,
         input_trajectory_filepath,
         "-e",
-        commands_filename,
+        commands_filepath,
         "-dispdev",
         "none"
     ], stdout=PIPE, stderr=PIPE).stdout.decode()
@@ -674,7 +683,7 @@ def get_interface_atom_indices (
     total_frames = process_vmd_output(total_frames_filename)[0]
 
     # Remove trash files
-    trash_files = [ commands_filename ] + expected_output_files
+    trash_files = [ commands_filepath ] + expected_output_files
     for trash_file in trash_files:
         os.remove(trash_file)
 

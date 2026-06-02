@@ -1,4 +1,4 @@
-from os import remove, rename
+from os import remove, rename, environ
 from os.path import exists, getmtime
 from shutil import copyfile
 from subprocess import run, PIPE, Popen
@@ -6,7 +6,7 @@ from re import search
 from time import time
 
 from mddb_workflow.utils.auxiliar import load_json, ToolError
-from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END
+from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END, GLOBALS
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
@@ -24,6 +24,10 @@ def run_gromacs(
     - Hidden unnecessary output logs and grey-colored necessary ones
     - Missing output checks
     Then return both output and error logs. """
+
+    # Set the working directory as the path for GROMACS where to look for supplementary data files
+    # Here we will make a copy of the atommass.dat file
+    environ["GMXLIB"] = GLOBALS["working_directory"]
 
     # Run a fix for gromacs masses if not done before
     fix_gromacs_masses()

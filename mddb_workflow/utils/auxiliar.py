@@ -4,6 +4,7 @@ from mddb_workflow import __path__, __version__
 from mddb_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import YELLOW_HEADER, RED_HEADER, COLOR_END
 from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
+from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.type_hints import *
 
 import os
@@ -910,3 +911,20 @@ class SocketTimeout:
     def stop(self):
         # Restore the original timeout
         socket.setdefaulttimeout(self.old_timeout)
+
+# Get the path of an auxiliar file to be created where the workflow is to be run (--dir)
+# Note that this must be requested from a function, or the globals may be not updated
+def get_auxiliar_filepath (filename : str) -> str:
+    return f'{GLOBALS["working_directory"]}/{filename}'
+
+def download_mmcif (pdb_id : str, output_filepath : str):
+    """Download a mmCIF file corresponding to a PDB entry."""
+    request_url = f'https://files.rcsb.org/download/{pdb_id}.cif'
+    try:
+        parsed_response = None
+        with urllib.request.urlopen(request_url) as response:
+            parsed_response = response.read().decode("utf-8")
+        with open(output_filepath, 'w') as file:
+            file.write(parsed_response)
+    except Exception as error:
+        raise Exception(f'Something went wrong when downloading {pdb_id} structure: {request_url} with error: {error}')
