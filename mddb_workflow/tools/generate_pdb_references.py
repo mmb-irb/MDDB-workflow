@@ -96,20 +96,17 @@ def get_pdb_reference (pdb_id : str) -> dict:
             chain_uniprots[chain] = uniprot_id
     pdb_data['organisms'] = list(set(organisms))
     pdb_data['chain_uniprots'] = chain_uniprots
-    # Download the structure and calculate the solvent accessible surface in the PDB structure as reference
-    # Do it for protein chains only and get also their aminoacid sequences
-    chain_sas, chain_seq, pdb_chains_num = calculate_pdb_chain_sas(final_pdb_id)
+    # Calculate the metrics needed for integration with the PDBe knowledge base
+    knowledge_data = calculate_knowledge_data(final_pdb_id)
     # Finally assign these values to the reference data
-    pdb_data['chain_seq'] = chain_seq
-    pdb_data['chain_resnum'] = pdb_chains_num
-    pdb_data['chain_sas'] = chain_sas
+    pdb_data['knowledge'] = knowledge_data
     # Sort all dictionaries
     # Otherwise the loader will complain about a change every time since the order may change
     for key, value in pdb_data.items():
         if type(value) == dict:
             pdb_data[key] = dict(sorted(value.items()))
     # Set a version number so new references can replace old references
-    pdb_data['version'] = '0.0.2'
+    pdb_data['version'] = '0.0.3'
     return pdb_data
 
 # Set service URLs to be requested
@@ -168,7 +165,7 @@ def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
 # Set a residual output filepath
 RESIDUAL_AREA_FILENAME = '.residual_area.xvg'
 
-def calculate_pdb_chain_sas (pdb_id : str) -> dict:
+def calculate_knowledge_data (pdb_id : str) -> dict:
     """Calculate the solvent accessible surface in the PDB structure as reference."""
     # Load the structure from the PDB
     # Ask for the author numeration to make things compatible with the PDBe
@@ -181,35 +178,28 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
     protein_selection = structure.select_protein()
     protein_chains = structure.get_selection_chains(protein_selection)
     chain_count = len(protein_chains)
-    # Keep the SAS of every chain
-    pdb_chains_sas = {}
-    # Keep also the chain sequence
-    # Note that the sequence coming from the GraphQL is the reference sequence, including also the endings
-    # And only god knows how to ask GraphQL to get the actual present sequence in the PDB structure
-    # In order to get the real sequence we read it directly from the parsed structure
-    pdb_chains_seq = {}
-    # Keep also the residue numeration
-    pdb_chains_num = {}
+    # Metrics are stored per chain
+    # Chain names, as well as resiude numbers, are according to author (auth) names/numbers
+    knowledge_data = {}
     # We have encountered some PDB entries with alpha carbons only (e.g. 2AKH, 2AKI)
     # The structure will not identify these chains as proteins although they are annotated as such in the PDB
     # We can not calculate SAS over these chains anyway but we must identify them to further handle them
     for chain in structure.chains:
         if chain.classification == 'protein': continue
         if all([ atom.name == 'CA' for atom in chain.atoms ]) and all([ residue.name in PROTEIN_RESIDUE_NAME_LETTERS for residue in chain.residues ]):
-            pdb_chains_sas[chain.name] = CA_ONLY
-            # Save the sequence as well, which is based in residue names so it should be correct
-            pdb_chains_seq[chain.name] = chain.get_sequence()
+            knowledge_data[chain.name] = CA_ONLY
     # Set the residual area filepath
     residual_area_filepath = get_auxiliar_filepath(RESIDUAL_AREA_FILENAME)
     print()
     # Iterate PDB chains
     for c, chain in enumerate(protein_chains, 1):
-        reprint(f' Calculating SAS for chain {chain.name} ({c}/{chain_count})')
-        # Run a SAS analysis only for this specific chain
+        reprint(f' Calculating SAS for protein in chain {chain.name} ({c}/{chain_count})')
+        # Run a SAS analysis only for protein in this specific chain
         # Convert the chain selection to a ndx file
         chain_selection = chain.get_selection()
+        chain_protein_selection = chain_selection & protein_selection
         sasa_selection_name = f'chain_{chain.name}'
-        sasa_ndx_selection = chain_selection.to_ndx(sasa_selection_name)
+        sasa_ndx_selection = chain_protein_selection.to_ndx(sasa_selection_name)
         ndx_filename = get_auxiliar_filepath(f'.indices.ndx')
         with open(ndx_filename, 'w') as file:
             file.write(sasa_ndx_selection)
@@ -221,28 +211,37 @@ def calculate_pdb_chain_sas (pdb_id : str) -> dict:
         # Mine the sasa results (.xvg file)
         # Areas from excluded atoms are not recorded in the xvg file
         sasa = xvg_parse(current_chain_sasa, ['n', 'area', 'sd'])
-        # Restructure data by adding all atoms sas per residue
+        # Get the values we are interested in and make sure the number of values is as expected
         atom_numbers = sasa['n']
         atom_areas = sasa['area']
-        sas_per_residues = [0.0] * len(structure.residues)
+        if not len(atom_numbers) == len(atom_areas) == len(chain_protein_selection):
+            raise ValueError(f'Protein selection in chain {chain.name} has {len(chain_protein_selection)} atoms but {len(atom_areas)} values were mined')
+        # Restructure data by adding all atoms sas per residue
+        protein_residues = structure.get_selection_residues(chain_protein_selection)
+        sas_per_residues = { residue.index : 0.0 for residue in protein_residues }
         for atom_number, atom_area in zip(atom_numbers, atom_areas):
             atom_index = atom_number - 1
             atom = structure.atoms[atom_index]
             residue_index = atom.residue_index
             sas_per_residues[residue_index] += atom_area
-        # To make is standard with the rest of analyses we pass the results from nm² to A²
-        # We also round the final values to thousands
-        sas_per_residues = [ round_to_thousandths(sas * 100) for sas in sas_per_residues ]
-        pdb_chains_sas[chain.name] = sas_per_residues
-        # Save the sequence as well
-        pdb_chains_seq[chain.name] = chain.get_sequence()
-        # And the residue numeration
-        residue_numbers = [ f'{residue.number}{residue.icode}' for residue in chain.residues ]
-        pdb_chains_num[chain.name] = residue_numbers
+        # Set the final knowledge data for this chain
+        chain_knowledge_data = []
+        # Set it residue-wise and only for protein residues
+        for protein_residue in protein_residues:
+            sas = sas_per_residues[protein_residue.index]
+            chain_knowledge_data.append({
+                'num': f'{protein_residue.number}{protein_residue.icode}',
+                'type': protein_residue.name,
+                # To make is standard with the rest of analyses we pass the results from nm² to A²
+                # We also round the final values to thousands
+                'sas': round_to_thousandths(sas * 100),
+            })
+        # Add the chain knowledge data to the overall knowledge data
+        knowledge_data[chain.name] = chain_knowledge_data
         # Remove files which are no longer required
         os.remove(ndx_filename)
         os.remove(current_chain_sasa)
         os.remove(residual_area_filepath)
     # Remove the auxiliar file
     os.remove(auxiliar_pdb_filepath)
-    return pdb_chains_sas, pdb_chains_seq, pdb_chains_num
+    return knowledge_data
