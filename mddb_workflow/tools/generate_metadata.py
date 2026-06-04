@@ -2,7 +2,7 @@ from mddb_workflow.tools.get_box_size import get_box_size
 from mddb_workflow.tools.get_atoms_count import get_atoms_count
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
 from mddb_workflow.tools.generate_map import get_sequence_metadata
-from mddb_workflow.utils.auxiliar import InputError, save_json
+from mddb_workflow.utils.auxiliar import InputError, save_json, make_sure_is_numeric_or_none
 from mddb_workflow.utils.constants import MD_DIRECTORY
 from mddb_workflow.utils.type_hints import *
 
@@ -137,8 +137,26 @@ def prepare_project_metadata (
 
     # Get the MD type
     md_type = input_type
-    # In case this is an ensemble and not a time related trajectory and not an ensemble, the framestep may be missing
-    framestep = None if md_type == 'ensemble' else input_framestep
+    # In case this is an ensemble the framestep may be missing
+    framestep = None
+    if md_type == 'trajectory':
+        framestep = input_framestep
+        if framestep <= 0: raise InputError(f'Frame step should always be postive, not "{input_framestep}"')
+        framestep = make_sure_is_numeric_or_none(framestep)
+        if framestep == InputError:
+            raise InputError(f'Input frame step must be a numeric value (ns), not "{input_framestep}"')
+
+    # Make sure other numeric values are numeric and positive
+    timestep = make_sure_is_numeric_or_none(input_timestep)
+    if timestep is InputError:
+        raise InputError(f'Input time step must be a numeric value (fs), not "{input_timestep}"')
+    if timestep <= 0:
+        raise InputError(f'Input time step must be positive, not "{input_timestep}"')
+    temperature = make_sure_is_numeric_or_none(input_temperature)
+    if temperature is InputError:
+        raise InputError(f'Input temperature must be a numeric value (K), not "{input_temperature}"')
+    if temperature <= 0:
+        raise InputError(f'Input temperature must be positive, not "{input_temperature}"')
 
     # Metadata interactions are input interactions and the interaction types combined
     # Thus we take the processed interactions and remove the field we are not interested in
@@ -196,8 +214,8 @@ def prepare_project_metadata (
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],
         'FRAMESTEP': framestep,
-        'TIMESTEP': input_timestep,
-        'TEMP': input_temperature,
+        'TIMESTEP': timestep,
+        'TEMP': temperature,
         'ENSEMBLE': input_ensemble,
         'FF': forcefields,
         'WAT': input_water,
