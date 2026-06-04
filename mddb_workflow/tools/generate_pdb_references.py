@@ -3,7 +3,7 @@ import json
 import urllib.request
 
 from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, get_auxiliar_filepath
-from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint
+from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint, download_mmcif
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
@@ -96,17 +96,27 @@ def get_pdb_reference (pdb_id : str) -> dict:
             chain_uniprots[chain] = uniprot_id
     pdb_data['organisms'] = list(set(organisms))
     pdb_data['chain_uniprots'] = chain_uniprots
+    # Download the structure
+    # Download the mmcif instead of the PDB to avoid having problems
+    # Some PDB entries may be not available in PDB format anymore
+    auxiliar_mmcif_filepath = get_auxiliar_filepath(f'.{pdb_id}.cif')
+    download_mmcif(pdb_id, auxiliar_mmcif_filepath)
+    # Load the structure with both the PDB (author) and the UniProt numeration
+    pdb_ref_structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath, author_notation=True)
+    pdb_ref_structure._fixed_atom_elements = True
+    uniprot_ref_structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath, author_notation=False)
+    uniprot_ref_structure._fixed_atom_elements = True
     # Calculate the metrics needed for integration with the PDBe knowledge base
-    knowledge_data = calculate_knowledge_data(final_pdb_id)
-    # Finally assign these values to the reference data
-    pdb_data['knowledge'] = knowledge_data
+    pdb_data['knowledge'] = calculate_knowledge_data(final_pdb_id, pdb_ref_structure)
+    # Make a uniprot to PDB map
+    pdb_data['uni2pdb'] = make_uniprot_to_pdb_map(uniprot_ref_structure, pdb_ref_structure, chain_uniprots)
     # Sort all dictionaries
     # Otherwise the loader will complain about a change every time since the order may change
     for key, value in pdb_data.items():
         if type(value) == dict:
             pdb_data[key] = dict(sorted(value.items()))
     # Set a version number so new references can replace old references
-    pdb_data['version'] = '0.0.3'
+    pdb_data['version'] = '0.0.4'
     return pdb_data
 
 # Set service URLs to be requested
@@ -165,13 +175,9 @@ def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
 # Set a residual output filepath
 RESIDUAL_AREA_FILENAME = '.residual_area.xvg'
 
-def calculate_knowledge_data (pdb_id : str) -> dict:
+def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
     """Calculate the solvent accessible surface in the PDB structure as reference."""
-    # Load the structure from the PDB
-    # Ask for the author numeration to make things compatible with the PDBe
-    structure = Structure.from_pdb_id(pdb_id, author_notation=True)
-    structure._fixed_atom_elements = True
-    # Now export it to PDB so gromacs can read it
+    # Export the structure to PDB so gromacs can read it
     auxiliar_pdb_filepath = get_auxiliar_filepath(f'.{pdb_id}.pdb')
     structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings = False)
     # Target only protein chains
@@ -245,3 +251,27 @@ def calculate_knowledge_data (pdb_id : str) -> dict:
     # Remove the auxiliar file
     os.remove(auxiliar_pdb_filepath)
     return knowledge_data
+
+def make_uniprot_to_pdb_map (
+    uniprot_structure : 'Structure',
+    pdb_structure : 'Structure',
+    chain_uniprots : dict) -> dict[str, list]:
+    """Make a map from UniProt to PDB for the PDBe knowledge base integration."""
+    uniprot_to_pdb_map = {}
+    # Iterate equivalent residues in both uniprot and PDB notation
+    for uniprot_residue, pdb_residue in zip(uniprot_structure.residues, pdb_structure.residues):
+        # Get uniprot reference
+        uniprot_id = chain_uniprots.get(uniprot_residue.chain.name, None)
+        # If there is no reference then this is probably ions/water
+        if uniprot_id is None: continue
+        uniprot_number = uniprot_residue.number
+        uniprot_key = f'{uniprot_id}_{uniprot_number}'
+        # Get PDB values
+        pdb_chain = pdb_residue.chain.name
+        pdb_label = f'{pdb_residue.number}{pdb_residue.icode}'
+        pdb_type = pdb_residue.name
+        # Set the value for this residue in the mpa, unless it is previously stablished by other
+        # Theoretically it may happen that a PDB has two chains with the same UniProt id and region
+        if uniprot_key not in uniprot_to_pdb_map:
+            uniprot_to_pdb_map[uniprot_key] = [pdb_chain, pdb_label, pdb_type]
+    return uniprot_to_pdb_map
