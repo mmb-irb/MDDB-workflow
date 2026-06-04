@@ -1667,7 +1667,7 @@ class Structure:
         """Set the structure from a mmcif file."""
         mmcif_file = File(mmcif_filepath)
         if not mmcif_file.exists:
-            raise InputError(f'File "{mmcif_filepath}" not found')
+            raise InputError(f'mmCIF file "{mmcif_filepath}" not found')
         if not mmcif_file.format == 'cif':
             raise InputError(f'"{mmcif_filepath}" is not a path for a mmcif file')
         # Read the mmcif file

@@ -3,12 +3,13 @@ import json
 import urllib.request
 
 from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, get_auxiliar_filepath
-from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint, download_mmcif
+from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
+from mddb_workflow.tools.generate_map import get_uniprot_reference, align
 from mddb_workflow.tools.xvg_parse import xvg_parse
 
 # Set a flag for chains which are made entirley of alpha carbons only
@@ -96,27 +97,21 @@ def get_pdb_reference (pdb_id : str) -> dict:
             chain_uniprots[chain] = uniprot_id
     pdb_data['organisms'] = list(set(organisms))
     pdb_data['chain_uniprots'] = chain_uniprots
-    # Download the structure
-    # Download the mmcif instead of the PDB to avoid having problems
-    # Some PDB entries may be not available in PDB format anymore
-    auxiliar_mmcif_filepath = get_auxiliar_filepath(f'.{pdb_id}.cif')
-    download_mmcif(pdb_id, auxiliar_mmcif_filepath)
-    # Load the structure with both the PDB (author) and the UniProt numeration
-    pdb_ref_structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath, author_notation=True)
-    pdb_ref_structure._fixed_atom_elements = True
-    uniprot_ref_structure = Structure.from_mmcif_file(auxiliar_mmcif_filepath, author_notation=False)
-    uniprot_ref_structure._fixed_atom_elements = True
+    # Download and parse the structure with the PDB (author) and
+    structure = Structure.from_pdb_id(final_pdb_id, author_notation=True)
+    structure._fixed_atom_elements = True
     # Calculate the metrics needed for integration with the PDBe knowledge base
-    pdb_data['knowledge'] = calculate_knowledge_data(final_pdb_id, pdb_ref_structure)
+    pdb_data['knowledge'] = calculate_knowledge_data(final_pdb_id, structure)
     # Make a uniprot to PDB map
-    pdb_data['uni2pdb'] = make_uniprot_to_pdb_map(uniprot_ref_structure, pdb_ref_structure, chain_uniprots)
+    uniprot_ids = list(chain_uniprots.values())
+    pdb_data['uni2pdb'] = make_uniprot_to_pdb_map(structure, uniprot_ids)
     # Sort all dictionaries
     # Otherwise the loader will complain about a change every time since the order may change
     for key, value in pdb_data.items():
         if type(value) == dict:
             pdb_data[key] = dict(sorted(value.items()))
     # Set a version number so new references can replace old references
-    pdb_data['version'] = '0.0.4'
+    pdb_data['version'] = '0.0.6'
     return pdb_data
 
 # Set service URLs to be requested
@@ -253,25 +248,57 @@ def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
     return knowledge_data
 
 def make_uniprot_to_pdb_map (
-    uniprot_structure : 'Structure',
     pdb_structure : 'Structure',
-    chain_uniprots : dict) -> dict[str, list]:
+    uniprots_ids : list[str]) -> dict[str, list]:
     """Make a map from UniProt to PDB for the PDBe knowledge base integration."""
     uniprot_to_pdb_map = {}
-    # Iterate equivalent residues in both uniprot and PDB notation
-    for uniprot_residue, pdb_residue in zip(uniprot_structure.residues, pdb_structure.residues):
-        # Get uniprot reference
-        uniprot_id = chain_uniprots.get(uniprot_residue.chain.name, None)
-        # If there is no reference then this is probably ions/water
-        if uniprot_id is None: continue
-        uniprot_number = uniprot_residue.number
-        uniprot_key = f'{uniprot_id}_{uniprot_number}'
-        # Get PDB values
-        pdb_chain = pdb_residue.chain.name
-        pdb_label = f'{pdb_residue.number}{pdb_residue.icode}'
-        pdb_type = pdb_residue.name
-        # Set the value for this residue in the mpa, unless it is previously stablished by other
-        # Theoretically it may happen that a PDB has two chains with the same UniProt id and region
-        if uniprot_key not in uniprot_to_pdb_map:
-            uniprot_to_pdb_map[uniprot_key] = [pdb_chain, pdb_label, pdb_type]
+    # Get all uniprot references
+    uniprot_references = {}
+    for uniprot_id in uniprots_ids:
+        uniprot_reference = get_uniprot_reference(uniprot_id)
+        if uniprot_reference:
+            uniprot_references[uniprot_id] = uniprot_reference
+    # Find which uniprot id belongs to which chain in the original PDB id
+    # Note that we have this information regarding the official PDB notation, but no the author notation
+    # Iterate structure protein chains
+    protein_selection = pdb_structure.select_protein()
+    protein_chains = pdb_structure.get_selection_chains(protein_selection)
+    for chain in protein_chains:
+        sequence = chain.get_sequence()
+        # Find the best alignment match for this sequence
+        matching_uniprot_id = None
+        residue_numeration = None
+        highest_score = 0
+        # Iterate uniprot references
+        for uniprot_id, uniprot_reference in uniprot_references.items():
+            reference_sequence = uniprot_reference['sequence']
+            # Compare sequences
+            align_match = align(reference_sequence, sequence)
+            # If there is no match then skip to the next uniprot reference
+            if not align_match: continue
+            sequence_map, align_score = align_match
+            # If there was a previous match which was better then skip to the next uniprot reference
+            if align_score <= highest_score: continue
+            # If this is the best match so far then use its resiude numeration
+            matching_uniprot_id = uniprot_id
+            residue_numeration = sequence_map
+            highest_score = align_score
+        # There should be a valid residue numeration by now
+        if residue_numeration is None:
+            warn(f'Chain {chain.name} matches no UniProt id: {", ".join(uniprots_ids)}')
+            continue
+        # Now iterate residues in the chain
+        for residue_chain_index, residue in enumerate(chain.residues):
+            # Get the key of this residue in uniprot notation
+            uniprot_number = residue_numeration[residue_chain_index]
+            # If the residue is matching no residue number then skip
+            # It means it is probably not a residue, but an ion, water, or something else
+            if (uniprot_number is None): continue
+            uniprot_key = f'{matching_uniprot_id}_{uniprot_number}'
+            # Get the knowledge expected label
+            pdb_label = f'{residue.number}{residue.icode}'
+            # Set the value for this residue in the mpa, unless it is previously stablished by other
+            # Theoretically it may happen that a PDB has two chains with the same UniProt id and region
+            if uniprot_key not in uniprot_to_pdb_map:
+                uniprot_to_pdb_map[uniprot_key] = [chain.name, pdb_label, residue.name]
     return uniprot_to_pdb_map
