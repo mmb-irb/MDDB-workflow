@@ -2161,6 +2161,7 @@ class Project:
         topology_reference_md = self.reference_md
         # However if there is an input topology filepath for the project and it does not match with the reference MD then we must change
         topology_filepath = self.get_topology_filepath()
+        if topology_filepath == MISSING_TOPOLOGY: return MISSING_TOPOLOGY
         if topology_filepath != self.reference_md.get_topology_filepath():
             # Iterate MDs until we find one using the project topology
             for md in self.mds:
