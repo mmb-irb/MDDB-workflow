@@ -912,7 +912,8 @@ class Dataset:
             scopes_to_query = ['projects', 'mds']
 
         # Keep persisted status in sync with real process state before displaying.
-        self._refresh_running_entries(scopes=scopes_to_query)
+        if shutil.which('squeue') is not None:
+            self._refresh_running_entries(scopes=scopes_to_query)
 
         # Query data directly from SQLite with filters applied
         dataframes = []
@@ -921,7 +922,8 @@ class Dataset:
             data = self.query_table(scope, query_path, query_state, query_message)
             df = pd.DataFrame(data, columns=cols)
             df['scope'] = scope
-            dataframes.append(df)
+            if len(df) > 0:
+                dataframes.append(df)
 
         df_joined = pd.concat(dataframes, ignore_index=True) if len(dataframes) > 1 else dataframes[0]
 
