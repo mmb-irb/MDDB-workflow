@@ -150,12 +150,12 @@ def prepare_project_metadata (
     timestep = make_sure_is_numeric_or_none(input_timestep)
     if timestep is InputError:
         raise InputError(f'Input time step must be a numeric value (fs), not "{input_timestep}"')
-    if timestep <= 0:
+    if timestep and timestep <= 0:
         raise InputError(f'Input time step must be positive, not "{input_timestep}"')
     temperature = make_sure_is_numeric_or_none(input_temperature)
     if temperature is InputError:
         raise InputError(f'Input temperature must be a numeric value (K), not "{input_temperature}"')
-    if temperature <= 0:
+    if temperature and temperature <= 0:
         raise InputError(f'Input temperature must be positive, not "{input_temperature}"')
 
     # Metadata interactions are input interactions and the interaction types combined
