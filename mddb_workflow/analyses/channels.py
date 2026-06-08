@@ -8,6 +8,8 @@ from mddb_workflow.utils.constants import OUTPUT_CHANNELS_FILENAME
 from mddb_workflow.utils.type_hints import *
 import json
 
+RESOURCES_DIR = str(Path(__file__).parent.parent / 'resources')
+
 
 def _parse_chap_residue_fractions(pdb_file: Path) -> dict[str, list[float]]:
     """Parse residue-level pore-lining and pore-facing fractions from CHAP output."""
@@ -43,6 +45,7 @@ def channels(
     universe: 'Universe',
     output_directory: str,
     thickness_analysis: dict,
+    cg_residues: list[int],
     snapshots: int,
     frames_limit: int
 ):
@@ -60,7 +63,9 @@ def channels(
     # Select protein between membrane planes
     TM_at = universe.select_atoms(f'protein and prop z > {bot} and prop z < {top}').residues.atoms
     with mda.selections.gromacs.SelectionWriter(f'{output_directory}/membrane_atoms.ndx', mode='w') as ndx:
-        ndx.write(universe.select_atoms('protein').atoms, name='Protein')
+        # chain X (ligand) is removed so CHAP can calculate the pore facing residues
+        # This is explained in the Pathway-Mapping Parameters section of the docs
+        ndx.write(universe.select_atoms('protein and not chainID X').atoms, name='Protein')
         ndx.write(TM_at, name='membrane_atoms')
     pdb = Path(universe.filename).absolute()
     reduced_trajectory_file, frame_step, n_frames = get_reduced_trajectory(
@@ -69,18 +74,22 @@ def channels(
         snapshots=snapshots,
         reduced_trajectory_frames_limit=frames_limit
     )
-    # TODO: find better fallbacks values
-    cmd = ("chap",
+    cmd = ["chap",
            "-f", str(Path(reduced_trajectory_file).absolute()),
            "-s", str(pdb),
            "-n", "membrane_atoms.ndx",
            "-sel-pathway", "0",
            "-pf-sel-ipp", "1",
-           "-hydrophob-fallback", "-0.568",  # hardcoded value for histidine forms
-           "-pf-vdwr-fallback", "0.2",       # hardcoded value for biggest radiues
+           "-hydrophob-fallback", "0",  # hardcoded value for weird named residues
+           "-pf-vdwr-database", "user",
+           "-pf-vdwr-json", RESOURCES_DIR + "/chap_vdw.json",
+           "-hydrophob-database", "user",
+           "-hydrophob-json", RESOURCES_DIR + "/chap_hydrophobicity.json",
            "-out-num-points", "200",
            "-out-detailed"
-    )
+    ]
+    if len(cg_residues) > 0:
+        cmd.append("-pf-vdwr-fallback 0.4")  # hardcoded value for CG
     cmd = ' '.join(cmd)
     print('  -> Running command:', cmd)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=output_directory)
@@ -107,6 +116,6 @@ def channels(
             'pore_residues': _parse_chap_residue_fractions(
                 f"{output_directory}/output.pdb"),
         },
-        'version': '0.1.0',
+        'version': '0.1.1',
     }
     save_json(data_to_save, output_directory + '/' + OUTPUT_CHANNELS_FILENAME)
