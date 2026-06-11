@@ -141,7 +141,7 @@ def prepare_project_metadata (
     framestep = None
     if md_type == 'trajectory':
         framestep = input_framestep
-        if framestep <= 0: raise InputError(f'Frame step should always be postive, not "{input_framestep}"')
+        if framestep and framestep <= 0: raise InputError(f'Frame step should always be postive, not "{input_framestep}"')
         framestep = make_sure_is_numeric_or_none(framestep)
         if framestep == InputError:
             raise InputError(f'Input frame step must be a numeric value (ns), not "{input_framestep}"')

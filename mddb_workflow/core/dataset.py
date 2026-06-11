@@ -925,7 +925,12 @@ class Dataset:
             if len(df) > 0:
                 dataframes.append(df)
 
-        df_joined = pd.concat(dataframes, ignore_index=True) if len(dataframes) > 1 else dataframes[0]
+        if dataframes:
+            df_joined = pd.concat(dataframes, ignore_index=True) if len(dataframes) > 1 else dataframes[0]
+        else:
+            # Return empty DataFrame with all possible columns if no data matches the filters
+            all_columns = list(set(self.project_columns + self.md_columns + ['scope']))
+            df_joined = pd.DataFrame(columns=all_columns)
 
         # Sort the DataFrame
         if sort_by == 'last_modified':
