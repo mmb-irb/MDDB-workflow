@@ -9,47 +9,66 @@ from mddb_workflow.utils.type_hints import *
 # Set a pair of independent auxiliar functions to save and recover chains from a pdb file
 # WARNING: These functions must be used only when the pdb has not changed in number of atoms
 
-# Get a list with each atom chain from a pdb
-def get_chains (pdb_filename : str) -> list:
+
+def get_chains(pdb_filename: str) -> list:
+    """Get a list with each atom chain from a PDB."""
     structure = Structure.from_pdb_file(pdb_filename)
     chains = structure.chains
     return chains
 
-# Set each atom chain from a pdb from a list
-def set_chains (pdb_filename : str, chains : list):
+
+def set_chains(pdb_filename: str, chains: list):
+    """Set the chains for a PDB file."""
     structure = Structure.from_pdb_file(pdb_filename)
     structure.chains = chains
     structure.generate_pdb_file(pdb_filename)
+
 
 # Set the default centering/fitting selection (vmd syntax): protein and nucleic acids
 CENTER_SELECTION_NAME = 'protein_and_nucleic_acids'
 CENTER_INDEX_FILEPATH = '.index.ndx'
 
-# Image and fit a trajectory
-# image - Set if it must me imaged
-# fit - Set if it must be fitted
-# translation - Set how it must be translated during imaging
-# pbc_selection - Set a selection to exclude PBC residues from both the centering and the fitting focuses
-def image_and_fit (
-    # Tested supported formats are .pdb and .tpr
-    input_structure_file : 'File',
-    # Tested supported formats are .trr and .xtc
-    input_trajectory_file : 'File',
-    # This must be in .tpr format
-    # This is optional if there are no PBC residues
-    input_topology_file : Union['File', Exception],
-    output_structure_file : 'File',
-    output_trajectory_file : 'File',
-    image : bool,
-    fit : bool,
-    translation : list[float],
-    # Note that this is an early provisional structure
-    structure : 'Structure',
-    # Selection of atoms which are to stay in PBC conditions after imaging
-    # Note that this is an early provisional atom selection
-    pbc_selection : 'Selection',
-    ) -> str:
 
+def image_and_fit(
+    input_structure_file: 'File',
+    input_trajectory_file: 'File',
+    input_topology_file: Union['File', Exception],
+    output_structure_file: 'File',
+    output_trajectory_file: 'File',
+    image: bool,
+    fit: bool,
+    translation: list[float],
+    structure: 'Structure',
+    pbc_selection: 'Selection',
+    ) -> str:
+    """Image and fit a trajectory.
+
+    Args:
+        input_structure_file:
+            The input structure file. Tested supported formats are .pdb and .tpr.
+        input_trajectory_file:
+            The input trajectory file. Tested supported formats are .xtc and .trr.
+        input_topology_file:
+            The input topology file. Tested supported format is .tpr.
+            This is optional if there are no PBC residues.
+        output_structure_file:
+            The output structure file.
+        output_trajectory_file:
+            The output trajectory file.
+        image:
+            Set if it must me imaged
+        fit:
+            Set if it must be fitted
+        translation:
+            Set how it must be translated during imaging
+        structure:
+            The structure of the system. Note that this is an early provisional structure.
+        pbc_selection:
+            Set a selection to exclude PBC residues from both the centering and the fitting focuses.
+            Selection of atoms which are to stay in PBC conditions after imaging.
+            Note that this is an early provisional atom selection.
+
+    """
     print(f' Image: {image} | Fit: {fit}')
 
     if not image and not fit:
@@ -64,7 +83,7 @@ def image_and_fit (
     # LORE: We were running the '-pbc nojump' step only when no pbc atoms were present in the system
     # LORE: However now we always run a no-jump followed by a '-pbc res' step thus recovering PBC atoms
     has_pbc_atoms = bool(pbc_selection)
-    
+
     # First of all save chains
     # Gromacs will delete chains so we need to recover them after
     chains_backup = get_chains(input_structure_file.path)
@@ -76,7 +95,7 @@ def image_and_fit (
     nucleic_selection = structure.select_nucleic()
     custom_selection = protein_selection + nucleic_selection
     if not custom_selection:
-        raise InputError(f'The default selection to center (protein or nucleic) is empty. Please image your simulation manually.')
+        raise InputError('The default selection to center (protein or nucleic) is empty. Please image your simulation manually.')
     # Exclude PBC residues from this custom selection
     custom_selection -= pbc_selection
     # Convert both selections to a single ndx file which gromacs can read
@@ -106,11 +125,11 @@ def image_and_fit (
             run_gromacs(f'trjconv -s {latest_structure.path} \
                 -f {latest_trajectory.path} -o {output_trajectory_file.path} \
                 -trans {translation[0]} {translation[1]} {translation[2]}',
-                user_input = 'System', show_error_logs = True)
+                user_input='System', show_error_logs=True)
             latest_trajectory = output_trajectory_file
-            
+
             # Select the first frame of the recently imaged trayectory as the new topology
-            reset_structure (
+            reset_structure(
                 latest_structure.path,
                 latest_trajectory.path,
                 output_structure_file.path)
@@ -124,20 +143,20 @@ def image_and_fit (
         print(' Running no-jump')
         run_gromacs(f'trjconv -s {latest_structure.path} \
             -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-            -pbc nojump', user_input = 'System', show_error_logs = True)
+            -pbc nojump', user_input='System', show_error_logs=True)
         latest_trajectory = output_trajectory_file
-            
+
         # Center the non-PBC region while we put all residues in the box
         # This is critical to recover all PBC regions which were diluted because of the no-jump step
         print(' Running ceneterd -pbc res')
         run_gromacs(f'trjconv -s {latest_structure.path} \
             -f {latest_trajectory.path} -o {output_trajectory_file.path} \
             -pbc res -center -n {CENTER_INDEX_FILEPATH}',
-            user_input = f'{CENTER_SELECTION_NAME} System', show_error_logs = True)
+            user_input=f'{CENTER_SELECTION_NAME} System', show_error_logs=True)
         latest_trajectory = output_trajectory_file
-        
+
         # Select the first frame of the recently imaged trayectory as the new topology
-        reset_structure (latest_structure.path, latest_trajectory.path, output_structure_file.path)
+        reset_structure(latest_structure.path, latest_trajectory.path, output_structure_file.path)
         latest_structure = output_structure_file
 
     # Fitting --------------------------------------------------------------------------------------
@@ -159,14 +178,14 @@ def image_and_fit (
         run_gromacs(f'trjconv -s {structure_to_fit.path} \
             -f {trajectroy_to_fit.path} -o {output_trajectory_file.path} \
             -fit rot+trans -n {CENTER_INDEX_FILEPATH}',
-            user_input = f'{CENTER_SELECTION_NAME} System',
-            show_error_logs = True)
+            user_input=f'{CENTER_SELECTION_NAME} System',
+            show_error_logs=True)
 
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
         # Note that the input structure is not necessarily the output structure in this scenario
         # The fit may have been done using the topology and there may be an offset, so better dump it
         if not output_structure_file.exists:
-            reset_structure (
+            reset_structure(
                 input_structure_file.path,
                 output_trajectory_file.path,
                 output_structure_file.path)
@@ -179,13 +198,13 @@ def image_and_fit (
     #     remove(CENTER_INDEX_FILEPATH)
 
 
-# Get the first frame of a trajectory
-def reset_structure (
-    input_structure_filepath : str,
-    input_trajectory_filepath : str,
-    output_structure_filepath : str,
+def reset_structure(
+    input_structure_filepath: str,
+    input_trajectory_filepath: str,
+    output_structure_filepath: str,
 ):
+    """Get the first frame of a trajectory and use it to reset the structure."""
     print(' Reseting structure after imaging step')
     run_gromacs(f'trjconv -s {input_structure_filepath} \
         -f {input_trajectory_filepath} -o {output_structure_filepath} \
-        -dump 0', user_input = 'System')
+        -dump 0', user_input='System')

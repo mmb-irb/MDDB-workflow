@@ -82,7 +82,7 @@ def process_input_files(
     # If it is an amber topology then change its extension to .prmtop
     # The extension is also important for some external tools (e.g. VMD)
     if initial_topology_file != MISSING_TOPOLOGY and initial_topology_file.extension == 'top' and is_amber_topology(initial_topology_file):
-        warn('Input topology has extension .top, which is ambiguous since it may refer to GROMACS topologies as well. ' \
+        warn('Input topology has extension .top, which is ambiguous since it may refer to GROMACS topologies as well. '
             'Since it is an amber topology the outputs will have extension .prmtop to avoid ambiguity.')
         # Change the final output topology format
         output_topology_file = output_topology_file.get_reformated_file('prmtop')
