@@ -182,13 +182,13 @@ def image_and_fit(
             show_error_logs=True)
 
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
+        # If there was imaging, we reset again to it its not far from the origin
         # Note that the input structure is not necessarily the output structure in this scenario
         # The fit may have been done using the topology and there may be an offset, so better dump it
-        if not output_structure_file.exists:
-            reset_structure(
-                input_structure_file.path,
-                output_trajectory_file.path,
-                output_structure_file.path)
+        reset_structure(
+            input_structure_file.path,
+            output_trajectory_file.path,
+            output_structure_file.path)
 
     # Recover chains
     set_chains(output_structure_file.path, chains_backup)
