@@ -709,6 +709,7 @@ class Dataset:
                 generated_input = inputs_generator(project_dir) or {}
             # Render the template with project defaults
             rendered_yaml = template.render(DIR=Path(project_dir).name,
+                                            PATH=Path(project_dir),
                                             DATASET=os.path.relpath(self.dataset_path, start=project_dir),
                                             project_status=project_dict,
                                             **generated_input)
@@ -1060,7 +1061,7 @@ class Dataset:
         query_path: list[str] | str = [],
         query_state: list[str] | str = [],
         query_message: list[str] | str = [],
-        debug: bool = False
+        debug: bool = False,
     ):
         """Launch a command for each project directory in the dataset.
 
@@ -1090,7 +1091,10 @@ class Dataset:
         # Validation: ensure proper parameters are provided
         if slurm and not job_template:
             raise ValueError("job_template must be provided when slurm is True")
-        cmd = 'mwf run' if cmd is None else cmd
+        if not job_template and not cmd:
+            raise ValueError("Either a command (-c) or job_template (-jt) must be provided.")
+        if slurm and cmd:
+            raise NotImplementedError("Custom command execution is not implemented for SLURM mode. Please provide a job_template that includes the necessary commands.")
 
         # Load job template if provided
         template_str = None
@@ -1174,7 +1178,7 @@ class Dataset:
                         'err_file': err_file
                     })
             else:
-                # Normal Python execution (sequential)
+                # Sequential execution
                 if debug:
                     print(f"cd {project_dir}")
                     print(f"{command_to_run}")
