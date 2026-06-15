@@ -67,6 +67,7 @@ def project(test_proj_dir: str, test_accession: str):
     # Nassa fails with less than 8 frames
     n_frames = 8 if test_accession == "seq001-1" else 5
     project = Project(directory=test_proj_dir, accession=test_accession, sample_trajectory=n_frames)
+    GLOBALS['working_directory'] = test_proj_dir
     return project
 
 
