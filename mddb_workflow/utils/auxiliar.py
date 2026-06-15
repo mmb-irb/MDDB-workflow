@@ -66,9 +66,11 @@ class RemoteServiceError (QuietException):
     """Quite exception for when the problem comes from a remote service."""
     pass
 
+
 class RequestError (QuietException):
     """Quite exception for when the problem comes from an HTTP request."""
     pass
+
 
 class ForcedStop (QuietException):
     """Quite exception for when we stop the workflow in purpose."""
@@ -407,7 +409,8 @@ def otherwise(values: list) -> Generator[tuple, None, None]:
         others = values[0:v] + values[v+1:]
         yield value, others
 
-def pairwise (values : list) -> Generator[tuple, None, None]:
+
+def pairwise(values: list) -> Generator[tuple, None, None]:
     """Set a special iteration system.
     Return every possible pair of values in the list.
     """
@@ -415,6 +418,7 @@ def pairwise (values : list) -> Generator[tuple, None, None]:
     for i in range(n_values):
         for j in range(i + 1, n_values):
             yield values[i], values[j]
+
 
 # List files in a directory
 def list_files(directory: str) -> list[str]:
@@ -468,7 +472,7 @@ def is_url(path: str) -> bool:
     return path[0:4] == 'http'
 
 
-def url_to_source_filename(url : str, verbose : bool = True) -> str:
+def url_to_source_filename(url: str, verbose: bool = True) -> str:
     """Set the filename of an input file downloaded from an input URL.
 
     In this scenario we are free to set our own paths or filenames.
@@ -589,8 +593,8 @@ class CaptureOutput (object):
         while True:
             content = os.read(self.pipe_out, os.O_RDONLY)
             char = content.decode(self.original_stream.encoding)
-            #print(char)
-            #char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
+            # print(char)
+            # char = os.read(self.pipe_out, 1).decode(self.original_stream.encoding)
             if not char or self.escape_char in char:
                 break
             self.captured_text += char
@@ -823,11 +827,12 @@ def handle_http_request(request_url, error_context="request") -> Optional[str]:
         raise RequestError(f'Something went wrong with the {error_context}: {error.reason}')
 
 
-def unique (source_list : list) -> list:
+def unique(source_list: list) -> list:
     """Get a new list with unique values while conserving the order."""
     return list(dict.fromkeys(source_list))
 
-def list_values_match (list_a : list, list_b : list) -> bool:
+
+def list_values_match(list_a: list, list_b: list) -> bool:
     """Given two lists, check if all their values perfectly match in the same order."""
     # If lists do not match in length then we are done already
     if len(list_a) != len(list_b):
@@ -837,11 +842,13 @@ def list_values_match (list_a : list, list_b : list) -> bool:
         if value_a != value_b: return False
     return True
 
-def get_first_list_values_missmatch (list_a : list, list_b : list) -> bool:
+
+def get_first_list_values_missmatch(list_a: list, list_b: list) -> bool:
     """Given two lists, find the first value which does not match between them. Return None if there is no missmatch"""
     for index, (value_a, value_b) in enumerate(zip(list_a, list_b)):
         if value_a != value_b: return index, value_a, value_b
     return None
+
 
 def _timeout_worker(func, result_queue, args, kwargs):
     """Worker function that runs in a separate process for timeout support."""
@@ -912,12 +919,15 @@ class SocketTimeout:
         # Restore the original timeout
         socket.setdefaulttimeout(self.old_timeout)
 
-# Get the path of an auxiliar file to be created where the workflow is to be run (--dir)
-# Note that this must be requested from a function, or the globals may be not updated
-def get_auxiliar_filepath (filename : str) -> str:
+
+def get_auxiliar_filepath(filename: str) -> str:
+    """Get the path of an auxiliar file to be created where the workflow is to be run (--dir).
+    Note that this must be requested from a function, or the globals may be not updated.
+    """
     return f'{GLOBALS["working_directory"]}/{filename}'
 
-def download_mmcif (pdb_id : str, output_filepath : str):
+
+def download_mmcif(pdb_id: str, output_filepath: str):
     """Download a mmCIF file corresponding to a PDB entry."""
     request_url = f'https://files.rcsb.org/download/{pdb_id}.cif'
     try:
@@ -929,11 +939,13 @@ def download_mmcif (pdb_id : str, output_filepath : str):
     except Exception as error:
         raise Exception(f'Something went wrong when downloading {pdb_id} structure: {request_url} with error: {error}')
 
-# Make sure a value is a number
-# Convert it if necessary
-def make_sure_is_numeric (value) -> float | int:
+
+def make_sure_is_numeric(value) -> float | int:
+    """Make sure a value is a number.
+    Convert it if necessary.
+    """
     # If the value is already numeric then return it
-    if type(value) in { float, int }: return value
+    if type(value) in {float, int}: return value
     # If this is a string then make it numeric if possible
     if type(value) is str:
         if value.isnumeric():
@@ -942,6 +954,7 @@ def make_sure_is_numeric (value) -> float | int:
         return InputError
     raise TypeError('Unexpected type')
 
-def make_sure_is_numeric_or_none (value) -> float | int | None:
+
+def make_sure_is_numeric_or_none(value) -> float | int | None:
     if value is None: return value
     return make_sure_is_numeric(value)
