@@ -790,9 +790,13 @@ def retry_request(func):
                     requests.exceptions.Timeout,
                     requests.exceptions.RequestException,
                     http.client.RemoteDisconnected,
-                    TimeoutError, URLError) as e:
+                    TimeoutError, URLError, HTTPError) as e:
                 if e is URLError and 'ssl' not in str(e.reason).lower():
-                    raise e  # Only retry for URLErrors related to SSL or timeouts
+                    # Only retry for URLErrors related to SSL or timeouts
+                    raise e
+                if e is HTTPError and func.__name__ != 'is_alive':
+                    # Do not retry for HTTPError except for the Database.is_alive
+                    raise e
                 last_exception = e
                 if attempt < MAX_RETRIES - 1:
                     print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
@@ -800,9 +804,6 @@ def retry_request(func):
                     delay *= RETRY_BACKOFF
                 else:
                     print(f"Request failed after {MAX_RETRIES} attempts: {e}")
-            # Do not retry for HTTPError
-            except (HTTPError) as e:
-                raise e
         raise last_exception
     # Retain the original function's name and docstring
     wrapper.__name__ = func.__name__

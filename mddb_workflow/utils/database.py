@@ -3,7 +3,7 @@ import urllib.error
 import ssl
 import json
 from tqdm import tqdm
-from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError, warn
+from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError, warn, retry_request
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
@@ -275,6 +275,7 @@ class Database:
         except Exception as error:
             raise Exception(f'Something went wrong when requesting nodes data ({nodes_url}) with error "{error}"')
 
+    @retry_request
     def is_alive(self) -> bool:
         """Check if the database is alive.
 
