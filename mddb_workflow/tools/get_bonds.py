@@ -12,11 +12,12 @@ from collections import Counter
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
 
-def get_excluded_atoms_selection (
-    structure : 'Structure',
-    pbc_selection : 'Selection',
-    cg_selection : 'Selection') -> 'Selection':
-    """ Set some atoms which are to be skipped from bonding tests given their "fake" nature. """
+
+def get_excluded_atoms_selection(
+    structure: 'Structure',
+    pbc_selection: 'Selection',
+    cg_selection: 'Selection') -> 'Selection':
+    """Set some atoms which are to be skipped from bonding tests given their "fake" nature."""
     # Get a selection of ion atoms which are not in PBC
     # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
     # They are not taken in count when testing coherent bonds or looking for the reference frame
@@ -26,16 +27,17 @@ def get_excluded_atoms_selection (
     excluded_atoms_selection = non_pbc_ions_selection + cg_selection + structure.select_dummy()
     return excluded_atoms_selection
 
-def do_bonds_match (
-    bonds_1 : list[ list[int] ],
-    bonds_2 : list[ list[int] ],
+
+def do_bonds_match(
+    bonds_1: list[list[int]],
+    bonds_2: list[list[int]],
     # A selection of atoms whose bonds are not evaluated
-    excluded_atoms_selection : 'Selection',
+    excluded_atoms_selection: 'Selection',
     # Set verbose as true to show which are the atoms preventing the match
-    verbose : bool = False,
+    verbose: bool = False,
     # The rest of inputs are just for logs and debug
-    atoms : Optional[ list['Atom'] ] = None,
-    counter_list : Optional[ list[int] ] = None
+    atoms: Optional[list['Atom']] = None,
+    counter_list: Optional[list[int]] = None
 ) -> bool:
     """Check if two sets of bonds match perfectly."""
     # If the number of atoms in both lists is not matching then there is something very wrong
@@ -57,32 +59,33 @@ def do_bonds_match (
                 if atoms:
                     mismatch_atom_label = atoms[atom_index].label
                     print(f' Mismatch in atom {mismatch_atom_label}:')
-                    it_is_atom_labels = ', '.join([ atoms[index].label for index in atom_bonds_set_1 ])
+                    it_is_atom_labels = ', '.join([atoms[index].label for index in atom_bonds_set_1])
                     print(f' It is bonded to atoms {it_is_atom_labels}')
-                    it_should_be_atom_labels = ', '.join([ atoms[index].label for index in atom_bonds_set_2 ])
+                    it_should_be_atom_labels = ', '.join([atoms[index].label for index in atom_bonds_set_2])
                     print(f' It should be bonded to atoms {it_should_be_atom_labels}')
                 else:
                     print(f' Mismatch in atom with index {atom_index}:')
-                    it_is_atom_indices = ','.join([ str(index) for index in atom_bonds_set_1 ])
+                    it_is_atom_indices = ','.join([str(index) for index in atom_bonds_set_1])
                     print(f' It is bonded to atoms with indices {it_is_atom_indices}')
-                    it_should_be_atom_indices = ','.join([ str(index) for index in atom_bonds_set_2 ])
+                    it_should_be_atom_indices = ','.join([str(index) for index in atom_bonds_set_2])
                     print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
             # Save for failure analysis
             if counter_list is not None:
-                counter_list.append((atom_index,tuple(atom_bonds_set_1),tuple(atom_bonds_set_2)))
+                counter_list.append((atom_index, tuple(atom_bonds_set_1), tuple(atom_bonds_set_2)))
             return False
     return True
 
-def get_most_stable_bonds (
-    structure_filepath : str,
-    trajectory_filepath : str,
-    snapshots : int,
-    frames_limit : int = 10
-) -> list[ list[int] ]:
-    """ Get covalent bonds using VMD along different frames.
-    This way we avoid having false positives because 2 atoms are very close in one frame by accident.
-    This way we avoid having false negatives because 2 atoms are very far in one frame by accident. """
 
+def get_most_stable_bonds(
+    structure_filepath: str,
+    trajectory_filepath: str,
+    snapshots: int,
+    frames_limit: int = 10
+) -> list[list[int]]:
+    """Get covalent bonds using VMD along different frames.
+    This way we avoid having false positives because 2 atoms are very close in one frame by accident.
+    This way we avoid having false negatives because 2 atoms are very far in one frame by accident.
+    """
     # Get each frame in pdb format to run VMD
     print('Finding most stable bonds')
     frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath,
@@ -122,20 +125,22 @@ def get_most_stable_bonds (
 
     return most_stable_bonds
 
-def get_bonds_reference_frame (
-    structure_file : 'File',
-    trajectory_file : 'File',
-    snapshots : int,
-    reference_bonds : list[ list[int] ],
-    structure : 'Structure',
-    pbc_selection : 'Selection',
-    cg_selection : 'Selection',
-    ignore_bonds : bool = False,
-    patience : int = 100,  # Limit of frames to check before we surrender
-    verbose : bool = False,
+
+def get_bonds_reference_frame(
+    structure_file: 'File',
+    trajectory_file: 'File',
+    snapshots: int,
+    reference_bonds: list[list[int]],
+    structure: 'Structure',
+    pbc_selection: 'Selection',
+    cg_selection: 'Selection',
+    ignore_bonds: bool = False,
+    patience: int = 100,  # Limit of frames to check before we surrender
+    verbose: bool = False,
 ) -> Optional[int]:
-    """ Return a reference frame number where all bonds are exactly as they should (by VMD standards).
-    This is the frame used when representing the MD. """
+    """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
+    This is the frame used when representing the MD.
+    """
     # If bonds were ignored then the reference frame makes no sense
     if ignore_bonds: return 0
     # Set some atoms which are to be skipped from these test given their "fake" nature
@@ -148,7 +153,7 @@ def get_bonds_reference_frame (
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
     # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1
-    frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots,patience=patience)
+    frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots, patience=patience)
     if step != 1: raise ValueError('If we are skipping frames then the code below will silently return a wrong reference frame')
     print(f'Searching the reference frame for the bonds. Only first {min(patience, count)} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
@@ -172,7 +177,7 @@ def get_bonds_reference_frame (
         for (at, bond, should), n in count:
             table_data.append([n, at, bond, should])
         col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data, headers)]
-        # Format rows
+
         def format_row(row):
             return " | ".join(f"{str(item):>{col_widths[i]}}" for i, item in enumerate(row))
         # Print table
@@ -185,8 +190,9 @@ def get_bonds_reference_frame (
 
     return bonds_reference_frame
 
-def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ list[int] ]:
-    """ Extract bonds from a source file and format them per atom. """
+
+def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[list[int]]:
+    """Extract bonds from a source file and format them per atom."""
     # If there is no topology then return no bonds at all
     if bonds_source_file == MISSING_TOPOLOGY or not bonds_source_file.exists:
         return None
@@ -210,7 +216,7 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ 
     elif bonds_source_file.is_pytraj_supported():
         print(f' Bonds will be mined from "{bonds_source_file.path}"')
         pt_topology = pt.load_topology(filename=bonds_source_file.path)
-        raw_bonds = [ bonds.indices for bonds in pt_topology.bonds ]
+        raw_bonds = [bonds.indices for bonds in pt_topology.bonds]
         # Sort bonds
         atom_count = pt_topology.n_atoms
         atom_bonds = sort_bonds(raw_bonds, atom_count)
@@ -226,12 +232,14 @@ def mine_topology_bonds (bonds_source_file : Union['File', Exception]) -> list[ 
             atom_bonds = sort_bonds(raw_bonds, atom_count)
             return atom_bonds
     # If we failed to mine bonds then return None and they will be guessed further
-    print (' Failed to mine bonds -> They will be guessed from atom distances and radius')
+    print(' Failed to mine bonds -> They will be guessed from atom distances and radius')
     return None
 
-def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
-    """ Get TPR bonds.
-    Try 2 different methods and hope 1 of them works. """
+
+def get_tpr_bonds(tpr_filepath: str) -> list[tuple[int, int]]:
+    """Get TPR bonds.
+    Try 2 different methods and hope 1 of them works.
+    """
     try:
         bonds = get_tpr_bonds_gromacs(tpr_filepath)
     except:
@@ -246,31 +254,34 @@ def get_tpr_bonds (tpr_filepath : str) -> list[ tuple[int, int] ]:
             bonds = FAILED_BOND_MINING_EXCEPTION
     return bonds
 
-def sort_bonds (source_bonds : list[ tuple[int, int] ], atom_count : int) -> list[ list[int] ]:
-    """ Sort bonds according to our format: a list with the bonded atom indices for each atom.
-    Source data is the usual format to store bonds: a list of tuples with every pair of bonded atoms. """
+
+def sort_bonds(source_bonds: list[tuple[int, int]], atom_count: int) -> list[list[int]]:
+    """Sort bonds according to our format: a list with the bonded atom indices for each atom.
+    Source data is the usual format to store bonds: a list of tuples with every pair of bonded atoms.
+    """
     # Set a list of lists with an empty list for every atom
-    atom_bonds = [ [] for i in range(atom_count) ]
+    atom_bonds = [[] for i in range(atom_count)]
     for bond in source_bonds:
-        a,b = bond
+        a, b = bond
         # Make sure atom indices are regular integers so they are JSON serializables
         atom_bonds[a].append(int(b))
         atom_bonds[b].append(int(a))
     return atom_bonds
 
-def find_safe_bonds (
-    topology_file : Union['File', Exception],
-    structure_file : 'File',
-    trajectory_file : 'File',
-    must_check_stable_bonds : bool,
-    snapshots : int,
-    structure : 'Structure',
-    register : 'Register',
-    cg_selection : 'Selection',
-    guess_bonds : bool = False,
-    ignore_bonds : bool = False,
+
+def find_safe_bonds(
+    topology_file: Union['File', Exception],
+    structure_file: 'File',
+    trajectory_file: 'File',
+    must_check_stable_bonds: bool,
+    snapshots: int,
+    structure: 'Structure',
+    register: 'Register',
+    cg_selection: 'Selection',
+    guess_bonds: bool = False,
+    ignore_bonds: bool = False,
     # Optional file with bonds sorted according a new atom order
-    resorted_bonds_file : Optional['File'] = None
+    resorted_bonds_file: Optional['File'] = None
 ) -> list[list[int]]:
     """Find reference safe bonds in the system.
     First try to mine bonds from a topology files.
@@ -281,7 +292,7 @@ def find_safe_bonds (
     register.remove_warnings(MISSING_BONDS_FLAG)
     if ignore_bonds:
         register.add_warning(MISSING_BONDS_FLAG, 'Bonds were ignored')
-        return [ MISSING_BONDS for atom in range(structure.atom_count) ]
+        return [MISSING_BONDS for atom in range(structure.atom_count)]
     # If we have a resorted file then use it
     # Note that this is very excepcional
     if resorted_bonds_file != None and resorted_bonds_file.exists:
@@ -297,7 +308,7 @@ def find_safe_bonds (
     # If all bonds are in coarse grain then set all bonds "wrong" already
     if len(cg_selection) == structure.atom_count:
         register.add_warning(MISSING_BONDS_FLAG, 'Bonds were missing')
-        safe_bonds = [ MISSING_BONDS for atom in range(structure.atom_count) ]
+        safe_bonds = [MISSING_BONDS for atom in range(structure.atom_count)]
         return safe_bonds
     # If failed to mine topology bonds then guess stable bonds
     print('Bonds will be guessed by atom distances and radii along different frames in the trajectory')
@@ -314,9 +325,11 @@ def find_safe_bonds (
     discard_coarse_grain_bonds(safe_bonds, cg_selection)
     return safe_bonds
 
-def discard_coarse_grain_bonds (bonds : list, cg_selection : 'Selection'):
-    """ Given a list of bonds, discard the ones in the coarse grain selection.
-    Note that the input list will be mutated. """
+
+def discard_coarse_grain_bonds(bonds: list, cg_selection: 'Selection'):
+    """Given a list of bonds, discard the ones in the coarse grain selection.
+    Note that the input list will be mutated.
+    """
     # For every atom in CG, replace its bonds with a class which will raise and error when read
     # Thus we make sure using these wrong bonds anywhere further will result in failure
     for atom_index in cg_selection.atom_indices:
