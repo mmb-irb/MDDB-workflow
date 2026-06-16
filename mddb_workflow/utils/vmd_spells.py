@@ -13,18 +13,21 @@ from mddb_workflow.utils.auxiliar import warn, ToolError, InputError, get_auxili
 from mddb_workflow.utils.constants import GLOBALS
 
 # Set characters to be escaped since they have a meaning in TCL
-TCL_RESERVED_CHARACTERS = ['"','[',']']
+TCL_RESERVED_CHARACTERS = ['"', '[', ']']
 
-def escape_tcl_selection (selection : str) -> str:
-    """ Given a VMD atom selection string, escape TCL meaningful characters and return the escaped string. """
+
+def escape_tcl_selection(selection: str) -> str:
+    """Given a VMD atom selection string, escape TCL meaningful characters and return the escaped string."""
     escaped_selection = selection
     for character in TCL_RESERVED_CHARACTERS:
         escaped_selection = escaped_selection.replace(character, '\\' + character)
     return escaped_selection
 
-# Get the path of the auxiliar commands file to be used to call VMD with a preset of instructions
-# Note that this must be requested from a function, or the globals may be not updated
-def get_auxiliar_commands_filepath () -> str:
+
+def get_auxiliar_commands_filepath() -> str:
+    """Get the path of the auxiliar commands file to be used to call VMD with a preset of instructions.
+    Note that this must be requested from a function, or the globals may be not updated.
+    """
     return get_auxiliar_filepath('.commands.vmd')
 
 # List all the vmd supported trajectory formats
@@ -55,13 +58,13 @@ VMD_WRITERS = {
     'psf': 'writepsf'
 }
 
-# Use VMD to conver format or filter structure or topology files
-def vmd_converter (
-    input_structure_or_topology_filepath : str,
-    input_trajectory_filepath : str,
-    output_structure_or_topology_filepath : str,
-    atom_selection : str = 'all'):
 
+def vmd_converter(
+    input_structure_or_topology_filepath: str,
+    input_trajectory_filepath: str,
+    output_structure_or_topology_filepath: str,
+    atom_selection: str = 'all'):
+    """Use VMD to convert format or filter structure or topology files."""
     # Get the trajectory format according to the vmd dictionary
     input_trajectory_file = File(input_trajectory_filepath)
     trajectory_format = input_trajectory_file.format
@@ -106,11 +109,12 @@ def vmd_converter (
         raise ToolError('Something went wrong with VMD')
     os.remove(commands_filepath)
 
-# Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file
-def vmd_to_pdb (
-    input_structure_filename : str,
-    input_trajectory_filename : str,
-    output_structure_filename : str):
+
+def vmd_to_pdb(
+    input_structure_filename: str,
+    input_trajectory_filename: str,
+    output_structure_filename: str):
+    """Given a vmd supported topology with no coordinates and a single frame file, generate a pdb file."""
     return vmd_converter(
         input_structure_filename,
         input_trajectory_filename,
@@ -128,25 +132,31 @@ vmd_to_pdb.format_sets = [
     }
 ]
 
-def chainer (
-    input_pdb_filename : str,
-    atom_selection : Optional[str] = None,
-    chain_letter : Optional[str] = None,
-    output_pdb_filename : Optional[str] = None
-):
-    """ This tool allows you to set the chain of all atoms in a selection.
-    This is powered by VMD and thus the selection lenguage must be the VMD's.
-    Arguments are as follows:
 
-    1. Input pdb filename
-    2. Atom selection (All atoms by defualt)
-    3. Chain letter (May be the flag 'fragment', which is the default indeed)
-    4. Output pdb filename (Input filename by default)
+def chainer(
+    input_pdb_filename: str,
+    atom_selection: Optional[str] = None,
+    chain_letter: Optional[str] = None,
+    output_pdb_filename: Optional[str] = None
+):
+    """Set the chain of all atoms in a selection.
+    This is powered by VMD and thus the selection lenguage must be the VMD's.
+
+    Arguments:
+        input_pdb_filename: str
+            The input pdb file to be modified.
+        atom_selection: str, optional
+            The atom selection to be modified. If not provided, all atoms will be selected.
+        chain_letter: str, optional
+            The chain letter to be set. If not provided, the flag 'fragment' will be used and chains will be set by fragment.
+        output_pdb_filename: str, optional
+            The output pdb file to be generated. If not provided, the input pdb file will be overwritten.
 
     WARNING: When no selection is passed, if only a part of a "fragment" is missing the chain then the whole fragment will be affected
     WARNING: VMD only handles fragments if there are less fragments than letters in the alphabet
-    DEPRECATED: Use the structures chainer instead. """
+    DEPRECATED: Use the structures chainer instead.
 
+    """
     # If no atom selection is provided then all atoms are selected
     if not atom_selection:
         atom_selection = 'all'
@@ -212,15 +222,16 @@ def chainer (
     # Remove the vmd commands file
     os.remove(commands_filepath)
 
-def merge_and_convert_trajectories (
-    input_structure_filename : Optional[str],
-    input_trajectory_filenames : list[str],
-    output_trajectory_filename : str
-    ):
-    """ Get vmd supported trajectories merged and converted to a different format.
-    WARNING: Note that this process is not memory efficient so beware the size of trajectories to be converted.
-    WARNING: The input structure filename may be None. """
 
+def merge_and_convert_trajectories(
+    input_structure_filename: Optional[str],
+    input_trajectory_filenames: list[str],
+    output_trajectory_filename: str
+    ):
+    """Get vmd supported trajectories merged and converted to a different format.
+    WARNING: Note that this process is not memory efficient so beware the size of trajectories to be converted.
+    WARNING: The input structure filename may be None.
+    """
     warn('You are using a not memory efficient tool. If the trajectory is too big your system may not hold it.')
     print('Note that we cannot display the progress of the conversion since we are using VMD')
 
@@ -243,7 +254,7 @@ def merge_and_convert_trajectories (
         file.write(f'animate write {output_trajectory_format} {output_trajectory_filename} waitfor all sel $all\n')
         file.write('exit\n')
 
-    inputs = [ input_structure_filename, *input_trajectory_filenames ] if input_structure_filename else input_trajectory_filenames
+    inputs = [input_structure_filename, *input_trajectory_filenames] if input_structure_filename else input_trajectory_filenames
 
     # Run VMD
     logs = run([
@@ -287,9 +298,9 @@ merge_and_convert_trajectories.format_sets = [
     }
 ]
 
-def get_vmd_selection_atom_indices (input_structure_filename : str, selection : str) -> list[int]:
-    """ Given an atom selection in vmd syntax, return the list of atom indices it corresponds to. """
 
+def get_vmd_selection_atom_indices(input_structure_filename: str, selection: str) -> list[int]:
+    """Given an atom selection in vmd syntax, return the list of atom indices it corresponds to."""
     # Escape TCL meaningful characters
     escaped_selection = escape_tcl_selection(selection)
 
@@ -327,19 +338,20 @@ def get_vmd_selection_atom_indices (input_structure_filename : str, selection : 
         raw_atom_indices = file.read()
 
     # Parse the atom indices string to an array of integers
-    atom_indices = [ int(i) for i in raw_atom_indices.split() ]
+    atom_indices = [int(i) for i in raw_atom_indices.split()]
 
     # Remove trahs files
-    trash_files = [ commands_filepath, atom_indices_filename ]
+    trash_files = [commands_filepath, atom_indices_filename]
     for trash_file in trash_files:
         os.remove(trash_file)
 
     return atom_indices
 
-def get_covalent_bonds (structure_filename : str, selection : Optional['Selection'] = None) -> list[ list[int] ]:
-    """ Set a function to retrieve all covalent (strong) bonds in a structure using VMD.
-    You may provide an atom selection as well. """
 
+def get_covalent_bonds(structure_filename: str, selection: Optional['Selection'] = None) -> list[list[int]]:
+    """Retrieve all covalent (strong) bonds in a structure using VMD.
+    You may provide an atom selection as well.
+    """
     # Parse the selection to vmd
     vmd_selection = 'all'
     if selection:
@@ -378,7 +390,7 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
         raw_bonds = file.read()
 
     # Remove vmd files since they are no longer usefull
-    for f in [ commands_filepath, output_bonds_file ]:
+    for f in [commands_filepath, output_bonds_file]:
         os.remove(f)
 
     # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
@@ -421,14 +433,14 @@ def get_covalent_bonds (structure_filename : str, selection : Optional['Selectio
 
     return bonds_per_atom
 
-def get_covalent_bonds_between (
-    structure_filename : str,
-    # Selections may be either selection instances or selection strings already in VMD format
-    selection_1 : Union['Selection', str],
-    selection_2 : Union['Selection', str]
-) -> list[ list[int] ]:
-    """ Set a function to retrieve covalent (strong) bonds between 2 atom selections. """
 
+def get_covalent_bonds_between(
+    structure_filename: str,
+    # Selections may be either selection instances or selection strings already in VMD format
+    selection_1: Union['Selection', str],
+    selection_2: Union['Selection', str]
+) -> list[list[int]]:
+    """Retrieve covalent (strong) bonds between 2 atom selections."""
     # Parse selections (if not parsed yet)
     parsed_selection_1 = selection_1 if type(selection_1) == str else selection_1.to_vmd()
     parsed_selection_2 = selection_2 if type(selection_2) == str else selection_2.to_vmd()
@@ -484,7 +496,7 @@ def get_covalent_bonds_between (
         raw_index_2 = file.read()
 
     # Remove vmd files since they are no longer usefull
-    for f in [ commands_filepath, output_index_1_file, output_index_2_file, output_bonds_file ]:
+    for f in [commands_filepath, output_index_1_file, output_index_2_file, output_bonds_file]:
         os.remove(f)
 
     # Sometimes there is a breakline at the end of the raw bonds string and it must be removed
@@ -492,8 +504,8 @@ def get_covalent_bonds_between (
     raw_bonds = raw_bonds.replace('\n', '') + ' '
 
     # Raw indexes is a string with all indexes separated by spaces
-    index_1 = [ int(i) for i in raw_index_1.split() ]
-    index_2 = set([ int(i) for i in raw_index_2.split() ])
+    index_1 = [int(i) for i in raw_index_1.split()]
+    index_2 = set([int(i) for i in raw_index_2.split()])
 
     # Parse the raw bonds string to a list of atom bonds (i.e. a list of lists of integers)
     # Raw bonds format is (for each atom in the selection):
@@ -547,17 +559,18 @@ def get_covalent_bonds_between (
 
     return crossed_bonds
 
-def get_interface_atom_indices (
-    input_structure_filepath : str,
-    input_trajectory_filepath : str,
-    selection_1 : str,
-    selection_2 : str,
-    distance_cutoff : float,
-) -> list[int]:
-    """ Given two atom selections, find interface atoms and return their indices
-    Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
-    Return also atom indices for the whole selections. """
 
+def get_interface_atom_indices(
+    input_structure_filepath: str,
+    input_trajectory_filepath: str,
+    selection_1: str,
+    selection_2: str,
+    distance_cutoff: float,
+) -> list[int]:
+    """Given two atom selections, find interface atoms and return their indices
+    Interface atoms are those atoms closer than the cutoff in at least 1 frame along a trajectory
+    Return also atom indices for the whole selections.
+    """
     # Set the interface selections
     interface_selection_1 = (f'({selection_1}) and within {distance_cutoff} of ({selection_2})')
     interface_selection_2 = (f'({selection_2 }) and within {distance_cutoff} of ({selection_1})')
@@ -669,10 +682,10 @@ def get_interface_atom_indices (
             raise ToolError('Something went wrong with VMD')
 
     # Set a function to read the VMD output and parse the atom indices string to an array of integers
-    def process_vmd_output (output_filename : str) -> list[int]:
+    def process_vmd_output(output_filename: str) -> list[int]:
         with open(output_filename, 'r') as file:
             raw_atom_indices = file.read()
-        return [ int(i) for i in raw_atom_indices.split() ]
+        return [int(i) for i in raw_atom_indices.split()]
 
     # Read the VMD output
     selection_1_atom_indices = process_vmd_output(selection_1_filename)
@@ -683,7 +696,7 @@ def get_interface_atom_indices (
     total_frames = process_vmd_output(total_frames_filename)[0]
 
     # Remove trash files
-    trash_files = [ commands_filepath ] + expected_output_files
+    trash_files = [commands_filepath] + expected_output_files
     for trash_file in trash_files:
         os.remove(trash_file)
 
