@@ -5,7 +5,7 @@ import pytest
 import requests
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.utils.auxiliar import InputError, load_json
+from mddb_workflow.utils.auxiliar import load_json
 from mddb_workflow.mwf import project_requestables, md_requestables
 from mddb_workflow.console import main
 

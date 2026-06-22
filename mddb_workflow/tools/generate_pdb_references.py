@@ -15,7 +15,8 @@ from mddb_workflow.tools.xvg_parse import xvg_parse
 # Set a flag for chains which are made entirley of alpha carbons only
 CA_ONLY = 'alpha carbons only'
 
-def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File') -> list[dict]:
+
+def prepare_pdb_references(pdb_ids: list[str], pdb_references_file: 'File') -> list[dict]:
     """Prepare the PDB references json file to be uploaded to the database."""
     # If we already have PDB references then load them
     previous_pdb_references = {}
@@ -39,11 +40,12 @@ def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File') -
         if pdb_reference is not None:
             pdb_references.append(pdb_reference)
     # Write references to a json file
-    save_json(pdb_references, pdb_references_file.path, indent = 4)
+    save_json(pdb_references, pdb_references_file.path, indent=4)
     return pdb_references
 
-# Download PDB data from the PDB API
-def get_pdb_reference (pdb_id : str) -> dict:
+
+def get_pdb_reference(pdb_id: str) -> dict:
+    """Download PDB data from the PDB API."""
     # Set the request query
     query = '''query ($id: String!) {
         entry(entry_id: $id) {
@@ -71,10 +73,10 @@ def get_pdb_reference (pdb_id : str) -> dict:
     pdb_data['id'] = final_pdb_id
     pdb_data['title'] = parsed_response['struct']['title']
     pdb_data['class'] = parsed_response['struct_keywords']['pdbx_keywords']
-    pdb_data['authors'] = [ author['name'] for author in parsed_response['audit_author'] ]
+    pdb_data['authors'] = [author['name'] for author in parsed_response['audit_author']]
     pdb_data['date'] = parsed_response['rcsb_accession_info']['initial_release_date']
     # pdbx_refine_id not on every PDB like in 1FI3
-    #pdb_data['method'] = parsed_response['refine'][0]['pdbx_refine_id']
+    # pdb_data['method'] = parsed_response['refine'][0]['pdbx_refine_id']
     pdb_data['method'] = parsed_response['exptl'][0]['method']
     # ls_d_res_high not on every PDB like in 1FI3
     # pdb_data['resolution'] = parsed_response['refine'][0]['ls_d_res_high']
@@ -87,7 +89,7 @@ def get_pdb_reference (pdb_id : str) -> dict:
         # Get the organisms
         organism_entries = polymer['rcsb_entity_source_organism']
         if organism_entries != None:
-            organisms += [ organism['scientific_name'] for organism in organism_entries ]
+            organisms += [organism['scientific_name'] for organism in organism_entries]
         # Get the uniprot
         uniprots = identifier.get('uniprot_ids', None)
         if not uniprots: continue
@@ -119,13 +121,16 @@ def get_pdb_reference (pdb_id : str) -> dict:
 
 # Set service URLs to be requested
 pdb_data_services = {
-    'IRB': f'https://mmb.irbbarcelona.org',
-    'BSC': f'https://mdb-login.bsc.es'
+    'IRB': 'https://mmb.irbbarcelona.org',
+    'BSC': 'https://mdb-login.bsc.es'
 }
-# Download PDB data from a remote service
-# DEPRECATED: our custom PDB API may return UniProt ids not matching the ones in the PDB
-# e.g. 1AK4 and 4Z80
-def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
+
+
+def DEPRECATED_download_pdb_data(pdb_id: str, service='IRB') -> dict:
+    """Download PDB data from a remote service.
+    DEPRECATED: our custom PDB API may return UniProt ids not matching the ones in the PDB.
+    e.g. 1AK4 and 4Z80.
+    """
     # Set the request URL
     service_url = pdb_data_services[service]
     request_url = f'{service_url}/api/pdb/{pdb_id}/entry'
@@ -154,7 +159,7 @@ def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
             raise RemoteServiceError('All APIs to retrieve PDB data may be out of service')
         # If the error is not known then stop here
         else:
-            raise RemoteServiceError(f'Something went wrong with the PDB data request')
+            raise RemoteServiceError('Something went wrong with the PDB data request')
     # Handle URL errors
     except urllib.error.URLError as error:
         print(f'There was a problem when requesting {request_url}')
@@ -165,7 +170,7 @@ def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
         if service == 'IRB':
             print('  Retrying with a different service')
             return DEPRECATED_download_pdb_data(pdb_id, service='BSC')
-        raise RemoteServiceError(f'Something went wrong with the PDB data request')
+        raise RemoteServiceError('Something went wrong with the PDB data request')
     # Return the response
     print(f'Successfully requested {request_url}')
     return parsed_response
@@ -173,11 +178,12 @@ def DEPRECATED_download_pdb_data (pdb_id : str, service = 'IRB') -> dict:
 # Set a residual output filepath
 RESIDUAL_AREA_FILENAME = '.residual_area.xvg'
 
-def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
+
+def calculate_knowledge_data(pdb_id: str, structure: 'Structure') -> dict:
     """Calculate the solvent accessible surface in the PDB structure as reference."""
     # Export the structure to PDB so gromacs can read it
     auxiliar_pdb_filepath = get_auxiliar_filepath(f'.{pdb_id}.pdb')
-    structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings = False)
+    structure.generate_pdb_file(auxiliar_pdb_filepath, show_warnings=False)
     # Target only protein chains
     protein_selection = structure.select_protein()
     protein_chains = structure.get_selection_chains(protein_selection)
@@ -190,7 +196,7 @@ def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
     # We can not calculate SAS over these chains anyway but we must identify them to further handle them
     for chain in structure.chains:
         if chain.classification == 'protein': continue
-        if all([ atom.name == 'CA' for atom in chain.atoms ]) and all([ residue.name in PROTEIN_RESIDUE_NAME_LETTERS for residue in chain.residues ]):
+        if all([atom.name == 'CA' for atom in chain.atoms]) and all([residue.name in PROTEIN_RESIDUE_NAME_LETTERS for residue in chain.residues]):
             knowledge_data[chain.name] = CA_ONLY
     # Set the residual area filepath
     residual_area_filepath = get_auxiliar_filepath(RESIDUAL_AREA_FILENAME)
@@ -204,14 +210,14 @@ def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
         chain_protein_selection = chain_selection & protein_selection
         sasa_selection_name = f'chain_{chain.name}'
         sasa_ndx_selection = chain_protein_selection.to_ndx(sasa_selection_name)
-        ndx_filename = get_auxiliar_filepath(f'.indices.ndx')
+        ndx_filename = get_auxiliar_filepath('.indices.ndx')
         with open(ndx_filename, 'w') as file:
             file.write(sasa_ndx_selection)
         # Set the main output filepath
         current_chain_sasa = get_auxiliar_filepath(f'.sasa_{pdb_id}_{chain.name}.xvg')
         # If not defined, then by default it creates a 'area.xvg' file where we are running the workflow
         run_gromacs(f'sasa -s {auxiliar_pdb_filepath} -oa {current_chain_sasa} -o {residual_area_filepath}\
-            -n {ndx_filename} -surface {sasa_selection_name}', expected_output_filepath = current_chain_sasa)
+            -n {ndx_filename} -surface {sasa_selection_name}', expected_output_filepath=current_chain_sasa)
         # Mine the sasa results (.xvg file)
         # Areas from excluded atoms are not recorded in the xvg file
         sasa = xvg_parse(current_chain_sasa, ['n', 'area', 'sd'])
@@ -222,7 +228,7 @@ def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
             raise ValueError(f'Protein selection in chain {chain.name} has {len(chain_protein_selection)} atoms but {len(atom_areas)} values were mined')
         # Restructure data by adding all atoms sas per residue
         protein_residues = structure.get_selection_residues(chain_protein_selection)
-        sas_per_residues = { residue.index : 0.0 for residue in protein_residues }
+        sas_per_residues = {residue.index: 0.0 for residue in protein_residues}
         for atom_number, atom_area in zip(atom_numbers, atom_areas):
             atom_index = atom_number - 1
             atom = structure.atoms[atom_index]
@@ -250,9 +256,10 @@ def calculate_knowledge_data (pdb_id : str, structure : 'Structure') -> dict:
     os.remove(auxiliar_pdb_filepath)
     return knowledge_data
 
-def make_uniprot_to_pdb_map (
-    pdb_structure : 'Structure',
-    uniprots_ids : list[str]) -> dict[str, list]:
+
+def make_uniprot_to_pdb_map(
+    pdb_structure: 'Structure',
+    uniprots_ids: list[str]) -> dict[str, list]:
     """Make a map from UniProt to PDB for the PDBe knowledge base integration."""
     uniprot_to_pdb_map = {}
     # Get all uniprot references

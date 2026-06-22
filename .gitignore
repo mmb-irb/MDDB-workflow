@@ -1,6 +1,8 @@
 .ipynb_checkpoints
 .gitignore
 .vscode
+.ruff_cache
+.qwen
 __pycache__
 **.log
 
