@@ -36,7 +36,8 @@ def prepare_pdb_references (pdb_ids : list[str], pdb_references_file : 'File') -
             continue
         # Otherwise download and mine the PDB data
         pdb_reference = get_pdb_reference(pdb_id)
-        pdb_references.append(pdb_reference)
+        if pdb_reference is not None:
+            pdb_references.append(pdb_reference)
     # Write references to a json file
     save_json(pdb_references, pdb_references_file.path, indent = 4)
     return pdb_references
@@ -61,6 +62,8 @@ def get_pdb_reference (pdb_id : str) -> dict:
     }'''
     # Request PDB data
     parsed_response = request_pdb_data(pdb_id, query)
+    if parsed_response is None:
+        return None
     # Note that the PDB id of the result may be different since obsolete PDBs are automatically replaced
     final_pdb_id = parsed_response['rcsb_id']
     # Mine data

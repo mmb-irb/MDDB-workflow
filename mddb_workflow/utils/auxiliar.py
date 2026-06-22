@@ -600,7 +600,7 @@ class CaptureOutput (object):
             self.captured_text += char
 
 
-def request_pdb_data(pdb_id: str, query: str) -> dict:
+def request_pdb_data(pdb_id: str, query: str) -> dict | None:
     """Request data to the PDB GraphQL API.
 
     Note that this function may be used for either PDB ids or PDB molecule ids, depending on the query.
@@ -648,7 +648,7 @@ def request_replaced_pdb(pdb_id):
             return response.json()['rcsb_repository_holdings_removed']['id_codes_replaced_by'][0]
         except:
             # It may not replaced if the entry is obsolete due to paper retraction
-            # e.g. 1BEF
+            # e.g. 1BEF, 7CU7
             print(response)
             print(f'Error when mining replaced PDB id for {pdb_id}')
             return None
