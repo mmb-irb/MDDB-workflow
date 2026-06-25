@@ -2,7 +2,7 @@
 # This process is carried by Gromacs
 
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY
+from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, warn
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
@@ -23,10 +23,10 @@ def set_chains(pdb_filename: str, chains: list):
     structure.chains = chains
     structure.generate_pdb_file(pdb_filename)
 
-
-# Set the default centering/fitting selection (vmd syntax): protein and nucleic acids
-CENTER_SELECTION_NAME = 'protein_and_nucleic_acids'
-CENTER_INDEX_FILEPATH = '.index.ndx'
+# Set some constant values to handle NDX atom index selections
+SYSTEM_SELECTION_NAME = 'system'
+CENTER_SELECTION_NAME = 'center'
+INDEX_FILEPATH = '.index.ndx'
 
 
 def image_and_fit(
@@ -76,9 +76,10 @@ def image_and_fit(
 
     # Using a TPR topology may provide some advantage in the imaging process
     # This includes connectivity and atom mass data
-    # LORE: This was important back in the day to use '-pbc mol' and '-pbc whole'
-    # LORE: However we do not rely in these features anymore given they were arbitrary
+    # This is important to keep atoms together when using -pbc res, mol or whole
     is_tpr_available = input_topology_file != MISSING_TOPOLOGY and input_topology_file.format == 'tpr'
+    if not is_tpr_available:
+        warn('Since we are missing a TPR file the automatic imaging protocol is more prone to fail.')
     # Check if we have PBC atoms
     # LORE: We were running the '-pbc nojump' step only when no pbc atoms were present in the system
     # LORE: However now we always run a no-jump followed by a '-pbc res' step thus recovering PBC atoms
@@ -88,22 +89,19 @@ def image_and_fit(
     # Gromacs will delete chains so we need to recover them after
     chains_backup = get_chains(input_structure_file.path)
 
-    # Set a custom index file (.ndx) to select protein and nucleic acids
-    # This is useful for some imaging steps (centering and fitting)
+    # Set a custom index file (.ndx) to select reference atoms for centering and fitting steps
+    # We will use as center all atoms which are not under PBC
     system_selection = structure.select('all', syntax='vmd')
-    protein_selection = structure.select_protein()
-    nucleic_selection = structure.select_nucleic()
-    custom_selection = protein_selection + nucleic_selection
-    if not custom_selection:
-        raise InputError('The default selection to center (protein or nucleic) is empty. Please image your simulation manually.')
-    # Exclude PBC residues from this custom selection
-    custom_selection -= pbc_selection
+    center_selection = structure.invert_selection(pbc_selection)
+    if not center_selection:
+        warn(f'The default selection to center and fit (non PBC) is empty. These steps will be skipped.')
     # Convert both selections to a single ndx file which gromacs can read
-    system_selection_ndx = system_selection.to_ndx('System')
-    selection_ndx = custom_selection.to_ndx(CENTER_SELECTION_NAME)
-    with open(CENTER_INDEX_FILEPATH, 'w') as file:
+    with open(INDEX_FILEPATH, 'w') as file:
+        system_selection_ndx = system_selection.to_ndx(SYSTEM_SELECTION_NAME)
         file.write(system_selection_ndx)
-        file.write(selection_ndx)
+        if center_selection:
+            center_selection_ndx = center_selection.to_ndx(CENTER_SELECTION_NAME)
+            file.write(center_selection_ndx)
 
     # Imaging --------------------------------------------------------------------------------------
 
@@ -125,17 +123,33 @@ def image_and_fit(
             run_gromacs(f'trjconv -s {latest_structure.path} \
                 -f {latest_trajectory.path} -o {output_trajectory_file.path} \
                 -trans {translation[0]} {translation[1]} {translation[2]}',
-                user_input='System', show_error_logs=True)
+                user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
             latest_trajectory = output_trajectory_file
 
-            # Select the first frame of the recently imaged trayectory as the new topology
+            # Select the first frame of the recently imaged trayectory as the new structure
             reset_structure(
                 latest_structure.path,
                 latest_trajectory.path,
                 output_structure_file.path)
             latest_structure = output_structure_file
 
-        # We assume that at this point (after a possible trnaslation) the first frame is "correct"
+        # Run an intial -pbc res step just to keep residue atoms together before the no-jump step
+        # Note that this can be done only if we have the TPR file
+        if is_tpr_available:
+            print(' Running initial -pbc res')
+            run_gromacs(f'trjconv -s {input_topology_file.path} \
+                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                -pbc res -n {INDEX_FILEPATH}',
+                user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
+            latest_trajectory = output_trajectory_file
+            # Select the first frame of the recently imaged trayectory as the new structure
+            reset_structure(
+                latest_structure.path,
+                latest_trajectory.path,
+                output_structure_file.path)
+            latest_structure = output_structure_file
+
+        # !!! We assume that at this point (after a possible translation) the first frame is "correct"
         # This means that the different molecules are placed as desired
         # e.g. two protein monomers are together, and not interacting across boundaries
         # To keep things like this we will run a no-jump step
@@ -143,19 +157,41 @@ def image_and_fit(
         print(' Running no-jump')
         run_gromacs(f'trjconv -s {latest_structure.path} \
             -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-            -pbc nojump', user_input='System', show_error_logs=True)
+            -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
         latest_trajectory = output_trajectory_file
 
-        # Center the non-PBC region while we put all residues in the box
-        # This is critical to recover all PBC regions which were diluted because of the no-jump step
-        print(' Running ceneterd -pbc res')
-        run_gromacs(f'trjconv -s {latest_structure.path} \
-            -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-            -pbc res -center -n {CENTER_INDEX_FILEPATH}',
-            user_input=f'{CENTER_SELECTION_NAME} System', show_error_logs=True)
-        latest_trajectory = output_trajectory_file
+        # Place all residues in the box again in case we have PBC residues
+        # This is critical to recover all PBC residues which were diluted because of the no-jump step
+        # Also center the non-PBC region if there is a center selection
+        # We try to do both processes in a single step just to be more efficient
+        if has_pbc_atoms and center_selection:
+            print(' Running center -pbc res')
+            run_gromacs(f'trjconv -s {latest_structure.path} \
+                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                -pbc res -center -n {INDEX_FILEPATH}',
+                user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
+                show_error_logs=True)
+            latest_trajectory = output_trajectory_file
+        # If there is no center selection then just place all residues in the box
+        elif has_pbc_atoms:
+            print(' Running -pbc res')
+            run_gromacs(f'trjconv -s {latest_structure.path} \
+                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                -pbc res -n {INDEX_FILEPATH}',
+                user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
+            latest_trajectory = output_trajectory_file
+        # If there are no PBC residues then just center the system
+        elif center_selection:
+            print(' Running center')
+            run_gromacs(f'trjconv -s {latest_structure.path} \
+                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                -center -n {INDEX_FILEPATH}',
+                user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
+                show_error_logs=True)
+            latest_trajectory = output_trajectory_file
+        # If there is no center and no PBC then do nothing, but this should never happen
 
-        # Select the first frame of the recently imaged trayectory as the new topology
+        # Select the first frame of the recently imaged trayectory as the new structure
         reset_structure(latest_structure.path, latest_trajectory.path, output_structure_file.path)
         latest_structure = output_structure_file
 
@@ -177,8 +213,8 @@ def image_and_fit(
         # Run Gromacs
         run_gromacs(f'trjconv -s {structure_to_fit.path} \
             -f {trajectroy_to_fit.path} -o {output_trajectory_file.path} \
-            -fit rot+trans -n {CENTER_INDEX_FILEPATH}',
-            user_input=f'{CENTER_SELECTION_NAME} System',
+            -fit rot+trans -n {INDEX_FILEPATH}',
+            user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
             show_error_logs=True)
 
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
@@ -194,8 +230,8 @@ def image_and_fit(
     set_chains(output_structure_file.path, chains_backup)
 
     # Clean up the index file
-    # if exists(CENTER_INDEX_FILEPATH):
-    #     remove(CENTER_INDEX_FILEPATH)
+    # if exists(INDEX_FILEPATH):
+    #     remove(INDEX_FILEPATH)
 
 
 def reset_structure(
@@ -207,4 +243,4 @@ def reset_structure(
     print(' Reseting structure after imaging step')
     run_gromacs(f'trjconv -s {input_structure_filepath} \
         -f {input_trajectory_filepath} -o {output_structure_filepath} \
-        -dump 0', user_input='System')
+        -dump 0', user_input=SYSTEM_SELECTION_NAME)
