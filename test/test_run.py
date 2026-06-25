@@ -8,10 +8,11 @@ from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.auxiliar import load_json
 from mddb_workflow.mwf import project_requestables, md_requestables
 from mddb_workflow.console import main
+from .conftest import TestBase
 
 
 @pytest.mark.release
-class TestRunAll:
+class TestRunAll(TestBase):
     """Test all the tasks workflow for reference accessions.
 
     - A0001: base case
@@ -158,7 +159,7 @@ class TestRunFlags:
 
 
 @pytest.mark.CI
-class TestRunSpecial:
+class TestRunSpecial(TestBase):
     """Test for special cases and specific accessions."""
 
     @pytest.mark.parametrize('test_accession', ['cg_test', 'cg_test2'], scope='class')

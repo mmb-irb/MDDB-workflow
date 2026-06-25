@@ -246,7 +246,7 @@ class Database:
             # Get available nodes from the remote
             available_nodes = self.get_available_nodes()
             # Add the global node as an option
-            nodes = { GLOBAL_SERVER_ALIAS: { 'name': GLOBAL_SERVER_NAME, 'url': GLOBAL_SERVER_URL }, **available_nodes }
+            nodes = {GLOBAL_SERVER_ALIAS: {'name': GLOBAL_SERVER_NAME, 'url': GLOBAL_SERVER_URL}, **available_nodes}
             # Check if the requested URL is actually a node alias
             target_node = nodes.get(url, None)
             # If not then we complain
@@ -271,7 +271,7 @@ class Database:
         try:
             response = workflow_urlopen(nodes_url, context=self.context)
             nodes_data = json.loads(response.read())
-            return { node['alias']: { 'name': node['name'], 'url': node['api_url'] } for node in nodes_data }
+            return {node['alias']: {'name': node['name'], 'url': node['api_url']} for node in nodes_data}
         except Exception as error:
             raise Exception(f'Something went wrong when requesting nodes data ({nodes_url}) with error "{error}"')
 

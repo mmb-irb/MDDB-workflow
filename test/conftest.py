@@ -2,7 +2,7 @@ import os, shutil, pytest
 from pathlib import Path
 from mddb_workflow.mwf import Project
 from mddb_workflow.utils.constants import *
-
+from mddb_workflow.utils.auxiliar import RemoteServiceError
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -66,7 +66,13 @@ def test_proj_dir(test_accession: str, test_data_dir: str):
 def project(test_proj_dir: str, test_accession: str):
     # Nassa fails with less than 8 frames
     n_frames = 8 if test_accession == "seq001-1" else 5
-    project = Project(directory=test_proj_dir, accession=test_accession, sample_trajectory=n_frames)
+    try:
+        project = Project(directory=test_proj_dir, accession=test_accession, sample_trajectory=n_frames)
+    except Exception as e:
+        if isinstance(e, RemoteServiceError):
+            return None
+        else:
+            raise e
     GLOBALS['working_directory'] = test_proj_dir
     return project
 
@@ -93,3 +99,12 @@ def setup_dummy_project(test_data_dir):
         return md_config
 
     return _setup
+
+
+class TestBase:
+    """Base class for tests that require a project fixture."""
+    @pytest.fixture(scope="class", autouse=True)
+    def check_project(self, project):
+        """Skip all tests in this class if project fixture would fail."""
+        if project is None:
+            pytest.skip("Skipping tests: Project not available due to RemoteServiceError.")

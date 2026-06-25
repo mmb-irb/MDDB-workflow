@@ -7,6 +7,7 @@ from io import StringIO
 from unittest.mock import patch
 from mddb_workflow.console import parser, main
 from mddb_workflow.utils.type_hints import *
+from .conftest import TestBase
 
 
 @pytest.mark.CI
@@ -78,7 +79,7 @@ class TestConsoleIntegration:
 @pytest.mark.CI
 class TestSubcommands:
     """Test the subcommands of the console interface.
-    
+
     Note: mwf inputs is tested separately in integration/test_inputs.py.
     """
 
@@ -159,8 +160,9 @@ class TestSubcommands:
 
 
 @pytest.mark.release
-class TestNassa:
+class TestNassa(TestBase):
     """Test the nassa subcommand of the console interface."""
+
     @pytest.fixture(scope="class")
     def test_accession(self):
         """Override the default accession for this test."""
