@@ -2508,7 +2508,7 @@ class TaskResolver:
     ]
 
     DEFAULT_PROJECT_TASKS = ['stopology', 'screenshot', 'pmeta', 'pdbs', 'chains']
-    DEFAULT_MD_TASKS = ['mdmeta', 'inter']
+    DEFAULT_MD_TASKS = ['inpro', 'mdmeta', 'inter']
 
     def __init__(
         self,
