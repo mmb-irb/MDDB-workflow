@@ -183,7 +183,9 @@ def prepare_project_metadata (
 
     # Get the reference PDB ids
     # Note that may differ from the input PDB ids since obsolete entries are replaced automatically
-    final_pdb_ids = [ pdb_references['id'] for pdb_references in pdb_references ]
+    final_pdb_ids = []
+    if pdb_references:
+        final_pdb_ids = [ pdb_references['id'] for pdb_references in pdb_references ]
 
     # Write the metadata file
     # Metadata keys must be in CAPS, as they are in the client
