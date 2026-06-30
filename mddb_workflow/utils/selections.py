@@ -105,7 +105,7 @@ class Selection:
         """Produce a vmd selection in tcl format."""
         # Make sure it is not an empty selection
         if not self: raise ValueError('Trying to get VMD selection from an empty selection')
-        return 'index ' + ' '.join([str(index) for index in self.atom_indices])
+        return 'index ' + ranger(self.atom_indices, unit_separator=' ', range_separator=' to ')
 
     def to_ndx(self, selection_name: str = 'Selection') -> str:
         """Produce the content of gromacs ndx file."""

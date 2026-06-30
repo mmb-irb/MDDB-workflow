@@ -353,11 +353,11 @@ def round_to_thousandths(number: float) -> float:
     return round(number * 1000) / 1000
 
 
-def ranger(numbers: list[int]) -> str:
+def ranger(numbers: list[int], unit_separator : str = ',', range_separator : str = '-') -> str:
     """Given a list with numbers, create a string where number in a row are represented rangedly.
 
     Example:
-        [1, 3, 5, 6, 7, 8] => "1, 3, 5-8"
+        [1, 3, 5, 6, 7, 8] => "1,3,5-8"
 
     """
     # Remove duplicates and sort numbers
@@ -375,7 +375,7 @@ def ranger(numbers: list[int]) -> str:
         # Skip this number if it was already included in a previous serie
         if i <= last_number: continue
         # Add current number to the ranged string
-        ranged += ',' + str(number)
+        ranged += unit_separator + str(number)
         # Now iterate numbers after the current number
         next_index = i+1
         for j, next_number in enumerate(sorted_numbers[next_index:], next_index):
@@ -389,13 +389,13 @@ def ranger(numbers: list[int]) -> str:
                 if serie_length > 1:
                     last_serie_number = j - 1
                     previous_number = sorted_numbers[last_serie_number]
-                    ranged += '-' + str(previous_number)
+                    ranged += range_separator + str(previous_number)
                     last_number = last_serie_number
                 break
             # End of the selection
             if j == number_count - 1:
                 if length > 1:
-                    ranged += '-' + str(next_number)
+                    ranged += range_separator + str(next_number)
                     last_number = j
     # Remove the first coma before returning the ranged string
     return ranged[1:]
