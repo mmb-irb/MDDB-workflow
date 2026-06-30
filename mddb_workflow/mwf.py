@@ -1809,11 +1809,11 @@ class Project:
         repeats = False
         for name, name_count in names.items():
             if name_count == 1: continue
-            warn(f'There are {name_count} MDs with the same name: {name}.')
+            warn(f'There are {name_count} MDs with the same name: {name}')
             repeats = True
         for directory, directory_count in directories.items():
             if directory_count == 1: continue
-            warn(f'There are {directory_count} MDs with the same directory: {directory}.')
+            warn(f'There are {directory_count} MDs with the same directory: {directory}')
             repeats = True
         if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' +
             ' All MD names and directories must be unique.')
@@ -2159,9 +2159,11 @@ class Project:
         # Given a scenario where different MDs may have different topologies, find the MD to be used as reference for the topology
         # By default we set the reference MD
         topology_reference_md = self.reference_md
-        # However if there is an input topology filepath for the project and it does not match with the reference MD then we must change
+        # Get the expected project topology, if any
         topology_filepath = self.get_topology_filepath()
+        # If the project topology is missing then return here
         if topology_filepath == MISSING_TOPOLOGY: return MISSING_TOPOLOGY
+        # If there is an input topology filepath for the project and it does not match with the reference MD then we must change
         if topology_filepath != self.reference_md.get_topology_filepath():
             # Iterate MDs until we find one using the project topology
             for md in self.mds:
@@ -2433,9 +2435,9 @@ def check_md_directory(directory: str):
 
 def directory_2_name(directory: str) -> str:
     """Convert an MD directory into an equivalent MD name."""
-    # Remove a possible starting './'
+    # The normpath prevents a possible ending '/' which would make this not work
     # Replace white spaces with underscores
-    name = directory.split('/')[-1].replace('_', ' ')
+    name = normpath(directory).split('/')[-1].replace('_', ' ')
     return name
 
 
