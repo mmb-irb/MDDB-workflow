@@ -1825,7 +1825,7 @@ class Project:
     def get_reference_md_index(self) -> int:
         """Get the reference MD index."""
         # If we are already have a value then return it
-        if self._reference_md_index:
+        if self._reference_md_index is not None:
             return self._reference_md_index
         # Otherwise we must find the reference MD index
         # If the inputs file is available then it must declare the reference MD index
