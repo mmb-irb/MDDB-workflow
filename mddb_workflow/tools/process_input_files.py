@@ -445,6 +445,8 @@ def process_input_files(
     self._trajectory_file = output_trajectory_file
     self._topology_file = output_topology_file
 
+    # --- Cache update ---
+
     # If the input and output file have the same name then overwrite input cksums
     # Thus we avoid this task to run forever
     # DANI: Esto es provisional, hay que prohibir que los inputs se llamen como los outputs
@@ -454,6 +456,20 @@ def process_input_files(
         task.cache_cksums['input_trajectory_files'] = get_cksum_id([output_trajectory_file])
     if input_topology_file == output_topology_file:
         task.cache_cksums['input_topology_file'] = get_cksum_id(output_topology_file)
+
+    # Update the MD task snapshots value again in case the final structure or trajectory changed
+    self.get_snapshots.update_inputs_cache(self, {
+        'structure_file': output_structure_file,
+        'trajectory_file': output_trajectory_file
+    })
+
+    # Write safe bonds back to the MD
+    self.get_reference_bonds.update_inputs_cache(self, {
+        'topology_file': output_topology_file,
+        'structure_file': output_structure_file,
+        'trajectory_file': output_trajectory_file,
+        'structure': provisional_structure,
+    })
 
     # --- Definitive selections ---
 

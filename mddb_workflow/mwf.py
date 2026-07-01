@@ -788,12 +788,10 @@ class MD:
 
     def get_check_stable_bonds(self) -> bool:
         """Check if we must check stable bonds."""
-        # Set if stable bonds have to be checked
-        must_check = STABLE_BONDS_FLAG not in self.project.trust
-        # If this analysis has been already passed then we can trust structure bonds
-        if self.register.tests.get(STABLE_BONDS_FLAG, None) is True:
-            must_check = False
-        return must_check
+        # WARNING: Do not return False if the test is already passed in the register
+        # WARNING: This value is an argument to the bonds task
+        # WARNING: Thus if its value changes then bonds will be mined again for no reason
+        return STABLE_BONDS_FLAG not in self.project.trust
     must_check_stable_bonds = property(get_check_stable_bonds, None, None, "Check if we must check stable bonds (read only)")
 
     # Reference bonds

@@ -94,7 +94,6 @@ def structure_corrector(
 
     # Check if the structure is missing bonds
     missing_any_bonds = any(bond == MISSING_BONDS for bond in safe_bonds)
-    if missing_any_bonds: must_check_stable_bonds = False
 
     # If safe bonds do not match structure bonds then we have to fix it
     def check_stable_bonds():
@@ -105,7 +104,7 @@ def structure_corrector(
         # e.g. coarse grain atom bonds
         structure.bonds = safe_bonds
         # If we have been requested to skip this test then we are done
-        if not must_check_stable_bonds: return
+        if not must_check_stable_bonds or missing_any_bonds: return
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
         # Set some atoms which are to be skipped from these test given their "fake" nature

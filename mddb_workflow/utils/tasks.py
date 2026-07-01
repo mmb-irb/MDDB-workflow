@@ -385,7 +385,7 @@ class Task:
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
 
-    def prefill(self, parent: Union['Project', 'MD'], output, inputs):
+    def prefill(self, parent: Union['Project', 'MD'], output: Any, inputs: dict):
         """Assign an output value to a task thus marking it as already run.
         This function is used in a very specific scenario:
         Tasks which generate no output files/directory inside the 'inpro' task.
@@ -394,6 +394,12 @@ class Task:
         self._set_parent_output(parent, output)
         # Update cache output unless it is marked to not save it
         if self.use_cache: parent.cache.update(self.cache_output_key, output)
+        # Save input cksums to avoid repeating this task in future runs
+        self.update_inputs_cache(parent, inputs)
+
+    def update_inputs_cache(self, parent: Union['Project', 'MD'], inputs: dict):
+        """Update the inputs argument cksums in the cache.
+        This may be useful when we change input values for inputs already used."""
         # Save input cksums to avoid repeating this task in future runs
         _, _, cache_cksums = self._get_changed_inputs(parent, inputs)
         parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
