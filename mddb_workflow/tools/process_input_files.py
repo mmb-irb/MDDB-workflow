@@ -7,6 +7,7 @@ from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, CG_ATOM_ELEMENT, SN
 from mddb_workflow.utils.constants import FAITH_BYPASS
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.pyt_spells import get_frames_count
 from mddb_workflow.utils.arg_cksum import get_cksum_id
@@ -456,13 +457,30 @@ def process_input_files(
     self._set_cg_selection(final_structure, verbose=False)
     final_cg_selection = self.cg_selection
 
+    # Make sure the CG selection is identical to the provisional selection
     if final_cg_selection != provisional_cg_selection:
+        print(f'Provisional CG selection ({len(provisional_cg_selection)})')
+        print(f'Final CG selection ({len(self.cg_selection)})')
+        provisional_atom_indices = set(provisional_cg_selection.atom_indices)
+        final_atom_indices = set(self.cg_selection.atom_indices)
+        different_atom_indices = (provisional_atom_indices - final_atom_indices) \
+            | (final_atom_indices - provisional_atom_indices)
+        different_atoms_vmd_selection = Selection(different_atom_indices).to_vmd()
+        print(f'Difference: {different_atoms_vmd_selection}')
         raise InputError('Coarse grain selection is not consistent after correcting the structure. '
             'Please consider using a different CG selection. '
             'Avoid relying in atom distances or elements to avoid this problem.')
 
-    # Make sure the selection is identical to the provisional selection
+    # Make sure the PBC selection is identical to the provisional selection
     if self.pbc_selection != provisional_pbc_selection:
+        print(f'Provisional PBC selection ({len(provisional_pbc_selection)})')
+        print(f'Final PBC selection ({len(self.pbc_selection)})')
+        provisional_atom_indices = set(provisional_pbc_selection.atom_indices)
+        final_atom_indices = set(self.pbc_selection.atom_indices)
+        different_atom_indices = (provisional_atom_indices - final_atom_indices) \
+            | (final_atom_indices - provisional_atom_indices)
+        different_atoms_vmd_selection = Selection(different_atom_indices).to_vmd()
+        print(f'Difference: {different_atoms_vmd_selection}')
         raise InputError('PBC selection is not consistent after correcting the structure. '
             'Please consider using a different PBC selection. '
             'Avoid relying in atom distances or elements to avoid this problem.')
