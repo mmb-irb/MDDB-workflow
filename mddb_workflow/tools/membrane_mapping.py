@@ -137,8 +137,8 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None) -> dict:
     leaflets = []
     no_mem_lipids = []
     for group in L.groups():
-        # 30 lipids like in FATSLiM
-        if len(group) > 30:
+        # 24 lipids like in FATSLiM
+        if len(group) >= 24:
             leaflets.append(group)
         else:
             no_mem_lipids.extend(group.residues.resindices)
