@@ -36,6 +36,13 @@ def process_input_files(
     image: bool,
     fit: bool,
     translation: list[float],
+    # Selections
+    # Note that they are not used directly but they are used inderictly
+    # However we must add them as arguments, so this task will be run again if they change
+    input_pbc_selection : Optional[str],
+    input_cg_selection : Optional[str],
+    input_dummy_selection : Optional[str],
+    input_forced_class_selections : dict,
     # Make sure the MD is used only to set values or use its functions, but not to get values
     # Values must be passed separately as inputs so the task can identify when inputs change
     self: 'MD',
