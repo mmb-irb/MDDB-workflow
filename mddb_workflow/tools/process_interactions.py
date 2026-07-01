@@ -4,6 +4,7 @@ import shlex
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, save_json, warn, reprint
 from mddb_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
+from mddb_workflow.utils.constants import AUTOMATIC_FLAG
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
 
@@ -110,12 +111,12 @@ def process_interactions(
              'Please change the atom selections for this interaction.')
 
     # Get keywords from the input interactions
-    # Right now the only supported instruction is 'auto'
+    # Right now the only supported instruction is the automatic flag
     keyword_interactions = set([inter for inter in interactions if type(inter) == str])
 
     # If the iauto argument is used from the console then add it here
     if interactions_auto:
-        keyword_interactions.add(f'auto "{interactions_auto}"')
+        keyword_interactions.add(f'{AUTOMATIC_FLAG} "{interactions_auto}"')
 
     # Now process keyword interactions
     for keyword in keyword_interactions:
@@ -127,11 +128,11 @@ def process_interactions(
         # Find all possible interactions in a specific region
         # All the structure is used by default if no selection is passed
         # Note that an interaction is set by every possible combination of pairs of chains
-        if header == 'auto':
+        if header == AUTOMATIC_FLAG:
             print(' Processing interactions automatically')
             if len(options) > 1: raise InputError('Automatic interactions support one selection only.\n'+
-                f' Your instruction was: auto {" ".join(options)}\n'+
-                f' Did you forget to add the quotes maybe? Try this: auto "{" ".join(options)}"')
+                f' Your instruction was: {AUTOMATIC_FLAG} {" ".join(options)}\n'+
+                f' Did you forget to add the quotes maybe? Try this: {AUTOMATIC_FLAG} "{" ".join(options)}"')
             # Get the structure regions which are not in PBC
             reference_structure = structure.filter(pbc_selection) if pbc_selection else structure
             # Set the selection of atoms where this logic is to be applied, if any
@@ -150,7 +151,7 @@ def process_interactions(
                     "agent_2": f"chain {chain2.name}",
                     "selection_1": f"chain {chain1.name}",
                     "selection_2": f"chain {chain2.name}",
-                    "auto": True,
+                    AUTOMATIC_FLAG: True,
                 }
                 # Now add the explicit interaction to the list
                 explicit_interactions.append(interaction)
@@ -205,7 +206,7 @@ def process_interactions(
         pretty_frames_percent = str(round(frames_percent * 10000) / 100)
         if frames_percent < interaction_cutoff:
             # If this interaction was set automatically then simply skip it silently
-            if interaction.get('auto', False):
+            if interaction.get(AUTOMATIC_FLAG, False):
                 interaction[FAILED_INTERACTION_FLAG] = True
                 continue
             meaning_log = 'is not happening at all' if frames_percent == 0 else 'is happening only in a small percent of the trajectory'

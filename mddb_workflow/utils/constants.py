@@ -545,6 +545,9 @@ NOT_FOUND_FLAG = 'notfound'
 # Reference id formats
 PDB_ID_FORMAT = r'^[1-9]{1}[a-zA-Z0-9]{3}$'
 
+# Set a flag to ask for automatic guessing in the inputs
+AUTOMATIC_FLAG = 'auto'
+
 # Available analysis for NASSA
 NASSA_ANALYSES_LIST = ['bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff']
 

@@ -899,11 +899,11 @@ class MD:
         # If there is no inputs file we guess PBC atoms automatically
         else:
             if verbose: print(' No inputs file -> Selection string will be set automatically')
-            selection_string = 'auto'
+            selection_string = AUTOMATIC_FLAG
         # Parse the selection string using the reference structure
         parsed_selection = None
-        # If the input PBC selection is 'auto' then guess it automatically
-        if selection_string == 'auto':
+        # If the input PBC selection is the automatic flag then guess it automatically
+        if selection_string == AUTOMATIC_FLAG:
             # To guess PBC atoms (with the current implementation) we must make sure ther eis no CG
             if reference_structure.has_cg():
                 raise InputError('We can not guess which atoms are under Periodic Boundary Conditions (PBC) in Coarse Grained (CG) systems. Please set PBC atoms manually.\n'
@@ -1040,8 +1040,8 @@ class MD:
             if not self.input_dummy_selection:
                 if verbose: print(' Empty selection -> There are no dummy atoms at all')
                 return Selection()
-            # If the input dummy selection is 'auto' then guess dummy atoms from their atom names
-            if self.input_dummy_selection == 'auto':
+            # If the input dummy selection is the automatic flag then guess dummy atoms from their atom names
+            if self.input_dummy_selection == AUTOMATIC_FLAG:
                 if verbose: print(' Guessing dummy atoms by their atom names')
                 # Get atom indices of all atoms with names matching a dummy atom name patter
                 atom_indices = []
