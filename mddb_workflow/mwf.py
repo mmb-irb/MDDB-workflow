@@ -19,7 +19,7 @@ from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_M
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
-from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise
+from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise, safe_getattr
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -867,7 +867,7 @@ class MD:
             if value is not None:
                 return value
             # If there is no MD input then return the project value
-            return getattr(self.project, f'input_{name}')
+            return safe_getattr(self.project, f'input_{name}')
         return getter
 
     # Assign the MD input getters
@@ -2224,17 +2224,17 @@ class Project:
             # Compare atoms one by one
             for reference_atom, other_atom in zip(reference_structure.atoms, other_structure.atoms):
                 for field in ['name', 'element', 'residue_index']:
-                    if getattr(reference_atom, field) == getattr(other_atom, field): continue
+                    if safe_getattr(reference_atom, field) == safe_getattr(other_atom, field): continue
                     raise InputError(error_message_header + f' Atom {other_atom.label} does not match the reference atom {reference_atom.label} in the field "{field}".\n' + error_message_tail)
             # Compare residues one by one
             for reference_residue, other_residue in zip(reference_structure.residues, other_structure.residues):
                 for field in ['name', 'number', 'icode', 'chain_index']:
-                    if getattr(reference_residue, field) == getattr(other_residue, field): continue
+                    if safe_getattr(reference_residue, field) == safe_getattr(other_residue, field): continue
                     raise InputError(error_message_header + f' Residue {other_residue.label} does not match the reference residue {reference_residue.label} in the field "{field}".\n' + error_message_tail)
             # Compare chains one by one
             for reference_chain, other_chain in zip(reference_structure.chains, other_structure.chains):
                 for field in ['name']:
-                    if getattr(reference_chain, field) == getattr(other_chain, field): continue
+                    if safe_getattr(reference_chain, field) == safe_getattr(other_chain, field): continue
                     raise InputError(error_message_header + f' Chain {other_chain.name} does not match the reference chain {reference_chain.name} in the field "{field}".\n' + error_message_tail)
             # Compare other structure properties
             # Compare atom bonds

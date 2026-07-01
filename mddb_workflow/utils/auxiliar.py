@@ -109,6 +109,7 @@ REMOVED_MD = Exception('Removed MD')
 MISSING_TOPOLOGY = Exception('Missing topology')
 MISSING_CHARGES = Exception('Missing atom charges')
 MISSING_BONDS = Exception('Missing atom bonds')
+MISSING_VALUE = Exception('No value')
 JSON_SERIALIZABLE_MISSING_BONDS = 'MB'
 
 # Keep all exceptions in a set
@@ -706,10 +707,12 @@ def safe_hasattr(instance, attribute_name: str) -> bool:
     """Use a safe alternative to hasattr."""
     return attribute_name in set(dir(instance))
 
-
-def safe_getattr(instance, attribute_name: str, default):
+def safe_getattr(instance, attribute_name: str, default : Any = MISSING_VALUE):
     """Use a safe alternative to getattr."""
-    if not safe_hasattr(instance, attribute_name): return default
+    if not safe_hasattr(instance, attribute_name):
+        if default is MISSING_VALUE:
+            raise AttributeError(f'"{str(instance)}" has no attribute "{attribute_name}"')
+        return default
     return getattr(instance, attribute_name)
 
 
