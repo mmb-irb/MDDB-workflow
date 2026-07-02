@@ -90,7 +90,7 @@ def record_pubchem_match(
 def generate_ligand_references(
     structure: 'Structure',
     cache: 'Cache',
-    input_ligands: Optional[list[dict]],
+    input_ligands: Optional[list[dict[str,int]]],
     pdb_ids: list[str],
     inchikeys: dict[str, 'InChIKeyData'],
     mercy: list[str] = [],
@@ -120,14 +120,9 @@ def generate_ligand_references(
     """
     socket_timeout = SocketTimeout(120)
     socket_timeout.start()
-    # Check input ligands format validity
+    # Ligands have already been validated and normalized (see validate_inputs):
+    # each entry is a mapping with at least one of pubchem/drugbank/chembl
     input_ligands = input_ligands or []
-    for i, ligand in enumerate(input_ligands):
-        if type(ligand) is int or (type(ligand) is str and ligand.isnumeric()):
-            print(f'A ligand number ID has been identified {ligand}, assuming that is a PubChem ID...')
-            input_ligands[i] = {'pubchem': str(ligand)}
-        elif type(ligand) is str:
-            raise InputError(f'A name of ligand has been identified: {ligand}. Anyway, provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
     # Create a dictionary to store the references generated without user input
     automatic_references = {key: {} for key in inchikeys}
     pubchem_ids_from_pdb = []

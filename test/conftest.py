@@ -79,7 +79,7 @@ def project(test_proj_dir: str, test_accession: str):
 
 @pytest.fixture
 def setup_dummy_project(test_data_dir):
-    """Factory fixture to create a two-replica project layout for tests."""
+    """Fixture to create a two-replica project layout for tests."""
     def _setup(test_fld: Path, traj="raw_trajectory", n_replicas=2, copy_inputs=True):
         dummy_dir = Path(test_data_dir) / 'input/dummy'
         # Remove old test folder and create a new one
