@@ -661,9 +661,9 @@ class Residue:
         # In our case we accept OC1 and OC2 or OT1 and OT2 instead of O for terminal residues
         # Also in our case the residue must be bonded to other residues
         atom_names = set([atom.name for atom in self.atoms])
-        if (not is_single_residue and all((name in atom_names) for name in ['C', 'N', 'CA']) and (
-            'O' in atom_names or {'OC1', 'OC2'} <= atom_names or {'OT1', 'OT2'} <= atom_names
-        )):
+        if (not is_single_residue and all((name in atom_names) for name in ['C', 'N', 'CA']) and \
+            ('O' in atom_names or {'OC1', 'OC2'} <= atom_names or {'OT1', 'OT2'} <= atom_names or \
+            {'O1', 'O2'} <= atom_names)):
             self._classification = 'protein'
             return self._classification
         # -------------------------------------------------------------------------------------------------------
