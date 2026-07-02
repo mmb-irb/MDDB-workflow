@@ -60,24 +60,29 @@ ACCEPTED_INPUT_FILENAMES = [
     'inputs.json'  # Legacy inputs file
 ]
 
+# Set a flag to ask for automatic guessing in the inputs
+AUTOMATIC_FLAG = 'auto'
+
 # Default input values used when the value is not specified
 # If an input field has no default value then it will be set as None
 DEFAULT_INPUT_VALUES = {
     'license': 'This trajectory dataset is released under a Creative Commons Attribution 4.0 International Public License',
     'linkcense': 'https://creativecommons.org/licenses/by/4.0/',
+    # Reference MD, the first MD is the reference MD by default
+    'mdref': 0,
     # Important selections
-    # Return an explicit "none" with meaning in VMD syntax
-    # Otherwise if we return a real None the value seem unassigned and is "recalculated" more than once
-    'pbc_selection': 'none',
-    'cg_selection': 'none',
-    'dummy_selection': 'none',
+    # Return the automatic flag when we intend to guess the selection
+    'pbc_selection': AUTOMATIC_FLAG,
+    'cg_selection': None,
+    'dummy_selection': AUTOMATIC_FLAG,
 }
 
 # An additional message to be displayed when inputs are set by default
 DEFAULT_INPUT_VALUE_WARNINGS = {
-    'pbc_selection': 'Assuming there are no atoms under Periodic Boundary Conditions (PBC) in the system',
+    'mdref': 'No reference MD was specified. The first MD will be used as reference.',
+    'pbc_selection': 'Guessing atoms under Periodic Boundary Conditions (PBC) in the system',
     'cg_selection': 'Assuming there are no Coarse Grain (CG) beads in the system but it is full atomistic',
-    'dummy_selection': 'Assuming there are no "dummy" atoms in the system',
+    'dummy_selection': 'Guessing "dummy" atoms in the system',
 }
 
 # Resource files which are always part of the workflow
@@ -544,9 +549,6 @@ NOT_FOUND_FLAG = 'notfound'
 
 # Reference id formats
 PDB_ID_FORMAT = r'^[1-9]{1}[a-zA-Z0-9]{3}$'
-
-# Set a flag to ask for automatic guessing in the inputs
-AUTOMATIC_FLAG = 'auto'
 
 # Available analysis for NASSA
 NASSA_ANALYSES_LIST = ['bconf', 'coordist', 'bpcorr', 'crdcorr', 'stiff']

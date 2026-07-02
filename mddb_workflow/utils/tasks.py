@@ -384,6 +384,11 @@ class Task:
                 # Update the references
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
+    
+    def has_arg(self, parent: Union['Project', 'MD'], arg_key: str) -> bool:
+        """Check if the inputs cache has an input argument cksum"""
+        cache_cksums = parent.cache.retrieve(self.cache_arg_cksums_key, {})
+        return arg_key in cache_cksums
 
     def prefill(self, parent: Union['Project', 'MD'], output: Any, inputs: dict):
         """Assign an output value to a task thus marking it as already run.

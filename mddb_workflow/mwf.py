@@ -15,7 +15,7 @@ from functools import partial
 from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
 # Import local utils
-from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD
+from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
@@ -157,43 +157,43 @@ class MD:
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
         self.arg_input_topology_filepath = input_topology_filepath
-        self._input_topology_filepath = None
+        self._input_topology_filepath = MISSING_VALUE
         self._input_topology_url = None
         # Set the internal variable for the input topology file, to be assigned later
-        self._input_topology_file = None
+        self._input_topology_file = MISSING_VALUE
         # Store also the output topology filepath
-        self._topology_filepath = None
+        self._topology_filepath = MISSING_VALUE
         # Save the input structure filepath
         # They may be relative to the project directory (unique) or relative to the MD directory (one per MD)
         # If the path is absolute then it is considered unique
         # If the file does not exist and it is to be downloaded then it is downloaded for each MD
         # Priorize the MD directory over the project directory
         self.arg_input_structure_filepath = input_structure_filepath
-        self._input_structure_filepath = None
+        self._input_structure_filepath = MISSING_VALUE
         self._input_structure_url = None
         # Set the internal variable for the input structure file, to be assigned later
-        self._input_structure_file = None
+        self._input_structure_file = MISSING_VALUE
         # Save the input trajectory filepaths
         self.arg_input_trajectory_filepaths = input_trajectory_filepaths
-        self._input_trajectory_filepaths = None
+        self._input_trajectory_filepaths = MISSING_VALUE
         self._input_trajectory_urls = None
         # Set the internal variable for the input trajectory files, to be assigned later
-        self._input_trajectory_files = None
+        self._input_trajectory_files = MISSING_VALUE
 
         # Other values which may be found/calculated on demand
         self.md_inputs = self.project.md_config[self.index]
-        self._structure = None
-        self._topology_reader = None
-        self._dihedrals = None
-        self._pbc_selection = None
-        self._pbc_residues = None
-        self._cg_selection = None
-        self._dummy_selection = None
-        self._forced_class_selections = None
-        self._cg_residues = None
+        self._structure = MISSING_VALUE
+        self._topology_reader = MISSING_VALUE
+        self._dihedrals = MISSING_VALUE
+        self._pbc_selection = MISSING_VALUE
+        self._pbc_residues = MISSING_VALUE
+        self._cg_selection = MISSING_VALUE
+        self._cg_residues = MISSING_VALUE
+        self._dummy_selection = MISSING_VALUE
+        self._forced_class_selections = MISSING_VALUE
 
         # Tests
-        self._trajectory_integrity = None
+        self._trajectory_integrity = MISSING_VALUE
 
         # Set a new MD specific register
         # In case the directory is the project directory itself, use the project register
@@ -242,7 +242,7 @@ class MD:
             3. Bonds will be guessed from atom radii and distance along multiple frames
         """
         # If we already have an internal value calculated then return it
-        if self._input_topology_filepath is not None:
+        if self._input_topology_filepath is not MISSING_VALUE:
             return self._input_topology_filepath
 
         def relativize_and_parse_path(input_filepath: str) -> str:
@@ -296,9 +296,9 @@ class MD:
         if self.arg_input_topology_filepath:
             input_topology_filepath = self.arg_input_topology_filepath
         # If the inputs file is available and has the value then use it
-        elif self.is_inputs_file_available():
+        elif self.is_inputs_file_available:
             # Get the input value, whose key must exist
-            input_topology_filepath = self.get_input(MD_INPUT_TOPOLOGY_FILEPATH)
+            input_topology_filepath = self.get_file_input(MD_INPUT_TOPOLOGY_FILEPATH)
         # If this is the project and all MDs have an input topology then set the project topology as missing
         # This should give no problems since this topology is not to be used
         if input_topology_filepath is None and self == self.project and all(md.get_input_topology_filepath() for md in self.mds):
@@ -320,7 +320,7 @@ class MD:
         # Update the input topology filepath in the inputs file, in case it is not matching
         # Note that the path must be relative to the project, no matter where the workflow is run
         project_relative_path = relpath(self._input_topology_filepath, self.project_directory)
-        self.update_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
+        self.update_file_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
         return self._input_topology_filepath
 
     def get_input_topology_file(self) -> Optional[File]:
@@ -328,7 +328,7 @@ class MD:
         If the file is not found try to download it.
         """
         # If we already have a value then return it
-        if self._input_topology_file is not None:
+        if self._input_topology_file is not MISSING_VALUE:
             return self._input_topology_file
         # Set the input topology filepath
         input_topology_filepath = self.get_input_topology_filepath()
@@ -378,7 +378,7 @@ class MD:
     def get_input_structure_filepath(self) -> str:
         """Set a function to get input structure file path."""
         # Return the internal value if it is already assigned
-        if self._input_structure_filepath is not None:
+        if self._input_structure_filepath is not MISSING_VALUE:
             return self._input_structure_filepath
 
         def relativize_and_parse_path(input_filepath: str) -> Optional[str]:
@@ -429,16 +429,16 @@ class MD:
         if self.arg_input_structure_filepath:
             input_structure_filepath = self.arg_input_structure_filepath
         # If we have a value passed through the inputs file has the value
-        elif self.is_inputs_file_available():
+        elif self.is_inputs_file_available:
             # Get the input value, whose key must exist
-            input_structure_filepath = self.get_input(MD_INPUT_STRUCTURE_FILEPATH)
+            input_structure_filepath = self.get_file_input(MD_INPUT_STRUCTURE_FILEPATH)
         # Find out if it is relative to MD directories or to the project directory
         if input_structure_filepath:
             self._input_structure_filepath = relativize_and_parse_path(input_structure_filepath)
             # Save or update the parsed value in the inputs file
             # Note that the path must be relative to the project, no matter where the workflow is run
             project_relative_path = relpath(self._input_structure_filepath, self.project_directory)
-            self.project.update_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
+            self.project.update_file_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
             return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
@@ -455,7 +455,7 @@ class MD:
         If the file is not found try to download it.
         """
         # If the input structure file is already defined then return it
-        if self._input_structure_file:
+        if self._input_structure_file is not MISSING_VALUE:
             return self._input_structure_file
         # Otherwise we must set it
         # First set the input structure filepath
@@ -489,7 +489,7 @@ class MD:
     def get_input_trajectory_filepaths(self) -> list[str]:
         """Get the input trajectory file paths."""
         # Return the internal value if it is already assigned
-        if self._input_trajectory_filepaths is not None:
+        if self._input_trajectory_filepaths is not MISSING_VALUE:
             return self._input_trajectory_filepaths
 
         def relativize_and_parse_paths(input_filepaths: list[str]) -> list[str]:
@@ -564,9 +564,9 @@ class MD:
         if self.arg_input_trajectory_filepaths:
             input_trajectory_filepaths = self.arg_input_trajectory_filepaths
         # Check if the inputs file has the value
-        elif self.is_inputs_file_available():
+        elif self.is_inputs_file_available:
             # Get the input value
-            input_trajectory_filepaths = self.get_input(MD_INPUT_TRAJECTORY_FILEPATHS)
+            input_trajectory_filepaths = self.get_file_input(MD_INPUT_TRAJECTORY_FILEPATHS)
         # If there is no trajectory available then we surrender
         if input_trajectory_filepaths is None:
             raise InputError('There is not input trajectory at all')
@@ -575,7 +575,7 @@ class MD:
         # Save the parsed value in the inputs file
         # Note that the path must be relative to the project, no matter where the workflow is run
         project_relative_paths = [relpath(path, self.project_directory) for path in self._input_trajectory_filepaths]
-        self.update_inputs(MD_INPUT_TRAJECTORY_FILEPATHS, project_relative_paths)
+        self.update_file_inputs(MD_INPUT_TRAJECTORY_FILEPATHS, project_relative_paths)
         return self._input_trajectory_filepaths
 
     def get_input_trajectory_files(self) -> list[File]:
@@ -583,7 +583,7 @@ class MD:
         If file(s) are not found try to download it.
         """
         # If we already defined input trajectory files then return them
-        if self._input_trajectory_files is not None:
+        if self._input_trajectory_files is not MISSING_VALUE:
             return self._input_trajectory_files
         # Otherwise we must set the input trajectory files
         input_trajectory_filepaths = self.get_input_trajectory_filepaths()
@@ -629,29 +629,32 @@ class MD:
         raise InputError('Missing input trajectory files: ' + ', '.join(missing_filepaths))
     input_trajectory_files = property(get_input_trajectory_files, None, None, "Input trajectory filenames (read only)")
 
-    def get_input(self, name: str):
+    def get_file_input(self, name: str):
         """Get a specific 'input' value from MD inputs."""
         value = self.md_inputs.get(name, MISSING_INPUT_EXCEPTION)
         # If we had a value then return it
         if value != MISSING_INPUT_EXCEPTION:
             return value
-        return self.project.get_input(name)
+        return self.project.get_file_input(name)
 
-    def update_inputs(self, key: str, new_value):
-        """Permanently update current MD inputs in the inputs file. Do it only if the project value is not already the same."""
+    def update_file_inputs(self, key: str, new_value) -> bool:
+        """Permanently update current MD inputs in the inputs file.
+        Do it only if the project value is not already the same.
+        Return True if the inputs is updated correctly. Return False if there is no update."""
         # Check if the project value is already this value
         # If so then there is no need to update this value specifically for the MD
-        project_value = self.project.get_input(key)
-        if project_value == new_value: return
+        project_value = self.project.get_file_input(key)
+        if project_value == new_value: return False
         nested_key = f'mds.{self.index}.{key}'
-        self.project.update_inputs(nested_key, new_value)
-
-    def is_inputs_file_available(self) -> bool:
-        """Check if inputs file is available.
+        return self.project.update_file_inputs(nested_key, new_value)
+    
+    def check_inputs_file_available(self) -> bool:
+        """Set a function to check if inputs file is available.
         Note that asking for it when it is not available will lead to raising an input error.
         This function is inherited from the project.
         """
-        return self.project.is_inputs_file_available()
+        return self.project.check_inputs_file_available()
+    is_inputs_file_available = property(check_inputs_file_available, None, None, "Inputs file availability (read only)")
 
     # ---------------------------------
 
@@ -745,7 +748,7 @@ class MD:
     def get_topology_filepath(self) -> str:
         """Get the processed topology file path."""
         # If we have a stored value then return it
-        if self._topology_filepath:
+        if self._topology_filepath is not MISSING_VALUE:
             return self._topology_filepath
         # Otherwise we must find it
         inherited_filename = self.inherit_topology_filename()
@@ -805,7 +808,7 @@ class MD:
     def get_structure(self) -> 'Structure':
         """Get the parsed structure."""
         # If we already have a stored value then return it
-        if self._structure:
+        if self._structure is not MISSING_VALUE:
             return self._structure
         # Otherwise we must set the structure
         # Make sure the structure file exists at this point
@@ -891,13 +894,12 @@ class MD:
         if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
         selection_string = None
         # If there is inputs file then get the input pbc selection
-        if self.is_inputs_file_available():
+        if self.is_inputs_file_available:
             if verbose: print(' Using selection string in the inputs file')
             selection_string = self.input_pbc_selection
-        # If there is no inputs file we guess PBC atoms automatically
+        # If there is no inputs file then get the default value
         else:
-            if verbose: print(' No inputs file -> Selection string will be set automatically')
-            selection_string = AUTOMATIC_FLAG
+            selection_string = self.project.get_input_default_value('pbc_selection')
         # Parse the selection string using the reference structure
         parsed_selection = None
         # If the input PBC selection is the automatic flag then guess it automatically
@@ -934,7 +936,7 @@ class MD:
     def get_pbc_selection(self) -> 'Selection':
         """Get the periodic boundary conditions atom selection."""
         # If we already have a stored value then return it
-        if self._pbc_selection is not None:
+        if self._pbc_selection is not MISSING_VALUE:
             return self._pbc_selection
         # Otherwise we must set the PBC selection
         self._pbc_selection = self._set_pbc_selection(self.structure)
@@ -946,7 +948,7 @@ class MD:
     def get_pbc_residues(self) -> list[int]:
         """Get indices of residues in periodic boundary conditions."""
         # If we already have a stored value then return it
-        if self._pbc_residues:
+        if self._pbc_residues is not MISSING_VALUE:
             return self._pbc_residues
         # If there is no inputs file then asume there are no PBC residues
         if not self.pbc_selection:
@@ -1004,7 +1006,7 @@ class MD:
     def get_cg_selection(self) -> 'Selection':
         """Get the coarse grain atom selection."""
         # If we already have a stored value then return it
-        if self._cg_selection is not None:
+        if self._cg_selection is not MISSING_VALUE:
             return self._cg_selection
         # Otherwise we must set the CG selection
         self._set_cg_selection(self.structure)
@@ -1016,7 +1018,7 @@ class MD:
     def get_cg_residues(self) -> list[int]:
         """Get indices of residues in coarse grain."""
         # If we already have a stored value then return it
-        if self._cg_residues is not None:
+        if self._cg_residues is not MISSING_VALUE:
             return self._cg_residues
         # If there is no inputs file then asume there are no cg residues
         if not self.cg_selection:
@@ -1031,15 +1033,16 @@ class MD:
     # NEVER FORGET: We use an input reference structure instead of self.structure for a reason
     # This function may be called for the first time while in the 'inpro' task
     # Thus this function is called when we still have no structure, but we us a provisional structure
-    def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = True):
+    def _set_dummy_selection(self, reference_structure: 'Structure', verbose: bool = False):
         def parse_dummy_selection() -> 'Selection':
-            if verbose: print('Setting dummy atoms selection')
+            if verbose: print(f'Setting dummy atoms selection in MD {self.name}')
+            input_dummy_selection = self.input_dummy_selection
             # If no input selection was passed assume there are no dummy atoms in the system
-            if not self.input_dummy_selection:
+            if not input_dummy_selection:
                 if verbose: print(' Empty selection -> There are no dummy atoms at all')
                 return Selection()
             # If the input dummy selection is the automatic flag then guess dummy atoms from their atom names
-            if self.input_dummy_selection == AUTOMATIC_FLAG:
+            if input_dummy_selection == AUTOMATIC_FLAG:
                 if verbose: print(' Guessing dummy atoms by their atom names')
                 # Get atom indices of all atoms with names matching a dummy atom name patter
                 atom_indices = []
@@ -1054,7 +1057,7 @@ class MD:
                     if example: print(f' e.g. {example.label}')
                 return Selection(atom_indices)
             # If we have and actual VMD selection then parse it
-            parsed_selection = reference_structure.select(self.input_dummy_selection, syntax='vmd')
+            parsed_selection = reference_structure.select(input_dummy_selection, syntax='vmd')
             if verbose: print(f' Parsed dummy atoms selection has {len(parsed_selection)} atoms')
             return parsed_selection
         # Save the parsed dummy selection
@@ -1072,7 +1075,7 @@ class MD:
     def get_dummy_selection(self) -> 'Selection':
         """Get the dummy atoms selection."""
         # If we already have a stored value then return it
-        if self._dummy_selection is not None:
+        if self._dummy_selection is not MISSING_VALUE:
             return self._dummy_selection
         # Otherwise we must set the dummy selection
         self._set_dummy_selection(self.structure)
@@ -1083,6 +1086,19 @@ class MD:
     def _set_forced_class_selections(self, reference_structure: 'Structure', verbose: bool = True):
         """Parse forced class selections."""
         if self.input_forced_class_selections is None: return
+        # Make sure the input forced class is an object and not a list
+        # This may happen easily while editting the inputs yaml file
+        # Try to fix it automatically if possible
+        if type(self.input_forced_class_selections) is list:
+            if all( type(value) == dict for value in self.input_forced_class_selections ):
+                print(' Forced class selections were not correctly formatted in the YAML inputs file. This is about to be fixed.')
+                fixed_forced_class_selections = {}
+                for dict_value in self.input_forced_class_selections:
+                    for key, value in dict_value.items():
+                        fixed_forced_class_selections[key] = value
+                # Update the inputs file with the correct format
+                self.project.update_file_inputs('forced_class_selections', fixed_forced_class_selections)
+            else: raise InputError('Forced class selections must be a dict, not a list.')
         if verbose: print('Processing input forced class selections')
         parsed_class_selections = {}
         # Iterate input forced class selections
@@ -1108,7 +1124,7 @@ class MD:
     def get_forced_class_selections(self) -> dict[str, 'Selection'] | None:
         """Get the forced class atoms selection."""
         # If we already have a stored value then return it
-        if self._forced_class_selections is not None:
+        if self._forced_class_selections is not MISSING_VALUE:
             return self._forced_class_selections
         # If there is no input forced class selections then skip this process already
         if self.input_forced_class_selections is None:
@@ -1143,7 +1159,8 @@ class MD:
     def get_topology_reader(self) -> 'Topology':
         """Get the topology data reader."""
         # If we already have a stored value then return it
-        if self._topology_reader: return self._topology_reader
+        if self._topology_reader is not MISSING_VALUE:
+            return self._topology_reader
         # Instantiate the topology reader
         self._topology_reader = Topology(self.topology_file)
         return self._topology_reader
@@ -1152,7 +1169,8 @@ class MD:
     def get_dihedrals(self) -> list[dict]:
         """Get the topology dihedrals."""
         # If we already have a stored value then return it
-        if self._dihedrals: return self._dihedrals
+        if self._dihedrals is not MISSING_VALUE:
+            return self._dihedrals
         # Calculate the dihedrals otherwise
         self._dihedrals = self.topology_reader.get_dihedrals_data()
         return self._dihedrals
@@ -1166,7 +1184,7 @@ class MD:
     def is_trajectory_integral(self) -> Optional[bool]:
         """Sudden jumps test."""
         # If we already have a stored value then return it
-        if self._trajectory_integrity is not None:
+        if self._trajectory_integrity is not MISSING_VALUE:
             return self._trajectory_integrity
         # Otherwise we must find the value
         self._trajectory_integrity = check_trajectory_integrity(
@@ -1531,21 +1549,19 @@ class Project:
             self.inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
         self._inputs_file = File(self.inputs_filepath)
         # Check if the inputs file is available at this point
-        if not self.is_inputs_file_available():
+        if not self.is_inputs_file_available:
             warn('Missing inputs file. Allowed tasks will be very limited.')
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
         self.arg_input_topology_filepath = input_topology_filepath
-        self._input_topology_filepath = None
-        self._input_topology_file = None
+        self._input_topology_filepath = MISSING_VALUE
+        self._input_topology_file = MISSING_VALUE
         self._input_topology_url = None
         # Input structure and trajectory filepaths
         # Do not parse them to files yet, let this to the MD class
         self.arg_input_structure_filepath = input_structure_filepath
         self.arg_input_trajectory_filepaths = input_trajectory_filepaths
-        # GROMACS masses file
-        self._gromacs_masses_file = None
         # Input populations and transitions for MSM
         self.populations_filepath = populations_filepath
         self._populations_file = File(self.populations_filepath)
@@ -1557,10 +1573,7 @@ class Project:
 
         # Set the processed topology filepath, which depends on the input topology filename
         # Note that this file is different from the standard topology
-        self._topology_filepath = None
-
-        # Set the standard topology file
-        self._standard_topology_file = None
+        self._topology_filepath = MISSING_VALUE
 
         # Set the rest of inputs
         # Note that the filter selection variable is not handled here at all
@@ -1600,23 +1613,26 @@ class Project:
         self.interactions_auto = interactions_auto
         self.guess_bonds = guess_bonds
         self.ignore_bonds = ignore_bonds
-        # Set the inputs, where values from the inputs file will be stored
-        self._inputs = None
+
+        # Set the file inputs, where values from the inputs file will be stored
+        self._file_inputs = MISSING_VALUE
 
         # Other values which may be found/calculated on demand
-        self._pbc_selection = None
-        self._pbc_residues = None
-        self._cg_selection = None
-        self._cg_residues = None
-        self._dummy_selection = None
-        self._forced_class_selections = None
-        self._reference_bonds = None
-        self._topology_reader = None
-        self._dihedrals = None
-        self._populations = None
-        self._transitions = None
-        self._pdb_ids = None
-        self._mds = None
+        self._pbc_selection = MISSING_VALUE
+        self._pbc_residues = MISSING_VALUE
+        self._cg_selection = MISSING_VALUE
+        self._cg_residues = MISSING_VALUE
+        self._dummy_selection = MISSING_VALUE
+        self._forced_class_selections = MISSING_VALUE
+        self._topology_reader = MISSING_VALUE
+        self._dihedrals = MISSING_VALUE
+        self._populations = MISSING_VALUE
+        self._transitions = MISSING_VALUE
+        self._pdb_ids = MISSING_VALUE
+        self._mds = MISSING_VALUE
+
+        # Keep track of warnings already issue in order to not repeat them
+        self._already_warned = set()
 
         # Save forced inputs and use them when necessary
         self.forced_inputs = {}
@@ -1648,7 +1664,7 @@ class Project:
 
             # Overwrite input file values
             for input_name, input_value in self.forced_inputs.items():
-                self.update_inputs(input_name, input_value)
+                self.update_file_inputs(input_name, input_value)
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
@@ -1664,12 +1680,12 @@ class Project:
         # Set the MD configuration
 
         # Get MD configuration from the inputs file, if any
-        self.md_config = self.get_input('mds')
+        self.md_config = self.get_file_input('mds')
         if self.md_config is None:
             # MDs must be a list, or it will cause further problems
             # To avoid this fix the problem both internally and in the inputs file
             self.md_config = []
-            self.update_inputs('mds', self.md_config)
+            self.update_file_inputs('mds', self.md_config)
         # Purge removed MDs from the list
         self.md_config = [ REMOVED_MD if c.get(MD_REMOVED_FLAG, False) else c for c in self.md_config ]
 
@@ -1700,7 +1716,7 @@ class Project:
                     config = {MD_DIRECTORY: directory}
                     self.md_config.append(config)
                     # Update inputs with the current MD or further writes to this MD will fail
-                    self.update_inputs('mds', self.md_config)
+                    self.update_file_inputs('mds', self.md_config)
                 # An input topoloy/structure for a specific MD may be passed before the trajectory
                 # In order to tell if the topology/structure was passed we check input file formats
                 # Note that PDB format is both a structure and a trajectory supported format
@@ -1792,12 +1808,12 @@ class Project:
             if directory is None:
                 directory = name_2_directory(name)
                 md_inputs['mdir'] = directory
-                self.update_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
+                self.update_file_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
             # And vice versa
             if name is None:
                 name = directory_2_name(directory)
                 md_inputs['name'] = name
-                self.update_inputs(f'mds.{md_index}.{MD_NAME}', name)
+                self.update_file_inputs(f'mds.{md_index}.{MD_NAME}', name)
             # Add current names and directories to the counts
             current_name_count = names.get(name, 0)
             names[name] = current_name_count + 1
@@ -1827,12 +1843,11 @@ class Project:
             return self._reference_md_index
         # Otherwise we must find the reference MD index
         # If the inputs file is available then it must declare the reference MD index
-        if self.is_inputs_file_available():
-            self._reference_md_index = self.get_input('mdref')
+        if self.is_inputs_file_available:
+            self._reference_md_index = self.get_file_input('mdref')
         # Otherwise we simply set the first MD as the reference and warn the user about this
         if self._reference_md_index is None:
-            warn('No reference MD was specified. The first MD will be used as reference.')
-            self._reference_md_index = 0
+            self._reference_md_index = self.get_input_default_value('mdref')
         return self._reference_md_index
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
 
@@ -1855,7 +1870,7 @@ class Project:
     def get_mds(self) -> list[MD]:
         """Get the available MDs (read only)."""
         # If MDs are already declared then return them
-        if self._mds:
+        if self._mds is not MISSING_VALUE:
             return self._mds
         # Now instantiate a new MD for each declared MD and save the reference MD
         self._mds = []
@@ -1881,7 +1896,7 @@ class Project:
 
     # Inputs filename ------------
 
-    def is_inputs_file_available(self) -> bool:
+    def check_inputs_file_available(self) -> bool:
         """Set a function to check if inputs file is available.
         Note that asking for it when it is not available will lead to raising an input error.
         """
@@ -1895,6 +1910,7 @@ class Project:
         if self.remote:
             return True
         return False
+    is_inputs_file_available = property(check_inputs_file_available, None, None, "Inputs file availability (read only)")
 
     def get_inputs_file(self) -> File:
         """Set a function to load the inputs yaml file."""
@@ -1968,14 +1984,14 @@ class Project:
 
     # First of all set input themselves
 
-    def get_inputs(self) -> dict:
+    def get_file_inputs(self) -> dict:
         """Get inputs."""
         # If inputs are already loaded then return them
-        if self._inputs:
-            return self._inputs
-        # When loading the inuts file, replace some values automatically
+        if self._file_inputs is not MISSING_VALUE:
+            return self._file_inputs
+        # When loading the inputs file, replace some values automatically
         replaces = [('$DIR', self.directory_name)]
-        # Otherwise, load inputs from the inputs file
+        # If we have no inputs stored then try to load the inputs file
         inputs_data = None
         if self.inputs_file.format == 'json':
             inputs_data = load_json(self.inputs_file.path, replaces)
@@ -1985,67 +2001,148 @@ class Project:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
         if not inputs_data:
             raise InputError('Input file is empty')
-        self._inputs = inputs_data
+        # Update the inputs internal value
+        # WARNING: Some values may habe been prefilled by command line inputs
+        self._file_inputs = inputs_data
         # Legacy fixes
-        old_pdb_ids = self._inputs.get('pdbIds', None)
+        old_pdb_ids = self._file_inputs.get('pdbIds', None)
         if old_pdb_ids:
-            self._inputs['pdb_ids'] = old_pdb_ids
+            self._file_inputs['pdb_ids'] = old_pdb_ids
         # Finally return the updated inputs
-        return self._inputs
-    inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
+        return self._file_inputs
+    file_inputs = property(get_file_inputs, None, None, "Inputs from the inputs file (read only)")
 
-    def update_inputs(self, nested_key: str, new_value):
+    def update_file_inputs(self, nested_key: str, new_value: Any) -> bool:
         """Permanently update the inputs file.
         This may be done when command line inputs do not match file inputs.
+        Return True if the inputs is updated correctly. Return False if there is no update.
         """
-        # If there is no inputs file then rhere is nothing to update
-        if not self.is_inputs_file_available(): return
+        # If there is no inputs file then there is nothing to update
+        if not self.is_inputs_file_available: return False
         # If the input already matches then do nothing
-        current_value = read_ndict(self.inputs, nested_key, MISSING_INPUT_EXCEPTION)
-        if current_value == new_value: return
+        current_value = read_ndict(self.file_inputs, nested_key, MISSING_INPUT_EXCEPTION)
+        if current_value == new_value: return False
         # Set the new value
-        write_ndict(self.inputs, nested_key, new_value)
-        # If there is no inputs file then do not try to save anything
-        if not self.is_inputs_file_available(): return
+        write_ndict(self.file_inputs, nested_key, new_value)
         print(f'* Field "{nested_key}" in the inputs file will be permanently modified')
         # Write the new inputs to disk
         if self.inputs_file.format == 'json':
-            save_json(self.inputs, self.inputs_file.path)
+            save_json(self.file_inputs, self.inputs_file.path)
         elif self.inputs_file.format == 'yaml':
             # Note that comments in the original YAML file will be not kept
-            save_yaml(self.inputs, self.inputs_file.path)
+            save_yaml(self.file_inputs, self.inputs_file.path)
         else:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
+        return True
+        
+    def update_cache_inputs(self, arg_key: str, new_value: Any, verbose: bool = False):
+        """Update an input argument cksum in the cache of all tasks using it.
+        This may be useful after updating an input value if you don't want all tasks using it to run again in the next workflow run
+        """
+        # Iterate project available tasks
+        for requestable in project_requestables.values():
+            # Ignore anything which is not a task
+            if not isinstance(requestable, Task): continue
+            # Make sure the cache already has this argument key
+            # Otherwise it means the task is not using the input or it did not run yet
+            # In either case there is nothing to update then
+            if not requestable.has_arg(self, arg_key): continue
+            if verbose: print(f'Updating project task "{requestable.name}" input "{arg_key}" to "{new_value}"')
+            # Update the task cache
+            requestable.update_inputs_cache(self, { arg_key: new_value })
+
+        # Iterate MD available tasks
+        for requestable in md_requestables.values():
+            # Ignore anything which is not a task
+            if not isinstance(requestable, Task): continue
+            # Iterate MDs since we will have to update the task cache in every MD
+            for md in self.mds:
+                # Make sure the cache already has this argument key
+                # Otherwise it means the task is not using the input or it did not run yet
+                # In either case there is nothing to update then
+                if not requestable.has_arg(md, arg_key): continue
+                if verbose: print(f'Updating MD "{md.name}" task "{requestable.name}" input "{arg_key}" to "{new_value}"')
+                # Update the task cache
+                requestable.update_inputs_cache(md, { arg_key: new_value })
+
+    def autofill_inputs (self):
+        """ Make the workflow create (if does not exist yet) and automatically fill the inputs file.
+        Note that, by definition, most inputs are not to be defined by the workflow, but user inputs.
+        However there are a few exceptions where the workflow may attempt to guess some values.
+        For instance, the PBC selection or the dummy atoms selection are often correctly guessed.
+        In addition other selections will be parsed to atomic indices selections, which are safer."""
+        # Get the final values to update in the input files
+        # WARNING: It is important to get these values before generating the inputs file
+        # WARNING: The inputs file is expected to either exists from the begining or not exist at all
+        # WARNING: Creating the inputs file mid run alters the order of things and it is not yet supported
+        final_pbc_selection = self.pbc_selection.to_vmd() if self.pbc_selection else None
+        final_cg_selection = self.cg_selection.to_vmd() if self.cg_selection else None
+        final_dummy_selection = self.dummy_selection.to_vmd() if self.dummy_selection else None
+        # Now start the actual autofilling process
+        print('Automatically filling inputs file')
+        # Make a copy of the template in the local directory if there is not an inputs file yet
+        if self.is_inputs_file_available:
+            print(f" Inputs file already exists")
+        else:
+            inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
+            inputs_file = File(inputs_filepath)
+            template_file = File(INPUTS_TEMPLATE_FILEPATH)
+            template_file.copy_to(inputs_file)
+            print(f" File {inputs_filepath} has been created from a template")
+        # Now fill the inputs file with the selections we just processed
+        # Parse the selections to ranged VMD syntax guess
+        # Then to make sure some tasks are not repeated uselessly we must update some cache arguments cksums
+        # Note that this is done because we are updating inputs after using them
+        # Fill the PBC selection
+        if self.update_file_inputs('pbc_selection', final_pbc_selection):
+            # Update the value in tasks caches only if there was an actual update
+            self.update_cache_inputs('input_pbc_selection', final_pbc_selection)
+        # Fill the CG selection
+        if self.update_file_inputs('cg_selection', final_cg_selection):
+            # Update the value in tasks caches only if there was an actual update
+            self.update_cache_inputs('input_cg_selection', final_cg_selection)
+        # Fill the dummy atoms selection
+        if self.update_file_inputs('dummy_selection', final_dummy_selection):
+            # Update the value in tasks caches only if there was an actual update
+            self.update_cache_inputs('input_dummy_selection', final_dummy_selection)
 
     # Then set getters for every value in the inputs file
-    def get_input(self, name: str) -> Any:
+    def get_file_input(self, name: str) -> Any:
         """Get a specific 'input' value from the inputs file."""
         # Check if the value of this input was forced from command line
         if name in self.forced_inputs:
             return self.forced_inputs[name]
-        if self.is_inputs_file_available():
+        if self.is_inputs_file_available:
             # Get the input value from the inputs file
-            value = self.inputs.get(name, MISSING_INPUT_EXCEPTION)
+            value = self.file_inputs.get(name, MISSING_INPUT_EXCEPTION)
             # If we had a value then return it
             if value != MISSING_INPUT_EXCEPTION:
                 return value
+        # If the field is not specified in the inputs file then return the defualt value
+        return self.get_input_default_value(name)
+    
+    def get_input_default_value(self, name: str) -> Any:
+        """Get a specific 'input' default value used when the user provides no value by any means.
+        If no default value is specified then return None."""
         # If the field is not specified in the inputs file then set a defualt value
         default_value = DEFAULT_INPUT_VALUES.get(name, None)
         # Warn the user about this a value we are about to assign automatically
         # If the value is None then it means there is no default value
-        if default_value is not None:
+        already_warned = name in self._already_warned
+        if default_value is not None and not already_warned:
             warn(f'Missing input "{name}" -> Using default value: {default_value}')
         # If there is an additional warning then display it here
         additional_warning = DEFAULT_INPUT_VALUE_WARNINGS.get(name, None)
-        if additional_warning is not None: warn(additional_warning)
+        if additional_warning is not None and not already_warned:
+            warn(additional_warning)
+        self._already_warned.add(name)
         return default_value
 
     def inputs_property(name: str, doc: str = ""):
         """Set a function to get a specific 'input' value by its key/name.
-        Note that we return the property without calling the getter.
-        """
+        Note that we return the property without calling the getter."""
         def getter(self: 'Project'):
-            return self.get_input(name)
+            return self.get_file_input(name)
         return property(getter, doc=doc)
 
     # Assign the getters
@@ -2094,7 +2191,7 @@ class Project:
     def get_cg_selection(self) -> 'Selection':
         """Get the coarse grain atom selection. Make sure it is coherent among all MDs."""
         # If we already have a stored value then return it
-        if self._cg_selection is not None:
+        if self._cg_selection is not MISSING_VALUE:
             return self._cg_selection
         # Otherwise we must set the selection
         # Make sure it is coherent among all MDs
@@ -2108,7 +2205,7 @@ class Project:
     def get_cg_residues(self) -> list[int]:
         """Get indices of coarse grain residues. Make sure they are coherent among all MDs."""
         # If we already have a stored value then return it
-        if self._cg_residues is not None:
+        if self._cg_residues is not MISSING_VALUE:
             return self._cg_residues
         # If there is no inputs file then asume there are no cg residues
         if not self.cg_selection:
@@ -2129,6 +2226,34 @@ class Project:
         print(f'CG residues "{self.input_cg_selection}" -> {len(self._cg_residues)} residues')
         return self._cg_residues
     cg_residues = property(get_cg_residues, None, None, "Indices of residues in coarse grain (read only)")
+
+    def get_pbc_selection(self) -> 'Selection':
+        """Get the periodic boundary conditions atom selection. Make sure it is coherent among all MDs."""
+        # If we already have a stored value then return it
+        if self._pbc_selection is not MISSING_VALUE:
+            return self._pbc_selection
+        # Otherwise we must set the selection
+        # Make sure it is coherent among all MDs
+        unique_md_selections = set([md.pbc_selection for md in self.mds if md is not REMOVED_MD])
+        if len(unique_md_selections) > 1:
+            raise InputError('Periodic Boundary Conditions selection is not coherent among MDs. Please change the input value.')
+        self._pbc_selection = self.reference_md.pbc_selection
+        return self._pbc_selection
+    pbc_selection = property(get_pbc_selection, None, None, "Periodic boundary conditions atom selection (read only)")
+
+    def get_dummy_selection(self) -> 'Selection':
+        """Get the dummy atoms selection. Make sure it is coherent among all MDs."""
+        # If we already have a stored value then return it
+        if self._dummy_selection is not MISSING_VALUE:
+            return self._dummy_selection
+        # Otherwise we must set the selection
+        # Make sure it is coherent among all MDs
+        unique_md_selections = set([md.dummy_selection for md in self.mds if md is not REMOVED_MD])
+        if len(unique_md_selections) > 1:
+            raise InputError('Dummy atoms selection is not coherent among MDs. Please change the input value.')
+        self._dummy_selection = self.reference_md.dummy_selection
+        return self._dummy_selection
+    dummy_selection = property(get_dummy_selection, None, None, "Dummy atoms selection (read only)")
 
     # Set additional values infered from input values
     # RUBEN: unused?
@@ -2283,7 +2408,7 @@ class Project:
     def get_populations(self) -> Optional[list[float]]:
         """Get the equilibrium populations from a MSM."""
         # If we already have a stored value then return it
-        if self._populations:
+        if self._populations is not MISSING_VALUE:
             return self._populations
         # Otherwise we must find the value
         if not self.populations_file:
@@ -2295,7 +2420,7 @@ class Project:
     def get_transitions(self) -> Optional[list[list[float]]]:
         """Get the transition probabilities from a MSM."""
         # If we already have a stored value then return it
-        if self._transitions:
+        if self._transitions is not MISSING_VALUE:
             return self._transitions
         # Otherwise we must find the value
         if not self.transitions_file:
@@ -2307,7 +2432,7 @@ class Project:
     def get_pdb_ids(self) -> list[str]:
         """Get the tested and standardized PDB ids."""
         # If we already have a stored value then return it
-        if self._pdb_ids is not None:
+        if self._pdb_ids is not MISSING_VALUE:
             return self._pdb_ids
         # Otherwise test and standarize input PDB ids
         self._pdb_ids = []
@@ -2456,7 +2581,8 @@ input_files = {**project_input_files, **md_input_files}
 
 # Project processed files
 project_processed_files = {
-    'topology': Project.get_topology_file
+    'topology': Project.get_topology_file,
+    'autin': Project.autofill_inputs,
 }
 # MD processed files
 md_processed_files = {
