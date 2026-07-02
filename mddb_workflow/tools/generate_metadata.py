@@ -2,7 +2,7 @@ from mddb_workflow.tools.get_box_size import get_box_size
 from mddb_workflow.tools.get_atoms_count import get_atoms_count
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
 from mddb_workflow.tools.generate_map import get_sequence_metadata
-from mddb_workflow.utils.auxiliar import InputError, save_json, make_sure_is_numeric_or_none
+from mddb_workflow.utils.auxiliar import InputError, save_json
 from mddb_workflow.utils.constants import MD_DIRECTORY
 from mddb_workflow.utils.type_hints import *
 
@@ -137,26 +137,6 @@ def prepare_project_metadata (
 
     # Get the MD type
     md_type = input_type
-    # In case this is an ensemble the framestep may be missing
-    framestep = None
-    if md_type == 'trajectory':
-        framestep = input_framestep
-        if framestep and framestep <= 0: raise InputError(f'Frame step should always be postive, not "{input_framestep}"')
-        framestep = make_sure_is_numeric_or_none(framestep)
-        if framestep == InputError:
-            raise InputError(f'Input frame step must be a numeric value (ns), not "{input_framestep}"')
-
-    # Make sure other numeric values are numeric and positive
-    timestep = make_sure_is_numeric_or_none(input_timestep)
-    if timestep is InputError:
-        raise InputError(f'Input time step must be a numeric value (fs), not "{input_timestep}"')
-    if timestep and timestep <= 0:
-        raise InputError(f'Input time step must be positive, not "{input_timestep}"')
-    temperature = make_sure_is_numeric_or_none(input_temperature)
-    if temperature is InputError:
-        raise InputError(f'Input temperature must be a numeric value (K), not "{input_temperature}"')
-    if temperature and temperature <= 0:
-        raise InputError(f'Input temperature must be positive, not "{input_temperature}"')
 
     # Metadata interactions are input interactions and the interaction types combined
     # Thus we take the processed interactions and remove the field we are not interested in
@@ -165,15 +145,6 @@ def prepare_project_metadata (
         for interaction in interactions:
             metadata_interaction = { k: v for k, v in interaction.items() if k in METADATA_INTERACTION_FIELDS }
             metadata_interactions.append(metadata_interaction)
-
-    # Make sure links are correct
-    links = input_links
-    if links != None:
-        if type(links) != list: links = [ links ]
-        for link in input_links:
-            if type(link) != dict: raise InputError('Links must be a list of objects')
-            if link.get('name', None) == None: raise InputError('Links must have a name')
-            if link.get('url', None) == None: raise InputError('Links must have a URL')
 
     # Make sure the version is a string
     # Note that in some cases it may be a numeric value (e.g. 5.1)
@@ -215,9 +186,9 @@ def prepare_project_metadata (
         'PROTSEQ': sequence_metadata['protein_sequences'],
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
         'DOMAINS': sequence_metadata['domains'],
-        'FRAMESTEP': framestep,
-        'TIMESTEP': timestep,
-        'TEMP': temperature,
+        'FRAMESTEP': input_framestep,
+        'TIMESTEP': input_timestep,
+        'TEMP': input_temperature,
         'ENSEMBLE': input_ensemble,
         'FF': forcefields,
         'WAT': input_water,

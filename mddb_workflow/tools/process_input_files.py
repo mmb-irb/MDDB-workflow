@@ -13,7 +13,7 @@ from mddb_workflow.utils.pyt_spells import get_frames_count
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
-from mddb_workflow.tools.check_inputs import check_inputs, FIXED_TOPOLOGY_EXCEPTION
+from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit
@@ -108,7 +108,7 @@ def process_input_files(
 
     # Check input files match in number of atoms
     # Here we have not standarized the format so we must check differently with every format
-    exceptions = check_inputs(input_structure_file, input_trajectory_files, initial_topology_file, self.cache)
+    exceptions = check_input_files(input_structure_file, input_trajectory_files, initial_topology_file, self.cache)
 
     # There is a chance that the inputs checker has fixed or prefiltered the topology to match trajectory
     # If this is the case then use the fixed/prefiltered topology from now on

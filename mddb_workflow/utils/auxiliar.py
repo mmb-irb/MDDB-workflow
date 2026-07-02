@@ -942,23 +942,3 @@ def download_mmcif(pdb_id: str, output_filepath: str):
             file.write(parsed_response)
     except Exception as error:
         raise Exception(f'Something went wrong when downloading {pdb_id} structure: {request_url} with error: {error}')
-
-
-def make_sure_is_numeric(value) -> float | int:
-    """Make sure a value is a number.
-    Convert it if necessary.
-    """
-    # If the value is already numeric then return it
-    if type(value) in {float, int}: return value
-    # If this is a string then make it numeric if possible
-    if type(value) is str:
-        if value.isnumeric():
-            try: return int(value)
-            except: return float(value)
-        return InputError
-    raise TypeError('Unexpected type')
-
-
-def make_sure_is_numeric_or_none(value) -> float | int | None:
-    if value is None: return value
-    return make_sure_is_numeric(value)

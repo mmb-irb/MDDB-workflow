@@ -55,3 +55,5 @@ dependencies:
   - jinja2
   # To compare file content between runs thus telling if the inputs have changed
   - python-xxhash
+  # To validate the inputs file against a schema
+  - pydantic>=2

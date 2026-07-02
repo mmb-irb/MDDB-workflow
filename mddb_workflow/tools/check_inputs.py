@@ -36,7 +36,7 @@ AUXILIAR_PDB_FILE = '.auxiliar.pdb'
 FIXED_TOPOLOGY_EXCEPTION = Exception('Fixed topology')
 
 
-def check_inputs(
+def check_input_files(
     input_structure_file: 'File',
     input_trajectory_files: list['File'],
     input_topology_file: Union['File', Exception],
