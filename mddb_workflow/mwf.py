@@ -20,6 +20,7 @@ from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, 
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
 from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
 from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise
+from mddb_workflow.core.inputs_schema import validate_inputs
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -1640,13 +1641,9 @@ class Project:
             # Save forced inputs as a dict
             self.forced_inputs = {name: value for name, value in forced_inputs}
 
-            # Check that forced inputs exist
-            # This is to prevent the user from loosing a lot of time for a silly typo
-            template_inputs = load_yaml(INPUTS_TEMPLATE_FILEPATH)
-            for input_name in self.forced_inputs.keys():
-                if input_name in template_inputs: continue
-                available_inputs = ', '.join(template_inputs.keys())
-                raise InputError(f'Unrecognized forced input "{input_name}". Available inputs: {available_inputs}')
+            # Check that forced inputs exist to prevent the user from
+            # loosing a lot of time for a silly typo
+            validate_inputs(self.forced_inputs, strict_unknown=True, fill_defaults=False)
 
             # Overwrite input file values
             for input_name, input_value in self.forced_inputs.items():
@@ -1987,14 +1984,17 @@ class Project:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
         if not inputs_data:
             raise InputError('Input file is empty')
-        self._inputs = inputs_data
-        # Legacy fixes
-        old_pdb_ids = self._inputs.get('pdbIds', None)
+        # Legacy fixes (applied before validation so legacy values are validated too)
+        old_pdb_ids = inputs_data.get('pdbIds', None)
         if old_pdb_ids:
-            self._inputs['pdb_ids'] = old_pdb_ids
+            inputs_data['pdb_ids'] = old_pdb_ids
+        # Validate the inputs against the workflow schema before using them
+        # This raises an InputError with a clear per-field message on any problem
+        validate_inputs(inputs_data)
+        self._inputs = inputs_data
         # Finally return the updated inputs
         return self._inputs
-    inputs = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
+    inputs: dict = property(get_inputs, None, None, "Inputs from the inputs file (read only)")
 
     def update_inputs(self, nested_key: str, new_value):
         """Permanently update the inputs file.
@@ -2319,10 +2319,8 @@ class Project:
         if type(input_pdb_ids) is str:
             input_pdb_ids = [input_pdb_ids]
         # Iterate input PDB ids
+        # Note that the PDB id format is already validated on input
         for input_pdb_id in input_pdb_ids:
-            # First make sure this is a PDB id
-            if not re.match(PDB_ID_FORMAT, input_pdb_id):
-                raise InputError(f'Input PDB id "{input_pdb_id}" does not look like a PDB id')
             # Make letters upper
             pdb_id = input_pdb_id.upper()
             self._pdb_ids.append(pdb_id)

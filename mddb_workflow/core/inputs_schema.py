@@ -8,17 +8,28 @@ fields (ligands, interactions, mds, links, customs...) are strongly typed since
 mistakes there are the hardest to debug.
 """
 
-from typing import Optional, Union
+import re
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from mddb_workflow.utils.auxiliar import InputError, warn
+from mddb_workflow.utils.constants import PDB_ID_FORMAT
 
 
 class InputsBaseModel(BaseModel):
     """Base model tolerating (and preserving) unknown fields."""
 
     model_config = ConfigDict(extra='allow')
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_is_mapping(cls, data):
+        if not isinstance(data, dict):
+            required_fields = [name for name, field in cls.model_fields.items() if field.is_required()]
+            fields_hint = f' with fields: {", ".join(required_fields)}' if required_fields else ''
+            raise ValueError(f'Each "{cls.__name__.lower()}" entry must be a dictionary{fields_hint}.')
+        return data
 
 
 class Ligand(InputsBaseModel):
@@ -119,7 +130,7 @@ class WorkflowInputs(InputsBaseModel):
     contact: Optional[str] = None
     program: Optional[str] = None
     version: Optional[Union[str, float, int]] = None
-    type: Optional[str] = None
+    type: Optional[Literal['trajectory', 'ensemble']] = None
     method: Optional[str] = None
     license: Optional[str] = None
     linkcense: Optional[str] = None
@@ -183,6 +194,24 @@ class WorkflowInputs(InputsBaseModel):
             raise ValueError(f'Orientation must be a list of 16 numbers, got {len(value)}.')
         return value
 
+    @field_validator('framestep', 'timestep', 'temp')
+    @classmethod
+    def check_positive(cls, value, info):
+        if value is not None and value <= 0:
+            raise ValueError(f'"{info.field_name}" must be a positive number.')
+        return value
+
+    @field_validator('pdb_ids')
+    @classmethod
+    def check_pdb_ids(cls, value):
+        if value is None:
+            return value
+        pdb_ids = [value] if isinstance(value, str) else value
+        for pdb_id in pdb_ids:
+            if not re.match(PDB_ID_FORMAT, pdb_id):
+                raise ValueError(f'"{pdb_id}" does not look like a PDB id.')
+        return value
+
 
 # The set of fields explicitly declared in the schema
 KNOWN_INPUT_FIELDS = set(WorkflowInputs.model_fields.keys())
@@ -194,12 +223,15 @@ def format_validation_error(error: ValidationError) -> str:
     for problem in error.errors():
         # Build a dotted location path (e.g. "ligands -> 0 -> pubchem")
         location = ' -> '.join(str(part) for part in problem['loc']) or '(root)'
+        # Custom validators raise plain ValueErrors, which pydantic prefixes with
+        # "Value error, "; strip it since our messages are already self-contained
+        message = problem['msg'].removeprefix('Value error, ')
         # Clarify the type and value that caused the error, when available
         detail = ''
         if 'input' in problem:
             value = problem['input']
             detail = f' (got {type(value).__name__}: {value!r})'
-        lines.append(f' - {location}: {problem["msg"]}{detail}')
+        lines.append(f' - {location}: {message}{detail}')
     return '\n'.join(lines)
 
 

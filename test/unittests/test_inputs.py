@@ -114,6 +114,38 @@ def test_interaction_missing_field_is_rejected():
 
 
 @pytest.mark.unit_int
+def test_md_type_must_be_valid():
+    """The MD 'type' must be either 'trajectory' or 'ensemble'."""
+    assert validate_inputs({'type': 'trajectory'})
+    assert validate_inputs({'type': 'ensemble'})
+    with pytest.raises(InputError) as excinfo:
+        validate_inputs({'type': 'md'})
+    assert 'trajectory' in str(excinfo.value)
+
+
+@pytest.mark.unit_int
+def test_numeric_fields_must_be_positive():
+    """framestep, timestep and temp must be positive when provided."""
+    assert validate_inputs({'framestep': 0.01, 'timestep': 2, 'temp': 310})
+    for field in ('framestep', 'timestep', 'temp'):
+        with pytest.raises(InputError) as excinfo:
+            validate_inputs({field: -1})
+        assert field in str(excinfo.value)
+        with pytest.raises(InputError):
+            validate_inputs({field: 0})
+
+
+@pytest.mark.unit_int
+def test_pdb_ids_format_is_validated():
+    """PDB ids must match the expected format, as a string or a list."""
+    assert validate_inputs({'pdb_ids': '6M0J'})
+    assert validate_inputs({'pdb_ids': ['5GGR', '6ACS']})
+    with pytest.raises(InputError) as excinfo:
+        validate_inputs({'pdb_ids': ['not-a-pdb']})
+    assert 'not-a-pdb' in str(excinfo.value)
+
+
+@pytest.mark.unit_int
 def test_wrong_type_is_rejected():
     """A scalar where a list of structured items is expected must be rejected."""
     with pytest.raises(InputError):
