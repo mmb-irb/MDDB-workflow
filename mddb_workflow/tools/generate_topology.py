@@ -6,8 +6,9 @@ def generate_topology (
     structure : 'Structure',
     md_charges : list[list[float]],
     residue_map : dict,
-    pbc_residues : list[int],
-    cg_residues : list[int],
+    pbc_selection : 'Selection',
+    cg_selection : 'Selection',
+    dummy_selection : 'Selection',
     output_file : 'File'
 ):
     """ Prepare the standard topology file to be uploaded to the database. """
@@ -103,6 +104,55 @@ def generate_topology (
         }
     else: raise RuntimeError('No MD charges')
 
+    # Set custom atom selections
+    selections = {}
+
+    # Set a function to format selections in a database-efficient format
+    # Parse selections to indices of chains, residues and atoms thus making the dict as light as possible
+    # Alternatively the formatted selection may be the string 'all'
+    def format_selection (selection : 'Selection') -> dict | str:
+        if not selection: raise ValueError('Trying to format empty selection')
+        if len(selection) == structure.atom_count: return 'all'
+        atom_indices = set(selection.atom_indices)
+        # Get indices of residues or chains the atoms of which are totally covered by the selection
+        chain_indices = []
+        residue_indices = []
+        # Iterate structure chains to see if any of them fits entirely in the selection
+        for chain in structure.chains:
+            chain_atom_indices = set(chain.get_selection().atom_indices)
+            # If the whole chain is included in the selection then add it
+            if chain_atom_indices.issubset(atom_indices):
+                chain_indices.append(chain.index)
+                atom_indices -= chain_atom_indices
+                continue
+            # Iterate residues in this chain to see if any of them fits entirely in the selection
+            for residue in chain.residues:
+                residue_atom_indices = set(residue.get_selection().atom_indices)
+                # If the whole residue is included in the selection then add it
+                if residue_atom_indices.issubset(atom_indices):
+                    residue_indices.append(residue.index)
+                    atom_indices -= residue_atom_indices
+        # Set the finally formatted selection
+        formatted = { 'n': len(selection) }
+        if len(chain_indices) > 0:
+            formatted['ch'] = chain_indices
+        if len(residue_indices) > 0:
+            formatted['re'] = residue_indices
+        if len(atom_indices) > 0:
+            formatted['at'] = list(atom_indices).sort()
+        return formatted
+    
+    # Add the main selections
+    if pbc_selection: selections['pbc'] = format_selection(pbc_selection)
+    if cg_selection: selections['cg'] = format_selection(cg_selection)
+    if dummy_selection: selections['dummy'] = format_selection(dummy_selection)
+
+    # Add residue classes as selections
+    available_classes = set([ residue.classification for residue in structure.residues ])
+    for classification in available_classes:
+        selection = structure.select_by_classification(classification)
+        selections[classification] = format_selection(selection)
+
     # Setup the final output
     topology = {
         'atom_names': atom_names,
@@ -118,7 +168,7 @@ def generate_topology (
         # Residues map
         **residue_map,
         # Save also some residue indices lists here
-        'pbc_residues': pbc_residues,
-        'cg_residues': cg_residues,
+        'selections': selections,
+        'version': '0.0.1',
     }
     save_json(topology, output_file.path)
