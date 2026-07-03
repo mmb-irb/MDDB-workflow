@@ -318,10 +318,6 @@ class MD:
             return self._input_topology_filepath
         # Relativize and glob-parse the input filepath
         self._input_topology_filepath = relativize_and_parse_path(input_topology_filepath)
-        # Update the input topology filepath in the inputs file, in case it is not matching
-        # Note that the path must be relative to the project, no matter where the workflow is run
-        project_relative_path = relpath(self._input_topology_filepath, self.project_directory)
-        self.update_file_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
         return self._input_topology_filepath
 
     def get_input_topology_file(self) -> Optional[File]:
@@ -367,6 +363,17 @@ class MD:
                     warn('Automatic download of itp files is not supported without the "-proj" argument.' +
                          ' Thus if the topology has associated itp files they will not be downloaded.')
                 download_file(input_topology_url, input_topology_file)
+            # Once the trajectory has been downloaded, change the inputs file to reflect its location
+            if self.is_inputs_file_available:
+                # The path must be relative to the project, no matter where the workflow is run
+                project_relative_path = relpath(input_topology_file.path, self.project_directory)
+                # Note that this URL may come either from the MD or from the project
+                # Check if it comes from the project and, if so, update it in the project
+                if self.project.get_file_input('input_topology_filepath') == input_topology_url:
+                    self.project.update_file_inputs('input_topology_filepath', project_relative_path)
+                # Otherwise it must come from the MD
+                else:
+                    self.update_file_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
         # If the file finally exists then we are done
         if input_topology_file.exists:
             self._input_topology_file = input_topology_file
@@ -436,10 +443,6 @@ class MD:
         # Find out if it is relative to MD directories or to the project directory
         if input_structure_filepath:
             self._input_structure_filepath = relativize_and_parse_path(input_structure_filepath)
-            # Save or update the parsed value in the inputs file
-            # Note that the path must be relative to the project, no matter where the workflow is run
-            project_relative_path = relpath(self._input_structure_filepath, self.project_directory)
-            self.project.update_file_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
             return self._input_structure_filepath
         # If there is not input structure anywhere then use the input topology
         # We will extract the structure from it using a sample frame from the trajectory
@@ -478,6 +481,17 @@ class MD:
             # Otherwise use the URL as is
             else:
                 download_file(input_structure_url, input_structure_file)
+            # Once the trajectory has been downloaded, change the inputs file to reflect its location
+            if self.is_inputs_file_available:
+                # The path must be relative to the project, no matter where the workflow is run
+                project_relative_path = relpath(input_structure_file.path, self.project_directory)
+                # Note that this URL may come either from the MD or from the project
+                # Check if it comes from the project and, if so, update it in the project
+                if self.project.get_file_input('input_structure_filepath') == input_structure_url:
+                    self.project.update_file_inputs('input_structure_filepath', project_relative_path)
+                # Otherwise it must come from the MD
+                else:
+                    self.update_file_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
         # If the file already exists then return it
         if input_structure_file.exists:
             self._input_structure_file = input_structure_file
@@ -573,10 +587,6 @@ class MD:
             raise InputError('There is not input trajectory at all')
         # Parse input paths by processing globs and making every path relative to the workflow caller
         self._input_trajectory_filepaths = relativize_and_parse_paths(input_trajectory_filepaths)
-        # Save the parsed value in the inputs file
-        # Note that the path must be relative to the project, no matter where the workflow is run
-        project_relative_paths = [relpath(path, self.project_directory) for path in self._input_trajectory_filepaths]
-        self.update_file_inputs(MD_INPUT_TRAJECTORY_FILEPATHS, project_relative_paths)
         return self._input_trajectory_filepaths
 
     def get_input_trajectory_files(self) -> list[File]:
@@ -617,6 +627,19 @@ class MD:
                     if self.project.sample_trajectory:
                         raise InputError('The "-smp" argument is supported only when using the "-proj" argument')
                     download_file(trajectory_url, trajectory_file)
+                # Once the trajectory has been downloaded, change the inputs file to reflect its location
+                if self.is_inputs_file_available:
+                    # Get the current file input value
+                    file_input_trajectory_filepaths = self.get_file_input(MD_INPUT_TRAJECTORY_FILEPATHS)
+                    if type(file_input_trajectory_filepaths) == str:
+                        file_input_trajectory_filepaths = [ file_input_trajectory_filepaths ]
+                    # Find the URL we just downloaded
+                    index = file_input_trajectory_filepaths.index(trajectory_url)
+                    if index == -1: raise ValueError('Missing trajectory URL we just downloaded')
+                    # The path must be relative to the project, no matter where the workflow is run
+                    project_relative_path = relpath(trajectory_file.path, self.project_directory)
+                    file_input_trajectory_filepaths[index] = project_relative_path
+                    self.update_file_inputs(MD_INPUT_TRAJECTORY_FILEPATHS, file_input_trajectory_filepaths)
         # Find missing trajectory files
         missing_input_trajectory_files = []
         for trajectory_file in input_trajectory_files:
