@@ -530,7 +530,7 @@ class MD:
                 # Set the paths for the further download
                 parsed_paths = []
                 for path in checked_paths:
-                    source_filename = url_to_source_filename(path)
+                    source_filename = url_to_source_filename(path, self.project.sample_trajectory)
                     source_filepath = self.pathify(source_filename)
                     parsed_paths.append(source_filepath)
                 return parsed_paths
@@ -788,13 +788,18 @@ class MD:
         return self._topology_filepath
     topology_filepath = property(get_topology_filepath, None, None, "Topology file path (read only)")
 
+    # The trajectory output may also change depending on if we are using a sample of a remote trajectory
+    def get_trajectory_filepath(self) -> str:
+        if self.project.sample_trajectory: return self.pathify(TRAJECTORY_SAMPLE_FILENAME)
+        return self.pathify(TRAJECTORY_FILENAME)
+
     # Run the actual processing to generate output processed files out of input raw files
     # And by "files" I mean structure, trajectory and topology
     input_files_processing = Task('inpro', 'Input files processing', process_input_files,
         output_filenames={
             'output_topology_file': get_topology_filepath,
             'output_structure_file': STRUCTURE_FILENAME,
-            'output_trajectory_file': TRAJECTORY_FILENAME,
+            'output_trajectory_file': get_trajectory_filepath,
         })
 
     # Output main files

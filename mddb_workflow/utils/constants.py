@@ -142,6 +142,11 @@ STANDARD_TOPOLOGY_FILENAME = 'topology.json'
 STRUCTURE_FILENAME = 'structure.pdb'
 TRAJECTORY_FILENAME = 'trajectory.xtc'
 
+# Set a different name for the main trajectory when we use the 'smp' argument
+# CRITICAL WARNING: This prevents the loader from overwritting the complete trajectory by accident
+# CRITICAL WARNING: This has happened already and there is no way to recover the remote trajectory
+TRAJECTORY_SAMPLE_FILENAME = 'trajectory_SAMPLE.xtc'
+
 # Auxiliar files
 REGISTER_FILENAME = '.register.json'
 CACHE_FILENAME = '.mwf_cache.json'

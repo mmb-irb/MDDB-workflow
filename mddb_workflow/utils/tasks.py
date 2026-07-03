@@ -165,9 +165,8 @@ class Task:
                 output_filepath = parent.pathify(output_filename)
             elif callable(output_filename):
                 # If it is a function then it must be fed with the parent
-                # DANI: Solo hay un caso para esto: el topology_filepath del inpro
-                # DANI: En este caso la topology ya viene con el path relativo a proyecto
-                # DANI: No hay que hacerlo relativo a MD
+                # We assume that the function will return the result already pathified
+                # DANI: Solo hay un caso para esto: los topology_filepath y trajectory_filepath del inpro
                 output_filepath = output_filename(parent)
             else: raise RuntimeError(f'Unexpected output filename type "{type(output_filename)}"')
             # Set the output file

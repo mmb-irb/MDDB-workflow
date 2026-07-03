@@ -473,7 +473,7 @@ def is_url(path: str) -> bool:
     return path[0:4] == 'http'
 
 
-def url_to_source_filename(url: str, verbose: bool = True) -> str:
+def url_to_source_filename(url: str, is_sample: bool = False, verbose: bool = True) -> str:
     """Set the filename of an input file downloaded from an input URL.
 
     In this scenario we are free to set our own paths or filenames.
@@ -483,20 +483,26 @@ def url_to_source_filename(url: str, verbose: bool = True) -> str:
     Thus if there is a new accession then we rely on the filenames to know
     if we already have the correct ones or if we must download again.
     """
-    splits = url.split('/')
+    url_splits = url.split('/')
     # Get the name of the source database/service
     # This will be at the start of the URL, right after the protocol
-    source_site = splits[2]
+    source_site = url_splits[2]
     source_alias = source_site.split('.')[0].split('-')[0]
     # Get the project accession
     # Accession in the URL is placed in .../projects/ACCESSION/...
     accession = 'unknown-accession'
-    accession_split_index = splits.index('projects') + 1
-    accession = splits[accession_split_index]
+    accession_split_index = url_splits.index('projects') + 1
+    accession = url_splits[accession_split_index]
     # Get the original filename, which will be at the end of the URL
-    original_filename = splits[-1]
+    original_filename = url_splits[-1]
+    # Edit the filename if this is a sample
+    filename = original_filename
+    if is_sample:
+        filename_splits = filename.split('.')
+        if filename_splits == 1: filename = filename + '_SAMPLE'
+        else: filename = '.'.join(filename_splits[0:-1]) + '_SAMPLE.' + filename_splits[-1]
     # Set the final name
-    source_filename = f'source_{source_alias}_{accession}_{original_filename}'
+    source_filename = f'source_{source_alias}_{accession}_{filename}'
     if verbose: print(f'{url} -> {source_filename}')
     return source_filename
 
