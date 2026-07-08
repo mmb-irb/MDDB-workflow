@@ -10,12 +10,11 @@ from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_LETTERS
 from mddb_workflow.utils.file import File
+from mddb_workflow.utils.blast import run_blastp
 from mddb_workflow.utils.type_hints import *
 
-import xmltodict
 
 from Bio import Align
-from Bio.Blast import NCBIWWW
 from Bio.Align import substitution_matrices, Alignment
 
 # Set generic sequences which should be similar to known antibodies
@@ -71,12 +70,16 @@ def generate_protein_mapping(
     mercy: list[str] = [],
     input_protein_references: list | dict = [],
     pdb_ids: list[str] = [],
+    local_blast: bool = False,
 ) -> dict:
     """Map the structure aminoacids sequences against the Uniprot reference sequences.
     References are uniprot accession ids and they are optional.
     For each reference, align the reference sequence with the topology sequence.
     Chains which do not match any reference sequence will be blasted.
-    Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast.
+    Note that an internet connection is required to retireve the uniprot reference sequence.
+    The blast runs remotely (NCBI) by default, which also requires an internet connection.
+    If 'local_blast' is True, the blast runs locally against a Swiss-Prot database (downloaded
+    on first use), which requires BLAST+ to be installed but no internet connection.
     NEVER FORGET: This system relies on the fact that topology chains are not repeated.
 
     This is a thin wrapper: all the logic lives in the ProteinMapper class below.
@@ -93,6 +96,7 @@ def generate_protein_mapping(
         mercy=mercy,
         input_protein_references=input_protein_references,
         pdb_ids=pdb_ids,
+        local_blast=local_blast,
     )
     return mapper.run()
 
@@ -117,6 +121,7 @@ class ProteinMapper:
         mercy: list[str] = [],
         input_protein_references: list | dict = [],
         pdb_ids: list[str] = [],
+        local_blast: bool = False,
     ):
         self.structure = structure
         self.protein_references_file = protein_references_file
@@ -126,6 +131,7 @@ class ProteinMapper:
         self.register = register
         self.mercy = mercy
         self.pdb_ids = pdb_ids
+        self.local_blast = local_blast
 
         # Forced references must be list or dict
         # If it is none then we set it as an empty list
@@ -161,7 +167,7 @@ class ProteinMapper:
         self.cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
         self.cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
         self.cached_pdb_to_uniprot = get_cached_function(pdb_to_uniprot, cache)
-        self.cached_blast = get_cached_function(blast, cache)
+        self.cached_blast = get_cached_function(run_blastp, cache)
 
     # -- Reference retrieval helpers --------------------------------------------------------------
 
@@ -500,7 +506,7 @@ class ProteinMapper:
             # Get the chain sequence
             sequence = chain_data['sequence']
             # Run the blast
-            uniprot_id = self.cached_blast(sequence)
+            uniprot_id = self.cached_blast(sequence, self.local_blast)
             if not uniprot_id:
                 chain_data['match'] = {'ref': NOT_FOUND_FLAG}
                 continue
@@ -709,39 +715,6 @@ def align(ref_sequence: str, new_sequence: str, verbose: bool = False) -> Option
     return aligned_mapping, normalized_score
 
 
-@retry_request
-def blast(sequence: str) -> Optional[str]:
-    """Given an aminoacids sequence, return a list of uniprot ids.
-    Note that we are blasting against UniProtKB / Swiss-Prot so results will always be valid UniProt accessions.
-    WARNING: This always means results will correspond to curated entries only.
-      If your sequence is from an exotic organism the result may be not from it but from other more studied organism.
-    Since this function may take some time we always cache the result.
-    """
-    print(f'Throwing blast for sequence {sequence}. This may take some time...')
-    result = NCBIWWW.qblast(
-        program="blastp",
-        database="swissprot",  # UniProtKB / Swiss-Prot
-        sequence=sequence,
-    )
-    parsed_result = xmltodict.parse(result.read())
-    hits = parsed_result['BlastOutput']['BlastOutput_iterations']['Iteration']['Iteration_hits']
-    # When there is no result return None
-    # Note that this is possible although hardly unprobable
-    if not hits:
-        return None
-    # Get the first result only
-    # Note that when there is only one result the Hit isnot an list, but the hit itself
-    results = hits['Hit']
-    if type(results) is list: first_result = results[0]
-    elif type(results) is dict: first_result = results
-    else: raise RuntimeError('Invalid hit format')
-    # Return the accession
-    # DANI: Si algun día tienes problemas porque te falta el '.1' al final del accession puedes sacarlo de Hit_id
-    accession = first_result['Hit_accession']
-    print('Result: ' + accession)
-    return accession
-
-
 def normalize_protein_sequence(sequence: str) -> str:
     """Given a protein sequence, make sure al letters ar standard aminoacids. Replace anything else with X."""
     # WARNING: some PDB polymers/chains may have a "special" sequence
@@ -939,7 +912,7 @@ def pdb_to_uniprot(pdb_id: str) -> list[str | NoReferableException]:
         entity = polymer.get('entity_poly', None)
         sequence = entity.get('pdbx_seq_one_letter_code', None) if entity else None
         if sequence:
-           sequence = normalize_protein_sequence(sequence)
+            sequence = normalize_protein_sequence(sequence)
         # Get the uniprot ids associated to this polymer (or chain)
         identifier = polymer['rcsb_polymer_entity_container_identifiers']
         uniprots = identifier.get('uniprot_ids', None)

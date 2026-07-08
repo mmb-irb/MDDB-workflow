@@ -1401,6 +1401,7 @@ class Project:
         ignore_bonds: bool = False,
         sample_trajectory: Optional[int] = None,
         screenshot_frame: Optional[int] = None,
+        local_blast: bool = False,
     ):
         """Initialize a Project.
 
@@ -1499,6 +1500,9 @@ class Project:
                 If passed, the project screenshot is made using the specified frame (0-based), from the reference MD.
                 Negative number may be passed to select frames starting by the end. e.g. -1 is the last frame.
                 By default the screenshot is made using the reference frame from the reference MD.
+            local_blast (bool):
+                Run the protein mapping blast locally against a Swiss-Prot database (downloaded on first use)
+                instead of using the remote NCBI blast service. Requires BLAST+ to be installed.
 
         """
         # Save input parameters
@@ -1642,6 +1646,7 @@ class Project:
         self.interactions_auto = interactions_auto
         self.guess_bonds = guess_bonds
         self.ignore_bonds = ignore_bonds
+        self.local_blast = local_blast
 
         # Set the file inputs, where values from the inputs file will be stored
         self._file_inputs = MISSING_VALUE
