@@ -103,10 +103,11 @@ def rmsds(
             # Thus we could make it work, but the values may be not real since masses are not real
             has_cg = group_selection & cg_selection
             has_dummy = group_selection & dummy_selection
-            mass_weighted = not has_cg and not has_dummy
+            structure_has_dummy = len(dummy_selection) > 0
+            mass_weighted = not has_cg and not has_dummy and not structure_has_dummy
             # Run the rmsd
             print(f' Reference: {reference_name}, Selection: {group_name},{"" if mass_weighted else " NOT"} mass weighted')
-            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis_filepath, skip_mass_weighting=has_cg)
+            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis_filepath, skip_mass_weighting=not mass_weighted)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis_filepath, ['times', 'values'])
             # Format the mined data and append it to the overall output
