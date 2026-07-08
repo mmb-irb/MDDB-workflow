@@ -57,3 +57,5 @@ dependencies:
   - python-xxhash
   # To validate the inputs file against a schema
   - pydantic>=2
+  # Optional dependencies
+  # - bioconda::blast

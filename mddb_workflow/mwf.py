@@ -1502,7 +1502,8 @@ class Project:
                 By default the screenshot is made using the reference frame from the reference MD.
             local_blast (bool):
                 Run the protein mapping blast locally against a Swiss-Prot database (downloaded on first use)
-                instead of using the remote NCBI blast service. Requires BLAST+ to be installed.
+                instead of using the remote NCBI blast service. Requires BLAST+ to be installed, which can
+                be done withc 'conda install -c bioconda blast' or 'apt install ncbi-blast+'.
 
         """
         # Save input parameters
