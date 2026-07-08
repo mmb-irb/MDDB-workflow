@@ -127,27 +127,27 @@ class ProteinMapper:
         self.mercy = mercy
         self.pdb_ids = pdb_ids
 
-    # Forced references must be list or dict
-    # If it is none then we set it as an empty list
-    if input_protein_references is None:
-        input_protein_references = []
-    # If forced references is a list of dictionaries then it means the input is wrongly formatted
-    # This may happen since the inputs file is in YAML format, and a simple hyphen makes the difference
-    # We can fix it from here anyway
-    if type(input_protein_references) is list and len(input_protein_references) > 0 and type(input_protein_references[0]) is dict:
-        input_protein_references = {k: v for fr in input_protein_references for k, v in fr.items()}
+        # Forced references must be list or dict
+        # If it is none then we set it as an empty list
+        if input_protein_references is None:
+            input_protein_references = []
+        # If forced references is a list of dictionaries then it means the input is wrongly formatted
+        # This may happen since the inputs file is in YAML format, and a simple hyphen makes the difference
+        # We can fix it from here anyway
+        if type(input_protein_references) is list and len(input_protein_references) > 0 and type(input_protein_references[0]) is dict:
+            input_protein_references = {k: v for fr in input_protein_references for k, v in fr.items()}
         self.input_protein_references = input_protein_references
-    # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
+        # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
         self.strict_references = type(input_protein_references) is dict
-    # Check the "no referable" flag not to be passed when references are not strict
+        # Check the "no referable" flag not to be passed when references are not strict
         if not self.strict_references and NO_REFERABLE_FLAG in input_protein_references:
             raise InputError(' The "no referable" flag cannot be passed in a list.'
-            f' You must use a chain keys dictionary (e.g. {"A":"{NO_REFERABLE_FLAG}"})')
+                f' You must use a chain keys dictionary (e.g. {"A":"{NO_REFERABLE_FLAG}"})')
 
-    # Store all the references which are got through this process
-    # Note that not all references may be used at the end
+        # Store all the references which are got through this process
+        # Note that not all references may be used at the end
         self.references = {}
-    # For each input forced reference, get the reference sequence
+        # For each input forced reference, get the reference sequence
         self.reference_sequences = {}
         # Local references imported from the references json file, if any
         self.imported_references = None
@@ -217,9 +217,9 @@ class ProteinMapper:
         self.parsed_chains = self.structure.get_parsed_chains()
         self.protein_parsed_chains = []
         for chain_data in self.parsed_chains:
-        sequence = chain_data['sequence']
-        if next((letter for letter in sequence if letter != 'X'), None):
-            chain_data['match'] = {'ref': None, 'map': None, 'score': 0}
+            sequence = chain_data['sequence']
+            if next((letter for letter in sequence if letter != 'X'), None):
+                chain_data['match'] = {'ref': None, 'map': None, 'score': 0}
                 self.protein_parsed_chains.append(chain_data)
 
     # -- Matching ---------------------------------------------------------------------------------
@@ -342,20 +342,20 @@ class ProteinMapper:
         """Make sure every forced reference ended up matching some protein sequence.
         Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file.
         """
-            # Get forced uniprot ids
+        # Get forced uniprot ids
         forced_uniprot_ids = set(list(self.input_protein_references.values()) if self.strict_references else self.input_protein_references)
-            forced_uniprot_ids -= {NOT_FOUND_FLAG, NO_REFERABLE_FLAG}
-            # forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
-            # forced_uniprot_ids.remove(NOT_FOUND_FLAG)
-            # Get matched uniprot ids
+        forced_uniprot_ids -= {NOT_FOUND_FLAG, NO_REFERABLE_FLAG}
+        # forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
+        # forced_uniprot_ids.remove(NOT_FOUND_FLAG)
+        # Get matched uniprot ids
         matched_references = [chain_data['match']['ref'] for chain_data in self.protein_parsed_chains]
-            matched_uniprot_ids = set([ref['uniprot'] for ref in matched_references if type(ref) == dict])
-            # Check the difference
-            unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
-            if len(unmatched_uniprot_ids) > 0:
-                log = ', '.join(unmatched_uniprot_ids)
-                raise InputError(f'Some forced references were not matched with any protein sequence: {log}\n'
-                    '  Please remove them from the inputs file')
+        matched_uniprot_ids = set([ref['uniprot'] for ref in matched_references if type(ref) == dict])
+        # Check the difference
+        unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
+        if len(unmatched_uniprot_ids) > 0:
+            log = ', '.join(unmatched_uniprot_ids)
+            raise InputError(f'Some forced references were not matched with any protein sequence: {log}\n'
+                '  Please remove them from the inputs file')
 
     # -- Reference sources (tried in priority order) ----------------------------------------------
 
@@ -414,7 +414,7 @@ class ProteinMapper:
         # If there are no referables we will have to make a bit of extra work
         if NO_REFERABLE_FLAG in remote_references:
             # Get the remote standard topology
-        topology = self.remote.get_standard_topology()
+            topology = self.remote.get_standard_topology()
             # Find which chain is the no referable
             # Even if multiple chains are no referable, the reference will be only one
             topology_references = topology['references']
@@ -422,7 +422,7 @@ class ProteinMapper:
                 index for index, reference in enumerate(topology_references)
                 if reference == NO_REFERABLE_FLAG), None)
             if no_referable_reference_index is None:
-            raise RuntimeError(f'Data inconsistency in project {self.remote.accession}:\n'
+                raise RuntimeError(f'Data inconsistency in project {self.remote.accession}:\n'
                     ' Metadata references include "noref" while the topology has none.')
             # Get all residues which are flagged as no referable
             residue_references = topology['residue_reference_indices']
@@ -492,22 +492,22 @@ class ProteinMapper:
         """Last resort: run a blast with each orphan chain sequence, re-matching after each hit.
         Return True if all protein chains ended up matched.
         """
-    # If there are still any chain which is not matched with a reference then we need more references
-    # To get them, we run a blast with each orphan chain sequence
+        # If there are still any chain which is not matched with a reference then we need more references
+        # To get them, we run a blast with each orphan chain sequence
         for chain_data in self.protein_parsed_chains:
-        # Skip already references chains
-        if chain_data['match']['ref']: continue
-        # Get the chain sequence
-        sequence = chain_data['sequence']
-        # Run the blast
+            # Skip already references chains
+            if chain_data['match']['ref']: continue
+            # Get the chain sequence
+            sequence = chain_data['sequence']
+            # Run the blast
             uniprot_id = self.cached_blast(sequence)
-        if not uniprot_id:
-            chain_data['match'] = {'ref': NOT_FOUND_FLAG}
-            continue
-        # Build a new reference from the resulting uniprot
+            if not uniprot_id:
+                chain_data['match'] = {'ref': NOT_FOUND_FLAG}
+                continue
+            # Build a new reference from the resulting uniprot
             self.add_reference(uniprot_id)
-        # If we have every protein chain matched with a reference already then we stop here
-        print(' Using references from blast')
+            # If we have every protein chain matched with a reference already then we stop here
+            print(' Using references from blast')
             if self.match_sequences():
                 return True
         return False
@@ -516,17 +516,17 @@ class ProteinMapper:
         """At this point we should have matched all sequences.
         If not, kill the process unless mercy was given.
         """
-    unmatched_chains = [chain_data['name'] 
+        unmatched_chains = [chain_data['name']
                             for chain_data in self.protein_parsed_chains
-                        if chain_data['match']['ref'] == NOT_FOUND_FLAG or chain_data['match']['ref'] is None]
+                            if chain_data['match']['ref'] == NOT_FOUND_FLAG or chain_data['match']['ref'] is None]
         must_be_killed = REFERENCE_SEQUENCE_FLAG not in self.mercy
-    if must_be_killed:
-        raise InputError(f'BLAST failed to find a matching reference sequence for chains: {", ".join(unmatched_chains)}.\n'
-            ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file:\n'+
-            f'\t- forced_references:\n\t\t{unmatched_chains[0]}: noref\n' +
-            ' If your system has exotic proteins whose sequences are not found in the Swiss-Prot database you may force non-curated UniProt ids.\n' +
-            ' If your system has very exotic proteins whose sequence are not in UniProt you can use the "--mercy refseq" flag to skip this error.')
-    warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
+        if must_be_killed:
+            raise InputError(f'BLAST failed to find a matching reference sequence for chains: {", ".join(unmatched_chains)}.\n'
+                ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file:\n'+
+                f'\t- forced_references:\n\t\t{unmatched_chains[0]}: noref\n' +
+                ' If your system has exotic proteins whose sequences are not found in the Swiss-Prot database you may force non-curated UniProt ids.\n' +
+                ' If your system has very exotic proteins whose sequence are not in UniProt you can use the "--mercy refseq" flag to skip this error.')
+        warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
         self.register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
 
     # -- Orchestration ----------------------------------------------------------------------------
