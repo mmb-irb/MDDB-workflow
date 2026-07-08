@@ -35,15 +35,6 @@ stderr_backup = sys.stderr
 # Restore stderr
 # sys.stderr = stderr_backup
 
-# AGUS: Necesitamos que la secuencia de aa alineada tenga gaps identificados con guiones y pairwaise2 (biopython < 1.80) no lo hace
-# AGUS: Para actualizar a biopython >= 1.80 pairwaise2 ya no existe y no podemos obtener el mismo outoput que necesitábamos
-# AGUS: Esta función parece resolver el problema: https://github.com/biopython/biopython/issues/4769
-# Set the aligner
-aligner = Align.PairwiseAligner(mode='local')
-aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
-aligner.open_gap_score = -10
-aligner.extend_gap_score = -0.5
-
 
 def add_leading_and_trailing_gaps(alignment: Alignment) -> Alignment:
     coords = alignment.coordinates
@@ -87,9 +78,55 @@ def generate_protein_mapping(
     Chains which do not match any reference sequence will be blasted.
     Note that an internet connection is required both to retireve the uniprot reference sequence and to do the blast.
     NEVER FORGET: This system relies on the fact that topology chains are not repeated.
+
+    This is a thin wrapper: all the logic lives in the ProteinMapper class below.
+    It is kept as a module-level function with this exact signature because the Task
+    machinery introspects it (getfullargspec) to inject Project/MD properties by name.
     """
-    # Remove previous warnings, if any
-    register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
+    mapper = ProteinMapper(
+        structure=structure,
+        protein_references_file=protein_references_file,
+        database=database,
+        remote=remote,
+        cache=cache,
+        register=register,
+        mercy=mercy,
+        input_protein_references=input_protein_references,
+        pdb_ids=pdb_ids,
+    )
+    return mapper.run()
+
+
+class ProteinMapper:
+    """Map structure aminoacid sequences against UniProt reference sequences.
+
+    Reference candidates are gathered from several sources, tried in priority order:
+    forced (inputs file) -> imported (references.json) -> remote project -> PDB ids -> blast.
+    After each source contributes new candidates we re-run the matching and stop as soon
+    as every protein chain has a reference.
+    """
+
+    def __init__(
+        self,
+        structure: 'Structure',
+        protein_references_file: 'File',
+        database: 'Database',
+        remote: 'Remote',
+        cache: 'Cache',
+        register: dict,
+        mercy: list[str] = [],
+        input_protein_references: list | dict = [],
+        pdb_ids: list[str] = [],
+    ):
+        self.structure = structure
+        self.protein_references_file = protein_references_file
+        self.database = database
+        self.remote = remote
+        self.cache = cache
+        self.register = register
+        self.mercy = mercy
+        self.pdb_ids = pdb_ids
+
     # Forced references must be list or dict
     # If it is none then we set it as an empty list
     if input_protein_references is None:
@@ -99,92 +136,123 @@ def generate_protein_mapping(
     # We can fix it from here anyway
     if type(input_protein_references) is list and len(input_protein_references) > 0 and type(input_protein_references[0]) is dict:
         input_protein_references = {k: v for fr in input_protein_references for k, v in fr.items()}
+        self.input_protein_references = input_protein_references
     # Check if the forced references are strict (i.e. reference per chain, as a dictionary) or flexible (list of references)
-    strict_references = type(input_protein_references) is dict
+        self.strict_references = type(input_protein_references) is dict
     # Check the "no referable" flag not to be passed when references are not strict
-    if not strict_references and NO_REFERABLE_FLAG in input_protein_references:
-        raise InputError(' The "no referable" flag cannot be passed in a list.' \
+        if not self.strict_references and NO_REFERABLE_FLAG in input_protein_references:
+            raise InputError(' The "no referable" flag cannot be passed in a list.'
             f' You must use a chain keys dictionary (e.g. {"A":"{NO_REFERABLE_FLAG}"})')
+
     # Store all the references which are got through this process
     # Note that not all references may be used at the end
-    references = {}
+        self.references = {}
     # For each input forced reference, get the reference sequence
-    reference_sequences = {}
-    # Cache wrappers for reference getter which connect to the internet
-    cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
-    cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
+        self.reference_sequences = {}
+        # Local references imported from the references json file, if any
+        self.imported_references = None
+        # Structure chains, and the subset which are protein
+        self.parsed_chains = []
+        self.protein_parsed_chains = []
+        # Save already tried alignments to not repeat the alignment further
+        self.tried_alignments = {}
 
-    def get_reference(uniprot_accession: str) -> dict:
+        # Cache wrappers for getters/logic which connect to the internet (or are otherwise expensive)
+        self.cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
+        self.cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
+        self.cached_pdb_to_uniprot = get_cached_function(pdb_to_uniprot, cache)
+        self.cached_blast = get_cached_function(blast, cache)
+
+    # -- Reference retrieval helpers --------------------------------------------------------------
+
+    def get_reference(self, uniprot_accession: str) -> dict:
         """Given a uniprot accession, get the reference object.
         Try first asking to the MDposit database in case the reference exists already.
         If not, retrieve UniProt data and build the reference object.
         """
         # Check the current references
-        reference = references.get(uniprot_accession, None)
+        reference = self.references.get(uniprot_accession, None)
         if reference:
             return reference
         # Check MDposit
-        reference = cached_get_database_reference('proteins', uniprot_accession)
+        reference = self.cached_get_database_reference('proteins', uniprot_accession)
         if reference:
             return reference
         # Get it from UniProt
-        reference = cached_get_uniprot_reference(uniprot_accession)
+        reference = self.cached_get_uniprot_reference(uniprot_accession)
         return reference
 
-    def add_reference(uniprot_id: str, check_isoforms: bool = True):
+    def add_reference(self, uniprot_id: str, check_isoforms: bool = True):
         """Given a uniprot id, add its reference to this list of available references.
         Get also the reference of every uniform.
         Build a new reference from the resulting uniprot.
         """
-        reference = get_reference(uniprot_id)
+        reference = self.get_reference(uniprot_id)
         if reference is None: return
         # Save the current whole reference object
-        reference_sequences[reference['uniprot']] = reference['sequence']
-        references[reference['uniprot']] = reference
+        self.reference_sequences[reference['uniprot']] = reference['sequence']
+        self.references[reference['uniprot']] = reference
         # If the reference has isoforms then add all their references as well
         if not check_isoforms: return
         isoforms = reference.get('isoforms', None)
         if not isoforms: return
         for isoform_uniprot_id in isoforms:
-            add_reference(isoform_uniprot_id, check_isoforms=False)
-    # Import local references, in case the references json file already exists
-    # DANI: This may not be run anymore
-    imported_references = None
-    if protein_references_file.exists:
-        imported_references = import_references(protein_references_file)
+            self.add_reference(isoform_uniprot_id, check_isoforms=False)
+
+    # -- Chain collection -------------------------------------------------------------------------
+
+    def _import_local_references(self):
+        """Import local references, in case the references json file already exists.
+        DANI: This may not be run anymore
+        """
+        if not self.protein_references_file.exists:
+            return
+        self.imported_references = import_references(self.protein_references_file)
         # Append the imported references to the overall references pool
-        for k, v in imported_references.items():
-            references[k] = v
-    # Get the structure chain sequences
-    parsed_chains = structure.get_parsed_chains()
-    # Find out which chains are protein
-    protein_parsed_chains = []
-    for chain_data in parsed_chains:
+        for k, v in self.imported_references.items():
+            self.references[k] = v
+
+    def _collect_protein_chains(self):
+        """Get the structure chain sequences and find out which chains are protein."""
+        self.parsed_chains = self.structure.get_parsed_chains()
+        self.protein_parsed_chains = []
+        for chain_data in self.parsed_chains:
         sequence = chain_data['sequence']
         if next((letter for letter in sequence if letter != 'X'), None):
             chain_data['match'] = {'ref': None, 'map': None, 'score': 0}
-            protein_parsed_chains.append(chain_data)
-    # If there are no protein sequences then there is no need to map anything
-    if len(protein_parsed_chains) == 0:
-        print(' There are no protein sequences')
-        return protein_parsed_chains
-    # Save already tried alignments to not repeat the alignment further
-    tried_alignments = {chain_data['name']: [] for chain_data in protein_parsed_chains}
+                self.protein_parsed_chains.append(chain_data)
 
-    def match_sequences() -> bool:
+    # -- Matching ---------------------------------------------------------------------------------
+
+    def match_sequences(self) -> bool:
         """Try to match all protein sequences with the available reference sequences.
         In case of match, objects in the 'protein_parsed_chains' list are modified by adding the result.
         Finally, return True if all protein sequences were matched with the available reference sequences or False if not.
         """
+        self._align_chains_to_references()
+        self._print_reference_summary()
+        # Export already matched references
+        export_references(self.protein_parsed_chains, self.protein_references_file)
+        # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
+        allright = all([chain_data['match']['ref'] for chain_data in self.protein_parsed_chains])
+        # If we match all chains then make sure there is no forced reference missing which did not match
+        # Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file
+        # WARNING: Although we could move on it is better to stop here and warn the user to prevent a future silent problem
+        if allright and self.input_protein_references:
+            self._check_forced_references_matched()
+        return allright
+
+    def _align_chains_to_references(self):
+        """For each protein chain, align the available reference sequences and keep the best match."""
         # Track each chain-reference alignment match and keep the score of successful alignments
         # Now for each structure sequence, align all reference sequences and keep the best alignment (if it meets the minimum)
-        for chain_data in protein_parsed_chains:
+        for chain_data in self.protein_parsed_chains:
             chain = chain_data['name']
-            chain_tried_alignments = tried_alignments[chain]
+            chain_tried_alignments = self.tried_alignments[chain]
             # In case references are forced per chain check if there is a reference for this chain and match according to this
-            if strict_references:
+            if self.strict_references:
                 # Get the forced specific chain for this sequence, if any
-                forced_reference = input_protein_references.get(chain, None)
+                forced_reference = self.input_protein_references.get(chain, None)
                 if forced_reference:
                     # If the chain has a specific forced reference then we must align it just once
                     # Skip this process in further matches
@@ -202,14 +270,14 @@ def generate_protein_mapping(
                         chain_data['match'] = {'ref': NOT_FOUND_FLAG}
                         continue
                     # Get the forced reference sequence and align it to the chain sequence in order to build the map
-                    reference_sequence = reference_sequences[forced_reference]
+                    reference_sequence = self.reference_sequences[forced_reference]
                     print(f' Aligning chain {chain} with {forced_reference} reference sequence')
                     align_results = align(reference_sequence, chain_data['sequence'])
                     # The align must match or we stop here and warn the user
                     if not align_results:
                         raise InputError(f'Forced reference {chain} -> {forced_reference} does not match in sequence')
                     sequence_map, align_score = align_results
-                    reference = references[forced_reference]
+                    reference = self.references[forced_reference]
                     chain_data['match'] = {'ref': reference, 'map': sequence_map, 'score': align_score}
                     continue
             # If the chain has already a match and this match is among the forced references then stop here
@@ -217,10 +285,10 @@ def generate_protein_mapping(
             # Same behaviour if the match is with an unreferable sequence
             if chain_data['match']['ref'] and (chain_data['match']['ref'] == NO_REFERABLE_FLAG
                 or chain_data['match']['ref'] == NOT_FOUND_FLAG
-                or chain_data['match']['ref']['uniprot'] in input_protein_references):
+                or chain_data['match']['ref']['uniprot'] in self.input_protein_references):
                 continue
             # Iterate over the different available reference sequences
-            for uniprot_id, reference_sequence in reference_sequences.items():
+            for uniprot_id, reference_sequence in self.reference_sequences.items():
                 # If this alignment has been tried already then skip it
                 if uniprot_id in chain_tried_alignments:
                     continue
@@ -228,7 +296,7 @@ def generate_protein_mapping(
                 # NEVER FORGET: This system relies on the fact that topology chains are not repeated
                 print(f' Aligning chain {chain} with {uniprot_id} reference sequence')
                 align_results = align(reference_sequence, chain_data['sequence'])
-                tried_alignments[chain].append(uniprot_id)  # Save the alignment try, no matter if it works or not
+                self.tried_alignments[chain].append(uniprot_id)  # Save the alignment try, no matter if it works or not
                 if not align_results:
                     continue
                 # In case we have a valid alignment, check the alignment score is better than the current reference score (if any)
@@ -240,16 +308,18 @@ def generate_protein_mapping(
                 if current_reference['score'] >= align_score:
                     continue
                 # If the match is a 'no referable' exception then set a no referable flag
-                if type(uniprot_id) == NoReferableException:
+                if isinstance(uniprot_id, NoReferableException):
                     chain_data['match'] = {'ref': NO_REFERABLE_FLAG, 'map': sequence_map, 'score': align_score}
                     continue
                 # Proceed to set the corresponding reference otherwise
-                reference = references[uniprot_id]
+                reference = self.references[uniprot_id]
                 # If the alignment is better then we impose the new reference
                 chain_data['match'] = {'ref': reference, 'map': sequence_map, 'score': align_score}
-        # Sum up the current matching
+
+    def _print_reference_summary(self):
+        """Log a summary of the current chain -> reference matching."""
         print(' Protein reference summary:')
-        for chain_data in parsed_chains:
+        for chain_data in self.parsed_chains:
             name = chain_data['name']
             match = chain_data.get('match', None)
             if not match:
@@ -267,21 +337,18 @@ def generate_protein_mapping(
                 continue
             uniprot_id = reference['uniprot']
             print(f'   {name} -> {uniprot_id}')
-        # Export already matched references
-        export_references(protein_parsed_chains, protein_references_file)
-        # Finally, return True if all protein sequences were matched with the available reference sequences or False if not
-        allright = all([chain_data['match']['ref'] for chain_data in protein_parsed_chains])
-        # If we match all chains then make sure there is no forced reference missing which did not match
-        # Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file
-        # WARNING: Although we could move on it is better to stop here and warn the user to prevent a future silent problem
-        if allright and input_protein_references:
+
+    def _check_forced_references_matched(self):
+        """Make sure every forced reference ended up matching some protein sequence.
+        Otherwise stop here and force the user to remove these forced uniprot ids from the inputs file.
+        """
             # Get forced uniprot ids
-            forced_uniprot_ids = set(list(input_protein_references.values()) if strict_references else input_protein_references)
+        forced_uniprot_ids = set(list(self.input_protein_references.values()) if self.strict_references else self.input_protein_references)
             forced_uniprot_ids -= {NOT_FOUND_FLAG, NO_REFERABLE_FLAG}
             # forced_uniprot_ids.remove(NO_REFERABLE_FLAG)
             # forced_uniprot_ids.remove(NOT_FOUND_FLAG)
             # Get matched uniprot ids
-            matched_references = [chain_data['match']['ref'] for chain_data in protein_parsed_chains]
+        matched_references = [chain_data['match']['ref'] for chain_data in self.protein_parsed_chains]
             matched_uniprot_ids = set([ref['uniprot'] for ref in matched_references if type(ref) == dict])
             # Check the difference
             unmatched_uniprot_ids = forced_uniprot_ids - matched_uniprot_ids
@@ -289,11 +356,14 @@ def generate_protein_mapping(
                 log = ', '.join(unmatched_uniprot_ids)
                 raise InputError(f'Some forced references were not matched with any protein sequence: {log}\n'
                     '  Please remove them from the inputs file')
-        return allright
-    # --- End of match_sequences function --------------------------------------------------------------------------------
-    # First use the forced references for the matching
-    if input_protein_references:
-        forced_uniprot_ids = list(input_protein_references.values()) if strict_references else input_protein_references
+
+    # -- Reference sources (tried in priority order) ----------------------------------------------
+
+    def _load_forced_references(self) -> bool:
+        """Load the references forced through the inputs file. Return True if matching should be attempted."""
+        if not self.input_protein_references:
+            return False
+        forced_uniprot_ids = list(self.input_protein_references.values()) if self.strict_references else self.input_protein_references
         for uniprot_id in forced_uniprot_ids:
             # If instead of a uniprot id there is a 'no referable' flag then we skip this process
             if uniprot_id == NO_REFERABLE_FLAG:
@@ -303,43 +373,48 @@ def generate_protein_mapping(
             if uniprot_id == NOT_FOUND_FLAG:
                 continue
             # If reference is already in the list (i.e. it has been imported) then skip this process
-            reference = references.get(uniprot_id, None)
+            reference = self.references.get(uniprot_id, None)
             if reference:
-                reference_sequences[uniprot_id] = reference['sequence']
+                self.reference_sequences[uniprot_id] = reference['sequence']
                 continue
             # Find the reference data for the given uniprot id
-            add_reference(uniprot_id)
+            self.add_reference(uniprot_id)
         # Now that we have all forced references data perform the matching
-        # If we have every protein chain matched with a reference then we stop here
         print(' Using forced references from the inputs file')
-        if match_sequences():
-            return protein_parsed_chains
-    # Now add the imported references to reference sequences. Thus now they will be 'matchable'
-    # Thus now they will be 'matchable', so try to match sequences again in case any of the imported references has not been tried
-    # It was not done before since we want forced references to have priority
-    if imported_references:
+        return True
+
+    def _load_imported_references(self) -> bool:
+        """Add references imported from references.json to the matchable pool.
+        It was not done before since we want forced references to have priority.
+        Return True if any new reference was added and matching should be attempted.
+        """
+        if not self.imported_references:
+            return False
         need_rematch = False
-        for uniprot_id, reference in imported_references.items():
+        for uniprot_id, reference in self.imported_references.items():
             # If the imported reference has been aligned already (i.e. it was a forced reference)
-            if uniprot_id in reference_sequences:
+            if uniprot_id in self.reference_sequences:
                 continue
             # Otherwise, include it
             need_rematch = True
-            reference_sequences[uniprot_id] = reference['sequence']
-        # If there was at least one imported reference missing then rerun the matching
+            self.reference_sequences[uniprot_id] = reference['sequence']
         if need_rematch:
             print(' Using references imported from references.json')
-            if match_sequences():
-                return protein_parsed_chains
-    # Import remote references, in case we have a project id
-    if remote:
+        return need_rematch
+
+    def _load_remote_references(self) -> bool:
+        """Import remote references, in case we have a project id.
+        Return True if any new reference was added and matching should be attempted.
+        """
+        if not self.remote:
+            return False
         need_rematch = False
         # Get remote references
-        remote_references = remote.project_data['metadata']['REFERENCES']
+        remote_references = self.remote.project_data['metadata']['REFERENCES']
         # If there are no referables we will have to make a bit of extra work
         if NO_REFERABLE_FLAG in remote_references:
             # Get the remote standard topology
-            topology = remote.get_standard_topology()
+        topology = self.remote.get_standard_topology()
             # Find which chain is the no referable
             # Even if multiple chains are no referable, the reference will be only one
             topology_references = topology['references']
@@ -347,7 +422,7 @@ def generate_protein_mapping(
                 index for index, reference in enumerate(topology_references)
                 if reference == NO_REFERABLE_FLAG), None)
             if no_referable_reference_index is None:
-                raise RuntimeError(f'Data inconsistency in project {remote.accession}:\n'
+            raise RuntimeError(f'Data inconsistency in project {self.remote.accession}:\n'
                     ' Metadata references include "noref" while the topology has none.')
             # Get all residues which are flagged as no referable
             residue_references = topology['residue_reference_indices']
@@ -370,76 +445,81 @@ def generate_protein_mapping(
                 residue_letters = [protein_residue_name_to_letter(name) for name in residue_names]
                 chain_sequence = ''.join(residue_letters)
                 no_referable_exception = NoReferableException(chain_sequence)
-                reference_sequences[no_referable_exception] = chain_sequence
+                self.reference_sequences[no_referable_exception] = chain_sequence
             need_rematch = True
         # Iterate remote references
         for uniprot_id in remote_references:
             # If the imported reference has been aligned already (i.e. it was a forced reference)
-            if uniprot_id in reference_sequences: continue
+            if uniprot_id in self.reference_sequences: continue
             # Skip the no referable flag, which has been handled already
             if uniprot_id == NO_REFERABLE_FLAG: continue
             need_rematch = True
-            add_reference(uniprot_id)
-        # If there was at least one project reference missing then rerun the matching
+            self.add_reference(uniprot_id)
         if need_rematch:
-            print(f' Using references from remote project {remote.accession}')
-            if match_sequences():
-                return protein_parsed_chains
-    # Cache wrapper for pdb 2 uniprot logic
-    cached_pdb_to_uniprot = get_cached_function(pdb_to_uniprot, cache)
-    # If there are still any chain which is not matched with a reference then we need more references
-    # To get them, retrieve all uniprot ids associated to the pdb ids, if any
-    if pdb_ids and len(pdb_ids) > 0:
+            print(f' Using references from remote project {self.remote.accession}')
+        return need_rematch
+
+    def _load_pdb_references(self) -> bool:
+        """Retrieve all uniprot ids associated to the input pdb ids, if any.
+        Return True if any PDB reference was found and matching should be attempted.
+        """
+        if not self.pdb_ids:
+            return False
         # Track if we added any reference
         any_pdb_reference = False
-        for pdb_id in pdb_ids:
+        for pdb_id in self.pdb_ids:
             # Ask PDB
-            uniprot_ids = cached_pdb_to_uniprot(pdb_id)
+            uniprot_ids = self.cached_pdb_to_uniprot(pdb_id)
             if uniprot_ids: any_pdb_reference = True
             # Iterate UniProt ids we just found
             for uniprot_id in uniprot_ids:
                 # If this is not an actual UniProt, but a no referable exception, then handle it
                 # We must find the matching sequence and set the corresponding chain as no referable
-                if type(uniprot_id) == NoReferableException:
-                    reference_sequences[uniprot_id] = uniprot_id.sequence
+                if isinstance(uniprot_id, NoReferableException):
+                    self.reference_sequences[uniprot_id] = uniprot_id.sequence
                     continue
                 # Build a new reference from the resulting uniprot
-                add_reference(uniprot_id)
+                self.add_reference(uniprot_id)
         # If we found any reference from our search in the PDB then try to match every chain again
-        # If we have every protein chain matched with a reference already then we stop here
-        pdb_ids_label = ', '.join(pdb_ids)
+        pdb_ids_label = ', '.join(self.pdb_ids)
         if any_pdb_reference:
             print(f' Using references related to PDB ids from the inputs file: {pdb_ids_label}')
-            if match_sequences():
-                return protein_parsed_chains
         else:
             print(f' Failed to find any reference related to PDB ids from the inputs file: {pdb_ids_label}')
-    # Cache wrapper for blast
-    cached_blast = get_cached_function(blast, cache)
+        return any_pdb_reference
+
+    def _match_via_blast(self) -> bool:
+        """Last resort: run a blast with each orphan chain sequence, re-matching after each hit.
+        Return True if all protein chains ended up matched.
+        """
     # If there are still any chain which is not matched with a reference then we need more references
     # To get them, we run a blast with each orphan chain sequence
-    for chain_data in protein_parsed_chains:
+        for chain_data in self.protein_parsed_chains:
         # Skip already references chains
         if chain_data['match']['ref']: continue
         # Get the chain sequence
         sequence = chain_data['sequence']
         # Run the blast
-        uniprot_id = cached_blast(sequence)
+            uniprot_id = self.cached_blast(sequence)
         if not uniprot_id:
             chain_data['match'] = {'ref': NOT_FOUND_FLAG}
             continue
         # Build a new reference from the resulting uniprot
-        add_reference(uniprot_id)
+            self.add_reference(uniprot_id)
         # If we have every protein chain matched with a reference already then we stop here
         print(' Using references from blast')
-        if match_sequences():
-            return protein_parsed_chains
-    # At this point we should have macthed all sequences
-    # If not, kill the process unless mercy was given
+            if self.match_sequences():
+                return True
+        return False
+
+    def _handle_unmatched_chains(self):
+        """At this point we should have matched all sequences.
+        If not, kill the process unless mercy was given.
+        """
     unmatched_chains = [chain_data['name'] 
-                        for chain_data in protein_parsed_chains 
+                            for chain_data in self.protein_parsed_chains
                         if chain_data['match']['ref'] == NOT_FOUND_FLAG or chain_data['match']['ref'] is None]
-    must_be_killed = REFERENCE_SEQUENCE_FLAG not in mercy
+        must_be_killed = REFERENCE_SEQUENCE_FLAG not in self.mercy
     if must_be_killed:
         raise InputError(f'BLAST failed to find a matching reference sequence for chains: {", ".join(unmatched_chains)}.\n'
             ' If your system has antibodies or synthetic constructs please consider marking these chains as "no referable" in the inputs file:\n'+
@@ -447,9 +527,47 @@ def generate_protein_mapping(
             ' If your system has exotic proteins whose sequences are not found in the Swiss-Prot database you may force non-curated UniProt ids.\n' +
             ' If your system has very exotic proteins whose sequence are not in UniProt you can use the "--mercy refseq" flag to skip this error.')
     warn('BLAST failed to find a matching reference sequence for at least one protein sequence')
-    # RUBEN: se añade un warning pero si se pone como no ref en el input, no se añade? De que sirve avisar en el cliente si es algo normal
-    register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
-    return protein_parsed_chains
+        self.register.add_warning(REFERENCE_SEQUENCE_FLAG, 'There is at least one protein region which is not mapped to any reference sequence')
+
+    # -- Orchestration ----------------------------------------------------------------------------
+
+    def run(self) -> dict:
+        """Run the whole mapping pipeline and return the protein parsed chains."""
+        # Remove previous warnings, if any
+        self.register.remove_warnings(REFERENCE_SEQUENCE_FLAG)
+        # Import local references, in case the references json file already exists
+        self._import_local_references()
+        # Collect protein chains from the structure
+        self._collect_protein_chains()
+        # If there are no protein sequences then there is no need to map anything
+        if len(self.protein_parsed_chains) == 0:
+            print(' There are no protein sequences')
+            return self.protein_parsed_chains
+        # Save already tried alignments to not repeat the alignment further
+        self.tried_alignments = {chain_data['name']: [] for chain_data in self.protein_parsed_chains}
+
+        # Reference sources are tried in priority order.
+        # After each source adds candidate references we re-run matching and
+        # stop as soon as every protein chain has a reference.
+        # Forced references go first so they have priority over the rest.
+        reference_sources = [
+            self._load_forced_references,
+            self._load_imported_references,
+            self._load_remote_references,
+            self._load_pdb_references,
+        ]
+        # Iterate until all sequences are matched or all sources have been tried
+        for load_source in reference_sources:
+            if load_source() and self.match_sequences():
+                return self.protein_parsed_chains
+
+        # Blast is the last resort: it is done per orphan chain, re-matching after each hit
+        if self._match_via_blast():
+            return self.protein_parsed_chains
+
+        # At this point we should have matched all sequences; deal with those we could not
+        self._handle_unmatched_chains()
+        return self.protein_parsed_chains
 
 
 def export_references(mapping_data: list, protein_references_file: 'File'):
@@ -491,6 +609,16 @@ def import_references(protein_references_file: 'File') -> list:
     return references
 
 
+# AGUS: Necesitamos que la secuencia de aa alineada tenga gaps identificados con guiones y pairwaise2 (biopython < 1.80) no lo hace
+# AGUS: Para actualizar a biopython >= 1.80 pairwaise2 ya no existe y no podemos obtener el mismo outoput que necesitábamos
+# AGUS: Esta función parece resolver el problema: https://github.com/biopython/biopython/issues/4769
+# Set the aligner
+aligner = Align.PairwiseAligner(mode='local')
+aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
+aligner.open_gap_score = -10
+aligner.extend_gap_score = -0.5
+
+
 def align(ref_sequence: str, new_sequence: str, verbose: bool = False) -> Optional[tuple[list, float]]:
     """Align two aminoacid sequences.
 
@@ -507,7 +635,7 @@ def align(ref_sequence: str, new_sequence: str, verbose: bool = False) -> Option
     # Then an array filled with None is returned
     if all([letter == 'X' for letter in new_sequence]):
         return None
-    
+
     # Make sure all characters in both sequences belong to valid aminoacids or are X
     # Otherwise stop here because the aligner will complain -> e.g. sequences containing 'U'
     ref_seq_non_alphabet_letter = next((letter for letter in ref_sequence if letter not in PROTEIN_RESIDUE_LETTERS), None)
@@ -613,8 +741,9 @@ def blast(sequence: str) -> Optional[str]:
     print('Result: ' + accession)
     return accession
 
-def normalize_protein_sequence (sequence : str) -> str:
-    """Given a protein sequence, make sure al letters ar standard aminacids. Replace anything else with X."""
+
+def normalize_protein_sequence(sequence: str) -> str:
+    """Given a protein sequence, make sure al letters ar standard aminoacids. Replace anything else with X."""
     # WARNING: some PDB polymers/chains may have a "special" sequence
     # It may combine one-letter code with 2/3-letter code in parenthesis
     # These are special aminoacids or other type of residues such as nucleotides
@@ -632,6 +761,7 @@ def normalize_protein_sequence (sequence : str) -> str:
         if letter not in PROTEIN_RESIDUE_LETTERS:
             normalized_sequence = normalized_sequence.replace(letter, 'X')
     return normalized_sequence
+
 
 def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
     """Given a uniprot accession, use the uniprot API to request its data and then mine what is needed for the database."""
