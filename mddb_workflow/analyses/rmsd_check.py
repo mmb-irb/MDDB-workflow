@@ -219,7 +219,7 @@ def check_trajectory_integrity (
     if any_bypassed_frames > 0:
         # Set the error message
         max_bypassed_frames = max(report['bypass'] for report in fragment_reports)
-        message = f'First {max_bypassed_frames} frames may be not equilibrated'
+        message = f'First {max_bypassed_frames} frames may be not equilibrated. Use the "--mercy {TRAJECTORY_INTEGRITY_FLAG}" flag to skip this error'
         # Add a warning an return True since the test failed in case we have mercy
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
             register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)

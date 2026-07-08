@@ -28,10 +28,12 @@ def count_projects(query_url):
     return n_projects
 
 
-def paginate_projects(selection_query, limit=100, api_url=default_url):
+def paginate_projects(selection_query=None, limit=100, api_url=default_url):
     """Paginate through all projects matching the selection query."""
     # Ask which projects have a tpr file
-    query_url = api_url + f'/projects?query={{{selection_query}}}'
+    query_url = api_url + '/projects?'
+    if selection_query is not None:
+        query_url += f'?query={selection_query}'
     n_projects = count_projects(query_url)
     # Calculate the expected number of pages
     pages = ceil(n_projects / limit)

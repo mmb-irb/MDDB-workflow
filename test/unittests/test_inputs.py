@@ -206,6 +206,7 @@ def test_error_message_lists_all_problems():
     assert 'ligands' in message
 
 
+@pytest.mark.CI
 @pytest.mark.unit_int
 def test_known_fields_match_template():
     """Every field declared in the schema must appear in the inputs template

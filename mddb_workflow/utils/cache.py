@@ -80,6 +80,8 @@ def get_cached_function(function: Callable, cache: Cache) -> Callable:
     """Create a cached function.
     The cached function will store input cksums and output in cache.
     The cached function will return cached output when input cksums are identical.
+    If there is no cached output for the given input cksums then the function will
+    be executed normally and the output will be stored in cache.
     """
     cache_key = function.__name__
     def cached_function(*inputs):
