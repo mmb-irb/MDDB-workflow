@@ -3,9 +3,10 @@ from pathlib import Path
 from subprocess import run, PIPE
 from shutil import which
 import xmltodict
-from mddb_workflow.utils.auxiliar import ToolError
+from mddb_workflow.utils.auxiliar import ToolError, retry_request
 from mddb_workflow.utils.constants import RESOURCES_DIRECTORY_PATH
 from Bio.Blast import NCBIWWW
+
 
 BLASTP_EXECUTABLE = which('blastp')
 UPDATE_BLASTDB_EXECUTABLE = which('update_blastdb.pl')
@@ -58,7 +59,9 @@ def local_blastp(sequence : str) -> str:
     return process.stdout.decode()
 
 
+@retry_request
 def remote_blastp(sequence : str) -> str:
+    """Given an amino acids sequence, run a remote blastp against the Swiss-Prot database."""
     result = NCBIWWW.qblast(
         program="blastp",
         database="swissprot",  # UniProtKB / Swiss-Prot
