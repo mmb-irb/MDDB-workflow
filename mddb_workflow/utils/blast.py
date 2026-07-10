@@ -31,17 +31,17 @@ def update_local_blastdb():
     """
     if not UPDATE_BLASTDB_EXECUTABLE:
         raise ToolError('Cannot find the BLAST+ update_blastdb.pl script. Is BLAST+ installed? '
-            f"Add it to the PATH or install it with conda install -c bioconda blast")
+                        'Add it to the PATH or install it with conda install -c bioconda blast')
     os.makedirs(BLASTDB_DIRECTORY, exist_ok=True)
     print(f'Downloading/updating the local {BLASTDB_NAME} BLAST database at {BLASTDB_DIRECTORY}...')
-    process = run([ UPDATE_BLASTDB_EXECUTABLE, '--decompress', '--quiet', BLASTDB_NAME ],
+    process = run([UPDATE_BLASTDB_EXECUTABLE, '--decompress', '--quiet', BLASTDB_NAME],
         cwd=BLASTDB_DIRECTORY, stdout=PIPE, stderr=PIPE)
     if process.returncode != 0:
         raise ToolError(f'Failed to download/update the local {BLASTDB_NAME} BLAST database:\n'
             + process.stderr.decode())
 
 
-def local_blastp(sequence : str) -> str:
+def local_blastp(sequence: str) -> str:
     """Given an amino acids sequence, run a local blastp against the Swiss-Prot database.
     Returns the raw BLAST XML output (outfmt 5), exactly as the remote NCBIWWW.qblast counterpart does,
     so callers may keep using the very same parsing logic regardless of which one was used.
@@ -49,10 +49,10 @@ def local_blastp(sequence : str) -> str:
     """
     if not BLASTP_EXECUTABLE:
         raise ToolError('Cannot find blastp. Is BLAST+ installed? '
-            f"Add it to the PATH or install it with conda install -c bioconda blast")
+                        'Add it to the PATH or install it with conda install -c bioconda blast')
     if not local_blastdb_exists():
         update_local_blastdb()
-    process = run([ BLASTP_EXECUTABLE, '-db', BLASTDB_DIR, '-outfmt', '5' ],
+    process = run([BLASTP_EXECUTABLE, '-db', BLASTDB_DIR, '-outfmt', '5'],
         input=sequence.encode(), stdout=PIPE, stderr=PIPE)
     if process.returncode != 0:
         raise ToolError('blastp failed:\n' + process.stderr.decode())
@@ -60,7 +60,7 @@ def local_blastp(sequence : str) -> str:
 
 
 @retry_request
-def remote_blastp(sequence : str) -> str:
+def remote_blastp(sequence: str) -> str:
     """Given an amino acids sequence, run a remote blastp against the Swiss-Prot database."""
     result = NCBIWWW.qblast(
         program="blastp",
