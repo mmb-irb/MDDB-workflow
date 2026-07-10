@@ -352,8 +352,15 @@ def get_screenshot (
         if cg_selection:
             # Change the default representation model to CPK (ball and stick)
             file.write('mol representation cpk \n')
-            # Change the default atom coloring method setting to Chain
-            file.write('mol color name \n')
+            # Coloring by name is only useful when beads have different names
+            # If all coarse grain beads share the same name we would get a single color
+            # In this case it is more informative to color them by chain
+            cg_atoms = [structure.atoms[index] for index in cg_selection.atom_indices]
+            cg_atom_names = set(atom.name for atom in cg_atoms)
+            if len(cg_atom_names) == 1:
+                file.write('mol color Chain \n')
+            else:
+                file.write('mol color name \n')
             # Set the default atom selection to atoms to be represented as CPK
             file.write(f'mol selection "{cg_selection.to_vmd()}" \n')
             # Change the current material of the representation of the molecule
