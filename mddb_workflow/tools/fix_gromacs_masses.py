@@ -28,6 +28,8 @@ updated_masses : bool = False
 # Make a copy of our custom masses file wherever GROMACS is to be run
 def fix_gromacs_masses ():
     global updated_masses
+    # If masses were already copied then don't do it again
+    if updated_masses: return
 
     # Set the source file
     # WARNING: Note that this must be done here, not outside the function
@@ -50,11 +52,12 @@ def fix_gromacs_masses ():
     # Make sure any reamining symlinks are removed
     if local_custom_masses_file.is_symlink(): local_custom_masses_file.remove()
 
-    # Check if the file exists and, if not, then copy the reference
-    # If the file was created in a previous workflow run then overwrite it as well since it may be outdated
-    if not local_custom_masses_file.exists or not updated_masses:
-        source_custom_masses_file.copy_to(local_custom_masses_file)
-        updated_masses = True
+    # Copy the reference masses
+    # Overwrite the previous masses file since it may be outdated
+    source_custom_masses_file.copy_to(local_custom_masses_file)
+    
+    # Set the masses as updated
+    updated_masses = True
 
 # Set the symbol in the atommass file representing 'any residue name'
 ANY_RESIDUE_NAME = '???'
@@ -70,8 +73,7 @@ def extend_gromacs_masses (new_masses : set[tuple]):
     local_custom_masses_filepath = get_auxiliar_filepath(GROMACS_MASSES_FILENAME)
     local_custom_masses_file = File(local_custom_masses_filepath)
     # If the file does not exist yet then create it
-    if not local_custom_masses_file.exists:
-        fix_gromacs_masses()
+    fix_gromacs_masses()
     
     # Read masses already listed in the file
     already_modified = False
