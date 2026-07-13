@@ -1094,7 +1094,7 @@ class MD:
         # If there are no dummy atoms then stop here
         if not self._dummy_selection: return
         # Update gromacs masses by setting fake masses for dummy atoms: 0
-        print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
+        if verbose: print('Dummy atoms may be added to the gromacs masses file with mass = 0.')
         fake_masses = set()
         for atom_index in self._dummy_selection.atom_indices:
             atom = reference_structure.atoms[atom_index]
