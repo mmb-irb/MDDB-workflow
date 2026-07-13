@@ -2,15 +2,17 @@ from os import remove, rename, environ
 from os.path import exists, getmtime
 from shutil import copyfile
 from subprocess import run, PIPE, Popen
-from re import search
+from re import search, findall
 from time import time
 
-from mddb_workflow.utils.auxiliar import load_json, ToolError
+from mddb_workflow.utils.auxiliar import load_json, ToolError, warn
 from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END, GLOBALS
+from mddb_workflow.utils.constants import GROMACS_MASSES_FILENAME
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
 
+GROMACS_MASSES_ERROR = r'Can not find mass in database for atom ([a-zA-Z0-9]*)'
 
 def run_gromacs(
     command : str,
@@ -81,9 +83,21 @@ def run_gromacs(
             output_is_old = output_time < start_time
         # If output was not generated then we report the problem
         if not output_exists or output_is_old:
-            # If we are missing the expetced output then report it
-            print(output_logs)
-            print(error_logs)
+            # If we recognize the error and can provide any clue then this is the moment
+            error_match = findall(GROMACS_MASSES_ERROR, error_logs)
+            if error_match:
+                warn(f'We are missing the masses for some atoms: {", ".join(error_match)}\n' + \
+                    '  Are they dummy atoms?\n' + \
+                    '  If so, please select them using the "dummy_selection" input field.\n' + \
+                    '  Dummy atoms will be considered to have mass = 0.\n' + \
+                    '  Are they Coarse Grain (CG) beads?\n' + \
+                    '  If so, please select them using the "cg_selection" input field.\n' + \
+                    '  Coarse Grain beads will be considered to have mass = 1.\n' + \
+                    f'  If you want to set custom masses for these atoms then please edit the {GROMACS_MASSES_FILENAME} file in the project directory.')
+            # If we don't know the error then simply output all the logs
+            else:
+                print(output_logs)
+                print(error_logs)
             # Recreate the exact command
             final_command = f'{GROMACS_EXECUTABLE} {command}'
             if user_input: final_command += f' (with user input "{user_input}")'
