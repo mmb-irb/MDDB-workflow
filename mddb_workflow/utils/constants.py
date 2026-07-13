@@ -11,6 +11,8 @@ GLOBALS = {
     'no_symlinks': False,
     # Set if colors are disabled for logging
     'no_colors': False,
+    # Keep a set with the paths of every directory where we already fixed gromacs masses
+    'updated_gromacs_masses': set(),
 }
 
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user

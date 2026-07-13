@@ -1,9 +1,7 @@
 from mddb_workflow.utils.auxiliar import get_auxiliar_filepath
 from mddb_workflow.utils.constants import GROMACS_MASSES_FILENAME, GROMACS_CUSTOM_MASSES_FILEPATH
+from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.file import File
-
-# Record if the masses file has been copied in the current workflow run
-updated_masses : bool = False
 
 # Replace the default GROMACS masses file (atommass.dat) by our custom masses file
 # This file includes relevant atoms also in all caps letters
@@ -27,9 +25,11 @@ updated_masses : bool = False
 
 # Make a copy of our custom masses file wherever GROMACS is to be run
 def fix_gromacs_masses ():
-    global updated_masses
-    # If masses were already copied then don't do it again
-    if updated_masses: return
+    # Get the path where we must have the fixed masses
+    # Note that this path may change further
+    working_directory = GLOBALS["working_directory"]
+    # If masses were already fixed in this directory then don't do it again
+    if working_directory in GLOBALS['updated_gromacs_masses']: return
 
     # Set the source file
     # WARNING: Note that this must be done here, not outside the function
@@ -57,7 +57,7 @@ def fix_gromacs_masses ():
     source_custom_masses_file.copy_to(local_custom_masses_file)
     
     # Set the masses as updated
-    updated_masses = True
+    GLOBALS['updated_gromacs_masses'].add(working_directory)
 
 # Set the symbol in the atommass file representing 'any residue name'
 ANY_RESIDUE_NAME = '???'
