@@ -9,7 +9,7 @@ from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
-from mddb_workflow.tools.generate_map import get_uniprot_reference, align
+from mddb_workflow.tools.generate_map import get_uniprot_reference, align, normalize_protein_sequence
 from mddb_workflow.tools.xvg_parse import xvg_parse
 
 # Set a flag for chains which are made entirley of alpha carbons only
@@ -274,16 +274,16 @@ def make_uniprot_to_pdb_map(
     protein_selection = pdb_structure.select_protein()
     protein_chains = pdb_structure.get_selection_chains(protein_selection)
     for chain in protein_chains:
-        sequence = chain.get_sequence()
+        pdb_sequence = normalize_protein_sequence(chain.get_sequence())
         # Find the best alignment match for this sequence
         matching_uniprot_id = None
         residue_numeration = None
         highest_score = 0
         # Iterate uniprot references
         for uniprot_id, uniprot_reference in uniprot_references.items():
-            reference_sequence = uniprot_reference['sequence']
+            uniprot_sequence = normalize_protein_sequence(uniprot_reference['sequence'])
             # Compare sequences
-            align_match = align(reference_sequence, sequence)
+            align_match = align(uniprot_sequence, pdb_sequence)
             # If there is no match then skip to the next uniprot reference
             if not align_match: continue
             sequence_map, align_score = align_match
