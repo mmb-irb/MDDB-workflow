@@ -106,7 +106,7 @@ def rmsds(
             mass_weighted = not has_cg and not has_dummy
             # Run the rmsd
             print(f' Reference: {reference_name}, Selection: {group_name},{"" if mass_weighted else " NOT"} mass weighted')
-            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis_filepath, skip_mass_weighting=has_cg)
+            rmsd(reference.path, reduced_trajectory_filepath, group_selection, rmsd_analysis_filepath, skip_mass_weighting=not mass_weighted)
             # Read and parse the output file
             rmsd_data = xvg_parse(rmsd_analysis_filepath, ['times', 'values'])
             # Format the mined data and append it to the overall output
