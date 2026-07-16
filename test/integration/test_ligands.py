@@ -1,5 +1,6 @@
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.cache import Cache
+from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.tools.get_inchi_keys import InChIKeyData, generate_inchi_references
 from mddb_workflow.tools.get_ligands import generate_ligand_references
@@ -19,6 +20,7 @@ def test_generate_ligand_references():
     if test_dir.parent.exists() and test_dir.exists():
         shutil.rmtree(test_dir)
     test_dir.mkdir(parents=True, exist_ok=True)
+    GLOBALS['working_directory'] = test_dir
     pdb_file = data_dir / 'input/structures/cin_A000V_structure.pdb'
 
     mwf_stc = Structure.from_file(str(pdb_file))
@@ -26,7 +28,7 @@ def test_generate_ligand_references():
     cache = Cache(cache_file)
     # TODO: make test of forced selection of a ligands from the inputs.yaml
     input_ligands = [
-        '5957',
+        {'pubchem': '5957'},
         {'drugbank': 'DB00945'},
         {'chembl': 'CHEMBL112', 'name': 'Paracetamol', 'selection': 'resname LIG'}]  # 'RZVAJINKPMORJF-UHFFFAOYSA-N'
     pdb_ids = ['2L94']

@@ -37,7 +37,7 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
 
         # Add lipid database data to InChIKeyData
         if SL_data or LM_data:
-            lipid_references[inchikey] = {'swisslipids': SL_data, 'lipidmaps': LM_data}
+            lipid_references[inchikey] = {'swisslipids': SL_data, 'lipidmaps': LM_data, 'version': '0.0.1'}
 
             # QUALITY CHECKS
             # If the residue is a lipid, we check if it is classified as fatty/steroid

@@ -617,8 +617,32 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
         raise RuntimeError(error_message + 'no InChI key')
     if inchikey_section:
         inchikey = inchikey_section.get('Information', None)[0].get('Value', {}).get('StringWithMarkup', None)[0].get('String', None)
+    # Mine ChEMBL and DrugBank IDs from the record's Reference list
+    chembl_id = None
+    drugbank_id = None
+    references = record.get('Reference', [])
+    for ref in references:
+        source = ref.get('SourceName', '')
+        url = ref.get('URL', '')
+        if source == 'ChEMBL' and url:
+            compound = url.rstrip('/').split('/')[-1]
+            if compound != 'targets':
+                chembl_id = compound
+        elif source == 'DrugBank' and url:
+            drugbank_id = url.rstrip('/').split('/')[-1]
+
     # Prepare the PubChem data to be returned
-    return {'name': name_substance, 'smiles': smiles, 'formula': molecular_formula, 'pdbid': pdb_id, 'inchi': inchi, 'inchikey': inchikey}
+    return {
+        'name': name_substance,
+        'smiles': smiles,
+        'formula': molecular_formula,
+        'pdbid': pdb_id,
+        'inchi': inchi,
+        'inchikey': inchikey,
+        'chembl': chembl_id,
+        'drugbank': drugbank_id,
+        'version': '0.0.1'
+    }
 
 
 def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
