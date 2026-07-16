@@ -57,7 +57,7 @@ def rmsds(
         selections['other'] = missing_regions
 
     # Remove PBC residues from parsed selections
-    non_pbc_selections = {}
+    non_pbc_selections: dict[str, 'Selection'] = {}
     for selection_name, selection in selections.items():
         # Substract PBC atoms
         non_pbc_selection = selection - pbc_selection

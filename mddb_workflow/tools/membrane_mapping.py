@@ -80,7 +80,7 @@ def all_atom_headgroups(
         warn("Atom charges not found, guessing headgroups by name.")
         polar_atoms = []
         for residue in all_lipids.residues:
-            if residue.resname == 'CHL':
+            if residue.resname in ['CHL', 'CHL1']:
                 polar_atoms.append(residue.atoms.select_atoms('name O*').indices[0])
             else:
                 # '(resname CHL and element O*) or (resname PA and name P*)'

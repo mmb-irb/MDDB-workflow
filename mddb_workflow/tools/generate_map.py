@@ -4,7 +4,7 @@ import urllib.request
 import numpy as np
 import re
 
-from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, RequestError, NoReferableException, retry_request
+from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, RequestError, NoReferableException
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
