@@ -20,10 +20,10 @@ def lipid_interactions(
 ):
     """Lipid-protein interactions analysis."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> No membranes found, skipping lipid interactions analysis')
+        print('   No membranes found, skipping lipid interactions analysis')
         return
     if universe.select_atoms('protein').n_atoms == 0:
-        print('-> No protein found, skipping lipid interactions analysis')
+        print('   No protein found, skipping lipid interactions analysis')
         return
 
     is_united_atom = False
@@ -54,29 +54,61 @@ def lipid_interactions(
         return
 
     # Wrap the data in a dictionary
-    data = {'data': data, 'version': '0.1.0'}
+    data = {'data': data, 'version': '0.2.0'}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
     save_json(data, output_analysis_filepath)
 
 
-def _per_frame_contacts(frame_index, universe, protein_residx, lipid_group):
-    """Per-frame worker for parallel analysis.
-    Seeks to *frame_index*, computes the lipid atoms near each protein residue,
-    and returns a list of (i, residx, atom_indices) – one entry per protein residue.
-    Atom indices are plain ints so the result is fully picklable.
+def _build_frame_task(frame_index, universe, protein_residx, lipid_group):
+    """Seek the frame in the main process and return a picklable snapshot.
+
+    Uses MDAnalysis.Merge to create a minimal self-contained universe that holds
+    only the protein atoms and the lipids already within 6 Å of the protein for
+    this frame.  Workers receive this small object instead of the full universe,
+    avoiding fork-COW memory copies proportional to trajectory size.
     """
     universe.trajectory[frame_index]
+    protein_ag = universe.select_atoms('protein')
     lipid_near_prot = universe.select_atoms(
         '(around 6 protein) and group lipid_group and not protein',
-        lipid_group=lipid_group)
+        lipid_group=lipid_group
+    )
+    original_lipid_indices = lipid_near_prot.indices
+    n_protein_atoms = protein_ag.n_atoms
+    # Merge into a small single-frame universe with current positions
+    if len(lipid_near_prot) > 0:
+        merged = MDAnalysis.Merge(protein_ag, lipid_near_prot)
+    else:
+        merged = MDAnalysis.Merge(protein_ag)
+    return (merged.atoms, protein_residx, original_lipid_indices, n_protein_atoms)
+
+
+def _per_frame_contacts(task) -> list[tuple[int, int, list[int]]]:
+    """Per-frame worker for parallel analysis.
+    Receives a merged single-frame snapshot (no trajectory attached) and computes
+    the lipid atoms near each protein residue.
+    Returns a list of (i, residx, atom_indices) where atom_indices are indices
+    in the *original* universe so the caller can reconstruct AtomGroups.
+    """
+    merged_atoms, protein_residx, original_lipid_indices, n_protein_atoms = task
+    merged_protein = merged_atoms[:n_protein_atoms]
+    merged_lipids = merged_atoms[n_protein_atoms:]
     frame_results = []
-    for i, residx in enumerate(protein_residx):
-        residue_atoms = universe.select_atoms(f'resindex {residx}')
-        lipid_near_res = lipid_near_prot.select_atoms(
+    for i, (residx, merged_res) in enumerate(zip(protein_residx, merged_protein.residues)):
+        res_atoms = merged_res.atoms
+        lipid_near_res = merged_lipids.select_atoms(
             'around 6 global group residuegroup',
-            residuegroup=residue_atoms)
-        frame_results.append((i, int(residx), lipid_near_res.indices.tolist()))
+            residuegroup=res_atoms)
+        local_idx = lipid_near_res.indices - n_protein_atoms
+        frame_results.append((i, int(residx), original_lipid_indices[local_idx].tolist()))
     return frame_results
+
+
+def _accumulate_results(frame_iter, accumulate_fn):
+        """Sequentially accumulate results from a frame iterator (either map or imap)."""
+        for frame_results in frame_iter:
+            for i, residx, atom_indices in frame_results:
+                accumulate_fn(i, residx, frozenset(atom_indices))
 
 
 def _iterate_protein_residues(universe, snapshots, frames_limit, lipid_group, accumulate_fn, n_jobs=1):
@@ -91,43 +123,31 @@ def _iterate_protein_residues(universe, snapshots, frames_limit, lipid_group, ac
     protein_residx = universe.select_atoms('protein').residues.resindices
     frame_indices = list(range(0, snapshots, frame_step))
 
-    if n_jobs != 1:
-        # Parallelization with multiprocessing (per-frame fashion)
-        # https://userguide.mdanalysis.org/stable/examples/analysis/custom_parallel_analysis.html#Parallelization-in-a-simple-per-frame-fashion
-        n_workers = multiprocessing.cpu_count() if n_jobs == -1 else n_jobs
-        # Fixed version of run_per_frame where only the frame index changes
-        run_per_frame = partial(
-            _per_frame_contacts,
-            universe=universe,
-            protein_residx=protein_residx,
-            lipid_group=lipid_group,
-        )
-        with multiprocessing.Pool(n_workers) as worker_pool:
-            all_frame_results = worker_pool.map(run_per_frame, frame_indices)
-        # Reconstruct AtomGroups from returned indices and call accumulate_fn
-        for frame_results in all_frame_results:
-            for i, residx, atom_indices in frame_results:
-                lipid_near_res = universe.atoms[atom_indices]
-                accumulate_fn(i, residx, lipid_near_res)
-    else:
-        # Serial fallback
-        for frame_index in frame_indices:
-            for i, residx, atom_indices in _per_frame_contacts(frame_index, universe, protein_residx, lipid_group):
-                lipid_near_res = universe.atoms[atom_indices]
-                accumulate_fn(i, residx, lipid_near_res)
+    # Build tasks lazily: main process seeks each frame and merges relevant atoms.
+    # Workers receive small picklable snapshots — no fork-COW on the full universe.
+    print(f'   Iterating {len(frame_indices)} frames with step {frame_step} and {len(protein_residx)} protein residues')
+    tasks = (_build_frame_task(fi, universe, protein_residx, lipid_group) for fi in frame_indices)
 
+    if n_jobs != 1:
+        n_workers = multiprocessing.cpu_count() if n_jobs == -1 else n_jobs
+        with multiprocessing.Pool(n_workers) as worker_pool:
+            _accumulate_results(worker_pool.imap(_per_frame_contacts, tasks, chunksize=1), accumulate_fn)
+    else:
+        _accumulate_results(map(_per_frame_contacts, tasks), accumulate_fn)
+    print('   Finished iterating frames and accumulating results')
     return protein_residx, frame_count
 
 
-def aa_lipid_interactions(universe, lipid_map, iterator):
+def aa_lipid_interactions(universe: 'MDAnalysis.Universe', lipid_map: list, iterator: callable):
     """Atomistic lipid-protein interactions analysis."""
     lipids_residx = [residue_idx for lipid in lipid_map for residue_idx in lipid['residue_indices']]
     inchikeys = [lipid['inchikey'] for lipid in lipid_map for residue_idx in lipid['residue_indices']]
     lipid_group = universe.select_atoms(f'resindex {" ".join(map(str, lipids_residx))}')
+    has_multiple_lipid_types = len(lipid_map) > 1
 
-    # Pre-compute headgroup and tail AtomGroups per lipid residue (topology is static)
-    head_atoms = {}  # lipid_residx -> AtomGroup of headgroup atoms
-    tail_atoms = {}  # lipid_residx -> AtomGroup of acyl-chain atoms
+    # Pre-compute headgroup and tail index sets per lipid residue (topology is static)
+    head_indices = {}  # lipid_residx -> frozenset of headgroup atom indices
+    tail_indices = {}  # lipid_residx -> frozenset of acyl-chain atom indices
     for lipid_residx, inchikey in zip(lipids_residx, inchikeys):
         residue = universe.select_atoms(f'resindex {lipid_residx}').residues[0]
         if inchikey == 'HVYWMOMLDIMFJA-DPAQBDIFSA-N':
@@ -136,8 +156,10 @@ def aa_lipid_interactions(universe, lipid_map, iterator):
             tail_ag = residue.atoms - head_ag
         else:
             head_ag, tail_ag = get_head_tail_split(residue)
-        head_atoms[lipid_residx] = head_ag
-        tail_atoms[lipid_residx] = tail_ag
+        head_indices[lipid_residx] = frozenset(head_ag.indices.tolist())
+        tail_indices[lipid_residx] = frozenset(tail_ag.indices.tolist())
+    # Map each atom index to its lipid residue for fast per-frame contact lookup
+    atom_to_lipid_resindex = {int(atom.index): atom.residue.resindex for atom in lipid_group.atoms}
     # Map each lipid residue index to its lipid type (inchikey index) for binary-per-frame scoring
     lipid_type_map = {}
     for k, lipid in enumerate(lipid_map):
@@ -150,21 +172,32 @@ def aa_lipid_interactions(universe, lipid_map, iterator):
     n_lipid_types = len(lipid_map)
     contacts_head = np.zeros((n_prot, n_lipid_types))
     contacts_tail = np.zeros((n_prot, n_lipid_types))
+    contacts_all_head = np.zeros(n_prot) if has_multiple_lipid_types else None
+    contacts_all_tail = np.zeros(n_prot) if has_multiple_lipid_types else None
 
-    def accumulate(i, residx, lipid_near_res):
-        # Use sets to score each lipid type at most once per frame
+    def accumulate(i, residx, atom_idx_set):
         seen_head = set()
         seen_tail = set()
-        for lipid_residx in lipid_near_res.residues.resindices:
+        seen_all_head = False
+        seen_all_tail = False
+        lipid_resindices = {atom_to_lipid_resindex[idx] for idx in atom_idx_set if idx in atom_to_lipid_resindex}
+        for lipid_residx in lipid_resindices:
             k = lipid_type_map[lipid_residx]
-            if len(head_atoms[lipid_residx] & lipid_near_res) > 0:
+            if head_indices[lipid_residx] & atom_idx_set:
                 seen_head.add(k)
-            if len(tail_atoms[lipid_residx] & lipid_near_res) > 0:
+                seen_all_head = True
+            if tail_indices[lipid_residx] & atom_idx_set:
                 seen_tail.add(k)
+                seen_all_tail = True
         for k in seen_head:
             contacts_head[i, k] += 1
         for k in seen_tail:
             contacts_tail[i, k] += 1
+        if has_multiple_lipid_types:
+            if seen_all_head:
+                contacts_all_head[i] += 1
+            if seen_all_tail:
+                contacts_all_tail[i] += 1
 
     protein_residx, frame_count = iterator(
         lipid_group=lipid_group, accumulate_fn=accumulate)
@@ -172,9 +205,17 @@ def aa_lipid_interactions(universe, lipid_map, iterator):
     # Divide by frame count to get fraction-of-frames probability
     contacts_head /= frame_count
     contacts_tail /= frame_count
+    if has_multiple_lipid_types:
+        contacts_all_head /= frame_count
+        contacts_all_tail /= frame_count
 
     # Save the data
     data = {'residue_indices': protein_residx.tolist()}
+    if has_multiple_lipid_types:
+        data['all_lipids'] = {
+            'head': contacts_all_head.tolist(),
+            'tail': contacts_all_tail.tolist(),
+        }
     for k, lipid in enumerate(lipid_map):
         data[lipid['inchikey']] = {
             'head': contacts_head[:, k].tolist(),
@@ -186,39 +227,54 @@ def aa_lipid_interactions(universe, lipid_map, iterator):
 
 def cg_lipid_interactions(universe, lipid_group, iterator):
     """Coarse-grain lipid-protein interactions analysis."""
-    print('-> Performing coarse-grain lipid-protein interactions analysis')
+    print('   Performing coarse-grain lipid-protein interactions analysis')
     lipid_resnames = set(residue.resname for residue in lipid_group.residues)
+    has_multiple_lipid_types = len(lipid_resnames) > 1
     n_protein = universe.select_atoms('protein').residues.n_residues
 
-    # Pre-compute headgroup and tail AtomGroups per CG lipid residue (topology is static)
-    head_atoms = {}  # lipid_residx -> AtomGroup of headgroup atoms
-    tail_atoms = {}  # lipid_residx -> AtomGroup of acyl-chain atoms
+    # Pre-compute headgroup and tail index sets per CG lipid residue (topology is static)
+    head_indices = {}  # lipid_residx -> frozenset of headgroup atom indices
+    tail_indices = {}  # lipid_residx -> frozenset of acyl-chain atom indices
+    lipid_resindex_to_resname = {}
     for residue in lipid_group.residues:
-        head_atoms[residue.resindex], tail_atoms[residue.resindex] = get_cg_head_tail_split(residue)
-    # If no tail atoms found, skip the analysis (probably a false positive lipid)
-    if all(len(tail) == 0 for tail in tail_atoms.values()):
+        head_ag, tail_ag = get_cg_head_tail_split(residue)
+        head_indices[residue.resindex] = frozenset(head_ag.indices.tolist())
+        tail_indices[residue.resindex] = frozenset(tail_ag.indices.tolist())
+        lipid_resindex_to_resname[residue.resindex] = residue.resname
+    if all(len(t) == 0 for t in tail_indices.values()):
         warn('Coarse-grain analysis not implemented for lipids without tails following the C1A, C2A, etc. naming convention.')
         return {}
+    atom_to_lipid_resindex = {int(atom.index): atom.residue.resindex for atom in lipid_group.atoms}
     # Contact probability arrays: fraction of frames where ANY bead of a lipid part
     # is within 6 Å of a given protein residue (binary per frame, per lipid type)
     contacts_head = {resname: np.zeros(n_protein) for resname in lipid_resnames}
     contacts_tail = {resname: np.zeros(n_protein) for resname in lipid_resnames}
+    contacts_all_head = np.zeros(n_protein) if has_multiple_lipid_types else None
+    contacts_all_tail = np.zeros(n_protein) if has_multiple_lipid_types else None
 
-    def accumulate(i, residx, lipid_near_res):
-        # Use sets to score each lipid type at most once per frame
+    def accumulate(i, residx, atom_idx_set):
         seen_head = set()
         seen_tail = set()
-        for resname in lipid_resnames:
-            near = lipid_near_res.select_atoms(f'resname {resname}')
-            for lipid_res in near.residues:
-                if len(head_atoms[lipid_res.resindex] & near) > 0:
-                    seen_head.add(resname)
-                if len(tail_atoms[lipid_res.resindex] & near) > 0:
-                    seen_tail.add(resname)
+        seen_all_head = False
+        seen_all_tail = False
+        lipid_resindices = {atom_to_lipid_resindex[idx] for idx in atom_idx_set if idx in atom_to_lipid_resindex}
+        for lipid_residx in lipid_resindices:
+            resname = lipid_resindex_to_resname[lipid_residx]
+            if head_indices[lipid_residx] & atom_idx_set:
+                seen_head.add(resname)
+                seen_all_head = True
+            if tail_indices[lipid_residx] & atom_idx_set:
+                seen_tail.add(resname)
+                seen_all_tail = True
         for resname in seen_head:
             contacts_head[resname][i] += 1
         for resname in seen_tail:
             contacts_tail[resname][i] += 1
+        if has_multiple_lipid_types:
+            if seen_all_head:
+                contacts_all_head[i] += 1
+            if seen_all_tail:
+                contacts_all_tail[i] += 1
 
     protein_residx, frame_count = iterator(
         lipid_group=lipid_group, accumulate_fn=accumulate)
@@ -228,8 +284,17 @@ def cg_lipid_interactions(universe, lipid_group, iterator):
         contacts_head[resname] /= frame_count
         contacts_tail[resname] /= frame_count
 
+    if has_multiple_lipid_types:
+        contacts_all_head /= frame_count
+        contacts_all_tail /= frame_count
+
     # Save the data in the same format as atomistic analysis
     data = {'residue_indices': protein_residx.tolist()}
+    if has_multiple_lipid_types:
+        data['all_lipids'] = {
+            'head': contacts_all_head.tolist(),
+            'tail': contacts_all_tail.tolist(),
+        }
     for resname in lipid_resnames:
         data[resname] = {
             'head': contacts_head[resname].tolist(),
@@ -246,53 +311,64 @@ def ua_lipid_interactions(universe, lipid_group, iterator):
     with ``removeHs=False`` since united-atom topologies have no explicit
     hydrogen atoms on carbon chains.
     """
-    print('-> Performing united-atom lipid-protein interactions analysis')
+    print('   Performing united-atom lipid-protein interactions analysis')
     lipid_resnames = set(residue.resname for residue in lipid_group.residues)
+    has_multiple_lipid_types = len(lipid_resnames) > 1
     n_protein = universe.select_atoms('protein').residues.n_residues
 
-    # Pre-compute headgroup and tail AtomGroups per UA lipid residue
-    head_atoms = {}  # lipid_resindex -> AtomGroup of headgroup atoms
-    tail_atoms = {}  # lipid_resindex -> AtomGroup of acyl-chain atoms
+    # Pre-compute headgroup and tail index sets per UA lipid residue
+    head_indices = {}  # lipid_resindex -> frozenset of headgroup atom indices
+    tail_indices = {}  # lipid_resindex -> frozenset of acyl-chain atom indices
+    lipid_resindex_to_resname = {}
     for residue in lipid_group.residues:
-        # Override elements for C* atoms (UA topology may lack proper elements)
         residue.atoms.select_atoms('name C*').elements = 'C'
-        # Use removeHs=False since UA has no explicit hydrogens
         chains = get_all_acyl_chains(residue, removeHs=False)
         tail_idx = [idx for chain in chains for idx in chain]
         if tail_idx:
             tail_ag = universe.atoms[tail_idx]
         else:
-            tail_ag = residue.atoms[[]]  # empty AtomGroup
+            tail_ag = residue.atoms[[]]
         head_ag = residue.atoms - tail_ag
-        head_atoms[residue.resindex] = head_ag
-        tail_atoms[residue.resindex] = tail_ag
+        head_indices[residue.resindex] = frozenset(head_ag.indices.tolist())
+        tail_indices[residue.resindex] = frozenset(tail_ag.indices.tolist())
+        lipid_resindex_to_resname[residue.resindex] = residue.resname
 
-    # If no tail atoms found, skip the analysis
-    if all(len(tail) == 0 for tail in tail_atoms.values()):
+    if all(len(t) == 0 for t in tail_indices.values()):
         warn('United-atom analysis could not identify acyl chains. '
              'Please check if the lipid topology contains bond information.')
         return {}
+    atom_to_lipid_resindex = {int(atom.index): atom.residue.resindex for atom in lipid_group.atoms}
 
     # Contact probability arrays: fraction of frames where ANY atom of a lipid part
     # is within 6 Å of a given protein residue (binary per frame, per lipid type)
     contacts_head = {resname: np.zeros(n_protein) for resname in lipid_resnames}
     contacts_tail = {resname: np.zeros(n_protein) for resname in lipid_resnames}
+    contacts_all_head = np.zeros(n_protein) if has_multiple_lipid_types else None
+    contacts_all_tail = np.zeros(n_protein) if has_multiple_lipid_types else None
 
-    def accumulate(i, residx, lipid_near_res):
-        # Use sets to score each lipid type at most once per frame
+    def accumulate(i, residx, atom_idx_set):
         seen_head = set()
         seen_tail = set()
-        for resname in lipid_resnames:
-            near = lipid_near_res.select_atoms(f'resname {resname}')
-            for lipid_res in near.residues:
-                if len(head_atoms[lipid_res.resindex] & near) > 0:
-                    seen_head.add(resname)
-                if len(tail_atoms[lipid_res.resindex] & near) > 0:
-                    seen_tail.add(resname)
+        seen_all_head = False
+        seen_all_tail = False
+        lipid_resindices = {atom_to_lipid_resindex[idx] for idx in atom_idx_set if idx in atom_to_lipid_resindex}
+        for lipid_residx in lipid_resindices:
+            resname = lipid_resindex_to_resname[lipid_residx]
+            if head_indices[lipid_residx] & atom_idx_set:
+                seen_head.add(resname)
+                seen_all_head = True
+            if tail_indices[lipid_residx] & atom_idx_set:
+                seen_tail.add(resname)
+                seen_all_tail = True
         for resname in seen_head:
             contacts_head[resname][i] += 1
         for resname in seen_tail:
             contacts_tail[resname][i] += 1
+        if has_multiple_lipid_types:
+            if seen_all_head:
+                contacts_all_head[i] += 1
+            if seen_all_tail:
+                contacts_all_tail[i] += 1
 
     protein_residx, frame_count = iterator(
         lipid_group=lipid_group, accumulate_fn=accumulate)
@@ -302,8 +378,17 @@ def ua_lipid_interactions(universe, lipid_group, iterator):
         contacts_head[resname] /= frame_count
         contacts_tail[resname] /= frame_count
 
+    if has_multiple_lipid_types:
+        contacts_all_head /= frame_count
+        contacts_all_tail /= frame_count
+
     # Save the data in the same format as other analyses
     data = {'residue_indices': protein_residx.tolist()}
+    if has_multiple_lipid_types:
+        data['all_lipids'] = {
+            'head': contacts_all_head.tolist(),
+            'tail': contacts_all_tail.tolist(),
+        }
     for resname in lipid_resnames:
         data[resname] = {
             'head': contacts_head[resname].tolist(),
