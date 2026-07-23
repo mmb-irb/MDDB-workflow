@@ -1373,7 +1373,7 @@ class Project:
         input_topology_filepath: Optional[str] = None,
         input_structure_filepath: Optional[str] = None,
         input_trajectory_filepaths: Optional[list[str]] = None,
-        md_directories: Optional[list[str]] = None,
+        input_md_directories: Optional[list[str]] = None,
         input_md_config: Optional[list[list[str]]] = None,
         reference_md_index: Optional[int] = None,
         forced_inputs: Optional[list[list[str]]] = None,
@@ -1422,7 +1422,7 @@ class Project:
             input_trajectory_filepaths (Optional[list[str]]):
                 Paths or glob patterns to input trajectory files relative to each MD directory.
                 If this value is not passed then the standard trajectory file path is used as input by default.
-            md_directories (Optional[list[str]]):
+            input_md_directories (Optional[list[str]]):
                 Path or glob pattern to the different MD directories.
                 Each directory is to contain an independent trajectory and structure.
                 Several output files will be generated in every MD directory.
@@ -1540,7 +1540,7 @@ class Project:
             if input_trajectory_filepaths:
                 raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-traj" argument or the "-proj" argument.')
-            if md_directories:
+            if input_md_directories:
                 raise InputError('User must not specify any input filepath when downloading input files from a database.\n' +
                     ' Please either remove the "-mdir" argument or the "-proj" argument.')
             if input_md_config:
@@ -1548,7 +1548,7 @@ class Project:
                     ' Please either remove any "-md" argument or the "-proj" argument.')
 
         # Make sure the new MD configuration (-md) was not passed as well as old MD inputs (-mdir, -traj)
-        if input_md_config and (md_directories or input_trajectory_filepaths):
+        if input_md_config and (input_md_directories or input_trajectory_filepaths):
             raise InputError('MD configurations (-md) is not compatible with old MD inputs (-mdir, -traj)')
 
         # Set the inputs file
@@ -1723,22 +1723,17 @@ class Project:
         # Add or overwrite possible MD inputs from the inputs file with the console arguments
 
         # First scenario argument: the new way
-        self.arg_md_config = input_md_config
-        # Second scenario argument: the old way
-        self.arg_md_directories = md_directories
-
-        # First scenario
-        if self.arg_md_config:
+        if input_md_config:
             # Make sure all MD configurations have at least 2 values each
-            for mdc in self.arg_md_config:
+            for mdc in input_md_config:
                 if len(mdc) >= 2: continue
                 raise InputError('Wrong MD configuration: the patter is -md <directory> <trajectory> <trajectory 2> ...')
             # Make sure there are no duplicated MD directories
-            arg_md_directories = [mdc[0] for mdc in self.arg_md_config]
+            arg_md_directories = [mdc[0] for mdc in input_md_config]
             if len(arg_md_directories) > len(set(arg_md_directories)):
                 raise InputError('There are duplicated MD directories. Every directory behind every "-md" must be unique.')
             # Iterate MD config entries and add / merge them with the already existing MD config
-            for n, arg_config in enumerate(self.arg_md_config, 1):
+            for n, arg_config in enumerate(input_md_config, 1):
                 directory = arg_config[0]
                 # Find if there is already a MD configuration for this directory
                 config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
@@ -1772,12 +1767,12 @@ class Project:
                     MD_INPUT_TRAJECTORY_FILEPATHS: md_input_trajectory_filepaths,
                 })
 
-        # Second scenario
-        elif self.arg_md_directories:
+        # Second scenario argument: the old way
+        elif input_md_directories:
             warn('The "-mdir" argument is deprecated. Please consider using the "-md" argument. Use the "--help" argument to see how it works.')
             parsed_md_directories = []
             # Parse any glob notation
-            for dir in md_directories:
+            for dir in input_md_directories:
                 if is_glob(dir):
                     parsed_md_directories.extend(glob(dir))
                 else:
@@ -2529,8 +2524,7 @@ class Project:
         prepare_project_metadata, output_filenames={'output_file': OUTPUT_METADATA_FILENAME})
 
     # Prepare the standard topology file to be uploaded to the database
-    prepare_standard_topology = Task('stopology', 'Standard topology file',
-        generate_topology, output_filenames={'output_file': STANDARD_TOPOLOGY_FILENAME})
+    prepare_standard_topology = Task('stopology', 'Standard topology file', generate_topology)
     get_standard_topology_file = prepare_standard_topology.get_output_file_getter('output_file')
     standard_topology_file = property(get_standard_topology_file, None, None, "Standard topology filename (read only)")
 

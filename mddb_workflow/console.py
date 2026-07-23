@@ -510,7 +510,7 @@ def main():
                 unit_len=args.unit_len,
                 n_sequences=args.n_sequences,
                 seq_path=args.seq_path,
-                md_directories=args.md_directories,
+                input_md_directories=args.input_md_directories,
                 trust=args.trust,
                 mercy=args.mercy
             )
@@ -530,7 +530,7 @@ def main():
                     n_sequences=args.n_sequences,
                     unit_len=args.unit_len,
                     all=args.all,
-                    md_directories=args.md_directories,
+                    input_md_directories=args.input_md_directories,
                     trust=args.trust,
                     mercy=args.mercy
             )
@@ -568,7 +568,7 @@ run_parser_input_args = [
     (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']+f'\nSupported formats: {", ".join(STRUCTURE_SUPPORTED_FORMATS)}.'}),
     (['-traj', '--input_trajectory_filepaths'], {'default': None, 'nargs': '*', 'help': project_init_help['input_trajectory_filepaths']+f'\nSupported formats: {", ".join(TRAJECTORY_SUPPORTED_FORMATS)}.'}),
     (['-dir', '--directory'], {'default': '.', 'help': project_init_help['directory']}),
-    (['-mdir', '--md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['md_directories']}),
+    (['-mdir', '--input_md_directories'], {'default': None, 'nargs': '*', 'help': project_init_help['input_md_directories']}),
     (['-md', '--input_md_config'], {'action': 'append', 'default': None, 'nargs': '*', 'help': project_init_help['input_md_config']}),
     (['-mdref', '--reference_md_index'], {'type': int, 'default': None, 'help': project_init_help['reference_md_index']}),
     (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
@@ -769,7 +769,7 @@ nassa_parser_args = [
     (['-stru', '--input_structure_filepath'], {'default': None, 'help': project_init_help['input_structure_filepath']}),
     (['-traj', '--input_trajectory_filepath'], {'nargs': '*', 'default': None, 'help': project_init_help['input_trajectory_filepaths']}),
     (['-top', '--input_topology_filepath'], {'default': None, 'help': project_init_help['input_topology_filepath']}),
-    (['-mdir', '--md_directories'], {'nargs': '*', 'default': None, 'help': project_init_help['md_directories']}),
+    (['-mdir', '--input_md_directories'], {'nargs': '*', 'default': None, 'help': project_init_help['input_md_directories']}),
     (['-proj', '--accession'], {'default': None, 'help': project_init_help['accession']}),
     (['-smp', '--sample_trajectory'], {'type': int, 'nargs': '?', 'default': None, 'const': 10, 'metavar': 'N_FRAMES', 'help': project_init_help['sample_trajectory']}),
     (['-t', '--trust'], {'default': [], 'nargs': '*', 'action': custom, 'const': AVAILABLE_CHECKINGS, 'choices': AVAILABLE_CHECKINGS,

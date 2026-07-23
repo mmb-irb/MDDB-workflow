@@ -30,7 +30,7 @@ def test_amber_prmtop_nc():
     project = Project(directory=str(test_fld),
                     input_topology_filepath=str(test_fld/"ala_ala.prmtop"),
                     input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.nc"),
-                    md_directories=['replica_1'])
+                    input_md_directories=['replica_1'])
     md = project.mds[0]
     md.input_files_processing(md)
 
@@ -48,7 +48,7 @@ def test_amber_top_nc():
     project = Project(directory=str(test_fld),
                     input_topology_filepath=str(test_fld/"ala_ala.top"),
                     input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.nc"),
-                    md_directories=['replica_1'])
+                    input_md_directories=['replica_1'])
     md = project.mds[0]
     md.input_files_processing(md)
 
@@ -96,14 +96,14 @@ def test_mda_universe():
     project = Project(directory=str(test_fld),
                     input_topology_filepath=str(test_fld/"ala_ala.tpr"),
                     input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.xtc"),
-                    md_directories=['replica_1'])
+                    input_md_directories=['replica_1'])
     project.membrane_map
     # Second run to test cache loading
     print("\n ------ Second run to test cache loading ------ \n")
     project = Project(directory=str(test_fld),
                     input_topology_filepath=str(test_fld/"ala_ala.tpr"),
                     input_trajectory_filepaths=str(test_fld/"replica_1/raw_trajectory.xtc"),
-                    md_directories=['replica_1'])
+                    input_md_directories=['replica_1'])
     project.membrane_map
     os.chdir(cwd)
 

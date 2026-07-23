@@ -53,7 +53,7 @@ def test_task_no_output_file_second_run():
                 directory=str(test_fld),
                 input_topology_filepath=str(test_fld / "ala_ala.tpr"),
                 input_trajectory_filepaths=str(test_fld / "replica_1/raw_trajectory.xtc"),
-                md_directories=['replica_1']
+                input_md_directories=['replica_1']
             )
             # Trigger the protmap task
             result1 = project.protein_map
@@ -72,7 +72,7 @@ def test_task_no_output_file_second_run():
                 directory=str(test_fld),
                 input_topology_filepath=str(test_fld / "ala_ala.tpr"),
                 input_trajectory_filepaths=str(test_fld / "replica_1/raw_trajectory.xtc"),
-                md_directories=['replica_1']
+                input_md_directories=['replica_1']
             )
             # This should not fail - it should use the cached result
             result2 = project2.protein_map
