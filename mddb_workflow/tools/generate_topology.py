@@ -1,6 +1,15 @@
 from mddb_workflow.utils.auxiliar import warn, save_json, list_values_match, MISSING_CHARGES
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
+from mddb_workflow.utils.auxiliar import round_to_hundredths, store_binary_data
+from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from mddb_workflow.utils.type_hints import *
+
+# Beyond this atom count the topology JSON may grow too large for MongoDB's 16 MB document limit
+# Charges are then written as float32 binary files in GridFS and the topology stores only a flag
+CHARGES_BIN_THRESHOLD = 300000
+
+# Set a flag to state that the data is in GridFS
+BIN_FLAG = 'gridfs'
 
 def generate_topology (
     structure : 'Structure',
@@ -9,9 +18,11 @@ def generate_topology (
     pbc_selection : 'Selection',
     cg_selection : 'Selection',
     dummy_selection : 'Selection',
-    output_file : 'File'
+    output_directory : str,
 ):
     """ Prepare the standard topology file to be uploaded to the database. """
+    # Set the main output filepath
+    output_topology_filepath = f'{output_directory}/{STANDARD_TOPOLOGY_FILENAME}'
 
     # We assume that the structure will be coherent among MDs but note that this is actually checked
 
@@ -27,15 +38,60 @@ def generate_topology (
         atom_elements[index] = atom.element
         atom_residue_indices[index] = atom.residue.index
 
+    # Set atom species: unique (name, element) pairs stored as compact [name, element] lists
+    species_map = {}
+    atom_species = []
+    atom_species_indices = [None] * atom_count
+    for i in range(atom_count):
+        key = (atom_names[i], atom_elements[i])
+        if key not in species_map:
+            species_map[key] = len(atom_species)
+            atom_species.append([atom_names[i], atom_elements[i]])
+        atom_species_indices[i] = species_map[key]
+
     # Set the atom bonds
     # In order to make it more standard sort atom bonds by their indices
     # Also replace missing bonds exceptions by a json serializable flag
-    atom_bonds = []
-    for atom_indices in structure.bonds:
-        if atom_indices == MISSING_BONDS:
-            atom_bonds.append(JSON_SERIALIZABLE_MISSING_BONDS)
-            continue
-        atom_bonds.append(sorted(atom_indices))
+    # In order to save disk, do not list redundant bonds
+    # e.g. if A-B is already listed do not list B-A
+    # Atoms with more bonds must be the ones listing the most bonds to save disk
+    # e.g. is more efficient 'D: A, B, C' than 'A: D, B: D, C: D'
+    # To do so, we will have to this in multiple steps
+    # Note that atoms will "loose" bonds to other atoms with more bonds, so the number may change
+
+    # Make a copy of the original atom bonds
+    unassigned_atom_bonds = [ 
+        MISSING_BONDS if bonds == MISSING_BONDS else [ atom_index for atom_index in bonds ]
+        for bonds in structure.bonds
+    ]
+
+    # Set the final optimized bonds
+    # Serialize missing bonds exceptions
+    final_atom_bonds = [
+        JSON_SERIALIZABLE_MISSING_BONDS if bonds == MISSING_BONDS else []
+        for bonds in unassigned_atom_bonds
+    ]
+
+    # Store atoms until we have not unassigned bonds left
+    while True:
+        # Counting the number of bonds per atom
+        atom_bond_counts = [ 0 if bonds == MISSING_BONDS else len(bonds) for bonds in unassigned_atom_bonds ]
+        # Find the atoms with most bonds and start assigning them final bonds
+        highest_bond_count = max(atom_bond_counts)
+        # If there are no more bonds to assign then we are done
+        if highest_bond_count == 0: break
+        # Iterate atom bonds looking for the atom with the maximum possible number of atoms
+        for atom_index, atom_bonds in enumerate(unassigned_atom_bonds):
+            if atom_bonds is MISSING_BONDS: continue
+            # Repeat the count as it may have changed
+            # Note that previous atoms may have claimed bonds from further atoms
+            bonds_count = len(atom_bonds)
+            if bonds_count < highest_bond_count: continue
+            # If this atom has the maximum number of bonds then assign these bonds to it
+            for bonded_atom_index in list(atom_bonds):
+                final_atom_bonds[atom_index].append(bonded_atom_index)
+                unassigned_atom_bonds[atom_index].remove(bonded_atom_index)
+                unassigned_atom_bonds[bonded_atom_index].remove(atom_index)
 
     # Residue data
     structure_residues = structure.residues
@@ -72,37 +128,61 @@ def generate_topology (
         index_match = None
         # Check we have charges and, if not, set charges as None (i.e. null for mongo)
         has_charges = charges != MISSING_CHARGES and charges != None and len(charges) > 0
-        atom_charges = charges if has_charges else None
+        # Normalize charges
+        norm_charges = [ round_to_hundredths(c) for c in charges ] if has_charges else None
         # Check if these charges were found already
         for previous_index, previous_charges in enumerate(unique_md_charges):
             # We must check if charges match
             # If variable type is different then continue
-            if type(atom_charges) != type(previous_charges): continue
+            if type(norm_charges) != type(previous_charges): continue
             # Check if it is the same exact list
             # This may happen if lists come from the project
             # If not then comparte if charges match perfectly with previous values
-            if atom_charges == previous_charges or (has_charges and list_values_match(atom_charges, previous_charges)):
+            if norm_charges == previous_charges or (has_charges and list_values_match(norm_charges, previous_charges)):
                 index_match = previous_index
                 break
         # If there was no match then this is a new set of unique atom charges
         if index_match is None:
             index_match = len(unique_md_charges)
-            unique_md_charges.append(atom_charges)
+            unique_md_charges.append(norm_charges)
         # Add the current matched index to the map list
         md_charges_map.append(index_match)
-    # If there is only one possible value then keep it as the atom charges
     n_md_charges = len(unique_md_charges)
-    if n_md_charges == 1:
-        atom_charges = unique_md_charges[0]
-        if not atom_charges:
-            warn('Topology is missing atom charges')
-    # If there are different values then keep the map
-    elif n_md_charges > 1:
-        atom_charges = {
-            'mdmap': md_charges_map,
-            'values': unique_md_charges,
-        }
-    else: raise RuntimeError('No MD charges')
+    # If there are no MD charges something went wrong
+    if n_md_charges == 0: raise RuntimeError('No MD charges')
+    # Large systems: charges are too heavy to inline in the topology JSON (MongoDB 16 MB limit)
+    # Each unique charge set is written as a float32 binary file alongside the topology JSON
+    # A .meta.json companion stores the set index and which MD indices share it,
+    # so the API can resolve mdmap → file without re-reading the whole topology.
+    if atom_count > CHARGES_BIN_THRESHOLD:
+        # Group the indices of all MDs having the same charges
+        md_indices_per_set = [[] for _ in range(n_md_charges)]
+        for md_index, set_index in enumerate(md_charges_map):
+            md_indices_per_set[set_index].append(md_index)
+        # Write every different MD charges to the binary format
+        for set_index, (charges, md_indices) in enumerate(zip(unique_md_charges, md_indices_per_set)):
+            # Handle missing charges
+            if charges is None: continue
+            # Write the binary file adding in the metadata the MDs it belongs to
+            bin_path = f'{output_directory}/mdf.atom_charges_{set_index}.bin'
+            store_binary_data(charges, 4, {
+                'mds': md_indices,
+                'x': {
+                    'name': 'atoms',
+                    'length': atom_count,
+                },
+                'bitsize': 32,
+            }, bin_path)
+        # Set the charges as the binary flag either if there is one or more MD charges
+        final_atom_charges = BIN_FLAG
+    # Small systems: inline charges in the topology JSON as before
+    else:
+        # If there is only one set of charges then just set these charges as the value
+        if n_md_charges == 1:
+            final_atom_charges = unique_md_charges[0]
+        # Otherwise set a more complex map
+        else:
+            final_atom_charges = { 'mdmap': md_charges_map, 'values': unique_md_charges }
 
     # Set custom atom selections
     selections = {}
@@ -155,11 +235,11 @@ def generate_topology (
 
     # Setup the final output
     topology = {
-        'atom_names': atom_names,
-        'atom_elements': atom_elements,
-        'atom_charges': atom_charges,
+        'atom_species': atom_species,
+        'atom_species_indices': atom_species_indices,
+        'atom_charges': final_atom_charges,
         'atom_residue_indices': atom_residue_indices,
-        'atom_bonds': atom_bonds,
+        'atom_bonds': final_atom_bonds,
         'residue_names': residue_names,
         'residue_numbers': residue_numbers,
         'residue_icodes': residue_icodes,
@@ -169,6 +249,6 @@ def generate_topology (
         **residue_map,
         # Save also some residue indices lists here
         'selections': selections,
-        'version': '0.0.1',
+        'version': '0.1.0',
     }
-    save_json(topology, output_file.path)
+    save_json(topology, output_topology_filepath)

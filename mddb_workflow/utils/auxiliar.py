@@ -534,7 +534,7 @@ SUPPORTED_BYTE_SIZES = {
 }
 
 
-def store_binary_data(data: list[float], byte_size: int, filepath: str):
+def store_binary_data(data: list[float], byte_size: int, metadata : dict, filepath: str):
     """Store binary data to a file.
 
     Args:
@@ -556,6 +556,9 @@ def store_binary_data(data: list[float], byte_size: int, filepath: str):
         for value in data:
             value = float(value)
             file.write(pack(byte_flag, value))
+    # If there is metadata to be appended to the binary data then write here the companion file
+    companion_filepath = filepath + '.meta.json'
+    save_json(metadata, companion_filepath)
 
 
 class CaptureOutput (object):
