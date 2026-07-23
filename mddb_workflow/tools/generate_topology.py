@@ -159,10 +159,13 @@ def generate_topology (
         md_indices_per_set = [[] for _ in range(n_md_charges)]
         for md_index, set_index in enumerate(md_charges_map):
             md_indices_per_set[set_index].append(md_index)
+        # Track whenever at least one of the charges are exported
+        is_bin : bool = False
         # Write every different MD charges to the binary format
         for set_index, (charges, md_indices) in enumerate(zip(unique_md_charges, md_indices_per_set)):
             # Handle missing charges
             if charges is None: continue
+            is_bin = True
             # Write the binary file adding in the metadata the MDs it belongs to
             bin_path = f'{output_directory}/mdf.atom_charges_{set_index}.bin'
             store_binary_data(charges, 4, {
@@ -174,7 +177,7 @@ def generate_topology (
                 'bitsize': 32,
             }, bin_path)
         # Set the charges as the binary flag either if there is one or more MD charges
-        final_atom_charges = BIN_FLAG
+        final_atom_charges = BIN_FLAG if is_bin else None
     # Small systems: inline charges in the topology JSON as before
     else:
         # If there is only one set of charges then just set these charges as the value
