@@ -1021,7 +1021,7 @@ def workflow_nassa(
     unit_len: int = 6,
     n_sequences: Optional[int] = '*',
     seq_path: str = None,
-    md_directories: Optional[list[str]] = None,
+    input_md_directories: Optional[list[str]] = None,
     trust: bool = False,
     mercy: bool = False,
     ):
@@ -1053,7 +1053,7 @@ def workflow_nassa(
                 'sample_trajectory': sample_trajectory,
                 'input_topology_filepath': input_top_file,
                 'input_trajectory_filepaths': input_trajectory_file,
-                'md_directories': md_directories,
+                'input_md_directories': input_md_directories,
                 'trust': trust,
                 'mercy': mercy
                 },
