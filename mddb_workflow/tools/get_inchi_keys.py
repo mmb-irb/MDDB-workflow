@@ -3,6 +3,7 @@ import traceback
 import multiprocessing
 from dataclasses import dataclass, field
 from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout
+from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION
 from mddb_workflow.tools.get_ligands import pubchem_standardization
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
@@ -313,16 +314,6 @@ def generate_inchikeys(
     return inchikeys
 
 
-def add_versions(version1: str, version2: str) -> int:
-    """Combine two version strings into a single integer version."""
-    # Split the version strings into lists of integers
-    v1_parts = list(map(int, version1.split('.')))
-    v2_parts = list(map(int, version2.split('.')))
-    v3_parts = [str(p1+p2) for p1, p2 in zip(v1_parts, v2_parts)]
-    v3 = '.'.join(v3_parts)
-    return v3
-
-
 def generate_inchi_references(
     inchikeys: dict[str, 'InChIKeyData'],
     lipid_references: dict[str, dict],
@@ -339,15 +330,13 @@ def generate_inchi_references(
         ref_inchikey = ligand_references.get(inchikey, {}).get('inchikey', inchikey)
         ref_inchi = ligand_references.get(inchikey, {}).get('inchi', res_data.inchi)
         lipid_data = lipid_references.get(inchikey, {})
-        version = add_versions(lipid_references.get('version', '0.0.1'),
-                               ligand_references.get('version', '0.0.1'))
         inchikey_references.append({
             'inchikey': ref_inchikey,
             'inchi': ref_inchi,
             'swisslipids': lipid_data.get('swisslipids'),
             'lipidmaps': lipid_data.get('lipidmaps'),
             'ligand': ligand_references.get(inchikey, None),
-            'version': version
+            'version': INCHI_REFERENCE_VERSION
         })
         # Sort dictionary entries for consistency when uploading to database
         for k, v in inchikey_references[-1].items():

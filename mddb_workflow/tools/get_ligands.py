@@ -5,7 +5,7 @@ import time
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
-from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG
+from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG, LIGAND_REFERENCE_VERSION
 from mddb_workflow.utils.auxiliar import InputError, RequestError, request_pdb_data, warn, retry_request, handle_http_request, SocketTimeout
 from mddb_workflow.utils.type_hints import *
 
@@ -641,7 +641,7 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
         'inchikey': inchikey,
         'chembl': chembl_id,
         'drugbank': drugbank_id,
-        'version': '0.0.1'
+        'version': LIGAND_REFERENCE_VERSION
     }
 
 

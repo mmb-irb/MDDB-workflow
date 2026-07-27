@@ -8,7 +8,7 @@ from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, Request
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
-from mddb_workflow.utils.constants import PROTEIN_RESIDUE_LETTERS
+from mddb_workflow.utils.constants import PROTEIN_RESIDUE_LETTERS, PROTEIN_REFERENCE_VERSION
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.blast import run_blastp
 from mddb_workflow.utils.type_hints import *
@@ -873,6 +873,7 @@ def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:
         'domains': domains,
         'functions': functions,
         'isoforms': isoforms,
+        'version': PROTEIN_REFERENCE_VERSION,
     }
 
 

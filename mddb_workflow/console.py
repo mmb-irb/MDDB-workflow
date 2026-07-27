@@ -17,6 +17,7 @@ from mddb_workflow.utils.nassa_file import generate_nassa_config
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
+from mddb_workflow.tools.update_references import update_references, AVAILABLE_REFERENCE_TYPES
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
@@ -206,6 +207,8 @@ def main():
         GLOBALS['no_symlinks'] = True
     if hasattr(args, 'no_colors') and args.no_colors:
         GLOBALS['no_colors'] = True
+    if hasattr(args, 'working_directory') and args.working_directory:
+        GLOBALS['working_directory'] = args.working_directory
     # Find which subcommand was called
     subcommand = args.subcommand
     # If there is not subcommand then print help
@@ -229,6 +232,9 @@ def main():
                 project_args[k] = v
             else:
                 workflow_args[k] = v
+        # Legacy fix
+        if project_args['directory'] == '.' and args.working_directory != '.':
+            project_args['directory'] = args.working_directory
         # Call the actual main function
         workflow(project_parameters=project_args, **workflow_args)
     # If user wants to setup the inputs
@@ -534,6 +540,9 @@ def main():
                     trust=args.trust,
                     mercy=args.mercy
             )
+    # Update references
+    elif subcommand == 'upref':
+        update_references(args.url_or_alias, args.reference_type, args.ssleep)
 
 
 # Define a common parser running in top of all others
@@ -543,8 +552,12 @@ common_parser = ArgumentParser(add_help=False)
 # If this argument is passed then no symlinks will be used anywhere
 # Files will be copied instead thus taking more time and disk
 # However symlinks are not always allowed in all file systems so this is sometimes necessary
-common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true', help="Do not use symlinks internally")
-common_parser.add_argument("-nc", "--no_colors", default=False, action='store_true', help="Do not use colors for logging")
+common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_true',
+    help="Do not use symlinks internally")
+common_parser.add_argument("-nc", "--no_colors", default=False, action='store_true',
+    help="Do not use colors for logging")
+common_parser.add_argument("-wd", "--working_directory", default='.',
+    help="Set the working directory. Make sure you have read and write permissions in this directory.")
 
 # Define console arguments to call the workflow
 parser = CustomArgumentParser(description="MDDB Workflow")
@@ -758,7 +771,6 @@ nassa_parser_args = [
     (['-w', '--make_config'], {'nargs': '*', 'default': None, 'help': "Make a configuration file for the NASSA analysis: makecfg.\nThe base path could be given as an argument. If not, an example of configuration file is created."}),
     (['-seq', '--seq_path'], {'type': str, 'const': False, 'action': custom, 'help': "Set the base path of the sequences. If not given, the sequences are searched in the current directory."}),
     (['-o', '--output'], {'help': "Output path for the NASSA analysis"}),
-    (['-dir', '--working_directory'], {'default': '.', 'help': "Directory where the whole workflow is run. Current directory by default."}),
     (['-ow', '--overwrite'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'choices': choices, 'help': workflow_help['overwrite']}),
     (['-own', '--overwrite_nassa'], {'type': str, 'nargs': '*', 'default': [], 'action': custom, 'const': True, 'help': "Set the output files to be overwritten thus re-runing its corresponding analysis or tool for the NASSA analysis"}),
     (['-nseq', '--n_sequences'], {'type': int, 'help': "Number of sequences to be analyzed"}),
@@ -832,3 +844,20 @@ ds_run.add_argument("-c", "--cmd", type=str, help=ds_help['launch']['cmd'])
 ds_run.add_argument("-sl", "--slurm", action="store_true", help=ds_help['launch']['slurm'])
 ds_run.add_argument("-jt", "--job-template", help=ds_help['launch']['job_template'])
 ds_run.add_argument("--debug", action="store_true", help=ds_help['launch']['debug'])
+
+# Update references command
+upref_parser = subparsers.add_parser("upref",
+    help="Update references",
+    formatter_class=CustomHelpFormatter,
+    parents=[common_parser]
+)
+
+# Set optional arguments
+upref_parser.add_argument("url_or_alias", type=str,
+    help=("Select the database where the references are to be updated. Either use an URL or an alias. "
+          "If you don't know the available aliases then just run the command with a wrong alias. "
+          "It will fail and then it will show you available aliases in MDposit."))
+upref_parser.add_argument("reference_type", type=str,
+    help=f"Select the type of references to update among these: {', '.join(AVAILABLE_REFERENCE_TYPES)}")
+upref_parser.add_argument('-sl', '--ssleep', default=False, action="store_true",
+    help="Select the type of references to update")

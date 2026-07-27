@@ -2,8 +2,10 @@ import urllib.request
 import urllib.error
 import ssl
 import json
+from math import ceil
 from tqdm import tqdm
-from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError, warn, retry_request
+from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError
+from mddb_workflow.utils.auxiliar import reprint, warn, retry_request
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
@@ -227,19 +229,19 @@ class Remote:
 
 class Database:
     """Class to handle database operations."""
-    def __init__(self, url: str, no_ssl_authentication: bool = False):
+    def __init__(self, url_or_alias: str, no_ssl_authentication: bool = False):
         """Initialize the database handler.
 
         Args:
-            url: URL of the database (e.g. https://irb-dev.mddbr.eu/api/)
+            url_or_alias: URL of the database (e.g. https://irb-dev.mddbr.eu/api/) or alias (e.g. mmb)
             no_ssl_authentication: If True, SSL certificates will not be authenticated.
 
         """
         # Set the context
         self.context = NO_SSL_CONTEXT if no_ssl_authentication else None
         # Set the database API URL
-        if '://' in url:
-            self.url = url
+        if '://' in url_or_alias:
+            self.url = url_or_alias
         # If this is not an URL then it may be an alias from a remote node
         else:
             # Check if the user is requesting for the global database
@@ -248,10 +250,10 @@ class Database:
             # Add the global node as an option
             nodes = {GLOBAL_SERVER_ALIAS: {'name': GLOBAL_SERVER_NAME, 'url': GLOBAL_SERVER_URL}, **available_nodes}
             # Check if the requested URL is actually a node alias
-            target_node = nodes.get(url, None)
+            target_node = nodes.get(url_or_alias, None)
             # If not then we complain
             if target_node is None:
-                message = f'Invalid database URL "{url}". Available URLs:\n'
+                message = f'Invalid database alias "{url_or_alias}". Available aliases:\n'
                 for node_alias, node_config in nodes.items():
                     message += f' - {node_alias} ({node_config["name"]}) -> {node_config["url"]}\n'
                 raise InputError(message)
@@ -315,14 +317,14 @@ class Database:
         """Instantiate the remote project handler."""
         return Remote(self, accession, context=self.context)
 
-    def get_reference_data(self, reference: str, id: str) -> Optional[dict]:
-        """Check if the required sequence is already in the MDDB database."""
+    def get_reference_data(self, reference_type: str, reference_id: str) -> Optional[dict]:
+        """Get reference data for a specific reference ID from the MDDB database."""
         # Make sure the database is alive (and thus the provided database URL is valid)
         # If not then we return None and allow the workflow to keep going
         # Probably if the reference can not be obtained the workflow will generate it again
         if not self.is_alive(): return None
         # Request the specific data
-        request_url = f'{self.url}rest/v1/references/{reference}/{id}'
+        request_url = f'{self.url}rest/v1/references/{reference_type}/{reference_id}'
         try:
             with workflow_urlopen(request_url, context=self.context) as response:
                 return json.loads(response.read().decode("utf-8", errors='ignore'))
@@ -334,3 +336,42 @@ class Database:
             raise RuntimeError(f'Something went wrong with the MDposit request {request_url}')
         except Exception as error:
             raise RuntimeError(f'Something went wrong with the MDposit request {request_url} with error: {error}')
+
+    def get_all_refences_data (self , reference_type: str, page_limit: int = 100, verbose : bool = True) -> list[dict]:
+        """Get all references data for a specific reference type from the MDDB database."""
+        # Make the first request to know the number of available references
+        first_request_url = f'{self.url}rest/v1/references/{reference_type}?limit={page_limit}'
+        if verbose: print() # Print an empty line for the further reprint
+        try:
+            if verbose: reprint(f'Requesting first page -> {first_request_url}')
+            with workflow_urlopen(first_request_url, context=self.context) as response:
+                first_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+        # Handle possible errors
+        except urllib.error.HTTPError as error:
+            raise RuntimeError(f'Something went wrong with the MDposit request {first_request_url} with error: {error}')
+        except Exception as error:
+            raise RuntimeError(f'Something went wrong with the MDposit request {first_request_url} with error: {error}')
+        # Calculate how many pages we will need to have the whole content
+        expected_references_count = first_response['referencesCount']
+        n_pages = ceil(expected_references_count/page_limit)
+        # Get all references in a single list
+        references = first_response['references']
+        # Paginate to get the rest of references
+        for page in range(2, n_pages + 1):
+            following_request_url = first_request_url + f'&page={page}'
+            try:
+                if verbose: reprint(f'Requesting page {page}/{n_pages} -> {following_request_url}')
+                with workflow_urlopen(following_request_url, context=self.context) as response:
+                    following_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+                    references += following_response['references']
+            # Handle possible errors
+            except urllib.error.HTTPError as error:
+                raise RuntimeError(f'Something went wrong with the MDposit request {following_request_url} with error: {error}')
+            except Exception as error:
+                raise RuntimeError(f'Something went wrong with the MDposit request {following_request_url} with error: {error}')
+        # Make sure the numbers match
+        final_references_count = len(references)
+        if final_references_count != expected_references_count:
+            warn(f'We expected {expected_references_count} references but we got {final_references_count}')
+        # Return all references
+        return references

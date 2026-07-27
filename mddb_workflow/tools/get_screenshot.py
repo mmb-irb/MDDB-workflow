@@ -42,10 +42,10 @@ def get_screenshot (
     # Set the solvent selection and totally remove it from the structure
     # This way not only we hide it from the representation, but we also prevent the center to be far away from the camera
     solvent_selection = structure.select_water_and_counter_ions()
-    filter_structure = structure.filter_away(solvent_selection)
+    filtered_structure = structure.filter_away(solvent_selection)
 
     # Produce a PDB file to feed VMD
-    filter_structure.generate_pdb_file(auxiliar_pdb_filepath)
+    filtered_structure.generate_pdb_file(auxiliar_pdb_filepath)
 
     # Number of pixels to scale in x
     x_number_pixels = 350
@@ -123,7 +123,7 @@ def get_screenshot (
     else:
 
         # Obtain all coordinates from each atom of the filtered structure
-        coordinates = [list(atom.coords) for atom in filter_structure.atoms]
+        coordinates = [list(atom.coords) for atom in filtered_structure.atoms]
         # Convert the list into a Numpy Array, since Scipy library just works with this type of data structure
         coordinates_np = np.array(coordinates)
 
@@ -308,8 +308,8 @@ def get_screenshot (
     # e.g. a large peptide noted as a single residue
     # Note that we also include terminals in the cartoon selection although they are not representable
     # This is because terminals are better hidden than represented as ligands, this would be missleading
-    cartoon_selection = filter_structure.select_cartoon(include_terminals=True)
-    non_cartoon_selection = filter_structure.invert_selection(cartoon_selection)
+    cartoon_selection = filtered_structure.select_cartoon(include_terminals=True)
+    non_cartoon_selection = filtered_structure.invert_selection(cartoon_selection)
     # Also coarse grain beads have to be considered
     # We cannot paint them by their elements so we must rely in atom names or chains
     non_cartoon_selection -= cg_selection

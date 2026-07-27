@@ -568,3 +568,20 @@ NASSA_ANALYSES_CANALS = {
     # 'crdcorr': ['shift', 'slide', 'rise', 'tilt', 'roll', 'twist'],
     'stiff': ['stretch', 'shear', 'buckle', 'stagger', 'propel', 'opening', 'chiW', 'chiC']
 }
+
+# Versions
+def _add_versions(version1: str, version2: str) -> int:
+    """Combine two version strings into a single integer version."""
+    # Split the version strings into lists of integers
+    v1_parts = list(map(int, version1.split('.')))
+    v2_parts = list(map(int, version2.split('.')))
+    v3_parts = [str(p1+p2) for p1, p2 in zip(v1_parts, v2_parts)]
+    v3 = '.'.join(v3_parts)
+    return v3
+
+# Reference versions
+PROTEIN_REFERENCE_VERSION = '0.0.1'
+LIPID_REFERENCE_VERSION = '0.0.1'
+LIGAND_REFERENCE_VERSION = '0.0.1'
+INCHI_REFERENCE_VERSION = _add_versions(LIPID_REFERENCE_VERSION, LIGAND_REFERENCE_VERSION)
+PDB_REFERENCE_VERSION = '0.0.6'
