@@ -641,8 +641,9 @@ class Residue:
         # WARNING: missing elements would result in silent failure to recognize some classifications
         self.structure.fix_atom_elements()
         # Solvent is water molecules
-        # First rely on the residue name
-        if self.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+        # First rely on the residue name and a reasonable number of atoms
+        # We consider 5 as the maximum number since there are TIP5P models
+        if self.name in STANDARD_SOLVENT_RESIDUE_NAMES and self.atom_count <= 5:
             self._classification = 'solvent'
             return self._classification
         # It may be water with a not known name
