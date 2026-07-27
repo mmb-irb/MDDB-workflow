@@ -232,9 +232,6 @@ def main():
                 project_args[k] = v
             else:
                 workflow_args[k] = v
-        # Legacy fix
-        if project_args['directory'] == '.' and args.working_directory != '.':
-            project_args['directory'] = args.working_directory
         # Call the actual main function
         workflow(project_parameters=project_args, **workflow_args)
     # If user wants to setup the inputs
