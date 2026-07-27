@@ -216,8 +216,8 @@ def main():
         parser.print_help()
     # If user wants to run the workflow
     elif subcommand == "run":
-        # Ger all parsed arguments
-        dict_args = vars(args)
+        # Get arguments in a dict copy, so we do not mutate the original 
+        dict_args = { k:v for k,v in vars(args).items() }
         # Remove arguments not related to this subcommand
         del dict_args['subcommand']
         # Remove common arguments from the dict as well
@@ -232,6 +232,9 @@ def main():
                 project_args[k] = v
             else:
                 workflow_args[k] = v
+        # Legacy fix
+        if hasattr(args, 'working_directory') and args.working_directory != '.' and project_args['directory'] == '.':
+            project_args['directory'] = args.working_directory
         # Call the actual main function
         workflow(project_parameters=project_args, **workflow_args)
     # If user wants to setup the inputs
@@ -519,7 +522,8 @@ def main():
             )
         # If the user wants to run the NASSA analysis with the config file already created and the analysis name provided
         else:
-            dict_args = vars(args)
+            # Get arguments in a dict copy, so we do not mutate the original 
+            dict_args = { k:v for k,v in vars(args).items() }
             del dict_args['subcommand']
             # Call the actual main function
             workflow_nassa(
