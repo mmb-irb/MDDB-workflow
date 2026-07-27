@@ -56,7 +56,7 @@ def update_references (database_url_or_alias : str, reference_type : str, ssleep
     reference_config = REFERENCE_TYPE_CONFIGURATIONS[reference_type]
 
     # Instantiate the database handler
-    database = Database(database_url_or_alias, ssleep)
+    database = Database(database_url_or_alias)
 
     # Paginate to get all available references and their versions
     references = database.get_all_refences_data(reference_config['endpoint'])

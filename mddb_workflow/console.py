@@ -207,6 +207,8 @@ def main():
         GLOBALS['no_symlinks'] = True
     if hasattr(args, 'no_colors') and args.no_colors:
         GLOBALS['no_colors'] = True
+    if hasattr(args, 'ssleep') and args.ssleep:
+        GLOBALS['no_ssl'] = True
     if hasattr(args, 'working_directory') and args.working_directory:
         GLOBALS['working_directory'] = args.working_directory
     # Find which subcommand was called
@@ -543,7 +545,7 @@ def main():
             )
     # Update references
     elif subcommand == 'upref':
-        update_references(args.url_or_alias, args.reference_type, args.ssleep)
+        update_references(args.url_or_alias, args.reference_type)
 
 
 # Define a common parser running in top of all others
@@ -557,6 +559,9 @@ common_parser.add_argument("-ns", "--no_symlinks", default=False, action='store_
     help="Do not use symlinks internally")
 common_parser.add_argument("-nc", "--no_colors", default=False, action='store_true',
     help="Do not use colors for logging")
+common_parser.add_argument("-sl", "--ssleep", default=False, action='store_true',
+    help=("Use this flag to skip SSL certificate authentication.\n"
+        "WARNING: Do not use this flag if you don't trust the data source."))
 common_parser.add_argument("-wd", "--working_directory", default='.',
     help="Set the working directory. Make sure you have read and write permissions in this directory.")
 
@@ -644,9 +649,6 @@ run_parser_checks_args = [
      'help': ("Use this flag to force-skip all data processing thus asuming inputs are already processed.\n"
               "WARNING: Do not use this flag if you don't know what you are doing.\n"
               "This may lead to several silent errors.")}),
-    (['-sl', '--ssleep'], {'default': False, 'action': 'store_true',
-     'help': ("Use this flag to skip SSL certificate authentication.\n"
-              "WARNING: Do not use this flag if you don't trust the data source.")}),
 ]
 for flags, kwargs in run_parser_checks_args:
     run_parser_checks_group.add_argument(*flags, **kwargs)
@@ -860,5 +862,3 @@ upref_parser.add_argument("url_or_alias", type=str,
           "It will fail and then it will show you available aliases in MDposit."))
 upref_parser.add_argument("reference_type", type=str,
     help=f"Select the type of references to update among these: {', '.join(AVAILABLE_REFERENCE_TYPES)}")
-upref_parser.add_argument('-sl', '--ssleep', default=False, action="store_true",
-    help="Select the type of references to update")

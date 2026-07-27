@@ -6,7 +6,7 @@ from math import ceil
 from tqdm import tqdm
 from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError
 from mddb_workflow.utils.auxiliar import reprint, warn, retry_request
-from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILENAME
+from mddb_workflow.utils.constants import GLOBALS, INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILENAME
 from mddb_workflow.utils.type_hints import *
 
 # When downloading files, set the chunk size in bytes
@@ -29,28 +29,38 @@ GLOBAL_SERVER_URL = 'https://mdposit.mddbr.eu/api/'
 
 def workflow_urlopen(url, *args, **kwargs):
     """Set a workflow header for metrics urllib.request.urlopen."""
+    # Set the context depending on if we will skip SSL authentication
+    no_ssl_authentication = GLOBALS.get('no_ssl', False) == True
+    kwargs['context'] = NO_SSL_CONTEXT if no_ssl_authentication else None
+    # Run the request
     req = urllib.request.Request(url)
     req.add_header(WORKFLOW_REQUEST_SOURCE_HEADER, WORKFLOW_REQUEST_SOURCE_VALUE)
     return urllib.request.urlopen(req, *args, **kwargs)
 
+def get_available_nodes() -> dict[str, str]:
+    nodes_url = f'{GLOBAL_SERVER_URL}rest/current/nodes'
+    try:
+        response = workflow_urlopen(nodes_url)
+        nodes_data = json.loads(response.read())
+        return {node['alias']: {'name': node['name'], 'url': node['api_url']} for node in nodes_data}
+    except Exception as error:
+        raise Exception(f'Something went wrong when requesting nodes data ({nodes_url}) with error "{error}"')
+
 
 class Remote:
     """Class to handle remote projects in the database."""
-    def __init__(self, database: 'Database', accession: str, context=None):
+    def __init__(self, database: 'Database', accession: str):
         """Initialize the remote project handler.
 
         Args:
             database: Database handler to access the database.
             accession: Accession of the remote project to be handled.
-            context: SSL context to be used in the requests.
 
         """
         # Set the URL
         self.database = database
         self.accession = accession
         self.project_url = f'{self.database.url}rest/current/projects/{accession}'
-        # Set the context
-        self.context = context
         # Set internal variables
         self._project_data = None
         self._available_files = None
@@ -72,7 +82,7 @@ class Remote:
             raise RemoteServiceError('Database not available')
         # Otherwise request the project data to the API
         try:
-            response = workflow_urlopen(self.project_url, context=self.context)
+            response = workflow_urlopen(self.project_url)
             self._project_data = json.loads(response.read())
             return self._project_data
         except urllib.error.HTTPError as error:
@@ -99,7 +109,7 @@ class Remote:
         file_str = '' if output_file is None else f' ({output_file.path})'
         print(f'Downloading {description}{file_str}\n')
         try:
-            response = workflow_urlopen(request_url, context=self.context)
+            response = workflow_urlopen(request_url)
             if output_file:
                 with open(output_file.path, 'wb') as file:
                     file.write(response.read())
@@ -125,7 +135,7 @@ class Remote:
         request_url = f'{self.project_url}/files/{target_filename}'
         print(f'Downloading file "{target_filename}" in {output_file.path}\n')
         try:
-            response = workflow_urlopen(request_url, context=self.context)
+            response = workflow_urlopen(request_url)
             with open(output_file.path, 'wb') as file:
                 while True:
                     chunk = response.read(CHUNK_SIZE)
@@ -185,7 +195,7 @@ class Remote:
         # If we have a previous incomplete trajectory then remove it
         if incomplete_trajectory.exists: incomplete_trajectory.remove()
         try:
-            response = workflow_urlopen(request_url, context=self.context)
+            response = workflow_urlopen(request_url)
             pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024,
                         miniters=1, desc=' Progress', leave=False)
             with open(incomplete_trajectory.path, 'wb') as file:
@@ -229,16 +239,13 @@ class Remote:
 
 class Database:
     """Class to handle database operations."""
-    def __init__(self, url_or_alias: str, no_ssl_authentication: bool = False):
+    def __init__(self, url_or_alias: str):
         """Initialize the database handler.
 
         Args:
             url_or_alias: URL of the database (e.g. https://irb-dev.mddbr.eu/api/) or alias (e.g. mmb)
-            no_ssl_authentication: If True, SSL certificates will not be authenticated.
 
         """
-        # Set the context
-        self.context = NO_SSL_CONTEXT if no_ssl_authentication else None
         # Set the database API URL
         if '://' in url_or_alias:
             self.url = url_or_alias
@@ -246,7 +253,7 @@ class Database:
         else:
             # Check if the user is requesting for the global database
             # Get available nodes from the remote
-            available_nodes = self.get_available_nodes()
+            available_nodes = get_available_nodes()
             # Add the global node as an option
             nodes = {GLOBAL_SERVER_ALIAS: {'name': GLOBAL_SERVER_NAME, 'url': GLOBAL_SERVER_URL}, **available_nodes}
             # Check if the requested URL is actually a node alias
@@ -268,15 +275,6 @@ class Database:
     def __str__(self) -> str:
         return f'< Database {self.url} >'
 
-    def get_available_nodes(self) -> dict[str, str]:
-        nodes_url = f'{GLOBAL_SERVER_URL}rest/current/nodes'
-        try:
-            response = workflow_urlopen(nodes_url, context=self.context)
-            nodes_data = json.loads(response.read())
-            return {node['alias']: {'name': node['name'], 'url': node['api_url']} for node in nodes_data}
-        except Exception as error:
-            raise Exception(f'Something went wrong when requesting nodes data ({nodes_url}) with error "{error}"')
-
     @retry_request
     def is_alive(self) -> bool:
         """Check if the database is alive.
@@ -285,7 +283,7 @@ class Database:
         WARNING: Do not run in by default.
         """
         try:
-            response = workflow_urlopen(self.url, context=self.context)
+            response = workflow_urlopen(self.url)
             response.read(1)
             return True
         except urllib.error.HTTPError as error:
@@ -315,7 +313,7 @@ class Database:
 
     def get_remote_project(self, accession: str) -> Remote:
         """Instantiate the remote project handler."""
-        return Remote(self, accession, context=self.context)
+        return Remote(self, accession)
 
     def get_reference_data(self, reference_type: str, reference_id: str) -> Optional[dict]:
         """Get reference data for a specific reference ID from the MDDB database."""
@@ -326,7 +324,7 @@ class Database:
         # Request the specific data
         request_url = f'{self.url}rest/v1/references/{reference_type}/{reference_id}'
         try:
-            with workflow_urlopen(request_url, context=self.context) as response:
+            with workflow_urlopen(request_url) as response:
                 return json.loads(response.read().decode("utf-8", errors='ignore'))
         # Handle possible errors
         except urllib.error.HTTPError as error:
@@ -344,7 +342,7 @@ class Database:
         if verbose: print() # Print an empty line for the further reprint
         try:
             if verbose: reprint(f'Requesting first page -> {first_request_url}')
-            with workflow_urlopen(first_request_url, context=self.context) as response:
+            with workflow_urlopen(first_request_url) as response:
                 first_response = json.loads(response.read().decode("utf-8", errors='ignore'))
         # Handle possible errors
         except urllib.error.HTTPError as error:
@@ -361,7 +359,7 @@ class Database:
             following_request_url = first_request_url + f'&page={page}'
             try:
                 if verbose: reprint(f'Requesting page {page}/{n_pages} -> {following_request_url}')
-                with workflow_urlopen(following_request_url, context=self.context) as response:
+                with workflow_urlopen(following_request_url) as response:
                     following_response = json.loads(response.read().decode("utf-8", errors='ignore'))
                     references += following_response['references']
             # Handle possible errors

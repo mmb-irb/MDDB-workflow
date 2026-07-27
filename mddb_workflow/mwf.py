@@ -1391,7 +1391,6 @@ class Project:
         mercy: list[str] | bool = [],
         trust: list[str] | bool = [],
         faith: bool = False,
-        ssleep: bool = False,
         pca_analysis_selection: str = PROTEIN_AND_NUCLEIC_BACKBONE,
         pca_fit_selection: str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff: float = DEFAULT_RMSD_CUTOFF,
@@ -1475,8 +1474,6 @@ class Project:
                 Tests to skip/trust (or boolean to set all/none).
             faith (bool):
                 If True, require input files to match expected output files and skip processing.
-            ssleep (bool):
-                If True, SSL certificate authentication is skipped when downloading data from an API.
             pca_analysis_selection (str):
                 Atom selection for PCA analysis in VMD syntax.
             pca_fit_selection (str):
@@ -1516,8 +1513,7 @@ class Project:
         self.project_directory = self.directory
 
         # Set the database handler
-        self.ssleep = ssleep
-        self.database = Database(database_url, self.ssleep) if database_url else None
+        self.database = Database(database_url) if database_url else None
         # Set the remote project handler
         self.accession = accession
         self.remote = None
