@@ -325,6 +325,10 @@ def generate_inchi_references(
     """Generate InChI references for the database."""
     inchikey_references = []  # For the database
     inchikey_map = []  # For the workflow
+    # Add the user selected ligands to the references, if any
+    for k, v in ligand_references.items():
+        if v.get('forced', False):
+            inchikeys[k] = InChIKeyData(inchi=v['inchi'], resnames=set(v['resnames']), resindices=v['resindices'])
     for inchikey, res_data in inchikeys.items():
         # If there is force ligands, the inchikey may have changed
         ref_inchikey = ligand_references.get(inchikey, {}).get('inchikey', inchikey)

@@ -240,6 +240,8 @@ def generate_ligand_references(
             if len(residue_indices) == 0 and LIGANDS_MATCH_FLAG not in mercy:
                 raise InputError(f'Ligand with PubChem ID {pubchem_id} did not map with any residue')
             ligand_data['resindices'] = residue_indices
+            ligand_data['resnames'] = [structure.residues[index].name for index in residue_indices]
+            ligand_data['forced'] = True
         # Search for this pubchem ID in automatic_references
         matched_inchikey = None
         for auto_inchikey, auto_data in automatic_references.items():
