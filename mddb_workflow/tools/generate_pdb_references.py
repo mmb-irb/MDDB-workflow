@@ -94,7 +94,7 @@ def get_pdb_reference(pdb_id: str) -> dict:
         uniprots = identifier.get('uniprot_ids', None)
         if not uniprots: continue
         if len(uniprots) > 1:
-            warn(f'PDB {final_pdb_id} has multiple uniprots: {uniprots}. Using only the first one')
+            warn(f'In PDB {final_pdb_id}, chain(s) {", ".join(chains)} assigned to multiple uniprots: {", ".join(uniprots)}. Using only the first one')
         uniprot_id = uniprots[0]
         # Get all chains with this configuration
         chains = identifier['asym_ids']
@@ -108,7 +108,7 @@ def get_pdb_reference(pdb_id: str) -> dict:
     # Calculate the metrics needed for integration with the PDBe knowledge base
     pdb_data['knowledge'] = calculate_knowledge_data(final_pdb_id, structure)
     # Make a uniprot to PDB map
-    uniprot_ids = list(chain_uniprots.values())
+    uniprot_ids = set(chain_uniprots.values())
     pdb_data['uni2pdb'] = make_uniprot_to_pdb_map(structure, uniprot_ids)
     # Sort all dictionaries
     # Otherwise the loader will complain about a change every time since the order may change
@@ -259,7 +259,7 @@ def calculate_knowledge_data(pdb_id: str, structure: 'Structure') -> dict:
 
 def make_uniprot_to_pdb_map(
     pdb_structure: 'Structure',
-    uniprots_ids: list[str]) -> dict[str, list]:
+    uniprots_ids: set[str]) -> dict[str, list]:
     """Make a map from UniProt to PDB for the PDBe knowledge base integration."""
     uniprot_to_pdb_map = {}
     # Get all uniprot references
