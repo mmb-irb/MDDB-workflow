@@ -1,5 +1,5 @@
 from packaging.version import Version
-
+from os.path import exists
 
 from mddb_workflow.utils.auxiliar import load_json, save_json
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, INCHI_REFERENCE_VERSION, PDB_REFERENCE_VERSION
@@ -74,8 +74,10 @@ def update_references (database_url_or_alias : str, reference_type : str, ssleep
     # Load already updated references in this directory, if any
     # Thus there is no need to update them again
     output_references_filepath = reference_config['output']
-    updated_references = load_json(output_references_filepath)
-    print(f'  There are {len(updated_references)} locally already updated references')
+    updated_references = []
+    if exists(output_references_filepath):
+        load_json(output_references_filepath)
+        print(f'  There are {len(updated_references)} locally already updated references')
 
     # Substract their ids from the outdated ids list
     locally_updated_references = set([ ref[id_key] for ref in updated_references ])
