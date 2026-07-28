@@ -859,7 +859,7 @@ upref_parser = subparsers.add_parser("upref",
 upref_parser.add_argument("url_or_alias", type=str,
     help=("Select the database where the references are to be updated. Either use an URL or an alias. "
           "If you don't know the available aliases then just run the command with a wrong alias. "
-          "It will fail and then it will show you available aliases in MDposit."
+          "It will fail and then it will show you available aliases in MDposit. "
           "You may also pass the flag 'all' in order to update references from all nodes."))
 upref_parser.add_argument("reference_type", type=str,
     help=f"Select the type of references to update among these: {', '.join(AVAILABLE_REFERENCE_TYPES)}")
