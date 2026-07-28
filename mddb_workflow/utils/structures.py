@@ -900,6 +900,7 @@ class Residue:
         _second_residue_name = second_residue_name if second_residue_name else self.name
         _second_residue_number = second_residue_number if second_residue_number else self.number
         _second_residue_icode = second_residue_icode if second_residue_icode else get_next_letter(self.icode)
+        if _second_residue_icode is None: raise RuntimeError('No more letters in the alphabet for icodes')
         second_residue = Residue(_second_residue_name, _second_residue_number, _second_residue_icode)
         second_residue._structure = self.structure
         new_residue_index = self.index + 1
@@ -2616,6 +2617,8 @@ class Structure:
                 last_chain_letter = repeated_chain.name
                 while last_chain_letter in current_letters:
                     last_chain_letter = get_next_letter(last_chain_letter)
+                    if last_chain_letter: continue
+                    last_chain_letter = self.get_available_chain_name()
                 repeated_chain.name = last_chain_letter
                 current_letters.append(last_chain_letter)
         # Check if there are splitted chains
@@ -3357,12 +3360,10 @@ def calculate_torsion(atom_1: Atom, atom_2: Atom, atom_3: Atom, atom_4: Atom) ->
 # =========================
 
 
-def get_next_letter(letter: str) -> str:
+def get_next_letter(letter: str) -> Optional[str]:
     """Set a function to get the next letter from an input letter in alphabetic order."""
-    if not letter:
-        return 'A'
-    if letter == 'z' or letter == 'Z':
-        raise InputError("Limit of chain letters has been reached")
+    if not letter: return 'A'
+    if letter == 'z' or letter == 'Z': return None
     next_letter = chr(ord(letter) + 1)
     return next_letter
 
