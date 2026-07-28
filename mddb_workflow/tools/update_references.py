@@ -1,9 +1,9 @@
 from packaging.version import Version
-from os import mkdir
+from os import mkdir, replace
 from os.path import exists
 from re import sub
 
-from mddb_workflow.utils.auxiliar import load_json, save_json
+from mddb_workflow.utils.auxiliar import load_json, save_json, warn
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, INCHI_REFERENCE_VERSION, PDB_REFERENCE_VERSION
 from mddb_workflow.utils.constants import PROTEIN_REFERENCES_FILENAME, INCHIKEY_REFERENCES_FILENAME, PDB_REFERENCES_FILENAME
 from mddb_workflow.utils.database import Database, get_available_nodes
@@ -85,9 +85,12 @@ def update_references (database_url_or_alias : str, reference_type : str):
     directory = sub('https?://', '', database_url_or_alias.replace('/api/', ''))
     if not exists(directory): mkdir(directory)
 
+    # Set the filepaths where output is to be written
+    output_references_filepath = f"{directory}/{reference_config['output']}"
+    provisional_output_references_filepath = f"{directory}/provisional_{reference_config['output']}"
+
     # Load already updated references in this directory, if any
     # Thus there is no need to update them again
-    output_references_filepath = f"{directory}/{reference_config['output']}"
     print(f'  Results will be saved to {output_references_filepath}')
     updated_references = []
     if exists(output_references_filepath):
@@ -103,13 +106,34 @@ def update_references (database_url_or_alias : str, reference_type : str):
     outdated_count = len(outdated_reference_ids)
     print(f'  There are {outdated_count} outdated references left after using the locally updated references')
 
+    # Keep track of the every reference we fail to update
+    # Note that the PDB may return a random 500 (internal server error) sometimes
+    # If we fail to update some references then just trying again may solve the issues
+    failed_references_count = 0
+
     # Remake every outdated reference
     reference_maker = reference_config['maker']
     for o, outdated_reference_id in enumerate(outdated_reference_ids, 1):
         print(f'  Remaking {outdated_reference_id} ({o}/{outdated_count})')
-        new_reference = reference_maker(outdated_reference_id)
+        # Wrap the updater in a try/except so we are resilient when having response issues
+        try:
+            new_reference = reference_maker(outdated_reference_id)
+        except:
+            warn(f'Something went wrong while updating {outdated_reference_id} -> Skipped')
+            failed_references_count += 1
+            continue
         updated_references.append(new_reference)
         # Write the updated references to disk after every update
         # Note that there may be a lot of references so the full update may take much time
         # We save the progress constantly so we don't have to start from scratch if something goes wrong
-        save_json(updated_references, output_references_filepath)
+        # Note that we do not write directly to the output file in case the user interrupts the process
+        # Instead, we first write to a provisional file and then replace the original file with it
+        # Otherwise we could loose all the already updated references if we are not lucky
+        save_json(updated_references, provisional_output_references_filepath)
+        replace(provisional_output_references_filepath, output_references_filepath)
+
+
+    # Warn the user about failed updates
+    if failed_references_count > 0:
+        warn(f' Failed to update {failed_references_count} out of {outdated_count} references. '
+            'This may be cause by network problems so please run the updater again.')
