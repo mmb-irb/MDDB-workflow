@@ -1947,6 +1947,8 @@ class Structure:
             if show_warnings:
                 warn(f'Chain names with more than 1 character (e.g. "{long_chain_name}")' + \
                 ' are not supported in PDB format. Chains will be renamed to fit in.')
+                for original_chain, shortened_chain in chain_names_map.items():
+                    print(f' Chain {original_chain} will be renamed as {shortened_chain}')
             if len(chain_names) > len(AVAILABLE_LETTERS):
                 if show_warnings: warn('There are more chains in the structure than letters in the alphabet.' + \
                     ' Some chain names will be left blank.')
