@@ -1,5 +1,5 @@
 # Count different type of atoms and residues in the structure
-def get_atoms_count (structure : 'Structure') -> tuple:
+def get_atom_counts (structure : 'Structure') -> tuple:
 
     # Number of system atoms and residues
     system_atoms = len(structure.atoms)

@@ -1,5 +1,5 @@
 from mddb_workflow.tools.get_box_size import get_box_size
-from mddb_workflow.tools.get_atoms_count import get_atoms_count
+from mddb_workflow.tools.get_atom_counts import get_atom_counts
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
 from mddb_workflow.tools.generate_map import get_sequence_metadata
 from mddb_workflow.utils.auxiliar import InputError, save_json
@@ -71,7 +71,7 @@ def prepare_project_metadata (
     (system_atoms, system_residues, protein_atoms, protein_residues,
     dna_atoms, dna_residues, rna_atoms, rna_residues, lipid_atoms, lipid_residues,
     carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
-    counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atoms_count(structure)
+    counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atom_counts(structure)
 
     # Get the system keywords
     system_keywords = get_system_keywords(structure, inchikey_map, membrane_map)
