@@ -159,7 +159,8 @@ def energies (
             for bond in strong_bonds:
                 strong_bond_atom_indices += bond
         # Set atoms to be flagged as dummy
-        dummy_atom_indices = set()
+        # Start including atoms which are actually "dummy", not in the sense of CMIP, but in general
+        dummy_atom_indices = set(dummy_selection.atom_indices)
         # If this is to be the host file then set guest atoms and strong bond atoms dummy
         if host_file:
             dummy_atom_indices |= set(strong_bond_atom_indices)
@@ -205,7 +206,8 @@ def energies (
                 # Set if atom is to be ignored
                 is_dummy = real_index in dummy_atom_indices
                 cmip_dummy_flag = 'X' if is_dummy else ''
-                element = atom.element
+                # Set dummy atoms as hydrogen, so their VDW is minimal
+                element = 'H' if is_dummy else atom.element
                 atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name + ' '
                     + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
                     + ' ' + str(charge).rjust(7) + '  ' + cmip_dummy_flag + element + '\n')
@@ -430,14 +432,6 @@ def energies (
             agent2_selection = frame_structure.select_atom_indices(agent2_atom_indices)
             if not agent2_selection:
                 raise ValueError(f'Empty agent 2 "{agent2_name}" from interaction "{interaction_name}"')
-
-            # Exclude atoms which are actually "dummy", not in the sense of CMIP, but in general
-            agent1_selection -= dummy_selection
-            if not agent1_selection:
-                raise ValueError('Agent 1 is all made of dummy atoms')
-            agent2_selection -= dummy_selection
-            if not agent2_selection:
-                raise ValueError('Agent 2 is all made of dummy atoms')
 
             # Prepare the CMIP friendly input pdb structures for every calculation
             # First prepare the host files and the prepare the guest files
