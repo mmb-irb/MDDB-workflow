@@ -47,6 +47,7 @@ def energies (
     interactions : list,
     charges : list,
     cg_selection : 'Selection',
+    dummy_selection : 'Selection',
     snapshots : int,
     frames_limit : int = 100,
     verbose : bool = False,
@@ -59,20 +60,21 @@ def energies (
 
     # Skip interactions with coarse grain regions
     cg_atom_indices = set(cg_selection.atom_indices)
-    aa_interactions = []
+    supported_interactions = []
     for interaction in interactions:
         has_cg = False
         for agent in ['1', '2']:
             atom_indices = interaction[f'atom_indices_{agent}']
             if set(atom_indices).intersection(cg_atom_indices):
+                warn(f'Interaction {interaction["name"]} will be skipped since it has Coarse Grain (CG) regions')
                 has_cg = True
                 break
         if has_cg: continue
-        aa_interactions.append(interaction)
+        supported_interactions.append(interaction)
 
     # If there are not atomistic interactions then we are done
-    if len(aa_interactions) == 0:
-        print('No atomistic interactions')
+    if len(supported_interactions) == 0:
+        print('No supported interactions')
         return
 
     # Make sure we have charges
@@ -100,7 +102,7 @@ def energies (
     # If there is any agent with more than 80000 atoms CMIP will fail so we must skip this specific energies analysis by now
     # DANI: Este valor límite se puede cambiar en CMIP, pero hay que recompilar y eso no es banal en un environment de conda
     cmip_atom_limit = 80000
-    for interaction in interactions:
+    for interaction in supported_interactions:
         exceeds = False
         for agent in ['1', '2']:
             atoms = interaction[f'atom_indices_{agent}']
@@ -403,7 +405,7 @@ def energies (
 
         # Repeat the whole process for each interaction
         data = []
-        for interaction in interactions:
+        for interaction in supported_interactions:
 
             # Check if the interaction has been marked as 'exceeds', in which case we skip it
             if interaction.get('exceeds', False):
@@ -428,6 +430,14 @@ def energies (
             agent2_selection = frame_structure.select_atom_indices(agent2_atom_indices)
             if not agent2_selection:
                 raise ValueError(f'Empty agent 2 "{agent2_name}" from interaction "{interaction_name}"')
+
+            # Exclude atoms which are actually "dummy", not in the sense of CMIP, but in general
+            agent1_selection -= dummy_selection
+            if not agent1_selection:
+                raise ValueError('Agent 1 is all made of dummy atoms')
+            agent2_selection -= dummy_selection
+            if not agent2_selection:
+                raise ValueError('Agent 2 is all made of dummy atoms')
 
             # Prepare the CMIP friendly input pdb structures for every calculation
             # First prepare the host files and the prepare the guest files
@@ -535,7 +545,7 @@ def energies (
 
     # Extract the energies for each frame in a reduced trajectory
     frames, step, count = get_pdb_frames(energies_structure_file.path, trajectory_file.path, snapshots, frames_limit)
-    non_exceeding_interactions = [interaction for interaction in interactions if not interaction.get('exceeds', False)]
+    non_exceeding_interactions = [interaction for interaction in supported_interactions if not interaction.get('exceeds', False)]
 
     # Load backup data in case there is a backup file
     if energies_backup.exists and energies_backup.size > 0:
