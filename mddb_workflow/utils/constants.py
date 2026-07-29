@@ -13,6 +13,11 @@ GLOBALS = {
     'no_colors': False,
     # Keep a set with the paths of every directory where we already fixed gromacs masses
     'updated_gromacs_masses': set(),
+    # Set if we are to skip the SSL authentication when requesting the API
+    'no_ssl': False,
+    # Keep the working directory
+    'working_directory': '.',
+
 }
 
 # Set the possible gromacs calls tried to find the gromacs executable in case it is not froced by the user
