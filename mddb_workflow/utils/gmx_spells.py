@@ -5,12 +5,17 @@ from subprocess import run, PIPE, Popen
 from re import search, findall
 from time import time
 
-from mddb_workflow.utils.auxiliar import load_json, ToolError, warn
+from mddb_workflow.utils.auxiliar import load_json, ToolError, warn, get_auxiliar_filepath
 from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END, GLOBALS
 from mddb_workflow.utils.constants import GROMACS_MASSES_FILENAME
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.fix_gromacs_masses import fix_gromacs_masses
+
+# Set some constants
+GROMACS_SUPPORTED_TRAJECTORY_FORMATS = { 'xtc', 'trr' }
+GROMACS_SUPPORTED_STRUCTURE_FORMATS = { 'gro', 'pdb' }
+GROMACS_SUPPORTED_INPUT_TOPOLOGY_FORMATS = { 'tpr', *GROMACS_SUPPORTED_STRUCTURE_FORMATS }
 
 GROMACS_MASSES_ERROR = r'Can not find mass in database for atom ([a-zA-Z0-9]*)'
 
@@ -110,30 +115,30 @@ def run_gromacs(
     return output_logs, error_logs
 
 
-def get_first_frame (input_structure_filename : str, input_trajectory_filename : str, output_frame_filename : str):
-    """ Get the first frame from a trajectory. """
+def get_first_frame_structure (input_structure_filename : str, input_trajectory_filename : str, output_frame_filename : str):
+    """ Get the first frame from a trajectory as a structure. """
     # Run Gromacs
     run_gromacs(f'trjconv -s {input_structure_filename} -f {input_trajectory_filename} \
                 -o {output_frame_filename} -dump 0', user_input = 'System')
 
 # Set function supported formats
-get_first_frame.format_sets = [
+get_first_frame_structure.format_sets = [
     {
         'inputs': {
-            'input_structure_filename': {'tpr', 'pdb', 'gro'},
-            'input_trajectory_filename': {'xtc', 'trr'}
+            'input_structure_filename': GROMACS_SUPPORTED_INPUT_TOPOLOGY_FORMATS,
+            'input_trajectory_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         },
         'outputs': {
-            'output_frame_filename': {'pdb', 'gro'}
+            'output_frame_filename': GROMACS_SUPPORTED_STRUCTURE_FORMATS
         }
     },
     {
         'inputs': {
             'input_structure_filename': None,
-            'input_trajectory_filename': {'xtc', 'trr'}
+            'input_trajectory_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         },
         'outputs': {
-            'output_frame_filename': {'xtc', 'trr'}
+            'output_frame_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         }
     },
     {
@@ -159,15 +164,15 @@ get_first_frame.format_sets = [
 
 def get_structure (input_structure_filename : str, input_trajectory_filename : str, output_structure_filename : str):
     """ Get the structure using the first frame getter function. """
-    get_first_frame(input_structure_filename, input_trajectory_filename, output_structure_filename)
+    get_first_frame_structure(input_structure_filename, input_trajectory_filename, output_structure_filename)
 get_structure.format_sets = [
     {
         'inputs': {
-            'input_structure_filename': {'tpr', 'pdb', 'gro'},
-            'input_trajectory_filename': {'xtc', 'trr'}
+            'input_structure_filename': GROMACS_SUPPORTED_INPUT_TOPOLOGY_FORMATS,
+            'input_trajectory_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         },
         'outputs': {
-            'output_structure_filename': {'pdb', 'gro'}
+            'output_structure_filename': GROMACS_SUPPORTED_STRUCTURE_FORMATS
         }
     }
 ]
@@ -175,18 +180,22 @@ get_structure.format_sets = [
 
 def get_structure_alone (input_structure_filename : str, output_structure_filename : str):
     """ Convert the structure using the first frame getter function (no trajectory is required). """
-    get_first_frame(input_structure_filename, input_structure_filename, output_structure_filename)
+    get_first_frame_structure(input_structure_filename, input_structure_filename, output_structure_filename)
 get_structure_alone.format_sets = [
     {
         'inputs': {
-            'input_structure_filename': {'pdb', 'gro'},
+            'input_structure_filename': GROMACS_SUPPORTED_STRUCTURE_FORMATS,
         },
         'outputs': {
-            'output_structure_filename': {'pdb', 'gro'}
+            'output_structure_filename': GROMACS_SUPPORTED_STRUCTURE_FORMATS
         }
     }
 ]
 
+def get_first_frame_trajectory (input_trajectory_filename : str, output_frame_filename : str):
+    """ Get the first frame from a trajectory as a trajectory. """
+    # Run Gromacs
+    run_gromacs(f'trjconv -f {input_trajectory_filename} -o {output_frame_filename} -dump 0')
 
 def merge_and_convert_trajectories (input_trajectory_filenames : list[str], output_trajectory_filename : str):
     """ Get gromacs supported trajectories merged and converted to a different format. """
@@ -217,10 +226,10 @@ def merge_and_convert_trajectories (input_trajectory_filenames : list[str], outp
 merge_and_convert_trajectories.format_sets = [
     {
         'inputs': {
-            'input_trajectory_filenames': {'xtc', 'trr'}
+            'input_trajectory_filenames': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         },
         'outputs': {
-            'output_trajectory_filename': {'xtc', 'trr'}
+            'output_trajectory_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         }
     },
     {
@@ -270,10 +279,10 @@ def get_trajectory_subset (
 get_trajectory_subset.format_sets = [
     {
         'inputs': {
-            'input_trajectory_filename': {'xtc', 'trr'}
+            'input_trajectory_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         },
         'outputs': {
-            'output_trajectory_filename': {'xtc', 'trr'}
+            'output_trajectory_filename': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         }
     }
 ]
@@ -302,10 +311,10 @@ def filter_structure (
 filter_structure.format_sets = [
     {
         'inputs': {
-            'input_structure_file': {'pdb', 'gro'},
+            'input_structure_file': GROMACS_SUPPORTED_STRUCTURE_FORMATS,
         },
         'outputs': {
-            'output_structure_file': {'pdb', 'gro'}
+            'output_structure_file': GROMACS_SUPPORTED_STRUCTURE_FORMATS
         }
     }
 ]
@@ -337,11 +346,11 @@ def filter_trajectory (
 filter_trajectory.format_sets = [
     {
         'inputs': {
-            'input_structure_file': {'tpr', 'pdb', 'gro'},
-            'input_trajectory_file': {'xtc', 'trr'}
+            'input_structure_file': GROMACS_SUPPORTED_INPUT_TOPOLOGY_FORMATS,
+            'input_trajectory_file': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         },
         'outputs': {
-            'output_trajectory_file': {'xtc', 'trr'}
+            'output_trajectory_file': GROMACS_SUPPORTED_TRAJECTORY_FORMATS
         }
     }
 ]
@@ -666,9 +675,20 @@ def read_ndx (input_index_file : 'File') -> dict:
 
 
 ATOMS_LINE = r'\n# Atoms\s*([0-9]*)\n'
-def get_atom_count (mysterious_file : 'File') -> int:
+def get_gmx_atom_count (mysterious_file : 'File') -> int:
     """ Count atoms in a gromacs supported file. """
     output_logs, error_logs =  run_gromacs(f'check -f {mysterious_file.path}')
     search_results = search(ATOMS_LINE, error_logs)
     if not search_results: raise ValueError('Failed to mine atoms')
     return int(search_results[1])
+
+def get_gmx_trajectory_atom_count (mysterious_file : 'File') -> int:
+    """ Count atoms in a gromacs supported trajectory file. Check only the first frame. """
+    # Generate a trajectory with inle the first sample
+    first_frame_sample = get_auxiliar_filepath(f'.first_frame.{mysterious_file.extension}')
+    get_first_frame_trajectory(mysterious_file, first_frame_sample)
+    # Check this trajectory to get the atom count
+    atom_count = get_gmx_atom_count(first_frame_sample)
+    # Clean up the auxiliar files
+    remove(first_frame_sample)
+    return atom_count

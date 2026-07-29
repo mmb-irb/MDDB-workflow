@@ -2,12 +2,16 @@ import re
 
 import mdtraj as mdt
 import pytraj as pyt
+import MDAnalysis as mda
 
 from mddb_workflow.utils.auxiliar import InputError, ToolError
 from mddb_workflow.utils.auxiliar import warn, CaptureOutput, load_json, MISSING_TOPOLOGY
 from mddb_workflow.utils.auxiliar import is_standard_topology, get_auxiliar_filepath
-from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count, get_atom_count
-from mddb_workflow.utils.vmd_spells import vmd_to_pdb
+from mddb_workflow.utils.gmx_spells import run_gromacs, mine_system_atoms_count
+from mddb_workflow.utils.gmx_spells import get_tpr_atom_count
+from mddb_workflow.utils.gmx_spells import get_gmx_atom_count, get_gmx_trajectory_atom_count
+from mddb_workflow.utils.gmx_spells import GROMACS_SUPPORTED_TRAJECTORY_FORMATS
+from mddb_workflow.utils.vmd_spells import vmd_to_pdb, get_rst7_atom_count
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import GROMACS_TRAJECTORY_SUPPORTED_FORMATS
@@ -20,9 +24,64 @@ PYTRAJ_XTC_ATOM_MISMATCH_ERROR = r'Error: # atoms in XTC file \(([0-9]*)\) does 
 GROMACS_ATOM_MISMATCH_ERROR = r'is larger than the number of atoms in the\ntrajectory file \(([0-9]*)\). There is a mismatch in the contents'
 GROMACS_ATOM_COUNT_CHECK = r'# Atoms  ([0-9]*)'
 
+def get_topology_atoms(topology_file: 'File') -> Optional[int]:
+    """Get the atoms count from a topology alone."""
+    # To do so rely on different tools depending on the topology format
+    # If there is no topology file then just return None
+    if topology_file == MISSING_TOPOLOGY: return None
+    # If it is our standard topology then simply count the atom names
+    if is_standard_topology(topology_file):
+        # Parse the json and count atoms
+        parsed_topology = load_json(topology_file.path)
+        topology_atom_count = len(parsed_topology['atom_names'])
+        return topology_atom_count
+    # For a TPR use Gromacs, which is its native tool
+    if topology_file.format == 'tpr':
+        return get_tpr_atom_count(topology_file.path)
+    # For .top files we use PyTraj since MDtraj can not handle it
+    if topology_file.format == 'top':
+        return get_topology_atoms_pytraj(topology_file)
+    # If the topology is a restart file then MDtraj will not be able to read it
+    # Use VMD to count its atoms
+    if topology_file.format == 'rst7':
+        return get_rst7_atom_count(topology_file.path)
+    # At this point the topology should be supported by MDtraj
+    try:
+        topology = mdt.load_topology(topology_file.path)
+        return topology.n_atoms
+    except Exception as error:
+        # If the error message matches with a known error then report the problem
+        error_message = str(error)
+        error_match = re.match(MDTRAJ_INSERTION_CODES_ERROR, error_message)
+        if error_match:
+            warn('The input topology has insertion codes.\n'
+            ' Some tools may crash when reading the topology (MDtraj).\n'
+            ' Some tools may ignore insertion codes when reading the topology (MDAnlysis, PyTraj, VMD).')
+            # Use other tool to read the topology
+            # Other tools could ignore the inserion codes
+            # However this is not a problem here, where we only care about the number of atoms
+            return get_topology_atoms_pytraj(topology_file)
+        # If we do not know the error then raise it as is
+        raise error
+
+def get_topology_atoms_pytraj(topology_file: 'File') -> int:
+    """Get the atoms count from a topology alone using PyTraj"""
+    topology = pyt.load_topology(topology_file.path)
+    return topology.n_atoms
+
+def get_trajectory_atoms(trajectory_file: 'File') -> int:
+    """Get the atoms count from a trajectory alone"""
+    # We will used different tools depending on the trajectory format
+    # Use Gromacs for Gromacs trajectories
+    if trajectory_file.format in GROMACS_SUPPORTED_TRAJECTORY_FORMATS:
+        return get_gmx_trajectory_atom_count(trajectory_file)
+    # Use MDAnalysis for anything else
+    # Note that MDAnalysis could also handle Gromacs trajectories actually
+    universe = mda.Universe(trajectory_file.path)
+    return universe.trajectory.n_atoms
 
 def get_topology_and_trajectory_atoms_pytraj(topology_file: 'File', trajectory_file: 'File') -> tuple[int, int]:
-    """Get atoms from topology and trajectory together using pytraj.
+    """Get the atoms count from topology and trajectory together using pytraj.
     This is an altermative method used when MDtraj can not handle it.
     """
     # Note that calling iterload will print a error log when atoms do not match but will not raise a proper error
@@ -42,7 +101,7 @@ def get_topology_and_trajectory_atoms_pytraj(topology_file: 'File', trajectory_f
 
 
 def get_topology_and_trajectory_atoms(topology_file: 'File', trajectory_file: 'File') -> tuple[int, int]:
-    """Get atoms from topology and trajectory together."""
+    """Get the atoms count from topology and trajectory together."""
     # To do so rely on different tools depending on the topology format
     # If there is no topology file then just compare strucutre and trajectory an exit
     if topology_file == MISSING_TOPOLOGY:
@@ -110,8 +169,7 @@ def get_topology_and_trajectory_atoms(topology_file: 'File', trajectory_file: 'F
     # For .top files we use PyTraj since MDtraj can not handle it
     if topology_file.format == 'top':
         return get_topology_and_trajectory_atoms_pytraj(topology_file, trajectory_file)
-    # At this point the topology should be supported by MDtraj
-    # However, f the trajectory is a restart file MDtraj will not be able to read it
+    # If the trajectory is a restart file MDtraj will not be able to read it
     # Make the conversion here, since restart files are single-frame trajectories this should be fast
     use_auxiliar_pdb = False
     auxiliar_pdb_file = get_auxiliar_filepath('.auxiliar.pdb')
@@ -119,7 +177,7 @@ def get_topology_and_trajectory_atoms(topology_file: 'File', trajectory_file: 'F
         # Generate the auxiliar PDB file
         vmd_to_pdb(topology_file.path, trajectory_file.path, auxiliar_pdb_file)
         use_auxiliar_pdb = True
-    # For any other format use MDtraj
+    # At this point the topology should be supported by MDtraj
     try:
         trajectory_path = auxiliar_pdb_file if use_auxiliar_pdb else trajectory_file.path
         if trajectory_file.format != 'pdb':
@@ -156,24 +214,24 @@ def get_topology_and_trajectory_atoms(topology_file: 'File', trajectory_file: 'F
             ' Some tools may ignore insertion codes when reading the topology (MDAnlysis, PyTraj, VMD).')
             # Use other tool to read the topology
             # Other tools could ignore the inserion codes
-            # However this is not a problem here, where we only care bout the number of atoms
+            # However this is not a problem here, where we only care about the number of atoms
             return get_topology_and_trajectory_atoms_pytraj(topology_file, trajectory_file)
         # If we do not know the error then raise it as is
         raise error
 
 
 def get_structure_atoms(structure_file: 'File') -> int:
-    """Get atoms from a structure alone."""
+    """Get the atoms count from a structure alone."""
     # If this is not a Structure supported file then use an alternative function
     if structure_file.format == 'gro':
-        return get_atom_count(structure_file)
+        return get_gmx_atom_count(structure_file)
     # Get the number of atoms in the input structure
     structure = Structure.from_file(structure_file.path)
     return structure.atom_count
 
 
 def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 'File') -> tuple[int, int]:
-    """Get atoms from structure and trajectory together."""
+    """Get the atoms count from structure and trajectory together."""
     try:
         # Note that declaring the iterator will not fail even when there is a mismatch
         trajectory = mdt.iterload(trajectory_file.path, top=structure_file.path, chunk=1)
@@ -190,7 +248,7 @@ def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 
             structure_atom_count = topology.n_atoms
         # If pytraj does not support the format (e.g. .gro files) then try other tools
         elif structure_file.format == 'gro':
-            structure_atom_count = get_atom_count(structure_file)
+            structure_atom_count = get_gmx_atom_count(structure_file)
         # If no tool supports the format then we surrender
         else:
             raise RuntimeError(f'Unsupported structure format: {structure_file.format}')
@@ -211,7 +269,7 @@ def get_structure_and_trajectory_atoms(structure_file: 'File', trajectory_file: 
             ' Some tools may ignore insertion codes when reading the topology (MDAnlysis, PyTraj, VMD).')
             # Use other tool to read the topology
             # Other tools could ignore the inserion codes
-            # However this is not a problem here, where we only care bout the number of atoms
+            # However this is not a problem here, where we only care about the number of atoms
             return get_topology_and_trajectory_atoms_pytraj(structure_file, trajectory_file)
         # If we do not know the error then raise it as is
         raise error

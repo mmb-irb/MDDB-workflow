@@ -4,13 +4,14 @@
 
 import os
 from os.path import exists
+import re
+from packaging.version import Version
 
 from subprocess import run, PIPE, STDOUT
 
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.auxiliar import warn, ToolError, InputError, get_auxiliar_filepath
-from mddb_workflow.utils.constants import GLOBALS
 
 # Set characters to be escaped since they have a meaning in TCL
 TCL_RESERVED_CHARACTERS = ['"', '[', ']']
@@ -709,3 +710,62 @@ def get_interface_atom_indices(
         'interacting_frames': interacting_frames,
         'total_frames': total_frames
     }
+
+# Set the format of the line in the logs telling us the VMD version
+VMD_VERSION_LOG = r'^Info\) VMD for [A-Z0-9]*, version ([0-9*].[0-9*].[0-9*])'
+
+# Get the VMD version
+def get_vmd_version () -> Version:
+    # Run VMD
+    logs = run(["vmd", "--help"], stdout=PIPE, stderr=PIPE).stdout.decode()
+    # Mine atom count from VMD logs
+    for line in logs.split('\n'):
+        match = re.match(VMD_VERSION_LOG, line)
+        if match: return Version(match[1])
+    raise RuntimeError('Failed to get VMD version')
+
+# Set the format of the line in the logs telling us the number of atoms
+# Note that this line may change depending on the VMD version
+RESTART_ATOM_COUNT_LOG_1 = r'rst7plugin\) The Restartcrd has ([0-9]*) atoms.'
+RESTART_ATOM_COUNT_LOG_2 = r'rst7plugin\) This restartcrd has ([0-9]*) atoms.'
+
+def get_rst7_atom_count (restart_filepath : str) -> int:
+    # Prepare a script for VMD to run. This is Tcl language
+    # Just exit as soon as it loads the input file
+    commands_filepath = get_auxiliar_commands_filepath()
+    with open(commands_filepath, "w") as file:
+        file.write('exit\n')
+
+    # Run VMD
+    logs = run([
+        "vmd",
+        restart_filepath,
+        "-e",
+        commands_filepath,
+        "-dispdev",
+        "none"
+    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+
+    # Get the VMD version, so we now the format of the logs
+    vmd_version = get_vmd_version()
+    restart_atom_count_regex = RESTART_ATOM_COUNT_LOG_1
+    if vmd_version >= Version('2'):
+        restart_atom_count_regex = RESTART_ATOM_COUNT_LOG_2
+
+    # Mine atom count from VMD logs
+    atom_count = None
+    for line in logs.split('\n'):
+        match = re.match(restart_atom_count_regex, line)
+        if match:
+            atom_count = int(match[1])
+            break
+
+    # If we did not mine the atom count then complain
+    if atom_count is None:
+        raise RuntimeError(f'Failed to get atom count in {restart_filepath}')
+
+    # Remove trash files
+    os.remove(commands_filepath)
+
+    # Return the mined atom count
+    return atom_count
