@@ -38,6 +38,9 @@ from mddb_workflow.utils.type_hints import *
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 ERASE_3_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+# Set an exception to handle internal issues
+OUTPUT_MINING_EXCEPTION = Exception('CMIP output mining failed')
+EXPECTED_CMIP_PDB_LINE_LENGTH = 65
 
 def energies (
     trajectory_file : File,
@@ -128,10 +131,6 @@ def energies (
     # Set each atom element in CMIP format
     set_cmip_elements(energies_structure)
 
-    # Save the structure back to a pdb
-    energies_structure_file = File(output_directory + '/energies.pdb')
-    energies_structure.generate_pdb_file(energies_structure_file.path)
-
     # Transform an agent structure to a cmip input pdb, which includes charges and cmip-friendly elements
     # If this is to be a host file then leave only atoms involved in the interaction: both host and guest agents
     # If this is to be a host file, all guest atoms are set dummy* as well
@@ -193,13 +192,14 @@ def energies (
                 name =  ' ' + atom_name.ljust(3) if len(atom_name) < 4 else atom_name
                 residue = atom.residue
                 residue_name = residue.name.ljust(3)
+                if len(residue_name) > 3: residue_name = residue_name[0:3]
                 chain = atom.chain
                 chain_name = chain.name.rjust(1)
                 residue_number = str(residue.number).rjust(4)
                 icode = residue.icode.rjust(1)
                 coords = atom.coords
                 x_coord, y_coord, z_coord = [ "{:.3f}".format(coord).rjust(8) for coord in coords ]
-                charge = "{:.4f}".format(atom.charge) # Charge was manually added before, it is not a standard attribute
+                charge = "{:.4f}".format(atom.charge).rjust(7)
                 # In case this atom is making an strong bond between both interacting agents we add an 'X' before the element
                 # This way CMIP will ignore the atom. Otherwise it would return high non-sense Van der Waals values
                 real_index = selection.atom_indices[a]
@@ -208,9 +208,20 @@ def energies (
                 cmip_dummy_flag = 'X' if is_dummy else ''
                 # Set dummy atoms as hydrogen, so their VDW is minimal
                 element = 'H' if is_dummy else atom.element
-                atom_line = ('ATOM  ' + index + ' ' + name + ' ' + residue_name + ' '
-                    + chain_name + residue_number + icode + '   ' + x_coord + y_coord + z_coord
-                    + ' ' + str(charge).rjust(7) + '  ' + cmip_dummy_flag + element + '\n')
+                # Set the tail
+                tail = cmip_dummy_flag + element
+                atom_line = (f'ATOM  {index} {name} {residue_name} {chain_name}{residue_number}{icode}'
+                    f'   {x_coord}{y_coord}{z_coord} {charge}  {tail}\n')
+                # IMPORTANT: Make sure every line has the expected length, apart from the tail
+                # Otherwise it means one of its parts is longer or shorter than expected
+                # This will offset the position of the numbers which CMIP expects to read
+                # Thus leading to missleading fortran errors
+                # e.g. Fortran runtime error: Bad value during floating point read
+                line_length = len(atom_line) - len(tail)
+                if line_length != EXPECTED_CMIP_PDB_LINE_LENGTH:
+                    clean_line = atom_line.replace('\n','')
+                    print(f'Line "{clean_line}" has an unexpected length ({line_length}/{EXPECTED_CMIP_PDB_LINE_LENGTH}).')
+                    raise RuntimeError('Wrong formatted CMIP input PDB file. Please report this problem to the MDDB developers.')
                 file.write(atom_line)
 
         return File(output_filepath)
@@ -226,7 +237,7 @@ def energies (
 
         # Run CMIP in 'checkonly' mode and save the grid dimensions output
         # First do it for the agent 1
-        cmip_logs_agent1 = run([
+        cmip_process_agent1 = run([
             "cmip",
             "-i",
             cmip_inputs_checkonly_source.path,
@@ -240,15 +251,21 @@ def energies (
             cmip_checkonly_output.path,
             "-rst",
             restart_file.path
-        ], stdout=PIPE, stderr=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE)
+        cmip_logs_agent1 = cmip_process_agent1.stdout.decode()
 
         # Mine the grid dimensions from CMIP logs
-        agent1_center, agent1_density, agent1_units = mine_cmip_output(
-            cmip_logs_agent1.split("\n"))
+        mining_results_agent1 = mine_cmip_output(cmip_logs_agent1)
+        if mining_results_agent1 is OUTPUT_MINING_EXCEPTION:
+            print(cmip_logs_agent1)
+            cmip_error_logs_agent1 = cmip_process_agent1.stderr.decode()
+            print(cmip_error_logs_agent1)
+            raise OUTPUT_MINING_EXCEPTION
+        agent1_center, agent1_density, agent1_units = mining_results_agent1
 
         # Run CMIP in 'checkonly' mode and save the grid dimensions output
         # Now do it for the agent 2
-        cmip_logs_agent2 = run([
+        cmip_process_agent2 = run([
             "cmip",
             "-i",
             cmip_inputs_checkonly_source.path,
@@ -262,11 +279,17 @@ def energies (
             cmip_checkonly_output.path,
             "-rst",
             restart_file.path
-        ], stdout=PIPE, stderr=PIPE).stdout.decode()
+        ], stdout=PIPE, stderr=PIPE)
+        cmip_logs_agent2 = cmip_process_agent2.stdout.decode()
 
         # Mine the grid dimensions from CMIP logs
-        agent2_center, agent2_density, agent2_units = mine_cmip_output(
-            cmip_logs_agent2.split("\n"))
+        mining_results_agent2 = mine_cmip_output(cmip_logs_agent2)
+        if mining_results_agent2 is OUTPUT_MINING_EXCEPTION:
+            print(cmip_logs_agent2)
+            cmip_error_logs_agent2 = cmip_process_agent2.stderr.decode()
+            print(cmip_error_logs_agent2)
+            raise OUTPUT_MINING_EXCEPTION
+        agent2_center, agent2_density, agent2_units = mining_results_agent2
 
         # Calculate grid dimensions for a new grid which contains both previous grids
         new_center, new_density = compute_new_grid(
@@ -538,7 +561,7 @@ def energies (
         return data
 
     # Extract the energies for each frame in a reduced trajectory
-    frames, step, count = get_pdb_frames(energies_structure_file.path, trajectory_file.path, snapshots, frames_limit)
+    frames, frame_step, frame_count = get_pdb_frames(energies_structure, trajectory_file.path, snapshots, frames_limit)
     non_exceeding_interactions = [interaction for interaction in supported_interactions if not interaction.get('exceeds', False)]
 
     # Load backup data in case there is a backup file
@@ -591,8 +614,8 @@ def energies (
         # Get the main data
         data = interactions_data[i]
         # Format data
-        agent1_output = format_data([ frame['agent1'] for frame in data ])
-        agent2_output = format_data([ frame['agent2'] for frame in data ])
+        agent1_output = format_data([ frame['agent1'] for frame in data ], frame_step)
+        agent2_output = format_data([ frame['agent2'] for frame in data ], frame_step)
         # Format the results data and append it to the output data
         output = {
             'name': name,
@@ -608,9 +631,6 @@ def energies (
 
     # Remove the backup to avoid accidentally reusing it when the output file is deleted
     energies_backup.remove()
-
-    # Finally remove the reduced topology
-    energies_structure_file.remove()
 
 # Given a topology (e.g. pdb, prmtop), extract the atom elements in a CMIP friendly format
 # Hydrogens bonded to carbons remain as 'H'
@@ -672,12 +692,16 @@ def name_terminal_residues (structure : 'Structure'):
         elif last_residue.name in nucleic_mid_residue_names:
             last_residue.name += '3'
 
-def mine_cmip_output (logs):
+# Mine important results from CMIP output logs
+# Error logs are just passed to be printed in case the mining process fails
+def mine_cmip_output (logs : str) -> tuple[tuple, tuple, tuple] | Exception:
     center, density, units = (), (), ()
+    # Set the regular expressions to mine the relevant data
     grid_density_exp = r"^\s*Grid density:\s+(\d+)\s+(\d+)\s+(\d+)"
     grid_center_exp = r"^\s*Grid center:([- ]+\d+.\d+)([- ]+\d+.\d+)([- ]+\d+.\d+)"
     grid_units_exp = r"^\s*Grid units:\s+(\d+.\d+)\s+(\d+.\d+)\s+(\d+.\d+)"
-    for line in logs:
+    # Iterate log lines
+    for line in logs.split("\n"):
         grid_center_groups = re.match(grid_center_exp, line)
         grid_density_groups = re.match(grid_density_exp, line)
         grid_units_groups = re.match(grid_units_exp, line)
@@ -692,9 +716,7 @@ def mine_cmip_output (logs):
                           for i in (1, 2, 3))
     # If data mining fails there must be something wrong with the CMIP output
     if center == () or density == () or units == ():
-        for line in logs:
-            print(line)
-        raise RuntimeError('CMIP output mining failed')
+        return OUTPUT_MINING_EXCEPTION
     return center, density, units
 
 # This function is used to create new grid parameters
@@ -727,7 +749,7 @@ def compute_new_grid (
 # Format data grouping atom energies by average ES/VDW
 # Calculate values for the whole set of frames analyzed
 # The canclulate it also for the 20% first frames and the 20% last frames separatedly
-def format_data (data : list) -> dict:
+def format_data (data : list, frame_step : int) -> dict:
 
     # First, reorder data by atoms and energies
     atom_count = len(data[0])
@@ -794,6 +816,8 @@ def format_data (data : list) -> dict:
         'fvdw': atom_vdw_avg_final,
         'fes': atom_es_avg_final,
         'fboth': atom_both_avg_final,
+        'step': frame_step,
+        'version': '0.0.1',
     }
 
     return output

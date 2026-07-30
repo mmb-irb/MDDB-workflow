@@ -81,7 +81,6 @@ def structure_corrector(
     # Otherwise guess bonds by guessing bonds according to coordinates and atom radius for 10 frames along the trajectory
     safe_bonds = find_safe_bonds(
         input_topology_file,
-        output_structure_file,
         input_trajectory_file,
         must_check_stable_bonds,
         snapshots,
@@ -124,11 +123,10 @@ def structure_corrector(
         ' This frame will be considered as the "reference frame".')
         # Find the first frame in the whole trajectory where safe bonds are respected
         bonds_reference_frame = get_bonds_reference_frame(
-            structure_file=output_structure_file,
+            structure=structure,
             trajectory_file=input_trajectory_file,
             snapshots=snapshots,
             reference_bonds=safe_bonds,
-            structure=structure,
             pbc_selection=pbc_selection,
             cg_selection=cg_selection,
         )
@@ -238,7 +236,7 @@ def structure_corrector(
         if not guessed_atoms_structure:
             guessed_atoms_structure = structure.copy()
             guessed_bonds = get_most_stable_bonds(
-                output_structure_file.path,
+                structure,
                 input_trajectory_file.path,
                 snapshots)
             guessed_atoms_structure.bonds = guessed_bonds

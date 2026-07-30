@@ -1,4 +1,4 @@
-from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
+from mddb_workflow.tools.get_pdb_frames import get_pdb_frames, get_starting_pdb_frames
 from mddb_workflow.utils.auxiliar import load_json, warn, MISSING_TOPOLOGY, is_standard_topology
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from mddb_workflow.utils.constants import MISSING_BONDS_FLAG
@@ -77,7 +77,7 @@ def do_bonds_match(
 
 
 def get_most_stable_bonds(
-    structure_filepath: str,
+    structure: 'Structure',
     trajectory_filepath: str,
     snapshots: int,
     frames_limit: int = 10
@@ -88,7 +88,7 @@ def get_most_stable_bonds(
     """
     # Get each frame in pdb format to run VMD
     print('Finding most stable bonds')
-    frames, step, count = get_pdb_frames(structure_filepath, trajectory_filepath,
+    frames, step, count = get_pdb_frames(structure, trajectory_filepath,
                                          snapshots, frames_limit, pbar_bool=True)
 
     # Track bonds along frames
@@ -127,11 +127,10 @@ def get_most_stable_bonds(
 
 
 def get_bonds_reference_frame(
-    structure_file: 'File',
+    structure: 'Structure',
     trajectory_file: 'File',
     snapshots: int,
     reference_bonds: list[list[int]],
-    structure: 'Structure',
     pbc_selection: 'Selection',
     cg_selection: 'Selection',
     ignore_bonds: bool = False,
@@ -153,9 +152,8 @@ def get_bonds_reference_frame(
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
     # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1
-    frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots, patience=patience)
-    if step != 1: raise ValueError('If we are skipping frames then the code below will silently return a wrong reference frame')
-    print(f'Searching the reference frame for the bonds. Only first {min(patience, count)} frames will be checked.')
+    frames = get_starting_pdb_frames(structure, trajectory_file.path, snapshots, patience)
+    print(f'Searching the reference frame for the bonds. Only first {patience} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
     bonds_reference_frame = None
     counter_list = []
@@ -271,7 +269,6 @@ def sort_bonds(source_bonds: list[tuple[int, int]], atom_count: int) -> list[lis
 
 def find_safe_bonds(
     topology_file: Union['File', Exception],
-    structure_file: 'File',
     trajectory_file: 'File',
     must_check_stable_bonds: bool,
     snapshots: int,
@@ -316,7 +313,7 @@ def find_safe_bonds(
     if must_check_stable_bonds:
         # Using the trajectory, find the most stable bonds
         print('Checking bonds along trajectory to determine which are stable')
-        safe_bonds = get_most_stable_bonds(structure_file.path, trajectory_file.path, snapshots)
+        safe_bonds = get_most_stable_bonds(structure, trajectory_file.path, snapshots)
         discard_coarse_grain_bonds(safe_bonds, cg_selection)
         return safe_bonds
     # If we trust stable bonds then simply use structure bonds

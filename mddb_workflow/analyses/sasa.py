@@ -13,10 +13,9 @@ import numpy
 RESIDUAL_AREA_FILENAME = 'area.xvg'
 
 def sasa(
-    structure_file: 'File',
+    structure : 'Structure',
     trajectory_file: 'File',
     output_directory: str,
-    structure : 'Structure',
     pbc_residues : list[int],
     snapshots : int,
     frames_limit : int = 100,
@@ -52,7 +51,7 @@ def sasa(
 
     # Calculate the sasa for each frame
     sasa_per_frame = []
-    frames, step, count = get_pdb_frames(structure_file.path, trajectory_file.path, snapshots, frames_limit)
+    frames, step, count = get_pdb_frames(structure, trajectory_file.path, snapshots, frames_limit)
     for f, current_frame in enumerate(frames):
 
         # Run the sasa analysis over the current frame
