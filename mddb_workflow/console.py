@@ -545,7 +545,7 @@ def main():
             )
     # Update references
     elif subcommand == 'upref':
-        update_references(args.url_or_alias, args.reference_type)
+        update_references(args.url_or_alias, args.reference_type, args.loader)
 
 
 # Define a common parser running in top of all others
@@ -863,3 +863,7 @@ upref_parser.add_argument("url_or_alias", type=str,
           "You may also pass the flag 'all' in order to update references from all nodes."))
 upref_parser.add_argument("reference_type", type=str,
     help=f"Select the type of references to update among these: {', '.join(AVAILABLE_REFERENCE_TYPES)}")
+upref_parser.add_argument("-ld", "--loader", type=str,
+    help=f"Set the path to the directory where the loader is installed, so the workflow can use it. "
+        "If the loader is available then the new references will be automatically uploaded in batches. "
+        "Note that using the loader makes the process more memory efficient and faster.")

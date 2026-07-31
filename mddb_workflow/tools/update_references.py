@@ -2,11 +2,13 @@ from packaging.version import Version
 from os import mkdir, replace
 from os.path import exists
 from re import sub
+from time import time
 
-from mddb_workflow.utils.auxiliar import load_json, save_json, warn
+from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, INCHI_REFERENCE_VERSION, PDB_REFERENCE_VERSION
 from mddb_workflow.utils.constants import PROTEIN_REFERENCES_FILENAME, INCHIKEY_REFERENCES_FILENAME, PDB_REFERENCES_FILENAME
 from mddb_workflow.utils.database import Database, get_available_nodes
+from mddb_workflow.utils.loader import Loader
 
 from mddb_workflow.tools.generate_map import get_uniprot_reference
 from mddb_workflow.tools.generate_pdb_references import get_pdb_reference
@@ -40,8 +42,13 @@ REFERENCE_TYPE_CONFIGURATIONS = {
 ALL_FLAG = 'all'
 # Collect all requestable available reference types
 AVAILABLE_REFERENCE_TYPES = [ *list(REFERENCE_TYPE_CONFIGURATIONS.keys()), ALL_FLAG ]
+# Set every how many updated references we upload to the database
+LOADER_BATCH = 100
 
-def update_references (database_url_or_alias : str, reference_type : str):
+def update_references (
+    database_url_or_alias : str,
+    reference_type : str,
+    loader_directory : str | None = None):
 
     # If all nodes are requested then simply call this same function with every node
     if database_url_or_alias == ALL_FLAG:
@@ -59,14 +66,16 @@ def update_references (database_url_or_alias : str, reference_type : str):
 
     # Make sure the type is known
     if reference_type not in REFERENCE_TYPE_CONFIGURATIONS:
-        print(f'Unknown reference type "{reference_type}". Please select one of the following: {", ".join(AVAILABLE_REFERENCE_TYPES)}')
-        return
+        raise InputError(f'Unknown reference type "{reference_type}". Please select one of the following: {", ".join(AVAILABLE_REFERENCE_TYPES)}')
 
     print(f'Updating references of type "{reference_type}" from "{database_url_or_alias}"')
     reference_config = REFERENCE_TYPE_CONFIGURATIONS[reference_type]
 
     # Instantiate the database handler
     database = Database(database_url_or_alias)
+
+    # If we are to upload the new references to the corresponding database then prepare the loader
+    loader = Loader(loader_directory, database_url_or_alias) if loader_directory else None
 
     # Paginate to get all available references and their versions
     references = database.get_all_refences_data(reference_config['endpoint'])
@@ -86,8 +95,9 @@ def update_references (database_url_or_alias : str, reference_type : str):
     if not exists(directory): mkdir(directory)
 
     # Set the filepaths where output is to be written
-    output_references_filepath = f"{directory}/{reference_config['output']}"
-    provisional_output_references_filepath = f"{directory}/provisional_{reference_config['output']}"
+    output_references_filename = reference_config['output']
+    output_references_filepath = f"{directory}/{output_references_filename}"
+    provisional_output_references_filepath = f"{directory}/provisional_{output_references_filename}"
 
     # Load already updated references in this directory, if any
     # Thus there is no need to update them again
@@ -96,6 +106,25 @@ def update_references (database_url_or_alias : str, reference_type : str):
     if exists(output_references_filepath):
         updated_references = load_json(output_references_filepath)
         print(f'  There are {len(updated_references)} already updated references in {output_references_filepath}')
+
+    # Set a function to upload the already updated references
+    def load_batch():
+        nonlocal updated_references
+        print(f'Loading batch of {len(updated_references)} updated references')
+        # Upload the already updated references
+        if loader.load(directory):
+            # After the load we make a cleanup both in memory and disk
+            # 1) Rename the updated references file to save apart
+            # Thus new updated references will be saved in a new fresh JSON
+            # Otherwise the rewrite operations become expensive
+            # Use timestamps for the batched files to avoid data loss
+            timestamp = round(time())
+            batch_backup = f'{directory}/uploaded_time{timestamp}_{output_references_filename}'
+            replace(output_references_filepath, batch_backup)
+            # 2) Cleanup the already uploaded references from the updated references list
+            updated_references = []
+        # If something went wrong with the upload then stop here
+        else: raise RuntimeError('Something went wrong when uploading updated references')
 
     # Substract their ids from the outdated ids list
     locally_updated_references = set([ ref[id_key] for ref in updated_references ])
@@ -114,6 +143,10 @@ def update_references (database_url_or_alias : str, reference_type : str):
     # Remake every outdated reference
     reference_maker = reference_config['maker']
     for o, outdated_reference_id in enumerate(outdated_reference_ids, 1):
+        # If the amount of updated references is enough for the loader batch then upload them
+        if loader and len(updated_references) >= LOADER_BATCH:
+            load_batch()
+        # Update the next reference
         print(f'  Remaking {outdated_reference_id} ({o}/{outdated_count})')
         # Wrap the updater in a try/except so we are resilient when having response issues
         try:
@@ -132,6 +165,9 @@ def update_references (database_url_or_alias : str, reference_type : str):
         save_json(updated_references, provisional_output_references_filepath)
         replace(provisional_output_references_filepath, output_references_filepath)
 
+    # Load the last remaining batch of simulations
+    if loader and len(updated_references) > 0:
+        load_batch()
 
     # Warn the user about failed updates
     if failed_references_count > 0:

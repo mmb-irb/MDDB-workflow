@@ -5,6 +5,7 @@
 .qwen
 __pycache__
 **.log
+loader_nodes.yaml
 
 # Resources
 **/blastdb

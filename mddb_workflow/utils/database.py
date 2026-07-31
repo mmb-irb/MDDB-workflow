@@ -246,11 +246,14 @@ class Database:
             url_or_alias: URL of the database (e.g. https://irb-dev.mddbr.eu/api/) or alias (e.g. mmb)
 
         """
+        self.url = None
+        self.alias = None
         # Set the database API URL
         if '://' in url_or_alias:
             self.url = url_or_alias
         # If this is not an URL then it may be an alias from a remote node
         else:
+            self.alias = url_or_alias
             # Check if the user is requesting for the global database
             # Get available nodes from the remote
             available_nodes = get_available_nodes()

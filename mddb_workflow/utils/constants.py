@@ -93,7 +93,8 @@ DEFAULT_INPUT_VALUE_WARNINGS = {
 }
 
 # Resource files which are always part of the workflow
-RESOURCES_DIRECTORY_PATH = resources = str(Path(__file__).parent.parent / "resources")
+WORKFLOW_DIRECTORY_PATH = str(Path(__file__).parent.parent)
+RESOURCES_DIRECTORY_PATH = f'{WORKFLOW_DIRECTORY_PATH}/resources'
 INPUTS_TEMPLATE_FILEPATH = f'{RESOURCES_DIRECTORY_PATH}/inputs_file_template.yml'
 NASSA_TEMPLATE_FILEPATH = f'{RESOURCES_DIRECTORY_PATH}/nassa_template.yml'
 GROMACS_MASSES_FILENAME = 'atommass.dat'
@@ -102,6 +103,8 @@ CMIP_INPUTS_CHECKONLY_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/cmip_check.in'
 CMIP_INPUTS_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/cmip.in'
 CMIP_VDW_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/vdwprm'
 ENERGIES_DEBUG_SCRIPT_SOURCE = f'{RESOURCES_DIRECTORY_PATH}/get_energies_sum.py'
+REPOSITORY_DIRECTORY_PATH = str(Path(__file__).parent.parent.parent)
+LOADER_NODES_CONFIG_FILEPATH = f'{REPOSITORY_DIRECTORY_PATH}/loader_nodes.yaml'
 
 # Expected MD inputs
 MD_NAME = 'name'
