@@ -87,8 +87,8 @@ def update_references (
         ref[id_key] for ref in references
         if Version(ref.get('version', '0.0.0')) < updated_version
     ]
-    outdated_count = len(outdated_reference_ids)
-    print(f'  Found {outdated_count} remote outdated references out of {len(references)}')
+    remote_outdated_count = len(outdated_reference_ids)
+    print(f'  Found {remote_outdated_count} remote outdated references out of {len(references)}')
 
     # Make a directory for the current url or alias
     directory = sub('https?://', '', database_url_or_alias.replace('/api/', ''))
@@ -103,9 +103,11 @@ def update_references (
     # Thus there is no need to update them again
     print(f'  Results will be saved to {output_references_filepath}')
     updated_references = []
+    already_updated_references_count = 0
     if exists(output_references_filepath):
         updated_references = load_json(output_references_filepath)
-        print(f'  There are {len(updated_references)} already updated references in {output_references_filepath}')
+        already_updated_references_count = len(updated_references)
+        print(f'  There are {already_updated_references_count} already updated references in {output_references_filepath}')
 
     # Set a function to upload the already updated references
     def load_batch():
@@ -132,8 +134,8 @@ def update_references (
         ref_id for ref_id in outdated_reference_ids
         if ref_id not in locally_updated_references
     ]
-    outdated_count = len(outdated_reference_ids)
-    print(f'  There are {outdated_count} outdated references left after using the locally updated references')
+    actual_outdated_count = len(outdated_reference_ids)
+    print(f'  There are {actual_outdated_count} outdated references left after using the locally updated references')
 
     # Keep track of the every reference we fail to update
     # Note that the PDB may return a random 500 (internal server error) sometimes
@@ -142,12 +144,12 @@ def update_references (
 
     # Remake every outdated reference
     reference_maker = reference_config['maker']
-    for o, outdated_reference_id in enumerate(outdated_reference_ids, 1):
+    for o, outdated_reference_id in enumerate(outdated_reference_ids, already_updated_references_count + 1):
         # If the amount of updated references is enough for the loader batch then upload them
         if loader and len(updated_references) >= LOADER_BATCH:
             load_batch()
         # Update the next reference
-        print(f'  Remaking {outdated_reference_id} ({o}/{outdated_count})')
+        print(f'  Remaking {outdated_reference_id} ({o}/{remote_outdated_count})')
         # Wrap the updater in a try/except so we are resilient when having response issues
         try:
             new_reference = reference_maker(outdated_reference_id)
@@ -171,5 +173,5 @@ def update_references (
 
     # Warn the user about failed updates
     if failed_references_count > 0:
-        warn(f' Failed to update {failed_references_count} out of {outdated_count} references. '
+        warn(f' Failed to update {failed_references_count} out of {remote_outdated_count} references. '
             'This may be cause by network problems so please run the updater again.')
