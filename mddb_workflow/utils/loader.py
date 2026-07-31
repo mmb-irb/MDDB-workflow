@@ -1,3 +1,4 @@
+from os import environ
 from os.path import exists, normpath
 from shutil import which
 from subprocess import run, Popen, PIPE
@@ -8,6 +9,26 @@ from mddb_workflow.utils.constants import LOADER_NODES_CONFIG_FILEPATH
 
 # Se the nodeJS command
 NODEJS_COMMAND = 'node'
+
+# The contents of the loader nodes config file must have the follwoing structure
+# < node alias >:     < as in https://mdposit.mddbr.eu/api/rest/v1/nodes >
+#   ssh_hostname:     < as in your own ~/.ssh/config file >
+#   db_server:        < as in the loader's .env file of the corresponding node >
+#   db_port:          < as in the loader's .env file of the corresponding node >
+#   db_name:          < as in the loader's .env file of the corresponding node >
+#   db_auth_user:     < as in the loader's .env file of the corresponding node >
+#   db_auth_password: < as in the loader's .env file of the corresponding node >
+#   db_auth_source:   < as in the loader's .env file of the corresponding node >
+
+# Set which fields are actually loader environmental variables
+LOADER_ENV_FIELDS = [
+    'db_server',
+    'db_port',
+    'db_name',
+    'db_auth_user',
+    'db_auth_password',
+    'db_authsource'
+]
 
 # Tool to handle the the MDDB loader from the MDDB workflow
 class Loader:
@@ -54,7 +75,7 @@ class Loader:
     def open_ssh_connection(self) -> bool:
         # Get the hostname where we must aim at
         hostname = self.config.get('ssh_hostname', None)
-        if hostname is None: raise InputError(f'Missing "ssh_hostname" for node {self.target_node} in {LOADER_NODES_CONFIG_FILEPATH}')
+        if hostname is None: raise InputError(f'Missing "ssh_hostname" for node "{self.target_node}" in {LOADER_NODES_CONFIG_FILEPATH}')
         # Run the SSH command and keep it alive
         print(f'Opening SSH connection to "{hostname}" for the loader...')
         # WARNING: stdin=PIPE prevents the terminal from becoming a zombi
@@ -79,11 +100,21 @@ class Loader:
             print(error_message)
             return False
         raise RuntimeError('Unexpected response in SSH connection')
-            
+
+    # Set the loader environment variables before calling the loader
+    def set_environment(self):
+        for field in LOADER_ENV_FIELDS:
+            field_value = self.config.get(field, None)
+            if field_value is None:
+                raise InputError(f'Missing "{field}" for node "{self.target_node}" in {LOADER_NODES_CONFIG_FILEPATH}')
+            caps_field = field.upper()
+            environ[caps_field] = field_value
 
     # Make sure the loader is connected and has access to the database
     def has_database_access(self) -> bool:
         print('Checking the loader has database access...')
+        # Set the environmental variables before calling the loader
+        self.set_environment()
         # Run the simplest and fastest loader command just to make sure it has database access
         check_process = run([NODEJS_COMMAND, self.loader_index, 'check'], stdout=PIPE, stderr=PIPE)
         check_output = check_process.stdout.decode().replace('\n','')
@@ -99,6 +130,8 @@ class Loader:
     # Load a directory
     def load(self, target_directory: str, overwrite : bool = False) -> bool:
         print(f'Running loader to load directory {target_directory}')
+        # Set the environmental variables before calling the loader
+        self.set_environment()
         # We are not going to handle when the loader asks the user for input
         # Instead we will always use either the '-c' (conserve) or the '-o' (overwrite) arguments
         force_argument = '-o' if overwrite else '-c'
