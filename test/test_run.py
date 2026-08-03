@@ -5,10 +5,24 @@ import pytest
 import requests
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.utils.auxiliar import load_json
+from mddb_workflow.utils.auxiliar import load_json, RequestError
 from mddb_workflow.mwf import project_requestables, md_requestables
 from mddb_workflow.console import main
 from .conftest import TestBase
+
+
+# Messages in a failed request which mean the remote service is overloaded
+# and thus the failure is not related to the workflow itself
+BUSY_SERVICE_HINTS = ('error 503', 'error 504', 'ServerBusy', 'server too busy',
+                      'Too many requests')
+
+
+def skip_if_service_busy(error: RequestError):
+    """Skip the test when a request failed because the remote service was busy."""
+    message = str(error)
+    if any(hint in message for hint in BUSY_SERVICE_HINTS):
+        pytest.skip(f'Skipping test since a remote service is busy: {message}')
+    raise error
 
 
 @pytest.mark.release
@@ -39,7 +53,10 @@ class TestRunAll(TestBase):
     def test_project_task(self, project: 'Project', project_task: str):
         """Test that each project task runs without errors."""
         project.overwritables = {project_task}
-        project_requestables[project_task](project)
+        try:
+            project_requestables[project_task](project)
+        except RequestError as error:
+            skip_if_service_busy(error)
         if project_task == 'pmeta':
             # Check that the pmeta directory was created
             pmeta_dir = os.path.join(project.directory, 'metadata.json')
@@ -69,7 +86,10 @@ class TestRunAll(TestBase):
 
         md: MD = project.mds[0]
         md.overwritables = {md_task}
-        md_requestables[md_task](md)
+        try:
+            md_requestables[md_task](md)
+        except RequestError as error:
+            skip_if_service_busy(error)
 
 
 @pytest.mark.release

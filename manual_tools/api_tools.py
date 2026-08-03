@@ -31,7 +31,7 @@ def count_projects(query_url):
 def paginate_projects(selection_query=None, limit=100, api_url=default_url):
     """Paginate through all projects matching the selection query."""
     # Ask which projects have a tpr file
-    query_url = api_url + '/projects?'
+    query_url = api_url + '/projects'
     if selection_query is not None:
         query_url += f'?query={selection_query}'
     n_projects = count_projects(query_url)
@@ -87,5 +87,8 @@ def download_files(accessions: list, file: str, output_folder: str, api_url=defa
 # Example of usage
 # Find all projects with a topology.top file
 # accessions = paginate_projects('"files.name":"topology.top"')
+# OR
+# api = 'https://mdposit-dev.mddbr.eu/api/rest/current'
+# accessions, projects_list = paginate_projects('{"metadata.COLLECTIONS": ["AB-DB"]}', api_url=api)
 # Download a specific file from all those projects
 # download_files(accessions, 'topology.top', './topologies')

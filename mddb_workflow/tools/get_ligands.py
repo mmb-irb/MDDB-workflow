@@ -56,8 +56,8 @@ def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context
         return r.json()
     elif error_context:
         if 'temporarily unable' in r.text:
-            raise requests.exceptions.ConnectionError(f"PubChem is temporarily unable to process requests. Please try again later.")
-        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text)
+            raise requests.exceptions.ConnectionError("PubChem is temporarily unable to process requests. Please try again later.")
+        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text + "\nThrottling: " + throttling)
     else:
         return None
 
@@ -90,7 +90,7 @@ def record_pubchem_match(
 def generate_ligand_references(
     structure: 'Structure',
     cache: 'Cache',
-    input_ligands: Optional[list[dict[str,int]]],
+    input_ligands: Optional[list[dict[str, int]]],
     pdb_ids: list[str],
     inchikeys: dict[str, 'InChIKeyData'],
     mercy: list[str] = [],
