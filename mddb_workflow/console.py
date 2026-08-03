@@ -13,11 +13,12 @@ from mddb_workflow.utils.filters import filter_atoms
 from mddb_workflow.utils.subsets import get_trajectory_subset
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS
+from mddb_workflow.utils.database import get_available_nodes
 from mddb_workflow.utils.nassa_file import generate_nassa_config
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
-from mddb_workflow.tools.update_references import update_references, AVAILABLE_REFERENCE_TYPES
+from mddb_workflow.tools.update_references import update_references, AVAILABLE_REFERENCE_TYPES, ALL_FLAG
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
@@ -545,8 +546,26 @@ def main():
             )
     # Update references
     elif subcommand == 'upref':
-        update_references(args.url_or_alias, args.reference_type, args.loader)
-
+        # Set the final list of nodes
+        nodes = list(args.nodes)
+        # If all nodes are requested then we must check available nodes
+        if ALL_FLAG in nodes:
+            if len(nodes) > 1:
+                raise InputError('If you ask for "all" nodes then it is redundant asking for any more nodes')
+            available_nodes = get_available_nodes()
+            nodes = list(available_nodes.keys())
+        # Set the final list reference types
+        types = list(args.types)
+        # If all nodes are requested then we must check available nodes
+        if ALL_FLAG in types:
+            if len(types) > 1:
+                raise InputError('If you ask for "all" reference types then it is redundant asking for any more types')
+            types = AVAILABLE_REFERENCE_TYPES
+        # Iterate nodes
+        for node_alias in nodes:
+            # Iterate reference types
+            for reference_type in types:
+                update_references(node_alias, reference_type, args.loader)
 
 # Define a common parser running in top of all others
 # This arguments declared here are available among all subparsers
@@ -856,13 +875,13 @@ upref_parser = subparsers.add_parser("upref",
 )
 
 # Set optional arguments
-upref_parser.add_argument("url_or_alias", type=str,
-    help=("Select the database where the references are to be updated. Either use an URL or an alias. "
+upref_parser.add_argument("-nd", "--nodes", required=True, nargs='*',
+    help=("Select the node(s) where the references are to be updated. Either use URLs or an aliases. "
           "If you don't know the available aliases then just run the command with a wrong alias. "
           "It will fail and then it will show you available aliases in MDposit. "
           "You may also pass the flag 'all' in order to update references from all nodes."))
-upref_parser.add_argument("reference_type", type=str,
-    help=f"Select the type of references to update among these: {', '.join(AVAILABLE_REFERENCE_TYPES)}")
+upref_parser.add_argument("-rt", "--types", required=True, nargs='*',
+    help=f"Select the type(s) of references to update among these: {', '.join(AVAILABLE_REFERENCE_TYPES)}")
 upref_parser.add_argument("-ld", "--loader", type=str,
     help=f"Set the path to the directory where the loader is installed, so the workflow can use it. "
         "If the loader is available then the new references will be automatically uploaded in batches. "

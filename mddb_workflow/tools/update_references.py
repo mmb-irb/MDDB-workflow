@@ -5,8 +5,9 @@ from re import sub
 from time import time
 
 from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError
-from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, INCHI_REFERENCE_VERSION, PDB_REFERENCE_VERSION
-from mddb_workflow.utils.constants import PROTEIN_REFERENCES_FILENAME, INCHIKEY_REFERENCES_FILENAME, PDB_REFERENCES_FILENAME
+from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, PROTEIN_REFERENCES_FILENAME
+from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME
+from mddb_workflow.utils.constants import PDB_REFERENCE_VERSION, PDB_REFERENCES_FILENAME
 from mddb_workflow.utils.database import Database, get_available_nodes
 from mddb_workflow.utils.loader import Loader
 
@@ -41,17 +42,19 @@ REFERENCE_TYPE_CONFIGURATIONS = {
 # Set a flag to update them all
 ALL_FLAG = 'all'
 # Collect all requestable available reference types
-AVAILABLE_REFERENCE_TYPES = [ *list(REFERENCE_TYPE_CONFIGURATIONS.keys()), ALL_FLAG ]
+AVAILABLE_REFERENCE_TYPES = list(REFERENCE_TYPE_CONFIGURATIONS.keys())
 # Set every how many updated references we upload to the database
 LOADER_BATCH = 100
 
+
+
 def update_references (
-    database_url_or_alias : str,
+    node_url_or_alias : str,
     reference_type : str,
     loader_directory : str | None = None):
 
     # If all nodes are requested then simply call this same function with every node
-    if database_url_or_alias == ALL_FLAG:
+    if node_url_or_alias == ALL_FLAG:
         # Get the available nodes
         available_nodes = get_available_nodes()
         for node_alias in available_nodes.keys():
@@ -61,21 +64,22 @@ def update_references (
     # If all reference types are requested then simply call this same function with every type
     if reference_type == ALL_FLAG:
         for current_reference_type in REFERENCE_TYPE_CONFIGURATIONS.keys():
-            update_references(database_url_or_alias, current_reference_type)
+            update_references(node_url_or_alias, current_reference_type)
         return
 
     # Make sure the type is known
     if reference_type not in REFERENCE_TYPE_CONFIGURATIONS:
-        raise InputError(f'Unknown reference type "{reference_type}". Please select one of the following: {", ".join(AVAILABLE_REFERENCE_TYPES)}')
+        raise InputError(f'Unknown reference type "{reference_type}". '
+            f'Please select any of the following: {", ".join(AVAILABLE_REFERENCE_TYPES)}')
 
-    print(f'Updating references of type "{reference_type}" from "{database_url_or_alias}"')
+    print(f'Updating references of type "{reference_type}" from "{node_url_or_alias}"')
     reference_config = REFERENCE_TYPE_CONFIGURATIONS[reference_type]
 
     # Instantiate the database handler
-    database = Database(database_url_or_alias)
+    database = Database(node_url_or_alias)
 
     # If we are to upload the new references to the corresponding database then prepare the loader
-    loader = Loader(loader_directory, database_url_or_alias) if loader_directory else None
+    loader = Loader(loader_directory, node_url_or_alias) if loader_directory else None
 
     # Paginate to get all available references and their versions
     references = database.get_all_refences_data(reference_config['endpoint'])
@@ -91,7 +95,7 @@ def update_references (
     print(f'  Found {remote_outdated_count} remote outdated references out of {len(references)}')
 
     # Make a directory for the current url or alias
-    directory = sub('https?://', '', database_url_or_alias.replace('/api/', ''))
+    directory = sub('https?://', '', node_url_or_alias.replace('/api/', ''))
     if not exists(directory): mkdir(directory)
 
     # Set the filepaths where output is to be written
@@ -174,4 +178,4 @@ def update_references (
     # Warn the user about failed updates
     if failed_references_count > 0:
         warn(f' Failed to update {failed_references_count} out of {remote_outdated_count} references. '
-            'This may be cause by network problems so please run the updater again.')
+            'This may be caused by network problems so please run the updater again.')
