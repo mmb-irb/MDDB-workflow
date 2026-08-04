@@ -5,9 +5,8 @@ from subprocess import run, Popen, PIPE
 from select import select
 from socket import create_connection
 from threading import Event, Thread
-from time import sleep
 
-from mddb_workflow.utils.auxiliar import load_yaml, InputError, RemoteServiceError
+from mddb_workflow.utils.auxiliar import load_yaml, InputError, RemoteServiceError, MISSING_VALUE
 from mddb_workflow.utils.constants import LOADER_NODES_CONFIG_FILEPATH
 
 # Set the time we wait for an SSH connection attempt before we give up
@@ -67,9 +66,10 @@ class Loader:
                 f'or include your node in the loader config file {LOADER_NODES_CONFIG_FILEPATH}')
         # Import all config variables and store them as instance variables as well
         for field in CONFIG_ENV_FIELDS:
-            field_value = self.config.get(field, None)
+            field_value = self.config.get(field, MISSING_VALUE)
             # If any of the expected fields is missing then complain
-            if field_value is None:
+            # Note that a field may be 'None' and not missing
+            if field_value is MISSING_VALUE:
                 raise InputError(f'Missing "{field}" for node "{self.target_node}" in {LOADER_NODES_CONFIG_FILEPATH}')
             setattr(self, field, field_value)
         # Set an internal variable to store the process holding the SSH connection
@@ -153,6 +153,7 @@ class Loader:
         for field in LOADER_ENV_FIELDS:
             caps_field = field.upper()
             field_value = getattr(self, field)
+            if field_value is None: field_value = ""
             environ[caps_field] = field_value
 
     # Make sure the loader is connected and has access to the database
