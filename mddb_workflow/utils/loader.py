@@ -3,9 +3,15 @@ from os.path import exists, normpath
 from shutil import which
 from subprocess import run, Popen, PIPE
 from select import select
+from socket import create_connection
+from threading import Event, Thread
+from time import sleep
 
 from mddb_workflow.utils.auxiliar import load_yaml, InputError, RemoteServiceError
 from mddb_workflow.utils.constants import LOADER_NODES_CONFIG_FILEPATH
+
+# Set the time we wait for an SSH connection attempt before we give up
+SSH_TIMEOUT = 30 # seconds
 
 # Se the nodeJS command
 NODEJS_COMMAND = 'node'
@@ -29,6 +35,9 @@ LOADER_ENV_FIELDS = [
     'db_auth_password',
     'db_authsource'
 ]
+
+# Set all expected fields in the configuration file
+CONFIG_ENV_FIELDS = [ 'ssh_hostname', *LOADER_ENV_FIELDS ]
 
 # Tool to handle the the MDDB loader from the MDDB workflow
 class Loader:
@@ -56,6 +65,13 @@ class Loader:
             raise InputError(f'There is no loader configuration for node "{target_node}". '
                 f'Please either use one of the available nodes ({", ".join(nodes_config.keys())}) '
                 f'or include your node in the loader config file {LOADER_NODES_CONFIG_FILEPATH}')
+        # Import all config variables and store them as instance variables as well
+        for field in CONFIG_ENV_FIELDS:
+            field_value = self.config.get(field, None)
+            # If any of the expected fields is missing then complain
+            if field_value is None:
+                raise InputError(f'Missing "{field}" for node "{self.target_node}" in {LOADER_NODES_CONFIG_FILEPATH}')
+            setattr(self, field, field_value)
         # Set an internal variable to store the process holding the SSH connection
         self.ssh_process = None
         # Open the SSH connection
@@ -64,7 +80,7 @@ class Loader:
                 'Please make sure you have the SSH connection properly configured in your ~/.ssh/config')
         # Make sure the connection works
         if not self.has_database_access():
-            raise RemoteServiceError(f'The loader failed to connect to node "{target_node}".\n'
+            raise RemoteServiceError(f'The loader failed to access the database in node "{target_node}".\n'
                 f'Please check the parameters are correct in the config file {LOADER_NODES_CONFIG_FILEPATH}\n'
                 'Also make sure you have the SSH tunnel properly configured in your ~/.ssh/config\n'
                 'There should be a line similar to "LocalForward <port> 127.0.0.1:27017"')
@@ -73,41 +89,70 @@ class Loader:
     # WARNING: Note that this function will only open a SSH connection
     # WARNING: the tunnel configuration must be in your ~/.ssh/config
     def open_ssh_connection(self) -> bool:
-        # Get the hostname where we must aim at
-        hostname = self.config.get('ssh_hostname', None)
-        if hostname is None: raise InputError(f'Missing "ssh_hostname" for node "{self.target_node}" in {LOADER_NODES_CONFIG_FILEPATH}')
         # Run the SSH command and keep it alive
-        print(f'Opening SSH connection to "{hostname}" for the loader...')
+        print(f'Opening SSH connection to "{self.ssh_hostname}" for the loader...')
         # WARNING: stdin=PIPE prevents the terminal from becoming a zombi
         # The argument "-T" prevents the following error log:
         #   Pseudo-terminal will not be allocated because stdin is not a terminal.
-        self.ssh_process = Popen([ "ssh", "-T", hostname ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        # Wait for 30 seconds for the SSH response
-        responses, _, _ = select([self.ssh_process.stdout, self.ssh_process.stderr], [], [], 30)
-        if len(responses) == 0:
+        self.ssh_process = Popen([ "ssh", "-T", self.ssh_hostname ],
+            stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        # Set a race between two independent processes to check if the SSH connection is open
+        finished = Event()
+        # WARNING: This has to be a list por the threads to edit it
+        result = [None]
+        # In one hand we check if the process returns output or error
+        def check_ssh_response():
+            # Watch for any writes in both stdout and stderr
+            # The waiting stops as soon as any of the streams has content
+            responses, _, _ = select([self.ssh_process.stdout, self.ssh_process.stderr], [], [], SSH_TIMEOUT)
+            # If the other racing process finished already then stop here
+            if finished.is_set(): return
+            # If there are no responses then
+            if len(responses) == 0: return
+            # If the first response is output then we assume the connection is alive
+            first_response = responses[0]
+            if first_response is self.ssh_process.stdout:
+                print('  The SSH connection is alive')
+                result[0] = True
+            # If the first response is error then we assume something went wrong
+            elif first_response is self.ssh_process.stderr:
+                error_message = first_response.read1().decode()
+                print('  Something went wrong')
+                print(error_message)
+                result[0] = False
+            # Set the race finished since this process got some response
+            finished.set()
+        # In the other hand we shcek if the SSH tunnel is open by trying to connect to the target port
+        # Note that this is necessary for some hosts which do not return output on connect
+        def check_port():
+            # Do this while the other racing process did not finish yet
+            while not finished.is_set():
+                try:
+                    with create_connection((self.db_server, self.db_port), timeout=1):
+                        print('  The SSH tunnel is open')
+                        result[0] = True
+                        finished.set()
+                        return
+                except (ConnectionRefusedError, OSError):
+                    finished.wait(0.5)
+        # Run the two checks in paralel
+        Thread(target=check_ssh_response, daemon=True).start()
+        Thread(target=check_port, daemon=True).start()
+        # Wait for any of them to finish
+        finished.wait(timeout=SSH_TIMEOUT)
+        # handle the results
+        if result[0] is True: return True
+        if result[0] is False: return False
+        if result[0] is None:
             print('  Exceeded timeout')
             return False
-        # Get the first response we have
-        first_response = responses[0]
-        # If we have output then the SSH connection has worked
-        if first_response is self.ssh_process.stdout:
-            print('  The SSH connection is open')
-            return True
-        # If we have an error then show the problem
-        if first_response is self.ssh_process.stderr:
-            print('  Something went wrong')
-            error_message = first_response.read1().decode()
-            print(error_message)
-            return False
-        raise RuntimeError('Unexpected response in SSH connection')
 
     # Set the loader environment variables before calling the loader
+    # Note that at this point we have already checked that the configuration fields exist
     def set_environment(self):
         for field in LOADER_ENV_FIELDS:
-            field_value = self.config.get(field, None)
-            if field_value is None:
-                raise InputError(f'Missing "{field}" for node "{self.target_node}" in {LOADER_NODES_CONFIG_FILEPATH}')
             caps_field = field.upper()
+            field_value = getattr(self, field)
             environ[caps_field] = field_value
 
     # Make sure the loader is connected and has access to the database
