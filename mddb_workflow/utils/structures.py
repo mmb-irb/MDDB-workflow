@@ -13,7 +13,7 @@ from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.vmd_spells import get_vmd_selection_atom_indices, get_covalent_bonds
 from mddb_workflow.utils.mdt_spells import sort_trajectory_atoms
 from mddb_workflow.utils.gmx_spells import make_index, read_ndx
-from mddb_workflow.utils.auxiliar import InputError, MISSING_BONDS
+from mddb_workflow.utils.auxiliar import InputError, RemoteServiceError, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import is_imported, residue_name_to_letter, otherwise, warn, protein_residue_name_to_letter
 from mddb_workflow.utils.auxiliar import get_auxiliar_filepath, download_mmcif
 from mddb_workflow.utils.constants import SUPPORTED_ION_ELEMENTS, SUPPORTED_ELEMENTS
@@ -62,6 +62,8 @@ coherent_bonds_without_hydrogen = {
 # This means the last number is 9999 and it is equivalent to index 9998
 pdb_last_decimal_residue_index = 9998
 
+# Set the flag mmCIF uses to state missing files
+MMCIF_MISSING_VALUE = '?'
 
 class Atom:
     """An atom class."""
@@ -1617,7 +1619,12 @@ class Structure:
             if not atom_number.isnumeric(): continue
             # Get the atom model number if a model number was passed
             # Note that then model is a number greater than 0
-            model_number = int(values[20])
+            # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
+            # In this scenario we assume it is the model 1 and keep going
+            model_string = values[20]
+            if model_string == MMCIF_MISSING_VALUE:
+                raise RuntimeError('Missing model number in mmCIF')
+            model_number = int(model_string)
             # If the model number does not match then skip it
             if model != model_number: continue
             # Mine atom data
@@ -1636,7 +1643,7 @@ class Structure:
             # chain_number = values[7]
             # Residue number is '.' for chains with only one residue
             residue_number = 1 if values[8] == '.' else int(values[8])
-            icode = '' if values[9] == '?' else values[9]
+            icode = '' if values[9] == MMCIF_MISSING_VALUE else values[9]
             x_coord = float(values[10])
             y_coord = float(values[11])
             z_coord = float(values[12])
@@ -1645,10 +1652,13 @@ class Structure:
             # Next value is the isotropic displacement, we do not need it
             # isotropic = float(values[14])
             # Next value is the charge, we do not need it
-            # charge = None if values[15] == '?' else float(values[15])
+            # charge = None if values[15] == MMCIF_MISSING_VALUE else float(values[15])
             # The rest of values are alternative author values
             if author_notation:
-                residue_number = int(values[16])
+                residue_number_string = values[16]
+                if residue_number_string == MMCIF_MISSING_VALUE:
+                    raise RuntimeError('Missing author residue numeration in mmCIF file.')
+                residue_number = int(residue_number_string)
                 residue_name = values[17]
                 chain_name = values[18]
                 atom_name = values[19].replace('"','')
