@@ -3,7 +3,8 @@ import pytraj as pt
 from mddb_workflow.utils.auxiliar import all_cases, all_charges
 from mddb_workflow.utils.constants import STANDARD_SOLVENT_RESIDUE_NAMES, STANDARD_COUNTER_ION_ATOM_NAMES
 from mddb_workflow.utils.file import File
-from mddb_workflow.utils.gmx_spells import make_index, tpr_filter, get_tpr_atom_count
+from mddb_workflow.utils.gmx_spells import tpr_filter, get_tpr_atom_count
+from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.type_hints import *
 
 # Set the atom selections to be tried
@@ -13,9 +14,11 @@ AMBER_MASKS = {
     'No water or counter ions': f'!:{",".join(STANDARD_SOLVENT_RESIDUE_NAMES)},{",".join(ALL_COUNTER_IONS)}'
 }
 
+DRY_SELECTION_NAME = 'dry' # Not water
+DRIER_SELECTION_NAME = 'drier' # Not water or counter ions
 GROMACS_MASKS = {
-    'No water': '!"Water"',
-    'No water or counter ions': '!"Water"&!"Ion"'
+    'No water': DRY_SELECTION_NAME,
+    'No water or counter ions': DRIER_SELECTION_NAME,
 }
 
 # Given a topology file and a specific atom number, find an atom selection which matches the number
@@ -55,20 +58,28 @@ def guess_and_filter_topology (
         return False
     # Gromacs topologies
     elif input_topology_file.format == 'tpr':
+        # We will not rely in Gromacs automatic atom selections
+        # Instead we will make our own index file with our custom selections
+        index_filepath = f'{input_topology_file.basepath}/.auxiliar.ndx'
+        index_file = File(index_filepath)
+        # Read and parse the TPR file
+        early_structure = Structure.from_tpr_file(input_topology_file.path)
+        # Set the dry selections
+        water_selection = early_structure.select_water()
+        dry_selection = early_structure.invert_selection(water_selection)
+        water_and_ion_selection = early_structure.select_water_and_counter_ions()
+        drier_selection = early_structure.invert_selection(water_and_ion_selection)
+        # Write the index file
+        with open(index_file.path, 'w') as file:
+            file.write(dry_selection.to_ndx(DRY_SELECTION_NAME))
+            file.write(drier_selection.to_ndx(DRIER_SELECTION_NAME))
         # Iterate possible atom selections
         for mask_name, mask in GROMACS_MASKS.items():
-            # Create the index file with the current atom selection
-            index_filepath = f'{input_topology_file.basepath}/.auxiliar.ndx'
-            index_file = File(index_filepath)
-            filter_group_name, group_exists = make_index(input_topology_file, index_file, mask)
-            # If the filter was not created then it means there was no water or ions to begin with
-            if not group_exists: continue
             # Filter the tpr
             tpr_filter(
                 input_topology_file.path,
                 output_topology_file.path,
-                index_file.path,
-                filter_group_name)
+                index_file.path, mask)
             # Count atoms in the new filtered tpr
             filtered_atoms_count = get_tpr_atom_count(output_topology_file.path)
             if verbose: print(f' {mask_name} -> {filtered_atoms_count}')
