@@ -107,7 +107,7 @@ def vmd_converter(
         print(output_logs)
         error_logs = vmd_process.stderr.decode()
         print(error_logs)
-        raise ToolError('Something went wrong with VMD')
+        raise ToolError('Something went wrong with VMD while converting')
     os.remove(commands_filepath)
 
 
@@ -206,19 +206,22 @@ def chainer(
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         input_pdb_filename,
         "-e",
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    output_logs = vmd_process.stdout.decode()
 
     # If the expected output file was not generated then stop here and warn the user
     if not exists(output_pdb_filename):
-        print(logs)
-        raise ToolError('Something went wrong with VMD')
+        print(output_logs)
+        error_logs = vmd_process.stderr.decode()
+        print(error_logs)
+        raise ToolError('Something went wrong with VMD while chaining')
 
     # Remove the vmd commands file
     os.remove(commands_filepath)
@@ -258,19 +261,22 @@ def merge_and_convert_trajectories(
     inputs = [input_structure_filename, *input_trajectory_filenames] if input_structure_filename else input_trajectory_filenames
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         *inputs,
         "-e",
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=STDOUT).stdout.decode() # Redirect errors to the output in order to dont show them in console
+    ], stdout=PIPE, stderr=STDOUT)
+    output_logs = vmd_process.stdout.decode()# Redirect errors to the output in order to dont show them in console
 
     # If the expected output file was not generated then stop here and warn the user
     if not exists(output_trajectory_filename):
-        print(logs)
-        raise ToolError('Something went wrong with VMD')
+        print(output_logs)
+        error_logs = vmd_process.stderr.decode()
+        print(error_logs)
+        raise ToolError('Something went wrong with VMD while merging and converting')
 
     # Remove the vmd commands file
     os.remove(commands_filepath)
@@ -320,19 +326,22 @@ def get_vmd_selection_atom_indices(input_structure_filename: str, selection: str
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         input_structure_filename,
         "-e",
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    output_logs = vmd_process.stdout.decode()
 
     # If the expected output file was not generated then stop here and warn the user
     if not exists(atom_indices_filename):
-        print(logs)
-        raise ToolError('Something went wrong with VMD')
+        print(output_logs)
+        error_logs = vmd_process.stderr.decode()
+        print(error_logs)
+        raise ToolError('Something went wrong with VMD while selecting atom indices')
 
     # Read the VMD output
     with open(atom_indices_filename, 'r') as file:
@@ -372,19 +381,23 @@ def get_covalent_bonds(structure_filename: str, selection: Optional['Selection']
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         structure_filename,
         "-e",
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    output_logs = vmd_process.stdout.decode()
+
 
     # If the output file is missing at this point then it means something went wrong
     if not exists(output_bonds_file):
-        print(logs)
-        raise ToolError('Something went wrong with VMD')
+        print(output_logs)
+        error_logs = vmd_process.stderr.decode()
+        print(error_logs)
+        raise ToolError('Something went wrong with VMD while finding covalent bonds')
 
     # Read the VMD output
     with open(output_bonds_file, 'r') as file:
@@ -474,19 +487,22 @@ def get_covalent_bonds_between(
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         structure_filename,
         "-e",
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    output_logs = vmd_process.stdout.decode()
 
     # If the expected output file was not generated then stop here and warn the user
     if not exists(output_index_1_file) or not exists(output_bonds_file) or not exists(output_index_2_file):
-        print(logs)
-        raise ToolError('Something went wrong with VMD')
+        print(output_logs)
+        error_logs = vmd_process.stderr.decode()
+        print(error_logs)
+        raise ToolError('Something went wrong with VMD while finding coalent bonds between two regions')
 
     # Read the VMD output
     with open(output_index_1_file, 'r') as file:
@@ -658,7 +674,7 @@ def get_interface_atom_indices(
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         input_structure_filepath,
         input_trajectory_filepath,
@@ -666,7 +682,8 @@ def get_interface_atom_indices(
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    output_logs = vmd_process.stdout.decode()
 
     # If any of the output files do not exist at this point then it means something went wrong with vmd
     expected_output_files = [
@@ -679,8 +696,10 @@ def get_interface_atom_indices(
     ]
     for output_file in expected_output_files:
         if not os.path.exists(output_file):
-            print(logs)
-            raise ToolError('Something went wrong with VMD')
+            print(output_logs)
+            error_logs = vmd_process.stderr.decode()
+            print(error_logs)
+            raise ToolError('Something went wrong with VMD while finding interface atom indices')
 
     # Set a function to read the VMD output and parse the atom indices string to an array of integers
     def process_vmd_output(output_filename: str) -> list[int]:
@@ -737,14 +756,15 @@ def get_rst7_atom_count (restart_filepath : str) -> int:
         file.write('exit\n')
 
     # Run VMD
-    logs = run([
+    vmd_process = run([
         "vmd",
         restart_filepath,
         "-e",
         commands_filepath,
         "-dispdev",
         "none"
-    ], stdout=PIPE, stderr=PIPE).stdout.decode()
+    ], stdout=PIPE, stderr=PIPE)
+    output_logs = vmd_process.stdout.decode()
 
     # Get the VMD version, so we now the format of the logs
     vmd_version = get_vmd_version()
@@ -754,7 +774,7 @@ def get_rst7_atom_count (restart_filepath : str) -> int:
 
     # Mine atom count from VMD logs
     atom_count = None
-    for line in logs.split('\n'):
+    for line in output_logs.split('\n'):
         match = re.match(restart_atom_count_regex, line)
         if match:
             atom_count = int(match[1])
