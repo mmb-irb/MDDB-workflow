@@ -685,10 +685,11 @@ def get_gmx_atom_count (mysterious_file : 'File') -> int:
 def get_gmx_trajectory_atom_count (mysterious_file : 'File') -> int:
     """ Count atoms in a gromacs supported trajectory file. Check only the first frame. """
     # Generate a trajectory with inle the first sample
-    first_frame_sample = get_auxiliar_filepath(f'.first_frame.{mysterious_file.extension}')
-    get_first_frame_trajectory(mysterious_file.path, first_frame_sample.path)
+    first_frame_sample_filepath = get_auxiliar_filepath(f'.first_frame.{mysterious_file.extension}')
+    first_frame_sample_file = File(first_frame_sample_filepath)
+    get_first_frame_trajectory(mysterious_file.path, first_frame_sample_file.path)
     # Check this trajectory to get the atom count
-    atom_count = get_gmx_atom_count(first_frame_sample)
+    atom_count = get_gmx_atom_count(first_frame_sample_file)
     # Clean up the auxiliar files
-    remove(first_frame_sample)
+    remove(first_frame_sample_file.path)
     return atom_count
