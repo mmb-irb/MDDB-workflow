@@ -1452,7 +1452,7 @@ class Structure:
         del self.chains[purged_index]
 
     @classmethod
-    def from_pdb(cls, pdb_content: str, model: int = 1, flexible_numeration: bool = True):
+    def from_pdb(cls, pdb_content: str, model: int = -1, flexible_numeration: bool = True):
         """Set the structure from a pdb file.
         You may filter the PDB content for a specific model.
         Some weird numeration systems are not supported and, when encountered, they are ignored.
@@ -1567,7 +1567,7 @@ class Structure:
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains, residue_numeration_base=residue_numeration_base)
 
     @classmethod
-    def from_pdb_file(cls, pdb_filepath: str, model: int = 1, flexible_numeration: bool = True):
+    def from_pdb_file(cls, pdb_filepath: str, model: int = -1, flexible_numeration: bool = True):
         """Set the structure from a pdb file.
         You may filter the input PDB file for a specific model.
         Some weird numeration systems are not supported and, when encountered, they are ignored.
@@ -1708,7 +1708,7 @@ class Structure:
         return cls.from_mmcif(mmcif_content, model, author_notation)
 
     @classmethod
-    def from_pdb_id(cls, pdb_id: str, model: int = 1, author_notation: bool = False):
+    def from_pdb_id(cls, pdb_id: str, model: int = -1, author_notation: bool = False):
         """Download and parse the structure from a PDB entry."""
         # Download the structure
         # Download the mmcif instead of the PDB to avoid having problems
@@ -3411,22 +3411,35 @@ def get_lower_numbers(numbers_text: str) -> str:
 
 
 def filter_model(pdb_content: str, model: int) -> str:
-    """Set a function to filter lines in PDB content for a specific model."""
+    """Set a function to filter lines in PDB content for a specific model.
+    If the model is -1 then simply return the first model we find."""
     # If there are no multiple models then return the whole PDB content
-    generic_model_header_regex = r'\nMODEL\s*[0-9]*\s*\n'
-    if not re.search(generic_model_header_regex, pdb_content): return pdb_content
+    model_header_regex = r'^MODEL\s*([0-9]*)\s*$'
+    # Keep track of the models found, for the logs
+    found_models = set()
     # If a model was passed then it means we must filter the PDB content
     filtered_pdb_content = ''
     # Search PDB lines until we find our model's header
-    model_header_regex = rf'^MODEL\s*{model}'
     pdb_lines = iter(pdb_content.split('\n'))
     for line in pdb_lines:
-        if not re.match(model_header_regex, line): continue
+        # Skip any line which is not a model line
+        model_line = re.match(model_header_regex, line)
+        if not model_line: continue
+        # If the model is not the model we aim for then skip, but record the number for the logs
+        model_number = int(model_line[1])
+        found_models.add(model_number)
+        if model_number != model and model != -1:
+            continue
         # If we just found the header
         filtered_pdb_content = line
         break
+    # If there are no models then return the whole PDB content
+    if len(found_models) == 0:
+        return pdb_content
     # If we did not find the header then stop here
-    if not filtered_pdb_content: raise RuntimeError(f'Could not find model "{model}" header')
+    if not filtered_pdb_content:
+        raise RuntimeError(f'Could not find model "{model}" header. '
+            f'Available models: {", ".join(found_models)}')
     # Add every line to the filtered content until we find the tail
     model_footer_regex = r'^ENDMDL'
     for line in pdb_lines:
