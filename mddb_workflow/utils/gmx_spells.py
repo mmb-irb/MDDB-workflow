@@ -192,10 +192,10 @@ get_structure_alone.format_sets = [
     }
 ]
 
-def get_first_frame_trajectory (input_trajectory_filename : str, output_frame_filename : str):
+def get_first_frame_trajectory (input_trajectory_filepath : str, output_frame_filepath : str):
     """ Get the first frame from a trajectory as a trajectory. """
     # Run Gromacs
-    run_gromacs(f'trjconv -f {input_trajectory_filename} -o {output_frame_filename} -dump 0')
+    run_gromacs(f'trjconv -f {input_trajectory_filepath} -o {output_frame_filepath} -dump 0')
 
 def merge_and_convert_trajectories (input_trajectory_filenames : list[str], output_trajectory_filename : str):
     """ Get gromacs supported trajectories merged and converted to a different format. """
@@ -686,7 +686,7 @@ def get_gmx_trajectory_atom_count (mysterious_file : 'File') -> int:
     """ Count atoms in a gromacs supported trajectory file. Check only the first frame. """
     # Generate a trajectory with inle the first sample
     first_frame_sample = get_auxiliar_filepath(f'.first_frame.{mysterious_file.extension}')
-    get_first_frame_trajectory(mysterious_file, first_frame_sample)
+    get_first_frame_trajectory(mysterious_file.path, first_frame_sample.path)
     # Check this trajectory to get the atom count
     atom_count = get_gmx_atom_count(first_frame_sample)
     # Clean up the auxiliar files
