@@ -64,6 +64,8 @@ pdb_last_decimal_residue_index = 9998
 
 # Set the flag mmCIF uses to state missing files
 MMCIF_MISSING_VALUE = '?'
+# Set the mmCIF line headers of lines with atom data
+MMCIF_ATOM_HEADERS = {'ATOM', 'HETATM', 'ANISOU'}
 
 class Atom:
     """An atom class."""
@@ -1460,7 +1462,7 @@ class Structure:
         Set the flexible numeration argument as false to avoid this behaviour, thus crashing instead.
         """
         # Filter the PDB content in case a model was passed
-        filtered_pdb_content = filter_model(pdb_content, model) if model else pdb_content
+        filtered_pdb_content = filter_pdb_model(pdb_content, model) if model else pdb_content
         # Split the PDB content in lines
         pdb_lines = filtered_pdb_content.split('\n')
         # Before we start, we must guess the numeration system
@@ -1587,13 +1589,16 @@ class Structure:
 
     # https://biopandas.github.io/biopandas/tutorials/Working_with_mmCIF_Structures_in_DataFrames/
     @classmethod
-    def from_mmcif(cls, mmcif_content: str, model: int = 1, author_notation: bool = False):
+    def from_mmcif(cls, mmcif_content: str, model: int = -1, author_notation: bool = False):
         """Set the structure from mmcif.
-        You may filter the content for a specific model.
+        You may filter the content for a specific model. If the target model is -1 then the first model will be used.
         You may ask for the author notation instead of the standarized notation for legacy reasons.
         This may have an effect in atom names, residue names, residue numbers and chain names.
         Read the pdb content line by line and set the parsed atoms, residues and chains.
         """
+        # Filter the content of the desired model
+        mmcif_filtered_content = filter_mmcif_model(mmcif_content, model)
+        # Store the parsed atoms, residue and chains to ensamble the final structure
         parsed_atoms = []
         parsed_residues = []
         parsed_chains = []
@@ -1604,29 +1609,11 @@ class Structure:
         atom_index = -1
         residue_index = -1
         # Iterate the content line by line
-        lines = iter(mmcif_content.split('\n'))
-        # Now mine atoms data
-        atom_headers = {'ATOM', 'HETATM', 'ANISOU'}
+        lines = mmcif_filtered_content.split('\n')
+        # Iterate content lines and mine atom data
         for line in lines:
             # Values are separated by spaces
             values = line.split()
-            # If this is not atom line then we are done
-            if len(values) == 0 or values[0] not in atom_headers: continue
-            # WARNING: The atom header is not safe enought
-            # Some other header data are free texts which may include these words
-            # To make it a bit safer we check that the atom number is present as well, although we don't need it
-            atom_number = values[1]
-            if not atom_number.isnumeric(): continue
-            # Get the atom model number if a model number was passed
-            # Note that then model is a number greater than 0
-            # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
-            # In this scenario we assume it is the model 1 and keep going
-            model_string = values[20]
-            if model_string == MMCIF_MISSING_VALUE:
-                raise RuntimeError('Missing model number in mmCIF')
-            model_number = int(model_string)
-            # If the model number does not match then skip it
-            if model != model_number: continue
             # Mine atom data
             # Mine the atom element
             element = values[2]
@@ -1694,7 +1681,7 @@ class Structure:
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains)
 
     @classmethod
-    def from_mmcif_file(cls, mmcif_filepath: str, model: int = 1, author_notation: bool = False):
+    def from_mmcif_file(cls, mmcif_filepath: str, model: int = -1, author_notation: bool = False):
         """Set the structure from a mmcif file."""
         mmcif_file = File(mmcif_filepath)
         if not mmcif_file.exists:
@@ -3410,7 +3397,7 @@ def get_lower_numbers(numbers_text: str) -> str:
     return ''.join([lower_numbers[c] for c in numbers_text])
 
 
-def filter_model(pdb_content: str, model: int) -> str:
+def filter_pdb_model(pdb_content: str, model: int) -> str:
     """Set a function to filter lines in PDB content for a specific model.
     If the model is -1 then simply return the first model we find."""
     # If there are no multiple models then return the whole PDB content
@@ -3447,3 +3434,72 @@ def filter_model(pdb_content: str, model: int) -> str:
         if re.match(model_footer_regex, line): return filtered_pdb_content
     # If we did not find the footer then stop here
     raise RuntimeError(f'Could not find model "{model}" footer')
+
+def filter_mmcif_model(mmcif_content: str, model: int) -> str:
+    """Set a function to filter lines in mmCIF content for a specific model.
+    If the model is -1 then simply return the first model we find."""
+    # Keep track of the models found, for the logs
+    found_models = set()
+    # If a model was passed then it means we must filter the content
+    filtered_content = ''
+    # Iterate the content line by line
+    lines = iter(mmcif_content.split('\n'))
+    for line in lines:
+        # Values are separated by spaces
+        values = line.split()
+        # If this is not atom line then skip it
+        if len(values) == 0 or values[0] not in MMCIF_ATOM_HEADERS: continue
+        # WARNING: The atom header is not safe enought
+        # Some other header data are free texts which may include these words
+        # To make it a bit safer we check that the atom number is present as well, although we don't need it
+        atom_number = values[1]
+        if not atom_number.isnumeric(): continue
+        # Get the atom model number if a model number was passed
+        # Note that then model is a number greater than 0
+        # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
+        # In this scenario we assume it is the model 1 and keep going
+        model_string = values[20]
+        if model_string == MMCIF_MISSING_VALUE:
+            raise RuntimeError('Missing model number in mmCIF')
+        found_models.add(model_string)
+        model_number = int(model_string)
+        # If the model is -1 then the model is the frist encountered model
+        if model == -1: model = model_number
+        # If the model number does not match then skip it
+        if model != model_number: continue
+        # If we just found the first line of our model then start mining the content
+        filtered_content = line
+        break
+    # If there are no models then something is very wrong
+    # In mmCIF the model is stated in every atom line, so it means there are no atom lines
+    if len(found_models) == 0:
+        raise RuntimeError('No models found. Is this mmCIF empty?')
+    # If we did not find any line belonging to the requested model then stop here
+    if not filtered_content:
+        raise RuntimeError(f'Could not find model "{model}" atoms. '
+            f'Available models: {", ".join(found_models)}')
+    # Add every line to the filtered content until we find an atom which belongs to a different model
+    for line in lines:
+        # Values are separated by spaces
+        values = line.split()
+        # If this is not atom line then we are done
+        if len(values) == 0 or values[0] not in MMCIF_ATOM_HEADERS: break
+        # WARNING: The atom header is not safe enought
+        # Some other header data are free texts which may include these words
+        # To make it a bit safer we check that the atom number is present as well, although we don't need it
+        atom_number = values[1]
+        if not atom_number.isnumeric(): break
+        # Get the atom model number if a model number was passed
+        # Note that then model is a number greater than 0
+        # In a few rare cases the model may be '?' (e.g. 1DOW, 1DQJ)
+        # In this scenario we assume it is the model 1 and keep going
+        model_string = values[20]
+        if model_string == MMCIF_MISSING_VALUE:
+            raise RuntimeError('Missing model number in mmCIF')
+        model_number = int(model_string)
+        # If the model has changed then we are done
+        if model_number != model: break
+        # If we are still in the same model then keep adding the content
+        filtered_content += '\n' + line
+    # Return the mined content
+    return filtered_content
