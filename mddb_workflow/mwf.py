@@ -632,7 +632,7 @@ class MD:
                     # Get the current file input value
                     file_input_trajectory_filepaths = self.get_file_input(MD_INPUT_TRAJECTORY_FILEPATHS)
                     if type(file_input_trajectory_filepaths) == str:
-                        file_input_trajectory_filepaths = [ file_input_trajectory_filepaths ]
+                        file_input_trajectory_filepaths = [file_input_trajectory_filepaths]
                     # Find the URL we just downloaded
                     index = file_input_trajectory_filepaths.index(trajectory_url)
                     if index == -1: raise ValueError('Missing trajectory URL we just downloaded')
@@ -664,14 +664,15 @@ class MD:
     def update_file_inputs(self, key: str, new_value) -> bool:
         """Permanently update current MD inputs in the inputs file.
         Do it only if the project value is not already the same.
-        Return True if the inputs is updated correctly. Return False if there is no update."""
+        Return True if the inputs is updated correctly. Return False if there is no update.
+        """
         # Check if the project value is already this value
         # If so then there is no need to update this value specifically for the MD
         project_value = self.project.get_file_input(key)
         if project_value == new_value: return False
         nested_key = f'mds.{self.index}.{key}'
         return self.project.update_file_inputs(nested_key, new_value)
-    
+
     def check_inputs_file_available(self) -> bool:
         """Set a function to check if inputs file is available.
         Note that asking for it when it is not available will lead to raising an input error.
@@ -1119,7 +1120,7 @@ class MD:
         # This may happen easily while editting the inputs yaml file
         # Try to fix it automatically if possible
         if type(self.input_forced_class_selections) is list:
-            if all( type(value) == dict for value in self.input_forced_class_selections ):
+            if all(type(value) == dict for value in self.input_forced_class_selections):
                 print(' Forced class selections were not correctly formatted in the YAML inputs file. This is about to be fixed.')
                 fixed_forced_class_selections = {}
                 for dict_value in self.input_forced_class_selections:
@@ -1714,7 +1715,7 @@ class Project:
             self.md_config = []
             self.update_file_inputs('mds', self.md_config)
         # Purge removed MDs from the list
-        self.md_config = [ REMOVED_MD if c.get(MD_REMOVED_FLAG, False) else c for c in self.md_config ]
+        self.md_config = [REMOVED_MD if c.get(MD_REMOVED_FLAG, False) else c for c in self.md_config]
 
         # Add or overwrite possible MD inputs from the inputs file with the console arguments
 
@@ -2022,7 +2023,7 @@ class Project:
         else:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
         if not inputs_data:
-            raise InputError('Input file is empty')    
+            raise InputError('Input file is empty')
         # Legacy fixes (applied before validation so legacy values are validated too)
         old_pdb_ids = inputs_data.get('pdbIds', None)
         if old_pdb_ids:
@@ -2057,10 +2058,10 @@ class Project:
         else:
             raise InputError('Input file format is not supported. Please use json or yaml files.')
         return True
-        
+
     def update_cache_inputs(self, arg_key: str, new_value: Any, verbose: bool = False):
         """Update an input argument cksum in the cache of all tasks using it.
-        This may be useful after updating an input value if you don't want all tasks using it to run again in the next workflow run
+        This may be useful after updating an input value if you don't want all tasks using it to run again in the next workflow run.
         """
         # Iterate project available tasks
         for requestable in project_requestables.values():
@@ -2072,7 +2073,7 @@ class Project:
             if not requestable.has_arg(self, arg_key): continue
             if verbose: print(f'Updating project task "{requestable.name}" input "{arg_key}" to "{new_value}"')
             # Update the task cache
-            requestable.update_inputs_cache(self, { arg_key: new_value })
+            requestable.update_inputs_cache(self, {arg_key: new_value})
 
         # Iterate MD available tasks
         for requestable in md_requestables.values():
@@ -2086,14 +2087,15 @@ class Project:
                 if not requestable.has_arg(md, arg_key): continue
                 if verbose: print(f'Updating MD "{md.name}" task "{requestable.name}" input "{arg_key}" to "{new_value}"')
                 # Update the task cache
-                requestable.update_inputs_cache(md, { arg_key: new_value })
+                requestable.update_inputs_cache(md, {arg_key: new_value})
 
-    def autofill_inputs (self):
-        """ Make the workflow create (if does not exist yet) and automatically fill the inputs file.
+    def autofill_inputs(self):
+        """Make the workflow create (if does not exist yet) and automatically fill the inputs file.
         Note that, by definition, most inputs are not to be defined by the workflow, but user inputs.
         However there are a few exceptions where the workflow may attempt to guess some values.
         For instance, the PBC selection or the dummy atoms selection are often correctly guessed.
-        In addition other selections will be parsed to atomic indices selections, which are safer."""
+        In addition other selections will be parsed to atomic indices selections, which are safer.
+        """
         # Get the final values to update in the input files
         # WARNING: It is important to get these values before generating the inputs file
         # WARNING: The inputs file is expected to either exists from the begining or not exist at all
@@ -2105,7 +2107,7 @@ class Project:
         print('Automatically filling inputs file')
         # Make a copy of the template in the local directory if there is not an inputs file yet
         if self.is_inputs_file_available:
-            print(f" Inputs file already exists")
+            print(" Inputs file already exists")
         else:
             inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
             inputs_file = File(inputs_filepath)
@@ -2143,10 +2145,11 @@ class Project:
                 return value
         # If the field is not specified in the inputs file then return the defualt value
         return self.get_input_default_value(name)
-    
+
     def get_input_default_value(self, name: str) -> Any:
         """Get a specific 'input' default value used when the user provides no value by any means.
-        If no default value is specified then return None."""
+        If no default value is specified then return None.
+        """
         # If the field is not specified in the inputs file then set a defualt value
         default_value = DEFAULT_INPUT_VALUES.get(name, None)
         # Warn the user about this a value we are about to assign automatically
@@ -2163,7 +2166,8 @@ class Project:
 
     def inputs_property(name: str, doc: str = ""):
         """Set a function to get a specific 'input' value by its key/name.
-        Note that we return the property without calling the getter."""
+        Note that we return the property without calling the getter.
+        """
         def getter(self: 'Project'):
             return self.get_file_input(name)
         return property(getter, doc=doc)
