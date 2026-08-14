@@ -29,7 +29,7 @@ def get_pdb_frames (
     reference_structure = structure.copy()
 
     # Generate an auxiliar PDB to be used to reduce the trajectory
-    reference_structure_sample_pdb = get_auxiliar_filepath(f'.reference.pdb')
+    reference_structure_sample_pdb = get_auxiliar_filepath('.reference.pdb')
     reference_structure.generate_pdb_file(reference_structure_sample_pdb)
 
     # Set a maximum number of frames
@@ -83,7 +83,7 @@ def get_starting_pdb_frames (
     reference_structure = structure.copy()
 
     # Generate an auxiliar PDB to be used to reduce the trajectory
-    reference_structure_sample_pdb = get_auxiliar_filepath(f'.reference.pdb')
+    reference_structure_sample_pdb = get_auxiliar_filepath('.reference.pdb')
     reference_structure.generate_pdb_file(reference_structure_sample_pdb)
 
     # Load the trajectory using pytraj
@@ -99,6 +99,7 @@ def get_starting_pdb_frames (
         else: print()
         # Extract each frame in pdb format
         for frame_number, frame in enumerate(trajectory.iterframe(), 1):
+            if frame_number >= frames_limit: break
             # Update the current frame log
             if pbar_bool: pbar.update(1); pbar.refresh()
             else: reprint(f'Frame {frame_number+1} ({frame_number} / {frames_limit})')
