@@ -29,7 +29,7 @@ def structure_corrector(
     trust: list[str] | bool,
     guess_bonds: bool,
     ignore_bonds: bool,
-) -> dict:
+) -> None:
     """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
 
     Supported cases:
@@ -144,8 +144,7 @@ def structure_corrector(
         # If there is no reference frame then stop here since there must be a problem
         if bonds_reference_frame is None:
             print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
-            must_be_killed = STABLE_BONDS_FLAG not in mercy
-            if must_be_killed:
+            if STABLE_BONDS_FLAG not in mercy:
                 raise TestFailure('Failed to find stable bonds')
             register.update_test(STABLE_BONDS_FLAG, False)
             register.add_warning(STABLE_BONDS_FLAG, ('Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.\n'
@@ -176,13 +175,13 @@ def structure_corrector(
         'snapshots': snapshots,
         'structure': structure,
         'register': register,
-        'cg_selection': cg_selection, 
+        'cg_selection': cg_selection,
         'guess_bonds': guess_bonds,
         'ignore_bonds': ignore_bonds,
     })
 
     # ------------------------------------------------------------------------------------------
-    # Incoherent residue lenght ----------------------------------------------------------------
+    # Incoherent residue length ----------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
     # Make sure every known residue has an expected number of atoms

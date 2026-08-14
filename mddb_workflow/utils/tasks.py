@@ -115,9 +115,10 @@ class Task:
         # Otherwise run the task and return the output
         return self(parent)
     output = property(get_output, None, None, "Task output (read only)")
-    # Asking for the an output file implies running the Task, then returning the file
-    # The argument must be specified, meaning the name of the output argument in the task function
     def get_output_file_getter(self, argument) -> Callable:
+        """Asking for the an output file implies running the Task, then returning the file.
+        The argument must be specified, meaning the name of the output argument in the task function.
+        """
         def get_output_file(parent) -> 'File':
             # If we already have a file stored from this run then return it
             file = self._get_parent_output_file(parent, argument)
@@ -138,7 +139,7 @@ class Task:
         """Call the task, running it if necessary."""
         return self._run(parent)
 
-    def _run (self, parent: Union['Project', 'MD']):
+    def _run(self, parent: Union['Project', 'MD']):
         # First of all check if this task has been already done in this very run
         # If so then return the stored vale
         output = self._get_parent_output(parent)
@@ -232,13 +233,13 @@ class Task:
             parent.cache.retrieve(self.cache_missing_output_dir_key, False)
         # If the output file already exists then it also means the task was done in a previous run
         any_existing_output_files = writes_output_files and \
-            any( output_file == None or type(output_file) == Exception or output_file.exists
-                 for output_file in output_files.values() )
+            any(output_file == None or type(output_file) == Exception or output_file.exists
+                 for output_file in output_files.values())
         # Check if all output file exist or are naurally missing
         all_existing_or_naturally_missing_output_files = writes_output_files and \
-            all( output_file == None or type(output_file) == Exception or output_file.exists
+            all(output_file == None or type(output_file) == Exception or output_file.exists
                  or parent.cache.retrieve(self.cache_missing_output_file_keys[argument], False)
-                 for argument, output_file in output_files.items() )
+                 for argument, output_file in output_files.items())
         # If we already have a cached output result
         existing_output_data = output != MISSING_VALUE_EXCEPTION
         # If we must overwrite then purge previous outputs
@@ -279,7 +280,7 @@ class Task:
         print(f'{GREEN_HEADER}-> Running task {task_full_label}{COLOR_END}')
         # If the task is to be run again because an inputs changed then let the user know
         if any_input_changed and had_cache and not forced_overwrite:
-            changes = ''.join([ '\n   - ' + inp for inp in changed_inputs ])
+            changes = ''.join(['\n   - ' + inp for inp in changed_inputs])
             print(f'{GREEN_HEADER}   The task is run again since the following inputs changed:{changes}{COLOR_END}')
         # Save a few internal values the task although the task is static
         # We save it right before calling the function in case the function uses this task as input
@@ -383,9 +384,9 @@ class Task:
                 # Update the references
                 cache_cksums[arg_name] = new_cksum
         return unmatched_arguments, had_cache, cache_cksums
-    
+
     def has_arg(self, parent: Union['Project', 'MD'], arg_key: str) -> bool:
-        """Check if the inputs cache has an input argument cksum"""
+        """Check if the inputs cache has an input argument cksum."""
         cache_cksums = parent.cache.retrieve(self.cache_arg_cksums_key, {})
         return arg_key in cache_cksums
 
@@ -403,7 +404,8 @@ class Task:
 
     def update_inputs_cache(self, parent: Union['Project', 'MD'], inputs: dict):
         """Update the inputs argument cksums in the cache.
-        This may be useful when we change input values for inputs already used."""
+        This may be useful when we change input values for inputs already used.
+        """
         # Save input cksums to avoid repeating this task in future runs
         _, _, cache_cksums = self._get_changed_inputs(parent, inputs)
         parent.cache.update(self.cache_arg_cksums_key, cache_cksums)
