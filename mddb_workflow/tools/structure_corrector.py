@@ -31,8 +31,8 @@ def structure_corrector(
     dummy_selection: 'Selection',
     snapshots: int,
     register: 'Register',
-    mercy: list[str] | bool,
-    trust: list[str] | bool,
+    mercy: list[str],
+    trust: list[str],
     guess_bonds: bool,
     ignore_bonds: bool,
 ) -> None:

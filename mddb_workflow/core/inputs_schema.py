@@ -242,6 +242,7 @@ def validate_inputs(inputs_data: dict, strict_unknown: bool = False) -> dict:
         inputs_data (dict): The loaded inputs dictionary to validate.
         strict_unknown (bool): If True, unknown top-level fields will raise an
             InputError. If False, they will be preserved and only warned about.
+
     """
     # Report unknown top-level fields (legacy or typos)
     unknown_fields = [key for key in inputs_data if key not in KNOWN_INPUT_FIELDS]

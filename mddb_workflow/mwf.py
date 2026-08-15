@@ -27,7 +27,7 @@ from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.topologies import Topology
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
-from mddb_workflow.utils.database import Database
+from mddb_workflow.utils.database import Database, Remote
 from mddb_workflow.utils.pyt_spells import get_frames_count, get_average_structure
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.mda_spells import get_mda_universe
@@ -141,7 +141,7 @@ class MD:
         self.remote = None
         if self.project.database and self.project.accession:
             self.accession = f'{self.project.accession}.{self.number}'
-            self.remote = self.project.database.get_remote_project(self.accession)
+            self.remote = Remote(self.project.database, self.accession)
         # Save the directory
         self.directory = normpath(directory)
         # Now set the director relative to the project
@@ -1519,7 +1519,7 @@ class Project:
         self.accession = accession
         self.remote = None
         if self.database and self.accession:
-            self.remote = self.database.get_remote_project(self.accession)
+            self.remote = Remote(self.database, accession)
 
         # If an accession is passed then make sure no other inputs file paths are passed
         # If input data files are to be downloaded then the workflow will automatically handle their paths
@@ -1619,21 +1619,12 @@ class Project:
         self.fit = fit
         self.translation = translation
         self.mercy = mercy
-        # Fix the mercy input, if needed
-        # If a boolean is passed instead of a list then we set its corresponding value
-        if type(mercy) is bool:
-            if mercy:
-                self.mercy = AVAILABLE_FAILURES
-            else:
-                self.mercy = []
         self.trust = trust
-        # Fix the trust input, if needed
-        # If a boolean is passed instead of a list then we set its corresponding value
+        # Convert boolean mercy and trust to their corresponding lists of values
+        if type(mercy) is bool:
+            self.mercy = AVAILABLE_FAILURES if mercy else []
         if type(trust) is bool:
-            if trust:
-                self.trust = AVAILABLE_CHECKINGS
-            else:
-                self.trust = []
+            self.trust = AVAILABLE_CHECKINGS if trust else []
         self.faith = faith
         self.pca_analysis_selection = pca_analysis_selection
         self.pca_fit_selection = pca_fit_selection
@@ -1708,16 +1699,10 @@ class Project:
         # Set the MD configuration
 
         # Get MD configuration from the inputs file, if any
-        self.md_config = self.get_file_input('mds')
-        if self.md_config is None:
-            # MDs must be a list, or it will cause further problems
-            # To avoid this fix the problem both internally and in the inputs file
-            self.md_config = []
-            self.update_file_inputs('mds', self.md_config)
+        self.md_config: list[dict] = self.get_file_input('mds')
         # Purge removed MDs from the list
         self.md_config = [REMOVED_MD if c.get(MD_REMOVED_FLAG, False) else c for c in self.md_config]
-
-        # Add or overwrite possible MD inputs from the inputs file with the console arguments
+        # Merge MD configs from inputs file and the CLI arguments
 
         # First scenario argument: the new way
         if input_md_config:
@@ -1769,19 +1754,19 @@ class Project:
             warn('The "-mdir" argument is deprecated. Please consider using the "-md" argument. Use the "--help" argument to see how it works.')
             parsed_md_directories = []
             # Parse any glob notation
-            for dir in input_md_directories:
-                if is_glob(dir):
-                    parsed_md_directories.extend(glob(dir))
+            for md_dir in input_md_directories:
+                if is_glob(md_dir):
+                    parsed_md_directories.extend(glob(md_dir))
                 else:
-                    parsed_md_directories.append(dir)
+                    parsed_md_directories.append(md_dir)
             # For each parsed MD directory, check if it is already defined in the config file
             # If not then add a new config for this
-            for dir in parsed_md_directories:
+            for md_dir in parsed_md_directories:
                 # Find if there is already a MD configuration for this directory
-                config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
+                config = next((c for c in self.md_config if c[MD_DIRECTORY] == md_dir), None)
                 # Otherwise create a new one and add it to the list
                 if config is None:
-                    config = {MD_DIRECTORY: directory}
+                    config = {MD_DIRECTORY: md_dir}
                     self.md_config.append(config)
 
         # Add the generic topology, structure or trajectory arguments, if any, to the MD config
@@ -1898,7 +1883,7 @@ class Project:
         # Now instantiate a new MD for each declared MD and save the reference MD
         self._mds = []
         for md_index, md_inputs in enumerate(self.md_config, 1):
-            # If it is a removed MD then we must handle it apart
+            # Keep removed MDs to have stable MD indexes
             if md_inputs == REMOVED_MD:
                 self._mds.append(REMOVED_MD)
                 continue
@@ -2081,6 +2066,7 @@ class Project:
             if not isinstance(requestable, Task): continue
             # Iterate MDs since we will have to update the task cache in every MD
             for md in self.mds:
+                if md == REMOVED_MD: continue
                 # Make sure the cache already has this argument key
                 # Otherwise it means the task is not using the input or it did not run yet
                 # In either case there is nothing to update then

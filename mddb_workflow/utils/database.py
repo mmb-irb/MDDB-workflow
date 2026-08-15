@@ -314,10 +314,6 @@ class Database:
             # Unknown error
             return False
 
-    def get_remote_project(self, accession: str) -> Remote:
-        """Instantiate the remote project handler."""
-        return Remote(self, accession)
-
     def get_reference_data(self, reference_type: str, reference_id: str) -> Optional[dict]:
         """Get reference data for a specific reference ID from the MDDB database."""
         # Make sure the database is alive (and thus the provided database URL is valid)

@@ -22,6 +22,26 @@ from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
 
 
+def _prepare_incomplete_output(output_directory: str, output_filename: str) -> File:
+    """Return an intermediate file to be processed.
+    This prevents using an incomplete file in case the workflow is suddenly interrupted while processing.
+    """
+    incomplete_output_file = File(f'{output_directory}/{INCOMPLETE_PREFIX + output_filename}')
+    if incomplete_output_file.exists:
+        incomplete_output_file.remove()
+    return incomplete_output_file
+
+
+def _commit_incomplete_output(incomplete_output_file: File, output_file: File) -> None:
+    """Once processed, rename the file as completed.
+    If the processed file already exists then it means it is the input file.
+    """
+    if output_file.exists:
+        incomplete_output_file.remove()
+    else:
+        incomplete_output_file.rename_to(output_file)
+
+
 def process_input_files(
     input_structure_file: 'File',
     input_trajectory_files: list['File'],
@@ -141,13 +161,7 @@ def process_input_files(
     # Join all input trajectory paths
     input_trajectory_paths = [trajectory_file.path for trajectory_file in input_trajectory_files]
 
-    # Set an intermeidate file for the trajectory while it is being converted
-    # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while converting
-    incompleted_converted_trajectory_filepath = f'{output_directory}/{INCOMPLETE_PREFIX + CONVERTED_TRAJECTORY}'
-    incompleted_converted_trajectory_file = File(incompleted_converted_trajectory_filepath)
-    # If there is an incomplete trajectory then remove it
-    if incompleted_converted_trajectory_file.exists:
-        incompleted_converted_trajectory_file.remove()
+    incompleted_converted_trajectory_file = _prepare_incomplete_output(output_directory, CONVERTED_TRAJECTORY)
 
     # Convert input structure and trajectories to output structure and trajectory
     if not converted_structure_file.exists or not converted_trajectory_file.exists:
@@ -158,12 +172,7 @@ def process_input_files(
             input_trajectory_filepaths=input_trajectory_paths,
             output_trajectory_filepath=incompleted_converted_trajectory_file.path,
         )
-        # Once converted, rename the trajectory file as completed
-        # If the converted trajectory already exists then it means it is the input trajectory
-        if converted_trajectory_file.exists:
-            incompleted_converted_trajectory_file.remove()
-        else:
-            incompleted_converted_trajectory_file.rename_to(converted_trajectory_file)
+        _commit_incomplete_output(incompleted_converted_trajectory_file, converted_trajectory_file)
 
     # Topologies are never converted, but they are kept in their original format
 
@@ -202,13 +211,7 @@ def process_input_files(
     # Note that this is the only step affecting topology and thus here we output the definitive topology
     filtered_topology_file = output_topology_file if must_filter else initial_topology_file
 
-    # Set an intermeidate file for the trajectory while it is being filtered
-    # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while filtering
-    incompleted_filtered_trajectory_filepath = f'{output_directory}/{INCOMPLETE_PREFIX + FILTERED_TRAJECTORY}'
-    incompleted_filtered_trajectory_file = File(incompleted_filtered_trajectory_filepath)
-    # If there is an incomplete trajectory then remove it
-    if incompleted_filtered_trajectory_file.exists:
-        incompleted_filtered_trajectory_file.remove()
+    incompleted_filtered_trajectory_file = _prepare_incomplete_output(output_directory, FILTERED_TRAJECTORY)
 
     # Check if any output file is missing
     missing_filter_output = not filtered_structure_file.exists \
@@ -233,12 +236,7 @@ def process_input_files(
             reference_structure=provisional_structure,
             filter_selection=filter_selection,
         )
-        # Once filetered, rename the trajectory file as completed
-        # If the filtered trajectory already exists then it means it is the input trajectory
-        if filtered_trajectory_file.exists:
-            incompleted_filtered_trajectory_file.remove()
-        else:
-            incompleted_filtered_trajectory_file.rename_to(filtered_trajectory_file)
+        _commit_incomplete_output(incompleted_filtered_trajectory_file, filtered_trajectory_file)
         self.cache.update(FILTERED, filter_selection)
 
     # --- provisional reference structure ---
@@ -283,13 +281,7 @@ def process_input_files(
         imaged_structure_file = filtered_structure_file
         imaged_trajectory_file = filtered_trajectory_file
 
-    # Set an intermeidate file for the trajectory while it is being imaged
-    # This prevents using an incomplete trajectory in case the workflow is suddenly interrupted while imaging
-    incompleted_imaged_trajectory_filepath = f'{output_directory}/{INCOMPLETE_PREFIX + IMAGED_TRAJECTORY}'
-    incompleted_imaged_trajectory_file = File(incompleted_imaged_trajectory_filepath)
-    # If there is an incomplete trajectory then remove it
-    if incompleted_imaged_trajectory_file.exists:
-        incompleted_imaged_trajectory_file.remove()
+    incompleted_imaged_trajectory_file = _prepare_incomplete_output(output_directory, IMAGED_TRAJECTORY)
 
     # Check if any output file is missing
     missing_imaged_output = not imaged_structure_file.exists or not imaged_trajectory_file.exists
@@ -316,12 +308,7 @@ def process_input_files(
             structure=provisional_structure,
             pbc_selection=provisional_pbc_selection
         )
-        # Once imaged, rename the trajectory file as completed
-        # If the imaged trajectory already exists then it means it is the input trajectory
-        if imaged_trajectory_file.exists:
-            incompleted_imaged_trajectory_file.remove()
-        else:
-            incompleted_imaged_trajectory_file.rename_to(imaged_trajectory_file)
+        _commit_incomplete_output(incompleted_imaged_trajectory_file, imaged_trajectory_file)
         # Update the cache
         self.cache.update(IMAGED, [image, fit, *translation])
         # Update the provisional strucutre coordinates
@@ -331,7 +318,7 @@ def process_input_files(
 
     # --- CORRECTING STRUCTURE ------------------------------------------------------------
 
-    # Note that this step, although it is foucsed in the structure, requires also the trajectory
+    # Note that this step, although it is focused in the structure, requires also the trajectory
     # Also the trajectory may be altered in very rare cases where coordinates must be resorted
 
     # There is no possible reason to not correct the structure
