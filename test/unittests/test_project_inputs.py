@@ -282,8 +282,8 @@ def test_project_inputs_maps_legacy_pdb_ids_before_validation(tmp_path):
 
     inputs = ProjectInputs(File(str(inputs_path)), directory_name='demo')
 
-    assert inputs.file_inputs['pdbIds'] == '5GGR'
     assert inputs.file_inputs['pdb_ids'] == '5GGR'
+    assert 'pdbIds' not in inputs.file_inputs
 
 
 def test_project_inputs_effective_values_are_combined_without_mutating_file(tmp_path):

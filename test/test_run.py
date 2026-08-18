@@ -5,7 +5,7 @@ import pytest
 import requests
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.utils.auxiliar import load_json, RequestError
+from mddb_workflow.utils.auxiliar import load_json, RequestError, InputError
 from mddb_workflow.mwf import project_requestables, md_requestables
 from mddb_workflow.console import main
 from .conftest import TestBase
@@ -127,6 +127,9 @@ class TestRunFlags:
         """Test the workflow without no inputs yaml."""
         working_directory = os.path.join(test_data_dir, 'output/test_no_inputs')
         # Remove the directory if it already exists to ensure a clean state
+        if os.path.exists(working_directory):
+            shutil.rmtree(working_directory)
+        # Copy the inputs from raw_project
         shutil.copytree(
             os.path.join(test_data_dir, 'input/raw_project'),
             working_directory,
@@ -140,10 +143,20 @@ class TestRunFlags:
             '-dir', working_directory,
             '-top', 'raw_topology.tpr',
             '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
-            '-i', 'setup', 'rmsds', 'dist',
+            '-i', 'inputs',
         ]
 
-        # with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
+        with pytest.raises(InputError, match='Missing inputs file "inputs.yaml"'):
+            main()
+
+        sys.argv = [
+                    'mddb_workflow',
+                    'run',
+                    '-dir', working_directory,
+                    '-top', 'raw_topology.tpr',
+                    '-md', 'replica_1', 'raw_structure.pdb', 'raw_trajectory.xtc',
+                    '-i', 'setup', 'rmsds', 'dist',
+                ]
         main()
 
         os.chdir(test_data_dir)

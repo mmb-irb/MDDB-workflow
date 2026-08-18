@@ -158,8 +158,9 @@ class ProjectInputs:
         if not inputs_data:
             raise InputError('Input file is empty')
         # Legacy fixes (applied before validation so legacy values are validated too)
-        old_pdb_ids = inputs_data.get('pdbIds', None)
+        old_pdb_ids = inputs_data.pop('pdbIds', None)
         if old_pdb_ids:
+            warn('Inputs "pdbIds" field is deprecated. Replacing it by "pdb_ids".')
             inputs_data['pdb_ids'] = old_pdb_ids
         # Validate the inputs against the workflow schema before using them
         # This raises an InputError with a clear per-field message on any problem
@@ -184,7 +185,7 @@ class ProjectInputs:
         # Write the new inputs to disk
         if self.inputs_file.format == 'json':
             aux.save_json(self.file_inputs, self.inputs_file.path)
-        elif self.inputs_file.format == 'yaml':
+        elif self.inputs_file.format in ['yaml', 'yml']:
             # Note that comments in the original YAML file will be not kept
             aux.save_yaml(self.file_inputs, self.inputs_file.path)
         else:

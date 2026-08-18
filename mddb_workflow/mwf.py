@@ -1743,20 +1743,6 @@ class Project:
         return self._mds
     mds: list[MD] = property(get_mds, None, None, "Available MDs (read only)")
 
-    # Check input files exist when their filenames are read
-    # If they do not exist then try to download them
-    # If the download is not possible then raise an error
-
-    # Inputs filename ------------
-
-    def get_inputs_file(self) -> File:
-        """Set a function to load the inputs yaml file."""
-        # There must be an inputs filename
-        if not self._inputs_file:
-            raise InputError('Not defined inputs filename')
-        return self.inputs.get_inputs_file()
-    inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
-
     # Input topology file ------------
 
     # Inherit MD function which should work the same for the project
@@ -1807,6 +1793,21 @@ class Project:
         Note that nowadays this function is used to get populations and transitions files, which are not common.
         """
         return self.reference_md.get_file(target_file)
+
+    # Check input files exist when their filenames are read
+    # If they do not exist then try to download them
+    # If the download is not possible then raise an error
+
+    # Inputs filename ------------
+
+    def get_inputs_file(self) -> File:
+        """Set a function to load the inputs yaml file."""
+        # There must be an inputs filename
+        if not self._inputs_file:
+            raise InputError('Not defined inputs filename')
+        self._file_inputs = self.inputs.get_inputs_file()
+        return self._inputs_file
+    inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
     # Input file values -----------------------------------------
 
@@ -1893,6 +1894,7 @@ class Project:
         if input_updates['dummy_selection']:
             # Update the value in tasks caches only if there was an actual update
             self.update_cache_inputs('input_dummy_selection', final_dummy_selection)
+        self.inputs.update_file_inputs('mds', self.md_config)
 
     def inputs_property(name: str, doc: str = ""):
         """Set a function to get a specific 'input' value by its key/name.
