@@ -14,13 +14,13 @@ from functools import partial
 # Importing constants first is important
 from mddb_workflow.utils.constants import *
 from mddb_workflow.core.dataset import Dataset, State
+from mddb_workflow.core.inputs import ProjectInputs
 # Import local utils
 from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, REMOVED_MD, MISSING_VALUE
-from mddb_workflow.utils.auxiliar import warn, load_json, save_json, load_yaml, save_yaml
+from mddb_workflow.utils.auxiliar import warn, load_json
 from mddb_workflow.utils.auxiliar import is_glob, parse_glob, is_url, url_to_source_filename
-from mddb_workflow.utils.auxiliar import read_ndict, write_ndict, get_git_version, download_file
+from mddb_workflow.utils.auxiliar import get_git_version, download_file
 from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise, safe_getattr
-from mddb_workflow.core.inputs_schema import validate_inputs
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
@@ -297,7 +297,7 @@ class MD:
         if self.arg_input_topology_filepath:
             input_topology_filepath = self.arg_input_topology_filepath
         # If the inputs file is available and has the value then use it
-        elif self.is_inputs_file_available:
+        elif self.project.inputs.is_file_available:
             # Get the input value, whose key must exist
             input_topology_filepath = self.get_file_input(MD_INPUT_TOPOLOGY_FILEPATH)
         # If this is the project and all MDs have an input topology then set the project topology as missing
@@ -364,13 +364,13 @@ class MD:
                          ' Thus if the topology has associated itp files they will not be downloaded.')
                 download_file(input_topology_url, input_topology_file)
             # Once the trajectory has been downloaded, change the inputs file to reflect its location
-            if self.is_inputs_file_available:
+            if self.project.inputs.is_file_available:
                 # The path must be relative to the project, no matter where the workflow is run
                 project_relative_path = relpath(input_topology_file.path, self.project_directory)
                 # Note that this URL may come either from the MD or from the project
                 # Check if it comes from the project and, if so, update it in the project
-                if self.project.get_file_input('input_topology_filepath') == input_topology_url:
-                    self.project.update_file_inputs('input_topology_filepath', project_relative_path)
+                if self.project.inputs.get('input_topology_filepath') == input_topology_url:
+                    self.project.inputs.update_file_inputs('input_topology_filepath', project_relative_path)
                 # Otherwise it must come from the MD
                 else:
                     self.update_file_inputs(MD_INPUT_TOPOLOGY_FILEPATH, project_relative_path)
@@ -437,7 +437,7 @@ class MD:
         if self.arg_input_structure_filepath:
             input_structure_filepath = self.arg_input_structure_filepath
         # If we have a value passed through the inputs file has the value
-        elif self.is_inputs_file_available:
+        elif self.project.inputs.is_file_available:
             # Get the input value, whose key must exist
             input_structure_filepath = self.get_file_input(MD_INPUT_STRUCTURE_FILEPATH)
         # Find out if it is relative to MD directories or to the project directory
@@ -482,13 +482,13 @@ class MD:
             else:
                 download_file(input_structure_url, input_structure_file)
             # Once the trajectory has been downloaded, change the inputs file to reflect its location
-            if self.is_inputs_file_available:
+            if self.project.inputs.is_file_available:
                 # The path must be relative to the project, no matter where the workflow is run
                 project_relative_path = relpath(input_structure_file.path, self.project_directory)
                 # Note that this URL may come either from the MD or from the project
                 # Check if it comes from the project and, if so, update it in the project
-                if self.project.get_file_input('input_structure_filepath') == input_structure_url:
-                    self.project.update_file_inputs('input_structure_filepath', project_relative_path)
+                if self.project.inputs.get('input_structure_filepath') == input_structure_url:
+                    self.project.inputs.update_file_inputs('input_structure_filepath', project_relative_path)
                 # Otherwise it must come from the MD
                 else:
                     self.update_file_inputs(MD_INPUT_STRUCTURE_FILEPATH, project_relative_path)
@@ -579,7 +579,7 @@ class MD:
         if self.arg_input_trajectory_filepaths:
             input_trajectory_filepaths = self.arg_input_trajectory_filepaths
         # Check if the inputs file has the value
-        elif self.is_inputs_file_available:
+        elif self.project.inputs.is_file_available:
             # Get the input value
             input_trajectory_filepaths = self.get_file_input(MD_INPUT_TRAJECTORY_FILEPATHS)
         # If there is no trajectory available then we surrender
@@ -628,7 +628,7 @@ class MD:
                         raise InputError('The "-smp" argument is supported only when using the "-proj" argument')
                     download_file(trajectory_url, trajectory_file)
                 # Once the trajectory has been downloaded, change the inputs file to reflect its location
-                if self.is_inputs_file_available:
+                if self.project.inputs.is_file_available:
                     # Get the current file input value
                     file_input_trajectory_filepaths = self.get_file_input(MD_INPUT_TRAJECTORY_FILEPATHS)
                     if type(file_input_trajectory_filepaths) == str:
@@ -659,7 +659,7 @@ class MD:
         # If we had a value then return it
         if value != MISSING_INPUT_EXCEPTION:
             return value
-        return self.project.get_file_input(name)
+        return self.project.inputs.get(name)
 
     def update_file_inputs(self, key: str, new_value) -> bool:
         """Permanently update current MD inputs in the inputs file.
@@ -668,18 +668,10 @@ class MD:
         """
         # Check if the project value is already this value
         # If so then there is no need to update this value specifically for the MD
-        project_value = self.project.get_file_input(key)
+        project_value = self.project.inputs.get(key)
         if project_value == new_value: return False
         nested_key = f'mds.{self.index}.{key}'
-        return self.project.update_file_inputs(nested_key, new_value)
-
-    def check_inputs_file_available(self) -> bool:
-        """Set a function to check if inputs file is available.
-        Note that asking for it when it is not available will lead to raising an input error.
-        This function is inherited from the project.
-        """
-        return self.project.check_inputs_file_available()
-    is_inputs_file_available = property(check_inputs_file_available, None, None, "Inputs file availability (read only)")
+        return self.project.inputs.update_file_inputs(nested_key, new_value)
 
     # ---------------------------------
 
@@ -924,12 +916,12 @@ class MD:
         if verbose: print('Setting Periodic Boundary Conditions (PBC) atoms selection')
         selection_string = None
         # If there is inputs file then get the input pbc selection
-        if self.is_inputs_file_available:
+        if self.project.inputs.is_file_available:
             if verbose: print(' Using selection string in the inputs file')
             selection_string = self.input_pbc_selection
         # If there is no inputs file then get the default value
         else:
-            selection_string = self.project.get_input_default_value('pbc_selection')
+            selection_string = self.project.inputs.get_default('pbc_selection')
         # Parse the selection string using the reference structure
         parsed_selection = None
         # If the input PBC selection is the automatic flag then guess it automatically
@@ -1127,7 +1119,7 @@ class MD:
                     for key, value in dict_value.items():
                         fixed_forced_class_selections[key] = value
                 # Update the inputs file with the correct format
-                self.project.update_file_inputs('forced_class_selections', fixed_forced_class_selections)
+                self.project.inputs.update_file_inputs('forced_class_selections', fixed_forced_class_selections)
             else: raise InputError('Forced class selections must be a dict, not a list.')
         if verbose: print('Processing input forced class selections')
         parsed_class_selections = {}
@@ -1579,9 +1571,6 @@ class Project:
         if self.inputs_filepath is None:
             self.inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
         self._inputs_file = File(self.inputs_filepath)
-        # Check if the inputs file is available at this point
-        if not self.is_inputs_file_available:
-            warn('Missing inputs file. Allowed tasks will be very limited.')
         # Set the input topology file
         # Note that even if the input topology path is passed we do not check it exists
         # Never forget we can donwload some input files from the database on the fly
@@ -1637,9 +1626,6 @@ class Project:
         self.ignore_bonds = ignore_bonds
         self.local_blast = local_blast
 
-        # Set the file inputs, where values from the inputs file will be stored
-        self._file_inputs = MISSING_VALUE
-
         # Other values which may be found/calculated on demand
         self._pbc_selection = MISSING_VALUE
         self._pbc_residues = MISSING_VALUE
@@ -1654,36 +1640,27 @@ class Project:
         self._pdb_ids = MISSING_VALUE
         self._mds = MISSING_VALUE
 
-        # Keep track of warnings already issue in order to not repeat them
-        self._already_warned = set()
+        # Input loading, validation, forced-value precedence, and defaults are
+        # handled by ProjectInputs.  The loader callback preserves the
+        # project's lazy remote input-file download behavior.
+        self.inputs = ProjectInputs(
+            self._inputs_file,
+            directory_name=self.directory_name,
+            forced_inputs=forced_inputs,
+            input_loader=self.remote.download_inputs_file if self.remote else None,
+        )
 
-        # Save forced inputs and use them when necessary
-        self.forced_inputs = {}
-        if forced_inputs:
-            # Make sure the format is respected
-            for forced_input in forced_inputs:
-                n_values = len(forced_input)
-                if n_values == 0:
-                    raise InputError('There is an empty "-fin". Please remove it from the command line.')
-                if n_values == 1:
-                    only_value = forced_input[0]
-                    raise InputError(f'There is a "-fin {only_value}" which is missing the new input value.')
-                if n_values > 2:
-                    suggested_fix = f'{forced_input[0]} "{" ".join(forced_input[1:])}"'
-                    raise InputError(f'Too many values in "-fin {" ".join(forced_input)}".\n' +
-                        ' Note that only two values are expected: -fin <input name> <new input value>\n' +
-                        f' Did you forget the quotes maybe? Try this: -fin {suggested_fix}')
+        # Set the MD configuration
+        self.md_config: list[dict] = self.inputs.merge_md_config(
+            input_md_config,
+            input_md_directories,
+            input_topology_filepath=self.arg_input_topology_filepath,
+            input_structure_filepath=self.arg_input_structure_filepath,
+            input_trajectory_filepaths=self.arg_input_trajectory_filepaths,
+        )
 
-            # Save forced inputs as a dict
-            self.forced_inputs = {name: value for name, value in forced_inputs}
-
-            # Check that forced inputs exist to prevent the user from
-            # loosing a lot of time for a silly typo
-            validate_inputs(self.forced_inputs, strict_unknown=True, fill_defaults=False)
-
-            # Overwrite input file values
-            for input_name, input_value in self.forced_inputs.items():
-                self.update_file_inputs(input_name, input_value)
+        # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
+        self.md_config = self.inputs.validate_md_config(self.md_config)
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))
@@ -1695,91 +1672,6 @@ class Project:
 
         # Set tasks whose output is to be overwritten
         self.overwritables = set()
-
-        # Set the MD configuration
-
-        # Get MD configuration from the inputs file, if any
-        self.md_config: list[dict] = self.get_file_input('mds')
-        # Purge removed MDs from the list
-        self.md_config = [REMOVED_MD if c.get(MD_REMOVED_FLAG, False) else c for c in self.md_config]
-        # Merge MD configs from inputs file and the CLI arguments
-
-        # First scenario argument: the new way
-        if input_md_config:
-            # Make sure all MD configurations have at least 2 values each
-            for mdc in input_md_config:
-                if len(mdc) >= 2: continue
-                raise InputError('Wrong MD configuration: the patter is -md <directory> <trajectory> <trajectory 2> ...')
-            # Make sure there are no duplicated MD directories
-            arg_md_directories = [mdc[0] for mdc in input_md_config]
-            if len(arg_md_directories) > len(set(arg_md_directories)):
-                raise InputError('There are duplicated MD directories. Every directory behind every "-md" must be unique.')
-            # Iterate MD config entries and add / merge them with the already existing MD config
-            for n, arg_config in enumerate(input_md_config, 1):
-                directory = arg_config[0]
-                # Find if there is already a MD configuration for this directory
-                config = next((c for c in self.md_config if c[MD_DIRECTORY] == directory), None)
-                # Otherwise create a new one and add it to the list
-                if config is None:
-                    config = {MD_DIRECTORY: directory}
-                    self.md_config.append(config)
-                    # Update inputs with the current MD or further writes to this MD will fail
-                    self.update_file_inputs('mds', self.md_config)
-                # An input topoloy/structure for a specific MD may be passed before the trajectory
-                # In order to tell if the topology/structure was passed we check input file formats
-                # Note that PDB format is both a structure and a trajectory supported format
-                has_structure = False
-                has_topology = False
-                if len(arg_config) > 2:
-                    first_sample = File(arg_config[1])
-                    second_sample = File(arg_config[2])
-                    if first_sample.format != second_sample.format:
-                        if first_sample.format in TOPOLOGY_SUPPORTED_FORMATS:
-                            has_topology = True
-                        else:
-                            has_structure = True
-                # Finally set the input topology, structure and trajectories files
-                md_input_topology_filepath = arg_config[1] if has_topology else self.arg_input_topology_filepath
-                md_input_structure_filepath = arg_config[1] if has_structure else self.arg_input_structure_filepath
-                md_input_trajectory_filepaths = arg_config[2:] if has_structure or has_topology else arg_config[1:]
-                # Add the input files to the MD configuration
-                config.update({
-                    MD_INPUT_TOPOLOGY_FILEPATH: md_input_topology_filepath,
-                    MD_INPUT_STRUCTURE_FILEPATH: md_input_structure_filepath,
-                    MD_INPUT_TRAJECTORY_FILEPATHS: md_input_trajectory_filepaths,
-                })
-
-        # Second scenario argument: the old way
-        elif input_md_directories:
-            warn('The "-mdir" argument is deprecated. Please consider using the "-md" argument. Use the "--help" argument to see how it works.')
-            parsed_md_directories = []
-            # Parse any glob notation
-            for md_dir in input_md_directories:
-                if is_glob(md_dir):
-                    parsed_md_directories.extend(glob(md_dir))
-                else:
-                    parsed_md_directories.append(md_dir)
-            # For each parsed MD directory, check if it is already defined in the config file
-            # If not then add a new config for this
-            for md_dir in parsed_md_directories:
-                # Find if there is already a MD configuration for this directory
-                config = next((c for c in self.md_config if c[MD_DIRECTORY] == md_dir), None)
-                # Otherwise create a new one and add it to the list
-                if config is None:
-                    config = {MD_DIRECTORY: md_dir}
-                    self.md_config.append(config)
-
-        # Add the generic topology, structure or trajectory arguments, if any, to the MD config
-        for config in self.md_config:
-            if self.arg_input_topology_filepath:
-                config[MD_INPUT_TOPOLOGY_FILEPATH] = self.arg_input_topology_filepath
-            if self.arg_input_structure_filepath:
-                config[MD_INPUT_STRUCTURE_FILEPATH] = self.arg_input_structure_filepath
-            if self.arg_input_trajectory_filepaths:
-                config[MD_INPUT_TRAJECTORY_FILEPATHS] = self.arg_input_trajectory_filepaths
-
-        # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
-        self._check_md_config()
 
         # Set the reference MD
         self._reference_md = None
@@ -1793,53 +1685,6 @@ class Project:
         """Return a string representation of the MD object."""
         return 'project'
 
-    def _check_md_config(self):
-        """Check input MDs configuration, make sure input is coherent and fill the gaps."""
-        # There must be at least one MD confiuration
-        if len(self.md_config) == 0:
-            raise InputError('There must be at least one MD')
-        # Run a few checks to make sure all inputs are coherent
-        # Make sure all input MDs have unique name and directory
-        names = {}
-        directories = {}
-        for md_index, md_inputs in enumerate(self.md_config):
-            # Skip removed MDs
-            if md_inputs == REMOVED_MD: continue
-            # Make sure the MD has at least a name or a directory
-            directory = md_inputs.get(MD_DIRECTORY, None)
-            name = md_inputs.get(MD_NAME, None)
-            if not directory and not name:
-                raise InputError(f'There is a MD (index {md_index}) with no name and no directory.' +
-                    ' Please define at least one of them.')
-            # Now fill the gaps
-            # If there is a directory and not a name then issue a name using the directory
-            if directory is None:
-                directory = name_2_directory(name)
-                md_inputs['mdir'] = directory
-                self.update_file_inputs(f'mds.{md_index}.{MD_DIRECTORY}', directory)
-            # And vice versa
-            if name is None:
-                name = directory_2_name(directory)
-                md_inputs['name'] = name
-                self.update_file_inputs(f'mds.{md_index}.{MD_NAME}', name)
-            # Add current names and directories to the counts
-            current_name_count = names.get(name, 0)
-            names[name] = current_name_count + 1
-            current_directory_count = directories.get(directory, 0)
-            directories[directory] = current_directory_count + 1
-        # If there were any duplicates then report it
-        repeats = False
-        for name, name_count in names.items():
-            if name_count == 1: continue
-            warn(f'There are {name_count} MDs with the same name: {name}')
-            repeats = True
-        for directory, directory_count in directories.items():
-            if directory_count == 1: continue
-            warn(f'There are {directory_count} MDs with the same directory: {directory}')
-            repeats = True
-        if repeats: raise InputError('Duplicated values in MD inputs (see warnings above).' +
-            ' All MD names and directories must be unique.')
-
     def pathify(self, filename_or_relative_path: str) -> str:
         """Given a filename or relative path, add the project directory path at the beginning."""
         return normpath(self.directory + '/' + filename_or_relative_path)
@@ -1851,11 +1696,11 @@ class Project:
             return self._reference_md_index
         # Otherwise we must find the reference MD index
         # If the inputs file is available then it must declare the reference MD index
-        if self.is_inputs_file_available:
-            self._reference_md_index = self.get_file_input('mdref')
+        if self.inputs.is_file_available:
+            self._reference_md_index = self.inputs.get('mdref')
         # Otherwise we simply set the first MD as the reference and warn the user about this
         if self._reference_md_index is None:
-            self._reference_md_index = self.get_input_default_value('mdref')
+            self._reference_md_index = self.inputs.get_default('mdref')
         return self._reference_md_index
     reference_md_index = property(get_reference_md_index, None, None, "Reference MD index (read only)")
 
@@ -1884,7 +1729,7 @@ class Project:
         self._mds = []
         for md_index, md_inputs in enumerate(self.md_config, 1):
             # Keep removed MDs to have stable MD indexes
-            if md_inputs == REMOVED_MD:
+            if md_inputs.get(MD_REMOVED_FLAG):
                 self._mds.append(REMOVED_MD)
                 continue
             # Instantiate the MD
@@ -1904,37 +1749,12 @@ class Project:
 
     # Inputs filename ------------
 
-    def check_inputs_file_available(self) -> bool:
-        """Set a function to check if inputs file is available.
-        Note that asking for it when it is not available will lead to raising an input error.
-        """
-        # If name is not declared then it is impossible to reach it
-        if not self._inputs_file:
-            return False
-        # If the file already exists then it is available
-        if self._inputs_file.exists:
-            return True
-        # If it does not exist but it may be downloaded then it is available
-        if self.remote:
-            return True
-        return False
-    is_inputs_file_available = property(check_inputs_file_available, None, None, "Inputs file availability (read only)")
-
     def get_inputs_file(self) -> File:
         """Set a function to load the inputs yaml file."""
         # There must be an inputs filename
         if not self._inputs_file:
             raise InputError('Not defined inputs filename')
-        # If the file already exists then we are done
-        if self._inputs_file.exists:
-            return self._inputs_file
-        # Try to download the inputs file
-        # If we do not have the required parameters to download it then we surrender here
-        if not self.remote:
-            raise InputError(f'Missing inputs file "{self._inputs_file.filename}"')
-        # Download the inputs json file if it does not exists
-        self.remote.download_inputs_file(self._inputs_file)
-        return self._inputs_file
+        return self.inputs.get_inputs_file()
     inputs_file = property(get_inputs_file, None, None, "Inputs filename (read only)")
 
     # Input topology file ------------
@@ -1990,59 +1810,18 @@ class Project:
 
     # Input file values -----------------------------------------
 
-    # First of all set input themselves
+    # Input loading, validation, and value resolution are handled by
+    # ProjectInputs. Keep this property on Project as a compatibility layer
+    # for the rest of the workflow and for callers using the old API.
 
     def get_file_inputs(self) -> dict:
-        """Get inputs."""
-        # If inputs are already loaded then return them
-        if self._file_inputs is not MISSING_VALUE:
-            return self._file_inputs
-        # When loading the inputs file, replace some values automatically
-        replaces = [('$DIR', self.directory_name)]
-        # If we have no inputs stored then try to load the inputs file
-        inputs_data = None
-        if self.inputs_file.format == 'json':
-            inputs_data = load_json(self.inputs_file.path, replaces)
-        elif self.inputs_file.format == 'yaml':
-            inputs_data = load_yaml(self.inputs_file.path, replaces)
-        else:
-            raise InputError('Input file format is not supported. Please use json or yaml files.')
-        if not inputs_data:
-            raise InputError('Input file is empty')
-        # Legacy fixes (applied before validation so legacy values are validated too)
-        old_pdb_ids = inputs_data.get('pdbIds', None)
-        if old_pdb_ids:
-            inputs_data['pdb_ids'] = old_pdb_ids
-        # Validate the inputs against the workflow schema before using them
-        # This raises an InputError with a clear per-field message on any problem
-        validate_inputs(inputs_data)
-        self._file_inputs = inputs_data
-        # Finally return the updated inputs
-        return self._file_inputs
+        """Get validated inputs through the project input manager."""
+        return self.inputs.file_inputs
     file_inputs: dict = property(get_file_inputs, None, None, "Inputs from the inputs file (read only)")
 
-    def update_file_inputs(self, nested_key: str, new_value: Any) -> bool:
-        """Permanently update the inputs file.
-        This may be done when command line inputs do not match file inputs.
-        Return True if the inputs is updated correctly. Return False if there is no update.
-        """
-        # If there is no inputs file then there is nothing to update
-        if not self.is_inputs_file_available: return False
-        # If the input already matches then do nothing
-        current_value = read_ndict(self.file_inputs, nested_key, MISSING_INPUT_EXCEPTION)
-        if current_value == new_value: return False
-        # Set the new value
-        write_ndict(self.file_inputs, nested_key, new_value)
-        print(f'* Field "{nested_key}" in the inputs file will be permanently modified')
-        # Write the new inputs to disk
-        if self.inputs_file.format == 'json':
-            save_json(self.file_inputs, self.inputs_file.path)
-        elif self.inputs_file.format == 'yaml':
-            # Note that comments in the original YAML file will be not kept
-            save_yaml(self.file_inputs, self.inputs_file.path)
-        else:
-            raise InputError('Input file format is not supported. Please use json or yaml files.')
-        return True
+    def get_file_input(self, name: str) -> Any:
+        """Get a resolved input value through the project input manager."""
+        return self.inputs.get(name)
 
     def update_cache_inputs(self, arg_key: str, new_value: Any, verbose: bool = False):
         """Update an input argument cksum in the cache of all tasks using it.
@@ -2091,71 +1870,36 @@ class Project:
         final_dummy_selection = self.dummy_selection.to_vmd() if self.dummy_selection else None
         # Now start the actual autofilling process
         print('Automatically filling inputs file')
-        # Make a copy of the template in the local directory if there is not an inputs file yet
-        if self.is_inputs_file_available:
-            print(" Inputs file already exists")
-        else:
-            inputs_filepath = self.pathify(DEFAULT_INPUTS_FILENAME)
-            inputs_file = File(inputs_filepath)
-            template_file = File(INPUTS_TEMPLATE_FILEPATH)
-            template_file.copy_to(inputs_file)
-            print(f" File {inputs_filepath} has been created from a template")
+        # Make sure the inputs file exists before persisting generated values
+        self.inputs.ensure_file_from_template(File(INPUTS_TEMPLATE_FILEPATH))
         # Now fill the inputs file with the selections we just processed
         # Parse the selections to ranged VMD syntax guess
         # Then to make sure some tasks are not repeated uselessly we must update some cache arguments cksums
         # Note that this is done because we are updating inputs after using them
+        input_updates = self.inputs.autofill({
+            'pbc_selection': final_pbc_selection,
+            'cg_selection': final_cg_selection,
+            'dummy_selection': final_dummy_selection,
+        })
         # Fill the PBC selection
-        if self.update_file_inputs('pbc_selection', final_pbc_selection):
+        if input_updates['pbc_selection']:
             # Update the value in tasks caches only if there was an actual update
             self.update_cache_inputs('input_pbc_selection', final_pbc_selection)
         # Fill the CG selection
-        if self.update_file_inputs('cg_selection', final_cg_selection):
+        if input_updates['cg_selection']:
             # Update the value in tasks caches only if there was an actual update
             self.update_cache_inputs('input_cg_selection', final_cg_selection)
         # Fill the dummy atoms selection
-        if self.update_file_inputs('dummy_selection', final_dummy_selection):
+        if input_updates['dummy_selection']:
             # Update the value in tasks caches only if there was an actual update
             self.update_cache_inputs('input_dummy_selection', final_dummy_selection)
-
-    # Then set getters for every value in the inputs file
-    def get_file_input(self, name: str) -> Any:
-        """Get a specific 'input' value from the inputs file."""
-        # Check if the value of this input was forced from command line
-        if name in self.forced_inputs:
-            return self.forced_inputs[name]
-        if self.is_inputs_file_available:
-            # Get the input value from the inputs file
-            value = self.file_inputs.get(name, MISSING_INPUT_EXCEPTION)
-            # If we had a value then return it
-            if value != MISSING_INPUT_EXCEPTION:
-                return value
-        # If the field is not specified in the inputs file then return the defualt value
-        return self.get_input_default_value(name)
-
-    def get_input_default_value(self, name: str) -> Any:
-        """Get a specific 'input' default value used when the user provides no value by any means.
-        If no default value is specified then return None.
-        """
-        # If the field is not specified in the inputs file then set a defualt value
-        default_value = DEFAULT_INPUT_VALUES.get(name, None)
-        # Warn the user about this a value we are about to assign automatically
-        # If the value is None then it means there is no default value
-        already_warned = name in self._already_warned
-        if default_value is not None and not already_warned:
-            warn(f'Missing input "{name}" -> Using default value: {default_value}')
-        # If there is an additional warning then display it here
-        additional_warning = DEFAULT_INPUT_VALUE_WARNINGS.get(name, None)
-        if additional_warning is not None and not already_warned:
-            warn(additional_warning)
-        self._already_warned.add(name)
-        return default_value
 
     def inputs_property(name: str, doc: str = ""):
         """Set a function to get a specific 'input' value by its key/name.
         Note that we return the property without calling the getter.
         """
         def getter(self: 'Project'):
-            return self.get_file_input(name)
+            return self.inputs.get(name)
         return property(getter, doc=doc)
 
     # Assign the getters
@@ -2546,17 +2290,7 @@ def read_file(target_file: File) -> dict:
     if file_format == 'json':
         return load_json(target_file.path)
 
-
-def name_2_directory(name: str) -> str:
-    """Set a function to convert an MD name into an equivalent MD directory."""
-    # Replace white spaces with underscores
-    directory = name.replace(' ', '_')
-    # Remove problematic characters
-    for character in FORBIDDEN_DIRECTORY_CHARACTERS:
-        directory = directory.replace(character, '')
-    return directory
-
-
+# RUBEN: not used, borrar?
 def check_md_directory(directory: str):
     """Check for problematic characters in a directory path."""
     # Remove problematic characters
@@ -2564,14 +2298,6 @@ def check_md_directory(directory: str):
     for character in FORBIDDEN_DIRECTORY_CHARACTERS:
         if character in directory_characters:
             raise InputError(f'Directory path "{directory}" includes the forbidden character "{character}"')
-
-
-def directory_2_name(directory: str) -> str:
-    """Convert an MD directory into an equivalent MD name."""
-    # The normpath prevents a possible ending '/' which would make this not work
-    # Replace white spaces with underscores
-    name = normpath(directory).split('/')[-1].replace('_', ' ')
-    return name
 
 
 # Project input files
