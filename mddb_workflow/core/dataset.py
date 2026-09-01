@@ -8,6 +8,8 @@ import subprocess
 import jinja2
 import time
 import os
+import tempfile
+import hashlib
 import glob
 import sqlite3
 import sys
@@ -68,7 +70,12 @@ class DatabaseLock:
     def _path_to_lock_dir(db_path: str | Path) -> Path:
         """Get the lock directory path for a given database path."""
         db_path = Path(db_path).resolve()
-        return db_path.with_name('.lock_' + db_path.name)
+        # Save the lock in the /tmp directory instead of in the local directory
+        # This allows to use the dataset command in directories you don't have writting permissions
+        # And this is useful if you want to make a 'mwf dataset status' in the directory of a coworker
+        path_hash = hashlib.md5(str(db_path).encode()).hexdigest()[:8]
+        lock_name = f".lock_{db_path.name}_{path_hash}"
+        return Path(tempfile.gettempdir()) / lock_name
 
     def acquire(self) -> bool:
         """Acquire the database lock using atomic directory creation."""

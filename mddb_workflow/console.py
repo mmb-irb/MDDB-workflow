@@ -834,7 +834,7 @@ dataset_remove = dataset_subparsers.add_parser("remove", formatter_class=CustomH
 dataset_remove.add_argument("-p", "--query_path", help='Path to the project to be removed from the dataset.')
 # Dataset status subcommand
 dataset_add = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter, help="Show the status of a project inside the dataset.", parents=[common_ds_parser])
-dataset_add.add_argument("-p", "--project_path", help='Path to the project.')
+dataset_add.add_argument("-p", "--project_path", help='Path to the project.', required=True)
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
