@@ -2,6 +2,7 @@ from mddb_workflow.tools.get_box_size import get_box_size
 from mddb_workflow.tools.get_atom_counts import get_atom_counts
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
 from mddb_workflow.tools.generate_map import get_sequence_metadata
+from mddb_workflow.tools.get_coverage_and_presence import get_coverage_and_presence
 from mddb_workflow.utils.auxiliar import InputError, save_json
 from mddb_workflow.utils.constants import MD_DIRECTORY
 from mddb_workflow.utils.type_hints import *
@@ -112,6 +113,10 @@ def prepare_project_metadata (
     # Get additional metadata related to the aminoacids sequence
     sequence_metadata = get_sequence_metadata(structure, protein_references_file, residue_map)
 
+    # Precompute coverage (proteins) and presence (proteins + inchikeys) from the residue map
+    # These values replace on-the-fly topology calculations that the API can no longer perform
+    cover, prese, coveres, presres = get_coverage_and_presence(residue_map, sequence_metadata.get('reference_lengths', {}))
+
     # Find the PTMs
     # Save only their names for now
     # DANI: Esto es temporal y de momento solo busca ser un parámetro de facil query
@@ -178,6 +183,10 @@ def prepare_project_metadata (
         'PDBIDS': final_pdb_ids,
         'FORCED_REFERENCES': input_protein_references,
         'REFERENCES': mapped_protein_references,
+        'COVER': cover,
+        'PRESE': prese,
+        'COVERES': coveres,
+        'PRESRES': presres,
         'INPUT_LIGANDS': input_ligands,
         # TODO: Ligands are now inchikeys only, remove after checking it does not break the client removing this
         'LIGANDS': [],
@@ -233,7 +242,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.2',
+        'ver': '0.0.3',
     }
     # Let the boxsizes only if all of them are available (they may be 0)
     if not boxsizex or not boxsizey or not boxsizez:

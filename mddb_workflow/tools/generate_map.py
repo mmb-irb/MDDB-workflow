@@ -1093,11 +1093,18 @@ def get_sequence_metadata(structure: 'Structure', protein_references_file: 'File
                 if in_range(start, end):
                     domains.append(domain['name'])
                     break
+    # Build a dict of uniprot_id -> sequence length for all protein references
+    reference_lengths = {
+        ref_id: len(references_data[ref_id]['sequence'])
+        for ref_id in reference_ids
+        if ref_id in references_data
+    }
     # Return the sequence matadata
     return {
         'sequences': sequences,
         'protein_sequences': protein_sequences,
         'nucleic_sequences': nucleic_sequences,
         'domains': domains,
-        'cv19_variant': variant
+        'cv19_variant': variant,
+        'reference_lengths': reference_lengths,
     }
