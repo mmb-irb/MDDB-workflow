@@ -92,14 +92,7 @@ def get_most_stable_bonds(
                                          snapshots, frames_limit, pbar_bool=True)
 
     # Track bonds along frames
-    frame_bonds = []
-
-    # Iterate over the different frames
-    for current_frame_pdb in frames:
-
-        # Find the covalent bonds for the current frame
-        current_frame_bonds = get_covalent_bonds(current_frame_pdb)
-        frame_bonds.append(current_frame_bonds)
+    frame_bonds = [get_covalent_bonds(frame_pdb) for frame_pdb in frames]
 
     # Then keep those bonds which are respected in the majority of frames
     # Usually wrongs bonds (both false positives and negatives) are formed only one frame

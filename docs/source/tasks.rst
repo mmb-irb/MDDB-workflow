@@ -76,7 +76,7 @@ Analyses
 
 * ``average`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/utils/pyt_spells.py#L182>`__: get an average structure from a trajectory. This process is carried by pytraj, since the Gromacs average may be displaced.
 
-* ``channels`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/channels.py#L10>`__: analyze channels in a membrane protein using MDAnalysis mda_hole.
+* ``channels`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/channels.py#L10>`__: characterize channels in a membrane protein using CHAP.
 
 * ``clusters`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/clusters.py#L15>`__: run the cluster analysis.
 
@@ -128,7 +128,7 @@ Analyses
 
 * ``thickness`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/thickness.py#L10>`__: membrane thickness analysis.
 
-* ``tmscore`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/tmscores.py#L22>`__: perform the tm score using the tmscoring package.
+* ``tmscore`` `[source] <https://github.com/mmb-irb/MDDB-workflow/blob/master/mddb_workflow/analyses/tmscores.py#L22>`__: calculate per-frame TM-scores against both reference structures using Biotite.
 
 Task Groups
 -------------
@@ -148,4 +148,3 @@ These are predefined groups of tasks that can be specified with a single flag.
 * ``interdeps`` (``inter``, ``pairwise``, ``hbonds``, ``energies``, ``perres``, ``clusters``, ``dist``): run interactions and all its dependent analyses.
 
 * ``membs`` (``memmap``, ``density``, ``thickness``, ``apl``, ``lorder``, ``linter``): run all membrane-related analyses.
-

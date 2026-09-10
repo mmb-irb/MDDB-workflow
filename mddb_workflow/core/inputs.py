@@ -29,6 +29,7 @@ from mddb_workflow.utils.constants import (
 from mddb_workflow.utils.file import File
 
 
+# Define sentinels: unique object to distinguish between an explicit None and a missing value
 _UNSET = object()
 _MISSING_INPUT = object()
 

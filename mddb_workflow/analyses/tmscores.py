@@ -1,4 +1,4 @@
-"""Module to perform the TM score analysis."""
+"""Perform TM-score analyses with Biotite."""
 
 import numpy as np
 import biotite.structure as struc
@@ -28,7 +28,7 @@ def tmscores(
     pbc_selection: 'Selection',
     snapshots: int,
     frames_limit: int = 200):
-    """Perform the tm score using the tmscoring package."""
+    """Calculate per-frame TM-scores against both reference structures using Biotite."""
     # Set the main output filepath
     output_analysis_filepath = f'{output_directory}/{OUTPUT_TMSCORES_FILENAME}'
     struc.filter_amino_acids = lambda array: np.ones(array.array_length(), dtype=bool)
@@ -68,7 +68,7 @@ def tmscores(
         for i in range(len(reduced_trajectory)):
             subject = reduced_trajectory[i]
             superimposed, _transform = struc.superimpose(reference_frame, subject)
-            # Run the tmscoring over the current frame against the current reference
+            # Calculate the current frame's TM-score against the current reference with Biotite
             tm = _tm_score_no_filter(reference_frame, superimposed)
             tmscores.append(tm)
 

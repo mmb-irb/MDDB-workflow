@@ -49,7 +49,7 @@ def channels(
     snapshots: int,
     frames_limit: int
 ):
-    """Analyze channels in a membrane protein using MDAnalysis mda_hole."""
+    """Characterize channels in a membrane protein using CHAP."""
     if membrane_map is None or membrane_map['n_mems'] == 0:
         print('  -> No membranes found, skipping channels analysis')
         return
