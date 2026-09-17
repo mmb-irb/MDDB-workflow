@@ -402,7 +402,7 @@ def main():
             df = dataset.get_dataframe(
                 show_id=args.show_id,
                 sort_by=args.sort_by,
-                asc=True,
+                asc=False if args.reverse else True,
                 include_logs=args.include_logs,
                 query_path=args.query_path,
                 query_state=args.query_state,
@@ -426,7 +426,7 @@ def main():
             watch_dataframe(lambda: dataset.get_dataframe(
                     root_path=dataset.root_path,
                     sort_by='last_modified',
-                    asc=False,
+                    asc=False if args.reverse else True,
                     query_path=args.query_path,
                     query_state=args.query_state,
                     query_scope=args.query_scope,
@@ -849,6 +849,7 @@ ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['g
 # Dataset show subcommand
 ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
+ds_show.add_argument('-r', '--reverse', help="Reverse the sort order.", action='store_true')
 ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for all rows.", default=50, type=int)
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 ds_show.add_argument('-m', '--summary', help="Get a summary of the state of the projects.", action='store_true')

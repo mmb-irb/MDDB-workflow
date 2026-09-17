@@ -103,15 +103,15 @@ def image_and_fit(
             center_selection_ndx = center_selection.to_ndx(CENTER_SELECTION_NAME)
             file.write(center_selection_ndx)
 
+    # Set the latest structure and trajectory files
+    # They are the ones to be used as inputs for the following steps
+    latest_structure = input_structure_file
+    latest_trajectory = input_trajectory_file
+
     # Imaging --------------------------------------------------------------------------------------
 
     if image:
         print(' Running imaging steps')
-
-        # Set the latest structure and trajectory files
-        # They are the ones to be used as inputs for the following steps
-        latest_structure = input_structure_file
-        latest_trajectory = input_trajectory_file
 
         # Check if coordinates are to be translated
         must_translate = translation != [0, 0, 0]
@@ -154,41 +154,35 @@ def image_and_fit(
         # e.g. two protein monomers are together, and not interacting across boundaries
         # To keep things like this we will run a no-jump step
         # DANI: The nojump step may cause artifacts, specially in already pre-imaged simulations
-        print(' Running no-jump')
-        run_gromacs(f'trjconv -s {latest_structure.path} \
-            -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-            -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-        latest_trajectory = output_trajectory_file
+        if center_selection:
+            print(' Running no-jump')
+            run_gromacs(f'trjconv -s {latest_structure.path} \
+                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                -pbc nojump', user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
+            latest_trajectory = output_trajectory_file
 
-        # Place all residues in the box again in case we have PBC residues
-        # This is critical to recover all PBC residues which were diluted because of the no-jump step
-        # Also center the non-PBC region if there is a center selection
-        # We try to do both processes in a single step just to be more efficient
-        if has_pbc_atoms and center_selection:
-            print(' Running center -pbc res')
-            run_gromacs(f'trjconv -s {latest_structure.path} \
-                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                -pbc res -center -n {INDEX_FILEPATH}',
-                user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
-                show_error_logs=True)
-            latest_trajectory = output_trajectory_file
-        # If there is no center selection then just place all residues in the box
-        elif has_pbc_atoms:
-            print(' Running -pbc res')
-            run_gromacs(f'trjconv -s {latest_structure.path} \
-                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                -pbc res -n {INDEX_FILEPATH}',
-                user_input=SYSTEM_SELECTION_NAME, show_error_logs=True)
-            latest_trajectory = output_trajectory_file
-        # If there are no PBC residues then just center the system
-        elif center_selection:
-            print(' Running center')
-            run_gromacs(f'trjconv -s {latest_structure.path} \
-                -f {latest_trajectory.path} -o {output_trajectory_file.path} \
-                -center -n {INDEX_FILEPATH}',
-                user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
-                show_error_logs=True)
-            latest_trajectory = output_trajectory_file
+            # Place all residues in the box again in case we have PBC residues
+            # This is critical to recover all PBC residues which were diluted because of the no-jump step
+            # Also center the non-PBC region if there is a center selection
+            # We try to do both processes in a single step just to be more efficient
+            # WARNING: If there is no center selection then there is no need with the initial -pbc res we should be good
+            if has_pbc_atoms:
+                print(' Running center -pbc res')
+                run_gromacs(f'trjconv -s {latest_structure.path} \
+                    -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                    -pbc res -center -n {INDEX_FILEPATH}',
+                    user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
+                    show_error_logs=True)
+                latest_trajectory = output_trajectory_file
+            # If there are no PBC residues then just center the system
+            else:
+                print(' Running center')
+                run_gromacs(f'trjconv -s {latest_structure.path} \
+                    -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+                    -center -n {INDEX_FILEPATH}',
+                    user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
+                    show_error_logs=True)
+                latest_trajectory = output_trajectory_file
         # If there is no center and no PBC then do nothing, but this should never happen
 
         # Select the first frame of the recently imaged trayectory as the new structure
@@ -202,17 +196,12 @@ def image_and_fit(
     if fit:
         print(' Running fitting step')
 
-        # The trajectory to fit is the already imaged trajectory
-        # However, if there was no imaging, the trajectory to fit is the input trajectory
-        structure_to_fit = output_structure_file if image else input_structure_file
-        trajectroy_to_fit = output_trajectory_file if image else input_trajectory_file
-
         # Here we use the structure, not the topology, even if it is a TPR
         # Note that using the topology would make useless the last 'nojump' process
 
         # Run Gromacs
-        run_gromacs(f'trjconv -s {structure_to_fit.path} \
-            -f {trajectroy_to_fit.path} -o {output_trajectory_file.path} \
+        run_gromacs(f'trjconv -s {latest_structure.path} \
+            -f {latest_trajectory.path} -o {output_trajectory_file.path} \
             -fit rot+trans -n {INDEX_FILEPATH}',
             user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
             show_error_logs=True)

@@ -76,7 +76,6 @@ class TestRunAll(TestBase):
             pytest.skip('Skipping analysis.')
         elif project.accession == 'A01IP' and md_task in [
             'pockets',
-            'pockets',
             'dist',
             'energies',
         ]:
