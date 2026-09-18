@@ -28,52 +28,72 @@ def get_excluded_atoms_selection(
     return excluded_atoms_selection
 
 
+def get_bond_clashes(
+    bonds_1: list[list[int]],
+    bonds_2: list[list[int]],
+    excluded_atom_indices: set[int],
+    reference_bond_sets: Optional[list[Optional[frozenset[int]]]] = None,
+) -> list[tuple[int, tuple[int, ...], tuple[int, ...]]]:
+    """Return every atom whose bond set differs between two structures."""
+    # If the number of atoms in both lists is not matching then there is something very wrong
+    if len(bonds_1) != len(bonds_2):
+        raise ValueError(f'The number of atoms is not matching in both bond lists ({len(bonds_1)} and {len(bonds_2)})')
+    if reference_bond_sets is None:
+        # Create a set of bonds for each atom in the second list
+        reference_bond_sets = [
+            None if atom_index in excluded_atom_indices else frozenset(atom_bonds) - excluded_atom_indices
+            for atom_index, atom_bonds in enumerate(bonds_2)
+        ]
+
+    if len(reference_bond_sets) != len(bonds_2):
+        raise ValueError('The reference bond cache must contain one entry per atom')
+
+    clashes = []
+    for atom_index, expected_bonds in enumerate(reference_bond_sets):
+        if expected_bonds is None or atom_index in excluded_atom_indices:
+            continue
+        actual_bonds = set(bonds_1[atom_index]) - excluded_atom_indices
+        if actual_bonds != expected_bonds:
+            # Sort only mismatches, giving stable keys for counts across frames.
+            clashes.append((atom_index, tuple(sorted(actual_bonds)), tuple(sorted(expected_bonds))))
+    return clashes
+
+
 def do_bonds_match(
     bonds_1: list[list[int]],
     bonds_2: list[list[int]],
     # A selection of atoms whose bonds are not evaluated
-    excluded_atoms_selection: 'Selection',
+    excluded_atom_indices: set[int],
     # Set verbose as true to show which are the atoms preventing the match
     verbose: bool = False,
     # The rest of inputs are just for logs and debug
     atoms: Optional[list['Atom']] = None,
-    counter_list: Optional[list[int]] = None
+    reference_bond_sets: Optional[list[Optional[frozenset[int]]]] = None,
 ) -> bool:
-    """Check if two sets of bonds match perfectly."""
-    # If the number of atoms in both lists is not matching then there is something very wrong
-    if len(bonds_1) != len(bonds_2):
-        raise ValueError(f'The number of atoms is not matching in both bond lists ({len(bonds_1)} and {len(bonds_2)})')
-    # Find ion atom indices
-    excluded_atom_indices = set(excluded_atoms_selection.atom_indices)
-    # For each atom, check bonds to match perfectly
-    # Order is not important
-    for atom_index, (atom_bonds_1, atom_bonds_2) in enumerate(zip(bonds_1, bonds_2)):
-        # Skip ion bonds
-        if atom_index in excluded_atom_indices:
-            continue
-        atom_bonds_set_1 = set(atom_bonds_1) - excluded_atom_indices
-        atom_bonds_set_2 = set(atom_bonds_2) - excluded_atom_indices
-        # Check atom bonds to match
-        if len(atom_bonds_set_1) != len(atom_bonds_set_2) or any(bond not in atom_bonds_set_2 for bond in atom_bonds_set_1):
-            if verbose:
-                if atoms:
-                    mismatch_atom_label = atoms[atom_index].label
-                    print(f' Mismatch in atom {mismatch_atom_label}:')
-                    it_is_atom_labels = ', '.join([atoms[index].label for index in atom_bonds_set_1])
-                    print(f' It is bonded to atoms {it_is_atom_labels}')
-                    it_should_be_atom_labels = ', '.join([atoms[index].label for index in atom_bonds_set_2])
-                    print(f' It should be bonded to atoms {it_should_be_atom_labels}')
-                else:
-                    print(f' Mismatch in atom with index {atom_index}:')
-                    it_is_atom_indices = ','.join([str(index) for index in atom_bonds_set_1])
-                    print(f' It is bonded to atoms with indices {it_is_atom_indices}')
-                    it_should_be_atom_indices = ','.join([str(index) for index in atom_bonds_set_2])
-                    print(f' It should be bonded to atoms with indices {it_should_be_atom_indices}')
-            # Save for failure analysis
-            if counter_list is not None:
-                counter_list.append((atom_index, tuple(atom_bonds_set_1), tuple(atom_bonds_set_2)))
-            return False
-    return True
+    """Check the whole frame and optionally collect every atom mismatch.
+
+    A counter accumulates mismatch frequencies; a list retains each occurrence.
+    Cached reference sets must use the same reference bonds and exclusions.
+    """
+    clashes = get_bond_clashes(bonds_1, bonds_2, excluded_atom_indices, reference_bond_sets)
+    if clashes and verbose:
+        print(f' Found {len(clashes)} atoms with bond mismatches')
+        atom_index, actual_bonds, expected_bonds = clashes[0]
+        if atoms:
+            mismatch_atom_label = atoms[atom_index].label
+            print(f' First one in atom {mismatch_atom_label}:')
+            it_is_atom_labels = ', '.join(atoms[index].label for index in actual_bonds)
+            if it_is_atom_labels:
+                print(f'    It is bonded to atoms {it_is_atom_labels}')
+            else:
+                print(f'    It is not bonded to any atom')
+            it_should_be_atom_labels = ', '.join(atoms[index].label for index in expected_bonds)
+            print(f'    It should be bonded to atoms {it_should_be_atom_labels}')
+        else:
+            print(f' First one in atom with index {atom_index}:')
+            print(f"    It is bonded to atoms with indices {','.join(map(str, actual_bonds))}")
+            print(f"    It should be bonded to atoms with indices {','.join(map(str, expected_bonds))}")
+    return not clashes
 
 
 def get_most_stable_bonds(
@@ -124,49 +144,74 @@ def get_bonds_reference_frame(
     trajectory_file: 'File',
     snapshots: int,
     reference_bonds: list[list[int]],
-    pbc_selection: 'Selection',
-    cg_selection: 'Selection',
+    excluded_atom_indices: set[int],
     ignore_bonds: bool = False,
+    max_clashes: int = 0,  # If more than this number of atoms have wrong bonds then we ignore the frame
     patience: int = 100,  # Limit of frames to check before we surrender
-    verbose: bool = False,
 ) -> Optional[int]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD.
     """
     # If bonds were ignored then the reference frame makes no sense
     if ignore_bonds: return 0
-    # Set some atoms which are to be skipped from these test given their "fake" nature
-    excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection, cg_selection)
 
     # If all atoms are to be excluded then set the first frame as the reference frame and stop here
-    if len(excluded_atoms_selection) == len(structure.atoms):
+    if len(excluded_atom_indices) == len(structure.atoms):
         print(' All atoms are excluded from bond checks -> Setting frame 1 as reference frame')
         return 0
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
-    # IMPORTANT: Note that we do not set a frames limit here, so all frames will be read and the step will be 1
     frames = get_starting_pdb_frames(structure, trajectory_file.path, snapshots, patience)
     print(f'Searching the reference frame for the bonds. Only first {patience} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
     bonds_reference_frame = None
-    counter_list = []
-    for frame_number, frame_pdb in enumerate(frames):
-        # Get the actual frame number
-        bonds = get_covalent_bonds(frame_pdb)
-        if do_bonds_match(bonds, reference_bonds, excluded_atoms_selection, counter_list=counter_list, verbose=verbose):
-            bonds_reference_frame = frame_number
-            break
-    frames.close()
+    clash_counts = Counter()
+    checked_frames = 0
+    frame_clash_counts = []
+    # Cache the reference bond sets so do_bonds_match does not have to create them for every frame
+    reference_bond_sets = [
+        None if atom_index in excluded_atom_indices else frozenset(atom_bonds) - excluded_atom_indices
+        for atom_index, atom_bonds in enumerate(reference_bonds)
+    ]
+    try:
+        for frame_number, frame_pdb in enumerate(frames):
+            # Get the actual frame number
+            bonds = get_covalent_bonds(frame_pdb)
+            checked_frames += 1
+            frame_clashes = get_bond_clashes(
+                bonds,
+                reference_bonds,
+                excluded_atom_indices,
+                reference_bond_sets=reference_bond_sets,
+            )
+            # Track every atom mismatch in this frame and its frequency across frames.
+            frame_clash_counts.append(len(frame_clashes))
+            clash_counts.update(frame_clashes)
+            if not frame_clashes:
+                bonds_reference_frame = frame_number
+                break
+    finally:
+        frames.close()
     # If no frame has the reference bonds then we return None
-    if bonds_reference_frame == None:
-        # Print the first clashes table
-        print(' First clash stats:')
-        headers = ['Count', 'Atom', 'Is bonding with', 'Should bond with']
-        count = Counter(counter_list).most_common(10)
+    if bonds_reference_frame is None:
+        # Summarize mismatching atoms per frame, not distinct undirected bonds.
+        if frame_clash_counts:
+            print(
+                f' Atom mismatches per frame: min={min(frame_clash_counts)}, '
+                f'average={sum(frame_clash_counts) / checked_frames:.2f}, '
+                f'max={max(frame_clash_counts)}, '
+                f'total={sum(frame_clash_counts)}'
+            )
+        # Print the most frequent clashes table
+        # Each count is the number of frames with this atom and bond-set mismatch.
+        print(f' Top 10 atom mismatches:')
+        headers = ['Frames', 'Atom', 'Label', 'Is bonding with', 'Should bond with']
+        count = clash_counts.most_common(10)
         # Calculate column widths
         table_data = []
         for (at, bond, should), n in count:
-            table_data.append([n, at, bond, should])
+            label = structure.atoms[at].label
+            table_data.append([n, at, label, bond, should])
         col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data, headers)]
 
         def format_row(row):
