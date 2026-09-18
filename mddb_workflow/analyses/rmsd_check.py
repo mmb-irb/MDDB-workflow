@@ -217,9 +217,9 @@ def check_trajectory_integrity (
 
     # Warn the user if we had bypassed frames
     if any_bypassed_frames > 0:
-        # Set the error message
+        # Set the error message, which is to be shown in the web client when mercy is asked
         max_bypassed_frames = max(report['bypass'] for report in fragment_reports)
-        message = f'First {max_bypassed_frames} frames may be not equilibrated. Use the "--mercy {TRAJECTORY_INTEGRITY_FLAG}" flag to skip this error'
+        message = f'First {max_bypassed_frames} frames may be not equilibrated.'
         # Add a warning an return True since the test failed in case we have mercy
         if TRAJECTORY_INTEGRITY_FLAG in mercy:
             register.add_warning(TRAJECTORY_INTEGRITY_FLAG, message)
@@ -232,6 +232,7 @@ def check_trajectory_integrity (
         report_data = worst_report['jumps'][0:graph_frames_limit]
         title = f'RMSD jumps along the trajectory in fragment "{report["name"]}" (first {graph_frames_limit} frames)'
         display_rmsd_jumps_graph(report_data, title)
+        message += f' Use the "--mercy {TRAJECTORY_INTEGRITY_FLAG}" flag to skip this error.'
         raise TestFailure(message)
 
     print(' Test has passed successfully')
