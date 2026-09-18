@@ -112,9 +112,10 @@ def structure_corrector(
         register.remove_warnings(STABLE_BONDS_FLAG)
         # Set some atoms which are to be skipped from these test given their "fake" nature
         excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection, cg_selection)
+        excluded_atom_indices = set(excluded_atoms_selection.atom_indices)
         # If bonds match from the begining we are done as well
         print(f'Checking default structure bonds ({STABLE_BONDS_FLAG})')
-        if do_bonds_match(current_bonds, safe_bonds, excluded_atoms_selection, verbose=True, atoms=structure.atoms):
+        if do_bonds_match(current_bonds, safe_bonds, excluded_atom_indices, verbose=True, atoms=structure.atoms):
             register.update_test(STABLE_BONDS_FLAG, True)
             print(' They are good')
             return
@@ -131,8 +132,7 @@ def structure_corrector(
             trajectory_file=input_trajectory_file,
             snapshots=snapshots,
             reference_bonds=safe_bonds,
-            pbc_selection=pbc_selection,
-            cg_selection=cg_selection,
+            excluded_atom_indices=excluded_atom_indices,
         )
         # Update the task output so it does not have to be repeated further
         # IMPORTANT: Note that this is not always run, but only when default structure bonds are wrong

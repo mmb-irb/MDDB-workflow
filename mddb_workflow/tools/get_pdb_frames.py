@@ -2,6 +2,7 @@ from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory, get_reduced_py
 from mddb_workflow.utils.auxiliar import reprint, get_auxiliar_filepath
 from mddb_workflow.utils.type_hints import *
 from tqdm import tqdm
+from itertools import islice
 import os
 
 import pytraj as pt
@@ -94,21 +95,33 @@ def get_starting_pdb_frames (
 
     def frames_generator():
         # Create a progress bar
-        if pbar_bool: pbar = tqdm(initial=0, desc=' Frames', total=frames_limit, unit='frame')
+        pbar = tqdm(initial=0, desc=' Frames', total=frames_limit, unit='frame') if pbar_bool else None
         # Or print an empty line for the reprint to not delete a previous log
-        else: print()
-        # Extract each frame in pdb format
-        for frame_number, frame in enumerate(trajectory.iterframe(), 1):
-            if frame_number >= frames_limit: break
-            # Update the current frame log
-            if pbar_bool: pbar.update(1); pbar.refresh()
-            else: reprint(f'Frame {frame_number+1} ({frame_number} / {frames_limit})')
-            current_frame_filepath = get_auxiliar_filepath(f'{output_frames_prefix}{frame_number+1}.pdb')
-            reference_structure.set_new_coordinates(frame.xyz)
-            reference_structure.generate_pdb_file(current_frame_filepath)
-            yield current_frame_filepath
-            # Delete current frame file before going for the next frame
-            os.remove(current_frame_filepath)
+        if pbar is None:
+            print()
+        try:
+            # Extract each frame in pdb format
+            # islice checks exactly the requested number of consecutive frames.
+            for frame_number, frame in enumerate(islice(trajectory.iterframe(), frames_limit), 1):
+                # Update the current frame log
+                if pbar is not None:
+                    pbar.update(1)
+                    pbar.refresh()
+                else:
+                    reprint(f'Frame {frame_number} ({frame_number} / {frames_limit})')
+                current_frame_filepath = get_auxiliar_filepath(f'{output_frames_prefix}{frame_number}.pdb')
+                reference_structure.set_new_coordinates(frame.xyz)
+                try:
+                    reference_structure.generate_pdb_file(current_frame_filepath)
+                    yield current_frame_filepath
+                finally:
+                    # Delete current frame file before going for the next frame
+                    # Also clean up when the caller finds a match or raises.
+                    if os.path.exists(current_frame_filepath):
+                        os.remove(current_frame_filepath)
+        finally:
+            if pbar is not None:
+                pbar.close()
 
     return frames_generator()
 
