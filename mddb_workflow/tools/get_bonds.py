@@ -13,21 +13,6 @@ from collections import Counter
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
 
 
-def get_excluded_atoms_selection(
-    structure: 'Structure',
-    pbc_selection: 'Selection',
-    cg_selection: 'Selection') -> 'Selection':
-    """Set some atoms which are to be skipped from bonding tests given their "fake" nature."""
-    # Get a selection of ion atoms which are not in PBC
-    # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
-    # They are not taken in count when testing coherent bonds or looking for the reference frame
-    non_pbc_ions_selection = structure.select_ions() - pbc_selection
-    # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
-    # Also dummy atoms are excluded since they are not real atoms
-    excluded_atoms_selection = non_pbc_ions_selection + cg_selection + structure.select_dummy()
-    return excluded_atoms_selection
-
-
 def get_bond_clashes(
     bonds_1: list[list[int]],
     bonds_2: list[list[int]],
@@ -146,7 +131,6 @@ def get_bonds_reference_frame(
     reference_bonds: list[list[int]],
     excluded_atom_indices: set[int],
     ignore_bonds: bool = False,
-    max_clashes: int = 0,  # If more than this number of atoms have wrong bonds then we ignore the frame
     patience: int = 100,  # Limit of frames to check before we surrender
 ) -> Optional[int]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).

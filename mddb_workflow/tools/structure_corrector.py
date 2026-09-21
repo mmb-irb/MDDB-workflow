@@ -1,6 +1,6 @@
 from os import remove
 from mddb_workflow.tools.get_bonds import find_safe_bonds, do_bonds_match, get_bonds_reference_frame
-from mddb_workflow.tools.get_bonds import get_excluded_atoms_selection, get_most_stable_bonds
+from mddb_workflow.tools.get_bonds import get_most_stable_bonds
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frame
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
@@ -15,6 +15,21 @@ def write_updated_structure(structure: 'Structure', output_structure_file: 'File
     """Write the updated structure and report the reason that triggered the write."""
     print(f' The structure file has been {reason} -> {output_structure_file.filename}')
     structure.generate_pdb_file(output_structure_file.path)
+
+
+def get_excluded_atoms_indices(
+    structure: 'Structure',
+    pbc_selection: 'Selection',
+    cg_selection: 'Selection') -> 'Selection':
+    """Set some atoms which are to be skipped from bonding tests given their "fake" nature."""
+    # Get a selection of ion atoms which are not in PBC
+    # These ions are usually "tweaked" to be bonded to another atom although there is no real covalent bond
+    # They are not taken in count when testing coherent bonds or looking for the reference frame
+    non_pbc_ions_selection = structure.select_ions() - pbc_selection
+    # We also exclude coarse grain atoms since their bonds will never be found by a distance/radius guess
+    # Also dummy atoms are excluded since they are not real atoms
+    excluded_atoms_selection = non_pbc_ions_selection + cg_selection + structure.select_dummy()
+    return set(excluded_atoms_selection.atom_indices)
 
 
 def structure_corrector(
@@ -111,8 +126,7 @@ def structure_corrector(
         # Reset warnings related to this analysis
         register.remove_warnings(STABLE_BONDS_FLAG)
         # Set some atoms which are to be skipped from these test given their "fake" nature
-        excluded_atoms_selection = get_excluded_atoms_selection(structure, pbc_selection, cg_selection)
-        excluded_atom_indices = set(excluded_atoms_selection.atom_indices)
+        excluded_atom_indices = get_excluded_atoms_indices(structure, pbc_selection, cg_selection)
         # If bonds match from the begining we are done as well
         print(f'Checking default structure bonds ({STABLE_BONDS_FLAG})')
         if do_bonds_match(current_bonds, safe_bonds, excluded_atom_indices, verbose=True, atoms=structure.atoms):
