@@ -2063,8 +2063,17 @@ class Structure:
         # WARNING: The following line gets stucked sometimes, idk why
         # atom_indices = sum([ self.residues[index].atom_indices for index in residue_indices ], [])
         atom_indices = []
-        for i, index in enumerate(residue_indices):
+        for index in residue_indices:
             atom_indices += self.residues[index].atom_indices
+        return Selection(atom_indices)
+
+    def select_chain_indices(self, chain_indices: list[int]) -> 'Selection':
+        """Set a function to make selections using chain indices."""
+        # WARNING: The following line gets stucked sometimes, idk why
+        # atom_indices = sum([ self.residues[index].atom_indices for index in residue_indices ], [])
+        atom_indices = []
+        for index in chain_indices:
+            atom_indices += self.chains[index].atom_indices
         return Selection(atom_indices)
 
     def select_all(self) -> 'Selection':
@@ -3033,6 +3042,10 @@ class Structure:
 
     def is_missing_any_bonds(self) -> bool:
         return any(bond == MISSING_BONDS for bond in self.bonds)
+
+    def select_missing_any_bonds (self) -> 'Selection':
+        """Select all atoms in the structure which are explicitly missing bonds."""
+        return Selection([ atom_index for atom_index, bonds in enumerate(self.bonds) if bonds == MISSING_BONDS ])
 
     def check_incoherent_bonds(self) -> bool:
         """Check bonds to be incoherent i.e. check atoms not to have more or less

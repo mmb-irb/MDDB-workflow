@@ -64,14 +64,14 @@ def check_trajectory_integrity (
     if not parsed_selection:
         raise Exception('WARNING: There are not atoms to be analyzed for the RMSD analysis')
 
-    # Discard PBC residues from the selection to be checked
-    parsed_selection -= pbc_selection
+    # # Discard PBC residues from the selection to be checked
+    # parsed_selection -= pbc_selection
 
-    # If there is nothing to check then warn the user and stop here
-    if not parsed_selection:
-        warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
-        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
-        return True
+    # # If there is nothing to check then warn the user and stop here
+    # if not parsed_selection:
+    #     warn('There are no atoms to be analyzed for the RMSD checking after PBC substraction')
+    #     register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
+    #     return True
 
     # Get fragments out of the parsed selection
     # Fragments will be analyzed independently
@@ -81,23 +81,115 @@ def check_trajectory_integrity (
     # For this reason splitting the test in fragments is a good meassure
     # Although big fragments could be splitted in even smaller parts in the future
     # In the other hand a very small fragment may overcome the cutoff with small RMSD jumps, so beware
-    # If the structure is missing bonds then there are no fragments to select
-    # In this case we just split the structure in chains
-    if structure.is_missing_any_bonds():
-        fragments = [ chain.get_selection() for chain in structure.chains ]
-    else:
-        fragments = list(structure.find_fragments(parsed_selection))
+    bonded_fragments = {}
+    unbonded_fragments = {}
 
-    print(f'Checking trajectory integrity ({len(fragments)} fragments)')
+    # If the structure is missing bonds then there are no "fragments" to select
+    # In this case we just split the structure in chains
+    missing_bonds_selection = structure.select_missing_any_bonds()
+    if missing_bonds_selection:
+        # Parse the selection to chain indices
+        missing_bonds_chain_indices = structure.get_selection_chain_indices(missing_bonds_selection)
+        # Make sure the selection wraps whole chains, for later
+        missing_bonds_selection = structure.select_chain_indices(missing_bonds_chain_indices)
+        # Now split the definitive selection in chains
+        for chain_index in missing_bonds_chain_indices:
+            chain = structure.chains[chain_index]
+            chain_fragment = chain.get_selection()
+            chain_fragment_name = structure.name_selection(chain_fragment)
+            unbonded_fragments[chain_fragment_name] = chain_fragment
+
+    # We also split PBC regions in chains
+    # Otherwise they would have a lot of fragments (e.g. every water or lipid molecule)
+    bonded_pbc_selection = pbc_selection - missing_bonds_selection
+    if bonded_pbc_selection:
+        # Parse the selection to chain indices
+        pbc_chain_indices = structure.get_selection_chain_indices(bonded_pbc_selection)
+        # Make sure the chain split selection selects whole chains, for later
+        bonded_pbc_selection = structure.select_chain_indices(pbc_chain_indices)
+        # Now split the definitive selection in chains
+        for chain_index in pbc_chain_indices:
+            chain = structure.chains[chain_index]
+            chain_fragment = chain.get_selection()
+            # Single-atom fragments are excluded
+            # Note that single-atoms are not checked by atom distance pairwsie but normal RMSD
+            # However if the atoms are under PBC they may jump freely, so we do not check them
+            if len(chain_fragment) == 1: continue
+            chain_fragment_name = structure.name_selection(chain_fragment)
+            bonded_fragments[chain_fragment_name] = chain_fragment
+
+    # Now split the rest of the structure in fragments
+    chain_split_selection = missing_bonds_selection + bonded_pbc_selection
+    fragment_split_selection = structure.invert_selection(chain_split_selection)
+    if fragment_split_selection:
+        for fragment in structure.find_fragments(fragment_split_selection):
+            fragment_name = structure.name_selection(fragment)
+            bonded_fragments[fragment_name] = fragment
+
+    # Merge all fragments together
+    all_fragments = bonded_fragments | unbonded_fragments
+
+    # Meta-fragment: one representative atom (first) per real non-PBC fragment
+    # Catches whole-fragment jumps that intra-fragment bond distances cannot see
+    non_pbc_fragments = [ fragment for fragment in all_fragments.values() if not fragment.intersection(pbc_selection) ]
+    if len(non_pbc_fragments) >= 2:
+        header_atoms_indices = [ fragment.atom_indices[0] for fragment in non_pbc_fragments ]
+        meta_fragment = structure.select_atom_indices(header_atoms_indices)
+        meta_fragment_name = 'Inter-fragment distances'
+        unbonded_fragments[meta_fragment_name] = meta_fragment
+        all_fragments[meta_fragment_name] = meta_fragment
+
+    print(f'Checking trajectory integrity ({len(all_fragments)} fragments)')
 
     # Load the trajectory frame by frame
     trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
 
-    # Save the previous frame any time
+    # Save the previous frame every time
     previous_frame = next(trajectory)
 
+    # Build atom pairs per fragment to track via distance RMSD
+    # Bonded fragments use the safe bonds
+    fragment_bond_pairs = {}
+    for fragment_name, fragment in bonded_fragments.items():
+        # If it has one atom only then skip it
+        if len(fragment) == 1:
+            fragment_bond_pairs[fragment_name] = None
+            continue 
+        atom_set = set(fragment.atom_indices)
+        # Now get bonded atom pairs inside the fragment
+        pairs = []
+        # Iterate fragment atom indices
+        for atom_index in fragment.atom_indices:
+            bonded_atom_indices = structure.bonds[atom_index]
+            # Iterate bonded atom indices
+            for bonded_atom_index in bonded_atom_indices:
+                # In order to avoid having duplicates (a-b and b-a) we only record the lower-higher bond
+                if bonded_atom_index < atom_index: continue
+                # Skip atoms which do not belong to the fragment
+                if bonded_atom_index not in atom_set: continue
+                # Add this pair to the list
+                pairs.append((atom_index, bonded_atom_index))
+        # Assign these pairs to this specific fragment
+        fragment_bond_pairs[fragment_name] = np.array(pairs) if pairs else None
+    # Unbonded fragments (with missing bonds) use sequential pairs as a fake backbone
+    for fragment_name, fragment in unbonded_fragments.items():
+        # If it has one atom only then skip it
+        if len(fragment) == 1:
+            fragment_bond_pairs[fragment_name] = None
+            continue
+        indices = fragment.atom_indices
+        fragment_bond_pairs[fragment_name] = np.array([(indices[i], indices[i + 1]) for i in range(len(indices) - 1)])
+
+    # Compute distances for the first frame so the loop always has a previous reference
+    previous_bond_distances = {}
+    for fragment_name, pairs in fragment_bond_pairs.items():
+        if pairs is not None:
+            previous_bond_distances[fragment_name] = mdt.compute_distances(previous_frame, pairs, periodic=True)[0]
+        else:
+            previous_bond_distances[fragment_name] = None
+
     # Save all RMSD jumps
-    fragment_rmsd_jumps = { fragment: [] for fragment in fragments }
+    fragment_rmsd_jumps = { fragment_name: [] for fragment_name in all_fragments.keys() }
 
     # Initialize progress bar first
     pbar = tqdm(trajectory, total=snapshots, desc=' Frame', unit='frame', initial=1)
@@ -106,12 +198,23 @@ def check_trajectory_integrity (
     for frame in pbar:
 
         # Iterate over the different fragments
-        for fragment in fragment_rmsd_jumps:
-            # Calculate RMSD value between previous and current frame
-            # DANI: El centrado de MDtraj elimina el salto a través de las boundaries
-            # DANI: El precentered=True debería evitarlo, pero es ignorado si hay atom_indices
-            rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=fragment.atom_indices, superpose=False)[0]
-            fragment_rmsd_jumps[fragment].append(rmsd_value)
+        for fragment_name, fragment in all_fragments.items():
+            # If the fragment has multiple atoms then compute bond distance RMSD between consecutive frames
+            if len(fragment) > 1:
+                pairs = fragment_bond_pairs[fragment_name]
+                if pairs is not None:
+                    current_dists = mdt.compute_distances(frame, pairs, periodic=True)[0]
+                    bond_dist_rmsd = np.sqrt(np.mean((current_dists - previous_bond_distances[fragment_name]) ** 2))
+                    fragment_rmsd_jumps[fragment_name].append(bond_dist_rmsd)
+                    previous_bond_distances[fragment_name] = current_dists
+            # If the fragment has s ingle atom then check the RMSD as is
+            else:
+                # Calculate RMSD value between previous and current frame
+                # DANI: El centrado de MDtraj elimina el salto a través de las boundaries
+                # DANI: El precentered=True debería evitarlo, pero era ignorado si había atom_indices
+                # DANI: Esto fué arreglado en las últimas versiones de MDtraj
+                rmsd_value = mdt.rmsd(frame, previous_frame, atom_indices=fragment.atom_indices, superpose=False)[0]
+                fragment_rmsd_jumps[fragment_name].append(rmsd_value)
 
         # Update the previous frame as the current one
         previous_frame = frame
@@ -120,10 +223,16 @@ def check_trajectory_integrity (
     fragment_reports = []
 
     # Iterate over the different fragments
-    for fragment, rmsd_jumps in fragment_rmsd_jumps.items():
+    for fragment_name, fragment in all_fragments.items():
 
-        # Log the fragment name
-        fragment_name = structure.name_selection(fragment)
+        # get the results
+        rmsd_jumps = fragment_rmsd_jumps[fragment_name]
+
+        # Skip fragments for which no metric could be computed (single atoms with no pairs)
+        # A multi-atom fragment with no intra-fragment bonds means all its bonds point outside
+        # the fragment — likely a cofactor or ligand fully bonded to another fragment in the topology
+        if not rmsd_jumps:
+            raise RuntimeError(f'Fragment "{fragment_name}" could not be analyzed')
 
         # Capture outliers
         # If we capture more than 5 we stop searching
