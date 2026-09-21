@@ -16,6 +16,7 @@ def prepare_project_metadata (
     trajectory_file : 'File',
     output_file : 'File',
     structure : 'Structure',
+    cg_selection : 'Selection',
     residue_map : dict,
     membrane_map : dict,
     inchikey_map : dict,
@@ -75,7 +76,7 @@ def prepare_project_metadata (
     counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atom_counts(structure)
 
     # Get the system keywords
-    system_keywords = get_system_keywords(structure, inchikey_map, membrane_map)
+    system_keywords = get_system_keywords(structure, inchikey_map, membrane_map, cg_selection)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
@@ -242,7 +243,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.3',
+        'ver': '0.0.4',
     }
     # Let the boxsizes only if all of them are available (they may be 0)
     if not boxsizex or not boxsizey or not boxsizez:

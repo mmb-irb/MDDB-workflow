@@ -25,6 +25,11 @@ MEMBRANE_KEYWORD = 'membrane'
 LIGAND_KEYWORD = 'ligand'
 # More complex keywords
 NUCLEOSOME_KEYWORD = 'nucleosome'
+# Atomic vs Coarse Grain labels
+# Abreviations are added in the keyword to in case a user makes a query with them
+AA_KEYWORD = 'all-atom (aa)'
+CG_KEYWORD = 'coarse grained (cg)'
+HYBRID_KEYWORD = 'hybrid resolution' # DANI: "multiscale" me gusta mucho pero puede ser ambiguo
 
 
 # Changes in the function can be tested with: pytest -k "TestRunAll and pmeta" -s
@@ -32,6 +37,7 @@ def get_system_keywords(
     structure: 'Structure',
     inchikey_map: list[dict],
     membrane_map: dict,
+    cg_selection: 'Selection',
 ) -> list[str]:
     """System keywords are useful to find different types of systems later in the browser
     Try to assign as many keywords as possible to the current system.
@@ -131,6 +137,11 @@ def get_system_keywords(
     # Find out if we have a nucleosome
     if has_protein and has_dna and has_nucleosome(structure):
         keywords.append(NUCLEOSOME_KEYWORD)
+
+    # Set atomic vs coarse-grained keywords
+    if not cg_selection: keywords.append(AA_KEYWORD)
+    elif len(cg_selection) == structure.atom_count: keywords.append(CG_KEYWORD)
+    else: keywords.append(HYBRID_KEYWORD)
 
     # Display issued system keywords
     print('Issued system keywords: ' + ', '.join(keywords))
