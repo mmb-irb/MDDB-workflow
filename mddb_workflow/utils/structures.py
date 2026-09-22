@@ -1355,7 +1355,9 @@ class Structure:
 
     def name_selection(self, selection: 'Selection') -> str:
         """Name an atom selection depending on the chains it contains. This is used for debug purpouses."""
+        if not selection: return 'empty selection'
         atoms = [self.atoms[index] for index in selection.atom_indices]
+        if len(atoms) == 1: return atoms[0].label
         # Count atoms per chain
         atom_count_per_chain = {chain: 0 for chain in self.chains}
         for atom in atoms:
