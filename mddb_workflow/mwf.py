@@ -55,6 +55,7 @@ from mddb_workflow.tools.process_input_files import process_input_files
 from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
+from mddb_workflow.tools.structure_corrector import get_excluded_atoms_indices
 
 # Import local analyses
 from mddb_workflow.analyses.rmsds import rmsds
@@ -1157,6 +1158,13 @@ class MD:
         return self._forced_class_selections
     forced_class_selections = property(get_forced_class_selections, None, None, "Custom forced selections for molecular classification (read only)")
 
+    def get_excluded_atom_indices(self):
+        """Get the atom indices which are excluded from the analysis.
+        This includes coarse grain beads and dummy atoms.
+        """
+        return get_excluded_atoms_indices(self.structure, self.pbc_selection, self.cg_selection)
+    excluded_atom_indices = property(get_excluded_atom_indices, None, None, "Excluded atom indices (read only)")
+    
     # Other input files
 
     def get_populations(self) -> list[float]:

@@ -11,6 +11,7 @@ def get_project_screenshot(
     snapshots: int,
     output_file: 'File',
     cg_selection: 'Selection',
+    # reference_frame: Optional[int] = None,  # This should be the frame used to generate the screenshot, but it is not used in the function
     screenshot_frame: Optional[int] = None,
     parameters: Optional[dict] = None,
 ) -> dict:
