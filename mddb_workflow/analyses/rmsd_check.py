@@ -150,7 +150,8 @@ def check_trajectory_integrity (
     # Build atom pairs per fragment to track via distance RMSD
     # Bonded fragments use the safe bonds
     fragment_bond_pairs = {}
-    for fragment_name, fragment in bonded_fragments.items():
+    # We make a list from bonded_fragments.items since some fragments may be moved to unbonded while iterating
+    for fragment_name, fragment in list(bonded_fragments.items()):
         # If it has one atom only then skip it
         if len(fragment) == 1:
             fragment_bond_pairs[fragment_name] = None
@@ -169,8 +170,16 @@ def check_trajectory_integrity (
                 if bonded_atom_index not in atom_set: continue
                 # Add this pair to the list
                 pairs.append((atom_index, bonded_atom_index))
+        # If there are no pairs then it means all atoms inside this fragment are not connected
+        # This may happen, for instance, with a chain made of counter ions, which are under PBC
+        # If this happens then move the fragment to the unbonded fragments dict
+        if not pairs:
+            unbonded_fragments[fragment_name] = fragment
+            del bonded_fragments[fragment_name]
+            continue
         # Assign these pairs to this specific fragment
-        fragment_bond_pairs[fragment_name] = np.array(pairs) if pairs else None
+        fragment_bond_pairs[fragment_name] = np.array(pairs)
+
     # Unbonded fragments (with missing bonds) use sequential pairs as a fake backbone
     for fragment_name, fragment in unbonded_fragments.items():
         # If it has one atom only then skip it
@@ -232,6 +241,7 @@ def check_trajectory_integrity (
         # A multi-atom fragment with no intra-fragment bonds means all its bonds point outside
         # the fragment — likely a cofactor or ligand fully bonded to another fragment in the topology
         if not rmsd_jumps:
+            breakpoint()
             raise RuntimeError(f'Fragment "{fragment_name}" could not be analyzed')
 
         # Capture outliers
