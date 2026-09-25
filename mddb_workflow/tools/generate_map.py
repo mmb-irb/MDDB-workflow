@@ -164,8 +164,6 @@ class ProteinMapper:
         self.tried_alignments = {}
 
         # Cache wrappers for getters/logic which connect to the internet (or are otherwise expensive)
-        self.cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
-        self.cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
         self.cached_pdb_to_uniprot = get_cached_function(pdb_to_uniprot, cache)
         self.cached_blast = get_cached_function(run_blastp, cache)
 
@@ -180,13 +178,8 @@ class ProteinMapper:
         reference = self.references.get(uniprot_accession, None)
         if reference:
             return reference
-        # Check MDposit
-        reference = self.cached_get_database_reference('proteins', uniprot_accession)
-        if reference:
-            return reference
-        # Get it from UniProt
-        reference = self.cached_get_uniprot_reference(uniprot_accession)
-        return reference
+        # Check MDposit or get it from UniProt
+        return get_protein_reference(uniprot_accession, self.cache, self.database)
 
     def add_reference(self, uniprot_id: str, check_isoforms: bool = True):
         """Given a uniprot id, add its reference to this list of available references.
@@ -734,6 +727,26 @@ def normalize_protein_sequence(sequence: str) -> str:
         if letter not in PROTEIN_RESIDUE_LETTERS:
             normalized_sequence = normalized_sequence.replace(letter, 'X')
     return normalized_sequence
+
+
+def get_protein_reference(
+    uniprot_accession: str,
+    cache: 'Cache',
+    database: Optional['Database'] = None,
+) -> Optional[dict]:
+    """Given a uniprot accession, get the reference object.
+    Try first asking to the MDposit database in case the reference exists already.
+    If not, retrieve UniProt data and build the reference object.
+    """
+    # Check MDposit
+    if database:
+        cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
+        reference = cached_get_database_reference('proteins', uniprot_accession)
+        if reference:
+            return reference
+    # Get it from UniProt
+    cached_get_uniprot_reference = get_cached_function(get_uniprot_reference, cache)
+    return cached_get_uniprot_reference(uniprot_accession)
 
 
 def get_uniprot_reference(uniprot_accession: str) -> Optional[dict]:

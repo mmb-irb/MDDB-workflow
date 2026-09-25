@@ -9,14 +9,19 @@ from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
-from mddb_workflow.tools.generate_map import get_uniprot_reference, align, normalize_protein_sequence
+from mddb_workflow.tools.generate_map import get_protein_reference, align, normalize_protein_sequence
 from mddb_workflow.tools.xvg_parse import xvg_parse
 
 # Set a flag for chains which are made entirley of alpha carbons only
 CA_ONLY = 'alpha carbons only'
 
 
-def prepare_pdb_references(pdb_ids: list[str], pdb_references_file: 'File') -> list[dict]:
+def prepare_pdb_references(
+    pdb_ids: list[str],
+    pdb_references_file: 'File',
+    cache: 'Cache',
+    database: Optional['Database'] = None,
+) -> list[dict]:
     """Prepare the PDB references json file to be uploaded to the database."""
     # If we already have PDB references then load them
     previous_pdb_references = {}
@@ -36,7 +41,7 @@ def prepare_pdb_references(pdb_ids: list[str], pdb_references_file: 'File') -> l
             pdb_references.append(pdb_reference)
             continue
         # Otherwise download and mine the PDB data
-        pdb_reference = get_pdb_reference(pdb_id)
+        pdb_reference = get_pdb_reference(pdb_id, cache, database)
         if pdb_reference is not None:
             pdb_references.append(pdb_reference)
     # Write references to a json file
@@ -44,7 +49,7 @@ def prepare_pdb_references(pdb_ids: list[str], pdb_references_file: 'File') -> l
     return pdb_references
 
 
-def get_pdb_reference(pdb_id: str) -> dict:
+def get_pdb_reference(pdb_id: str, cache: 'Cache', database: Optional['Database'] = None) -> dict:
     """Download PDB data from the PDB API."""
     # Set the request query
     query = '''query ($id: String!) {
@@ -109,7 +114,7 @@ def get_pdb_reference(pdb_id: str) -> dict:
     pdb_data['knowledge'] = calculate_knowledge_data(final_pdb_id, structure)
     # Make a uniprot to PDB map
     uniprot_ids = set(chain_uniprots.values())
-    pdb_data['uni2pdb'] = make_uniprot_to_pdb_map(structure, uniprot_ids)
+    pdb_data['uni2pdb'] = make_uniprot_to_pdb_map(structure, uniprot_ids, cache, database)
     # Sort all dictionaries
     # Otherwise the loader will complain about a change every time since the order may change
     for key, value in pdb_data.items():
@@ -259,13 +264,16 @@ def calculate_knowledge_data(pdb_id: str, structure: 'Structure') -> dict:
 
 def make_uniprot_to_pdb_map(
     pdb_structure: 'Structure',
-    uniprots_ids: set[str]) -> dict[str, list]:
+    uniprots_ids: set[str],
+    cache: 'Cache',
+    database: Optional['Database'] = None,
+) -> dict[str, list]:
     """Make a map from UniProt to PDB for the PDBe knowledge base integration."""
     uniprot_to_pdb_map = {}
     # Get all uniprot references
     uniprot_references = {}
     for uniprot_id in uniprots_ids:
-        uniprot_reference = get_uniprot_reference(uniprot_id)
+        uniprot_reference = get_protein_reference(uniprot_id, cache, database)
         if uniprot_reference:
             uniprot_references[uniprot_id] = uniprot_reference
     # Find which uniprot id belongs to which chain in the original PDB id
