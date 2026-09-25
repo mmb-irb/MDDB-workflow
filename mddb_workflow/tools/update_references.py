@@ -8,6 +8,9 @@ from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, PROTEIN_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import PDB_REFERENCE_VERSION, PDB_REFERENCES_FILENAME
+from mddb_workflow.utils.constants import CACHE_FILENAME
+from mddb_workflow.utils.cache import Cache
+from mddb_workflow.utils.file import File
 from mddb_workflow.utils.database import Database, get_available_nodes
 from mddb_workflow.utils.loader import Loader
 
@@ -21,7 +24,7 @@ REFERENCE_TYPE_CONFIGURATIONS = {
         'version': PROTEIN_REFERENCE_VERSION,
         'endpoint': 'proteins',
         'id_key': 'uniprot',
-        'maker': get_uniprot_reference,
+        'maker': lambda uniprot_id, cache, database: get_uniprot_reference(uniprot_id),
         'output': PROTEIN_REFERENCES_FILENAME,
     },
     # 'inchi': {
@@ -35,7 +38,7 @@ REFERENCE_TYPE_CONFIGURATIONS = {
         'version': PDB_REFERENCE_VERSION,
         'endpoint': 'pdbs',
         'id_key': 'id',
-        'maker': get_pdb_reference,
+        'maker': lambda pdb_id, cache, database: get_pdb_reference(pdb_id, cache, database),
         'output': PDB_REFERENCES_FILENAME,
     },
 }
@@ -98,6 +101,9 @@ def update_references (
     directory = sub('https?://', '', node_url_or_alias.replace('/api/', ''))
     if not exists(directory): mkdir(directory)
 
+    # Set a cache in this directory to reuse requests between runs
+    cache = Cache(File(f'{directory}/{CACHE_FILENAME}'))
+
     # Set the filepaths where output is to be written
     output_references_filename = reference_config['output']
     output_references_filepath = f"{directory}/{output_references_filename}"
@@ -156,7 +162,7 @@ def update_references (
         print(f'  Remaking {outdated_reference_id} ({o}/{remote_outdated_count})')
         # Wrap the updater in a try/except so we are resilient when having response issues
         try:
-            new_reference = reference_maker(outdated_reference_id)
+            new_reference = reference_maker(outdated_reference_id, cache, database)
         except:
             warn(f'Something went wrong while updating {outdated_reference_id} -> Skipped')
             failed_references_count += 1
