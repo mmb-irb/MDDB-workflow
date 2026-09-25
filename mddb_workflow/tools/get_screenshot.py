@@ -18,6 +18,12 @@ from scipy.spatial.distance import cdist
 debug = False
 
 
+# VMD ColorID and Material used to draw every structure beyond the first one (the "overlay" frames)
+# This makes overlaid frames visually distinguishable from the main (first) structure
+OVERLAY_COLOR_ID = 6  # silver
+OVERLAY_MATERIAL = 'Transparent'
+
+
 def get_screenshot (
     structure : 'Structure',
     output_file : 'File',
@@ -27,25 +33,40 @@ def get_screenshot (
     # Note that a slight movement in the molecule may make the rotation logic here use a different angle
     # Thus the image could be radically different and misleading, since the change could be minimal
     parameters : Optional[dict] = None,
+    # Optionally pass another structure (e.g. a different frame of the same molecule) to render it
+    # overlaid, as a transparent silhouette, behind the main structure
+    reference_structure : Optional['Structure'] = None,
 ) -> dict:
     """Obtain a screenshot from the pdb file using VMD. This screenshot of the system is uploaded to the database.
+    If a reference_structure is provided it is overlaid behind the main structure as a flat-colored,
+    transparent silhouette (e.g. to compare two frames of the same molecule).
     Returns the rotation values used to take the photo so they can be saved and reused."""
     # Check the output screenshot file extension is JPG
     if output_file.format != 'jpg':
         print(output_file)
         raise InputError(f'You must provide a .jpg file name. {output_file.format} format is not supported')
-    
-    # Set the auxiliar files
-    auxiliar_pdb_filepath = get_auxiliar_filepath('.screenshot_structure.pdb')
-    auxiliar_tga_filepath = get_auxiliar_filepath('.transition_screenshot.tga')
-    
-    # Set the solvent selection and totally remove it from the structure
-    # This way not only we hide it from the representation, but we also prevent the center to be far away from the camera
-    solvent_selection = structure.select_water_and_counter_ions()
-    filtered_structure = structure.filter_away(solvent_selection)
 
-    # Produce a PDB file to feed VMD
-    filtered_structure.generate_pdb_file(auxiliar_pdb_filepath)
+    # The main structure is always rendered normally; the reference structure, if any, is overlaid
+    structures = [structure] + ([reference_structure] if reference_structure is not None else [])
+
+    # Set the auxiliar files, one PDB per overlaid structure
+    auxiliar_pdb_filepaths = [
+        get_auxiliar_filepath(f'.screenshot_structure_{i}.pdb') for i in range(len(structures))
+    ]
+    auxiliar_tga_filepath = get_auxiliar_filepath('.transition_screenshot.tga')
+
+    # Set the solvent selection and totally remove it from every structure
+    # This way not only we hide it from the representation, but we also prevent the center to be far away from the camera
+    filtered_structures = []
+    for struct, auxiliar_pdb_filepath in zip(structures, auxiliar_pdb_filepaths):
+        solvent_selection = struct.select_water_and_counter_ions()
+        filtered_structure = struct.filter_away(solvent_selection)
+        filtered_structures.append(filtered_structure)
+        # Produce a PDB file to feed VMD
+        filtered_structure.generate_pdb_file(auxiliar_pdb_filepath)
+    # Keep the first filtered structure at hand: selections (cartoon, CG, etc.) are topology-based
+    # so they are identical across overlaid frames and only need to be computed once
+    filtered_structure = filtered_structures[0]
 
     # Number of pixels to scale in x
     x_number_pixels = 350
@@ -70,20 +91,24 @@ def get_screenshot (
     # Set a file to save the result obtained when calculating the center
     center_filename = get_auxiliar_filepath('.center_point_filename.txt')
     with open(commands_filename_1, "w") as file:
-        # Select the whole molecule
-        file.write('set sel [atomselect 0 all] \n')
-        # Find the center
-        file.write('set center [measure center $sel] \n')
+        # Molecule 0 is already loaded (it was passed as the VMD startup argument)
+        # Load any further overlaid structures as additional molecules
+        for auxiliar_pdb_filepath in auxiliar_pdb_filepaths[1:]:
+            file.write(f'mol new {auxiliar_pdb_filepath} \n')
         # Export the center to a file
         file.write(f'set center_file [open {center_filename} w] \n')
-        file.write('puts $center_file $center \n')
+        # Find and export the center of every loaded molecule, one line per molecule
+        for molid in range(len(structures)):
+            file.write(f'set sel{molid} [atomselect {molid} all] \n')
+            file.write(f'set center{molid} [measure center $sel{molid}] \n')
+            file.write(f'puts $center_file $center{molid} \n')
         # Exit VMD
         file.write('exit \n')
 
     # Run VMD
     process = run([
         "vmd",
-        auxiliar_pdb_filepath,
+        auxiliar_pdb_filepaths[0],
         "-e",
         commands_filename_1,
         "-dispdev",
@@ -98,11 +123,16 @@ def get_screenshot (
         print(error_logs)
         raise ToolError('Something went wrong with VMD while generating the center point file')
 
-    # Read the generated file to get the center
+    # Read the generated file to get the center of every molecule and average them
+    # Since all overlaid structures share the same topology (same atoms, same masses)
+    # this average is equivalent to the center of mass of the whole combined set
     with open(center_filename,"r") as file:
-        line = file.readline().split()
-        line = [float(i) for i in line]
-    vmd_center_coordinates = line
+        molecule_centers = []
+        for line in file:
+            values = line.split()
+            if values:
+                molecule_centers.append([float(v) for v in values])
+    vmd_center_coordinates = np.mean(molecule_centers, axis=0).tolist()
 
     # Set the camera rotation, translation and zoom values to get the optimal picture
     angle = None
@@ -122,8 +152,9 @@ def get_screenshot (
     # We must calculate these values otherwise
     else:
 
-        # Obtain all coordinates from each atom of the filtered structure
-        coordinates = [list(atom.coords) for atom in filtered_structure.atoms]
+        # Obtain all coordinates from each atom of every overlaid structure combined
+        # This way the camera frames the whole overlay, not just the first structure
+        coordinates = [list(atom.coords) for fs in filtered_structures for atom in fs.atoms]
         # Convert the list into a Numpy Array, since Scipy library just works with this type of data structure
         coordinates_np = np.array(coordinates)
 
@@ -322,63 +353,76 @@ def get_screenshot (
         file.write('color Display Background white \n')
         # Delete the axes drawing in the VMD window
         file.write('axes location Off \n')
-        # Eliminate the molecule to perform changes in the representation, color and material
-        file.write('mol delrep 0 top \n')
-        # First add a spcific representation for polymers (protein and nucleic acids)
-        if cartoon_selection:
-            # Change the default representation model to Newcartoon
-            file.write('mol representation Newcartoon \n')
-            # Change the default atom coloring method setting to Chain
-            file.write('mol color Chain \n')
-            # Set the default atom selection to atoms to be represented as cartoon
-            file.write(f'mol selection "{cartoon_selection.to_vmd()}" \n')
-            # Change the current material of the representation of the molecule
-            file.write('mol material Opaque \n')
-            # Using the new changes performed previously add a new representation to the new molecule
-            file.write('mol addrep top \n')
-        # In case we have any non-cartoon selection to represent...
-        if non_cartoon_selection:
-            # Change the default representation model to CPK (ball and stick)
-            file.write('mol representation cpk \n')
-            # Change the default atom coloring method setting to Chain
-            file.write('mol color element \n')
-            # Set the default atom selection to atoms to be represented as CPK
-            file.write(f'mol selection "{non_cartoon_selection.to_vmd()}" \n')
-            # Change the current material of the representation of the molecule
-            file.write('mol material Opaque \n')
-            # Using the new changes performed previously add a new representation to the new molecule
-            file.write('mol addrep top \n')
-        # In case we have coarse grain beads
-        if cg_selection:
-            # Change the default representation model to CPK (ball and stick)
-            file.write('mol representation cpk \n')
-            # Coloring by name is only useful when beads have different names
-            # If all coarse grain beads share the same name we would get a single color
-            # In this case it is more informative to color them by chain
-            cg_atoms = [structure.atoms[index] for index in cg_selection.atom_indices]
-            cg_atom_names = set(atom.name for atom in cg_atoms)
-            if len(cg_atom_names) == 1:
-                file.write('mol color Chain \n')
-            else:
-                file.write('mol color name \n')
-            # Set the default atom selection to atoms to be represented as CPK
-            file.write(f'mol selection "{cg_selection.to_vmd()}" \n')
-            # Change the current material of the representation of the molecule
-            file.write('mol material Opaque \n')
-            # Using the new changes performed previously add a new representation to the new molecule
-            file.write('mol addrep top \n')
+        # Molecule 0 is already loaded (it was passed as the VMD startup argument)
+        # Load any further overlaid structures as additional molecules
+        for auxiliar_pdb_filepath in auxiliar_pdb_filepaths[1:]:
+            file.write(f'mol new {auxiliar_pdb_filepath} \n')
+
+        # Add representations molecule by molecule
+        # Molecule 0 (the main structure) keeps its normal, multi-colored look
+        # Any further molecule (an overlaid frame) is drawn as a flat, transparent silhouette
+        for molid in range(len(structures)):
+            is_overlay = molid > 0
+            # Eliminate the default representation to perform changes in the representation, color and material
+            file.write(f'mol delrep 0 {molid} \n')
+            # First add a specific representation for polymers (protein and nucleic acids)
+            if cartoon_selection:
+                # Change the default representation model to Newcartoon
+                file.write('mol representation Newcartoon \n')
+                # Change the default atom coloring method setting to Chain, unless this is an overlaid frame
+                file.write(f'mol color {"ColorID " + str(OVERLAY_COLOR_ID) if is_overlay else "Chain"} \n')
+                # Set the default atom selection to atoms to be represented as cartoon
+                file.write(f'mol selection "{cartoon_selection.to_vmd()}" \n')
+                # Change the current material of the representation of the molecule
+                file.write(f'mol material {OVERLAY_MATERIAL if is_overlay else "Opaque"} \n')
+                # Using the new changes performed previously add a new representation to the molecule
+                file.write(f'mol addrep {molid} \n')
+            # In case we have any non-cartoon selection to represent...
+            if non_cartoon_selection:
+                # Change the default representation model to CPK (ball and stick)
+                file.write('mol representation cpk \n')
+                # Change the default atom coloring method setting to element, unless this is an overlaid frame
+                file.write(f'mol color {"ColorID " + str(OVERLAY_COLOR_ID) if is_overlay else "element"} \n')
+                # Set the default atom selection to atoms to be represented as CPK
+                file.write(f'mol selection "{non_cartoon_selection.to_vmd()}" \n')
+                # Change the current material of the representation of the molecule
+                file.write(f'mol material {OVERLAY_MATERIAL if is_overlay else "Opaque"} \n')
+                # Using the new changes performed previously add a new representation to the molecule
+                file.write(f'mol addrep {molid} \n')
+            # In case we have coarse grain beads
+            if cg_selection:
+                # Change the default representation model to CPK (ball and stick)
+                file.write('mol representation cpk \n')
+                if is_overlay:
+                    file.write(f'mol color ColorID {OVERLAY_COLOR_ID} \n')
+                else:
+                    # Coloring by name is only useful when beads have different names
+                    # If all coarse grain beads share the same name we would get a single color
+                    # In this case it is more informative to color them by chain
+                    cg_atoms = [structures[0].atoms[index] for index in cg_selection.atom_indices]
+                    cg_atom_names = set(atom.name for atom in cg_atoms)
+                    file.write(f'mol color {"Chain" if len(cg_atom_names) == 1 else "name"} \n')
+                # Set the default atom selection to atoms to be represented as CPK
+                file.write(f'mol selection "{cg_selection.to_vmd()}" \n')
+                # Change the current material of the representation of the molecule
+                file.write(f'mol material {OVERLAY_MATERIAL if is_overlay else "Opaque"} \n')
+                # Using the new changes performed previously add a new representation to the molecule
+                file.write(f'mol addrep {molid} \n')
+
         # Change projection from perspective (used by VMD by default) to orthographic
         file.write('display projection orthographic \n')
-        # Select all atoms
-        file.write('set sel [atomselect 0 all] \n')
         # First rotation of the molecule to set it perpendicular with respect to z axis
+        # This is a display-level (camera) transform so it affects every loaded molecule at once
         file.write(f'rotate y by {angle} \n')
         # Second rotatoin of the molecule to set it diagonal with respect to z axis
         file.write(f'rotate z by {angle2} \n')
-        # Move to rectify the difference
-        file.write('$sel moveby { ' + tuple_to_vmd(y_axis_difference_vector) + ' } \n')
-        # Move to rectify the difference
-        file.write('$sel moveby { ' + tuple_to_vmd(x_axis_difference_vector) + ' } \n')
+        # Move every molecule's own atoms to rectify the difference
+        # Unlike rotation, 'moveby' mutates the atom coordinates of a specific molecule's selection
+        # so it must be repeated once per overlaid molecule to keep them all correctly centered
+        for molid in range(len(structures)):
+            file.write(f'set sel{molid} [atomselect {molid} all] \n')
+            file.write('$sel' + str(molid) + ' moveby { ' + tuple_to_vmd(y_axis_difference_vector) + ' } \n')
+            file.write('$sel' + str(molid) + ' moveby { ' + tuple_to_vmd(x_axis_difference_vector) + ' } \n')
         # Set the scale
         file.write(f'scale to {scale} \n')
 
@@ -413,7 +457,7 @@ def get_screenshot (
     # Run VMD
     process = run([
         "vmd",
-        auxiliar_pdb_filepath,
+        auxiliar_pdb_filepaths[0],
         "-e",
         commands_filename_2,
         "-dispdev",
@@ -434,7 +478,7 @@ def get_screenshot (
     rgb_im.save(output_file.path)
 
     # Remove trash files
-    trash_files = [ auxiliar_pdb_filepath, commands_filename_1, commands_filename_2, auxiliar_tga_filepath, center_filename ]
+    trash_files = [ *auxiliar_pdb_filepaths, commands_filename_1, commands_filename_2, auxiliar_tga_filepath, center_filename ]
     for trash_file in trash_files:
         remove(trash_file)
 

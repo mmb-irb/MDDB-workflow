@@ -1350,7 +1350,7 @@ class MD:
 
     # Run the cluster analysis
     run_clusters_analysis = Task('clusters', 'Clusters analysis',
-        clusters_analysis, {'frames_limit': 1000, 'desired_n_clusters': 20})
+        clusters_analysis, {'frames_limit': 1000})
 
     # Calculate the distance mean and standard deviation of each pair of residues
     run_dist_perres_analysis = Task('dist', 'Distance per residue',
