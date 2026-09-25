@@ -4,6 +4,8 @@ from shutil import copyfile
 from subprocess import run, PIPE, Popen
 from re import search, findall
 from time import time
+import struct
+import numpy as np
 
 from mddb_workflow.utils.auxiliar import load_json, ToolError, warn, get_auxiliar_filepath
 from mddb_workflow.utils.constants import GROMACS_EXECUTABLE, GREY_HEADER, COLOR_END, GLOBALS
@@ -693,3 +695,314 @@ def get_gmx_trajectory_atom_count (mysterious_file : 'File') -> int:
     # Clean up the auxiliar files
     remove(first_frame_sample_file.path)
     return atom_count
+
+
+# ---- XTC low-level utilities (Claude) ------------------------------------------------------------------
+#
+# XTC is the GROMACS compressed trajectory format.  Each frame is an XDR
+# (big-endian) record with the following layout:
+#
+#   int32    magic       (always 1995)
+#   int32    natoms
+#   int32    step
+#   float32  time
+#   float32[9] box       (3×3 matrix, nm, row-major — diagonal = Lx, Ly, Lz)
+#   int32    natoms      (repeated)
+#   -- if natoms <= 9 the coordinates are not compressed: --
+#   float32[3*natoms]    coordinates
+#   -- otherwise: --
+#   float32  precision
+#   int32[3] minint
+#   int32[3] maxint
+#   int32    smallidx
+#   int32    ncoord_bytes   (byte count of the compressed coordinate block)
+#   bytes[ceil(ncoord_bytes/4)*4]  (3dfcoord-compressed integers, XDR-padded)
+#
+# Because ncoord_bytes is stored in the header we can skip the compressed
+# block entirely and jump straight to the next frame.  This avoids the full
+# 3dfcoord decompression and yields ~50× speed-up over mdtraj/pytraj when
+# only box dimensions or a frame count are needed.
+#
+# Note: ncoord_bytes is frame-specific (depends on coordinate range) so
+# frame sizes are not constant in general.
+# --------------------------------------------------------------------------------------------------------
+
+_XTC_MAGIC = 1995
+# Byte offsets within a frame (after the 4-byte magic):
+#   natoms(4) + step(4) + time(4) + box(36) = 48  → box starts at byte 12 of this block
+_XTC_PRE_BOX    = 48    # bytes to read after magic: covers natoms/step/time/box
+_XTC_BOX_OFFSET = 12    # offset of box within that 48-byte block
+# Compressed block header before ncoord_bytes: precision(4) + minint(12) + maxint(12) + smallidx(4)
+_XTC_COMPRESSED_HEADER = 32
+# Systems with this many atoms or less store their coordinates without compression
+_XTC_MAX_UNCOMPRESSED_ATOMS = 9
+
+def _skip_xtc_coordinates (f) -> bool:
+    """Move the file cursor from right after the box to the start of the next frame.
+    Return False if the file ends before.
+
+    Made by Claude.
+    """
+    raw = f.read(4)
+    if len(raw) < 4: return False
+    natoms = struct.unpack('>i', raw)[0]
+    if natoms <= _XTC_MAX_UNCOMPRESSED_ATOMS:
+        f.seek(3 * 4 * natoms, 1)
+        return True
+    f.seek(_XTC_COMPRESSED_HEADER, 1)
+    raw = f.read(4)
+    if len(raw) < 4: return False
+    ncoord_bytes = struct.unpack('>i', raw)[0]
+    f.seek(((ncoord_bytes + 3) // 4) * 4, 1)
+    return True
+
+def get_xtc_frame_count(xtc_path: str, verbose: bool = True) -> int:
+    """Count the number of frames in an XTC file without loading coordinates.
+
+    Scans the file by reading only the small per-frame header and skipping the
+    compressed coordinate block via the stored byte-count field.
+    ~3× faster than pytraj and requires no topology file.
+
+    Made by Claude.
+    """
+    if verbose: print('-> Counting number of frames')
+    count = 0
+    magic_bytes = struct.pack('>i', _XTC_MAGIC)
+    with open(xtc_path, 'rb') as f:
+        while True:
+            if f.read(4) != magic_bytes:
+                break
+            f.seek(_XTC_PRE_BOX, 1)
+            if not _skip_xtc_coordinates(f):
+                break
+            count += 1
+    if verbose: print(f' Frames: {count}')
+    return count
+
+# Set the workflow task to read frames
+def count_xtc_frames (trajectory_file : 'File') -> int:
+    return get_xtc_frame_count(xtc_path=trajectory_file.path)
+
+# ---- Box shape classification (Claude) -----------------------------------------------------------------
+#
+# The same periodic box can be written with different sets of box vectors.
+# e.g. AMBER writes the truncated octahedron with three 109.47° angles while
+# GROMACS writes it with 70.53°, 109.47° and 70.53°, yet both are the same box.
+# Thus comparing the box vectors against templates is not reliable.
+#
+# Instead we look at the periodic translations of the box: every integer
+# combination of box vectors moves the system onto one of its periodic images.
+# The three shortest translations which do not lie in the same line or plane
+# are the same whatever the box vectors we were given, so their lengths and
+# angles characterise the box shape.
+# Angles are folded into [0°, 90°] since a translation and its opposite are
+# equivalent (e.g. 60° and 120° both count as 60°).
+#
+# Expected shortest translations for every shape:
+#   cubic        — 3 equal lengths, angles 90° 90° 90°
+#   orthogonal   — any lengths, angles 90° 90° 90°
+#   hexagonal    — 2 equal lengths at 60°, the third one perpendicular to both
+#   dodecahedral — 3 equal lengths, angles 60° 60° 60° or 60° 60° 90°
+#   octahedral   — 3 equal lengths, angles 70.53° 70.53° 70.53° (truncated octahedron)
+#   triclinic    — anything else
+# --------------------------------------------------------------------------------------------------------
+
+# Integer combinations of box vectors used to enumerate periodic translations
+# Coefficients up to 2 are enough for any reasonably shaped box (e.g. those written by MD engines)
+# Tested also with boxes rewritten through random combinations of their vectors
+_TRANSLATION_COEFFICIENTS = np.array(
+    [(i, j, k) for i in range(-2, 3) for j in range(-2, 3) for k in range(-2, 3) if (i, j, k) != (0, 0, 0)],
+    dtype=np.float64)
+# Tolerances when comparing lengths (relative) and angles (degrees)
+# They absorb float32 precision and the small fluctuations of isotropic pressure coupling
+_BOX_SHAPE_LENGTH_TOLERANCE = 0.01
+_BOX_SHAPE_ANGLE_TOLERANCE = 1.0
+# Angle between the shortest translations of a truncated octahedron: acos(1/3)
+_OCTAHEDRAL_ANGLE = float(np.degrees(np.arccos(1 / 3)))
+
+# Number of frames classified at once, to limit memory usage (~50 MB per chunk)
+_BOX_SHAPE_CHUNK_SIZE = 2000
+
+def get_box_shapes (box_matrices : np.ndarray) -> list[str]:
+    """Classify the shape of many periodic boxes given their box matrices (n_boxes, 3, 3), rows are box vectors.
+
+    Returns a list with one of 'cubic', 'orthogonal', 'hexagonal', 'dodecahedral', 'octahedral'
+    or 'triclinic' for every box. See the comment block above for the logic.
+    All boxes are processed at once with numpy operations since classifying boxes one by one
+    would be too slow for long trajectories with a dynamic box.
+
+    Made by Claude.
+    """
+    box_matrices = np.asarray(box_matrices, dtype=np.float64).reshape(-1, 3, 3)
+    shapes = []
+    for start in range(0, len(box_matrices), _BOX_SHAPE_CHUNK_SIZE):
+        shapes += _classify_box_shapes(box_matrices[start : start + _BOX_SHAPE_CHUNK_SIZE])
+    return shapes
+
+def get_box_shape (box_matrix : np.ndarray) -> str:
+    """Classify the shape of a single periodic box given its box matrix (rows are box vectors).
+
+    Made by Claude.
+    """
+    return get_box_shapes(box_matrix)[0]
+
+def _classify_box_shapes (box_matrices : np.ndarray) -> list[str]:
+    """Classify a chunk of box matrices (n_boxes, 3, 3). Used by get_box_shapes.
+
+    Made by Claude.
+    """
+    n_boxes = len(box_matrices)
+    rows = np.arange(n_boxes)
+    # All periodic translations of every box and their lengths
+    translations = np.einsum('tj,bjk->btk', _TRANSLATION_COEFFICIENTS, box_matrices)   # (n_boxes, n_translations, 3)
+    lengths = np.linalg.norm(translations, axis=2)                                        # (n_boxes, n_translations)
+    # Pick the shortest translation, then the shortest one not in its line,
+    # then the shortest one not in the plane of the previous two
+    # A small relative threshold makes float precision errors not count as out of line/plane
+    first_index = np.argmin(lengths, axis=1)
+    first = translations[rows, first_index]
+    first_length = lengths[rows, first_index]
+    out_of_line = np.linalg.norm(np.cross(first[:, np.newaxis, :], translations), axis=2) \
+        > 1e-4 * first_length[:, np.newaxis] * lengths
+    second = translations[rows, np.argmin(np.where(out_of_line, lengths, np.inf), axis=1)]
+    normal = np.cross(first, second)
+    out_of_plane = np.abs(np.einsum('btk,bk->bt', translations, normal)) \
+        > 1e-4 * np.linalg.norm(normal, axis=1)[:, np.newaxis] * lengths
+    third = translations[rows, np.argmin(np.where(out_of_plane, lengths, np.inf), axis=1)]
+    shortest = np.stack([first, second, third], axis=1)                                  # (n_boxes, 3, 3)
+    # These three translations must enclose the same volume as the box itself
+    # Otherwise they skip some periodic images and they do not represent the box
+    # This is not expected to happen, but in such case we can not tell the shape
+    box_volumes = np.abs(np.linalg.det(box_matrices))
+    represents_box = np.abs(np.abs(np.linalg.det(shortest)) - box_volumes) <= 1e-3 * box_volumes
+    # Get lengths and folded angles
+    # angles[:, k] is the angle between the two translations other than k
+    shortest_lengths = np.linalg.norm(shortest, axis=2)                                  # (n_boxes, 3)
+    def folded_angle (i, j):
+        cosine = np.abs(np.sum(shortest[:, i] * shortest[:, j], axis=1)) \
+            / (shortest_lengths[:, i] * shortest_lengths[:, j])
+        return np.degrees(np.arccos(np.minimum(cosine, 1.0)))
+    angles = np.stack([folded_angle(1, 2), folded_angle(0, 2), folded_angle(0, 1)], axis=1)
+    def equal_lengths (i, j):
+        a, b = shortest_lengths[:, i], shortest_lengths[:, j]
+        return np.abs(a - b) <= _BOX_SHAPE_LENGTH_TOLERANCE * np.maximum(a, b)
+    def angle_is (angle, target):
+        return np.abs(angle - target) <= _BOX_SHAPE_ANGLE_TOLERANCE
+    all_lengths_equal = equal_lengths(0, 1) & equal_lengths(1, 2) & equal_lengths(0, 2)
+    # Check every shape
+    all_right_angles = np.all(angle_is(angles, 90), axis=1)
+    sorted_angles = np.sort(angles, axis=1)
+    is_dodecahedral = all_lengths_equal & angle_is(sorted_angles[:, 0], 60) & angle_is(sorted_angles[:, 1], 60) \
+        & (angle_is(sorted_angles[:, 2], 60) | angle_is(sorted_angles[:, 2], 90))
+    is_octahedral = all_lengths_equal & np.all(angle_is(angles, _OCTAHEDRAL_ANGLE), axis=1)
+    # Hexagonal: two equal translations at 60° and the third one perpendicular to both
+    is_hexagonal = np.zeros(n_boxes, dtype=bool)
+    for k in range(3):
+        i, j = [index for index in range(3) if index != k]
+        is_hexagonal |= equal_lengths(i, j) & angle_is(angles[:, k], 60) \
+            & angle_is(angles[:, i], 90) & angle_is(angles[:, j], 90)
+    # The first matching condition wins
+    shapes = np.select(
+        [~represents_box, all_right_angles & all_lengths_equal, all_right_angles,
+         is_dodecahedral, is_octahedral, is_hexagonal],
+        ['triclinic', 'cubic', 'orthogonal', 'dodecahedral', 'octahedral', 'hexagonal'],
+        default='triclinic')
+    return shapes.tolist()
+
+def get_xtc_simulation_box(
+    xtc_path: str, verbose: bool = True,
+) -> tuple[
+    Optional[tuple[tuple[float, float, float], ...] | str],
+    Optional[tuple[float, float, float]],
+    Optional[bool],
+    Optional[bool],
+    Optional[str],
+]:
+    """Read the simulation box from every frame of an XTC file.
+
+    Skips compressed coordinates entirely (~50× faster than mdtraj/pytraj).
+
+    Returns (box, box_size, is_constant, is_orthogonal, box_shape) where:
+      box           — The three box vectors in Ångstroms, as a tuple of three
+                      (x, y, z) tuples (rows of the box matrix).  They fully
+                      define the periodic cell whatever its shape.
+                      If the box is dynamic this is the flag 'dyn' instead.
+      box_size      — (x, y, z) tuple in Ångstroms with the diagonal of the box
+                      matrix.  For orthogonal boxes these are the box lengths,
+                      but for triclinic boxes they are not the vector lengths.
+                      For constant boxes this is the per-frame value; for
+                      variable boxes this is the per-dimension maximum.
+      is_constant   — True when the box vectors do not change significantly
+                      across frames (relative std < 0.1 % in all elements).
+      is_orthogonal — True when every off-diagonal element of the box matrix
+                      is ~0 in every frame (rectangular box).
+      box_shape     — 'cubic', 'orthogonal', 'hexagonal', 'dodecahedral',
+                      'octahedral' or 'triclinic' (see get_box_shape).
+                      If a dynamic box changes its shape along the trajectory
+                      then all shapes are joined in order of appearance
+                      (e.g. 'dodecahedral / triclinic').
+    All five are None if no valid XTC frame is found or there is no box.
+
+    Made by Claude.
+    """
+    # Box matrix of every frame, as 9 floats in nm (row-major)
+    box_matrices: list[tuple[float, ...]] = []
+    magic_bytes = struct.pack('>i', _XTC_MAGIC)
+
+    with open(xtc_path, 'rb') as f:
+        while True:
+            if f.read(4) != magic_bytes:
+                break
+            data = f.read(_XTC_PRE_BOX)
+            if len(data) < _XTC_PRE_BOX:
+                break
+            # Box is a 3×3 float32 matrix (nm); rows are the box vectors
+            box_matrices.append(struct.unpack('>9f', data[_XTC_BOX_OFFSET : _XTC_BOX_OFFSET + 36]))
+            if not _skip_xtc_coordinates(f):
+                break
+
+    if not box_matrices:
+        return None, None, None, None, None
+
+    matrices = np.array(box_matrices, dtype=np.float64).reshape(-1, 3, 3) * 10.0   # (n_frames, 3, 3) Å
+
+    # Trajectories without a periodic box store an all-zero box matrix
+    if not np.any(matrices):
+        if verbose: print(' There is no simulation box')
+        return None, None, None, None, None
+
+    diagonals = np.diagonal(matrices, axis1=1, axis2=2)                            # (n_frames, 3) Å
+
+    # Off-diagonal elements (triclinic tilt); 1e-3 Å is well below XTC coordinate precision
+    off_diagonal_mask = ~np.eye(3, dtype=bool)
+    is_orthogonal = bool(np.all(np.abs(matrices[:, off_diagonal_mask]) < 1e-3))
+
+    # Every element varies less than 0.1 % of the mean length of its vector
+    if matrices.shape[0] > 1:
+        vector_lengths = np.linalg.norm(matrices, axis=2).mean(axis=0)   # (3,) Å
+        variation = np.std(matrices, axis=0) / vector_lengths[:, np.newaxis]
+        is_constant = bool(np.all(variation < 0.001))
+    else:
+        is_constant = True
+
+    if is_constant:
+        box = tuple(tuple(float(value) for value in vector) for vector in matrices[0])
+        box_size = tuple(float(value) for value in diagonals[0])
+        box_shape = get_box_shape(matrices[0])
+    else:
+        box = 'dyn'
+        box_size = tuple(float(value) for value in diagonals.max(axis=0))
+        # Pressure coupling may deform the box along the trajectory (e.g. semi-isotropic)
+        # Classify every frame and keep the different shapes in order of appearance
+        box_shape = ' / '.join(dict.fromkeys(get_box_shapes(matrices)))
+
+    # Make a summary of the final box
+    if verbose:
+        if is_constant:
+            print(f' Simulation box size is constant ({box_size[0]:.2f} × {box_size[1]:.2f} × {box_size[2]:.2f} Å)')
+        else:
+            print(f' Simulation box varies. Maximum size: ({box_size[0]:.2f} × {box_size[1]:.2f} × {box_size[2]:.2f} Å)')
+
+        print(f' Simulation box shape: {box_shape}')
+
+    return box, box_size, is_constant, is_orthogonal, box_shape

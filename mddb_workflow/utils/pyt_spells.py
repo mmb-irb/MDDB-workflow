@@ -84,13 +84,15 @@ def get_reduced_pytraj_trajectory (
     reduced_pt_trajectory = pt_trajectory[0:snapshots:frame_step]
     return reduced_pt_trajectory, frame_step, reduced_frame_count
 
-
+# Get the frame count from any trajectory format
+# WARNING: There is a function for XTC format only which is way faster
 # LORE: This was tried also with mdtraj's iterload but pytraj was way faster
 def get_frames_count (
     structure_file : 'File',
-    trajectory_file : 'File') -> int:
+    trajectory_file : 'File',
+    verbose : bool = True) -> int:
     """Get the trajectory frames count."""
-    print('-> Counting number of frames')
+    if verbose: print('-> Counting number of frames')
 
     if not trajectory_file.exists:
         raise InputError('Missing trajectroy file when counting frames: ' + trajectory_file.path)
@@ -105,7 +107,7 @@ def get_frames_count (
 
     # Return the frames number
     frames = pyt_trajectory.n_frames
-    print(f' Frames: {frames}')
+    if verbose: print(f' Frames: {frames}')
 
     # If 0 frames were counted then there is something wrong with the file
     if frames == 0:

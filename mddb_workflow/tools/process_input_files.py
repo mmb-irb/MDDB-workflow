@@ -9,7 +9,7 @@ from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.pyt_spells import get_frames_count
+from mddb_workflow.utils.gmx_spells import count_xtc_frames
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
@@ -20,6 +20,7 @@ from mddb_workflow.tools.image_and_fit import image_and_fit
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
+from mddb_workflow.utils.mdt_spells import check_system_centering
 
 
 def _prepare_incomplete_output(output_directory: str, output_filename: str) -> File:
@@ -267,6 +268,17 @@ def process_input_files(
     # Since this is proviosonal we will make it silent
     provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
 
+    # --- Get the simulation box ------------------------------------------------------------
+
+    # # Check if the system is centered in the simulation box (in case there is a box)
+    # self._is_system_centered = check_system_centering(filtered_trajectory_file.path, filtered_structure_file.path)
+    # if self._is_system_centered == True:
+    #     print(f' System is already centered')
+    # elif self._is_system_centered == False:
+    #     print(' The system is not centered -> Attempt to image automatically')
+    #     image = True
+    # else: print(' There is no simulation box')
+
     # --- IMAGING AND FITTING ------------------------------------------------------------
 
     # There is no logical way to know if the trajectory is already imaged or it must be imaged
@@ -335,7 +347,7 @@ def process_input_files(
     if same_trajectory: snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
     # Calculate the new value
     if snapshots is None:
-        snapshots = get_frames_count(imaged_structure_file, imaged_trajectory_file)
+        snapshots = count_xtc_frames(imaged_trajectory_file)
     # Update the MD task snapshots value
     self.get_snapshots.prefill(self, snapshots, {
         'structure_file': imaged_structure_file,
@@ -501,6 +513,9 @@ def process_input_files(
 
     # Check the trajectory has not sudden jumps
     self.is_trajectory_integral()
+
+    # Check there are no cross-periodic boundary contacts
+    self.are_there_cross_periodic_contacts()
 
     # Make a final test summary
     self.print_tests_summary()

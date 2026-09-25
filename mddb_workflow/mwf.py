@@ -24,12 +24,13 @@ from mddb_workflow.utils.auxiliar import is_standard_topology, unique, pairwise,
 from mddb_workflow.utils.register import Register
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.structures import Structure
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.topologies import Topology
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.database import Database, Remote
-from mddb_workflow.utils.pyt_spells import get_frames_count, get_average_structure
-from mddb_workflow.utils.selections import Selection
+from mddb_workflow.utils.pyt_spells import get_average_structure
+from mddb_workflow.utils.gmx_spells import count_xtc_frames
 from mddb_workflow.utils.mda_spells import get_mda_universe
 from mddb_workflow.utils.tasks import Task
 from mddb_workflow.utils.type_hints import *
@@ -56,6 +57,7 @@ from mddb_workflow.tools.provenance import produce_provenance
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import get_excluded_atoms_indices
+from mddb_workflow.tools.get_box_data import mine_simulation_box_data
 
 # Import local analyses
 from mddb_workflow.analyses.rmsds import rmsds
@@ -80,6 +82,8 @@ from mddb_workflow.analyses.energies import energies
 from mddb_workflow.analyses.dihedral_energies import compute_dihedral_energies
 from mddb_workflow.analyses.pockets import pockets
 from mddb_workflow.analyses.rmsd_check import check_trajectory_integrity
+from mddb_workflow.analyses.mindist import check_cross_periodic_contacts
+from mddb_workflow.utils.mdt_spells import check_system_centering
 from mddb_workflow.analyses.helical_parameters import helical_parameters
 from mddb_workflow.analyses.markov import markov
 
@@ -193,9 +197,11 @@ class MD:
         self._cg_residues = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
+        self._is_system_centered = MISSING_VALUE
 
         # Tests
         self._trajectory_integrity = MISSING_VALUE
+        self._cross_periodic_contacts = MISSING_VALUE
 
         # Set a new MD specific register
         # In case the directory is the project directory itself, use the project register
@@ -809,7 +815,7 @@ class MD:
     # ---------------------------------------------------------------------------------
 
     # Trajectory snapshots
-    get_snapshots = Task('frames', 'Count trajectory frames', get_frames_count)
+    get_snapshots = Task('frames', 'Count trajectory frames', count_xtc_frames)
     snapshots = property(get_snapshots, None, None, "Trajectory snapshots (read only)")
 
     def get_check_stable_bonds(self) -> bool:
@@ -1206,6 +1212,54 @@ class MD:
         return self._dihedrals
     dihedrals = property(get_dihedrals, None, None, "Topology dihedrals (read only)")
 
+    # Simulation box data
+    get_simulation_box_data = Task('simbox', 'Simulation box', mine_simulation_box_data)
+    simulation_box_data = property(get_simulation_box_data, None, None, "Simulation box vectors, size, constant and orthogonal flags and shape (read only)")
+
+    def get_simulation_box(self) -> Optional[tuple | str]:
+        """Box vectors in Å (rows of the box matrix), or 'dyn' if the box is dynamic.
+        Return None if it is missing."""
+        return self.simulation_box_data[0]
+    simulation_box = property(get_simulation_box, None, None, "Simulation box vectors, or 'dyn' if dynamic (read only)")
+
+    def get_simulation_box_size(self) -> Optional[tuple]:
+        """Box size (diagonal of the box matrix). Maximum size for every dimension if it is dynamic.
+        Return None if it is missing."""
+        return self.simulation_box_data[1]
+    simulation_box_size = property(get_simulation_box_size, None, None, "Simulation box size (read only)")
+
+    def check_is_simulation_box_constant(self) -> Optional[bool]:
+            """Check if the simulation box is constant (True) or dynamic (False).
+            Return None if is is missing."""
+            return self.simulation_box_data[2]
+    is_simulation_box_constant = property(check_is_simulation_box_constant, None, None, "Whether the simulation box is constant or dynamic (read only)")
+
+    def check_is_simulation_box_orthogonal(self) -> Optional[bool]:
+        """Check if the simulation box is orthogonal (True) or triclinic (False).
+        Return None if it is missing."""
+        return self.simulation_box_data[3]
+    is_simulation_box_orthogonal = property(check_is_simulation_box_orthogonal, None, None, "Whether the simulation box is orthogonal (read only)")
+
+    def get_simulation_box_shape(self) -> Optional[str]:
+        """Box shape: cubic, orthogonal, hexagonal, dodecahedral, octahedral or triclinic.
+        Several shapes joined by ' / ' if a dynamic box changes its shape.
+        Return None if it is missing."""
+        return self.simulation_box_data[4]
+    simulation_box_shape = property(get_simulation_box_shape, None, None, "Simulation box shape (read only)")
+
+    def check_is_system_centered(self) -> Optional[bool]:
+        """True if atoms appear centred within the simulation box"""
+        # If we already have a stored value then return it
+        if self._is_system_centered is not MISSING_VALUE:
+            return self._is_system_centered
+        # Calculate the value otherwise
+        self._is_system_centered = check_system_centering(
+            input_trajectory_filename=self.trajectory_file.path,
+            input_structure_filename=self.structure_file.path,
+        )
+        return self._is_system_centered
+    is_system_centered = property(check_is_system_centered, None, None, "Whether the system is centred in the simulation box (read only)")
+
     # ---------------------------------------------------------------------------------
     # Tests
     # ---------------------------------------------------------------------------------
@@ -1231,6 +1285,28 @@ class MD:
             snapshots=self.snapshots,
         )
         return self._trajectory_integrity
+
+    def are_there_cross_periodic_contacts(self) -> Optional[bool]:
+        """Check if there are contacts between non-PBC regions across periodic boundaries"""
+        # If we already have a stored value then return it
+        if self._cross_periodic_contacts is not MISSING_VALUE:
+            return self._cross_periodic_contacts
+        # Otherwise we must find the value
+        self._cross_periodic_contacts = check_cross_periodic_contacts(
+            input_structure_filename=self.structure_file.path,
+            input_trajectory_filename=self.trajectory_file.path,
+            structure=self.structure,
+            pbc_selection=self.pbc_selection,
+            mercy=self.project.mercy,
+            trust=self.project.trust,
+            register=self.register,
+            check_selection=ALL_ATOMS,
+            distance_cutoff=5, # In Ångstroms
+            snapshots=self.snapshots,
+            is_system_centered=self.is_system_centered,
+            is_simulation_box_orthogonal=self.is_simulation_box_orthogonal,
+        )
+        return self._cross_periodic_contacts
 
     # ---------------------------------------------------------------------------------
     # Analyses
@@ -1939,7 +2015,6 @@ class Project:
     input_temperature = inputs_property('temp', "Input temperature (read only)")
     input_ensemble = inputs_property('ensemble', "Input ensemble (read only)")
     input_water = inputs_property('wat', "Input water force field (read only)")
-    input_boxtype = inputs_property('boxtype', "Input boxtype (read only)")
     input_customs = inputs_property('customs', "Input custom representations (read only)")
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
     input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
@@ -2145,6 +2220,31 @@ class Project:
         """Get the reference MD snapshots."""
         return self.reference_md.snapshots
     snapshots = property(get_snapshots, None, None, "Reference MD snapshots (read only)")
+
+    def get_simulation_box(self) -> Optional[tuple | str]:
+        """Get the reference MD simulation box vectors, or 'dyn' if the box is dynamic."""
+        return self.reference_md.simulation_box
+    simulation_box = property(get_simulation_box, None, None, "Reference MD simulation box vectors, or 'dyn' if dynamic (read only)")
+
+    def get_simulation_box_size(self) -> Optional[tuple]:
+        """Get the reference MD simulation box size."""
+        return self.reference_md.simulation_box_size
+    simulation_box_size = property(get_simulation_box_size, None, None, "Reference MD simulation box size (read only)")
+
+    def check_is_simulation_box_constant(self) -> Optional[bool]:
+        """Check if the reference MD simulation box is constant (True) or dynamic (False)."""
+        return self.reference_md.is_simulation_box_constant
+    is_simulation_box_constant = property(check_is_simulation_box_constant, None, None, "Whether the reference MD simulation box is constant or dynamic (read only)")
+
+    def check_is_simulation_box_orthogonal(self) -> Optional[bool]:
+        """Check if the reference MD simulation box is orthogonal (True) or triclinic (False)."""
+        return self.reference_md.is_simulation_box_orthogonal
+    is_simulation_box_orthogonal = property(check_is_simulation_box_orthogonal, None, None, "Whether the reference MD simulation box is orthogonal (read only)")
+
+    def get_simulation_box_shape(self) -> Optional[str]:
+        """Get the reference MD simulation box shape."""
+        return self.reference_md.simulation_box_shape
+    simulation_box_shape = property(get_simulation_box_shape, None, None, "Reference MD simulation box shape (read only)")
 
     def get_universe(self) -> int:
         """Get the MDAnalysis Universe from the reference MD."""

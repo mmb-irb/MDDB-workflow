@@ -277,12 +277,6 @@ ff:
 
 wat:
 
-# Boxtype
-# e.g. Triclinic, Cubic, Dodecahedron.
-# IMPORTANT: Check already existing values for this field to avoid making duplicates.
-
-boxtype:
-
 #------------------------------------------------------------------------------------------------------------
 # ANALYSIS PARAMETERS
 #------------------------------------------------------------------------------------------------------------

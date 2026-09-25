@@ -51,7 +51,7 @@ def check_trajectory_integrity (
 
     # If the trajectory has only 1 or 2 frames then there is no test to do
     if snapshots < 3:
-        register.update_test(TRAJECTORY_INTEGRITY_FLAG, True)
+        register.update_test(TRAJECTORY_INTEGRITY_FLAG, 'na')
         return True
 
     # Remove old warnings

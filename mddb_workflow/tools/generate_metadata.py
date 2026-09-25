@@ -1,4 +1,3 @@
-from mddb_workflow.tools.get_box_size import get_box_size
 from mddb_workflow.tools.get_atom_counts import get_atom_counts
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
 from mddb_workflow.tools.generate_map import get_sequence_metadata
@@ -12,8 +11,6 @@ METADATA_INTERACTION_FIELDS = { "name", "agent_1", "agent_2", "selection_1", "se
 
 
 def prepare_project_metadata (
-    structure_file : 'File',
-    trajectory_file : 'File',
     output_file : 'File',
     structure : 'Structure',
     cg_selection : 'Selection',
@@ -26,6 +23,9 @@ def prepare_project_metadata (
     input_ligands : list[dict],
     interactions : list[dict],
     warnings : dict,
+    simulation_box : tuple[tuple],
+    simulation_box_size: tuple,
+    simulation_box_shape: str,
     # Set all inputs to be loaded as they are
     input_force_fields : list[str],
     input_collections : list[str],
@@ -49,7 +49,6 @@ def prepare_project_metadata (
     input_temperature : float,
     input_ensemble : str,
     input_water : str,
-    input_boxtype : str,
     input_pbc_selection : str,
     input_cg_selection : str,
     input_forced_class_selections: dict[str, str],
@@ -64,9 +63,8 @@ def prepare_project_metadata (
     input_cv19_nanobs : bool,
     ):
     """Prepare a JSON file with all project metadata."""
-    # Find out the box size (x, y and z)
-    (boxsizex, boxsizey, boxsizez) = get_box_size(
-        structure_file.path, trajectory_file.path)
+    # Get the box data
+    boxsizex, boxsizey, boxsizez = simulation_box_size if simulation_box_size else (None, None, None)
 
     # Count different types of atoms and residues
     # Unpack atom counts to write them independently in the metadata
@@ -202,10 +200,11 @@ def prepare_project_metadata (
         'ENSEMBLE': input_ensemble,
         'FF': forcefields,
         'WAT': input_water,
-        'BOXTYPE': input_boxtype,
+        'BOXTYPE': simulation_box_shape,
         'BOXSIZEX': boxsizex,
         'BOXSIZEY': boxsizey,
         'BOXSIZEZ': boxsizez,
+        'BOX': simulation_box,
         'METADDITIONS': input_metadditions,
         'SYSTATS': system_atoms,
         'SYSTRES': system_residues,
@@ -243,7 +242,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.4',
+        'ver': '0.0.5',
     }
     # Let the boxsizes only if all of them are available (they may be 0)
     if not boxsizex or not boxsizey or not boxsizez:

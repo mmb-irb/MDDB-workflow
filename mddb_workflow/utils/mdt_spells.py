@@ -5,10 +5,11 @@ from subprocess import run, PIPE
 import mdtraj as mdt
 import numpy as np
 
-from mddb_workflow.utils.auxiliar import ToolError, InputError
+from mddb_workflow.utils.auxiliar import ToolError, InputError, reprint
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.gmx_spells import merge_xtc_files
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
+from mddb_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
@@ -404,3 +405,92 @@ def get_frame (structure_file : 'File', trajectory_file : 'File', frame : int) -
     for f, mdt_frame in enumerate(trajectory):
         if f != frame: continue
         return mdt_frame
+
+# Get the simulation box size from any trajectory format
+# WARNING: There is a function for XTC format only which is way faster
+def get_simulation_box(
+    input_trajectory_filename : str,
+    input_structure_filename : str,
+    verbose: bool = True,
+) -> tuple[Optional[tuple[float, float, float]], bool]:
+    """Read the simulation box across all trajectory frames.
+    Return also if it is constant or dynamic.
+    If the simulation box is dynamic then the maximum size for every dimension is returned.
+    """
+    print()
+    rows = []
+    trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
+    # Iterate trajectory frames while mining every box size
+    for frame_idx, frame in enumerate(trajectory, 1):
+        reprint(f' Reading simulation box size: frame {frame_idx}')
+        if frame.unitcell_lengths is not None:
+            rows.append(frame.unitcell_lengths[0] * 10.0)
+
+    # Handle when there is no box at all
+    if not rows:
+        return None, None
+
+    # Check if the box is constant or dynamic
+    boxes_arr = np.array(rows)
+    if boxes_arr.shape[0] > 1:
+        variation = np.std(boxes_arr, axis=0) / np.mean(boxes_arr, axis=0)
+        is_constant = bool(np.all(variation < 0.001))
+    else:
+        is_constant = True
+
+    # Set the final box and make it a tuple
+    if is_constant:
+        b = boxes_arr[0]
+        box = (float(b[0]), float(b[1]), float(b[2]))
+    else:
+        m = boxes_arr.max(axis=0)
+        box = (float(m[0]), float(m[1]), float(m[2]))
+
+    if box is None:
+        return None, None
+
+    # Make a summary of the final box
+    if verbose:
+        if is_constant:
+            print(f' Simulation box is constant ({box[0]:.2f} × {box[1]:.2f} × {box[2]:.2f} Å)')
+        else:
+            print(f' Simulation box varies. Max per dimension: '
+                f'x={box[0]:.2f} Å, y={box[1]:.2f} Å, z={box[2]:.2f} Å')
+
+    return box, is_constant
+
+
+def check_system_centering(
+    input_trajectory_filename : str,
+    input_structure_filename : str,
+    threshold : float = 0.90,
+    verbose : bool = True,
+) -> Optional[bool]:
+    """Check whether atoms are within the simulation box.
+
+    Reads only the first frame.  Returns True if at least `threshold` fraction
+    of all atoms have fractional coordinates inside [0, 1) (with a 1% tolerance
+    on each side), False otherwise, or None if no box information is available.
+    Fractional coordinates make this valid for triclinic boxes as well.
+    """
+    # Read the first frame
+    frame = next(mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1))
+    # If there is no box then there is nothing to check
+    if frame.unitcell_lengths is None:
+        if verbose: print('There is no simulation box')
+        return None
+    # Express atom positions in units of the box vectors (rows of the box matrix)
+    box_vectors_nm       = frame.unitcell_vectors[0]            # (3, 3) nm
+    atom_positions_nm    = frame.xyz[0]                         # (n_atoms, 3) nm
+    fractional_positions = atom_positions_nm @ np.linalg.inv(box_vectors_nm)
+    tolerance            = 0.01                                 # 1 % of each box vector
+    atom_in_box          = np.all(
+        (fractional_positions >= -tolerance) &
+        (fractional_positions <   1 + tolerance),
+        axis=1,
+    )
+    fraction_in_box   = float(atom_in_box.mean())
+    # Log and return the result
+    is_centered = fraction_in_box >= threshold
+    if verbose: print(f'The system is {"" if is_centered else "not "}centered')
+    return is_centered

@@ -2,7 +2,7 @@ from inspect import getfullargspec
 
 from mddb_workflow.utils.auxiliar import InputError
 from mddb_workflow.utils.formats import get_format_set_suitable_function
-from mddb_workflow.utils.pyt_spells import get_frames_count
+from mddb_workflow.utils.get_frames_count import get_frames_count
 from mddb_workflow.utils.gmx_spells import get_trajectory_subset as gmx_get_trajectory_subset
 from mddb_workflow.utils.mdt_spells import get_trajectory_subset as mdt_get_trajectory_subset
 from mddb_workflow.utils.type_hints import *
