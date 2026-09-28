@@ -2,8 +2,6 @@ accession: null
 authors:
 - Puneet K Singh
 - Razvan C Stan
-boxtype:
-- Triclinic
 chainnames:
   A: Antibody
   B: Antibody

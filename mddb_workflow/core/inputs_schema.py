@@ -152,7 +152,6 @@ class WorkflowInputs(InputsBaseModel):
     ensemble: Optional[str] = None
     ff: Optional[Union[str, list[str]]] = None
     wat: Optional[str] = None
-    boxtype: Optional[Union[str, list[str]]] = None
 
     # Analysis parameters
     interactions: Optional[list[Interaction]] = None

@@ -47,7 +47,6 @@ inputs = {
     "timestep": None,
     "ff": None,
     "wat": None,
-    "boxtype": None
 }
 
 # Set the available ligands

@@ -370,16 +370,6 @@ Water force fields.
 
 	wat: TIP3P
 
-``boxtype``
-~~~~~~~~~~~
-
-Boxtype
-e.g. Triclinic, Cubic, Dodecahedron.
-
-.. warning::
- Check already existing values for this field to avoid making duplicates.
-
-
 
 Analysis parameters
 -------------------
