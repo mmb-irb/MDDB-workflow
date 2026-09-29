@@ -296,6 +296,7 @@ def generate_md_metadata (
     structure : 'Structure',
     snapshots : int,
     reference_frame : int,
+    global_rmsd : Optional[tuple[float, float, float]],
     warnings : dict,
     output_file : 'File'
     ):
@@ -312,6 +313,14 @@ def generate_md_metadata (
         'refframe': reference_frame,
         'warnings': warnings,
     }
+
+    # Add the global RMSD values (against the first frame), if any
+    # Note that the tuple becomes a list when it is retrieved from the cache
+    if global_rmsd:
+        rmsd_mean, rmsd_stdv, rmsd_max = global_rmsd
+        md_metadata['rmsd_mean'] = rmsd_mean
+        md_metadata['rmsd_stdv'] = rmsd_stdv
+        md_metadata['rmsd_max'] = rmsd_max
 
     # Get other MD inputs than the name and the directory
     other_md_inputs = { k: v for k, v in md_inputs.items() }

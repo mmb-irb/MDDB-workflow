@@ -1314,7 +1314,8 @@ class MD:
 
     # RMSDs analysis
     run_rmsds_analysis = Task('rmsds', 'RMSDs analysis',
-        rmsds, {'frames_limit': 5000})
+        rmsds, {'time_splits': 100})
+    global_rmsd = property(run_rmsds_analysis, None, None, "Global RMSD against the first frame as (mean, stdv, max) (read only)")
 
     # TM scores analysis
     run_tmscores_analysis = Task('tmscore', 'TM scores analysis',
