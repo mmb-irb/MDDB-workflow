@@ -82,6 +82,7 @@ from mddb_workflow.analyses.energies import energies
 from mddb_workflow.analyses.dihedral_energies import compute_dihedral_energies
 from mddb_workflow.analyses.pockets import pockets
 from mddb_workflow.analyses.allostery import allostery
+from mddb_workflow.analyses.chemical_shifts import chemical_shifts
 from mddb_workflow.analyses.rmsd_check import check_trajectory_integrity
 from mddb_workflow.analyses.mindist import check_cross_periodic_contacts
 from mddb_workflow.utils.mdt_spells import check_system_centering
@@ -1381,6 +1382,10 @@ class MD:
     # Allostery analysis: allosteric network, hotspots, communities and cliques
     run_allostery_analysis = Task('allostery', 'Allostery analysis',
         allostery, {'frames_limit': 1000})
+
+    # Chemical shifts analysis: NMR chemical shifts of protein backbone atoms along the trajectory
+    run_chemical_shifts_analysis = Task('chemshifts', 'Chemical shifts analysis',
+        chemical_shifts, {'frames_limit': 1000})
 
     # Helical parameters
     run_helical_analysis = Task('helical', 'Helical parameters', helical_parameters)

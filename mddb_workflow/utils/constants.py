@@ -227,6 +227,7 @@ OUTPUT_LIPID_ORDER_FILENAME = 'mda.lipid_order.json'
 OUTPUT_LIPID_INTERACTIONS_FILENAME = 'mda.lipid_inter.json'
 OUTPUT_CHANNELS_FILENAME = 'mda.channels.json'
 OUTPUT_ALLOSTERY_FILENAME = 'mda.allostery.json'
+OUTPUT_CHEMICAL_SHIFTS_FILENAME = 'mda.chemical_shifts.json'
 
 # Set problematic signs for directory/folder names
 # º is forbidden since paths including this characters are not readable by MDtraj
