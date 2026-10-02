@@ -192,7 +192,9 @@ def prepare_project_metadata (
         'LIGANDNAMES': forced_ligand_names,
         'INCHIKEYS': mapped_inchikey_references,
         'PROTSEQ': sequence_metadata['protein_sequences'],
+        'PROTSEQLEN': sequence_metadata['protein_sequence_lengths'],
         'NUCLSEQ': sequence_metadata['nucleic_sequences'],
+        'NUCLSEQLEN': sequence_metadata['nucleic_sequence_lengths'],
         'DOMAINS': sequence_metadata['domains'],
         'FRAMESTEP': input_framestep,
         'TIMESTEP': input_timestep,
@@ -242,7 +244,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.5',
+        'ver': '0.0.6',
     }
     # Let the boxsizes only if all of them are available (they may be 0)
     if not boxsizex or not boxsizey or not boxsizez:

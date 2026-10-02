@@ -1112,11 +1112,17 @@ def get_sequence_metadata(structure: 'Structure', protein_references_file: 'File
         for ref_id in reference_ids
         if ref_id in references_data
     }
+    # Get the length of every protein/nucleic sequence
+    # By storing these in the database we allow to search for fragments of specific length
+    protein_sequence_lengths = list(set([ len(seq) for seq in protein_sequences ]))
+    nucleic_sequence_lengths = list(set([ len(seq) for seq in nucleic_sequences ]))
     # Return the sequence matadata
     return {
         'sequences': sequences,
         'protein_sequences': protein_sequences,
+        'protein_sequence_lengths': protein_sequence_lengths,
         'nucleic_sequences': nucleic_sequences,
+        'nucleic_sequence_lengths': nucleic_sequence_lengths,
         'domains': domains,
         'cv19_variant': variant,
         'reference_lengths': reference_lengths,
