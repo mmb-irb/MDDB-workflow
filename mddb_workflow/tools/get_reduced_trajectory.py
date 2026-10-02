@@ -1,7 +1,7 @@
 from math import ceil
 
 from mddb_workflow.utils.constants import INCOMPLETE_PREFIX
-from mddb_workflow.utils.gmx_spells import run_gromacs
+from mddb_workflow.utils.gmx_spells import copy_xtc_frames
 from mddb_workflow.utils.type_hints import *
 
 
@@ -37,7 +37,6 @@ def calculate_frame_step(snapshots: int, reduced_trajectory_frames_limit: int) -
 
 
 def get_reduced_trajectory(
-    input_topology_file: 'File',
     input_trajectory_file: 'File',
     snapshots: int,
     reduced_trajectory_frames_limit: int,
@@ -73,12 +72,10 @@ def get_reduced_trajectory(
     # Create the reduced trajectory if it does not exist yet
     if not output_trajectory_file.exists:
         print(f'Reducing trajectory from {snapshots} to less than {reduced_trajectory_frames_limit} frames')
-        # Run Gromacs
-        run_gromacs(f'trjconv -s {input_topology_file.path} -f {input_trajectory_file.path} \
-                -o {incomplete_trajectory_file.path} -skip {frame_step}',
-                user_input='System')
+        # Copy every n-th frame directly from the input trajectory
+        copy_xtc_frames(input_trajectory_file.path, incomplete_trajectory_file.path,
+            lambda frame: frame % frame_step == 0)
         # Once the trajectory is complete we rename it as complete
         incomplete_trajectory_file.rename_to(output_trajectory_file)
 
-    # Return gromacs logs
     return output_trajectory_file.path, frame_step, n_frames

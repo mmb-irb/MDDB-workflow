@@ -103,7 +103,6 @@ def allostery(
 
     # Write a reduced trajectory with only the node residues atoms
     reduced_trajectory_filepath, step, _ = get_reduced_trajectory(
-        structure_file,
         trajectory_file,
         snapshots,
         frames_limit,

@@ -69,7 +69,6 @@ def channels(
         ndx.write(TM_at, name='membrane_atoms')
     pdb = Path(universe.filename).absolute()
     reduced_trajectory_file, frame_step, n_frames = get_reduced_trajectory(
-        input_topology_file=File(universe.filename),
         input_trajectory_file=File(universe.trajectory.filename),
         snapshots=snapshots,
         reduced_trajectory_frames_limit=frames_limit

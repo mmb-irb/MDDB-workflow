@@ -33,7 +33,7 @@ def compute_dihedral_energies(
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        structure_file, trajectory_file, snapshots, frames_limit)
+        trajectory_file, snapshots, frames_limit)
 
     # Load the reduced trajectory
     traj = mdt.load(reduced_trajectory_filepath, top=structure_file.path)

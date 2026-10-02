@@ -43,6 +43,7 @@ from mddb_workflow.tools.generate_metadata import prepare_project_metadata, gene
 from mddb_workflow.tools.chains import prepare_chain_references
 from mddb_workflow.tools.generate_pdb_references import prepare_pdb_references
 from mddb_workflow.tools.generate_map import generate_protein_mapping
+from mddb_workflow.tools.multimerism import get_chain_contacts
 from mddb_workflow.tools.get_inchi_keys import generate_inchikeys, generate_inchi_references
 from mddb_workflow.tools.get_lipids import generate_lipid_references
 from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping
@@ -2369,6 +2370,10 @@ class Project:
     # This is formatted as both the standard topology and metadata producers expect them
     get_residue_map = Task('resmap', 'Residue mapping', generate_residue_mapping)
     residue_map = property(get_residue_map, None, None, "Residue map (read only)")
+
+    # Find which polymer chains are in contact (and base paired) along the trajectory
+    get_chain_contacts = Task('chaincons', 'Chain contacts', get_chain_contacts)
+    chain_contacts = property(get_chain_contacts, None, None, "Polymer chain contacts along the trajectory (read only)")
 
     # Prepare the project metadata file to be upload to the database
     prepare_metadata = Task('pmeta', 'Prepare project metadata',

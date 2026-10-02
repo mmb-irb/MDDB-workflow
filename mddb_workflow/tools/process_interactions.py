@@ -168,7 +168,6 @@ def process_interactions(
 
     # If trajectory frames number is bigger than the limit we create a reduced trajectory
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        structure_file,
         trajectory_file,
         snapshots,
         frames_limit,

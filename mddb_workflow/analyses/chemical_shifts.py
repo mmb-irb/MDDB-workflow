@@ -97,7 +97,6 @@ def chemical_shifts(
 
     # Write a reduced trajectory with only the analyzed residues atoms
     reduced_trajectory_filepath, _, _ = get_reduced_trajectory(
-        structure_file,
         trajectory_file,
         snapshots,
         frames_limit,

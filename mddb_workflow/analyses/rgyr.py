@@ -23,7 +23,6 @@ def rgyr(
 
     # Use a reduced trajectory in case the original trajectory has many frames
     reduced_trajectory_filepath, step, frames = get_reduced_trajectory(
-        structure_file,
         trajectory_file,
         snapshots,
         frames_limit,

@@ -69,7 +69,6 @@ def pockets (
     # Set a reduced trajectory with only 100 frames
     # Get the step between frames of the new reduced trajectory, since it will be append to the output
     pockets_trajectory, step, frames = get_reduced_trajectory(
-        structure_file,
         trajectory_file,
         snapshots,
         frames_limit,
