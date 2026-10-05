@@ -2029,7 +2029,6 @@ class Project:
     input_water = inputs_property('wat', "Input water force field (read only)")
     input_customs = inputs_property('customs', "Input custom representations (read only)")
     input_orientation = inputs_property('orientation', "Input orientation (read only)")
-    input_multimeric = inputs_property('multimeric', "Input multimeric labels (read only)")
     input_dataset = inputs_property('dataset_path', "Dataset storage file. (read only)")
     input_pbc_selection = inputs_property('pbc_selection', "Selection of atoms which are still in periodic boundary conditions (read only)")
     input_cg_selection = inputs_property('cg_selection', "Selection of atoms which are not acutal atoms but Coarse Grained beads (read only)")

@@ -1,4 +1,5 @@
 from mddb_workflow.tools.nucleosomes import has_nucleosome
+from mddb_workflow.tools.multimerism import get_multimerism_keywords
 from mddb_workflow.utils.type_hints import *
 
 # Set the keywords as constants
@@ -38,6 +39,8 @@ def get_system_keywords(
     inchikey_map: list[dict],
     membrane_map: dict,
     cg_selection: 'Selection',
+    protein_map: list[dict],
+    chain_contacts: dict,
 ) -> list[str]:
     """System keywords are useful to find different types of systems later in the browser
     Try to assign as many keywords as possible to the current system.
@@ -137,6 +140,10 @@ def get_system_keywords(
     # Find out if we have a nucleosome
     if has_protein and has_dna and has_nucleosome(structure):
         keywords.append(NUCLEOSOME_KEYWORD)
+
+    # Find out protein multimerism (e.g. homodimer), nucleic strands (e.g. double strand)
+    # and protein-nucleic complexes according to chain contacts along the trajectory
+    keywords += get_multimerism_keywords(structure, protein_map, chain_contacts)
 
     # Set atomic vs coarse-grained keywords
     if not cg_selection: keywords.append(AA_KEYWORD)

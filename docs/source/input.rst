@@ -580,30 +580,6 @@ Normally this is done once the simulation has been uploaded since there is no ea
 	  1
 	  ]
 
-Others
-------
-
-Other metadata
-
-``multimeric``
-~~~~~~~~~~~~~~
-
-Set if we have any multimeric form:
-monomer, dimer, trimer...
-This field was requested by the referees.
-Its only use for now is as a parameter in project queries.
-
-.. tip::
-   This is temporary, it would be best to automate it.
-
-
-
-::
-
-	multimeric:
-	  - monomer
-	  - trimer
-
 Collections
 -----------
 

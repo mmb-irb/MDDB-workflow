@@ -51,7 +51,6 @@ mds:
   temp: 310
 membranes: null
 method: Classical MD
-multimeric: null
 name: PD-1 in complex with nivolumab
 orientation: null
 pbc_selection: null

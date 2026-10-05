@@ -453,25 +453,6 @@ customs:
 orientation:
 
 #------------------------------------------------------------------------------------------------------------
-# OTHERS
-#------------------------------------------------------------------------------------------------------------
-# Other metadata 
-
-# Set if we have any multimeric form:
-# monomer, dimer, trimer...
-# This field was requested by the referees. 
-# Its only use for now is as a parameter in project queries.
-# DANI: This is temporary, it would be best to automate it.
-#
-# Example:
-#
-# multimeric:
-#   - monomer
-#   - trimer
-
-multimeric:
-
-#------------------------------------------------------------------------------------------------------------
 # COLLECTIONS
 #------------------------------------------------------------------------------------------------------------
 # Set also additional collection related metadata values.

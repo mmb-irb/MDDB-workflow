@@ -17,6 +17,8 @@ def prepare_project_metadata (
     residue_map : dict,
     membrane_map : dict,
     inchikey_map : dict,
+    protein_map : list[dict],
+    chain_contacts : dict,
     protein_references_file : 'File',
     pdb_references : list[dict],
     input_protein_references : list[str] | dict,
@@ -54,7 +56,6 @@ def prepare_project_metadata (
     input_forced_class_selections: dict[str, str],
     input_customs : list[dict],
     input_orientation : list[float],
-    input_multimeric : list[str],
     input_metadditions : dict,
     # Additional topic-specific inputs
     input_cv19_unit : str,
@@ -74,7 +75,7 @@ def prepare_project_metadata (
     counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atom_counts(structure)
 
     # Get the system keywords
-    system_keywords = get_system_keywords(structure, inchikey_map, membrane_map, cg_selection)
+    system_keywords = get_system_keywords(structure, inchikey_map, membrane_map, cg_selection, protein_map, chain_contacts)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
@@ -235,7 +236,6 @@ def prepare_project_metadata (
         'CUSTOMS': input_customs,
         'ORIENTATION': input_orientation,
         'PTM': ptm_names,
-        'MULTIMERIC': input_multimeric,
         'COLLECTIONS': collections,
         'SYSKEYS': system_keywords,
         'ATNAME': unique_atom_names,
@@ -244,7 +244,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.6',
+        'ver': '0.0.7',
     }
     # Let the boxsizes only if all of them are available (they may be 0)
     if not boxsizex or not boxsizey or not boxsizez:
@@ -288,7 +288,7 @@ def prepare_project_metadata (
 METADATA_FIELDS = set([ 'NAME', 'DESCRIPTION', 'AUTHORS', 'GROUPS', 'CONTACT', 'PROGRAM', 'VERSION',
     'TYPE', 'METHOD', 'LICENSE', 'LINKCENSE', 'CITATION', 'THANKS', 'LINKS', 'DOMAINS', 'FRAMESTEP', 'TIMESTEP',
     'TEMP', 'ENSEMBLE', 'FF', 'WAT', 'BOXTYPE', 'BOXSIZEX', 'BOXSIZEY', 'BOXSIZEZ', 'INTERACTIONS', 'PBC_SELECTION',
-    'CHAINNAMES', 'CUSTOMS', 'ORIENTATION', 'PTM', 'MULTIMERIC', 'METADDITIONS', 'WARNINGS',
+    'CHAINNAMES', 'CUSTOMS', 'ORIENTATION', 'PTM', 'METADDITIONS', 'WARNINGS',
     'CV19_UNIT', 'CV19_STARTCONF', 'CV19_ABS', 'CV19_NANOBS', 'CV19_VARIANT'
 ])
 

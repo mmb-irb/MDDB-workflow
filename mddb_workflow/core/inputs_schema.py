@@ -165,9 +165,6 @@ class WorkflowInputs(InputsBaseModel):
     customs: Optional[list[Custom]] = None
     orientation: Optional[list[float]] = None
 
-    # Others
-    multimeric: Optional[Union[str, list[str]]] = None
-
     # Collections
     collections: Optional[Union[str, list[str]]] = None
     cv19_unit: Optional[str] = None
