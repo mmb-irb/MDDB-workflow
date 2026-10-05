@@ -37,6 +37,7 @@ HYBRID_KEYWORD = 'hybrid resolution' # DANI: "multiscale" me gusta mucho pero pu
 def get_system_keywords(
     structure: 'Structure',
     inchikey_map: list[dict],
+    lipids_selection: 'Selection',
     membrane_map: dict,
     cg_selection: 'Selection',
     protein_map: list[dict],
@@ -69,7 +70,8 @@ def get_system_keywords(
     if has_ligand:
         keywords.append(LIGAND_KEYWORD)
     # Lipids
-    lipids_selection = structure.select_lipids() - ligands_selection
+    # WARNING: Do not rely in the structure logic for lipid identification, it is precarious
+    # WARNING: Instead we use selection made out ut lipidmaps references
     has_lipids = len(lipids_selection) > 0
     if has_lipids:
         keywords.append(LIPID_KEYWORD)

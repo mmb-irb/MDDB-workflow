@@ -2,6 +2,7 @@ import requests
 from functools import lru_cache
 from mddb_workflow.utils.auxiliar import warn, retry_request
 from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
 
 
@@ -59,6 +60,23 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
 
     return lipid_references
 
+
+
+def get_lipids_selection(
+    structure: 'Structure',
+    inchikey_map: list[dict],
+    lipid_references: dict[str, dict],
+    cg_selection: Optional['Selection'] = None,
+) -> 'Selection':
+    """Select lipids using lipid references (InChI keys found in SwissLipids/LIPID MAPS) for all-atom regions.
+    Coarse grained regions have no InChI keys, so here we rely on the residue classification.
+    """
+    aa_lipids_selection = Selection()
+    for inchikey_data in inchikey_map:
+        if inchikey_data['generated_inchikey'] in lipid_references:
+            aa_lipids_selection += structure.select_residue_indices(inchikey_data['residue_indices'])
+    cg_lipids_selection = structure.select_lipids() & cg_selection
+    return (aa_lipids_selection - cg_selection) + cg_lipids_selection
 
 @retry_request
 @lru_cache(maxsize=None)

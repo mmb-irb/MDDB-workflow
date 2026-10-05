@@ -1,5 +1,5 @@
 # Count different type of atoms and residues in the structure
-def get_atom_counts (structure : 'Structure') -> tuple:
+def get_atom_counts (structure : 'Structure', lipids_selection : 'Selection') -> tuple:
 
     # Number of system atoms and residues
     system_atoms = len(structure.atoms)
@@ -17,7 +17,8 @@ def get_atom_counts (structure : 'Structure') -> tuple:
     rna_atoms = len(rna_selection)
     rna_residues = len(structure.get_selection_residue_indices(rna_selection))
     # Number of lipid atoms and residues
-    lipids_selection = structure.select_lipids()
+    # WARNING: Do not rely in the structure logic for lipid identification, it is precarious
+    # WARNING: Instead we use selection made out ut lipidmaps references
     lipid_atoms = len(lipids_selection)
     lipid_residues = len(structure.get_selection_residue_indices(lipids_selection))
     # Number of carbohydrates atoms and residues

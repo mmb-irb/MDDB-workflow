@@ -1,5 +1,6 @@
 from mddb_workflow.tools.get_atom_counts import get_atom_counts
 from mddb_workflow.tools.get_system_keywords import get_system_keywords
+from mddb_workflow.tools.get_lipids import get_lipids_selection
 from mddb_workflow.tools.generate_map import get_sequence_metadata
 from mddb_workflow.tools.get_coverage_and_presence import get_coverage_and_presence
 from mddb_workflow.utils.auxiliar import InputError, save_json
@@ -17,6 +18,7 @@ def prepare_project_metadata (
     residue_map : dict,
     membrane_map : dict,
     inchikey_map : dict,
+    lipid_references : dict,
     protein_map : list[dict],
     chain_contacts : dict,
     protein_references_file : 'File',
@@ -67,15 +69,18 @@ def prepare_project_metadata (
     # Get the box data
     boxsizex, boxsizey, boxsizez = simulation_box_size if simulation_box_size else (None, None, None)
 
+    # Select lipids using lipid references for all-atom regions and residue classification for CG regions
+    lipids_selection = get_lipids_selection(structure, inchikey_map, lipid_references, cg_selection)
+
     # Count different types of atoms and residues
     # Unpack atom counts to write them independently in the metadata
     (system_atoms, system_residues, protein_atoms, protein_residues,
     dna_atoms, dna_residues, rna_atoms, rna_residues, lipid_atoms, lipid_residues,
     carbohydrates_atoms, carbohydrates_residues, solvent_atoms, solvent_residues,
-    counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atom_counts(structure)
+    counter_cations, counter_anions, counter_ions, non_counter_ions, other_atoms) = get_atom_counts(structure, lipids_selection)
 
     # Get the system keywords
-    system_keywords = get_system_keywords(structure, inchikey_map, membrane_map, cg_selection, protein_map, chain_contacts)
+    system_keywords = get_system_keywords(structure, inchikey_map, lipids_selection, membrane_map, cg_selection, protein_map, chain_contacts)
 
     # Get protein references from the residues map
     # Get ligand references from the residues map
