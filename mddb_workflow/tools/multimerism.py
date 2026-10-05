@@ -41,11 +41,17 @@ MANY_CHAINS_MULTIMER_NAME = 'multimer'
 HOMO_PREFIX = 'homo'
 HETERO_PREFIX = 'hetero'
 
-# Set the nucleic strand keywords
-SINGLE_STRAND_KEYWORD = 'single strand'
-DOUBLE_STRAND_KEYWORD = 'double strand'
-TRIPLE_STRAND_KEYWORD = 'triple strand'
-MULTIPLE_STRAND_KEYWORD = 'multiple strand'
+# Set the nucleic strand keywords according to the number of strands
+# The nucleic type is appended to them (e.g. 'double strand dna')
+STRAND_NAMES = {
+    1: 'single strand',
+    2: 'double strand',
+    3: 'triple strand',
+}
+# Set the name for groups with more strands than the ones above
+MANY_STRANDS_NAME = 'multiple strand'
+# Set the nucleic type for groups of strands with both dna and rna
+HYBRID_NUCLEIC_TYPE = 'nucleic'
 
 # Set the protein-nucleic complex keywords
 PROTEIN_DNA_COMPLEX_KEYWORD = 'protein-dna complex'
@@ -295,16 +301,18 @@ def get_nucleic_strand_keywords (
     nucleic_chains : list['Chain'],
     paired_pairs : set[tuple[int, int]],
 ) -> list[str]:
-    """Set strand keywords for every group of base paired nucleic chains."""
+    """Set strand keywords for every group of base paired nucleic chains.
+    Keywords include the nucleic type of the group (e.g. 'single strand rna', 'double strand dna').
+    Groups with both dna and rna (or chains with both) are labeled as nucleic (e.g. 'double strand nucleic').
+    """
     keywords = []
-    nucleic_chain_indices = [ chain.index for chain in nucleic_chains ]
-    groups = get_connected_groups(nucleic_chain_indices, paired_pairs)
+    chains_by_index = { chain.index: chain for chain in nucleic_chains }
+    groups = get_connected_groups(list(chains_by_index.keys()), paired_pairs)
     for group in groups:
-        strand_count = len(group)
-        if strand_count == 1: keywords.append(SINGLE_STRAND_KEYWORD)
-        elif strand_count == 2: keywords.append(DOUBLE_STRAND_KEYWORD)
-        elif strand_count == 3: keywords.append(TRIPLE_STRAND_KEYWORD)
-        else: keywords.append(MULTIPLE_STRAND_KEYWORD)
+        strand_name = STRAND_NAMES.get(len(group), MANY_STRANDS_NAME)
+        classifications = set([ chains_by_index[chain_index].classification for chain_index in group ])
+        nucleic_type = classifications.pop() if classifications in [{ 'dna' }, { 'rna' }] else HYBRID_NUCLEIC_TYPE
+        keywords.append(f'{strand_name} {nucleic_type}')
     # Remove duplicates while keeping the order
     return list(dict.fromkeys(keywords))
 
