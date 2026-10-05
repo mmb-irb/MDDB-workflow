@@ -1386,7 +1386,7 @@ class MD:
 
     # Chemical shifts analysis: NMR chemical shifts of protein backbone atoms along the trajectory
     run_chemical_shifts_analysis = Task('chemshifts', 'Chemical shifts analysis',
-        chemical_shifts, {'frames_limit': 1000})
+        chemical_shifts, {'frames_limit': 1000, 'time_splits': 10})
 
     # Helical parameters
     run_helical_analysis = Task('helical', 'Helical parameters', helical_parameters)

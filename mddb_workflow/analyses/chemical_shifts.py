@@ -19,11 +19,12 @@ import json
 import re
 import sys
 from statistics import mean, pstdev
+from math import ceil
 
 import mdtraj as mdt
 
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
-from mddb_workflow.utils.auxiliar import ToolError, save_json, warn
+from mddb_workflow.utils.auxiliar import InputError, ToolError, save_json, warn
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
 from mddb_workflow.utils.constants import OUTPUT_CHEMICAL_SHIFTS_FILENAME
 from mddb_workflow.utils.type_hints import *
@@ -58,9 +59,14 @@ def chemical_shifts(
     snapshots: int,
     output_directory: str,
     frames_limit: int = 1000,
+    time_splits: int = 10,
 ):
     """Perform the chemical shifts analysis using LEGOLAS."""
     warn('The "chemical shifts" analysis is not yet fully integrated. LEGOLAS is not installed in the conda enviornment')
+
+    # Every time split must have at least one frame
+    if frames_limit < time_splits:
+        raise InputError(f'Frames limit ({frames_limit}) must be greater than time splits ({time_splits})')
 
     # Set the residues to be analyzed: protein residues with a residue name supported by LEGOLAS
     # Residues in PBC and coarse grain residues are excluded
@@ -96,7 +102,7 @@ def chemical_shifts(
     legolas_structure.generate_pdb_file(legolas_structure_filepath)
 
     # Write a reduced trajectory with only the analyzed residues atoms
-    reduced_trajectory_filepath, _, _ = get_reduced_trajectory(
+    reduced_trajectory_filepath, reduced_step, _ = get_reduced_trajectory(
         trajectory_file,
         snapshots,
         frames_limit,
@@ -162,33 +168,59 @@ def chemical_shifts(
     atom_indices = [legolas_selection.atom_indices[atom_index] for atom_index in legolas_atom_indices]
     atom_order = sorted(range(len(atom_indices)), key=lambda row: atom_indices[row])
 
-    # Parse chemical shifts and summarize them along frames
+    # Set the time splits
+    # The start will be always 0 since we start with the first frame
+    start = 0
+    # Calculate how many frames fall in every time split
+    # Note that step refers to frames in the original trajectory, not in the reduced trajectory
+    step = ceil(snapshots / time_splits)
+    # Calculate how many time splits we will have at the end
+    # Note that the last split may have less frames than the rest
+    nsteps = ceil(snapshots / step)
+
+    # Parse chemical shifts and summarize them along all frames and along frames in every time split
     # Note that LEGOLAS returns a single value instead of a list when there is only one frame
     def parse_values(text: str) -> list[float]:
         values = json.loads(text)
         if type(values) != list: values = [values]
         return values
-    def round_values(values: list[float]) -> list[float]:
-        return [round(value, OUTPUT_DECIMALS) for value in values]
+    # Split values according to the original trajectory frame they belong to
+    def split_values(values: list[float]) -> list[list[float]]:
+        splits = [ [] for _ in range(nsteps) ]
+        for reduced_frame, value in enumerate(values):
+            splits[reduced_frame * reduced_step // step].append(value)
+        return splits
+    def round_value(value: float) -> float:
+        return round(value, OUTPUT_DECIMALS)
     chemical_shift_averages = []
     chemical_shift_deviations = []
     model_deviation_averages = []
+    timed_chemical_shift_averages = []
+    timed_chemical_shift_deviations = []
     for row in legolas_output:
         chemical_shifts = parse_values(row['CHEMICAL_SHIFT'])
-        chemical_shift_averages.append(mean(chemical_shifts))
-        chemical_shift_deviations.append(pstdev(chemical_shifts))
+        chemical_shift_averages.append(round_value(mean(chemical_shifts)))
+        chemical_shift_deviations.append(round_value(pstdev(chemical_shifts)))
+        chemical_shift_splits = split_values(chemical_shifts)
+        timed_chemical_shift_averages.append([ round_value(mean(split)) for split in chemical_shift_splits ])
+        timed_chemical_shift_deviations.append([ round_value(pstdev(split)) for split in chemical_shift_splits ])
         # Note that the deviation returned by LEGOLAS is the standard deviation between its 5 models
         # i.e. it is a measure of the prediction uncertainty, not of the fluctuation along the trajectory
         model_deviations = parse_values(row['CHEMICAL_SHIFT_STD'])
-        model_deviation_averages.append(mean(model_deviations))
+        model_deviation_averages.append(round_value(mean(model_deviations)))
 
     # Set the output analysis
     # Note that csdv is the deviation along frames while csmdv is the average deviation between LEGOLAS models
+    # Note that timed values have a list per atom with a value per time split
     output_analysis = {
-        'atom_indices': [atom_indices[row] for row in atom_order],
-        'csav': round_values([chemical_shift_averages[row] for row in atom_order]),
-        'csdv': round_values([chemical_shift_deviations[row] for row in atom_order]),
-        'csmdv': round_values([model_deviation_averages[row] for row in atom_order]),
+        'atndx': [atom_indices[row] for row in atom_order],
+        'csav': [chemical_shift_averages[row] for row in atom_order],
+        'csdv': [chemical_shift_deviations[row] for row in atom_order],
+        'csmdv': [model_deviation_averages[row] for row in atom_order],
+        'tcsav': [timed_chemical_shift_averages[row] for row in atom_order],
+        'tcsdv': [timed_chemical_shift_deviations[row] for row in atom_order],
+        'start': start,
+        'step': step,
     }
     save_json(output_analysis, f'{output_directory}/{OUTPUT_CHEMICAL_SHIFTS_FILENAME}')
 
