@@ -27,7 +27,7 @@ from subprocess import run, PIPE
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
 from mddb_workflow.utils.auxiliar import load_json, save_json, warn, numerate_filename, get_analysis_name
 from mddb_workflow.utils.auxiliar import ForcedStop
-from mddb_workflow.utils.constants import OUTPUT_ENERGIES_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_ENERGIES_FILENAME, ENERGIES_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, NUCLEIC_RESIDUE_NAME_LETTERS
 from mddb_workflow.utils.constants import CMIP_INPUTS_CHECKONLY_SOURCE, CMIP_INPUTS_SOURCE
 from mddb_workflow.utils.constants import CMIP_VDW_SOURCE, ENERGIES_DEBUG_SCRIPT_SOURCE
@@ -621,7 +621,7 @@ def energies (
             'name': name,
             'agent1': agent1_output,
             'agent2': agent2_output,
-            'version': '1.1.0'
+            'version': ENERGIES_ANALYSIS_VERSION
         }
         # Export the current interaction analysis in json format
         save_json(output, numbered_output_analysis_filepath)
@@ -817,7 +817,6 @@ def format_data (data : list, frame_step : int) -> dict:
         'fes': atom_es_avg_final,
         'fboth': atom_both_avg_final,
         'step': frame_step,
-        'version': '0.0.1',
     }
 
     return output

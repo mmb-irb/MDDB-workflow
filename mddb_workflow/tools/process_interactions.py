@@ -4,7 +4,7 @@ import shlex
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, save_json, warn, reprint
 from mddb_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
-from mddb_workflow.utils.constants import AUTOMATIC_FLAG
+from mddb_workflow.utils.constants import AUTOMATIC_FLAG, INTERACTIONS_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.utils.vmd_spells import get_covalent_bonds_between, get_interface_atom_indices
 
@@ -263,7 +263,7 @@ def process_interactions(
             continue
 
         # Save the interactions version
-        interaction['version'] = '2.0.0'
+        interaction['version'] = INTERACTIONS_ANALYSIS_VERSION
 
         # Log the final results
         interface_residue_indices = sorted(interaction["interface_residue_indices_1"]

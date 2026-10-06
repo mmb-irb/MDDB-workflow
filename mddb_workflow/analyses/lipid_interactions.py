@@ -1,6 +1,6 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
-from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPIDS_RESIDUE_NAMES
+from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPIDS_RESIDUE_NAMES, LIPID_INTERACTIONS_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_head_tail_split, get_cg_head_tail_split, get_all_acyl_chains
 from mddb_workflow.utils.type_hints import *
 import numpy as np
@@ -54,7 +54,7 @@ def lipid_interactions(
         return
 
     # Wrap the data in a dictionary
-    data = {'data': data, 'version': '0.2.0'}
+    data = {'data': data, 'version': LIPID_INTERACTIONS_ANALYSIS_VERSION}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_INTERACTIONS_FILENAME}'
     save_json(data, output_analysis_filepath)
 

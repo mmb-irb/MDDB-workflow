@@ -5,7 +5,7 @@ import biotite.structure as struc
 import biotite.structure.io as strucio
 import biotite.structure.io.xtc as xtc
 from mddb_workflow.utils.auxiliar import save_json, load_json
-from mddb_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME
+from mddb_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_TMSCORES_FILENAME, TMSCORES_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 
@@ -83,7 +83,7 @@ def tmscores(
         output_analysis.append(data)
 
     # Export the analysis in json format
-    save_json({'start': 0, 'step': frame_step, 'data': output_analysis, 'version': '0.1.0'}, output_analysis_filepath)
+    save_json({'start': 0, 'step': frame_step, 'data': output_analysis, 'version': TMSCORES_ANALYSIS_VERSION}, output_analysis_filepath)
 
 
 def plot_tmscores(json_path: str):

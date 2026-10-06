@@ -1,6 +1,6 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
-from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, OUTPUT_LIPID_ORDER_FILENAME
+from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names, get_cg_acyl_chains
 from mddb_workflow.utils.type_hints import *
 import numpy as np
@@ -64,7 +64,7 @@ def lipid_order(
              'Please check the logs for warnings.')
         return
     # Save the data
-    data = {'data': order_parameters_dict, 'version': '0.1.0'}
+    data = {'data': order_parameters_dict, 'version': LIPID_ORDER_ANALYSIS_VERSION}
     output_analysis_filepath = f'{output_directory}/{OUTPUT_LIPID_ORDER_FILENAME}'
     save_json(data, output_analysis_filepath)
 

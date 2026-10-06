@@ -4,7 +4,7 @@ import subprocess
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.file import File
-from mddb_workflow.utils.constants import OUTPUT_CHANNELS_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_CHANNELS_FILENAME, CHANNELS_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 import json
 
@@ -115,6 +115,6 @@ def channels(
             'pore_residues': _parse_chap_residue_fractions(
                 f"{output_directory}/output.pdb"),
         },
-        'version': '0.1.1',
+        'version': CHANNELS_ANALYSIS_VERSION,
     }
     save_json(data_to_save, output_directory + '/' + OUTPUT_CHANNELS_FILENAME)

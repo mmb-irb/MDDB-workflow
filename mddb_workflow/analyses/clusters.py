@@ -8,7 +8,7 @@ from scipy.linalg import eigh
 from mddb_workflow.utils.auxiliar import save_json
 from mddb_workflow.utils.auxiliar import numerate_filename, get_analysis_name
 from mddb_workflow.utils.auxiliar import reprint
-from mddb_workflow.utils.constants import OUTPUT_CLUSTERS_FILENAME, OUTPUT_CLUSTER_SCREENSHOT_FILENAMES
+from mddb_workflow.utils.constants import OUTPUT_CLUSTERS_FILENAME, OUTPUT_CLUSTER_SCREENSHOT_FILENAMES, CLUSTERS_ANALYSIS_VERSION
 from mddb_workflow.utils.file import File
 from mddb_workflow.tools.get_screenshot import get_screenshot
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
@@ -295,7 +295,7 @@ def clusters_analysis(
             'transitions': output_transitions,
             'excursions': output_excursions,
             'reduction': 'tica' if use_tica else 'pca',
-            'version': '0.2.0',
+            'version': CLUSTERS_ANALYSIS_VERSION,
         }
 
         save_json(output_analysis, numbered_output_analysis_filepath)

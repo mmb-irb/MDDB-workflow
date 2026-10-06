@@ -16,7 +16,7 @@ from os.path import exists
 
 from mddb_workflow.utils.pyt_spells import get_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json, numerate_filename, get_analysis_name, reprint
-from mddb_workflow.utils.constants import OUTPUT_HBONDS_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_HBONDS_FILENAME, HBONDS_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 
 
@@ -224,7 +224,7 @@ def hydrogen_bonds(
             'donors': donor_atom_index_list,
             'hydrogens': hydrogen_atom_index_list,
             'hbonds': hbond_overall,
-            'version': '1.0.0'
+            'version': HBONDS_ANALYSIS_VERSION
         }
         if is_time_dependent:
             interaction_data['hbonds_timed'] = hbond_timed

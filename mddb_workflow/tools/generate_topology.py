@@ -1,7 +1,7 @@
 from mddb_workflow.utils.auxiliar import warn, save_json, list_values_match, MISSING_CHARGES
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
 from mddb_workflow.utils.auxiliar import round_to_hundredths, store_binary_data
-from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
+from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, TOPOLOGY_VERSION
 from mddb_workflow.utils.type_hints import *
 
 # Beyond this atom count the topology JSON may grow too large for MongoDB's 16 MB document limit
@@ -252,6 +252,6 @@ def generate_topology (
         **residue_map,
         # Save also some residue indices lists here
         'selections': selections,
-        'version': '0.1.0',
+        'version': TOPOLOGY_VERSION,
     }
     save_json(topology, output_topology_filepath)

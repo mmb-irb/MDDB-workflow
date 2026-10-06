@@ -1,6 +1,6 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json
-from mddb_workflow.utils.constants import OUTPUT_THICKNESS_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_THICKNESS_FILENAME, THICKNESS_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 from lipyphilic.analysis.z_positions import ZPositions
 import numpy as np
@@ -77,7 +77,7 @@ def thickness(
         'std_thickness': np.sqrt([zpos_std**2 for zpos_std in zpos_stds] + [zneg_std**2 for zneg_std in zneg_stds]),
         'midplane_z': midplane_z,
         },
-        'version': '0.1.0',
+        'version': THICKNESS_ANALYSIS_VERSION,
     }
     # Convert any numpy arrays to lists for JSON serialization
     for key in data['data']:

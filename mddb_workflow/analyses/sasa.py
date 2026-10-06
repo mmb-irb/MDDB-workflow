@@ -1,7 +1,7 @@
 from mddb_workflow.tools.xvg_parse import xvg_parse
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
 from mddb_workflow.utils.auxiliar import save_json
-from mddb_workflow.utils.constants import OUTPUT_SASA_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_SASA_FILENAME, SASA_ANALYSIS_VERSION
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
@@ -125,7 +125,7 @@ def sasa(
         'saspf': saspf,
         'means': means,
         'stdvs': stdvs,
-        'version': '0.0.1',
+        'version': SASA_ANALYSIS_VERSION,
     }
 
     # Export the analysis in json format

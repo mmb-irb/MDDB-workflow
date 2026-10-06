@@ -4,7 +4,7 @@ from numpy import mean, std
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.tools.xvg_parse import xvg_parse
 from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath
-from mddb_workflow.utils.constants import OUTPUT_RGYR_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_RGYR_FILENAME, RGYR_ANALYSIS_VERSION
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
@@ -82,7 +82,7 @@ def rgyr(
                 'data': raw_rgyr_data['rgyrz']
             }
         },
-        'version': '0.0.1',
+        'version': RGYR_ANALYSIS_VERSION,
     }
 
     # Export formatted data to a json file

@@ -1,6 +1,6 @@
 from mddb_workflow.tools.xvg_parse import xvg_parse
 from mddb_workflow.utils.auxiliar import save_json, get_auxiliar_filepath
-from mddb_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_RMSDS_FILENAME
+from mddb_workflow.utils.constants import REFERENCE_LABELS, OUTPUT_RMSDS_FILENAME, RMSDS_ANALYSIS_VERSION
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
 
@@ -149,7 +149,7 @@ def rmsds(
         'start': start,
         'step': step,
         'data': output_analysis,
-        'version': '1.0.0',
+        'version': RMSDS_ANALYSIS_VERSION,
     }, output_analysis_filepath)
 
     return global_rmsd

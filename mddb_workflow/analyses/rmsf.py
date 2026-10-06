@@ -4,7 +4,7 @@
 from numpy import mean, std
 
 from mddb_workflow.utils.auxiliar import save_json
-from mddb_workflow.utils.constants import OUTPUT_RMSF_FILENAME
+from mddb_workflow.utils.constants import OUTPUT_RMSF_FILENAME, RMSF_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 
 from MDAnalysis import Universe
@@ -51,7 +51,7 @@ def rmsf (
                 'data': rmsf_values # Keep all values here to make the list length match the number of atoms
             }
         },
-        'version': '0.1.0'
+        'version': RMSF_ANALYSIS_VERSION
     }
 
     # Export formatted data to a json file
