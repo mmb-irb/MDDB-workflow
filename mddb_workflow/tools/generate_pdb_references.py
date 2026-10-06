@@ -4,7 +4,7 @@ import urllib.request
 
 from mddb_workflow.utils.auxiliar import RemoteServiceError, load_json, save_json, get_auxiliar_filepath
 from mddb_workflow.utils.auxiliar import request_pdb_data, round_to_thousandths, warn, reprint
-from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS
+from mddb_workflow.utils.constants import PROTEIN_RESIDUE_NAME_LETTERS, PDB_REFERENCE_VERSION
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.type_hints import *
@@ -121,7 +121,7 @@ def get_pdb_reference(pdb_id: str, cache: 'Cache', database: Optional['Database'
         if type(value) == dict:
             pdb_data[key] = dict(sorted(value.items()))
     # Set a version number so new references can replace old references
-    pdb_data['version'] = '0.0.6'
+    pdb_data['version'] = PDB_REFERENCE_VERSION
     return pdb_data
 
 # Set service URLs to be requested
