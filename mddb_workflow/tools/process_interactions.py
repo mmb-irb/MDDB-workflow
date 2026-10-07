@@ -3,6 +3,7 @@ import shlex
 
 from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, save_json, warn, reprint
+from mddb_workflow.utils.auxiliar import numerate_filename, get_analysis_name
 from mddb_workflow.utils.constants import STABLE_INTERACTIONS_FLAG, OUTPUT_INTERACTIONS_FILENAME
 from mddb_workflow.utils.constants import AUTOMATIC_FLAG, INTERACTIONS_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
@@ -22,7 +23,6 @@ UPLOAD_FIELDS = {
     'atom_indices_2',
     'interface_atom_indices_1',
     'interface_atom_indices_2',
-    'version',
     'strong_bonds',
     'has_cg'
 }
@@ -262,9 +262,6 @@ def process_interactions(
             interaction[FAILED_INTERACTION_FLAG] = True
             continue
 
-        # Save the interactions version
-        interaction['version'] = INTERACTIONS_ANALYSIS_VERSION
-
         # Log the final results
         interface_residue_indices = sorted(interaction["interface_residue_indices_1"]
             + interaction["interface_residue_indices_2"])
@@ -311,15 +308,21 @@ def process_interactions(
         if alphabetically_sorted == ['ligand', 'protein']:
             interaction['type'] = 'protein-ligand'
 
-    # Create interaction duplicates to avoid mutating the already processed interactions
-    # Then fill these duplicates only with those fields to be uploaded to the database
-    file_interactions = []
-    for interaction in valid_interactions:
+    # Write every interaction in a separated file and keep track of them in a summary
+    output_summary = []
+    for i, interaction in enumerate(valid_interactions):
+        # Get the numerated output filepath for this specific interaction
+        numbered_output_analysis_filepath = numerate_filename(output_analysis_filepath, i)
+        analysis_name = get_analysis_name(numbered_output_analysis_filepath)
+        output_summary.append({'name': interaction['name'], 'analysis': analysis_name})
+        # Create an interaction duplicate to avoid mutating the already processed interaction
+        # Then fill this duplicate only with those fields to be uploaded to the database
         file_interaction = {key: value for key, value in interaction.items() if key in UPLOAD_FIELDS}
-        file_interactions.append(file_interaction)
+        file_interaction['version'] = INTERACTIONS_ANALYSIS_VERSION
+        save_json(file_interaction, numbered_output_analysis_filepath, indent=4)
 
-    # Write them to disk
-    save_json(file_interactions, output_analysis_filepath, indent=4)
+    # Write the summary to disk
+    save_json(output_summary, output_analysis_filepath, indent=4)
 
     # Finally return the processed interactions
     return valid_interactions
