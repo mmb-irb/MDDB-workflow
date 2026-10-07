@@ -62,8 +62,8 @@ class TestRunAll(TestBase):
             pmeta_dir = os.path.join(project.directory, 'metadata.json')
             metadata = load_json(pmeta_dir)
             syskeys = {
-                'A0001': ['protein', 'protein only', 'all-atom (aa)'],
-                'A01IP': ['protein', 'ligand', 'lipid', 'carbohydrate', 'membrane', 'all-atom (aa)'],
+                'A0001': ['protein', 'protein only', 'monomer', 'all-atom (aa)'],
+                'A01IP': ['protein', 'ligand', 'lipid', 'carbohydrate', 'membrane', 'dimer', 'heterodimer', 'all-atom (aa)'],
                 'A025N': ['ligand', 'ligand only', 'all-atom (aa)'],
                 'A02F9': ['lipid', 'solvent', 'lipid only', 'membrane', 'all-atom (aa)']
             }
@@ -82,6 +82,8 @@ class TestRunAll(TestBase):
             pytest.skip('Skipping analysis to save time.')
         elif project.accession == 'A01V7' and md_task in ['pockets']:
             pytest.skip('Skipping analysis to save time.')
+        elif md_task in ['allostery', 'chemshifts']:
+            pytest.skip('Library not in conda yet.')
 
         md: MD = project.mds[0]
         md.overwritables = {md_task}

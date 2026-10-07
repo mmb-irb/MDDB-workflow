@@ -61,7 +61,6 @@ def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str,
     return lipid_references
 
 
-
 def get_lipids_selection(
     structure: 'Structure',
     inchikey_map: list[dict],
@@ -77,6 +76,7 @@ def get_lipids_selection(
             aa_lipids_selection += structure.select_residue_indices(inchikey_data['residue_indices'])
     cg_lipids_selection = structure.select_lipids() & cg_selection
     return (aa_lipids_selection - cg_selection) + cg_lipids_selection
+
 
 @retry_request
 @lru_cache(maxsize=None)

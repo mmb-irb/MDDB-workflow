@@ -19,7 +19,7 @@ test/data/output/
 test/data/source_*
 atommass.dat
 **/tmp/
-**/*dataset
+**/docs/*/*dataset
 
 # Build
 build/
