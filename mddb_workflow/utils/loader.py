@@ -174,17 +174,20 @@ class Loader:
         return False
 
     # Load a directory
-    def load(self, target_directory: str, overwrite : bool = False) -> bool:
+    # Optionally load only some files (-i), as paths or wildcards relative to the target directory
+    def load(self, target_directory: str, overwrite : bool = False,
+        include : list[str] | None = None) -> bool:
         print(f'Running loader to load directory {target_directory}')
         # Set the environmental variables before calling the loader
         self.set_environment()
         # We are not going to handle when the loader asks the user for input
         # Instead we will always use either the '-c' (conserve) or the '-o' (overwrite) arguments
         force_argument = '-o' if overwrite else '-c'
+        command = [NODEJS_COMMAND, self.loader_index, 'load', target_directory, force_argument]
+        # Note that an empty include would make the loader complain, so we never pass it empty
+        if include: command += ['-i', *include]
         # Run the load process
-        load_process = run(
-            [NODEJS_COMMAND, self.loader_index, 'load', target_directory, force_argument], 
-            stderr=PIPE)
+        load_process = run(command, stderr=PIPE)
         # If there is any error then assume the load failed
         error_logs = load_process.stderr.decode()
         if error_logs:

@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.parse
 import urllib.error
 import ssl
 import json
@@ -273,7 +274,8 @@ class Database:
         if '/rest' in self.url:
             self.url = self.url.split('/rest')[0] + '/'
         # Set an alias for this database
-        self.alias = self.url.split('://')[1].split('.')[0].split('-')[0]
+        # Note that the URL may include a port or a path (e.g. http://localhost:8000/)
+        self.alias = self.url.split('://')[1].split('/')[0].split(':')[0].split('.')[0].split('-')[0]
 
     def __str__(self) -> str:
         return f'< Database {self.url} >'
@@ -372,3 +374,53 @@ class Database:
             warn(f'We expected {expected_references_count} references but we got {final_references_count}')
         # Return all references
         return references
+
+    def get_all_project_accessions(self, search: str | None = None, page_limit: int = 100, verbose: bool = True) -> tuple[int, Generator[str, None, None]]:
+        """Get the accessions of all projects in the MDDB database.
+        If a search query is passed then only the matching projects are returned.
+        Return the number of projects and a generator which yields the accessions one by one.
+        Only the first page is requested here, further pages are requested on demand while iterating."""
+        # Ask only for the accession to make the requests light
+        first_request_url = f'{self.url}rest/v1/projects?limit={page_limit}&projection={{"accession":1}}'
+        if search: first_request_url += f'&search={urllib.parse.quote(search)}'
+        if verbose: print() # Print an empty line for the further reprint
+        try:
+            if verbose: reprint(f'Requesting first page -> {first_request_url}')
+            with workflow_urlopen(first_request_url) as response:
+                first_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+        except Exception as error:
+            raise RuntimeError(f'Something went wrong with the MDposit request {first_request_url} with error: {error}')
+        # Calculate how many pages we will need to have the whole content
+        expected_projects_count = first_response['filteredCount']
+        n_pages = ceil(expected_projects_count/page_limit)
+        def generate_accessions() -> Generator[str, None, None]:
+            yielded_projects_count = 0
+            for project in first_response['projects']:
+                yielded_projects_count += 1
+                yield project['accession']
+            # Paginate to get the rest of projects
+            # Note that we do not reprint here since other logs may be printed between pages
+            for page in range(2, n_pages + 1):
+                following_request_url = first_request_url + f'&page={page}'
+                try:
+                    if verbose: print(f'Requesting page {page}/{n_pages} -> {following_request_url}')
+                    with workflow_urlopen(following_request_url) as response:
+                        following_response = json.loads(response.read().decode("utf-8", errors='ignore'))
+                except Exception as error:
+                    raise RuntimeError(f'Something went wrong with the MDposit request {following_request_url} with error: {error}')
+                for project in following_response['projects']:
+                    yielded_projects_count += 1
+                    yield project['accession']
+            # Make sure the numbers match
+            if yielded_projects_count != expected_projects_count:
+                warn(f'We expected {expected_projects_count} projects but we got {yielded_projects_count}')
+        return expected_projects_count, generate_accessions()
+
+    def get_project_versions(self, accession: str) -> dict:
+        """Get the versions of the project metadata, topology and analyses in the MDDB database."""
+        request_url = f'{self.url}rest/v1/projects/{accession}/versions'
+        try:
+            with workflow_urlopen(request_url) as response:
+                return json.loads(response.read().decode("utf-8", errors='ignore'))
+        except Exception as error:
+            raise RuntimeError(f'Something went wrong with the MDposit request {request_url} with error: {error}')

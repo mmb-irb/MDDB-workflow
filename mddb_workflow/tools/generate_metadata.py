@@ -4,7 +4,7 @@ from mddb_workflow.tools.get_lipids import get_lipids_selection
 from mddb_workflow.tools.generate_map import get_sequence_metadata
 from mddb_workflow.tools.get_coverage_and_presence import get_coverage_and_presence
 from mddb_workflow.utils.auxiliar import InputError, save_json
-from mddb_workflow.utils.constants import MD_DIRECTORY
+from mddb_workflow.utils.constants import MD_DIRECTORY, PROJECT_METADATA_VERSION
 from mddb_workflow.utils.type_hints import *
 
 # Input fields + interaction type
@@ -249,7 +249,7 @@ def prepare_project_metadata (
         'CHNAME': unique_chain_names,
         'WARNINGS': warnings,
         # Beware, we already have a VERSION field for the PROGRAM version
-        'ver': '0.0.7',
+        'ver': PROJECT_METADATA_VERSION,
     }
     # Let the boxsizes only if all of them are available (they may be 0)
     if not boxsizex or not boxsizey or not boxsizez:

@@ -19,6 +19,7 @@ from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOLOGY_SUPPORTED_FORMATS, STRUCTURE_SUPPORTED_FORMATS
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.tools.update_references import update_references, AVAILABLE_REFERENCE_TYPES, ALL_FLAG
+from mddb_workflow.tools.update_projects import update_projects, UPDATABLE_TASKS
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
@@ -566,6 +567,21 @@ def main():
             # Iterate reference types
             for reference_type in types:
                 update_references(node_alias, reference_type, args.loader)
+    # Update projects
+    elif subcommand == 'uproj':
+        # Set the final list of nodes
+        nodes = list(args.nodes)
+        # If all nodes are requested then we must check available nodes
+        if ALL_FLAG in nodes:
+            if len(nodes) > 1:
+                raise InputError('If you ask for "all" nodes then it is redundant asking for any more nodes')
+            available_nodes = get_available_nodes()
+            nodes = list(available_nodes.keys())
+        # Iterate nodes
+        for node_alias in nodes:
+            update_projects(node_alias, args.loader, args.accessions, args.query,
+                trust=args.trust, mercy=args.mercy, faith=args.faith,
+                include=args.include, exclude=args.exclude)
 
 # Define a common parser running in top of all others
 # This arguments declared here are available among all subparsers
@@ -887,3 +903,38 @@ upref_parser.add_argument("-ld", "--loader", type=str,
     help=f"Set the path to the directory where the loader is installed, so the workflow can use it. "
         "If the loader is available then the new references will be automatically uploaded in batches. "
         "Note that using the loader makes the process more memory efficient and faster.")
+
+
+# The update projects command
+uproj_parser = subparsers.add_parser("uproj",
+    help="Update outdated projects",
+    formatter_class=CustomHelpFormatter,
+    parents=[common_parser]
+)
+
+# Set optional arguments
+uproj_parser.add_argument("-nd", "--nodes", required=True, nargs='*',
+    help=("Select the node(s) where the projects are to be updated. Either use URLs or an aliases. "
+          "If you don't know the available aliases then just run the command with a wrong alias. "
+          "It will fail and then it will show you available aliases in MDposit. "
+          "You may also pass the flag 'all' in order to update projects from all nodes."))
+uproj_parser.add_argument("-proj", "--accessions", nargs='*', default=None,
+    help="Select the project(s) to be updated. All projects in the node are checked by default.")
+uproj_parser.add_argument("-q", "--query", type=str, default=None,
+    help=("Set a search query so only the matching projects are checked (e.g. -q spike). "
+          "This is the 'search' parameter of the /projects endpoint in the database API. "
+          "It can not be combined with specific projects (-proj)."))
+uproj_parser.add_argument("-ld", "--loader", type=str,
+    help=f"Set the path to the directory where the loader is installed, so the workflow can use it. "
+        "If the loader is available then the outdated data will be automatically uploaded after every project update. "
+        "Note that, once uploaded, the local project directory is removed.")
+uproj_parser.add_argument("-i", "--include", nargs='*', choices=UPDATABLE_TASKS,
+    help=("Set the only tasks to be checked and updated. Projects with these tasks up to date are not updated at all. "
+          "Note that included analyses are also run in those MDs where they are missing in the database."))
+uproj_parser.add_argument("-e", "--exclude", nargs='*', choices=UPDATABLE_TASKS,
+    help="Set tasks to be ignored, so they are not updated even if they are outdated.")
+
+# Set the same input checking options of the run command, to be passed to the workflow
+uproj_parser_checks_group = uproj_parser.add_argument_group('INPUT CHECKS OPTIONS', description=f"For more information about each check please visit:\n{test_docs_url}")
+for flags, kwargs in run_parser_checks_args:
+    uproj_parser_checks_group.add_argument(*flags, **kwargs)
