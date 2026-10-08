@@ -20,7 +20,6 @@ from mddb_workflow.tools.image_and_fit import image_and_fit
 from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.tools.fix_gromacs_masses import extend_gromacs_masses
 from mddb_workflow.tools.structure_corrector import structure_corrector
-from mddb_workflow.utils.mdt_spells import check_system_centering
 
 
 def _prepare_incomplete_output(output_directory: str, output_filename: str) -> File:
@@ -267,17 +266,6 @@ def process_input_files(
     # We will make sure that the provisonal and the final PBC selections match
     # Since this is proviosonal we will make it silent
     provisional_pbc_selection = self._set_pbc_selection(provisional_structure, verbose=False)
-
-    # --- Get the simulation box ------------------------------------------------------------
-
-    # # Check if the system is centered in the simulation box (in case there is a box)
-    # self._is_system_centered = check_system_centering(filtered_trajectory_file.path, filtered_structure_file.path)
-    # if self._is_system_centered == True:
-    #     print(f' System is already centered')
-    # elif self._is_system_centered == False:
-    #     print(' The system is not centered -> Attempt to image automatically')
-    #     image = True
-    # else: print(' There is no simulation box')
 
     # --- IMAGING AND FITTING ------------------------------------------------------------
 

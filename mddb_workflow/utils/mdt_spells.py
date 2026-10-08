@@ -459,38 +459,3 @@ def get_simulation_box(
 
     return box, is_constant
 
-
-def check_system_centering(
-    input_trajectory_filename : str,
-    input_structure_filename : str,
-    threshold : float = 0.90,
-    verbose : bool = True,
-) -> Optional[bool]:
-    """Check whether atoms are within the simulation box.
-
-    Reads only the first frame.  Returns True if at least `threshold` fraction
-    of all atoms have fractional coordinates inside [0, 1) (with a 1% tolerance
-    on each side), False otherwise, or None if no box information is available.
-    Fractional coordinates make this valid for triclinic boxes as well.
-    """
-    # Read the first frame
-    frame = next(mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1))
-    # If there is no box then there is nothing to check
-    if frame.unitcell_lengths is None:
-        if verbose: print('There is no simulation box')
-        return None
-    # Express atom positions in units of the box vectors (rows of the box matrix)
-    box_vectors_nm       = frame.unitcell_vectors[0]            # (3, 3) nm
-    atom_positions_nm    = frame.xyz[0]                         # (n_atoms, 3) nm
-    fractional_positions = atom_positions_nm @ np.linalg.inv(box_vectors_nm)
-    tolerance            = 0.01                                 # 1 % of each box vector
-    atom_in_box          = np.all(
-        (fractional_positions >= -tolerance) &
-        (fractional_positions <   1 + tolerance),
-        axis=1,
-    )
-    fraction_in_box   = float(atom_in_box.mean())
-    # Log and return the result
-    is_centered = fraction_in_box >= threshold
-    if verbose: print(f'The system is {"" if is_centered else "not "}centered')
-    return is_centered

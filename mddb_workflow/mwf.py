@@ -86,7 +86,6 @@ from mddb_workflow.analyses.allostery import allostery
 from mddb_workflow.analyses.chemical_shifts import chemical_shifts
 from mddb_workflow.analyses.rmsd_check import check_trajectory_integrity
 from mddb_workflow.analyses.mindist import check_cross_periodic_contacts
-from mddb_workflow.utils.mdt_spells import check_system_centering
 from mddb_workflow.analyses.helical_parameters import helical_parameters
 from mddb_workflow.analyses.markov import markov
 
@@ -200,7 +199,6 @@ class MD:
         self._cg_residues = MISSING_VALUE
         self._dummy_selection = MISSING_VALUE
         self._forced_class_selections = MISSING_VALUE
-        self._is_system_centered = MISSING_VALUE
 
         # Tests
         self._trajectory_integrity = MISSING_VALUE
@@ -1250,19 +1248,6 @@ class MD:
         return self.simulation_box_data[4]
     simulation_box_shape = property(get_simulation_box_shape, None, None, "Simulation box shape (read only)")
 
-    def check_is_system_centered(self) -> Optional[bool]:
-        """True if atoms appear centred within the simulation box"""
-        # If we already have a stored value then return it
-        if self._is_system_centered is not MISSING_VALUE:
-            return self._is_system_centered
-        # Calculate the value otherwise
-        self._is_system_centered = check_system_centering(
-            input_trajectory_filename=self.trajectory_file.path,
-            input_structure_filename=self.structure_file.path,
-        )
-        return self._is_system_centered
-    is_system_centered = property(check_is_system_centered, None, None, "Whether the system is centred in the simulation box (read only)")
-
     # ---------------------------------------------------------------------------------
     # Tests
     # ---------------------------------------------------------------------------------
@@ -1306,8 +1291,7 @@ class MD:
             check_selection=ALL_ATOMS,
             distance_cutoff=5, # In Ångstroms
             snapshots=self.snapshots,
-            is_system_centered=self.is_system_centered,
-            is_simulation_box_orthogonal=self.is_simulation_box_orthogonal,
+            simulation_box=self.simulation_box,
         )
         return self._cross_periodic_contacts
 
