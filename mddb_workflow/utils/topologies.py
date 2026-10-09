@@ -1,4 +1,6 @@
 import re
+import numpy as np
+from mdtraj.utils import lengths_and_angles_to_box_vectors
 
 from mddb_workflow.utils.gmx_spells import get_tpr_content
 from mddb_workflow.utils.type_hints import *
@@ -6,6 +8,12 @@ from mddb_workflow.utils.type_hints import *
 # Set some constants
 AMBER_FLAG_PATTERN = r'%FLAG ([A-Z_]*)\s*'
 AMBER_FORMAT_PATTERN = r'%FORMAT\(([0-9A-Za-z.]*)\)\s*'
+# Index of the IFBOX value in the Amber POINTERS flag (0 = no box, 1 = orthogonal or monoclinic, 2 = truncated octahedron)
+AMBER_IFBOX_POINTER = 27
+# Angle of the Amber truncated octahedron, in degrees
+AMBER_OCTAHEDRON_ANGLE = 109.4712206
+# Regular expression to mine every box vector in a tpr dump, e.g. "   box[    0]={ 7.93649e+00,  0.00000e+00,  0.00000e+00}"
+GROMACS_TPR_BOX_VECTOR_REGEX = r'^\s*box\[\s*[0-2]\]=\{(.*)\}\s*$'
 AMBER_FLAG_FORMAT_TYPES = {
     '20a4': str,
     '1a80': str,
@@ -32,7 +40,7 @@ class Topology:
         if self._raw_content: return self._raw_content
         # TPR topologies are not readable as they are, since they are in binary format
         if self.format == 'tpr':
-            output, error = get_tpr_content(self.path)
+            output, error = get_tpr_content(self.file.path)
             self._raw_content = output
             return self._raw_content
         # The rest of formats are usually readable ASCII
@@ -105,6 +113,37 @@ class Topology:
             # Note that flag_type may be int or float
             else: values += [ flag_type(value) for value in string_values ]
         return values
+
+    # Get the simulation box vectors in Ångstroms (rows of the box matrix)
+    # Return None if the topology has no box
+    def get_box (self) -> Optional[np.ndarray]:
+        if self.format == 'prmtop': return self._get_box_amber()
+        if self.format == 'tpr': return self._get_box_tpr()
+        return None
+
+    # Amber topologies only
+    # Amber stores only the box lengths and the beta angle
+    # https://ambermd.org/FileFormats.php
+    def _get_box_amber (self) -> Optional[np.ndarray]:
+        ifbox = self.mine_amber_flag('POINTERS')[AMBER_IFBOX_POINTER]
+        if ifbox == 0: return None
+        beta, a, b, c = self.mine_amber_flag('BOX_DIMENSIONS')
+        # In a truncated octahedron all three angles are equal, otherwise only beta may be non-right
+        if ifbox == 2 or abs(beta - AMBER_OCTAHEDRON_ANGLE) < 1e-3: alpha = gamma = beta
+        else: alpha = gamma = 90
+        return np.array(lengths_and_angles_to_box_vectors(a, b, c, alpha, beta, gamma))
+
+    # GROMACS topologies only
+    def _get_box_tpr (self) -> Optional[np.ndarray]:
+        vectors = []
+        for line in self.raw_content.split('\n'):
+            match = re.search(GROMACS_TPR_BOX_VECTOR_REGEX, line)
+            if match: vectors.append([ float(value) for value in match[1].split(',') ])
+        if len(vectors) != 3: raise RuntimeError(f'Failed to mine the box from tpr file "{self.file.path}"')
+        box = np.array(vectors) * 10 # nm -> Å
+        # Systems with no periodic boundary conditions have an all-zero box
+        if not np.any(box): return None
+        return box
 
     # Get dihedrals data in a standarized format
     def get_dihedrals_data (self) -> list[dict]:

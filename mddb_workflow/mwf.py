@@ -1292,6 +1292,7 @@ class MD:
             distance_cutoff=5, # In Ångstroms
             snapshots=self.snapshots,
             simulation_box=self.simulation_box,
+            ignore_box=self.project.ignore_box,
         )
         return self._cross_periodic_contacts
 
@@ -1471,6 +1472,7 @@ class Project:
         interactions_auto: Optional[str] = None,
         guess_bonds: bool = False,
         ignore_bonds: bool = False,
+        ignore_box: bool = False,
         sample_trajectory: Optional[int] = None,
         screenshot_frame: Optional[int] = None,
         local_blast: bool = False,
@@ -1563,6 +1565,9 @@ class Project:
                 Force the workflow to guess atom bonds based on distance and atom radii in different frames along the trajectory instead of mining topology bonds.
             ignore_bonds (bool):
                 Force the workflow to ignore atom bonds. This will result in many check-ins being skipped
+            ignore_box (bool):
+                Force the workflow to ignore the simulation box, e.g. when the trajectory box does not match the topology box.
+                Everything depending on the box will be skipped (e.g. cross-PBC contacts test and box metadata).
             sample_trajectory (Optional[int]):
                 If passed, download the first 10 (by default) frames from the trajectory.
                 You can specify a different number by providing an integer value.
@@ -1704,6 +1709,7 @@ class Project:
         self.interactions_auto = interactions_auto
         self.guess_bonds = guess_bonds
         self.ignore_bonds = ignore_bonds
+        self.ignore_box = ignore_box
         self.local_blast = local_blast
 
         # Other values which may be found/calculated on demand

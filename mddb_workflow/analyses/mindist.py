@@ -13,6 +13,35 @@ NEIGHBOUR_CELL_SHIFTS = np.array(
     [shift for shift in itertools.product((-1, 0, 1), repeat=3) if shift != (0, 0, 0)],
     dtype=np.float64)
 
+# Distance (nm) below which atoms in cross-PBC contact are considered to overlap
+OVERLAP_DISTANCE = 0.1
+
+# Distance (nm) a fragment center must be closer to a periodic image of the reference than to the reference itself
+# to be considered escaped from the rest of the system
+ESCAPE_MARGIN = 1.0
+
+
+def find_frame_escaped_fragments(
+    reference_center : np.ndarray,
+    fragment_centers : np.ndarray,
+    box_vectors : np.ndarray,
+    margin : float,
+) -> list[tuple[int, float, float]]:
+    """Find fragments whose center is considerably closer to a periodic image of the reference than to the reference itself.
+
+    The reference is the geometric center of all non-PBC atoms, so it does not depend on where the system is in the box.
+    Return a list of (fragment index, distance to the reference, distance to the closest reference image).
+    A fragment is escaped when its distance to a reference image is shorter than the distance to the reference minus the margin.
+    Only images in the first neighbour cells are checked, but a fragment further away is still closer to one of them.
+    """
+    shifts = NEIGHBOUR_CELL_SHIFTS @ box_vectors
+    deltas = fragment_centers - reference_center
+    own_distances = np.linalg.norm(deltas, axis=1)
+    # The distance to a reference image shifted by s is the norm of delta - s
+    image_distances = np.linalg.norm(deltas[:, np.newaxis, :] - shifts[np.newaxis, :, :], axis=2).min(axis=1)
+    escaped_indices = np.where(own_distances - image_distances > margin)[0]
+    return [ (int(index), own_distances[index], image_distances[index]) for index in escaped_indices ]
+
 
 def find_frame_cross_contacts(
     positions : np.ndarray,
@@ -91,6 +120,7 @@ def check_cross_periodic_contacts(
     distance_cutoff : float,
     snapshots : int,
     simulation_box : Optional[tuple | str] = None,
+    ignore_box : bool = False,
 ) -> Optional[bool]:
     """Check if non-PBC atoms contact each other across periodic boundaries.
 
@@ -106,8 +136,16 @@ def check_cross_periodic_contacts(
     if CROSS_PBC_FLAG in trust:
         return True
 
-    # If the test was run already
-    if register.tests.get(CROSS_PBC_FLAG, None):
+    # Skip if the box is to be ignored
+    if ignore_box:
+        print('Skipping cross-PBC contacts check: simulation box is ignored')
+        register.remove_warnings(CROSS_PBC_FLAG)
+        register.update_test(CROSS_PBC_FLAG, 'na')
+        return True
+
+    # If the test was passed already
+    # Note that a not applicable result is checked again, since it may be applicable now (e.g. box is not ignored anymore)
+    if register.tests.get(CROSS_PBC_FLAG, None) is True:
         return True
 
     register.remove_warnings(CROSS_PBC_FLAG)
@@ -132,11 +170,26 @@ def check_cross_periodic_contacts(
 
     print(f'Checking cross-PBC contacts ({n_nonpbc} non-PBC atoms, cutoff {distance_cutoff} Å)')
 
+    # Split non-PBC atoms in fragments to check none of them goes away from the rest of the system
+    # The geometric center of every fragment is compared against the geometric center of all non-PBC atoms
+    # If bonds are missing then we can not find fragments so we use chains instead
+    if structure.is_missing_any_bonds():
+        fragments = [ chain.get_selection() & non_pbc_selection for chain in structure.chains ]
+        fragments = [ fragment for fragment in fragments if fragment ]
+    else:
+        fragments = list(structure.find_fragments(non_pbc_selection))
+    fragments_atom_indices = [ np.array(fragment.atom_indices) for fragment in fragments ]
+    # Frames where every fragment escaped, and the distances in the first escaped frame
+    escape_frames = [ [] for _ in fragments ]
+    first_escape_distances = [ None for _ in fragments ]
+
     violation_frames = []
     # Frame with the largest number of atoms in cross-PBC contact, to be reported as example
     example_frame = None
     example_atoms_count = 0
     example_pairs = example_distances = None
+    # Shortest cross-PBC contact distance along the whole trajectory
+    closest_distance = np.inf
 
     trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
     pbar = tqdm(trajectory, total=snapshots, desc=' Frame', unit='frame')
@@ -148,10 +201,20 @@ def check_cross_periodic_contacts(
         if frame.unitcell_vectors is None: raise RuntimeError('Missing unitcell vectors')
         # Check if there are atoms too close to its period images in this frame
         box_vectors = frame.unitcell_vectors[0].astype(np.float64)   # (3, 3) nm, rows are vectors
-        positions = frame.xyz[0][non_pbc_indices].astype(np.float64)  # (n_nonpbc, 3) nm
+        all_positions = frame.xyz[0].astype(np.float64)
+        positions = all_positions[non_pbc_indices]  # (n_nonpbc, 3) nm
+        # Check if any fragment is closer to a periodic image of the non-PBC center than to the center itself
+        fragment_centers = np.array([ all_positions[atom_indices].mean(axis=0) for atom_indices in fragments_atom_indices ])
+        escaped = find_frame_escaped_fragments(positions.mean(axis=0), fragment_centers, box_vectors, ESCAPE_MARGIN)
+        for fragment_index, own_distance, image_distance in escaped:
+            escape_frames[fragment_index].append(frame_idx)
+            if first_escape_distances[fragment_index] is None:
+                first_escape_distances[fragment_index] = (own_distance, image_distance)
+        # Check if there are atoms too close to its period images in this frame
         pairs, distances = find_frame_cross_contacts(positions, box_vectors, cutoff_nm)
         if len(pairs) == 0: continue
         violation_frames.append(frame_idx)
+        closest_distance = min(closest_distance, distances[0])
         atoms_count = len(np.unique(pairs))
         if atoms_count > example_atoms_count:
             example_frame = frame_idx
@@ -159,7 +222,25 @@ def check_cross_periodic_contacts(
             example_pairs, example_distances = pairs, distances
 
     # Report any problem
-    if violation_frames:
+    escaped_fragment_indices = [ index for index, frames in enumerate(escape_frames) if frames ]
+    if not violation_frames and not escaped_fragment_indices:
+        print(' Test passed: no cross-PBC contacts detected')
+        register.update_test(CROSS_PBC_FLAG, True)
+        return True
+    messages = []
+    # Fragments which went away from the rest of the system
+    if escaped_fragment_indices:
+        message = ('Some non-PBC fragments go away from the rest of the system.')
+        for fragment_index in escaped_fragment_indices:
+            fragment_name = name_fragment(structure, fragments[fragment_index])
+            frames = escape_frames[fragment_index]
+            own_distance, image_distance = first_escape_distances[fragment_index]
+            message += (f'\n  {fragment_name} in {len(frames)}/{snapshots} frames.'
+                f' First in frame {frames[0]}')
+        message += ('\n If these fragments diffuse freely (e.g. an unbound ligand) then they must be part of the PBC selection')
+        messages.append(message)
+    # Contacts across periodic boundaries
+    elif violation_frames:
         n_violations = len(violation_frames)
         message = (
             f'Cross-PBC contacts detected in {n_violations}/{snapshots} frames. '
@@ -174,12 +255,21 @@ def check_cross_periodic_contacts(
             message += f'\n  {label_a} — {label_b} ({distance * 10:.2f} Å)'
         if len(example_pairs) > MAX_REPORTED_PAIRS:
             message += f'\n  etc. ({len(example_pairs)} pairs)'
-        if CROSS_PBC_FLAG in mercy:
-            register.add_warning(CROSS_PBC_FLAG, message)
-            register.update_test(CROSS_PBC_FLAG, False)
-            return False
-        raise TestFailure(message)
+        # Atoms overlapping through the boundary are not physical, so the box is likely wrong
+        if closest_distance < OVERLAP_DISTANCE:
+            message += (f'\n Some atoms overlap their periodic neighbours (down to {closest_distance * 10:.2f} Å).'
+                ' This is not physical: the simulation box in the trajectory is probably wrong.')
+        messages.append(message)
+    message = '\n'.join(messages)
+    if CROSS_PBC_FLAG in mercy:
+        register.add_warning(CROSS_PBC_FLAG, message)
+        register.update_test(CROSS_PBC_FLAG, False)
+        return False
+    raise TestFailure(message)
 
-    print(' Test passed: no cross-PBC contacts detected')
-    register.update_test(CROSS_PBC_FLAG, True)
-    return True
+
+def name_fragment(structure : 'Structure', fragment : 'Selection') -> str:
+    """Name a fragment by its residue if it has only one, or by its chains otherwise."""
+    residue_indices = structure.get_selection_residue_indices(fragment)
+    if len(residue_indices) == 1: return structure.residues[residue_indices[0]].label
+    return structure.name_selection(fragment)

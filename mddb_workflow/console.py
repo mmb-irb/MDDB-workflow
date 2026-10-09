@@ -652,6 +652,7 @@ run_parser_workflow_args = [
     (['-iauto', '--interactions_auto'], {'type': str, 'nargs': '?', 'const': True, 'help': project_init_help['interactions_auto']}),
     (['-gb', '--guess_bonds'], {'action': 'store_true', 'help': project_init_help['guess_bonds']}),
     (['-ib', '--ignore_bonds'], {'action': 'store_true', 'help': project_init_help['ignore_bonds']}),
+    (['-ibox', '--ignore_box'], {'action': 'store_true', 'help': project_init_help['ignore_box']}),
     (['-sfr', '--screenshot_frame'], {'type': int, 'default': None, 'help': project_init_help['screenshot_frame']}),
     (['-lb', '--local_blast'], {'action': 'store_true', 'help': project_init_help['local_blast']}),
 ]

@@ -63,6 +63,9 @@ def process_input_files(
     input_cg_selection: Optional[str],
     input_dummy_selection: Optional[str],
     input_forced_class_selections: dict,
+    # The cross-PBC contacts test depends on the simulation box
+    # It is not used directly but this task must be run again if it changes
+    ignore_box: bool,
     # Make sure the MD is used only to set values or use its functions, but not to get values
     # Values must be passed separately as inputs so the task can identify when inputs change
     self: 'MD',
