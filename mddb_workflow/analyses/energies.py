@@ -22,6 +22,8 @@ from shutil import copyfile
 from glob import glob
 import re
 import math
+import numpy as np
+from scipy.spatial import cKDTree
 from subprocess import run, PIPE
 
 from mddb_workflow.tools.get_pdb_frames import get_pdb_frames
@@ -37,7 +39,11 @@ from mddb_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
+ERASE_2_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
 ERASE_3_PREVIOUS_LINES = CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE
+# Set the minimum distance (Å) between agents beyond which CMIP is not run and energies are assumed to be 0
+# Otherwise the CMIP grid, which must include both agents, becomes huge and the calculation becomes too slow and memory demanding
+FAR_AGENTS_CUTOFF = 30
 # Set an exception to handle internal issues
 OUTPUT_MINING_EXCEPTION = Exception('CMIP output mining failed')
 EXPECTED_CMIP_PDB_LINE_LENGTH = 65
@@ -455,6 +461,18 @@ def energies (
             agent2_selection = frame_structure.select_atom_indices(agent2_atom_indices)
             if not agent2_selection:
                 raise ValueError(f'Empty agent 2 "{agent2_name}" from interaction "{interaction_name}"')
+
+            # If both agents are far from each other then skip CMIP and assume all energies are 0
+            agent1_coords = np.array([ frame_structure.atoms[index].coords for index in agent1_atom_indices ])
+            agent2_coords = np.array([ frame_structure.atoms[index].coords for index in agent2_atom_indices ])
+            distances, _ = cKDTree(agent1_coords).query(agent2_coords, distance_upper_bound=FAR_AGENTS_CUTOFF)
+            if np.isinf(distances).all():
+                print(f'  Agents are further than {FAR_AGENTS_CUTOFF} Å -> Energies are set to 0')
+                agent1_atom_energies = [ (0, 0, 0) for index in agent1_atom_indices ]
+                agent2_atom_energies = [ (0, 0, 0) for index in agent2_atom_indices ]
+                data.append({ 'agent1': agent1_atom_energies, 'agent2': agent2_atom_energies })
+                print(ERASE_2_PREVIOUS_LINES)
+                continue
 
             # Prepare the CMIP friendly input pdb structures for every calculation
             # First prepare the host files and the prepare the guest files
