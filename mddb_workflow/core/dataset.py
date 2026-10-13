@@ -19,6 +19,7 @@ from pathlib import Path
 from enum import Enum
 from contextlib import contextmanager
 import importlib.util
+import random
 
 
 def _stream_output(stream, log_file_handle, output_stream):
@@ -28,6 +29,24 @@ def _stream_output(stream, log_file_handle, output_stream):
         output_stream.flush()
         log_file_handle.write(line)
         log_file_handle.flush()
+
+
+# Substrings of sqlite3 errors that can be transient when several processes (possibly on different
+# nodes of a parallel filesystem like BeeGFS/NFS) access the same database at the same time
+_TRANSIENT_SQLITE_ERRORS = (
+    'database is locked',
+    'unable to open database file',
+    'database disk image is malformed',
+    'disk i/o error',
+)
+
+
+def _is_transient_sqlite_error(error: Exception) -> bool:
+    """Return whether a sqlite3 error is likely caused by concurrent access and worth retrying."""
+    if not isinstance(error, sqlite3.DatabaseError):
+        return False
+    message = str(error).lower()
+    return any(transient in message for transient in _TRANSIENT_SQLITE_ERRORS)
 
 
 class State(Enum):
@@ -44,6 +63,8 @@ class DatabaseLock:
 
     Uses os.mkdir() which is atomic across distributed filesystems like NFS and BeeGFS.
     This provides reliable locking where fcntl.flock() fails on network filesystems.
+    The lock directory is created next to the database so all nodes share it. Only when that
+    directory is not writable it falls back to the node-local temporary directory.
 
     Note: This implementation uses exclusive locking for both read and write operations
     to ensure consistency on distributed filesystems. While this is more conservative
@@ -70,7 +91,11 @@ class DatabaseLock:
     def _path_to_lock_dir(db_path: str | Path) -> Path:
         """Get the lock directory path for a given database path."""
         db_path = Path(db_path).resolve()
-        # Save the lock in the /tmp directory instead of in the local directory
+        # Save the lock next to the database so it is shared by all nodes of a distributed filesystem
+        # This is what keeps concurrent SLURM jobs running in different nodes from corrupting each other's reads
+        if os.access(db_path.parent, os.W_OK):
+            return db_path.with_name('.lock_' + db_path.name)
+        # Otherwise save the lock in the /tmp directory, which is local to this node
         # This allows to use the dataset command in directories you don't have writting permissions
         # And this is useful if you want to make a 'mwf dataset status' in the directory of a coworker
         path_hash = hashlib.md5(str(db_path).encode()).hexdigest()[:8]
@@ -157,6 +182,10 @@ class Dataset:
     project_columns = ['uuid', 'rel_path', 'num_mds'] + common_columns
     md_columns = ['uuid', 'project_uuid', 'rel_path'] + common_columns
     date_format = "%H:%M:%S %d-%m-%Y"
+    # Retries when opening the database fails due to concurrent access (jittered exponential backoff)
+    open_retries = 8
+    open_retry_base_delay = 0.2
+    open_retry_max_delay = 10.0
 
     def __init__(self, dataset_path: str = 'mwf_ds.sql', lock_timeout: float = 30.0):
         """Initialize the Dataset object and connect to SQLite DB.
@@ -171,10 +200,30 @@ class Dataset:
         #     raise ValueError(f"Dataset path {self.dataset_path} does not exist.")
         self.root_path = self.dataset_path.parent
         self._lock = DatabaseLock(self.dataset_path, timeout=lock_timeout)
-        self.conn = sqlite3.connect(dataset_path, check_same_thread=False)
+        self.conn = None
+        self._retry_transient(self._open)
+
+    def _open(self):
+        """(Re)connect to the database and make sure the schema is up to date."""
+        # Always start from a fresh connection so no stale page cache survives a failed attempt
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+        self.conn = sqlite3.connect(self.dataset_path, check_same_thread=False)
         # Enable foreign key constraints (disabled by default in SQLite)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self._ensure_tables()
+
+    def _retry_transient(self, func):
+        """Call func, retrying with jittered exponential backoff on transient sqlite3 errors."""
+        for attempt in range(self.open_retries + 1):
+            try:
+                return func()
+            except sqlite3.DatabaseError as e:
+                if attempt == self.open_retries or not _is_transient_sqlite_error(e):
+                    raise
+                delay = min(self.open_retry_base_delay * 2 ** attempt, self.open_retry_max_delay)
+                time.sleep(delay * random.uniform(0.5, 1.5))
 
     @property
     def locked_storage_file(self):
