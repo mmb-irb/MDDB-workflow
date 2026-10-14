@@ -5,6 +5,7 @@ import subprocess
 import threading
 import time
 import multiprocessing
+import sqlite3
 from mddb_workflow.core.dataset import Dataset, State, DatabaseLock
 from pathlib import Path
 
@@ -435,3 +436,140 @@ def test_running_project_lifecycle_reconciles_to_error_when_process_dies():
         assert updated['state'] == State.ERROR.value
         assert 'no longer running' in updated['message'].lower()
         ds.close()
+
+
+def _open_dataset_concurrently(db_path: str, start_event, results_queue, iterations: int = 5):
+    """Open the dataset several times and read from it, reporting any error."""
+    try:
+        start_event.wait(timeout=30)
+        for _ in range(iterations):
+            ds = Dataset(dataset_path=db_path)
+            ds.query_table('projects')
+            ds.close()
+        results_queue.put(('success', os.getpid()))
+    except Exception as e:
+        results_queue.put(('error', os.getpid(), repr(e)))
+
+
+def _run_concurrent_opens(db_path: Path, num_workers: int = 8) -> list:
+    start_event = multiprocessing.Event()
+    results_queue = multiprocessing.Queue()
+    processes = [
+        multiprocessing.Process(target=_open_dataset_concurrently, args=(str(db_path), start_event, results_queue))
+        for _ in range(num_workers)
+    ]
+    for p in processes:
+        p.start()
+    start_event.set()  # Release all workers at the same time
+    results = [results_queue.get(timeout=120) for _ in processes]
+    for p in processes:
+        p.join(timeout=30)
+    return results
+
+
+@pytest.mark.unit_int
+def test_dataset_concurrent_open():
+    """Several processes opening the same (new and existing) dataset at once all succeed."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        db_path = tmpdir / "dataset.db"
+
+        # All workers race to create the schema of a brand new dataset
+        results = _run_concurrent_opens(db_path)
+        errors = [r for r in results if r[0] == 'error']
+        assert not errors, f"Worker errors: {errors}"
+
+        ds = Dataset(dataset_path=str(db_path))
+        project_dir = tmpdir / "proj1"
+        project_dir.mkdir()
+        ds.add_project(str(project_dir), make_uuid=True)
+        ds.close()
+
+        # Opening an up to date dataset must not write to it
+        before = db_path.read_bytes()
+        mtime_before = db_path.stat().st_mtime_ns
+        results = _run_concurrent_opens(db_path)
+        errors = [r for r in results if r[0] == 'error']
+        assert not errors, f"Worker errors: {errors}"
+        assert db_path.read_bytes() == before
+        assert db_path.stat().st_mtime_ns == mtime_before
+
+
+@pytest.mark.unit_int
+def test_dataset_open_retries_transient_errors(monkeypatch):
+    """Transient sqlite3 errors while opening are retried; permanent ones are raised at once."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "dataset.db"
+        real_connect = sqlite3.connect
+        failures = [sqlite3.OperationalError('unable to open database file'),
+                    sqlite3.DatabaseError('database disk image is malformed')]
+        calls = []
+
+        def flaky_connect(*args, **kwargs):
+            calls.append(None)
+            if failures:
+                raise failures.pop(0)
+            return real_connect(*args, **kwargs)
+
+        monkeypatch.setattr(Dataset, 'open_retry_base_delay', 0.01)
+        monkeypatch.setattr(sqlite3, 'connect', flaky_connect)
+        ds = Dataset(dataset_path=str(db_path))
+        assert len(calls) == 3
+        ds.close()
+
+        def broken_connect(*args, **kwargs):
+            calls.append(None)
+            raise sqlite3.OperationalError('no such table: foo')
+
+        calls.clear()
+        monkeypatch.setattr(sqlite3, 'connect', broken_connect)
+        with pytest.raises(sqlite3.OperationalError):
+            Dataset(dataset_path=str(db_path))
+        assert len(calls) == 1
+
+
+@pytest.mark.unit_int
+def test_lock_dir_next_to_writable_dataset():
+    """The lock lives next to the database so every node of a shared filesystem sees it."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "dataset.db"
+        lock_dir = DatabaseLock._path_to_lock_dir(db_path)
+        assert lock_dir == db_path.resolve().with_name('.lock_dataset.db')
+
+        ds = Dataset(dataset_path=str(db_path))
+        assert ds._lock.lock_dir == lock_dir
+        with ds.locked_storage_file:
+            assert lock_dir.is_dir()
+        assert not lock_dir.exists()
+        ds.close()
+
+
+@pytest.mark.unit_int
+@pytest.mark.skipif(hasattr(os, 'geteuid') and os.geteuid() == 0, reason="root can write to read-only directories")
+def test_lock_dir_falls_back_to_tmp_for_read_only_dataset():
+    """A dataset in a read-only directory (e.g. a coworker's) uses a lock in the temp dir and can still be read."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        data_dir = Path(tmpdir) / "coworker"
+        data_dir.mkdir()
+        db_path = data_dir / "dataset.db"
+        project_dir = data_dir / "proj1"
+        project_dir.mkdir()
+        ds = Dataset(dataset_path=str(db_path))
+        ds.add_project(str(project_dir), make_uuid=True)
+        ds.close()
+
+        data_dir.chmod(0o555)
+        db_path.chmod(0o444)
+        try:
+            lock_dir = DatabaseLock._path_to_lock_dir(db_path)
+            assert lock_dir.parent == Path(tempfile.gettempdir())
+            assert lock_dir.name.startswith('.lock_dataset.db_')
+
+            ds = Dataset(dataset_path=str(db_path))
+            assert ds._lock.lock_dir == lock_dir
+            assert len(ds.query_table('projects')) == 1
+            assert not lock_dir.exists()
+            ds.close()
+        finally:
+            db_path.chmod(0o644)
+            data_dir.chmod(0o755)
