@@ -11,6 +11,7 @@ from mddb_workflow.utils.constants import RED_HEADER, GREEN_HEADER, COLOR_END
 from mddb_workflow.utils.constants import CHANNELS_ANALYSIS_VERSION, CLUSTERS_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import ENERGIES_ANALYSIS_VERSION, HBONDS_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import INTERACTIONS_ANALYSIS_VERSION, LIPID_INTERACTIONS_ANALYSIS_VERSION, LIPID_ORDER_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import POCKETS_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import RGYR_ANALYSIS_VERSION, RMSDS_ANALYSIS_VERSION, RMSF_ANALYSIS_VERSION
 from mddb_workflow.utils.constants import SASA_ANALYSIS_VERSION, THICKNESS_ANALYSIS_VERSION, TMSCORES_ANALYSIS_VERSION
 from mddb_workflow.utils.database import Database, get_available_nodes
@@ -28,6 +29,7 @@ ANALYSIS_VERSIONS = {
     'inter': INTERACTIONS_ANALYSIS_VERSION,
     'linter': LIPID_INTERACTIONS_ANALYSIS_VERSION,
     'lorder': LIPID_ORDER_ANALYSIS_VERSION,
+    'pockets': POCKETS_ANALYSIS_VERSION,
     'rgyr': RGYR_ANALYSIS_VERSION,
     'rmsds': RMSDS_ANALYSIS_VERSION,
     'rmsf': RMSF_ANALYSIS_VERSION,

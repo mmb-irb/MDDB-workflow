@@ -21,7 +21,6 @@
 from os.path import exists, getsize, split
 from os import remove, chdir, getcwd
 import re
-import collections
 
 from subprocess import run, PIPE
 
@@ -30,6 +29,7 @@ from mddb_workflow.utils.auxiliar import warn, ToolError, save_json
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import GREY_HEADER, COLOR_END
 from mddb_workflow.utils.constants import OUTPUT_POCKETS_FILENAME, OUTPUT_POCKET_STRUCTURES_PREFIX
+from mddb_workflow.utils.constants import POCKETS_ANALYSIS_VERSION
 from mddb_workflow.utils.type_hints import *
 
 CURSOR_UP_ONE = '\x1b[1A'
@@ -166,6 +166,8 @@ def pockets (
             # DANI: '! No Pockets Found while refining' y '! No pocket to reindex.'
             # DANI: Además de algún 'Error in creating clustering tree, return NULL pointer...breaking up!'
             raise Exception('Failed to mine dimensions')
+        if not origin:
+            raise Exception('Failed to mine origin')
 
         # Next, mine the grid values
         grid_values = []
@@ -190,6 +192,12 @@ def pockets (
             if (search != None):
                 grid_values.append(float(search.group(1)))
                 continue
+
+    # Make sure we mined as many grid values as expected
+    # Otherwise some line was not recognized and the grid indices would be shifted
+    expected_values = dimensions[0] * dimensions[1] * dimensions[2]
+    if len(grid_values) != expected_values:
+        raise Exception(f'Failed to mine grid values: expected {expected_values} but found {len(grid_values)}')
 
     # Set a function to get the value of a given 'x, y, z' grid point
     # Grid points are disposed first in 'z' order, then 'y', and finally 'x'
@@ -249,8 +257,13 @@ def pockets (
     cuttoff = 0.5
 
     # Classify all non-zero values by 'pocket' groups according to if they are connected
-    pockets = [0] * xl * yl * zl
+    # Store the grid point indices of each pocket by its pocket number
+    # Note that a grid point may belong to several pockets
+    pockets = {}
     pockets_count = 0
+    # Keep track of the points already used to expand any pocket so they do not start a new pocket
+    # Note that pocket edge points which were tagged but not expanded may still start a new pocket
+    expanded_points = set()
 
     # Given a point which belongs to a pocket, find all pocket points connected to it
     # This connection must be wide enought for a water molecule to fit in
@@ -258,7 +271,11 @@ def pockets (
     # So, pocket points must be connected by a net of points at least 3 points wide in all dimensions (x,y,z)
     # Tag all points with the same pocket number
     def set_pocket (start_point : tuple, pocket_number : int):
+        # Tag the start point itself, since only colliding points are tagged below
+        pocket_indices = { get_index(*start_point) }
         points = [start_point]
+        # Keep also a set of the points for fast membership checks
+        visited_points = { start_point }
         for point in points:
             # Get current point colliders
             colliding_points = get_colliding_points(point)
@@ -270,7 +287,7 @@ def pockets (
                 # If it is a pocket then set it as part of the current pocket
                 if value >= cuttoff:
                     # Tag it as the current pocket
-                    pockets[index] = pocket_number
+                    pocket_indices.add(index)
                     pocket_points.append(point)
             # In case all its surrounding points are pockets add the points to the list so they can keep expanding the pocket
             # This is done because if all surrounding points are pockets it means we have a wide enought region of the pocket
@@ -279,14 +296,21 @@ def pockets (
             if len(pocket_points) < 26:
                 continue
             # Filter points which are not in the pockets list already
-            new_points = [ point for point in pocket_points if point not in points ]
+            new_points = [ point for point in pocket_points if point not in visited_points ]
             # Update the points list
             points += new_points
+            visited_points.update(new_points)
+        pockets[pocket_number] = pocket_indices
+        expanded_points.update(visited_points)
 
     # Find out if a point is surrounded by all pocket points so it could be considered a pocket alone
     def is_pocket_base (start_point : tuple) -> bool:
         # Get current point colliders
         colliding_points = get_colliding_points(start_point)
+        # Points in the grid border have less colliding points and they can not be a pocket base
+        # Note that they could not expand the pocket either
+        if len(colliding_points) < 26:
+            return False
         # Search if these points match the cutoff
         # If only 1 point does not match then this is not a pocket base
         for point in colliding_points:
@@ -305,26 +329,24 @@ def pockets (
                 value = grid_values[index]
                 if value < cuttoff:
                     continue
-                # If it is a pocket but it has been already tagged then pass
-                pocket = pockets[index]
-                if pocket:
+                # If it is a pocket but it has been already expanded by another pocket then pass
+                point = (x,y,z)
+                if point in expanded_points:
                     continue
                 # If it is not wide enought to start a pocket then pass
-                point = (x,y,z)
                 if not is_pocket_base(point):
                     continue
                 # If none of the previous values was marked as a pocket then we set a new pocket number
                 pockets_count += 1
                 set_pocket(start_point=point, pocket_number=pockets_count)
 
-    # Exclude the first result which will always be 0 and it stands for no-pocket points
-    biggest_pockets = collections.Counter(pockets).most_common()
-    if len(biggest_pockets) == 1:
+    if len(pockets) == 0:
         print(' No pockets were found')
         # Recover the original directory
         chdir(recovery_path)
         return
-    biggest_pockets = biggest_pockets[1:]
+    # Sort pockets by their number of points, biggest first
+    biggest_pockets = sorted(pockets.values(), key=len, reverse=True)
     pockets_number = len(biggest_pockets)
     # If we have more than the maximum number of pockets then get the first pockets and discard the rest
     if pockets_number > maximum_pockets_number:
@@ -353,7 +375,7 @@ def pockets (
     # 2 - Conver the grid to pdb
     # 3 - Analyze this pdb with mdpocket
     # 4 - Harvest the volumes over time and write them in the pockets analysis file
-    for p, pock in enumerate(biggest_pockets, 1):
+    for p, pocket_indices in enumerate(biggest_pockets, 1):
         # WARNING: This name must match the final name of the pocket file once loaded in the database
         pocket_name = 'pocket_' + str(p).zfill(2)
         pocket_output = output_directory_name + '/' + pocket_name
@@ -371,8 +393,7 @@ def pockets (
             print(f' Analyzing pocket {p}/{pockets_number}', end='\r')
 
             # Create the new grid for this pocket, where all values from other pockets are set to 0
-            pocket_value = pock[0]
-            new_grid_values = [str(value).ljust(5,'0') if pockets[v] == pocket_value else '0.000' for v, value in enumerate(grid_values)]
+            new_grid_values = [str(value).ljust(5,'0') if v in pocket_indices else '0.000' for v, value in enumerate(grid_values)]
             new_grid_filename = output_directory_name + '/' + pocket_name + '.dx'
             with open(new_grid_filename,'w') as file:
                 # Write the header lines
@@ -403,9 +424,7 @@ def pockets (
             new_pdb_lines = []
             lines_count = 0
             new_pdb_filename = f'{output_pocket_structure_prefix}{str(p).zfill(2)}.pdb'
-            for j, pocket in enumerate(pockets):
-                if pocket != pocket_value:
-                    continue
+            for j in sorted(pocket_indices):
                 x,y,z = get_coordinates(j)
                 lines_count += 1
                 atom_num = str(lines_count).rjust(6,' ')
@@ -495,6 +514,10 @@ def pockets (
                 line_data = re.split("[ ]+", line[:-1])
                 if line_data[0] == 'MODEL':
                     continue
+                # In big systems the atom number may be glued to the record name (e.g. 'ATOM100000')
+                # DANI: En realidad no estoy seguro, es más un check
+                if re.fullmatch('ATOM[0-9]+', line_data[0]):
+                    raise ValueError(f'Atom number glued to the record name in {atoms_filename}: {line}')
                 if line_data[0] == 'ATOM':
                     atoms.append(int(line_data[1]))
                 if line_data[0] == 'ENDMDL':
@@ -520,4 +543,4 @@ def pockets (
     start = 0
 
     # Export the analysis in json format
-    save_json({ 'data': output_analysis, 'start': start, 'step': step }, output_analysis_filepath)
+    save_json({ 'data': output_analysis, 'start': start, 'step': step, 'version': POCKETS_ANALYSIS_VERSION }, output_analysis_filepath)
