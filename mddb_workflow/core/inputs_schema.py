@@ -57,6 +57,9 @@ class Ligand(InputsBaseModel):
         if type(data) is str:
             raise ValueError(f'A ligand name has been identified: {data}. '
                 'Please provide at least one of the following IDs: PubChem, DrugBank, ChEMBL.')
+        # The forced selection field was previously read as 'selection'
+        if type(data) is dict and 'selection' in data:
+            raise ValueError('The ligand field "selection" is not supported. Use "vmd_selection" instead.')
         return data
 
     @model_validator(mode='after')

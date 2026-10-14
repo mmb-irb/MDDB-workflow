@@ -231,14 +231,16 @@ def generate_ligand_references(
         # If the user defined a ligand name, it will be respected and added to the metadata
         if forced_name := input_ligand.get('name', None):
             ligand_data['forced_name'] = forced_name
-        forced_selection = input_ligand.get('selection', None)
+        forced_selection = input_ligand.get('vmd_selection', None)
         if forced_selection:
-            # Could be a single residue or a list of residues
+            # Could be a single selection or a list of selections
+            if type(forced_selection) is list:
+                forced_selection = ' or '.join(f'({selection})' for selection in forced_selection)
             selection_atoms = structure.select(forced_selection)
             residue_indices = structure.get_selection_residue_indices(selection_atoms)
             print(f'User forced selection of {len(residue_indices)} residue/s for ligand {input_ligand}.')
             if len(residue_indices) == 0 and LIGANDS_MATCH_FLAG not in mercy:
-                raise InputError(f'Ligand with PubChem ID {pubchem_id} did not map with any residue')
+                raise InputError(f'Ligand with PubChem ID {ligand_data["pubchem"]} did not map with any residue')
             ligand_data['resindices'] = residue_indices
             ligand_data['resnames'] = [structure.residues[index].name for index in residue_indices]
             ligand_data['forced'] = True
