@@ -1505,6 +1505,8 @@ class Structure:
         # Keep track of the last issued atom and residue indices
         atom_index = -1
         residue_index = -1
+        # Keep track of the atom names in the last issued residue
+        current_residue_atom_names = set()
         for line in pdb_lines:
             # Parse atoms only
             start = line[0:6]
@@ -1547,10 +1549,17 @@ class Structure:
             parsed_residue = label_residues.get(residue_label, None)
             if parsed_residue and parsed_residue != parsed_residues[-1]:
                 parsed_residue = None
+            # Some writers (e.g. VMD) write a placeholder such as '****' for every residue number which overflows
+            # In this case consecutive residues share the same label, so we can not rely on it to split them
+            # Start a new residue whenever the residue name changes or an atom name is repeated
+            is_placeholder_number = is_residue_number_placeholder(residue_number)
+            if parsed_residue and is_placeholder_number:
+                if residue_name != parsed_residue.name or atom_name in current_residue_atom_names:
+                    parsed_residue = None
             # If the parsed residue was not yet instantiated then do it now
             if not parsed_residue:
                 # Parse the residue number if it is to be parsed
-                if residue_numeration_base:
+                if residue_numeration_base and not is_placeholder_number:
                     parsed_residue_number = int(residue_number, residue_numeration_base)
                 # If we decided to ignore the numeration system then we just issue a new residue number
                 # Use the last residue number from the current chain as reference
@@ -1565,9 +1574,11 @@ class Structure:
                 # Add current residue to the parsed chain
                 residue_index += 1
                 parsed_chain.residue_indices.append(residue_index)
+                current_residue_atom_names = set()
             # Add current atom to the parsed residue
             atom_index += 1
             parsed_residue.atom_indices.append(atom_index)
+            current_residue_atom_names.add(atom_name)
         return cls(atoms=parsed_atoms, residues=parsed_residues, chains=parsed_chains, residue_numeration_base=residue_numeration_base)
 
     @classmethod
@@ -3410,6 +3421,14 @@ lower_numbers = {
 def get_lower_numbers(numbers_text: str) -> str:
     """Convert numbers to lower text characters (chr 8020-8029)."""
     return ''.join([lower_numbers[c] for c in numbers_text])
+
+
+def is_residue_number_placeholder(residue_number: str) -> bool:
+    """Check if a PDB residue number is a placeholder with no numerical meaning (e.g. '****').
+    VMD writes this placeholder for every residue number which overflows the 4 PDB characters."""
+    stripped_residue_number = residue_number.strip()
+    if len(stripped_residue_number) == 0: return False
+    return not any(character.isalnum() for character in stripped_residue_number)
 
 
 def filter_pdb_model(pdb_content: str, model: int) -> str:
