@@ -775,6 +775,71 @@ class Dataset:
             with open(inputs_yaml_path, 'w') as f:
                 f.write(rendered_yaml)
 
+    def _find_inputs_file(self, rel_path: str) -> str | None:
+        """Find the inputs file of a project as the Project class does.
+        Return None if there is no inputs file.
+        """
+        project_dir = self._rel_to_abs(rel_path)
+        candidates = []
+        for filename in ACCEPTED_INPUT_FILENAMES:
+            candidates += glob.glob(os.path.join(glob.escape(str(project_dir)), '*' + filename))
+        if len(candidates) == 0: return None
+        if len(candidates) > 1:
+            raise ValueError(f'Multiple files could be the inputs file in {rel_path}: {", ".join(candidates)}')
+        return candidates[0]
+
+    def get_inputs_field(self,
+            field: str,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
+            query_message: list[str] = [],
+        ):
+        """Print the value of a single field in the inputs files of the selected projects.
+
+        Args:
+            field (str):
+                Name of the field to be shown. Use dots to access nested fields and
+                integers to access list items (e.g. 'mds.0.name').
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+
+        """
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
+        if len(filtered_projects) == 0:
+            print("No projects found matching the specified query_path and query_state filters.")
+            return
+        keys = field.split('.')
+        for project_entry in filtered_projects:
+            project_dict = dict(zip(self.project_columns, project_entry))
+            rel_path = project_dict['rel_path']
+            inputs_filepath = self._find_inputs_file(rel_path)
+            if inputs_filepath is None:
+                print(f'{rel_path}: (no inputs file)')
+                continue
+            value = load_json(inputs_filepath) if inputs_filepath.endswith('.json') else load_yaml(inputs_filepath)
+            missing = False
+            for i, key in enumerate(keys):
+                if type(value) is list:
+                    key = int(key)
+                    if key >= len(value):
+                        missing = True
+                        break
+                elif type(value) is dict:
+                    if key not in value:
+                        missing = True
+                        break
+                else:
+                    raise ValueError(f'Field "{".".join(keys[:i])}" in {inputs_filepath} is not a dict or a list')
+                value = value[key]
+            print(f'{rel_path}: ' + ('(missing)' if missing else repr(value)))
+
     def set_inputs_field(self,
             field: str,
             value: str,
@@ -817,17 +882,10 @@ class Dataset:
         inputs_files = []
         for project_entry in filtered_projects:
             project_dict = dict(zip(self.project_columns, project_entry))
-            project_dir = self._rel_to_abs(project_dict['rel_path'])
-            # Search the inputs file as the Project class does
-            candidates = []
-            for filename in ACCEPTED_INPUT_FILENAMES:
-                candidates += glob.glob(os.path.join(glob.escape(str(project_dir)), '*' + filename))
-            if len(candidates) == 0:
+            inputs_filepath = self._find_inputs_file(project_dict['rel_path'])
+            if inputs_filepath is None:
                 missing_inputs.append(project_dict['rel_path'])
                 continue
-            if len(candidates) > 1:
-                raise ValueError(f'Multiple files could be the inputs file in {project_dict["rel_path"]}: {", ".join(candidates)}')
-            inputs_filepath = candidates[0]
             inputs = load_json(inputs_filepath) if inputs_filepath.endswith('.json') else load_yaml(inputs_filepath)
             # Find the parent of the target field
             # Missing dict fields are created, but list items must exist
