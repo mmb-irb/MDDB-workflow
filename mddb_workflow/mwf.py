@@ -1191,7 +1191,11 @@ class MD:
 
     # Reference frame
     get_reference_frame = Task('reframe', 'Reference frame', get_bonds_reference_frame)
-    reference_frame = property(get_reference_frame, None, None, "Reference frame to be used to represent the MD (read only)")
+    def get_reference_frame_number(self) -> int:
+        """Get the reference frame number, without the bonds check result."""
+        reference_frame, _ = self.get_reference_frame(self)
+        return reference_frame
+    reference_frame = property(get_reference_frame_number, None, None, "Reference frame to be used to represent the MD (read only)")
 
     def get_topology_reader(self) -> 'Topology':
         """Get the topology data reader."""

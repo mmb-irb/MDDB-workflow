@@ -141,7 +141,7 @@ def structure_corrector(
         ' Now we will look for a frame which has no clashes/overstretches at all.\n'
         ' This frame will be considered as the "reference frame".')
         # Find the first frame in the whole trajectory where safe bonds are respected
-        bonds_reference_frame = get_bonds_reference_frame(
+        bonds_reference_frame, bonds_are_fine = get_bonds_reference_frame(
             structure=structure,
             trajectory_file=input_trajectory_file,
             snapshots=snapshots,
@@ -151,7 +151,7 @@ def structure_corrector(
         # Update the task output so it does not have to be repeated further
         # IMPORTANT: Note that this is not always run, but only when default structure bonds are wrong
         # IMPORTANT: Thus it is NORMAL when the reference frame is calculated further in the workflow
-        MD.get_reference_frame.prefill(MD, bonds_reference_frame, {
+        MD.get_reference_frame.prefill(MD, (bonds_reference_frame, bonds_are_fine), {
             'structure_file': output_structure_file,
             'trajectory_file': input_trajectory_file,
             'snapshots': snapshots,
@@ -160,7 +160,7 @@ def structure_corrector(
             'pbc_selection': pbc_selection
         })
         # If there is no reference frame then stop here since there must be a problem
-        if bonds_reference_frame is None:
+        if not bonds_are_fine:
             print('There is no reference frame for the safe bonds. Is the trajectory not imaged?')
             if STABLE_BONDS_FLAG not in mercy:
                 raise TestFailure('Failed to find stable bonds')

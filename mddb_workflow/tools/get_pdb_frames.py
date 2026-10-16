@@ -79,6 +79,8 @@ def get_starting_pdb_frames (
     # In case we are missing a frames limit set the limit as the number os snapshots
     if frames_limit == None:
         frames_limit = snapshots
+    # The limit can not be larger than the number of snapshots, or logs would be missleading
+    frames_limit = min(frames_limit, snapshots)
 
     # Make a copy of the structure to be used as a template, so we do not modify the original coordinates
     reference_structure = structure.copy()

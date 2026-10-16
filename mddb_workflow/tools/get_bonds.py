@@ -9,8 +9,11 @@ from mddb_workflow.utils.mda_spells import get_tpr_bonds_mdanalysis
 from mddb_workflow.utils.type_hints import *
 import pytraj as pt
 from collections import Counter
+from math import ceil
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
+# Minimum number of frames where the same atom must fail to consider the reference frame test as failed
+MIN_ATOM_FAILURE_FRAMES = 2
 
 
 def get_bond_clashes(
@@ -132,24 +135,35 @@ def get_bonds_reference_frame(
     excluded_atom_indices: set[int],
     ignore_bonds: bool = False,
     patience: int = 100,  # Limit of frames to check before we surrender
-) -> Optional[int]:
+    # Minimum ratio of checked frames where the same atom must fail to consider the test as failed
+    atom_failure_ratio: float = 0.05,
+) -> tuple[int, bool]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD.
+    Also return a boolean saying if bonds are fine.
+
+    If no frame respects all bonds then we check how often every atom fails.
+    If any atom fails in the atom failure ratio of checked frames or more then bonds are wrong.
+    If failures are spread along different atoms then bonds are considered fine.
+    In this case the frame with the fewest mismatches is returned as reference frame.
     """
     # If bonds were ignored then the reference frame makes no sense
-    if ignore_bonds: return 0
+    if ignore_bonds: return 0, True
 
     # If all atoms are to be excluded then set the first frame as the reference frame and stop here
     if len(excluded_atom_indices) == len(structure.atoms):
         print(' All atoms are excluded from bond checks -> Setting frame 1 as reference frame')
-        return 0
+        return 0, True
 
     # Now that we have the reference bonds, we must find a frame where bonds are exactly the reference ones
-    frames = get_starting_pdb_frames(structure, trajectory_file.path, snapshots, patience)
-    print(f'Searching the reference frame for the bonds. Only first {patience} frames will be checked.')
+    frames_limit = min(patience, snapshots)
+    frames = get_starting_pdb_frames(structure, trajectory_file.path, snapshots, frames_limit)
+    print(f'Searching the reference frame for the bonds. Only first {frames_limit} frames will be checked.')
     # We check all frames but we stop as soon as we find a match
     bonds_reference_frame = None
     clash_counts = Counter()
+    # Count the number of frames where every atom has a mismatch, no matter the bonds
+    atom_clash_counts = Counter()
     checked_frames = 0
     frame_clash_counts = []
     # Cache the reference bond sets so do_bonds_match does not have to create them for every frame
@@ -171,44 +185,59 @@ def get_bonds_reference_frame(
             # Track every atom mismatch in this frame and its frequency across frames.
             frame_clash_counts.append(len(frame_clashes))
             clash_counts.update(frame_clashes)
+            atom_clash_counts.update(atom_index for atom_index, _, _ in frame_clashes)
             if not frame_clashes:
                 bonds_reference_frame = frame_number
                 break
     finally:
         frames.close()
-    # If no frame has the reference bonds then we return None
-    if bonds_reference_frame is None:
-        # Summarize mismatching atoms per frame, not distinct undirected bonds.
-        if frame_clash_counts:
-            print(
-                f' Atom mismatches per frame: min={min(frame_clash_counts)}, '
-                f'average={sum(frame_clash_counts) / checked_frames:.2f}, '
-                f'max={max(frame_clash_counts)}, '
-                f'total={sum(frame_clash_counts)}'
-            )
-        # Print the most frequent clashes table
-        # Each count is the number of frames with this atom and bond-set mismatch.
-        print(f' Top 10 atom mismatches:')
-        headers = ['Frames', 'Atom', 'Label', 'Is bonding with', 'Should bond with']
-        count = clash_counts.most_common(10)
-        # Calculate column widths
-        table_data = []
-        for (at, bond, should), n in count:
-            label = structure.atoms[at].label
-            table_data.append([n, at, label, bond, should])
-        col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data, headers)]
+    # If we found a frame with the reference bonds then we are done
+    if bonds_reference_frame is not None:
+        print(f' Got it -> Frame {bonds_reference_frame + 1}')
+        return bonds_reference_frame, True
+    # Summarize mismatching atoms per frame, not distinct undirected bonds.
+    print(
+        f' Atom mismatches per frame: min={min(frame_clash_counts)}, '
+        f'average={sum(frame_clash_counts) / checked_frames:.2f}, '
+        f'max={max(frame_clash_counts)}, '
+        f'total={sum(frame_clash_counts)}'
+    )
+    # Use the frame with the fewest mismatches as reference frame
+    bonds_reference_frame = frame_clash_counts.index(min(frame_clash_counts))
+    # Find atoms which fail too often
+    # If failures are spread along different atoms then they are likely random clashes/overstretches
+    failure_cut = ceil(checked_frames * atom_failure_ratio)
+    # With a few frames the cut would be 1 frame, meaning any failure would fail the test
+    # Thus we set a minimum of frames
+    if failure_cut < MIN_ATOM_FAILURE_FRAMES:
+        failure_cut = MIN_ATOM_FAILURE_FRAMES
+        warn(f'Only {checked_frames} frames were checked. With such a reduced sampling this test may fail.')
+    recurrent_atoms = [ atom_index for atom_index, n in atom_clash_counts.items() if n >= failure_cut ]
+    if not recurrent_atoms:
+        print(f' No atom fails in {failure_cut} or more of the {checked_frames} checked frames -> Bonds are considered fine')
+        print(f' Using the frame with the fewest mismatches -> Frame {bonds_reference_frame + 1}')
+        return bonds_reference_frame, True
+    print(f' {len(recurrent_atoms)} atoms fail in {failure_cut} or more of the {checked_frames} checked frames')
+    # Print the most frequent clashes table
+    # Each count is the number of frames with this atom and bond-set mismatch.
+    print(f' Top 10 atom mismatches:')
+    headers = ['Frames', 'Atom', 'Label', 'Is bonding with', 'Should bond with']
+    count = clash_counts.most_common(10)
+    # Calculate column widths
+    table_data = []
+    for (at, bond, should), n in count:
+        label = structure.atoms[at].label
+        table_data.append([n, at, label, bond, should])
+    col_widths = [max(len(str(item)) for item in col) for col in zip(*table_data, headers)]
 
-        def format_row(row):
-            return " | ".join(f"{str(item):>{col_widths[i]}}" for i, item in enumerate(row))
-        # Print table
-        print(format_row(headers))
-        print("-+-".join('-' * width for width in col_widths))
-        for row in table_data:
-            print(format_row(row))
-        return None
-    print(f' Got it -> Frame {bonds_reference_frame + 1}')
-
-    return bonds_reference_frame
+    def format_row(row):
+        return " | ".join(f"{str(item):>{col_widths[i]}}" for i, item in enumerate(row))
+    # Print table
+    print(format_row(headers))
+    print("-+-".join('-' * width for width in col_widths))
+    for row in table_data:
+        print(format_row(row))
+    return bonds_reference_frame, False
 
 
 def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[list[int]]:
