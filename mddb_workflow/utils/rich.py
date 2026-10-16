@@ -53,7 +53,8 @@ def rich_display_dataframe(df, row_limit=None, title="Dataframe", only_return=Fa
 
     table = Table(title=title)
     for col in df.columns:
-        table.add_column(col)
+        # Fold long values (e.g. paths without spaces) into several lines instead of cropping them
+        table.add_column(col, overflow='fold')
     for row in df.values:
         # Convert HTML links to Rich markup for each cell
         rich_row = [_convert_html_links_to_rich(cell) for cell in row]
