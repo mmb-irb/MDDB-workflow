@@ -441,7 +441,8 @@ def main():
                 inputs_generator=args.inputs_generator,
                 overwrite=args.overwrite,
                 query_path=args.query_path,
-                query_state=args.query_state
+                query_state=args.query_state,
+                query_message=args.query_message
             )
         elif args.dataset_subcommand == 'run':
             dataset.launch(
@@ -856,15 +857,17 @@ dataset_add.add_argument("-p", "--project_path", help='Path to the project.', re
 query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
 query_parser.add_argument("-st", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
-query_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
 query_parser.add_argument("-ms", "--query_message", nargs='*', default=[], help=ds_help['get_dataframe']['query_message'])
+# Scope filter only for subcommands which display both projects and MDs
+scope_parser = ArgumentParser(add_help=False)
+scope_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])
 # Dataset inputs subcommand
 ds_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFormatter, help="Generate inputs file for MDDB projects.", parents=[common_ds_parser, query_parser])
 ds_inputs.add_argument("-it", "--inputs_template", type=str, help=ds_help['generate_inputs_yaml']['inputs_template_path'])
 ds_inputs.add_argument("-ig", "--inputs_generator", type=str, help=ds_help['generate_inputs_yaml']['inputs_generator'])
 ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['generate_inputs_yaml']['overwrite'])
 # Dataset show subcommand
-ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
+ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser, scope_parser])
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
 ds_show.add_argument('-r', '--reverse', help="Reverse the sort order.", action='store_true')
 ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for all rows.", default=50, type=int)
@@ -873,7 +876,7 @@ ds_show.add_argument('-m', '--summary', help="Get a summary of the state of the 
 ds_show.add_argument('-id', '--show_id', help="Show UUIDs.", action='store_true')
 
 # Dataset watch subcommand
-ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser])
+ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser, scope_parser])
 # Dataset scan subcommand
 ds_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter, help="Scan a directory and add all MDDB projects to a dataset storage file.", parents=[common_ds_parser])
 # # Dataset run subcommand
