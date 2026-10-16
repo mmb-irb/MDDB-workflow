@@ -1,11 +1,12 @@
-from mddb_workflow.utils.auxiliar import load_yaml, load_json, is_glob
+from mddb_workflow.utils.auxiliar import load_yaml, load_json, save_yaml, save_json, is_glob
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
-from mddb_workflow.utils.constants import CACHE_FILENAME
+from mddb_workflow.utils.constants import CACHE_FILENAME, ACCEPTED_INPUT_FILENAMES
 from mddb_workflow.utils.type_hints import *
 import pandas as pd
 import subprocess
 import jinja2
+import yaml
 import time
 import os
 import tempfile
@@ -773,6 +774,84 @@ class Dataset:
             print(f"Generating {inputs_yaml_path} for project {project_dict['rel_path']}")
             with open(inputs_yaml_path, 'w') as f:
                 f.write(rendered_yaml)
+
+    def set_inputs_field(self,
+            field: str,
+            value: str,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
+            query_message: list[str] = [],
+        ):
+        """Set a single field in the existing inputs files of the selected projects.
+        Note that comments in the inputs files are lost.
+
+        Args:
+            field (str):
+                Name of the field to be set. Use dots to access nested fields and
+                integers to access list items (e.g. 'mds.0.name').
+            value (str):
+                New value of the field. It is parsed as YAML, so '310' becomes an integer,
+                'true' a boolean, '[a, b]' a list and 'null' an empty value.
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+
+        """
+        # Query projects directly from database with filters
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
+        if len(filtered_projects) == 0:
+            print("No projects found matching the specified query_path and query_state filters.")
+            return
+        parsed_value = yaml.safe_load(value)
+        keys = field.split('.')
+        # Find and load every inputs file before editing any of them
+        # Thus we do not end up with half of the projects edited if something fails
+        missing_inputs = []
+        inputs_files = []
+        for project_entry in filtered_projects:
+            project_dict = dict(zip(self.project_columns, project_entry))
+            project_dir = self._rel_to_abs(project_dict['rel_path'])
+            # Search the inputs file as the Project class does
+            candidates = []
+            for filename in ACCEPTED_INPUT_FILENAMES:
+                candidates += glob.glob(os.path.join(glob.escape(str(project_dir)), '*' + filename))
+            if len(candidates) == 0:
+                missing_inputs.append(project_dict['rel_path'])
+                continue
+            if len(candidates) > 1:
+                raise ValueError(f'Multiple files could be the inputs file in {project_dict["rel_path"]}: {", ".join(candidates)}')
+            inputs_filepath = candidates[0]
+            inputs = load_json(inputs_filepath) if inputs_filepath.endswith('.json') else load_yaml(inputs_filepath)
+            # Find the parent of the target field
+            parent = inputs
+            for i, key in enumerate(keys):
+                if type(parent) is list:
+                    key = int(key)
+                    exists = key < len(parent)
+                else:
+                    exists = type(parent) is dict and key in parent
+                if not exists:
+                    raise ValueError(f'Field "{".".join(keys[:i + 1])}" not found in {inputs_filepath}')
+                if i < len(keys) - 1:
+                    parent = parent[key]
+            inputs_files.append((inputs_filepath, inputs, parent, key))
+        if len(missing_inputs) > 0:
+            raise FileNotFoundError(f'There is no inputs file in {len(missing_inputs)} projects: {", ".join(missing_inputs)}\n' +
+                ' Generate them first with "mwf ds inputs -it <template>"')
+        # Now set the new value and write the inputs files
+        for inputs_filepath, inputs, parent, key in inputs_files:
+            parent[key] = parsed_value
+            print(f'Setting {field} = {parsed_value!r} in {inputs_filepath}')
+            if inputs_filepath.endswith('.json'):
+                save_json(inputs, inputs_filepath, indent=4)
+            else:
+                save_yaml(inputs, inputs_filepath)
 
     def scan(self,
         root_dir: str = None,

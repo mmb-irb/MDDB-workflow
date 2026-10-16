@@ -435,6 +435,17 @@ def main():
                 ),
                 title="Live MDDB Dataset"
             )
+        elif args.dataset_subcommand == 'inputs' and args.set:
+            if args.inputs_template or args.inputs_generator or args.overwrite:
+                ds_inputs.error("--set can not be combined with --inputs_template, --inputs_generator or --overwrite")
+            field, value = args.set
+            dataset.set_inputs_field(
+                field=field,
+                value=value,
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_message=args.query_message
+            )
         elif args.dataset_subcommand == 'inputs':
             dataset.generate_inputs_yaml(
                 inputs_template_path=args.inputs_template,
@@ -866,6 +877,8 @@ ds_inputs = dataset_subparsers.add_parser("inputs", formatter_class=CustomHelpFo
 ds_inputs.add_argument("-it", "--inputs_template", type=str, help=ds_help['generate_inputs_yaml']['inputs_template_path'])
 ds_inputs.add_argument("-ig", "--inputs_generator", type=str, help=ds_help['generate_inputs_yaml']['inputs_generator'])
 ds_inputs.add_argument("-o", "--overwrite", action="store_true", help=ds_help['generate_inputs_yaml']['overwrite'])
+ds_inputs.add_argument("-s", "--set", nargs=2, metavar=('FIELD', 'VALUE'),
+    help="Edit existing inputs files instead of generating them. " + ds_help['set_inputs_field']['field'] + " " + ds_help['set_inputs_field']['value'])
 # Dataset show subcommand
 ds_show = dataset_subparsers.add_parser("show", formatter_class=CustomHelpFormatter, help="Display information about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser, scope_parser])
 ds_show.add_argument('-s', '--sort_by', help="Column name to sort the dataset by.", default='last_modified', type=str)
