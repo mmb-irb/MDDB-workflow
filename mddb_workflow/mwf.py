@@ -1281,7 +1281,6 @@ class MD:
             return self._cross_periodic_contacts
         # Otherwise we must find the value
         self._cross_periodic_contacts = check_cross_periodic_contacts(
-            input_structure_filename=self.structure_file.path,
             input_trajectory_filename=self.trajectory_file.path,
             structure=self.structure,
             pbc_selection=self.pbc_selection,

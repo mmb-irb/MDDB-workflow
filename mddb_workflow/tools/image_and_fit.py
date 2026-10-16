@@ -4,6 +4,7 @@
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, warn
 from mddb_workflow.utils.gmx_spells import run_gromacs
+from mddb_workflow.utils.mdt_spells import rotate_boxes
 from mddb_workflow.utils.type_hints import *
 
 # Set a pair of independent auxiliar functions to save and recover chains from a pdb file
@@ -199,12 +200,24 @@ def image_and_fit(
         # Here we use the structure, not the topology, even if it is a TPR
         # Note that using the topology would make useless the last 'nojump' process
 
+        # Gromacs rotates the coordinates but it keeps the original box
+        # Then periodic images are no longer valid after the fit
+        # To fix it we write the fit in an intermediate file and then we rotate boxes in the output file
+        fitted_trajectory_file = output_trajectory_file.get_prefixed_file('fitted.')
+        rotated_trajectory_file = output_trajectory_file.get_prefixed_file('rotated.')
+
         # Run Gromacs
         run_gromacs(f'trjconv -s {latest_structure.path} \
-            -f {latest_trajectory.path} -o {output_trajectory_file.path} \
+            -f {latest_trajectory.path} -o {fitted_trajectory_file.path} \
             -fit rot+trans -n {INDEX_FILEPATH}',
             user_input=f'{CENTER_SELECTION_NAME} {SYSTEM_SELECTION_NAME}',
             show_error_logs=True)
+
+        # Rotate boxes as coordinates were rotated by the fit
+        print(' Rotating boxes')
+        rotate_boxes(latest_trajectory, fitted_trajectory_file, rotated_trajectory_file)
+        fitted_trajectory_file.remove()
+        rotated_trajectory_file.rename_to(output_trajectory_file)
 
         # If there is no output structure at this time (i.e. there was no imaging) then create it now
         # If there was imaging, we reset again to it its not far from the origin

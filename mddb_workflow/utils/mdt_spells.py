@@ -362,39 +362,28 @@ def sort_trajectory_atoms (
     if output_trajectory_file.exists:
         raise InputError('The output file already exists and overwrite is not supported for this functionality')
 
-    # Load the trajectory frame by frame
-    trajectory = mdt.iterload(input_trajectory_file.path, top=input_structure_file.path, chunk=1)
-    frame_filename = '.frame.xtc'
+    # Read and write the xtc files directly instead of using MDtraj trajectories
+    # MDtraj trajectories rebuild box vectors with the first vector along the x axis
+    # This would lose the rotation of boxes in fitted trajectories (see image_and_fit)
+    if input_trajectory_file.format != 'xtc' or output_trajectory_file.format != 'xtc':
+        raise ValueError('Sorting trajectory atoms is only supported for xtc trajectories')
+    new_atom_indices = np.array(new_atom_indices)
 
     # Print an empty line for the first 'ERASE_PREVIOUS_LINE' to not delete a previous log
     print()
 
-    for f, frame in enumerate(trajectory):
-        # Update the current frame log
-        print(ERASE_PREVIOUS_LINE)
-        print('Frame ' + str(f))
-
-        # Sort coordinates according to new atom indices
-        xyz = frame.xyz[0]
-        new_xyz = np.empty(shape=xyz.shape)
-        for i, atom_index in enumerate(new_atom_indices):
-            new_xyz[i] = xyz[atom_index]
-
-        # Export the current frame
-        new_frame = mdt.Trajectory([new_xyz],
-            topology=topology,
-            time=frame.time, # This is necessary for the new mdtraj trajectory to be functional
-            unitcell_lengths=frame.unitcell_lengths, # This is necessary for the new mdtraj trajectory to be functional
-            unitcell_angles=frame.unitcell_angles # This is necessary for the new mdtraj trajectory to be functional
-        )
-        new_frame.save(frame_filename)
-        # Join current frame to the output trajectory
-        merge_xtc_files(output_trajectory_file.path, frame_filename)
-
-    # Remove the residual file
-    # WARNING: It may not exist if the trajectory has 1 frame
-    if exists(frame_filename):
-        os.remove(frame_filename)
+    with mdt.formats.XTCTrajectoryFile(input_trajectory_file.path) as reader, \
+        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer:
+        frame_count = 0
+        while True:
+            xyz, time, step, box = reader.read(n_frames=1000)
+            if len(xyz) == 0: break
+            frame_count += len(xyz)
+            # Update the current frame log
+            print(ERASE_PREVIOUS_LINE)
+            print('Frame ' + str(frame_count))
+            # Sort coordinates according to new atom indices
+            writer.write(xyz[:, new_atom_indices], time=time, step=step, box=box)
 
 # Get a frame in MDtraj
 # Most specifically, get a trajectry with a single frame
@@ -459,3 +448,69 @@ def get_simulation_box(
 
     return box, is_constant
 
+
+def iterate_xtc_frames(xtc_filename : str):
+    """Iterate the frames in a xtc file as (positions, box vectors), both in nm.
+    Boxes are read as they are in the file, since MDtraj rebuilds box vectors with the first vector along the x axis.
+    This would be wrong for fitted trajectories, where boxes are rotated (see image_and_fit).
+    """
+    with mdt.formats.XTCTrajectoryFile(xtc_filename) as reader:
+        while True:
+            xyz, _, _, box = reader.read(n_frames=1)
+            if len(xyz) == 0: return
+            yield xyz[0], box[0]
+
+
+# Maximum RMSD (nm) between fitted coordinates and original coordinates once rotated
+# Since the fit is a rigid transformation this should be only the xtc precision noise
+MAX_ROTATION_RESIDUAL = 0.02
+# Number of frames to be read and written at once when rotating boxes
+ROTATION_CHUNK_SIZE = 1000
+
+
+def find_rotation(original_coordinates: np.ndarray, fitted_coordinates: np.ndarray) -> tuple[np.ndarray, float]:
+    """Find the rotation matrix R which turns original coordinates into fitted coordinates (Kabsch).
+    Coordinates are row vectors, so centered fitted coordinates ~ centered original coordinates @ R.
+    Translation is ignored since both sets of coordinates are centered.
+    Return the rotation matrix and the RMSD between fitted and rotated original coordinates.
+    """
+    original = original_coordinates - original_coordinates.mean(axis=0)
+    fitted = fitted_coordinates - fitted_coordinates.mean(axis=0)
+    u, _, vt = np.linalg.svd(original.T @ fitted)
+    # Make sure we get a proper rotation and not a reflection
+    sign = np.sign(np.linalg.det(u @ vt))
+    rotation = u @ np.diag([1, 1, sign]) @ vt
+    residual = np.sqrt(((original @ rotation - fitted) ** 2).sum(axis=1).mean())
+    return rotation, residual
+
+
+def rotate_boxes(
+    original_trajectory_file: 'File',
+    fitted_trajectory_file: 'File',
+    output_trajectory_file: 'File',
+):
+    """Write the fitted trajectory with every box rotated as its frame coordinates were rotated by the fit.
+    The rotation in every frame is found by comparing the original and the fitted coordinates.
+    Note that most tools (e.g. Gromacs, MDtraj) expect the first box vector along the x axis.
+    Thus they do not support rotated boxes and periodic images may be wrong when using them.
+    """
+    for trajectory_file in [original_trajectory_file, fitted_trajectory_file, output_trajectory_file]:
+        if trajectory_file.format != 'xtc':
+            raise ValueError(f'Rotating boxes is only supported for xtc trajectories: {trajectory_file.path}')
+    with mdt.formats.XTCTrajectoryFile(original_trajectory_file.path) as original_reader, \
+        mdt.formats.XTCTrajectoryFile(fitted_trajectory_file.path) as fitted_reader, \
+        mdt.formats.XTCTrajectoryFile(output_trajectory_file.path, 'w') as writer:
+        while True:
+            original_xyz, _, _, _ = original_reader.read(n_frames=ROTATION_CHUNK_SIZE)
+            fitted_xyz, time, step, boxes = fitted_reader.read(n_frames=ROTATION_CHUNK_SIZE)
+            if len(original_xyz) != len(fitted_xyz):
+                raise ValueError('Original and fitted trajectories have a different number of frames')
+            if len(fitted_xyz) == 0: break
+            rotated_boxes = np.empty_like(boxes)
+            for i, (original_coordinates, fitted_coordinates) in enumerate(zip(original_xyz, fitted_xyz)):
+                rotation, residual = find_rotation(original_coordinates.astype(np.float64), fitted_coordinates.astype(np.float64))
+                if residual > MAX_ROTATION_RESIDUAL:
+                    raise ValueError(f'Fitted coordinates are not a rigid rotation of the original coordinates (RMSD {residual:.4f} nm)')
+                # Box vectors are rows, just like coordinates
+                rotated_boxes[i] = boxes[i].astype(np.float64) @ rotation
+            writer.write(fitted_xyz, time=time, step=step, box=rotated_boxes)

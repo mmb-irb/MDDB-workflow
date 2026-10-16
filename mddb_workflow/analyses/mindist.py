@@ -1,11 +1,11 @@
 import itertools
-import mdtraj as mdt
 import numpy as np
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
 from mddb_workflow.utils.auxiliar import TestFailure, warn
 from mddb_workflow.utils.constants import CROSS_PBC_FLAG
+from mddb_workflow.utils.mdt_spells import iterate_xtc_frames
 from mddb_workflow.utils.type_hints import *
 
 # All 26 neighbour cell offsets, in units of box vectors
@@ -109,7 +109,6 @@ def find_frame_cross_contacts(
 # A01GY -> boxed and centered, non orthogonal, has no contacts
 # MCV1900439 -> boxed and centered, has contacts
 def check_cross_periodic_contacts(
-    input_structure_filename : str,
     input_trajectory_filename : str,
     structure : 'Structure',
     pbc_selection : 'Selection',
@@ -191,17 +190,19 @@ def check_cross_periodic_contacts(
     # Shortest cross-PBC contact distance along the whole trajectory
     closest_distance = np.inf
 
-    trajectory = mdt.iterload(input_trajectory_filename, top=input_structure_filename, chunk=1)
-    pbar = tqdm(trajectory, total=snapshots, desc=' Frame', unit='frame')
+    if not input_trajectory_filename.endswith('.xtc'):
+        raise ValueError(f'Cross-PBC contacts check is only supported for xtc trajectories: {input_trajectory_filename}')
+    frames = iterate_xtc_frames(input_trajectory_filename)
+    pbar = tqdm(frames, total=snapshots, desc=' Frame', unit='frame')
 
     # Iterate frames
-    for frame_idx, frame in enumerate(pbar, 1):
+    for frame_idx, (frame_positions, frame_box) in enumerate(pbar, 1):
         # Ignore frames with no unit vectors
         # DANI: Si ya hemos comprobado que tiene caja esto puede pasar?
-        if frame.unitcell_vectors is None: raise RuntimeError('Missing unitcell vectors')
+        if not frame_box.any(): raise RuntimeError('Missing unitcell vectors')
         # Check if there are atoms too close to its period images in this frame
-        box_vectors = frame.unitcell_vectors[0].astype(np.float64)   # (3, 3) nm, rows are vectors
-        all_positions = frame.xyz[0].astype(np.float64)
+        box_vectors = frame_box.astype(np.float64)   # (3, 3) nm, rows are vectors
+        all_positions = frame_positions.astype(np.float64)
         positions = all_positions[non_pbc_indices]  # (n_nonpbc, 3) nm
         # Check if any fragment is closer to a periodic image of the non-PBC center than to the center itself
         fragment_centers = np.array([ all_positions[atom_indices].mean(axis=0) for atom_indices in fragments_atom_indices ])
@@ -228,19 +229,19 @@ def check_cross_periodic_contacts(
         register.update_test(CROSS_PBC_FLAG, True)
         return True
     messages = []
-    # Fragments which went away from the rest of the system
-    if escaped_fragment_indices:
-        message = ('Some non-PBC fragments go away from the rest of the system.')
-        for fragment_index in escaped_fragment_indices:
-            fragment_name = name_fragment(structure, fragments[fragment_index])
-            frames = escape_frames[fragment_index]
-            own_distance, image_distance = first_escape_distances[fragment_index]
-            message += (f'\n  {fragment_name} in {len(frames)}/{snapshots} frames.'
-                f' First in frame {frames[0]}')
-        message += ('\n If these fragments diffuse freely (e.g. an unbound ligand) then they must be part of the PBC selection')
-        messages.append(message)
+    # # Fragments which went away from the rest of the system
+    # if escaped_fragment_indices:
+    #     message = ('Some non-PBC fragments go away from the rest of the system.')
+    #     for fragment_index in escaped_fragment_indices:
+    #         fragment_name = name_fragment(structure, fragments[fragment_index])
+    #         frames = escape_frames[fragment_index]
+    #         own_distance, image_distance = first_escape_distances[fragment_index]
+    #         message += (f'\n  {fragment_name} in {len(frames)}/{snapshots} frames.'
+    #             f' First in frame {frames[0]}')
+    #     message += ('\n If these fragments diffuse freely (e.g. an unbound ligand) then they must be part of the PBC selection')
+    #     messages.append(message)
     # Contacts across periodic boundaries
-    elif violation_frames:
+    if violation_frames:
         n_violations = len(violation_frames)
         message = (
             f'Cross-PBC contacts detected in {n_violations}/{snapshots} frames. '
