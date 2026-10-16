@@ -494,6 +494,25 @@ cv19_abs:
 cv19_nanobs:
 
 #------------------------------------------------------------------------------------------------------------
+# ADDITIONAL METADATA
+#------------------------------------------------------------------------------------------------------------
+
+# Set any additional metadata
+# Field names and values are fully costumizable
+# This data will be stored in the database, in the project metadata, and they will be accessible to read
+# This data will be also recovered when downloading the inputs file from the API
+# However these fields will have no further effects on the workflow, API or web client
+# API queries based on these fields are supported but the integration in the client is limited
+#
+# Example:
+#
+# add_meta:
+#   my_custom_field: 42
+#   my_custom_field_2: whatever
+
+metadditions:
+
+#------------------------------------------------------------------------------------------------------------
 # INPUT FILES
 #------------------------------------------------------------------------------------------------------------
 # Directories for every MD in the project.
@@ -548,20 +567,76 @@ mdref:
 dataset_path:
 
 #------------------------------------------------------------------------------------------------------------
-# ADDITIONAL METADATA
+# WORKFLOW CONTROL PARAMETERS
 #------------------------------------------------------------------------------------------------------------
+# These fields have an effect in the workflow but they are NOT propagated to the database.
+# They are not metadata, but instructions on how the workflow must process the inputs.
+# All these values may be passed through command line as well.
+# Note that values passed through command line override the ones in this file.
 
-# Set any additional metadata
-# Field names and values are fully costumizable
-# This data will be stored in the database, in the project metadata, and they will be accessible to read
-# This data will be also recovered when downloading the inputs file from the API
-# However these fields will have no further effects on the workflow, API or web client
-# API queries based on these fields are supported but the integration in the client is limited
+# Set atoms to be filtered (removed) from the topology and trajectory.
+# Use a VMD selection to filter specific atoms.
+# Set 'true' to filter water and counter ions.
+# Equivalent to the "-filt" command line argument.
 #
 # Example:
 #
-# add_meta:
-#   my_custom_field: 42
-#   my_custom_field_2: whatever
+# filter_selection: resname SOL or resname NA
 
-metadditions:
+filter_selection:
+
+# Set if the trajectory is to be imaged so atoms stay in the PBC box.
+# See the "pbc_selection" field for more information.
+# Equivalent to the "-img" command line argument.
+#
+# Example:
+#
+# image: true
+
+image:
+
+# Set if the trajectory is to be fitted (both rotation and translation).
+# The fitting minimizes the RMSD of the protein and nucleic acid backbone.
+# Equivalent to the "-fit" command line argument.
+#
+# Example:
+#
+# fit: true
+
+fit:
+
+# Set which checkings are allowed to fail without killing the process.
+# Set 'true' to allow all checkings to fail.
+# Available checkings: stabonds, cohbonds, intrajrity, pbcontacts, elements, refseq, interact, ligands, chains, largeaa
+# Equivalent to the "-m" ("--mercy") command line argument.
+#
+# Example:
+#
+# mercy:
+#   - stabonds
+#   - refseq
+
+mercy:
+
+# Set which checkings are to be skipped.
+# Set 'true' to skip all checkings.
+# Available checkings: stabonds, cohbonds, intrajrity, pbcontacts
+# Equivalent to the "-t" ("--trust") command line argument.
+#
+# Example:
+#
+# trust:
+#   - intrajrity
+
+trust:
+
+# Force-skip all data processing thus asuming inputs are already processed.
+# WARNING: Do not use this field if you don't know what you are doing.
+# WARNING: This may lead to several silent errors.
+# Equivalent to the "-f" ("--faith") command line argument.
+#
+# Example:
+#
+# faith: true
+
+faith:

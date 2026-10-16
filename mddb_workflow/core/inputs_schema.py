@@ -14,7 +14,7 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from mddb_workflow.utils.auxiliar import InputError, warn
-from mddb_workflow.utils.constants import PDB_ID_FORMAT
+from mddb_workflow.utils.constants import PDB_ID_FORMAT, AVAILABLE_CHECKINGS, AVAILABLE_FAILURES
 
 
 class InputsBaseModel(BaseModel):
@@ -186,6 +186,15 @@ class WorkflowInputs(InputsBaseModel):
     # Additional metadata
     metadditions: Optional[dict] = None
 
+    # Workflow control parameters
+    # These values have an effect in the workflow but they are not propagated to the database
+    filter_selection: Optional[Union[bool, str]] = None
+    image: Optional[bool] = None
+    fit: Optional[bool] = None
+    mercy: Optional[Union[bool, list[str]]] = None
+    trust: Optional[Union[bool, list[str]]] = None
+    faith: Optional[bool] = None
+
     @field_validator('orientation')
     @classmethod
     def check_orientation_length(cls, value):
@@ -198,6 +207,18 @@ class WorkflowInputs(InputsBaseModel):
     def check_positive(cls, value, info):
         if value is not None and value <= 0:
             raise ValueError(f'"{info.field_name}" must be a positive number.')
+        return value
+
+    @field_validator('mercy', 'trust')
+    @classmethod
+    def check_test_flags(cls, value, info):
+        if value is None or type(value) is bool:
+            return value
+        available = AVAILABLE_FAILURES if info.field_name == 'mercy' else AVAILABLE_CHECKINGS
+        for flag in value:
+            if flag not in available:
+                raise ValueError(f'"{flag}" is not a valid "{info.field_name}" value. '
+                    f'Available values: {", ".join(available)}.')
         return value
 
     @field_validator('pdb_ids')

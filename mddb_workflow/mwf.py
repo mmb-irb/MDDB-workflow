@@ -1525,6 +1525,7 @@ class Project:
             filter_selection (bool|str):
                 Atoms selection to be filtered in VMD format.
                 If the argument is passed alone (i.e. with no selection) then water and counter ions are filtered.
+                Value passed through console overrides the one in inputs file.
             pbc_selection (Optional[str]):
                 Selection of atoms which stay in Periodic Boundary Conditions even after imaging the trajectory.
                 e.g. remaining solvent, ions, membrane lipids, etc.
@@ -1538,17 +1539,22 @@ class Project:
                 Custom forced selections for molecular classification.
             image (bool):
                 Set if the trajectory is to be imaged so atoms stay in the PBC box. See -pbc for more information.
+                Value passed through console overrides the one in inputs file.
             fit (bool):
                 Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.
+                Value passed through console overrides the one in inputs file.
             translation (list[float]):
                 Set the x y z translation for the imaging process.
                 e.g. -trans 0.5 -1 0
             mercy (list[str]|bool):
                 Failures to be tolerated (or boolean to set all/none).
+                Value passed through console overrides the one in inputs file.
             trust (list[str]|bool):
                 Tests to skip/trust (or boolean to set all/none).
+                Value passed through console overrides the one in inputs file.
             faith (bool):
                 If True, require input files to match expected output files and skip processing.
+                Value passed through console overrides the one in inputs file.
             pca_analysis_selection (str):
                 Atom selection for PCA analysis in VMD syntax.
             pca_fit_selection (str):
@@ -1681,25 +1687,12 @@ class Project:
         self._topology_filepath = MISSING_VALUE
 
         # Set the rest of inputs
-        # Note that the filter selection variable is not handled here at all
-        # This is just pased to the filtering function which knows how to handle the default
-        self.filter_selection = filter_selection
         # PBC selection may come from the console or from the inputs
         self._input_pbc_selection = pbc_selection
         self._input_cg_selection = cg_selection
         self._input_dummy_selection = dummy_selection
         self._input_forced_class_selections = forced_class_selections
-        self.image = image
-        self.fit = fit
         self.translation = translation
-        self.mercy = mercy
-        self.trust = trust
-        # Convert boolean mercy and trust to their corresponding lists of values
-        if type(mercy) is bool:
-            self.mercy = AVAILABLE_FAILURES if mercy else []
-        if type(trust) is bool:
-            self.trust = AVAILABLE_CHECKINGS if trust else []
-        self.faith = faith
         self.pca_analysis_selection = pca_analysis_selection
         self.pca_fit_selection = pca_fit_selection
         self.rmsd_cutoff = rmsd_cutoff
@@ -1735,6 +1728,22 @@ class Project:
             forced_inputs=forced_inputs,
             input_loader=self.remote.download_inputs_file if self.remote else None,
         )
+
+        # Set the workflow control inputs, which may come from the console or from the inputs file
+        # Values passed through console override the ones in the inputs file
+        # Note that the filter selection variable is not further handled here
+        # This is just pased to the filtering function which knows how to handle the default
+        self.filter_selection = filter_selection if filter_selection else self.inputs.get('filter_selection', filter_selection)
+        self.image = image if image else self.inputs.get('image', image)
+        self.fit = fit if fit else self.inputs.get('fit', fit)
+        self.mercy = mercy if mercy else self.inputs.get('mercy', mercy)
+        self.trust = trust if trust else self.inputs.get('trust', trust)
+        self.faith = faith if faith else self.inputs.get('faith', faith)
+        # Convert boolean mercy and trust to their corresponding lists of values
+        if type(self.mercy) is bool:
+            self.mercy = AVAILABLE_FAILURES if self.mercy else []
+        if type(self.trust) is bool:
+            self.trust = AVAILABLE_CHECKINGS if self.trust else []
 
         # Set the MD configuration
         self.md_config: list[dict] = self.inputs.merge_md_config(
