@@ -789,6 +789,7 @@ class Dataset:
             field (str):
                 Name of the field to be set. Use dots to access nested fields and
                 integers to access list items (e.g. 'mds.0.name').
+                Missing fields are added, but list items must already exist.
             value (str):
                 New value of the field. It is parsed as YAML, so '310' becomes an integer,
                 'true' a boolean, '[a, b]' a list and 'null' an empty value.
@@ -829,17 +830,20 @@ class Dataset:
             inputs_filepath = candidates[0]
             inputs = load_json(inputs_filepath) if inputs_filepath.endswith('.json') else load_yaml(inputs_filepath)
             # Find the parent of the target field
+            # Missing dict fields are created, but list items must exist
             parent = inputs
             for i, key in enumerate(keys):
                 if type(parent) is list:
                     key = int(key)
-                    exists = key < len(parent)
-                else:
-                    exists = type(parent) is dict and key in parent
-                if not exists:
-                    raise ValueError(f'Field "{".".join(keys[:i + 1])}" not found in {inputs_filepath}')
-                if i < len(keys) - 1:
-                    parent = parent[key]
+                    if key >= len(parent):
+                        raise ValueError(f'Field "{".".join(keys[:i + 1])}" not found in {inputs_filepath}')
+                elif type(parent) is not dict:
+                    raise ValueError(f'Field "{".".join(keys[:i])}" in {inputs_filepath} is not a dict or a list')
+                if i == len(keys) - 1: break
+                # Create missing or empty intermediate fields as dicts
+                if type(parent) is dict and parent.get(key) is None:
+                    parent[key] = {}
+                parent = parent[key]
             inputs_files.append((inputs_filepath, inputs, parent, key))
         if len(missing_inputs) > 0:
             raise FileNotFoundError(f'There is no inputs file in {len(missing_inputs)} projects: {", ".join(missing_inputs)}\n' +
