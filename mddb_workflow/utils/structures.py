@@ -2277,6 +2277,13 @@ class Structure:
                 # If the classification is not recognized, count it as "other"
                 residue_counts[res_class] = 1
 
+        # Some nucleic residue names are used for both DNA and RNA so they are classified just as 'nucleic'
+        # If the rest of nucleic residues are only DNA or only RNA then count these residues as such
+        has_dna, has_rna = 'dna' in residue_counts, 'rna' in residue_counts
+        if 'nucleic' in residue_counts and has_dna != has_rna:
+            nucleic_type = 'dna' if has_dna else 'rna'
+            residue_counts[nucleic_type] += residue_counts.pop('nucleic')
+
         # Count the total number of residues in the selection
         total_residues = sum(residue_counts.values())
         if total_residues == 0: raise ValueError('Should have residues at this point')

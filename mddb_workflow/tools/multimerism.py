@@ -56,6 +56,7 @@ HYBRID_NUCLEIC_TYPE = 'nucleic'
 # Set the protein-nucleic complex keywords
 PROTEIN_DNA_COMPLEX_KEYWORD = 'protein-dna complex'
 PROTEIN_RNA_COMPLEX_KEYWORD = 'protein-rna complex'
+PROTEIN_NUCLEIC_COMPLEX_KEYWORD = 'protein-nucleic complex'
 
 # Set the names of nucleic atoms which are not part of the base
 # Hydrogen bonds involving these atoms are not considered as base pairing
@@ -322,14 +323,15 @@ def get_protein_nucleic_complex_keywords (
     nucleic_chains : list['Chain'],
     contact_pairs : set[tuple[int, int]],
 ) -> list[str]:
-    """Set protein-dna/rna complex keywords if any protein chain is in contact with a nucleic chain."""
+    """Set protein-nucleic/dna/rna complex keywords if any protein chain is in contact with a nucleic chain."""
     keywords = []
     protein_chain_indices = set([ chain.index for chain in protein_chains ])
     for nucleic_chain in nucleic_chains:
         if not any((a == nucleic_chain.index and b in protein_chain_indices)
             or (b == nucleic_chain.index and a in protein_chain_indices) for a, b in contact_pairs): continue
         classification = nucleic_chain.classification
-        if classification in { 'dna', 'nucleic' }: keywords.append(PROTEIN_DNA_COMPLEX_KEYWORD)
-        if classification in { 'rna', 'nucleic' }: keywords.append(PROTEIN_RNA_COMPLEX_KEYWORD)
+        keywords.append(PROTEIN_NUCLEIC_COMPLEX_KEYWORD)
+        if classification == 'dna': keywords.append(PROTEIN_DNA_COMPLEX_KEYWORD)
+        if classification == 'rna': keywords.append(PROTEIN_RNA_COMPLEX_KEYWORD)
     # Remove duplicates while keeping the order
     return list(dict.fromkeys(keywords))

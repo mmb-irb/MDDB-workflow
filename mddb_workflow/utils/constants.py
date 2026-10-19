@@ -520,6 +520,7 @@ DNA_RESIDUE_NAME_LETTERS = {
     'DC5': 'C',
     'DG3': 'G',
     'DG5': 'G',
+    'THY': 'T',
 }
 RNA_RESIDUE_NAME_LETTERS = {
     'RA': 'A',
@@ -537,6 +538,7 @@ RNA_RESIDUE_NAME_LETTERS = {
     'RC5': 'C',
     'RG3': 'G',
     'RG5': 'G',
+    'URA': 'U',
 }
 NUCLEIC_RESIDUE_NAME_LETTERS = {
     **DNA_RESIDUE_NAME_LETTERS,
@@ -550,6 +552,9 @@ NUCLEIC_RESIDUE_NAME_LETTERS = {
     'G': 'G',
     'G3': 'G',
     'G5': 'G',
+    'ADE': 'A',
+    'CYT': 'C',
+    'GUA': 'G',
 }
 # All of them together
 RESIDUE_NAME_LETTERS = {**PROTEIN_RESIDUE_NAME_LETTERS, **NUCLEIC_RESIDUE_NAME_LETTERS}
@@ -619,7 +624,7 @@ INCHI_REFERENCE_VERSION = _add_versions(LIPID_REFERENCE_VERSION, LIGAND_REFERENC
 PDB_REFERENCE_VERSION = '0.0.6'
 
 # Project metadata version
-PROJECT_METADATA_VERSION = '0.0.7'
+PROJECT_METADATA_VERSION = '0.0.8'
 
 # Topology version
 TOPOLOGY_VERSION = '0.2.0'
