@@ -363,6 +363,9 @@ class Dataset:
             return {}
 
         if result.returncode != 0:
+            # When none of the requested jobs is known anymore squeue fails with this error
+            if 'invalid job id' in result.stderr.lower():
+                return {job_id: False for job_id in unique_job_ids}
             return {}
 
         active_jobs = {line.strip() for line in result.stdout.splitlines() if line.strip()}
@@ -381,6 +384,14 @@ class Dataset:
         return None
 
     @staticmethod
+    def _stale_waiting_message(slurm_job_id: str) -> str:
+        """Build a clear status message for submitted jobs which never started the workflow."""
+        return (
+            f"SLURM job {slurm_job_id} is no longer in the queue but the workflow never started. "
+            "Likely cancelled while pending or failed before running the workflow (check the logs)."
+        )
+
+    @staticmethod
     def _stale_running_message(process_id: int | str | None, slurm_job_id: str | None) -> str:
         """Build a clear status message for externally terminated jobs."""
         details = []
@@ -395,13 +406,13 @@ class Dataset:
         )
 
     def _refresh_running_entries(self, scopes: list[str] | None = None):
-        """Mark stale RUNNING entries as ERROR when backing process/job no longer exists."""
+        """Mark stale RUNNING/WAITING entries as ERROR when backing process/job no longer exists."""
         scopes = scopes or ['projects', 'mds']
         running_entries: list[tuple[str, dict]] = []
 
         for table in scopes:
             cols = self.project_columns if table == 'projects' else self.md_columns
-            for row in self.query_table(table, query_state=[State.RUNNING.value]):
+            for row in self.query_table(table, query_state=[State.RUNNING.value, State.WAITING.value]):
                 running_entries.append((table, dict(zip(cols, row))))
 
         if not running_entries:
@@ -417,11 +428,15 @@ class Dataset:
                 active_slurm_jobs,
             )
             if is_active is False:
+                if entry['state'] == State.WAITING.value:
+                    message = self._stale_waiting_message(entry['slurm_job_id'])
+                else:
+                    message = self._stale_running_message(entry.get('process_id'), entry.get('slurm_job_id'))
                 self.update_status(
                     uuid=entry['uuid'],
                     project_uuid=entry.get('project_uuid') if table == 'mds' else None,
                     state=State.ERROR,
-                    message=self._stale_running_message(entry.get('process_id'), entry.get('slurm_job_id')),
+                    message=message,
                 )
 
     def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
@@ -560,7 +575,8 @@ class Dataset:
         state: State | str,
         message: str,
         project_uuid: str = None,
-        rel_path: str = None
+        rel_path: str = None,
+        slurm_job_id: str = None,
     ):
         """Update or insert (upsert) a project or MD's status in the database.
 
@@ -570,7 +586,8 @@ class Dataset:
             message: Status message
             project_uuid: If provided, this is an MD entry (requires rel_path)
             rel_path: Relative path to the directory (required for new entries)
-            overwrite: Whether to replace existing entries with the same rel_path.
+            slurm_job_id: SLURM job ID to store with non-running states (e.g. WAITING).
+                For RUNNING it is always taken from the SLURM_JOB_ID environment variable.
 
         """
         with self.locked_storage_file:
@@ -584,7 +601,6 @@ class Dataset:
                 slurm_job_id = os.environ.get('SLURM_JOB_ID')
             else:
                 process_id = None
-                slurm_job_id = None
 
             if project_uuid:
                 # This is an MD entry
@@ -1355,12 +1371,19 @@ class Dataset:
                     # print("sbatch --output=logs/mwf_%j.out --error=logs/mwf_%j.err mwf_slurm_job.sh ")
                 else:
                     print(f"Submitting SLURM job for {project_dir}")
-                    self.update_status(project_dict['uuid'], state=State.WAITING, message='Job submitted to SLURM')
-                    subprocess.run(['sbatch',
+                    result = subprocess.run(['sbatch',
+                                    '--parsable',
                                     '--output=logs/mwf_%j.out',
                                     '--error=logs/mwf_%j.err',
                                     job_script_path],
-                                cwd=project_dir)
+                                cwd=project_dir, capture_output=True, text=True)
+                    if result.returncode != 0:
+                        raise RuntimeError(f"sbatch failed for {project_dir}:\n{result.stderr.strip()}")
+                    # With --parsable the output is 'jobid' or 'jobid;cluster'
+                    slurm_job_id = result.stdout.strip().split(';')[0]
+                    print(f"Submitted batch job {slurm_job_id}")
+                    self.update_status(project_dict['uuid'], state=State.WAITING,
+                                       message='Job submitted to SLURM', slurm_job_id=slurm_job_id)
             elif parallel:
                 # Parallel execution - collect jobs to run later
                 if debug:
