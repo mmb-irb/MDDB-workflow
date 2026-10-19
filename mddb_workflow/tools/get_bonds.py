@@ -218,6 +218,9 @@ def get_bonds_reference_frame(
         print(f' Using the frame with the fewest mismatches -> Frame {bonds_reference_frame + 1}')
         return bonds_reference_frame, True
     print(f' {len(recurrent_atoms)} atoms fail in {failure_cut} or more of the {checked_frames} checked frames')
+    worst_atom_index, worst_atom_failures = atom_clash_counts.most_common(1)[0]
+    print(f' The most failing atom is {structure.atoms[worst_atom_index].label} (index {worst_atom_index})'
+        f' which fails in {worst_atom_failures} frames')
     # Print the most frequent clashes table
     # Each count is the number of frames with this atom and bond-set mismatch.
     print(f' Top 10 atom mismatches:')
