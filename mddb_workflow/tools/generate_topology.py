@@ -222,7 +222,7 @@ def generate_topology (
         if len(residue_indices) > 0:
             formatted['re'] = residue_indices
         if len(atom_indices) > 0:
-            formatted['at'] = list(atom_indices).sort()
+            formatted['at'] = sorted(atom_indices)
         return formatted
     
     # Add the main selections
