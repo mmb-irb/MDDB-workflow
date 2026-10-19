@@ -1083,14 +1083,14 @@ class Chain:
         """Get atom indices for all atoms in the chain (read only).
         In order to change atom indices they must be changed in their corresponding residues.
         """
-        return sum([residue.atom_indices for residue in self.residues], [])
+        return [index for residue in self.residues for index in residue.atom_indices]
     atom_indices = property(get_atom_indices, None, None, "Atom indices for all atoms in the chain (read only)")
 
     def get_atoms(self) -> list[int]:
         """Get the atoms in the chain (read only).
         In order to change atoms they must be changed in their corresponding residues.
         """
-        return sum([residue.atoms for residue in self.residues], [])
+        return [atom for residue in self.residues for atom in residue.atoms]
     atoms: list['Atom'] = property(get_atoms, None, None, "Atoms in the chain (read only)")
 
     def add_atom(self, new_atom: 'Atom'):
@@ -2938,7 +2938,7 @@ class Structure:
                 print('        NEVER FORGET: This will break any associated trajectory if coordinates are not sorted as well')
                 # Sort atoms to group residue atoms together
                 # Note that each atom index must be updated
-                new_atom_indices = sum([residue.atom_indices for residue in self.residues], [])
+                new_atom_indices = [index for residue in self.residues for index in residue.atom_indices]
                 for i, new_atom_index in enumerate(new_atom_indices):
                     atom = self.atoms[new_atom_index]
                     atom._index = i
