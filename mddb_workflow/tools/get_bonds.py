@@ -136,7 +136,7 @@ def get_bonds_reference_frame(
     ignore_bonds: bool = False,
     patience: int = 100,  # Limit of frames to check before we surrender
     # Minimum ratio of checked frames where the same atom must fail to consider the test as failed
-    atom_failure_ratio: float = 0.05,
+    atom_failure_ratio: float = 0.1,
 ) -> tuple[int, bool]:
     """Return a reference frame number where all bonds are exactly as they should (by VMD standards).
     This is the frame used when representing the MD.
