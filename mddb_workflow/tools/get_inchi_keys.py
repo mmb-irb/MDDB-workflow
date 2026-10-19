@@ -1,10 +1,11 @@
 import MDAnalysis
 import traceback
 import multiprocessing
-from dataclasses import dataclass, field
 from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION
-from mddb_workflow.tools.get_ligands import pubchem_standardization
+from mddb_workflow.core.dataclass import InChIKeyData
+from mddb_workflow.utils.cache import get_cached_function
+from mddb_workflow.utils.pubchem import pubchem_standardization
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
 from mddb_workflow.utils.type_hints import *
@@ -16,47 +17,6 @@ from MDAnalysis.converters.RDKitInferring import MDAnalysisInferrer
 
 # Regular expression matching formulas of single ions
 ION_FORMULA = r'^[A-Z]{1}[a-z]?[+-]?\d?$'
-
-
-@dataclass
-class InChIKeyData:
-    """Data structure for InChI key information.
-
-    Attributes:
-        inchi (str): The InChI string for the residue.
-        resindices (list[int]): List of all residue indices with this InChI key.
-        fragments (list[list[int]]): Lists of residue indices that are connected as a single group.
-        resnames (set[str]): Set of residue names associated with this InChI key.
-        molname (str): Representative molecule name for this InChI key.
-        moltype (Literal['residue', 'fragment']): Type of the molecule.
-        classification (set): Set of residue classifications for this InChI key.
-        frag_len (int): Length on number of residues of the fragments. 1 if no fragments are present.
-        references (dict): Additional database references related to this InChI key.
-
-    """
-    inchi: str
-    resindices: list[int] = field(default_factory=list)
-    fragments: list[list[int]] = field(default_factory=list)
-    resnames: set[str] = field(default_factory=set)
-    molname: str = ''
-    moltype: Literal['residue', 'fragment'] = 'residue'
-    classification: set = field(default_factory=set)
-    frag_len: int = 1
-    references: dict = field(default_factory=dict)
-
-    @classmethod
-    def load_cache(cls, cache_dict: dict[dict | None]) -> dict[str, 'InChIKeyData']:
-        """Load data from cache by converting dictionaries to InChIKeyData objects."""
-        if len(cache_dict) > 0 and isinstance(next(iter(cache_dict.values())), dict):
-            inchikeys = {}
-            for inchikey, data in cache_dict.items():
-                inchidata = cls(inchi=data['inchi'])
-                for key, value in data.items():
-                    setattr(inchidata, key, value)
-                inchikeys[inchikey] = inchidata
-            return inchikeys
-        else:
-            return cache_dict
 
 
 def is_ferroheme(mda_atoms: 'MDAnalysis.AtomGroup') -> bool:
@@ -312,6 +272,22 @@ def generate_inchikeys(
                 f'{key_counts}')
     socket_timeout.stop()
     return inchikeys
+
+
+def get_database_inchikey_reference(
+    inchikey: str,
+    cache: 'Cache',
+    database: Optional['Database'] = None,
+) -> Optional[dict]:
+    """Given an InChI key, get its reference from the MDDB database, if any.
+    References generated with a different version are ignored so they are generated again.
+    """
+    if not database: return None
+    cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
+    reference = cached_get_database_reference('inchikeys', inchikey)
+    if not reference: return None
+    if reference.get('version') != INCHI_REFERENCE_VERSION: return None
+    return reference
 
 
 def generate_inchi_references(

@@ -2,40 +2,58 @@ import requests
 from functools import lru_cache
 from mddb_workflow.utils.auxiliar import warn, retry_request
 from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION
+from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
 
 
-def generate_lipid_references(inchikeys: dict[str, 'InChIKeyData']) -> dict[str, dict]:
+def generate_lipid_references(
+    inchikeys: dict[str, 'InChIKeyData'],
+    cache: 'Cache',
+    database: Optional['Database'] = None,
+) -> dict[str, dict]:
     """Add lipid-specific database information to InChIKeyData objects.
 
     This function queries SwissLipids and LIPID MAPS databases for each InChI key
     and adds the results directly to the InChIKeyData objects. It also performs
-    quality checks on lipid classifications.
+    quality checks on lipid classifications. InChI keys already in the MDDB
+    database reuse its lipid data instead.
 
     Args:
         inchikeys: Dictionary mapping InChI keys to InChIKeyData objects (modified in-place).
+        cache: Cache to store the MDDB database requests.
+        database: MDDB database handler to reuse existing references.
 
     Returns:
         set: Set of InChI keys that were identified as lipids.
 
     """
-    # Check internet connection
-    try:
-        is_in_swisslipids('test')
-    except Exception as e:
-        warn(f'There was a problem connecting to the SwissLipids database: {e}')
-        return {}
     lipid_references = {}
+    # Check internet connection only once we need to request the lipid databases
+    is_connected = None
 
     for inchikey, mol_data in inchikeys.items():
         clasi = mol_data.classification
         if len(clasi) == 1 and 'ion' in clasi:
             # Skip ions
             continue
-        # If we dont find it, we try without stereochemistry (only connection layer)
-        SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
-        LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
+        # Check if the lipid data is already in the MDDB database
+        database_reference = get_database_inchikey_reference(inchikey, cache, database)
+        if database_reference:
+            SL_data = database_reference.get('swisslipids')
+            LM_data = database_reference.get('lipidmaps')
+        else:
+            if is_connected is None:
+                try:
+                    is_in_swisslipids('test')
+                    is_connected = True
+                except Exception as e:
+                    warn(f'There was a problem connecting to the SwissLipids database: {e}')
+                    is_connected = False
+            if not is_connected: continue
+            # If we dont find it, we try without stereochemistry (only connection layer)
+            SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
+            LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
 
         # Add lipid database data to InChIKeyData
         if SL_data or LM_data:

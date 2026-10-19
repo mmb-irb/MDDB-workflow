@@ -438,6 +438,11 @@ GROMACS_TPR_ATOM_BONDS_REGEX = r"^\s*([0-9]*) type=[0-9]* \((BONDS|CONSTR|CONNBO
 # --------------------------------------------------------------------------------------------------------
 # So it may happen that we encounter SETTLE with 4 atoms
 # This is not yet supported, but at least we check if this is happening to raise an error when found
+# NOTE: Amber topologies (prmtop) have a similar issue with SHAKE
+# Rigid waters (e.g. TIP3P) include a H-H bond to keep the geometry rigid, which is not a covalent bond
+# Bonds mined through pytraj (tools/get_bonds.py) keep it, so the stabonds/cohbonds tests fail since it is
+# never found when guessing bonds from coordinates (e.g. PLAS-20K, where 2 waters are kept in the system)
+# Until this is handled, filter the water (-filt) or discard H-H bonds when mining prmtop bonds
 GROMACS_TPR_SETTLE_REGEX = r"^\s*([0-9]*) type=[0-9]* \(SETTLE\)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)\s*([0-9]*)$"
 
 # Set the fields including vsites in the tpr dump tool

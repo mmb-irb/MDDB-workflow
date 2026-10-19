@@ -1,65 +1,26 @@
 import re
 import json
-import time
 
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from mordred import Calculator, descriptors
 from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LARGE_AMINOACID_FLAG, LIGAND_REFERENCE_VERSION
-from mddb_workflow.utils.auxiliar import InputError, RequestError, request_pdb_data, warn, retry_request, handle_http_request, SocketTimeout
+from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, handle_http_request, SocketTimeout
+from mddb_workflow.utils.pubchem import make_pubchem_request, pubchem_standardization, _make_post_request
+from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
 from mddb_workflow.utils.type_hints import *
 
 
 from functools import lru_cache
-import requests
 from scipy.optimize import linear_sum_assignment
 import numpy as np
 
 # Set the expected ligand data fields
 LIGAND_DATA_FIELDS = set(['name', 'pubchem', 'drugbank', 'chembl', 'smiles', 'formula', 'pdbid', 'inchikey'])
 MINIMUM_TANIMOTO_THRESHOLD = 0.3
-
-
-def _make_get_request(url: str) -> requests.Response:
-    return requests.get(url, timeout=30)
-
-
-def _make_post_request(url, payload):
-    return requests.post(url, data=payload, timeout=30)
-
-
-@retry_request
-def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context: str = None) -> Optional[dict]:
-    """Make a request to PubChem API, with retries and error handling.
-
-    Args:
-        url (str): The URL to make the request to.
-        error_context (str): Context for error messages. If not given, return None.
-        payload (Optional[dict]): The payload to send in a POST request. If None, a GET request will be made.
-
-    """
-    if payload is None:
-        r = _make_get_request(url)
-    else:
-        r = _make_post_request(url, payload)
-    # Add a small sleep if we are in the green zone to avoid hitting the rate limit
-    # https://pubchem.ncbi.nlm.nih.gov/docs/dynamic-request-throttling
-    throttling = r.headers.get('X-Throttling-Control', 'No throttling').split(',')[0]
-
-    if 'Yellow' in throttling:
-        time.sleep(0.2)
-    elif 'Red' in throttling:
-        time.sleep(0.5)
-    elif 'Black' in throttling:
-        time.sleep(1)
-    if r.status_code == 200:
-        return r.json()
-    elif error_context:
-        if 'temporarily unable' in r.text:
-            raise requests.exceptions.ConnectionError("PubChem is temporarily unable to process requests. Please try again later.")
-        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text + "\nThrottling: " + throttling)
-    else:
-        return None
+# Set the ligand data fields which are specific to the project where the reference was generated
+# These fields must not be reused from a database reference
+PROJECT_SPECIFIC_LIGAND_FIELDS = set(['forced', 'forced_name', 'resindices', 'resnames'])
 
 
 def record_pubchem_match(
@@ -94,11 +55,15 @@ def generate_ligand_references(
     pdb_ids: list[str],
     inchikeys: dict[str, 'InChIKeyData'],
     mercy: list[str] = [],
+    database: Optional['Database'] = None,
     ) -> dict[str, dict]:
     """Generate a map of residues associated to ligands.
 
     This function identifies and maps ligands in the molecular structure through a
     multi-step matching process:
+
+    0. **MDDB references**: If the InChIKey is already in the MDDB database with a
+       PubChem ID, reuse its ligand data and skip the matching steps.
 
     1. **Direct InChIKey matching**: Extracts InChIKeys from structure fragments
        (excluding lipids and membrane components) and attempts direct matching with
@@ -128,15 +93,28 @@ def generate_ligand_references(
     pubchem_ids_from_pdb = []
     pdb_ids = pdb_ids or []
     pubchem_ids_from_pdb = pdbs_2_pubchems(pdb_ids, cache)
+    # Keep track of the references reused from the database so we do not request PubChem again
+    database_inchikeys = set()
     for inchikey in inchikeys:
-        # 1. Direct InChIKey match
-        pubchem_id = inchikey_2_pubchem(inchikey)
         inchi = inchikeys[inchikey].inchi
         mol = Chem.MolFromInchi(inchi, sanitize=False)
         # Original descriptors to calculate similarity later
         descriptor_data = obtain_mordred_morgan_descriptors(mol)
         ligand_fg = descriptor_data['morgan_fp_bit_array']
         automatic_references[inchikey].update(descriptor_data)
+        # 0. Check if the ligand reference is already in the MDDB database
+        database_reference = get_database_inchikey_reference(inchikey, cache, database)
+        database_ligand = database_reference and database_reference.get('ligand')
+        if database_ligand and database_ligand.get('pubchem'):
+            database_ligand = {k: v for k, v in database_ligand.items()
+                               if k not in PROJECT_SPECIFIC_LIGAND_FIELDS}
+            # Descriptors are calculated locally, they are cheap and needed further
+            automatic_references[inchikey] = {**database_ligand, **descriptor_data}
+            database_inchikeys.add(inchikey)
+            print(f'Found CID {database_ligand["pubchem"]} in the MDDB database.')
+            continue
+        # 1. Direct InChIKey match
+        pubchem_id = inchikey_2_pubchem(inchikey)
         if pubchem_id:
             automatic_references[inchikey]['pubchem'] = pubchem_id
             print(f'Found CID {pubchem_id} by direct InChIKey match.')
@@ -220,6 +198,7 @@ def generate_ligand_references(
                 if success: break
 
     for inchikey, ligand_data in automatic_references.items():
+        if inchikey in database_inchikeys: continue
         if ligand_data.get('pubchem', None):
             automatic_references[inchikey].update(obtain_pubchem_data_from_input(ligand_data))
 
@@ -652,14 +631,14 @@ def get_pubchem_data(pubchem_id: str) -> Optional[dict]:
 def drugbank_2_pubchem(drugbank_id) -> Optional[str]:
     """Given a DrugBank ID, request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{drugbank_id}/JSON'
-    data = make_pubchem_request(url, "DrugBank to PubChem")
+    data = make_pubchem_request(url, error_context="DrugBank to PubChem")
     return str(data['PC_Compounds'][0]['id']['id']['cid'])
 
 
 def chembl_2_pubchem(chembl_id) -> Optional[str]:
     """Given a ChemBL ID, use the uniprot API to request its PubChem compound ID."""
     url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/xref/RegistryID/{chembl_id}/cids/JSON'
-    data = make_pubchem_request(url, "ChemBL to PubChem")
+    data = make_pubchem_request(url, error_context="ChemBL to PubChem")
     return str(data['IdentifierList']['CID'][0])
 
 
@@ -674,29 +653,6 @@ def inchikey_2_pubchem(inchikey: str, conectivity_only=False) -> Optional[str]:
             return [str(cid) for cid in data['IdentifierList']['CID']]
         else:
             return str(data['IdentifierList']['CID'][0])
-    return None
-
-
-@lru_cache(maxsize=None)
-def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
-    """Try PubChem standardization service to write things like the bonds from aromatic rings in the same order.
-    You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8.
-    """
-    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-    data = make_pubchem_request(url, payload={'inchi': inchi})
-    if data:
-        results = []
-        for compound in data['PC_Compounds']:
-            if compound['id']['id']['cid']:
-                cid = str(compound['id']['id']['cid'])
-            else:
-                continue
-            standard_inchi = None
-            for prop in compound['props']:
-                if prop['urn']['label'] == 'InChI':
-                    standard_inchi = prop['value']['sval']
-            results.append({'pubchem': cid, 'inchi': standard_inchi})
-        return results
     return None
 
 

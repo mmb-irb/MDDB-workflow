@@ -2,7 +2,8 @@ from mddb_workflow.utils.file import File
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.constants import GLOBALS
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.tools.get_inchi_keys import InChIKeyData, generate_inchi_references
+from mddb_workflow.core.dataclass import InChIKeyData
+from mddb_workflow.tools.get_inchi_keys import generate_inchi_references
 from mddb_workflow.tools.get_ligands import generate_ligand_references
 from mddb_workflow.tools.residue_mapping import generate_residue_mapping
 import pytest

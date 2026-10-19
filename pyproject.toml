@@ -20,6 +20,10 @@ docs = [
     "nbsphinx",
     "pandoc"
 ]
+viz = [
+    "ipywidgets>=8",
+    "plotly>=6",
+]
 
 [project.scripts]
 mwf = "mddb_workflow.console:main"

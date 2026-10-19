@@ -1,7 +1,7 @@
 from mddb_workflow.utils.auxiliar import load_json, save_json
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
-from mddb_workflow.tools.get_inchi_keys import InChIKeyData
+from mddb_workflow.core.dataclass import InChIKeyData
 import uuid
 
 

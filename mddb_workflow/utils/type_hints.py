@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from mddb_workflow.utils.cache import Cache
     from mddb_workflow.utils.file import File
     from mddb_workflow.utils.database import Database, Remote
-    from mddb_workflow.tools.get_inchi_keys import InChIKeyData
+    from mddb_workflow.core.dataclass import InChIKeyData
     from mddb_workflow.utils.selections import Selection
     from mddb_workflow.mwf import Task, MD, Project
     from MDAnalysis import Universe

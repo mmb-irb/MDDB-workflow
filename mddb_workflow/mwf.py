@@ -997,6 +997,7 @@ class MD:
     pbc_residues = property(get_pbc_residues, None, None, "Indices of residues in periodic boundary conditions (read only)")
 
     # DANI: Esto algún día habría que tratar de automatizarlo
+    # RUBEN: Mover a structure?
     def _set_cg_selection(self, reference_structure: 'Structure', verbose: bool = False) -> 'Selection':
         """Set the coarse grain selection."""
         def parse_cg_selection() -> 'Selection':
@@ -1254,7 +1255,8 @@ class MD:
     def get_simulation_box_shape(self) -> Optional[str]:
         """Box shape: cubic, orthogonal, hexagonal, dodecahedral, octahedral or triclinic.
         Several shapes joined by ' / ' if a dynamic box changes its shape.
-        Return None if it is missing."""
+        Return None if it is missing.
+        """
         return self.simulation_box_data[4]
     simulation_box_shape = property(get_simulation_box_shape, None, None, "Simulation box shape (read only)")
 
