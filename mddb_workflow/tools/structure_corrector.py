@@ -6,7 +6,8 @@ from mddb_workflow.tools.get_charges import get_charges
 from mddb_workflow.utils.auxiliar import InputError, TestFailure, MISSING_BONDS
 from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
-from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG
+from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG, AVAILABLE_LETTERS
+from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure, Residue
 from mddb_workflow.utils.type_hints import *
 
@@ -15,6 +16,45 @@ def write_updated_structure(structure: 'Structure', output_structure_file: 'File
     """Write the updated structure and report the reason that triggered the write."""
     print(f' The structure file has been {reason} -> {output_structure_file.filename}')
     structure.generate_pdb_file(output_structure_file.path)
+
+
+def apply_chainer(structure: 'Structure', chainer: dict, missing_any_bonds: bool) -> set[int]:
+    """Set chains according to the 'chainer' input.
+    Keys are chain letters or 'auto' and values are VMD selections.
+    The 'auto' key sets a new chain per fragment in its selection.
+    Return the indices of all atoms whose chain was set.
+    """
+    if type(chainer) is not dict:
+        raise InputError(f'The "chainer" input must be a dict of chain letters and selections, not: {chainer}')
+    # Letters explicitly requested by the user must not be used by the 'auto' logic
+    requested_letters = set(key for key in chainer.keys() if key != 'auto')
+    forced_atom_indices = set()
+    for key, selection_string in chainer.items():
+        if key != 'auto' and key not in AVAILABLE_LETTERS:
+            raise InputError(f'Wrong chain "{key}" in the "chainer" input. Keys must be a single letter or "auto".')
+        selection = structure.select(selection_string, syntax='vmd')
+        if not selection:
+            raise InputError(f'Empty selection for chain "{key}" in the "chainer" input: {selection_string}')
+        # Note that chains are set per whole residue so we save all atoms in the selected residues
+        for residue_index in structure.get_selection_residue_indices(selection):
+            forced_atom_indices.update(structure.residues[residue_index].atom_indices)
+        if key != 'auto':
+            print(f' Setting chain {key} to {len(selection)} atoms ({selection_string})')
+            structure.set_selection_chain_name(selection, key)
+            continue
+        # Set a new chain per fragment
+        if missing_any_bonds:
+            raise InputError('Cannot use the "auto" key in the "chainer" input with missing bonds.\n'
+                '  Please either set chain letters explicitly or provide a topology including bonds.')
+        for fragment in structure.find_fragments(selection):
+            current_letters = set(chain.name for chain in structure.chains)
+            unavailable_letters = current_letters | requested_letters
+            chain_name = next((letter for letter in AVAILABLE_LETTERS if letter not in unavailable_letters), None)
+            if chain_name is None:
+                raise InputError(f'No more letters available for the "auto" chainer ({selection_string})')
+            print(f' Setting chain {chain_name} to a fragment of {len(fragment)} atoms ({selection_string})')
+            structure.set_selection_chain_name(fragment, chain_name)
+    return forced_atom_indices
 
 
 def get_excluded_atoms_indices(
@@ -50,6 +90,7 @@ def structure_corrector(
     trust: list[str],
     guess_bonds: bool,
     ignore_bonds: bool,
+    chainer: Optional[dict] = None,
 ) -> None:
     """Analyze the structure looking for irregularities and then modify the structure to standarize the format.
 
@@ -60,6 +101,8 @@ def structure_corrector(
       -> Coordinates in the pdb file are replaced by those of the first frame in the trajectory where bonds are stable
     * Incoherent atom bonds -> If an atom has unexpected bonds then the simulation may be wrong
       -> Stop the workflow and warn the user
+    * Forced chains -> Chains are set according to the 'chainer' input, if passed
+      -> Missing chains are not fixed and forced chains must not be modified by further corrections
     * Missing chains -> Chains are added through VMD
     * Splitted chain -> Kill the process and warn the user. This should never happen by just reading a pdb, but after correcting
     * Repeated chains -> Chains are renamed (e.g. A, G, B, G, C, G -> A, G, B, H, C, I)
@@ -306,6 +349,18 @@ def structure_corrector(
             register.update_test(COHERENT_BONDS_FLAG, True)
 
     # ------------------------------------------------------------------------------------------
+    # Forced chains ----------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------
+
+    # Set chains as requested by the user, if requested
+    # Save the forced chains so we can make sure they are not modified by further corrections
+    forced_atom_chains = None
+    if chainer:
+        forced_atom_indices = apply_chainer(structure, chainer, missing_any_bonds)
+        forced_atom_chains = { index: structure.atoms[index].chain.name for index in forced_atom_indices }
+        write_updated_structure(structure, output_structure_file, 'modified (chainer input)')
+
+    # ------------------------------------------------------------------------------------------
     # Missing chains ---------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------
 
@@ -313,7 +368,8 @@ def structure_corrector(
     chains = structure.chains
 
     # In case there are not chains at all
-    if len(chains) == 1 and (chains[0].name == ' ' or chains[0].name == 'X'):
+    # If chains were forced then we respect them, even if there is a single chain
+    if not chainer and len(chains) == 1 and (chains[0].name == ' ' or chains[0].name == 'X'):
         warn('Chains are missing and they will be added')
         # Stop here if we have bonds guessed from coarse grain (i.e. we have no topology)
         # Note that we rely in fragments (and thus in bonds) to guess chains
@@ -424,6 +480,18 @@ def structure_corrector(
     # If we did any change then save the structure
     if had_to_split_chains:
         write_updated_structure(structure, output_structure_file, 'modified (coherent chains)')
+
+    # Make sure forced chains were not modified by any of the previous corrections
+    # Note that this must be checked before atoms are resorted
+    if forced_atom_chains:
+        modified_atom_indices = [ index for index, chain_name in forced_atom_chains.items()
+            if structure.atoms[index].chain.name != chain_name ]
+        if len(modified_atom_indices) > 0:
+            modified_atoms_vmd_selection = Selection(modified_atom_indices).to_vmd()
+            raise InputError(f'Chains set by the "chainer" input were modified for {len(modified_atom_indices)} atoms'
+                ' when correcting the structure (see the logs above).\n'
+                f'  Modified atoms: {modified_atoms_vmd_selection}\n'
+                '  Please make sure every chain is a continuous region and its polymers are bonded.')
 
     # ------------------------------------------------------------------------------------------
     # Merged residues ------------------------------------------------------------------------

@@ -56,6 +56,7 @@ def process_input_files(
     image: bool,
     fit: bool,
     translation: list[float],
+    input_chainer: Optional[dict],
     # Selections
     # Note that they are not used directly but they are used inderictly
     # However we must add them as arguments, so this task will be run again if they change
@@ -383,6 +384,7 @@ def process_input_files(
         trust=self.project.trust,
         guess_bonds=self.project.guess_bonds,
         ignore_bonds=self.project.ignore_bonds,
+        chainer=input_chainer,
     )
 
     # If the corrected output exists then use it

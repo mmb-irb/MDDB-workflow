@@ -605,6 +605,24 @@ image:
 
 fit:
 
+# Set chains in the processed structure.
+# Use a dict where keys are chain letters and values are VMD selections.
+# Use the 'auto' key to set a new chain per fragment (i.e. covalently bonded atoms) in the selection.
+# Entries are applied in order so the last ones overwrite the previous ones.
+# Atoms out of all selections keep their original chain.
+# Note that the automatic fix of missing chains is skipped when this field is passed.
+# The automatic fix is good enough for most scenarios, this field is only used to manually fix the exceptions.
+#
+# Example:
+#
+# chainer:
+#   A: protein and resid 1 to 300
+#   B: protein and resid 301 to 600
+#   M: resname POPC POPE
+#   auto: nucleic
+
+chainer:
+
 # Set which checkings are allowed to fail without killing the process.
 # Set 'true' to allow all checkings to fail.
 # Available checkings: stabonds, cohbonds, intrajrity, pbcontacts, elements, refseq, interact, ligands, chains, largeaa

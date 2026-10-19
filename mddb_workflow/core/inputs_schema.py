@@ -191,6 +191,7 @@ class WorkflowInputs(InputsBaseModel):
     filter_selection: Optional[Union[bool, str]] = None
     image: Optional[bool] = None
     fit: Optional[bool] = None
+    chainer: Optional[dict[str, str]] = None
     mercy: Optional[Union[bool, list[str]]] = None
     trust: Optional[Union[bool, list[str]]] = None
     faith: Optional[bool] = None
