@@ -57,5 +57,7 @@ dependencies:
   - python-xxhash
   # To validate the inputs file against a schema
   - pydantic>=2
+  # To measure the actual size of documents to be loaded in the database (MongoDB uses BSON)
+  - pymongo
   # Optional dependencies
   # - bioconda::blast

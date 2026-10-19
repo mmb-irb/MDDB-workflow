@@ -5,6 +5,8 @@ from mddb_workflow.utils.constants import RESIDUE_NAME_LETTERS, PROTEIN_RESIDUE_
 from mddb_workflow.utils.constants import YELLOW_HEADER, RED_HEADER, COLOR_END
 from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME
 from mddb_workflow.utils.constants import GLOBALS
+from mddb_workflow.utils.constants import DATABASE_DOCUMENT_SIZE_LIMIT
+from mddb_workflow.utils.constants import DATABASE_DOCUMENT_PATTERNS, DATABASE_DOCUMENT_LIST_PATTERNS
 from mddb_workflow.utils.type_hints import *
 
 import os
@@ -14,6 +16,7 @@ import sys
 import time
 import json
 import yaml
+import bson
 from glob import glob
 from struct import pack
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
@@ -265,6 +268,28 @@ def load_json(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
         return deserialized_content
     except Exception as error:
         raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
+
+
+def check_database_document_size(filepath: str):
+    """If the file is to be loaded in the database as a document, make sure it does not exceed the size limit.
+    Size is measured as the BSON encoding of every document, which is what MongoDB actually stores.
+    """
+    filename = os.path.basename(filepath)
+    is_document = any(re.match(pattern, filename) for pattern in DATABASE_DOCUMENT_PATTERNS)
+    is_document_list = any(re.match(pattern, filename) for pattern in DATABASE_DOCUMENT_LIST_PATTERNS)
+    if not is_document and not is_document_list: return
+    with open(filepath, 'r') as file:
+        content = json.load(file)
+    documents = content if is_document_list else [content]
+    for document in documents:
+        # Wrap the document since BSON only encodes objects and some analyses are lists at the top level
+        # Note that the loader also wraps analyses this way: { name, value }
+        size = len(bson.encode({ 'value': document }))
+        if size <= DATABASE_DOCUMENT_SIZE_LIMIT: continue
+        raise RuntimeError(f'Output file {filepath} is to be loaded in the database but a document is too big: '
+            f'{size / 1024 ** 2:.2f} Mb (limit is {DATABASE_DOCUMENT_SIZE_LIMIT / 1024 ** 2:.2f} Mb).\n'
+            '  MongoDB documents can not exceed 16 Mb and, anyway, such a big document would make the service slow.\n'
+            '  The format of this output should be reconsidered.')
 
 
 def save_json(content, filepath: str, indent: Optional[int] = None, separators: Optional[tuple] = None):

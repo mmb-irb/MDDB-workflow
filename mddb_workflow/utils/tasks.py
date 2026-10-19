@@ -1,11 +1,11 @@
-from os import rename, mkdir
+from os import rename, mkdir, walk
 from os.path import exists
 from shutil import rmtree
 from inspect import getfullargspec
 import time
 
 from mddb_workflow.utils.arg_cksum import get_cksum_id
-from mddb_workflow.utils.auxiliar import safe_getattr
+from mddb_workflow.utils.auxiliar import safe_getattr, check_database_document_size
 from mddb_workflow.utils.constants import *
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.type_hints import *
@@ -291,6 +291,16 @@ class Task:
         output = self.func(**processed_args)
         end_time = time.time()
         print(f'   Task {self.flag} completed in {end_time - start_time:.2f} seconds{COLOR_END}')
+        # Make sure output JSON files to be loaded in the database as documents do not exceed the size limit
+        # Note that we check before saving the output in cache so the task is run again if it fails
+        for output_file in output_files.values():
+            if output_file == None or type(output_file) == Exception: continue
+            if not output_file.exists: continue
+            check_database_document_size(output_file.path)
+        if writes_output_dir and exists(processed_args[OUTPUT_DIRECTORY_ARG]):
+            for directory, _, filenames in walk(processed_args[OUTPUT_DIRECTORY_ARG]):
+                for filename in filenames:
+                    check_database_document_size(f'{directory}/{filename}')
         self._set_parent_output(parent, output)
         if self.use_cache:
             # Save output in cache unless it is marked to not save it

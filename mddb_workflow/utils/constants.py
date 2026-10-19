@@ -231,6 +231,24 @@ OUTPUT_CHANNELS_FILENAME = 'mda.channels.json'
 OUTPUT_ALLOSTERY_FILENAME = 'mda.allostery.json'
 OUTPUT_CHEMICAL_SHIFTS_FILENAME = 'mda.chemshifts.json'
 
+# Set the maximum size of an output JSON file to be loaded in the database as a document
+# MongoDB has a hard limit of 16Mb per document (BSON encoded)
+# We leave 1Kb of margin for the fields added by the loader (e.g. name, project, md, _id)
+# Note that if a document is anywhere near this size then we should probably rethink its format
+# Otherwise, even if it fits in the database, the service will be slow when serving it
+DATABASE_DOCUMENT_SIZE_LIMIT = 16 * 1024 * 1024 - 1024 # Bytes
+# Set the patterns of output JSON filenames which are loaded in the database as a single document
+# Note that metadata.json is not checked although it is merged in the project document
+DATABASE_DOCUMENT_PATTERNS = [ r'^topology\.json$', r'^mda\..*\.json$' ]
+# Set the patterns of output JSON filenames which are loaded in the database as a list of documents
+# i.e. every element in the list becomes a separated document
+DATABASE_DOCUMENT_LIST_PATTERNS = [
+    r'^(protein_references|references)\.json$',
+    r'^inchikey_references\.json$',
+    r'^pdb_references\.json$',
+    r'^chains\.json$',
+]
+
 # Set problematic signs for directory/folder names
 # º is forbidden since paths including this characters are not readable by MDtraj
 FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']

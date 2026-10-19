@@ -18,6 +18,7 @@ dependencies:
   - mordred
   - iminuit
   - requests
+  - pymongo
   - vmd
   - pip:
     - tmscoring
