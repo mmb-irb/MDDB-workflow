@@ -18,7 +18,7 @@ import json
 import yaml
 import bson
 from glob import glob
-from struct import pack
+import numpy
 # NEVER FORGET: GraphQL has a problem with urllib.parse -> It will always return error 400 (Bad request)
 # We must use requests instead
 import requests
@@ -270,6 +270,13 @@ def load_json(filepath: str, replaces: Optional[list[tuple]] = []) -> dict:
         raise Exception(f'Something went wrong when loading JSON file {filepath}: {str(error)}')
 
 
+def get_bson_size(value) -> int:
+    """Get the size in bytes of a value once encoded in BSON, which is what MongoDB actually stores."""
+    # Wrap the value since BSON only encodes objects and some analyses are lists at the top level
+    # Note that the loader also wraps analyses this way: { name, value }
+    return len(bson.encode({ 'value': value }))
+
+
 def check_database_document_size(filepath: str):
     """If the file is to be loaded in the database as a document, make sure it does not exceed the size limit.
     Size is measured as the BSON encoding of every document, which is what MongoDB actually stores.
@@ -282,9 +289,7 @@ def check_database_document_size(filepath: str):
         content = json.load(file)
     documents = content if is_document_list else [content]
     for document in documents:
-        # Wrap the document since BSON only encodes objects and some analyses are lists at the top level
-        # Note that the loader also wraps analyses this way: { name, value }
-        size = len(bson.encode({ 'value': document }))
+        size = get_bson_size(document)
         if size <= DATABASE_DOCUMENT_SIZE_LIMIT: continue
         raise RuntimeError(f'Output file {filepath} is to be loaded in the database but a document is too big: '
             f'{size / 1024 ** 2:.2f} Mb (limit is {DATABASE_DOCUMENT_SIZE_LIMIT / 1024 ** 2:.2f} Mb).\n'
@@ -551,39 +556,41 @@ def is_standard_topology(file: 'File') -> bool:
     return file.filename.endswith(STANDARD_TOPOLOGY_FILENAME)
 
 
-# Supported byte sizes
-SUPPORTED_BYTE_SIZES = {
-    2: 'e',
-    4: 'f',
-    8: 'd'
+# Supported data types for binary files and their numpy codes
+# '<' stands for little endian
+SUPPORTED_BINARY_TYPES = {
+    'float16': '<f2',
+    'float32': '<f4',
+    'float64': '<f8',
+    'uint16': '<u2',
+    'uint32': '<u4',
+    'int32': '<i4',
 }
 
 
-def store_binary_data(data: list[float], byte_size: int, metadata : dict, filepath: str):
+def store_binary_data(data: list[float] | list[int], dtype: str, metadata : dict, filepath: str):
     """Store binary data to a file.
 
     Args:
         data: A list of numeric values
-        byte_size: The number of bytes for each value in data to be occupied
+        dtype: The data type of every value in the output file (e.g. float32, uint32)
+        metadata: Additional data to be written in a companion file (filepath + .meta.json)
         filepath: The output file path
 
     """
-    # Check bit size to make sense
-    letter = SUPPORTED_BYTE_SIZES.get(byte_size, None)
-    if not letter:
-        raise ValueError(f'Not supported byte size {byte_size}, please select one of these: {", ".join(SUPPORTED_BYTE_SIZES.keys())}')
-    # Set the binary format
-    # '<' stands for little endian
-    byte_flag = f'<{letter}'
-    # Start writting the output file
-    with open(filepath, 'wb') as file:
-        # Iterate over data list values
-        for value in data:
-            value = float(value)
-            file.write(pack(byte_flag, value))
-    # If there is metadata to be appended to the binary data then write here the companion file
+    numpy_dtype = SUPPORTED_BINARY_TYPES.get(dtype, None)
+    if not numpy_dtype:
+        raise ValueError(f'Not supported data type {dtype}, please select one of these: {", ".join(SUPPORTED_BINARY_TYPES.keys())}')
+    values = numpy.asarray(data)
+    # Make sure integer values fit in the requested type, since numpy would silently overflow them
+    if 'int' in dtype and len(values) > 0:
+        limits = numpy.iinfo(numpy_dtype)
+        if values.min() < limits.min or values.max() > limits.max:
+            raise ValueError(f'Values out of range for {dtype} ({limits.min} - {limits.max}): min {values.min()}, max {values.max()}')
+    values.astype(numpy_dtype).tofile(filepath)
+    # Write the companion metadata file, including the data type so readers know how to parse it
     companion_filepath = filepath + '.meta.json'
-    save_json(metadata, companion_filepath)
+    save_json({ **metadata, 'dtype': dtype }, companion_filepath)
 
 
 class CaptureOutput (object):

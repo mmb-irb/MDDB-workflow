@@ -1,15 +1,15 @@
 from mddb_workflow.utils.auxiliar import warn, save_json, list_values_match, MISSING_CHARGES
 from mddb_workflow.utils.auxiliar import MISSING_BONDS, JSON_SERIALIZABLE_MISSING_BONDS
-from mddb_workflow.utils.auxiliar import round_to_hundredths, store_binary_data
+from mddb_workflow.utils.auxiliar import round_to_hundredths, store_binary_data, get_bson_size
 from mddb_workflow.utils.constants import STANDARD_TOPOLOGY_FILENAME, TOPOLOGY_VERSION
+from mddb_workflow.utils.constants import DATABASE_DOCUMENT_SIZE_LIMIT
 from mddb_workflow.utils.type_hints import *
-
-# Beyond this atom count the topology JSON may grow too large for MongoDB's 16 MB document limit
-# Charges are then written as float32 binary files in GridFS and the topology stores only a flag
-CHARGES_BIN_THRESHOLD = 300000
 
 # Set a flag to state that the data is in GridFS
 BIN_FLAG = 'gridfs'
+
+# Set the value used in binary files to flag missing values (e.g. atoms with missing bonds)
+BIN_MISSING_VALUE = 2 ** 32 - 1
 
 def generate_topology (
     structure : 'Structure',
@@ -96,7 +96,10 @@ def generate_topology (
     # Residue data
     structure_residues = structure.residues
     residue_count = len(structure_residues)
-    residue_names = [ None ] * residue_count
+    # Set residue species: unique residue names, as we do with atom species
+    residue_species_map = {}
+    residue_species = []
+    residue_species_indices = [ None ] * residue_count
     residue_numbers = [ None ] * residue_count
     # Icodes are saved as a dictionary since usually only a few residues have icodes (or none)
     # Resiude ids are used as keys and, when loaded to mongo, they will become strings
@@ -104,7 +107,10 @@ def generate_topology (
     residue_icodes = {}
     residue_chain_indices = [ None ] * residue_count
     for index, residue in enumerate(structure_residues):
-        residue_names[index] = residue.name
+        if residue.name not in residue_species_map:
+            residue_species_map[residue.name] = len(residue_species)
+            residue_species.append(residue.name)
+        residue_species_indices[index] = residue_species_map[residue.name]
         residue_numbers[index] = residue.number
         if residue.icode:
             residue_icodes[index] = residue.icode
@@ -150,42 +156,12 @@ def generate_topology (
     n_md_charges = len(unique_md_charges)
     # If there are no MD charges something went wrong
     if n_md_charges == 0: raise RuntimeError('No MD charges')
-    # Large systems: charges are too heavy to inline in the topology JSON (MongoDB 16 MB limit)
-    # Each unique charge set is written as a float32 binary file alongside the topology JSON
-    # A .meta.json companion stores the set index and which MD indices share it,
-    # so the API can resolve mdmap → file without re-reading the whole topology.
-    if atom_count > CHARGES_BIN_THRESHOLD:
-        # Group the indices of all MDs having the same charges
-        md_indices_per_set = [[] for _ in range(n_md_charges)]
-        for md_index, set_index in enumerate(md_charges_map):
-            md_indices_per_set[set_index].append(md_index)
-        # Track whenever at least one of the charges are exported
-        is_bin : bool = False
-        # Write every different MD charges to the binary format
-        for set_index, (charges, md_indices) in enumerate(zip(unique_md_charges, md_indices_per_set)):
-            # Handle missing charges
-            if charges is None: continue
-            is_bin = True
-            # Write the binary file adding in the metadata the MDs it belongs to
-            bin_path = f'{output_directory}/mdf.atom_charges_{set_index}.bin'
-            store_binary_data(charges, 4, {
-                'mds': md_indices,
-                'x': {
-                    'name': 'atoms',
-                    'length': atom_count,
-                },
-                'bitsize': 32,
-            }, bin_path)
-        # Set the charges as the binary flag either if there is one or more MD charges
-        final_atom_charges = BIN_FLAG if is_bin else None
-    # Small systems: inline charges in the topology JSON as before
+    # If there is only one set of charges then just set these charges as the value
+    if n_md_charges == 1:
+        final_atom_charges = unique_md_charges[0]
+    # Otherwise set a more complex map
     else:
-        # If there is only one set of charges then just set these charges as the value
-        if n_md_charges == 1:
-            final_atom_charges = unique_md_charges[0]
-        # Otherwise set a more complex map
-        else:
-            final_atom_charges = { 'mdmap': md_charges_map, 'values': unique_md_charges }
+        final_atom_charges = { 'mdmap': md_charges_map, 'values': unique_md_charges }
 
     # Set custom atom selections
     selections = {}
@@ -243,7 +219,8 @@ def generate_topology (
         'atom_charges': final_atom_charges,
         'atom_residue_indices': atom_residue_indices,
         'atom_bonds': final_atom_bonds,
-        'residue_names': residue_names,
+        'residue_species': residue_species,
+        'residue_species_indices': residue_species_indices,
         'residue_numbers': residue_numbers,
         'residue_icodes': residue_icodes,
         'residue_chain_indices': residue_chain_indices,
@@ -254,4 +231,91 @@ def generate_topology (
         'selections': selections,
         'version': TOPOLOGY_VERSION,
     }
+
+    # Large systems: the topology may be too big for the database (MongoDB 16 MB limit)
+    # Note that BSON arrays are heavy since every value is stored together with its index as a string
+    # Per-atom and per-residue fields are then written as binary files (to be loaded in GridFS)
+    # The topology stores only a flag for these fields
+    # Binary files have fixed size values so the API can read only the values of specific atoms or residues
+
+    # Use the smallest data type to store indices, given the number of possible values
+    def get_index_dtype (count : int) -> str:
+        return 'uint16' if count <= 2 ** 16 else 'uint32'
+
+    # Write a list of values to a binary file named after the topology field
+    # Missing values (None) are replaced by a flag value
+    def export_values (field : str, values : list, dtype : str, axis : str):
+        has_missing = None in values
+        if has_missing: values = [ BIN_MISSING_VALUE if value is None else value for value in values ]
+        metadata = {
+            'x': { 'name': axis, 'length': len(values) },
+            'bitsize': int(dtype[-2:]),
+        }
+        if has_missing: metadata['missing'] = BIN_MISSING_VALUE
+        store_binary_data(values, dtype, metadata, f'{output_directory}/mdf.{field}.bin')
+
+    # Charges: every different set of charges is written to a different file
+    # A .meta.json companion stores which MD indices share every set of charges
+    def export_atom_charges ():
+        # Group the indices of all MDs having the same charges
+        md_indices_per_set = [[] for _ in range(n_md_charges)]
+        for md_index, set_index in enumerate(md_charges_map):
+            md_indices_per_set[set_index].append(md_index)
+        # Write every different MD charges to the binary format
+        for set_index, (charges, md_indices) in enumerate(zip(unique_md_charges, md_indices_per_set)):
+            # Handle missing charges
+            if charges is None: continue
+            # Write the binary file adding in the metadata the MDs it belongs to
+            store_binary_data(charges, 'float32', {
+                'mds': md_indices,
+                'x': { 'name': 'atoms', 'length': atom_count },
+                'bitsize': 32,
+            }, f'{output_directory}/mdf.atom_charges_{set_index}.bin')
+
+    # Bonds: atoms have different number of bonds so we need two files
+    # The bonds file has all bonded atom indices one after the other
+    # The offsets file says where the bonds of every atom start in the bonds file
+    # i.e. bonds of atom i are bonds[offsets[i]:offsets[i+1]]
+    # Atoms with missing bonds have a single bond with a flag value
+    def export_atom_bonds ():
+        offsets = [ 0 ]
+        bonds = []
+        for atom_bonds in final_atom_bonds:
+            if atom_bonds == JSON_SERIALIZABLE_MISSING_BONDS: bonds.append(None)
+            else: bonds += atom_bonds
+            offsets.append(len(bonds))
+        export_values('atom_bond_offsets', offsets, 'uint32', 'atoms')
+        export_values('atom_bonds', bonds, 'uint32', 'bonds')
+
+    exporters = {
+        'atom_charges': export_atom_charges,
+        'atom_bonds': export_atom_bonds,
+        'atom_residue_indices': lambda: export_values('atom_residue_indices',
+            atom_residue_indices, get_index_dtype(residue_count), 'atoms'),
+        'atom_species_indices': lambda: export_values('atom_species_indices',
+            atom_species_indices, get_index_dtype(len(atom_species)), 'atoms'),
+        'residue_species_indices': lambda: export_values('residue_species_indices',
+            residue_species_indices, get_index_dtype(len(residue_species)), 'residues'),
+        'residue_numbers': lambda: export_values('residue_numbers', residue_numbers, 'int32', 'residues'),
+        'residue_chain_indices': lambda: export_values('residue_chain_indices',
+            residue_chain_indices, get_index_dtype(chain_count), 'residues'),
+        'residue_reference_indices': lambda: export_values('residue_reference_indices',
+            topology['residue_reference_indices'], 'uint32', 'residues'),
+        'residue_reference_numbers': lambda: export_values('residue_reference_numbers',
+            topology['residue_reference_numbers'], 'uint32', 'residues'),
+    }
+
+    # Measure the topology and, if it is too big, export the heaviest fields until it fits
+    topology_size = get_bson_size(topology)
+    if topology_size > DATABASE_DOCUMENT_SIZE_LIMIT:
+        flag_size = get_bson_size(BIN_FLAG)
+        field_sizes = { field: get_bson_size(topology[field]) for field in exporters if topology.get(field) is not None }
+        for field in sorted(field_sizes, key=field_sizes.get, reverse=True):
+            print(f' Topology is too big ({topology_size / 1024 ** 2:.2f} Mb) -> Exporting {field} to binary')
+            exporters[field]()
+            topology[field] = BIN_FLAG
+            topology_size += flag_size - field_sizes[field]
+            if topology_size <= DATABASE_DOCUMENT_SIZE_LIMIT: break
+        print(f' Final topology size: {topology_size / 1024 ** 2:.2f} Mb')
+
     save_json(topology, output_topology_filepath)
