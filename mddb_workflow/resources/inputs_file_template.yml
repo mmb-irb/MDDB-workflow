@@ -623,6 +623,21 @@ fit:
 
 chainer:
 
+# Set a number of frames to be excluded from the beginning of the trajectory of each MD.
+# Use a dict where keys are MD indices (starting at 0, as in 'mdref') and values are the number of frames to skip.
+# MDs out of this dict keep all their frames.
+# These frames are removed before any other processing step (e.g. filtering, imaging or fitting).
+# Note that frames are counted after merging all input trajectory files of the MD.
+# Equivalent to the "-skip" ("--skip_frames") command line argument.
+#
+# Example:
+#
+# skip_frames:
+#   0: 100
+#   2: 50
+
+skip_frames:
+
 # Set which checkings are allowed to fail without killing the process.
 # Set 'true' to allow all checkings to fail.
 # Available checkings: stabonds, cohbonds, intrajrity, pbcontacts, elements, refseq, interact, ligands, chains, largeaa

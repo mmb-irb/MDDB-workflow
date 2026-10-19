@@ -192,6 +192,7 @@ class WorkflowInputs(InputsBaseModel):
     image: Optional[bool] = None
     fit: Optional[bool] = None
     chainer: Optional[dict[str, str]] = None
+    skip_frames: Optional[dict[int, int]] = None
     mercy: Optional[Union[bool, list[str]]] = None
     trust: Optional[Union[bool, list[str]]] = None
     faith: Optional[bool] = None
@@ -208,6 +209,18 @@ class WorkflowInputs(InputsBaseModel):
     def check_positive(cls, value, info):
         if value is not None and value <= 0:
             raise ValueError(f'"{info.field_name}" must be a positive number.')
+        return value
+
+    @field_validator('skip_frames')
+    @classmethod
+    def check_skip_frames(cls, value):
+        if value is None:
+            return value
+        for md_index, frames in value.items():
+            if md_index < 0:
+                raise ValueError(f'Wrong MD index {md_index} in "skip_frames": it must not be a negative number.')
+            if frames < 0:
+                raise ValueError(f'Wrong number of frames for MD {md_index} in "skip_frames": it must not be a negative number.')
         return value
 
     @field_validator('mercy', 'trust')

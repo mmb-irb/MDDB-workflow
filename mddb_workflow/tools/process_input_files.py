@@ -1,5 +1,5 @@
 from mddb_workflow.utils.auxiliar import InputError, MISSING_TOPOLOGY, warn
-from mddb_workflow.utils.constants import CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY
+from mddb_workflow.utils.constants import CONVERTED_STRUCTURE, CONVERTED_TRAJECTORY, SKIPPED_TRAJECTORY
 from mddb_workflow.utils.constants import FILTERED, FILTERED_STRUCTURE, FILTERED_TRAJECTORY
 from mddb_workflow.utils.constants import IMAGED, IMAGED_STRUCTURE, IMAGED_TRAJECTORY
 from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, CORRECTED_TRAJECTORY
@@ -9,7 +9,7 @@ from mddb_workflow.utils.file import File
 from mddb_workflow.utils.formats import is_amber_topology
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.gmx_spells import count_xtc_frames
+from mddb_workflow.utils.gmx_spells import count_xtc_frames, copy_xtc_frames
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
@@ -57,6 +57,7 @@ def process_input_files(
     fit: bool,
     translation: list[float],
     input_chainer: Optional[dict],
+    input_skip_frames: Optional[int],
     # Selections
     # Note that they are not used directly but they are used inderictly
     # However we must add them as arguments, so this task will be run again if they change
@@ -94,6 +95,7 @@ def process_input_files(
         self.register.add_warning(FAITH_BYPASS, 'All processing steps and tests were skipped')
         output_structure_file.set_symlink_to(input_structure_file, force=True)
         if len(input_trajectory_files) > 1: raise InputError('Please do not use the --faith argument')
+        if input_skip_frames: raise InputError('Frames can not be skipped when using the --faith argument')
         output_trajectory_file.set_symlink_to(input_trajectory_files[0], force=True)
         if output_topology_file != MISSING_TOPOLOGY:
             output_topology_file.set_symlink_to(input_topology_file, force=True)
@@ -180,6 +182,23 @@ def process_input_files(
 
     # Topologies are never converted, but they are kept in their original format
 
+    # --- SKIPPING FRAMES ------------------------------------------------------------
+
+    # Remove the first frames of the trajectory if it was requested
+    # Note that the converted trajectory may be the input trajectory itself so we never modify it
+    skipped_trajectory_file = converted_trajectory_file
+    if input_skip_frames:
+        skipped_trajectory_file = File(f'{output_directory}/{SKIPPED_TRAJECTORY}')
+        incompleted_skipped_trajectory_file = _prepare_incomplete_output(output_directory, SKIPPED_TRAJECTORY)
+        if not skipped_trajectory_file.exists:
+            print(f' * Skipping the first {input_skip_frames} frames')
+            written_frames = copy_xtc_frames(converted_trajectory_file.path, incompleted_skipped_trajectory_file.path,
+                lambda frame: frame >= input_skip_frames)
+            if written_frames == 0:
+                incompleted_skipped_trajectory_file.remove()
+                raise InputError(f'Cannot skip {input_skip_frames} frames: the trajectory has not enough frames')
+            _commit_incomplete_output(incompleted_skipped_trajectory_file, skipped_trajectory_file)
+
     # --- provisional reference structure ---
 
     # Now that we MUST have a PDB file we can set a provisional structure instance
@@ -211,7 +230,7 @@ def process_input_files(
         filtered_trajectory_file = File(f'{output_directory}/{FILTERED_TRAJECTORY}')
     else:
         filtered_structure_file = converted_structure_file
-        filtered_trajectory_file = converted_trajectory_file
+        filtered_trajectory_file = skipped_trajectory_file
     # Note that this is the only step affecting topology and thus here we output the definitive topology
     filtered_topology_file = output_topology_file if must_filter else initial_topology_file
 
@@ -232,7 +251,7 @@ def process_input_files(
         print(' * Filtering atoms')
         filter_atoms(
             input_structure_file=converted_structure_file,
-            input_trajectory_file=converted_trajectory_file,
+            input_trajectory_file=skipped_trajectory_file,
             input_topology_file=initial_topology_file,  # We use input topology
             output_structure_file=filtered_structure_file,
             output_trajectory_file=incompleted_filtered_trajectory_file,
@@ -335,7 +354,8 @@ def process_input_files(
     # We must calculate snapshots here using last step structure and trajectory
     snapshots = None
     # If we already have a value in the cache then use it, unless the input trajectory has changed
-    same_trajectory = 'input_trajectory_files' not in task.changed_inputs
+    same_trajectory = 'input_trajectory_files' not in task.changed_inputs \
+        and 'input_skip_frames' not in task.changed_inputs
     if same_trajectory: snapshots = self.cache.retrieve(SNAPSHOTS_FLAG)
     # Calculate the new value
     if snapshots is None:
@@ -401,7 +421,7 @@ def process_input_files(
     ]
     # Set a list of intermediate files
     intermediate_files = set([
-        converted_structure_file, converted_trajectory_file,
+        converted_structure_file, converted_trajectory_file, skipped_trajectory_file,
         filtered_structure_file, filtered_trajectory_file,
         imaged_structure_file, imaged_trajectory_file,
     ])

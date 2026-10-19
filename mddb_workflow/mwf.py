@@ -794,6 +794,12 @@ class MD:
         if self.project.sample_trajectory: return self.pathify(TRAJECTORY_SAMPLE_FILENAME)
         return self.pathify(TRAJECTORY_FILENAME)
 
+    # Number of frames to be excluded from the beginning of the trajectory
+    # Note that it is None when there is nothing to skip so the processing is not run again in old projects
+    def get_input_skip_frames(self) -> Optional[int]:
+        return self.project.skip_frames.get(self.index)
+    input_skip_frames = property(get_input_skip_frames, None, None, "Number of initial frames to be excluded from the processed trajectory (read only)")
+
     # Run the actual processing to generate output processed files out of input raw files
     # And by "files" I mean structure, trajectory and topology
     input_files_processing = Task('inpro', 'Input files processing', process_input_files,
@@ -1275,6 +1281,8 @@ class MD:
             check_selection=ALL_ATOMS,
             standard_deviations_cutoff=self.project.rmsd_cutoff,
             snapshots=self.snapshots,
+            md_index=self.index,
+            skipped_frames=self.input_skip_frames or 0,
         )
         return self._trajectory_integrity
 
@@ -1468,6 +1476,7 @@ class Project:
         mercy: list[str] | bool = [],
         trust: list[str] | bool = [],
         faith: bool = False,
+        skip_frames: Optional[list[list[int]]] = None,
         pca_analysis_selection: str = PROTEIN_AND_NUCLEIC_BACKBONE,
         pca_fit_selection: str = PROTEIN_AND_NUCLEIC_BACKBONE,
         rmsd_cutoff: float = DEFAULT_RMSD_CUTOFF,
@@ -1557,6 +1566,10 @@ class Project:
                 Value passed through console overrides the one in inputs file.
             faith (bool):
                 If True, require input files to match expected output files and skip processing.
+                Value passed through console overrides the one in inputs file.
+            skip_frames (list[list[int]]):
+                Pairs of MD index (starting at 0) and number of frames to be excluded from the beginning of its trajectory.
+                e.g. -skip 0 100 -skip 2 50
                 Value passed through console overrides the one in inputs file.
             pca_analysis_selection (str):
                 Atom selection for PCA analysis in VMD syntax.
@@ -1748,6 +1761,16 @@ class Project:
         if type(self.trust) is bool:
             self.trust = AVAILABLE_CHECKINGS if self.trust else []
 
+        # Set the number of frames to skip per MD index
+        if skip_frames:
+            self.skip_frames = {}
+            for md_index, frames in skip_frames:
+                if md_index < 0 or frames < 0:
+                    raise InputError(f'Wrong skip frames argument "{md_index} {frames}": values must not be negative numbers')
+                self.skip_frames[md_index] = frames
+        else:
+            self.skip_frames = self.inputs.get('skip_frames') or {}
+
         # Set the MD configuration
         self.md_config: list[dict] = self.inputs.merge_md_config(
             input_md_config,
@@ -1759,6 +1782,11 @@ class Project:
 
         # Make sure the values make sense and fill any gaps (e.g. missing names or directories)
         self.md_config = self.inputs.validate_md_config(self.md_config)
+
+        # Make sure all MD indices where frames are to be skipped exist
+        for md_index in self.skip_frames:
+            if md_index >= len(self.md_config):
+                raise InputError(f'Frames are to be skipped for MD index {md_index} but there are only {len(self.md_config)} MDs (indices start at 0)')
 
         # Force a couple of extraordinary files which is generated if atoms are resorted
         self.resorted_bonds_file = File(self.pathify(RESORTED_BONDS_FILENAME))

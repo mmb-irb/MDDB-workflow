@@ -135,6 +135,8 @@ CONVERTED = 'converted'
 CONVERTED_STRUCTURE = 'converted.pdb'
 CONVERTED_TRAJECTORY = 'converted.xtc'
 
+SKIPPED_TRAJECTORY = 'skipped.xtc'
+
 FILTERED = 'filtered'
 FILTERED_STRUCTURE = 'filtered.pdb'
 FILTERED_TRAJECTORY = 'filtered.xtc'
