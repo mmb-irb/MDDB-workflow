@@ -13,7 +13,7 @@ from math import ceil
 
 FAILED_BOND_MINING_EXCEPTION = Exception('Failed to mine bonds')
 # Minimum number of frames where the same atom must fail to consider the reference frame test as failed
-MIN_ATOM_FAILURE_FRAMES = 2
+MIN_ATOM_FAILURE_FRAMES = 3
 
 
 def get_bond_clashes(
@@ -207,7 +207,7 @@ def get_bonds_reference_frame(
     # Find atoms which fail too often
     # If failures are spread along different atoms then they are likely random clashes/overstretches
     failure_cut = ceil(checked_frames * atom_failure_ratio)
-    # With a few frames the cut would be 1 frame, meaning any failure would fail the test
+    # With a few frames the cut would be too small and a few random failures would fail the test
     # Thus we set a minimum of frames
     if failure_cut < MIN_ATOM_FAILURE_FRAMES:
         failure_cut = MIN_ATOM_FAILURE_FRAMES
