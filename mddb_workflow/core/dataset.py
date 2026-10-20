@@ -903,7 +903,6 @@ class Dataset:
             if log_path is None: continue
             with open(log_path) as file:
                 print(file.read(), end='')
-        print(f"Shown {log_type} logs of {len(projects)} of {len(filtered_projects)} projects")
 
     def set_inputs_field(self,
             field: str,
