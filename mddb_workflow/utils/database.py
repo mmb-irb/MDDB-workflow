@@ -5,7 +5,7 @@ import ssl
 import json
 from math import ceil
 from tqdm import tqdm
-from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError
+from mddb_workflow.utils.auxiliar import load_json, save_json, InputError, RemoteServiceError, DatabaseUnavailableError
 from mddb_workflow.utils.auxiliar import reprint, warn, retry_request
 from mddb_workflow.utils.constants import GLOBALS, INCOMPLETE_PREFIX, DEFAULT_INPUTS_FILENAME
 from mddb_workflow.utils.type_hints import *
@@ -317,11 +317,14 @@ class Database:
             return False
 
     def get_reference_data(self, reference_type: str, reference_id: str) -> Optional[dict]:
-        """Get reference data for a specific reference ID from the MDDB database."""
+        """Get reference data for a specific reference ID from the MDDB database.
+        Return None if the reference is not in the database.
+        Raise a DatabaseUnavailableError if the database is not responding.
+        """
         # Make sure the database is alive (and thus the provided database URL is valid)
-        # If not then we return None and allow the workflow to keep going
-        # Probably if the reference can not be obtained the workflow will generate it again
-        if not self.is_alive(): return None
+        # If not we raise an error instead of returning None, so this is not saved in cache as a missing reference
+        if not self.is_alive():
+            raise DatabaseUnavailableError(f'MDDB database {self.url} is not available')
         # Request the specific data
         request_url = f'{self.url}rest/v1/references/{reference_type}/{reference_id}'
         try:

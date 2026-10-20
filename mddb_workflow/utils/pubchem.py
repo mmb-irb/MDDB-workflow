@@ -1,6 +1,6 @@
 import time
 import requests
-from mddb_workflow.utils.auxiliar import RequestError, retry_request
+from mddb_workflow.utils.auxiliar import RequestError, RateLimitError, retry_request, get_retry_after
 from mddb_workflow.utils.type_hints import *
 from functools import lru_cache
 
@@ -14,13 +14,20 @@ def _make_post_request(url, payload):
 
 
 @retry_request
-def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context: str = None) -> Optional[dict]:
+def make_pubchem_request(
+    url: str,
+    payload: Optional[dict] = None,
+    error_context: str = 'PubChem',
+    no_result_codes: tuple[int, ...] = (),
+) -> Optional[dict]:
     """Make a request to PubChem API, with retries and error handling.
 
     Args:
         url (str): The URL to make the request to.
-        error_context (str): Context for error messages. If not given, return None.
         payload (Optional[dict]): The payload to send in a POST request. If None, a GET request will be made.
+        error_context (str): Context for error messages.
+        no_result_codes (tuple[int, ...]): Status codes which mean PubChem has no result for this request.
+            In these cases return None. Any other error status raises an error.
 
     """
     if payload is None:
@@ -39,12 +46,14 @@ def make_pubchem_request(url: str, payload: Optional[dict] = None, error_context
         time.sleep(1)
     if r.status_code == 200:
         return r.json()
-    elif error_context:
-        if 'temporarily unable' in r.text:
-            raise requests.exceptions.ConnectionError("PubChem is temporarily unable to process requests. Please try again later.")
-        raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text + "\nThrottling: " + throttling)
-    else:
+    if r.status_code in no_result_codes:
         return None
+    if r.status_code == 429:
+        raise RateLimitError(f"Too many requests in the {error_context} request. Throttling: {throttling}",
+            retry_after=get_retry_after(r.headers))
+    if 'temporarily unable' in r.text:
+        raise requests.exceptions.ConnectionError("PubChem is temporarily unable to process requests. Please try again later.")
+    raise RequestError(f"Something went wrong with the {error_context} request (error " + str(r.status_code) + "): " + r.text + "\nThrottling: " + throttling)
 
 
 @lru_cache(maxsize=None)
@@ -53,7 +62,9 @@ def pubchem_standardization(inchi: str) -> Optional[list[dict]]:
     You can see examples on the paper https://jcheminf.biomedcentral.com/articles/10.1186/s13321-018-0293-8.
     """
     url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/standardize/inchi/JSON"
-    data = make_pubchem_request(url, payload={'inchi': inchi})
+    # PubChem answers 400 when it is not able to standardize the structure
+    data = make_pubchem_request(url, payload={'inchi': inchi},
+        error_context='PubChem standardization', no_result_codes=(400,))
     if data:
         results = []
         for compound in data['PC_Compounds']:

@@ -5,6 +5,7 @@ import numpy as np
 import re
 
 from mddb_workflow.utils.auxiliar import protein_residue_name_to_letter, RequestError, NoReferableException
+from mddb_workflow.utils.auxiliar import DatabaseUnavailableError
 from mddb_workflow.utils.auxiliar import InputError, warn, load_json, save_json, request_pdb_data
 from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.constants import REFERENCE_SEQUENCE_FLAG, NO_REFERABLE_FLAG, NOT_FOUND_FLAG
@@ -741,7 +742,11 @@ def get_protein_reference(
     # Check MDposit
     if database:
         cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
-        reference = cached_get_database_reference('proteins', uniprot_accession)
+        try:
+            reference = cached_get_database_reference('proteins', uniprot_accession)
+        # If the database is not available then the reference will be generated again
+        except DatabaseUnavailableError:
+            reference = None
         if reference:
             return reference
     # Get it from UniProt

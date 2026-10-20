@@ -1,7 +1,7 @@
 import MDAnalysis
 import traceback
 import multiprocessing
-from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout
+from mddb_workflow.utils.auxiliar import warn, save_json, SocketTimeout, DatabaseUnavailableError
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION
 from mddb_workflow.core.dataclass import InChIKeyData
 from mddb_workflow.utils.cache import get_cached_function
@@ -284,7 +284,11 @@ def get_database_inchikey_reference(
     """
     if not database: return None
     cached_get_database_reference = get_cached_function(database.get_reference_data, cache)
-    reference = cached_get_database_reference('inchikeys', inchikey)
+    try:
+        reference = cached_get_database_reference('inchikeys', inchikey)
+    # If the database is not available then the reference will be generated again
+    except DatabaseUnavailableError:
+        return None
     if not reference: return None
     if reference.get('version') != INCHI_REFERENCE_VERSION: return None
     return reference

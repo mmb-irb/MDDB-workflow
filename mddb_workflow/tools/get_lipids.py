@@ -1,6 +1,6 @@
 import requests
 from functools import lru_cache
-from mddb_workflow.utils.auxiliar import warn, retry_request
+from mddb_workflow.utils.auxiliar import warn, retry_request, RequestError, RateLimitError, get_retry_after
 from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION
 from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
 from mddb_workflow.utils.selections import Selection
@@ -96,6 +96,16 @@ def get_lipids_selection(
     return (aa_lipids_selection - cg_selection) + cg_lipids_selection
 
 
+def check_lipid_response(response: 'requests.Response', service: str, key: str):
+    """Raise an error if the lipid database response is not successful."""
+    if response.status_code == 200: return
+    if response.status_code == 429:
+        raise RateLimitError(f'Too many requests to {service} for {key}',
+            retry_after=get_retry_after(response.headers))
+    raise RequestError(f'Something went wrong with the {service} request for {key} '
+        f'(error {response.status_code}): {response.reason}')
+
+
 @retry_request
 @lru_cache(maxsize=None)
 def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
@@ -111,13 +121,11 @@ def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all/json"
     headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'}
     response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        js = response.json()
-        if js != []:
-            return js
-    else:
-        print(f"Error for {inchikey}: {response.status_code}: {response.reason}")
-    return False
+    check_lipid_response(response, 'LIPID MAPS', key)
+    js = response.json()
+    # LIPID MAPS answers an empty list when the InChI key is not found
+    if js == []: return False
+    return js
 
 
 def get_swisslipids_info(entity_id) -> dict:
@@ -125,10 +133,8 @@ def get_swisslipids_info(entity_id) -> dict:
     headers = {'accept': 'json'}
     url = f"https://www.swisslipids.org/api/index.php/entity/{entity_id}"
     response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return None
+    check_lipid_response(response, 'SwissLipids', entity_id)
+    return response.json()
 
 
 @retry_request
@@ -141,10 +147,10 @@ def is_in_swisslipids(inchikey, only_first_layer=False) -> dict:
     headers = {'accept': 'json'}
     url = f"https://www.swisslipids.org/api/index.php/search?term={key}"
     response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        data = response.json()[0]
-        detailed_data = get_swisslipids_info(data['entity_id'])
-        data['synonyms'] = detailed_data.get('synonyms', [])
-        return data
-    else:
-        return None
+    # SwissLipids answers 404 when the InChI key is not found
+    if response.status_code == 404: return None
+    check_lipid_response(response, 'SwissLipids', key)
+    data = response.json()[0]
+    detailed_data = get_swisslipids_info(data['entity_id'])
+    data['synonyms'] = detailed_data.get('synonyms', [])
+    return data

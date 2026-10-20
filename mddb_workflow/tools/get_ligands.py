@@ -8,6 +8,7 @@ from mddb_workflow.utils.constants import LIGANDS_MATCH_FLAG, PDB_TO_PUBCHEM, LA
 from mddb_workflow.utils.auxiliar import InputError, request_pdb_data, warn, handle_http_request, SocketTimeout
 from mddb_workflow.utils.pubchem import make_pubchem_request, pubchem_standardization, _make_post_request
 from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
+from mddb_workflow.utils.cache import get_cached_function
 from mddb_workflow.utils.type_hints import *
 
 
@@ -93,6 +94,9 @@ def generate_ligand_references(
     pubchem_ids_from_pdb = []
     pdb_ids = pdb_ids or []
     pubchem_ids_from_pdb = pdbs_2_pubchems(pdb_ids, cache)
+    # Save PubChem results in cache so we do not repeat the requests in further runs
+    cached_inchikey_2_pubchem = get_cached_function(inchikey_2_pubchem, cache)
+    cached_pubchem_standardization = get_cached_function(pubchem_standardization, cache)
     # Keep track of the references reused from the database so we do not request PubChem again
     database_inchikeys = set()
     for inchikey in inchikeys:
@@ -114,7 +118,7 @@ def generate_ligand_references(
             print(f'Found CID {database_ligand["pubchem"]} in the MDDB database.')
             continue
         # 1. Direct InChIKey match
-        pubchem_id = inchikey_2_pubchem(inchikey)
+        pubchem_id = cached_inchikey_2_pubchem(inchikey)
         if pubchem_id:
             automatic_references[inchikey]['pubchem'] = pubchem_id
             print(f'Found CID {pubchem_id} by direct InChIKey match.')
@@ -130,25 +134,25 @@ def generate_ligand_references(
         # 2.1. Neutralize charges
         neutral_mol = rdMolStandardize.ChargeParent(mol)
         neutral_inchikey = Chem.MolToInchiKey(neutral_mol)
-        if pubchem_id := inchikey_2_pubchem(neutral_inchikey):
+        if pubchem_id := cached_inchikey_2_pubchem(neutral_inchikey):
             if record_pubchem_match(inchikey, pubchem_id, neutral_mol, ligand_fg,
                                     automatic_references, 'after neutralization'):
                 continue
         # 2.2. Remove stereochemistry
         snon_inchikey = Chem.MolToInchiKey(mol, options='-SNon')
-        if pubchem_id := inchikey_2_pubchem(snon_inchikey):
+        if pubchem_id := cached_inchikey_2_pubchem(snon_inchikey):
             Chem.RemoveStereochemistry(mol)
             if record_pubchem_match(inchikey, pubchem_id, mol, ligand_fg,
                                     automatic_references, 'after stereochemistry removal'):
                 continue
         # Neutralize charges and remove stereochemistry
         snon_neutral_inchikey = Chem.MolToInchiKey(neutral_mol, options='-SNon')
-        if pubchem_id := inchikey_2_pubchem(snon_neutral_inchikey):
+        if pubchem_id := cached_inchikey_2_pubchem(snon_neutral_inchikey):
             if record_pubchem_match(inchikey, pubchem_id, mol, ligand_fg,
                                     automatic_references, 'after neutralization + stereochemistry removal'):
                 continue
         # 2.3. Standardize molecule
-        standar_id = pubchem_standardization(inchi)
+        standar_id = cached_pubchem_standardization(inchi)
         if standar_id and len(standar_id) == 1:
             standar_pubchem = standar_id[0]['pubchem']
             standar_mol = Chem.MolFromInchi(standar_id[0]['inchi'])
@@ -164,7 +168,7 @@ def generate_ligand_references(
             noH_ligand_fg = descriptor_data['morgan_fp_bit_array']
             for pdb_ligand in pubchem_ids_from_pdb:
                 if not pdb_ligand.get('inchi', None):
-                    ligand_data = obtain_pubchem_data_from_input(pdb_ligand)
+                    ligand_data = obtain_pubchem_data_from_input(pdb_ligand, cache)
                     pdb_ligand.update(ligand_data)
 
                 pdb_mol = Chem.MolFromInchi(pdb_ligand['inchi'])
@@ -200,13 +204,13 @@ def generate_ligand_references(
     for inchikey, ligand_data in automatic_references.items():
         if inchikey in database_inchikeys: continue
         if ligand_data.get('pubchem', None):
-            automatic_references[inchikey].update(obtain_pubchem_data_from_input(ligand_data))
+            automatic_references[inchikey].update(obtain_pubchem_data_from_input(ligand_data, cache))
 
     # 4. User-forced selections
     input_ligands_data = []
     user_references = {}
     for input_ligand in input_ligands:
-        ligand_data = obtain_pubchem_data_from_input(input_ligand)
+        ligand_data = obtain_pubchem_data_from_input(input_ligand, cache)
         # If the user defined a ligand name, it will be respected and added to the metadata
         if forced_name := input_ligand.get('name', None):
             ligand_data['forced_name'] = forced_name
@@ -647,7 +651,8 @@ def inchikey_2_pubchem(inchikey: str, conectivity_only=False) -> Optional[str]:
     """Given an InChIKey, get the PubChem CID."""
     inchikey = inchikey.split('-')[0] if conectivity_only else inchikey
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{inchikey}/cids/JSON"
-    data = make_pubchem_request(url)
+    # PubChem answers 404 when there is no CID for this InChIKey
+    data = make_pubchem_request(url, error_context='InChIKey to PubChem', no_result_codes=(404,))
     if data:
         if conectivity_only:
             return [str(cid) for cid in data['IdentifierList']['CID']]
@@ -718,26 +723,30 @@ def tanimoto_similarity(fp1: list[int], fp2: list[int]) -> float:
     return a / (a + b + c)
 
 
-def obtain_pubchem_data_from_input(ligand: dict) -> dict[str, Optional[str]]:
+def obtain_pubchem_data_from_input(ligand: dict, cache: 'Cache') -> dict[str, Optional[str]]:
     """Given an input ligand, obtain all necessary data."""
     # Save in a dictionary all ligand data including its name and IDs
     # The ID can be of the databases: 'drugbank' , 'pubchem' , 'chembl'
     # Define the needed variables to check if the ligand has a database ID or it is None
     ligand_data = {field: None for field in LIGAND_DATA_FIELDS}
     # Set ligand data PubChem ID, even if the input ID is not from pubhcme (e.g. drugbank, chembl)
+    # Save PubChem results in cache so we do not repeat the requests in further runs
     if 'pubchem' in ligand:
         ligand_data['pubchem'] = str(ligand.get('pubchem'))
     elif 'drugbank' in ligand:
         ligand_data['drugbank'] = ligand.get('drugbank')
-        ligand_data['pubchem'] = str(drugbank_2_pubchem(ligand_data['drugbank']))
+        cached_drugbank_2_pubchem = get_cached_function(drugbank_2_pubchem, cache)
+        ligand_data['pubchem'] = str(cached_drugbank_2_pubchem(ligand_data['drugbank']))
     elif 'chembl' in ligand:
         ligand_data['chembl'] = ligand.get('chembl')
-        ligand_data['pubchem'] = str(chembl_2_pubchem(ligand_data['chembl']))
+        cached_chembl_2_pubchem = get_cached_function(chembl_2_pubchem, cache)
+        ligand_data['pubchem'] = str(cached_chembl_2_pubchem(ligand_data['chembl']))
     else:
         raise InputError('None of the ligand IDs are defined. Please provide at least one of the following IDs: DrugBank, PubChem, ChEMBL.')
 
     # Request ligand data from pubchem
-    pubchem_data = get_pubchem_data(ligand_data['pubchem'])
+    cached_get_pubchem_data = get_cached_function(get_pubchem_data, cache)
+    pubchem_data = cached_get_pubchem_data(ligand_data['pubchem'])
 
     # Add PubChem data to ligand data
     ligand_data = {**ligand_data, **pubchem_data}

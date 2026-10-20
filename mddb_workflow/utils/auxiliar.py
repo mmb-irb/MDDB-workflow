@@ -75,6 +75,19 @@ class RequestError (QuietException):
     pass
 
 
+class RateLimitError (RequestError):
+    """Quite exception for when a remote service rejects our requests because we sent too many (error 429)."""
+    def __init__(self, message: str, retry_after: Optional[float] = None):
+        super().__init__(message)
+        # Seconds the service asks us to wait before trying again, if it says so
+        self.retry_after = retry_after
+
+
+class DatabaseUnavailableError (RemoteServiceError):
+    """Quite exception for when the MDDB database is not responding."""
+    pass
+
+
 class ForcedStop (QuietException):
     """Quite exception for when we stop the workflow in purpose."""
     pass
@@ -642,6 +655,77 @@ class CaptureOutput (object):
             self.captured_text += char
 
 
+# Retry configuration for HTTP requests
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0  # seconds
+RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+# When a service says we sent too many requests we must wait longer
+RATE_LIMIT_RETRIES = 5
+RATE_LIMIT_DELAY = 10.0  # seconds
+
+
+def get_retry_after(headers) -> Optional[float]:
+    """Get the seconds to wait from the 'Retry-After' header of a response, if any."""
+    retry_after = headers.get('Retry-After')
+    # This header may also be a date, in which case we ignore it
+    if retry_after is None or not retry_after.isdigit(): return None
+    return float(retry_after)
+
+
+def _get_http_status(error: Exception) -> Optional[int]:
+    """Get the HTTP status code of a request error, if any."""
+    if isinstance(error, HTTPError): return error.code
+    if isinstance(error, requests.exceptions.HTTPError) and error.response is not None:
+        return error.response.status_code
+    return None
+
+
+def _get_error_retry_after(error: Exception) -> Optional[float]:
+    """Get the seconds to wait before retrying, if the error says so."""
+    if isinstance(error, RateLimitError): return error.retry_after
+    if isinstance(error, HTTPError): return get_retry_after(error.headers)
+    if isinstance(error, requests.exceptions.HTTPError) and error.response is not None:
+        return get_retry_after(error.response.headers)
+    return None
+
+
+def retry_request(func):
+    """Decorator to retry HTTP requests with exponential backoff.
+
+    Network errors, server errors (5xx) and too many requests errors (429) are retried.
+    Other HTTP errors (e.g. 404) are raised directly since retrying would give the same result.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        attempt = 0
+        while True:
+            try:
+                return func(*args, **kwargs)
+            # Catch network-related exceptions for retry
+            except (RateLimitError,
+                    requests.exceptions.RequestException,
+                    http.client.RemoteDisconnected,
+                    TimeoutError, URLError) as error:
+                status = _get_http_status(error)
+                # Errors in our request would fail again, except for too many requests
+                if status is not None and status < 500 and status != 429:
+                    raise
+                rate_limited = isinstance(error, RateLimitError) or status == 429
+                max_attempts = RATE_LIMIT_RETRIES if rate_limited else MAX_RETRIES
+                attempt += 1
+                if attempt >= max_attempts:
+                    print(f"Request failed after {attempt} attempts: {error}")
+                    raise
+                if rate_limited:
+                    delay = _get_error_retry_after(error) or RATE_LIMIT_DELAY * RETRY_BACKOFF ** (attempt - 1)
+                else:
+                    delay = RETRY_DELAY * RETRY_BACKOFF ** (attempt - 1)
+                print(f"Request failed (attempt {attempt}/{max_attempts}): {error}. Retrying in {delay:.1f}s...")
+                time.sleep(delay)
+    return wrapper
+
+
+@retry_request
 def request_pdb_data(pdb_id: str, query: str) -> dict | None:
     """Request data to the PDB GraphQL API.
 
@@ -665,6 +749,12 @@ def request_pdb_data(pdb_id: str, query: str) -> dict | None:
         response = requests.post(request_url, json=post_data)
     except requests.exceptions.ConnectionError as error:
         raise ConnectionError('No internet connection :(') from None
+    if response.status_code == 429:
+        raise RateLimitError(f'Too many requests to the PDB API for {pdb_id}',
+            retry_after=get_retry_after(response.headers))
+    if response.status_code != 200:
+        raise RequestError(f'Something went wrong with the PDB API request for {pdb_id} '
+            f'(error {response.status_code}): {response.text}')
     # Get the response
     parsed_response = json.loads(response.text)['data'][data_key]
     if parsed_response is None:
@@ -677,6 +767,7 @@ def request_pdb_data(pdb_id: str, query: str) -> dict | None:
     return parsed_response
 
 
+@retry_request
 def request_replaced_pdb(pdb_id):
     """Use the RCSB REST API to get the replaced PDB id.
 
@@ -684,17 +775,21 @@ def request_replaced_pdb(pdb_id):
     """
     query_url = 'https://data.rcsb.org/rest/v1/holdings/removed/' + pdb_id
     response = requests.get(query_url, headers={'Content-Type': 'application/json'})
-    # Check if the response is OK
-    if response.status_code == 200:
-        try:
-            return response.json()['rcsb_repository_holdings_removed']['id_codes_replaced_by'][0]
-        except:
-            # It may not replaced if the entry is obsolete due to paper retraction
-            # e.g. 1BEF, 7CU7
-            print(response)
-            print(f'Error when mining replaced PDB id for {pdb_id}')
-            return None
-    else:
+    # The API answers 404 when the PDB has not been removed
+    if response.status_code == 404:
+        return None
+    if response.status_code == 429:
+        raise RateLimitError(f'Too many requests to the PDB API for removed PDB {pdb_id}',
+            retry_after=get_retry_after(response.headers))
+    if response.status_code != 200:
+        raise RequestError(f'Something went wrong with the PDB API request for removed PDB {pdb_id} '
+            f'(error {response.status_code}): {response.text}')
+    try:
+        return response.json()['rcsb_repository_holdings_removed']['id_codes_replaced_by'][0]
+    except (KeyError, IndexError):
+        # It may be not replaced if the entry is obsolete due to paper retraction
+        # e.g. 1BEF, 7CU7
+        print(f'PDB {pdb_id} was removed and not replaced by any other PDB')
         return None
 
 
@@ -815,46 +910,6 @@ def natural_sort_key(s):
             for text in re.split('([0-9]+)', s)]
 
 
-# Retry configuration for HTTP requests
-MAX_RETRIES = 3
-RETRY_DELAY = 1.0  # seconds
-RETRY_BACKOFF = 2.0  # exponential backoff multiplier
-
-
-def retry_request(func):
-    """Decorator to retry HTTP requests with exponential backoff."""
-    def wrapper(*args, **kwargs):
-        delay = RETRY_DELAY
-        last_exception = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                return func(*args, **kwargs)
-            # Catch network-related exceptions for retry
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                    requests.exceptions.RequestException,
-                    http.client.RemoteDisconnected,
-                    TimeoutError, URLError, HTTPError) as e:
-                if e is URLError and 'ssl' not in str(e.reason).lower():
-                    # Only retry for URLErrors related to SSL or timeouts
-                    raise e
-                if e is HTTPError and func.__name__ != 'is_alive':
-                    # Do not retry for HTTPError except for the Database.is_alive
-                    raise e
-                last_exception = e
-                if attempt < MAX_RETRIES - 1:
-                    print(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}. Retrying in {delay:.1f}s...")
-                    time.sleep(delay)
-                    delay *= RETRY_BACKOFF
-                else:
-                    print(f"Request failed after {MAX_RETRIES} attempts: {e}")
-        raise last_exception
-    # Retain the original function's name and docstring
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    return wrapper
-
-
 @retry_request
 def handle_http_request(request_url, error_context="request") -> Optional[str]:
     """Make an HTTP request handler with consistent error handling."""
@@ -864,6 +919,9 @@ def handle_http_request(request_url, error_context="request") -> Optional[str]:
     except HTTPError as error:
         if error.code == 404:
             return None
+        if error.code == 429:
+            raise RateLimitError(f'Too many requests in the {error_context}',
+                retry_after=get_retry_after(error.headers))
         raise RequestError(f'Something went wrong with the {error_context} (error {error.code})')
     except URLError as error:
         # Convert SSL/timeout URLErrors to TimeoutError so @retry_request decorator retries them

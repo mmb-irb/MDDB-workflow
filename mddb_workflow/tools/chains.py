@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 
 from mddb_workflow.utils.auxiliar import warn, load_json, save_json, retry_request
-from mddb_workflow.utils.auxiliar import RemoteServiceError
+from mddb_workflow.utils.auxiliar import RemoteServiceError, DatabaseUnavailableError
 from mddb_workflow.utils.type_hints import *
 
 # Set analysis version
@@ -127,7 +127,11 @@ def prepare_chain_references(
         chain_data = next((data for data in chains_data if data['sequence'] == sequence), None)
         # If we have no previous chain data then check if the sequence is already in the MDDB database
         if chain_data is None:
-            chain_data = database.get_reference_data('chains', sequence)
+            try:
+                chain_data = database.get_reference_data('chains', sequence)
+            # If the database is not available then the chain data will be generated again
+            except DatabaseUnavailableError:
+                chain_data = None
             if chain_data is not None:
                 chains_data.append(chain_data)
                 # Save the chains data at this point
