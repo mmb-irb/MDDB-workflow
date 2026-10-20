@@ -1,7 +1,7 @@
 import re
 import json
 from os import listdir
-from os.path import isabs, isfile, dirname
+from os.path import isabs, isfile, dirname, basename
 from glob import glob
 from subprocess import call
 from tempfile import TemporaryDirectory
@@ -157,20 +157,21 @@ def find_in_mds(project: Project, finder: callable) -> File | None:
     return None
 
 
-def get_project() -> Project:
-    """Set the project in the current directory.
+def get_project(directory: str) -> Project:
+    """Set the project in the given directory.
     If there is no inputs file then MD directories are those with a cache file.
     """
-    inputs_filepaths = [filepath for filename in ACCEPTED_INPUT_FILENAMES for filepath in glob('*' + filename)]
-    if inputs_filepaths: return Project()
-    md_directories = sorted(dirname(filepath) for filepath in glob(f'*/{CACHE_FILENAME}'))
+    inputs_filepaths = [filepath for filename in ACCEPTED_INPUT_FILENAMES for filepath in glob(f'{directory}/*{filename}')]
+    if inputs_filepaths: return Project(directory=directory)
+    md_directories = sorted(basename(dirname(filepath)) for filepath in glob(f'{directory}/*/{CACHE_FILENAME}'))
     if not md_directories:
-        raise InputError('There is no inputs file and no MD directory with a cache file')
+        raise InputError(f'There is no inputs file and no MD directory with a cache file in {directory}')
     print(f'There is no inputs file. Using MD directories with a cache: {", ".join(md_directories)}')
-    return Project(input_md_directories=md_directories)
+    return Project(directory=directory, input_md_directories=md_directories)
 
 
 def view_project(
+    directory: str = '.',
     structure_filepath: str | None = None,
     trajectory_filepath: str | None = None,
     start: int | None = None,
@@ -180,7 +181,7 @@ def view_project(
 ):
     """Open VMD with a structure and some frames of a trajectory.
 
-    If no structure is passed then the most processed structure and trajectory in the current project are used.
+    If no structure is passed then the most processed structure and trajectory in the project directory are used.
     If only the structure is passed then it is loaded alone.
     If no frames are specified then the first 10 frames are loaded.
     If only some of start/end/step are specified then the end is the last frame.
@@ -193,7 +194,7 @@ def view_project(
             raise InputError(f'File {passed_file.path} does not exist')
     # If only the structure is passed then it is loaded alone
     if not structure_file:
-        project = get_project()
+        project = get_project(directory)
         structure_file = find_in_mds(project, find_structure)
         if not structure_file:
             raise InputError('No structure was found in any MD directory')

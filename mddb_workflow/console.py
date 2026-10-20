@@ -421,6 +421,19 @@ def main():
             print(f"Log file: {log_path}")
             with open(log_path) as file:
                 print(file.read(), end='')
+        elif args.dataset_subcommand == 'view':
+            status = dataset.get_status(args.project_path)
+            if status is None:
+                raise InputError(f'{args.project_path} is not in the dataset')
+            if status['scope'] != 'Project':
+                raise InputError(f'{args.project_path} is a MD directory. Please pass the path to its project.')
+            view_project(
+                directory=args.project_path,
+                start=args.start,
+                end=args.end,
+                step=args.step,
+                frames=args.frames
+            )
         elif args.dataset_subcommand == 'show':
             if args.summary:
                 summary = dataset.summary()
@@ -856,12 +869,15 @@ view_parser = subparsers.add_parser("view",
 view_parser_args = [
     (["structure"], {'nargs': '?', 'default': None, 'help': "Path to the structure file. The most processed structure in the project by default"}),
     (["trajectory"], {'nargs': '?', 'default': None, 'help': "Path to the trajectory file. If the structure is passed alone then no trajectory is loaded"}),
+]
+# Frame options are shared with the dataset view command
+view_frames_args = [
     (["-start", "--start"], {'type': int, 'default': None, 'help': "Start frame (0-based)"}),
     (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based, not included). The last frame by default if start or step are passed"}),
     (["-step", "--step"], {'type': int, 'default': None, 'help': "Frame step"}),
     (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be loaded (0-based). Other arguments are ignored."}),
 ]
-for flags, kwargs in view_parser_args:
+for flags, kwargs in view_parser_args + view_frames_args:
     view_parser.add_argument(*flags, **kwargs)
 
 
@@ -939,6 +955,11 @@ dataset_add.add_argument("-p", "--project_path", help='Path to the project.', re
 ds_logs = dataset_subparsers.add_parser("logs", formatter_class=CustomHelpFormatter, help="Show the most recent output logs of a project inside the dataset.", parents=[common_ds_parser])
 ds_logs.add_argument("-p", "--project_path", help='Path to the project.', required=True)
 ds_logs.add_argument("-e", "--error", help="Show the most recent error logs instead.", action='store_true')
+# Dataset view subcommand
+ds_view = dataset_subparsers.add_parser("view", formatter_class=CustomHelpFormatter, help="Open VMD with the most processed structure and trajectory of a project inside the dataset.", parents=[common_ds_parser])
+ds_view.add_argument("-p", "--project_path", help='Path to the project.', required=True)
+for flags, kwargs in view_frames_args:
+    ds_view.add_argument(*flags, **kwargs)
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
