@@ -32,6 +32,9 @@ NO_COORDINATES_FORMATS = {'prmtop', 'psf'}
 # Topology formats which VMD can not load but we can convert to gro
 CONVERTIBLE_TOPOLOGY_FORMATS = {'tpr'}
 
+# Minimum size in Angstroms of the focused region, to avoid zooming too much on a few atoms
+MIN_FOCUS_SIZE = 10
+
 # Number of frames to be loaded when no frames are specified
 DEFAULT_FRAMES_COUNT = 10
 
@@ -178,6 +181,7 @@ def view_project(
     end: int | None = None,
     step: int | None = None,
     frames: list[int] = [],
+    selection: str | None = None,
 ):
     """Open VMD with a structure and some frames of a trajectory.
 
@@ -186,6 +190,7 @@ def view_project(
     If no frames are specified then the first 10 frames are loaded.
     If only some of start/end/step are specified then the end is the last frame.
     The end frame is not included, as in the subset command.
+    If a selection is passed then the view is focused on it and it is also shown in CPK.
     """
     structure_file = File(structure_filepath) if structure_filepath else None
     trajectory_file = File(trajectory_filepath) if trajectory_filepath else None
@@ -244,9 +249,53 @@ def view_project(
         'package require pbctools',
         'if {[molinfo top get a] > 0} { pbc box }',
     ]
+    # VMD does not return an error code, so selection errors are written in a file and VMD is closed
+    selection_error_filepath = f'{temporary_directory.name}/selection_error.txt'
+    if selection:
+        commands += get_focus_commands(selection, selection_error_filepath)
     # Write the commands in a file and open VMD
     commands_filepath = f'{temporary_directory.name}/commands.vmd'
     with open(commands_filepath, 'w') as commands_file:
         commands_file.write('\n'.join(commands) + '\n')
     call(['vmd', '-e', commands_filepath])
+    selection_error = None
+    if File(selection_error_filepath).exists:
+        with open(selection_error_filepath) as file:
+            selection_error = file.read().strip()
     temporary_directory.cleanup()
+    if selection_error: raise InputError(selection_error)
+
+
+def get_focus_commands(selection: str, selection_error_filepath: str) -> list[str]:
+    """Set the VMD commands to focus the view on a selection and show it in CPK.
+
+    The view is centered in the selection and zoomed in as much as the selection is smaller than the whole system.
+    """
+    return [
+        f'set focus_text {{{selection}}}',
+        'if {[catch {atomselect top $focus_text} focus]} {',
+        f'    set error_file [open {{{selection_error_filepath}}} w]',
+        '    puts $error_file "Wrong selection \\"$focus_text\\": $focus"',
+        '    close $error_file',
+        '    quit',
+        '}',
+        'if {[$focus num] == 0} {',
+        f'    set error_file [open {{{selection_error_filepath}}} w]',
+        '    puts $error_file "Selection \\"$focus_text\\" matches no atoms"',
+        '    close $error_file',
+        '    quit',
+        '}',
+        'proc get_size {atoms} {',
+        '    lassign [measure minmax $atoms] lowest highest',
+        '    return [tcl::mathfunc::max {*}[vecsub $highest $lowest]]',
+        '}',
+        'display resetview',
+        'molinfo top set center_matrix [list [transoffset [vecscale -1 [measure center $focus]]]]',
+        f'set zoom [expr {{[get_size [atomselect top all]] / max([get_size $focus], {MIN_FOCUS_SIZE})}}]',
+        'if {$zoom > 1} { scale by $zoom }',
+        'mol representation CPK',
+        'mol color Name',
+        'mol selection $focus_text',
+        'mol material Opaque',
+        'mol addrep top',
+    ]

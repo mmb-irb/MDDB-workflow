@@ -344,7 +344,8 @@ def main():
             start=args.start,
             end=args.end,
             step=args.step,
-            frames=args.frames
+            frames=args.frames,
+            selection=args.selection
         )
 
     # In case the chainer tool was called
@@ -431,7 +432,8 @@ def main():
                 start=args.start,
                 end=args.end,
                 step=args.step,
-                frames=args.frames
+                frames=args.frames,
+                selection=args.selection
             )
         elif args.dataset_subcommand == 'show':
             if args.summary:
@@ -869,14 +871,15 @@ view_parser_args = [
     (["structure"], {'nargs': '?', 'default': None, 'help': "Path to the structure file. The most processed structure in the project by default"}),
     (["trajectory"], {'nargs': '?', 'default': None, 'help': "Path to the trajectory file. If the structure is passed alone then no trajectory is loaded"}),
 ]
-# Frame options are shared with the dataset view command
-view_frames_args = [
+# Frame and selection options are shared with the dataset view command
+view_shared_args = [
     (["-start", "--start"], {'type': int, 'default': None, 'help': "Start frame (0-based)"}),
     (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based, not included). The last frame by default if start or step are passed"}),
     (["-step", "--step"], {'type': int, 'default': None, 'help': "Frame step"}),
     (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be loaded (0-based). Other arguments are ignored."}),
+    (["-sel", "--selection"], {'default': None, 'help': "Atom selection (VMD syntax) to focus the view on. It is also shown in CPK over the default representation."}),
 ]
-for flags, kwargs in view_parser_args + view_frames_args:
+for flags, kwargs in view_parser_args + view_shared_args:
     view_parser.add_argument(*flags, **kwargs)
 
 
@@ -954,7 +957,7 @@ dataset_add.add_argument("-p", "--project_path", help='Path to the project.', re
 # Dataset view subcommand
 ds_view = dataset_subparsers.add_parser("view", formatter_class=CustomHelpFormatter, help="Open VMD with the most processed structure and trajectory of a project inside the dataset.", parents=[common_ds_parser])
 ds_view.add_argument("-p", "--project_path", help='Path to the project.', required=True)
-for flags, kwargs in view_frames_args:
+for flags, kwargs in view_shared_args:
     ds_view.add_argument(*flags, **kwargs)
 # Common query parser for dataset subcommands
 query_parser = ArgumentParser(add_help=False)
