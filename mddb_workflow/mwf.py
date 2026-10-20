@@ -1766,14 +1766,18 @@ class Project:
             self.trust = AVAILABLE_CHECKINGS if self.trust else []
 
         # Set the number of frames to skip per MD index
+        # Values from the console come as pairs and values from the inputs file come as a dict
+        # Numbers may come as strings (e.g. quoted keys in the inputs file) so we convert them to integers
         if skip_frames:
-            self.skip_frames = {}
-            for md_index, frames in skip_frames:
-                if md_index < 0 or frames < 0:
-                    raise InputError(f'Wrong skip frames argument "{md_index} {frames}": values must not be negative numbers')
-                self.skip_frames[md_index] = frames
+            skip_frames_pairs = skip_frames
         else:
-            self.skip_frames = self.inputs.get('skip_frames') or {}
+            skip_frames_pairs = (self.inputs.get('skip_frames') or {}).items()
+        self.skip_frames = {}
+        for md_index, frames in skip_frames_pairs:
+            md_index, frames = int(md_index), int(frames)
+            if md_index < 0 or frames < 0:
+                raise InputError(f'Wrong skip frames "{md_index}: {frames}": values must not be negative numbers')
+            self.skip_frames[md_index] = frames
 
         # Set the MD configuration
         self.md_config: list[dict] = self.inputs.merge_md_config(
