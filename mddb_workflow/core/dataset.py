@@ -852,6 +852,59 @@ class Dataset:
             found, value = _read_inputs_field(inputs_filepath, keys)
             print(f'{rel_path}: ' + (repr(value) if found else '(missing)'))
 
+    def show_logs(self,
+            error: bool = False,
+            n_projects: int = 50,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
+            query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
+        ):
+        """Print the most recent output or error logs of the selected projects.
+
+        Args:
+            error (bool):
+                Show the most recent error logs instead of the output logs.
+            n_projects (int):
+                Number of projects to show, the most recently modified ones. 0 for all projects.
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
+
+        """
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        if len(filtered_projects) == 0:
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            return
+        projects = [dict(zip(self.project_columns, project_entry)) for project_entry in filtered_projects]
+        # Sort projects as in 'ds show', so the most recently modified ones are printed last
+        projects.sort(key=lambda project: pd.to_datetime(project['last_modified'], format=self.date_format))
+        if n_projects != 0: projects = projects[-n_projects:]
+        log_type = 'error' if error else 'output'
+        width = shutil.get_terminal_size((80, 20)).columns
+        for project in projects:
+            rel_path = project['rel_path']
+            latest_out, latest_err = self._get_latest_log_files(rel_path)
+            log_path = latest_err if error else latest_out
+            print('=' * width)
+            print(f"Project: {rel_path} ({project['state']}, {project['last_modified']})")
+            print(f"Log file: {log_path}" if log_path else f"No {log_type} logs found")
+            print('=' * width)
+            if log_path is None: continue
+            with open(log_path) as file:
+                print(file.read(), end='')
+        print(f"Shown {log_type} logs of {len(projects)} of {len(filtered_projects)} projects")
+
     def set_inputs_field(self,
             field: str,
             value: str,

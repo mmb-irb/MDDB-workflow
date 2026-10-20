@@ -412,15 +412,14 @@ def main():
             print(f"Last Modified: {status['last_modified']}")
             print(f"Message:       {status['message']}")
         elif args.dataset_subcommand == 'logs':
-            status = dataset.get_status(args.project_path)
-            latest_out, latest_err = dataset._get_latest_log_files(status['rel_path'])
-            log_path = latest_err if args.error else latest_out
-            if log_path is None:
-                print(f"No {'error' if args.error else 'output'} logs found for {status['rel_path']}")
-                return
-            print(f"Log file: {log_path}")
-            with open(log_path) as file:
-                print(file.read(), end='')
+            dataset.show_logs(
+                error=args.error,
+                n_projects=args.n_rows,
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
+            )
         elif args.dataset_subcommand == 'view':
             status = dataset.get_status(args.project_path)
             if status is None:
@@ -952,9 +951,6 @@ dataset_remove.add_argument("-p", "--query_path", help='Path to the project to b
 dataset_add = dataset_subparsers.add_parser("status", formatter_class=CustomHelpFormatter, help="Show the status of a project inside the dataset.", parents=[common_ds_parser])
 dataset_add.add_argument("-p", "--project_path", help='Path to the project.', required=True)
 
-ds_logs = dataset_subparsers.add_parser("logs", formatter_class=CustomHelpFormatter, help="Show the most recent output logs of a project inside the dataset.", parents=[common_ds_parser])
-ds_logs.add_argument("-p", "--project_path", help='Path to the project.', required=True)
-ds_logs.add_argument("-e", "--error", help="Show the most recent error logs instead.", action='store_true')
 # Dataset view subcommand
 ds_view = dataset_subparsers.add_parser("view", formatter_class=CustomHelpFormatter, help="Open VMD with the most processed structure and trajectory of a project inside the dataset.", parents=[common_ds_parser])
 ds_view.add_argument("-p", "--project_path", help='Path to the project.', required=True)
@@ -989,6 +985,10 @@ ds_show.add_argument('-n', '--n_rows', help="Number of rows to display. 0 for al
 ds_show.add_argument('-l', '--include_logs', help=ds_help['get_dataframe']['include_logs'], action='store_true')
 ds_show.add_argument('-m', '--summary', help="Get a summary of the state of the projects.", action='store_true')
 ds_show.add_argument('-id', '--show_id', help="Show UUIDs.", action='store_true')
+
+ds_logs = dataset_subparsers.add_parser("logs", formatter_class=CustomHelpFormatter, help="Show the most recent output logs of the dataset projects.", parents=[common_ds_parser, query_parser])
+ds_logs.add_argument("-e", "--error", help=ds_help['show_logs']['error'], action='store_true')
+ds_logs.add_argument('-n', '--n_rows', help=ds_help['show_logs']['n_projects'], default=50, type=int)
 
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser, scope_parser])
