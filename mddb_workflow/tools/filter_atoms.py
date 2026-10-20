@@ -6,7 +6,7 @@ import pytraj as pt
 
 from mddb_workflow.utils.constants import RAW_CHARGES_FILENAME
 from mddb_workflow.utils.structures import Structure
-from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology
+from mddb_workflow.utils.auxiliar import save_json, MISSING_TOPOLOGY, is_standard_topology, JSON_SERIALIZABLE_MISSING_BONDS
 from mddb_workflow.utils.gmx_spells import get_tpr_atom_count, tpr_filter, xtc_filter
 from mddb_workflow.utils.vmd_spells import vmd_converter
 from mddb_workflow.utils.type_hints import *
@@ -223,7 +223,13 @@ def standard_topology_filter (
     raw_atom_bonds = topology.get('atom_bonds', None)
     if raw_atom_bonds:
         old_atom_bonds = filter_by_indices(raw_atom_bonds, atom_indices)
-        atom_bonds = [ [ atom_backmapping(bond) for bond in bonds ] for bonds in old_atom_bonds ]
+        # Bonds with atoms which are filtered out are removed
+        # Atoms with missing bonds keep the missing bonds flag
+        atom_bonds = [
+            bonds if bonds == JSON_SERIALIZABLE_MISSING_BONDS else
+            [ atom_backmapping[bond] for bond in bonds if bond in atom_backmapping ]
+            for bonds in old_atom_bonds
+        ]
 
     # Filter residuewise fields
     residue_names = filter_by_indices(topology['residue_names'], residue_indices)
@@ -238,11 +244,12 @@ def standard_topology_filter (
     raw_residue_icodes = topology['residue_icodes']
     if raw_residue_icodes:
         # Filter icodes
-        old_residue_icodes = { index: icode for index, icode in raw_residue_icodes.items if index in residue_indices_set }
+        # Note that residue indices are strings here since they are JSON keys
+        old_residue_icodes = { int(index): icode for index, icode in raw_residue_icodes.items() if int(index) in residue_indices_set }
         # Backmap icodes
-        residue_icodes = { residue_backmapping(index): icode for index, icode in old_residue_icodes.items() }
+        residue_icodes = { residue_backmapping[index]: icode for index, icode in old_residue_icodes.items() }
     # Handle PBC residues
-    pbc_residues = [ residue_backmapping(index) for index in topology.get('pbc_residues', []) if index in residue_indices_set ]
+    pbc_residues = [ residue_backmapping[index] for index in topology.get('pbc_residues', []) if index in residue_indices_set ]
 
     # Handle chainwise fields
     chain_names = filter_by_indices(topology['chain_names'], chain_indices)

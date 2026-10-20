@@ -261,7 +261,16 @@ def mine_topology_bonds(bonds_source_file: Union['File', Exception]) -> list[lis
             if bonds == JSON_SERIALIZABLE_MISSING_BONDS:
                 atom_bonds.append(MISSING_BONDS)
                 continue
-            atom_bonds.append(bonds)
+            atom_bonds.append(list(bonds))
+        # Every bond is listed only once in the standard topology (e.g. if A-B is listed then B-A is not)
+        # Add the opposite bonds so every atom has all its bonds
+        # Old topologies may already list both so we make sure not to repeat them
+        for atom_index, bonds in enumerate(atom_bonds):
+            if bonds == MISSING_BONDS: continue
+            for bonded_atom_index in bonds:
+                bonded_atom_bonds = atom_bonds[bonded_atom_index]
+                if atom_index in bonded_atom_bonds: continue
+                bonded_atom_bonds.append(atom_index)
         if atom_bonds: return atom_bonds
         print('  There were no bonds in the topology file. Is this an old file?')
     # In some ocasions, bonds may come inside a topology which can be parsed through pytraj
