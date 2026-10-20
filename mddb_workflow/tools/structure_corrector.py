@@ -8,7 +8,7 @@ from mddb_workflow.utils.auxiliar import get_new_letter, save_json, warn
 from mddb_workflow.utils.constants import CORRECT_ELEMENTS, STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG
 from mddb_workflow.utils.constants import LARGE_AMINOACID_FLAG, AVAILABLE_LETTERS
 from mddb_workflow.utils.selections import Selection
-from mddb_workflow.utils.structures import Structure, Residue
+from mddb_workflow.utils.structures import Structure, Residue, get_next_letter
 from mddb_workflow.utils.type_hints import *
 
 
@@ -307,11 +307,16 @@ def structure_corrector(
         print('Guessed fragments match actual fragments, so we assume bonds are correct.')
         print('This means that multiple residues are numbered as the same residue by mistake.')
         print('In order to solve this issue, this residue will be splitted in new renumerated residues.')
-        last_number = residue.number
+        # New residues keep the same number and get the next free insertion code
+        # Increasing the number instead could clash with the next residue in the chain
+        last_icode = residue.icode
         for fragment in fragments[1:]:
-            last_number += 1
+            last_icode = get_next_letter(last_icode)
+            while last_icode and residue.chain.find_residue(residue.number, last_icode):
+                last_icode = get_next_letter(last_icode)
+            if last_icode is None: raise RuntimeError(f'No more letters in the alphabet for icodes in residue {residue}')
             # Set the new residue
-            new_residue = Residue(residue.name, last_number, residue.icode)
+            new_residue = Residue(residue.name, residue.number, last_icode)
             structure.set_new_residue(new_residue)
             residue.chain.add_residue(new_residue)
             # Add fragment atoms to the new residue
