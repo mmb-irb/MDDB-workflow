@@ -21,6 +21,9 @@ def run_workflow_with_mock_task(mock_task, setup_dummy_project, dataset_path=Non
         with patch.dict(mwf.md_requestables, {'mock_task': mock_task}):
             md_config = setup_dummy_project(test_fld, n_replicas=2, copy_inputs=True)
             print(md_config)
+            # The workflow does not create the dataset file, so create it beforehand
+            if dataset_path:
+                Dataset(dataset_path, create=True).close()
             workflow(
                 project_parameters={
                     'input_topology_filepath': 'ala_ala.tpr',

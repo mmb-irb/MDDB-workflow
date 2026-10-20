@@ -26,7 +26,7 @@ def test_add_remove_entries():
         for d in project_dirs + replica_dirs:
             os.makedirs(d)
         db_path = tmpdir / "dataset.db"
-        ds = Dataset(dataset_path=str(db_path))
+        ds = Dataset(dataset_path=str(db_path), create=True)
         project_dirs = [str(d) for d in project_dirs]
         ds.add_entries(project_dirs,
                        ignore_dirs=str(tmpdir / "proj_glob2"),
@@ -283,7 +283,7 @@ class TestDatabaseLock:
             db_path, lock_dir = self._paths(tmpdir)
 
             # Create dataset
-            ds = Dataset(dataset_path=str(db_path))
+            ds = Dataset(dataset_path=str(db_path), create=True)
 
             # Lock should be released after __init__
             assert not lock_dir.exists()
@@ -332,7 +332,7 @@ class TestDatabaseLock:
             db_path, lock_dir = self._paths(tmpdir)
 
             # Create dataset and add a project
-            ds = Dataset(dataset_path=str(db_path))
+            ds = Dataset(dataset_path=str(db_path), create=True)
             project_dir = tmpdir / "proj1"
             project_dir.mkdir()
             ds.add_project(str(project_dir), make_uuid=True)
@@ -409,7 +409,7 @@ def test_running_project_lifecycle_reconciles_to_error_when_process_dies():
         project_dir = tmpdir / "proj1"
         project_dir.mkdir()
 
-        ds = Dataset(dataset_path=str(db_path))
+        ds = Dataset(dataset_path=str(db_path), create=True)
         ds.add_project(str(project_dir), make_uuid=True)
         ready_queue = multiprocessing.Queue()
         hold_event = multiprocessing.Event()
@@ -443,7 +443,7 @@ def _open_dataset_concurrently(db_path: str, start_event, results_queue, iterati
     try:
         start_event.wait(timeout=30)
         for _ in range(iterations):
-            ds = Dataset(dataset_path=db_path)
+            ds = Dataset(dataset_path=db_path, create=True)
             ds.query_table('projects')
             ds.close()
         results_queue.put(('success', os.getpid()))
@@ -513,7 +513,7 @@ def test_dataset_open_retries_transient_errors(monkeypatch):
 
         monkeypatch.setattr(Dataset, 'open_retry_base_delay', 0.01)
         monkeypatch.setattr(sqlite3, 'connect', flaky_connect)
-        ds = Dataset(dataset_path=str(db_path))
+        ds = Dataset(dataset_path=str(db_path), create=True)
         assert len(calls) == 3
         ds.close()
 
@@ -536,7 +536,7 @@ def test_lock_dir_next_to_writable_dataset():
         lock_dir = DatabaseLock._path_to_lock_dir(db_path)
         assert lock_dir == db_path.resolve().with_name('.lock_dataset.db')
 
-        ds = Dataset(dataset_path=str(db_path))
+        ds = Dataset(dataset_path=str(db_path), create=True)
         assert ds._lock.lock_dir == lock_dir
         with ds.locked_storage_file:
             assert lock_dir.is_dir()
@@ -554,7 +554,7 @@ def test_lock_dir_falls_back_to_tmp_for_read_only_dataset():
         db_path = data_dir / "dataset.db"
         project_dir = data_dir / "proj1"
         project_dir.mkdir()
-        ds = Dataset(dataset_path=str(db_path))
+        ds = Dataset(dataset_path=str(db_path), create=True)
         ds.add_project(str(project_dir), make_uuid=True)
         ds.close()
 

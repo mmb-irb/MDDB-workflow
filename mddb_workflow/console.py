@@ -391,7 +391,9 @@ def main():
                 ds_parser.print_help()
                 return
 
-        dataset = Dataset(args.dataset_path)
+        # Only the commands which add projects may create a new dataset file
+        create = args.dataset_subcommand in ('add', 'scan')
+        dataset = Dataset(args.dataset_path, create=create)
         if args.dataset_subcommand == 'add':
             dataset.add_entries(
                 paths_or_globs=args.paths_or_globs,

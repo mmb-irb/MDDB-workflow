@@ -1,4 +1,4 @@
-from mddb_workflow.utils.auxiliar import load_yaml, load_json, save_yaml, save_json, is_glob
+from mddb_workflow.utils.auxiliar import InputError, load_yaml, load_json, save_yaml, save_json, is_glob
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import CACHE_FILENAME, ACCEPTED_INPUT_FILENAMES
@@ -188,18 +188,22 @@ class Dataset:
     open_retry_base_delay = 0.2
     open_retry_max_delay = 10.0
 
-    def __init__(self, dataset_path: str = 'mwf_ds.sql', lock_timeout: float = 30.0):
+    def __init__(self, dataset_path: str = 'mwf_ds.sql', lock_timeout: float = 30.0, create: bool = False):
         """Initialize the Dataset object and connect to SQLite DB.
 
         Args:
             dataset_path (str): Path to the dataset storage file, normally an .db file.
             lock_timeout (float): Maximum time to wait for database lock (seconds).
+            create (bool): Create the dataset file if it does not exist yet.
 
         """
         self.dataset_path = Path(dataset_path).resolve()
-        # if not self.dataset_path.exists():
-        #     raise ValueError(f"Dataset path {self.dataset_path} does not exist.")
         self.root_path = self.dataset_path.parent
+        if not self.root_path.is_dir():
+            raise InputError(f'Dataset file not found at {self.dataset_path}\n'
+                f'  The directory {self.root_path} does not exist')
+        if not create and not self.dataset_path.exists():
+            raise InputError(f'Dataset file not found at {self.dataset_path}')
         self._lock = DatabaseLock(self.dataset_path, timeout=lock_timeout)
         self.conn = None
         self._retry_transient(self._open)
