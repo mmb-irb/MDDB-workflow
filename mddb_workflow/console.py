@@ -442,7 +442,6 @@ def main():
         elif args.dataset_subcommand == 'watch':
             from mddb_workflow.utils.rich import watch_dataframe
             watch_dataframe(lambda: dataset.get_dataframe(
-                    root_path=dataset.root_path,
                     sort_by='last_modified',
                     asc=False if args.reverse else True,
                     query_path=args.query_path,
@@ -928,6 +927,7 @@ ds_show.add_argument('-id', '--show_id', help="Show UUIDs.", action='store_true'
 
 # Dataset watch subcommand
 ds_watch = dataset_subparsers.add_parser("watch", formatter_class=CustomHelpFormatter, help="Display information live about a dataset of MDDB projects.", parents=[common_ds_parser, query_parser, scope_parser])
+ds_watch.add_argument('-r', '--reverse', help="Reverse the sort order.", action='store_true')
 # Dataset scan subcommand
 ds_scan = dataset_subparsers.add_parser("scan", formatter_class=CustomHelpFormatter, help="Scan a directory and add all MDDB projects to a dataset storage file.", parents=[common_ds_parser])
 # # Dataset run subcommand
