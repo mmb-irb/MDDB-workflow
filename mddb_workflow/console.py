@@ -424,7 +424,8 @@ def main():
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_scope=args.query_scope,
-                query_message=args.query_message
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
             )
             total = len(df)
             if args.n_rows == 0 or args.n_rows >= total:
@@ -447,7 +448,8 @@ def main():
                     query_path=args.query_path,
                     query_state=args.query_state,
                     query_scope=args.query_scope,
-                    query_message=args.query_message
+                    query_message=args.query_message,
+                    query_inputs=args.query_inputs
                 ),
                 title="Live MDDB Dataset"
             )
@@ -458,7 +460,8 @@ def main():
                 field=args.get,
                 query_path=args.query_path,
                 query_state=args.query_state,
-                query_message=args.query_message
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
             )
         elif args.dataset_subcommand == 'inputs' and args.set:
             if args.inputs_template or args.inputs_generator or args.overwrite:
@@ -469,7 +472,8 @@ def main():
                 value=value,
                 query_path=args.query_path,
                 query_state=args.query_state,
-                query_message=args.query_message
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
             )
         elif args.dataset_subcommand == 'inputs':
             dataset.generate_inputs_yaml(
@@ -478,13 +482,15 @@ def main():
                 overwrite=args.overwrite,
                 query_path=args.query_path,
                 query_state=args.query_state,
-                query_message=args.query_message
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
             )
         elif args.dataset_subcommand == 'run':
             dataset.launch(
                 query_path=args.query_path,
                 query_state=args.query_state,
                 query_message=args.query_message,
+                query_inputs=args.query_inputs,
                 n_jobs=args.n_jobs,
                 pool_size=args.pool_size,
                 cmd=args.cmd,
@@ -895,6 +901,10 @@ query_parser = ArgumentParser(add_help=False)
 query_parser.add_argument("-p", "--query_path", nargs='*', default=['*'], help=ds_help['get_dataframe']['query_path'])
 query_parser.add_argument("-st", "--query_state", nargs='*', default=[], help=ds_help['get_dataframe']['query_state'])
 query_parser.add_argument("-ms", "--query_message", nargs='*', default=[], help=ds_help['get_dataframe']['query_message'])
+query_parser.add_argument("-qi", "--query_inputs", nargs=2, action='append', metavar=('FIELD', 'VALUE'), default=None,
+    help="Filter projects by a field in their inputs file (e.g. '-qi pdb_ids 1ABC'). " + ds_help['get_inputs_field']['field'] +
+    " The value is parsed as YAML. If the field is a list, it is enough for the value to be one of its items." +
+    " Repeat the option to add more conditions, projects must match all of them (e.g. '-qi pdb_ids 1ABC -qi temp 310').")
 # Scope filter only for subcommands which display both projects and MDs
 scope_parser = ArgumentParser(add_help=False)
 scope_parser.add_argument("-sc", "--query_scope", type=str, default=None, help=ds_help['get_dataframe']['query_scope'])

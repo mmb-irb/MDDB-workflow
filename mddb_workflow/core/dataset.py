@@ -716,6 +716,7 @@ class Dataset:
             query_path: list[str] = ['*'],
             query_state: list[str] = [],
             query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
         ):
         """Generate an inputs.yaml file for the project directory based on a Jinja2 template.
 
@@ -737,6 +738,10 @@ class Dataset:
                 List of states to filter the projects from the dataset.
             query_message (list[str]):
                 List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
 
 
         """
@@ -744,7 +749,7 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
         if len(filtered_projects) == 0:
             print("No projects found matching the specified query_path and query_state filters.")
             return
@@ -809,6 +814,7 @@ class Dataset:
             query_path: list[str] = ['*'],
             query_state: list[str] = [],
             query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
         ):
         """Print the value of a single field in the inputs files of the selected projects.
 
@@ -822,12 +828,16 @@ class Dataset:
                 List of states to filter the projects from the dataset.
             query_message (list[str]):
                 List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
 
         """
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
         if len(filtered_projects) == 0:
             print("No projects found matching the specified query_path and query_state filters.")
             return
@@ -839,22 +849,8 @@ class Dataset:
             if inputs_filepath is None:
                 print(f'{rel_path}: (no inputs file)')
                 continue
-            value = load_json(inputs_filepath) if inputs_filepath.endswith('.json') else load_yaml(inputs_filepath)
-            missing = False
-            for i, key in enumerate(keys):
-                if type(value) is list:
-                    key = int(key)
-                    if key >= len(value):
-                        missing = True
-                        break
-                elif type(value) is dict:
-                    if key not in value:
-                        missing = True
-                        break
-                else:
-                    raise ValueError(f'Field "{".".join(keys[:i])}" in {inputs_filepath} is not a dict or a list')
-                value = value[key]
-            print(f'{rel_path}: ' + ('(missing)' if missing else repr(value)))
+            found, value = _read_inputs_field(inputs_filepath, keys)
+            print(f'{rel_path}: ' + (repr(value) if found else '(missing)'))
 
     def set_inputs_field(self,
             field: str,
@@ -862,6 +858,7 @@ class Dataset:
             query_path: list[str] = ['*'],
             query_state: list[str] = [],
             query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
         ):
         """Set a single field in the existing inputs files of the selected projects.
         Note that comments in the inputs files are lost.
@@ -880,13 +877,17 @@ class Dataset:
                 List of states to filter the projects from the dataset.
             query_message (list[str]):
                 List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
 
         """
         # Query projects directly from database with filters
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
         if len(filtered_projects) == 0:
             print("No projects found matching the specified query_path and query_state filters.")
             return
@@ -1048,7 +1049,8 @@ class Dataset:
         where_clause = " AND ".join(conditions) if conditions else ""
         return where_clause, params
 
-    def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None) -> list[tuple]:
+    def query_table(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None,
+            query_inputs: list[tuple[str, str]] = None) -> list[tuple]:
         """Query an available table with optional filters.
 
         Args:
@@ -1056,11 +1058,32 @@ class Dataset:
             query_path: List of glob patterns to filter rel_path by
             query_state: List of states to filter by
             query_message: List of glob patterns to filter message by (e.g., 'URLError*')
+            query_inputs: List of field and value pairs to filter projects by their inputs file, all of them must match (e.g., [('pdb_ids', '1ABC')])
 
         Returns:
             List of tuples with project data
 
         """
+        rows = self._query_table_sql(table, query_path, query_state, query_message)
+        if not query_inputs: return rows
+        # MDs are filtered by the inputs file of their project
+        if table == 'mds':
+            matching_projects = self.query_table('projects', query_inputs=query_inputs)
+            matching_uuids = set(project[0] for project in matching_projects)
+            project_uuid_index = self.md_columns.index('project_uuid')
+            return [row for row in rows if row[project_uuid_index] in matching_uuids]
+        conditions = [(field.split('.'), yaml.safe_load(value)) for field, value in query_inputs]
+        rel_path_index = self.project_columns.index('rel_path')
+        filtered_rows = []
+        for row in rows:
+            inputs_filepath = self._find_inputs_file(row[rel_path_index])
+            if inputs_filepath is None: continue
+            if all(_inputs_field_matches(inputs_filepath, keys, value) for keys, value in conditions):
+                filtered_rows.append(row)
+        return filtered_rows
+
+    def _query_table_sql(self, table: str, query_path: list[str] = None, query_state: list[str] = None, query_message: list[str] = None) -> list[tuple]:
+        """Query an available table with the filters which are stored in the database."""
         if table not in ['projects', 'mds']:
             raise ValueError("Table must be either 'projects' or 'mds'")
         with self.locked_storage_file:
@@ -1092,6 +1115,7 @@ class Dataset:
             query_path: list[str] | str = [],
             query_state: list[str] | str = [],
             query_message: list[str] | str = [],
+            query_inputs: list[tuple[str, str]] = None,
             query_scope: str = None,
     ) -> 'pd.DataFrame':
         """Retrieve a joined view of projects and MDs as a single DataFrame
@@ -1107,6 +1131,7 @@ class Dataset:
             query_path (list[str] | str): If provided, filters rows whose 'rel_path' matches these glob patterns.
             query_state (list[str] | str): If provided, filters rows whose 'state' matches this value/list of values.
             query_message (list[str] | str): If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]], optional): If provided, filters rows whose project inputs file has all these field and value pairs (e.g. [('pdb_ids', '1ABC')]).
             query_scope (str, optional): If provided, filters rows whose 'scope' matches this value ('project'/'p' or 'md'/'m').
 
         """
@@ -1133,7 +1158,7 @@ class Dataset:
         dataframes = []
         for scope in scopes_to_query:
             cols = self.project_columns if scope == 'projects' else self.md_columns
-            data = self.query_table(scope, query_path, query_state, query_message)
+            data = self.query_table(scope, query_path, query_state, query_message, query_inputs)
             df = pd.DataFrame(data, columns=cols)
             df['scope'] = scope
             if len(df) > 0:
@@ -1274,6 +1299,7 @@ class Dataset:
         query_path: list[str] | str = [],
         query_state: list[str] | str = [],
         query_message: list[str] | str = [],
+        query_inputs: list[tuple[str, str]] = None,
         debug: bool = False,
     ):
         """Launch a command for each project directory in the dataset.
@@ -1297,6 +1323,8 @@ class Dataset:
                 If provided, filters rows whose 'state' matches this value/list of values.
             query_message (list[str] | str):
                 If provided, filters rows whose 'message' matches these glob patterns (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                If provided, filters projects whose inputs file has all these field and value pairs (e.g. [('pdb_ids', '1ABC')]).
             debug (bool):
                 Only print the commands without executing them.
 
@@ -1326,7 +1354,7 @@ class Dataset:
         query_path = _type_check_dir_list(query_path)
         query_state = _type_check_dir_list(query_state)
         query_message = _type_check_dir_list(query_message)
-        filtered_projects = self.query_table('projects', query_path, query_state, query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
 
         n = 0
         if debug:
@@ -1530,6 +1558,32 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
             p = p.absolute() if not p.is_absolute() else p
             directories.append(p)
     return directories
+
+
+def _inputs_field_matches(inputs_filepath: str, keys: list[str], value: Any) -> bool:
+    """Check if a field in an inputs file has a value.
+    If the field is a list it is enough for the value to be one of its items.
+    """
+    found, inputs_value = _read_inputs_field(inputs_filepath, keys)
+    if not found: return False
+    return inputs_value == value or (type(inputs_value) is list and value in inputs_value)
+
+
+def _read_inputs_field(inputs_filepath: str, keys: list[str]) -> tuple[bool, Any]:
+    """Read a field from an inputs file following a list of keys.
+    Return whether the field was found and its value.
+    """
+    value = load_json(inputs_filepath) if inputs_filepath.endswith('.json') else load_yaml(inputs_filepath)
+    for i, key in enumerate(keys):
+        if type(value) is list:
+            key = int(key)
+            if key >= len(value): return False, None
+        elif type(value) is dict:
+            if key not in value: return False, None
+        else:
+            raise ValueError(f'Field "{".".join(keys[:i])}" in {inputs_filepath} is not a dict or a list')
+        value = value[key]
+    return True, value
 
 
 def _type_check_dir_list(dir_list: list[str] | str) -> list[str]:
