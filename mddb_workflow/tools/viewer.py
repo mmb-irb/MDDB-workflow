@@ -239,6 +239,11 @@ def view_project(
             # VMD includes the last frame while we do not
             last = -1 if end is None else end - 1
             commands.append(f'{load_command} first {start} last {last} step {step} waitfor all')
+    # Show the PBC box, if there is any
+    commands += [
+        'package require pbctools',
+        'if {[molinfo top get a] > 0} { pbc box }',
+    ]
     # Write the commands in a file and open VMD
     commands_filepath = f'{temporary_directory.name}/commands.vmd'
     with open(commands_filepath, 'w') as commands_file:
