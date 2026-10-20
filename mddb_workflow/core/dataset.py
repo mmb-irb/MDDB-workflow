@@ -751,7 +751,7 @@ class Dataset:
         query_message = _type_check_dir_list(query_message)
         filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
         if len(filtered_projects) == 0:
-            print("No projects found matching the specified query_path and query_state filters.")
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
             return
 
         # Load the template
@@ -839,7 +839,7 @@ class Dataset:
         query_message = _type_check_dir_list(query_message)
         filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
         if len(filtered_projects) == 0:
-            print("No projects found matching the specified query_path and query_state filters.")
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
             return
         keys = field.split('.')
         for project_entry in filtered_projects:
@@ -889,7 +889,7 @@ class Dataset:
         query_message = _type_check_dir_list(query_message)
         filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
         if len(filtered_projects) == 0:
-            print("No projects found matching the specified query_path and query_state filters.")
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
             return
         parsed_value = yaml.safe_load(value)
         keys = field.split('.')
@@ -1558,6 +1558,18 @@ def _resolve_directory_patterns(dir_patterns: list[str], root_path: Path = Path(
             p = p.absolute() if not p.is_absolute() else p
             directories.append(p)
     return directories
+
+
+def _no_projects_message(query_path: list[str], query_state: list[str], query_message: list[str], query_inputs: list[tuple[str, str]]) -> str:
+    """Build the message for a query with no matching projects, mentioning only the filters in use."""
+    filters = []
+    query_path = [pattern for pattern in query_path if pattern and pattern != '*']
+    if query_path: filters.append(f'path {" or ".join(query_path)}')
+    if query_state: filters.append(f'state {" or ".join(query_state)}')
+    if query_message: filters.append(f'message {" or ".join(query_message)}')
+    for field, value in query_inputs or []: filters.append(f'inputs {field} = {value}')
+    if not filters: return 'No projects found in the dataset.'
+    return 'No projects found matching ' + ' and '.join(filters) + '.'
 
 
 def _inputs_field_matches(inputs_filepath: str, keys: list[str], value: Any) -> bool:
