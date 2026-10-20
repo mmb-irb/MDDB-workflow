@@ -1,0 +1,246 @@
+import re
+import json
+from os import listdir
+from os.path import isabs, isfile, dirname
+from glob import glob
+from subprocess import call
+from tempfile import TemporaryDirectory
+from mddb_workflow.mwf import Project, MD
+from mddb_workflow.utils.auxiliar import InputError, parse_glob, unique
+from mddb_workflow.utils.constants import INCOMPLETE_PREFIX, STRUCTURE_FILENAME, TRAJECTORY_FILENAME, TRAJECTORY_SAMPLE_FILENAME
+from mddb_workflow.utils.constants import CORRECTED_STRUCTURE, IMAGED_STRUCTURE, FILTERED_STRUCTURE, CONVERTED_STRUCTURE
+from mddb_workflow.utils.constants import CORRECTED_TRAJECTORY, IMAGED_TRAJECTORY, FILTERED_TRAJECTORY, CONVERTED_TRAJECTORY
+from mddb_workflow.utils.constants import MD_INPUT_STRUCTURE_FILEPATH, MD_INPUT_TRAJECTORY_FILEPATHS, MD_INPUT_TOPOLOGY_FILEPATH, MD_REMOVED_FLAG
+from mddb_workflow.utils.constants import ACCEPTED_INPUT_FILENAMES, CACHE_FILENAME
+from mddb_workflow.utils.file import File
+from mddb_workflow.utils.gmx_spells import run_gromacs
+from mddb_workflow.utils.vmd_spells import VMD_FORMAT, vmd_supported_trajectory_formats
+
+# Structure formats which VMD can load, with the VMD name of each format
+# Topologies have no coordinates but they are fine since a trajectory is always loaded
+VMD_STRUCTURE_FORMATS = {
+    'pdb': 'pdb',
+    'gro': 'gro',
+    'cif': 'pdbx',
+    'prmtop': 'parm7',
+    'psf': 'psf',
+}
+
+# Topology formats which VMD can load but have no coordinates
+NO_COORDINATES_FORMATS = {'prmtop', 'psf'}
+
+# Topology formats which VMD can not load but we can convert to gro
+CONVERTIBLE_TOPOLOGY_FORMATS = {'tpr'}
+
+# Number of frames to be loaded when no frames are specified
+DEFAULT_FRAMES_COUNT = 10
+
+# Directory where intermediate files are written while input files are processed
+INPRO_DIRECTORY = INCOMPLETE_PREFIX + 'inpro'
+
+# Files to be searched in the MD directory, from the most processed to the least processed
+STRUCTURE_CANDIDATES = [
+    STRUCTURE_FILENAME,
+    f'{INPRO_DIRECTORY}/{CORRECTED_STRUCTURE}',
+    f'{INPRO_DIRECTORY}/{IMAGED_STRUCTURE}',
+    f'{INPRO_DIRECTORY}/{FILTERED_STRUCTURE}',
+    f'{INPRO_DIRECTORY}/{CONVERTED_STRUCTURE}',
+]
+TRAJECTORY_CANDIDATES = [
+    TRAJECTORY_FILENAME,
+    TRAJECTORY_SAMPLE_FILENAME,
+    f'{INPRO_DIRECTORY}/{CORRECTED_TRAJECTORY}',
+    f'{INPRO_DIRECTORY}/{IMAGED_TRAJECTORY}',
+    f'{INPRO_DIRECTORY}/{FILTERED_TRAJECTORY}',
+    f'{INPRO_DIRECTORY}/{CONVERTED_TRAJECTORY}',
+]
+
+# Cksums of files are the file size and a hash of its content (e.g. 45652-096635543c4ba329)
+FILE_CKSUM_PATTERN = re.compile(r'^(\d+)-')
+
+
+def find_input_file(md: MD, input_filepath: str) -> File | None:
+    """Find an input file path from the inputs file, either relative to the MD or the project directory."""
+    if isabs(input_filepath):
+        candidate_filepaths = [input_filepath]
+    else:
+        candidate_filepaths = [md.pathify(input_filepath), md.project.pathify(input_filepath)]
+    for candidate_filepath in candidate_filepaths:
+        for parsed_filepath in parse_glob(candidate_filepath):
+            parsed_file = File(parsed_filepath)
+            if parsed_file.exists: return parsed_file
+    return None
+
+
+def find_cached_file(md: MD, cksum: str | None) -> File | None:
+    """Find a file in the MD or the project directory with the same cksum."""
+    if not cksum: return None
+    cksum_match = FILE_CKSUM_PATTERN.match(cksum)
+    if not cksum_match: return None
+    size = int(cksum_match.group(1))
+    for directory in unique([md.directory, md.project.directory]):
+        for filename in sorted(listdir(directory)):
+            candidate_file = File(f'{directory}/{filename}')
+            if not isfile(candidate_file.path) or candidate_file.size != size: continue
+            if candidate_file.get_cksum(unsafe=True) == cksum: return candidate_file
+    return None
+
+
+def get_input_files(md: MD, md_inputs: dict) -> tuple[File | None, list[File | None], File | None]:
+    """Get the input structure, trajectories and topology of a MD.
+
+    Paths are read from the inputs file.
+    If there is no inputs file then files are found by comparing their cksums with the ones in the cache.
+    """
+    if md.project.inputs.is_file_available:
+        structure_filepath = md_inputs.get(MD_INPUT_STRUCTURE_FILEPATH)
+        trajectory_filepaths = md_inputs.get(MD_INPUT_TRAJECTORY_FILEPATHS) or []
+        if type(trajectory_filepaths) is str: trajectory_filepaths = [trajectory_filepaths]
+        # The topology may be set for the MD or for the whole project
+        # Note that a 'no' value is read as False
+        topology_filepath = md.get_file_input(MD_INPUT_TOPOLOGY_FILEPATH)
+        return (
+            find_input_file(md, structure_filepath) if structure_filepath else None,
+            [find_input_file(md, filepath) for filepath in trajectory_filepaths],
+            find_input_file(md, topology_filepath) if topology_filepath else None,
+        )
+    cksums = md.cache.retrieve(MD.input_files_processing.cache_arg_cksums_key, {})
+    # Trajectory cksums are saved as a JSON list, unless the list is too long
+    trajectory_cksums = cksums.get('input_trajectory_files')
+    trajectory_cksums = json.loads(trajectory_cksums) if trajectory_cksums and trajectory_cksums.startswith('[') else []
+    return (
+        find_cached_file(md, cksums.get('input_structure_file')),
+        [find_cached_file(md, cksum) for cksum in trajectory_cksums],
+        find_cached_file(md, cksums.get('input_topology_file')),
+    )
+
+
+def find_structure(md: MD, md_inputs: dict) -> File | None:
+    """Find the most processed structure in a MD directory."""
+    for candidate in STRUCTURE_CANDIDATES:
+        candidate_file = File(md.pathify(candidate))
+        if candidate_file.exists: return candidate_file
+    input_structure_file, _, input_topology_file = get_input_files(md, md_inputs)
+    if input_structure_file and input_structure_file.format in VMD_STRUCTURE_FORMATS:
+        return input_structure_file
+    supported_topology_formats = set(VMD_STRUCTURE_FORMATS) | CONVERTIBLE_TOPOLOGY_FORMATS
+    if input_topology_file and input_topology_file.format in supported_topology_formats:
+        return input_topology_file
+    return None
+
+
+def find_trajectory(md: MD, md_inputs: dict) -> File | None:
+    """Find the most processed trajectory in a MD directory."""
+    for candidate in TRAJECTORY_CANDIDATES:
+        candidate_file = File(md.pathify(candidate))
+        if candidate_file.exists: return candidate_file
+    _, input_trajectory_files, _ = get_input_files(md, md_inputs)
+    if not input_trajectory_files or None in input_trajectory_files: return None
+    # When there are several trajectories only the first one is loaded
+    if len(input_trajectory_files) > 1:
+        print(f'There are {len(input_trajectory_files)} input trajectories. Only the first one will be loaded')
+    input_trajectory_file = input_trajectory_files[0]
+    if input_trajectory_file.format not in vmd_supported_trajectory_formats: return None
+    return input_trajectory_file
+
+
+def find_in_mds(project: Project, finder: callable) -> File | None:
+    """Search a file in the reference MD first and then in the rest of MDs."""
+    md_indices = list(range(len(project.mds)))
+    md_indices.remove(project.reference_md_index)
+    md_indices = [project.reference_md_index] + md_indices
+    for md_index in md_indices:
+        md_inputs = project.md_config[md_index]
+        if md_inputs.get(MD_REMOVED_FLAG): continue
+        found_file = finder(project.mds[md_index], md_inputs)
+        if found_file: return found_file
+    return None
+
+
+def get_project() -> Project:
+    """Set the project in the current directory.
+    If there is no inputs file then MD directories are those with a cache file.
+    """
+    inputs_filepaths = [filepath for filename in ACCEPTED_INPUT_FILENAMES for filepath in glob('*' + filename)]
+    if inputs_filepaths: return Project()
+    md_directories = sorted(dirname(filepath) for filepath in glob(f'*/{CACHE_FILENAME}'))
+    if not md_directories:
+        raise InputError('There is no inputs file and no MD directory with a cache file')
+    print(f'There is no inputs file. Using MD directories with a cache: {", ".join(md_directories)}')
+    return Project(input_md_directories=md_directories)
+
+
+def view_project(
+    structure_filepath: str | None = None,
+    trajectory_filepath: str | None = None,
+    start: int | None = None,
+    end: int | None = None,
+    step: int | None = None,
+    frames: list[int] = [],
+):
+    """Open VMD with a structure and some frames of a trajectory.
+
+    If no structure is passed then the most processed structure and trajectory in the current project are used.
+    If only the structure is passed then it is loaded alone.
+    If no frames are specified then the first 10 frames are loaded.
+    If only some of start/end/step are specified then the end is the last frame.
+    The end frame is not included, as in the subset command.
+    """
+    structure_file = File(structure_filepath) if structure_filepath else None
+    trajectory_file = File(trajectory_filepath) if trajectory_filepath else None
+    for passed_file in [structure_file, trajectory_file]:
+        if passed_file and not passed_file.exists:
+            raise InputError(f'File {passed_file.path} does not exist')
+    # If only the structure is passed then it is loaded alone
+    if not structure_file:
+        project = get_project()
+        structure_file = find_in_mds(project, find_structure)
+        if not structure_file:
+            raise InputError('No structure was found in any MD directory')
+        trajectory_file = find_in_mds(project, find_trajectory)
+        if not trajectory_file:
+            raise InputError('No trajectory was found in any MD directory')
+    print(f'Structure: {structure_file.path}')
+    if trajectory_file: print(f'Trajectory: {trajectory_file.path}')
+    # Temporary files are removed once VMD is closed
+    temporary_directory = TemporaryDirectory()
+    # Convert topologies which VMD can not load to gro
+    if structure_file.format in CONVERTIBLE_TOPOLOGY_FORMATS:
+        converted_structure_file = structure_file.get_reformated_file('gro').get_relocated_file(temporary_directory.name)
+        print(f'Converting {structure_file.path} to gro')
+        run_gromacs(f'editconf -f {structure_file.path} -o {converted_structure_file.path}')
+        structure_file = converted_structure_file
+    if structure_file.format not in VMD_STRUCTURE_FORMATS:
+        raise InputError(f'Structure format "{structure_file.format}" is not supported')
+    if not trajectory_file and structure_file.format in NO_COORDINATES_FORMATS:
+        raise InputError(f'{structure_file.path} is a topology and it has no atom coordinates, so you would see nothing in VMD.\n'
+            '  Pass also a trajectory to see the system, e.g. mwf view topology.prmtop trajectory.xtc')
+    if trajectory_file and trajectory_file.format not in vmd_supported_trajectory_formats:
+        raise InputError(f'Trajectory format "{trajectory_file.format}" is not supported')
+    # Set the VMD commands to load the structure and the trajectory frames
+    structure_vmd_format = VMD_STRUCTURE_FORMATS[structure_file.format]
+    commands = [f'mol new {{{structure_file.path}}} type {structure_vmd_format} waitfor all']
+    if trajectory_file:
+        # Frames from the structure file are removed so frame numbers match the trajectory
+        commands.append('animate delete all')
+        trajectory_vmd_format = VMD_FORMAT[trajectory_file.format]
+        load_command = f'mol addfile {{{trajectory_file.path}}} type {trajectory_vmd_format}'
+        if frames:
+            for frame in sorted(frames):
+                commands.append(f'{load_command} first {frame} last {frame} waitfor all')
+        else:
+            no_frame_options = start is None and end is None and step is None
+            if no_frame_options: end = DEFAULT_FRAMES_COUNT
+            if start is None: start = 0
+            if step is None: step = 1
+            if end is not None and end <= start:
+                raise InputError('End frame must be posterior to start frame')
+            # VMD includes the last frame while we do not
+            last = -1 if end is None else end - 1
+            commands.append(f'{load_command} first {start} last {last} step {step} waitfor all')
+    # Write the commands in a file and open VMD
+    commands_filepath = f'{temporary_directory.name}/commands.vmd'
+    with open(commands_filepath, 'w') as commands_file:
+        commands_file.write('\n'.join(commands) + '\n')
+    call(['vmd', '-e', commands_filepath])
+    temporary_directory.cleanup()

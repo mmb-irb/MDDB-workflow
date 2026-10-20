@@ -20,6 +20,7 @@ from mddb_workflow.tools.check_inputs import TRAJECTORY_SUPPORTED_FORMATS, TOPOL
 from mddb_workflow.tools.get_bonds import mine_topology_bonds
 from mddb_workflow.tools.update_references import update_references, AVAILABLE_REFERENCE_TYPES, ALL_FLAG
 from mddb_workflow.tools.update_projects import update_projects, UPDATABLE_TASKS
+from mddb_workflow.tools.viewer import view_project
 from mddb_workflow.analyses.nassa import workflow_nassa
 from mddb_workflow.core.dataset import Dataset
 
@@ -334,6 +335,17 @@ def main():
             frames=args.frames
         )
         print('All done :)')
+
+    # In case the view tool was called
+    elif subcommand == 'view':
+        view_project(
+            structure_filepath=args.structure,
+            trajectory_filepath=args.trajectory,
+            start=args.start,
+            end=args.end,
+            step=args.step,
+            frames=args.frames
+        )
 
     # In case the chainer tool was called
     elif subcommand == 'chainer':
@@ -833,6 +845,24 @@ subset_parser_args = [
 ]
 for flags, kwargs in subset_parser_args:
     subset_parser.add_argument(*flags, **kwargs)
+
+
+# The view command
+view_parser = subparsers.add_parser("view",
+    help="Open VMD with the most processed structure and trajectory of the current project\n" +
+        "Only the first 10 frames are loaded unless other frames are specified",
+    formatter_class=CustomHelpFormatter,
+    parents=[common_parser])
+view_parser_args = [
+    (["structure"], {'nargs': '?', 'default': None, 'help': "Path to the structure file. The most processed structure in the project by default"}),
+    (["trajectory"], {'nargs': '?', 'default': None, 'help': "Path to the trajectory file. If the structure is passed alone then no trajectory is loaded"}),
+    (["-start", "--start"], {'type': int, 'default': None, 'help': "Start frame (0-based)"}),
+    (["-end", "--end"], {'type': int, 'default': None, 'help': "End frame (0-based, not included). The last frame by default if start or step are passed"}),
+    (["-step", "--step"], {'type': int, 'default': None, 'help': "Frame step"}),
+    (["-fr", "--frames"], {'nargs': '*', 'type': int, 'default': [], 'help': "Frames to be loaded (0-based). Other arguments are ignored."}),
+]
+for flags, kwargs in view_parser_args:
+    view_parser.add_argument(*flags, **kwargs)
 
 
 # The chainer command
