@@ -14,7 +14,7 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from mddb_workflow.utils.auxiliar import InputError, warn
-from mddb_workflow.utils.constants import PDB_ID_FORMAT, AVAILABLE_CHECKINGS, AVAILABLE_FAILURES
+from mddb_workflow.utils.constants import PDB_ID_FORMAT, AVAILABLE_CHECKINGS, AVAILABLE_FAILURES, AUTOMATIC_FLAG
 
 
 class InputsBaseModel(BaseModel):
@@ -191,6 +191,7 @@ class WorkflowInputs(InputsBaseModel):
     filter_selection: Optional[Union[bool, str]] = None
     image: Optional[bool] = None
     fit: Optional[bool] = None
+    translation: Optional[Union[str, list[float]]] = None
     chainer: Optional[dict[str, str]] = None
     skip_frames: Optional[dict[int, int]] = None
     mercy: Optional[Union[bool, list[str]]] = None
@@ -209,6 +210,19 @@ class WorkflowInputs(InputsBaseModel):
     def check_positive(cls, value, info):
         if value is not None and value <= 0:
             raise ValueError(f'"{info.field_name}" must be a positive number.')
+        return value
+
+    @field_validator('translation')
+    @classmethod
+    def check_translation(cls, value):
+        if value is None:
+            return value
+        if type(value) is str:
+            if value != AUTOMATIC_FLAG:
+                raise ValueError(f'Translation must be "{AUTOMATIC_FLAG}" or a list of 3 numbers, got "{value}".')
+            return value
+        if len(value) != 3:
+            raise ValueError(f'Translation must be a list of 3 numbers (x y z), got {len(value)}.')
         return value
 
     @field_validator('skip_frames')

@@ -55,7 +55,7 @@ def process_input_files(
     filter_selection: str,
     image: bool,
     fit: bool,
-    translation: list[float],
+    translation: list[float] | str,
     input_chainer: Optional[dict],
     input_skip_frames: Optional[int],
     # Selections
@@ -312,7 +312,7 @@ def process_input_files(
     # Check if parameters have changed
     # Note that for this step the filter parameters is also important
     previous_imaged_parameters = self.cache.retrieve(IMAGED)
-    same_imaged_parameters = previous_imaged_parameters == [image, fit, *translation]
+    same_imaged_parameters = previous_imaged_parameters == [image, fit, translation]
 
     # Image the trajectory if it is required
     # i.e. make the trajectory uniform avoiding atom jumps and making molecules to stay whole
@@ -333,7 +333,7 @@ def process_input_files(
         )
         _commit_incomplete_output(incompleted_imaged_trajectory_file, imaged_trajectory_file)
         # Update the cache
-        self.cache.update(IMAGED, [image, fit, *translation])
+        self.cache.update(IMAGED, [image, fit, translation])
         # Update the provisional strucutre coordinates
         imaged_structure = Structure.from_pdb_file(imaged_structure_file.path)
         imaged_structure_coords = [atom.coords for atom in imaged_structure.atoms]

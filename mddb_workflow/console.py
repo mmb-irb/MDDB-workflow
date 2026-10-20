@@ -197,6 +197,22 @@ class custom (Action):
             setattr(namespace, self.dest, self.const)
 
 
+class translation_action (Action):
+    """Custom argparse action to accept either 'auto' or 3 numbers."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values == [AUTOMATIC_FLAG]:
+            setattr(namespace, self.dest, AUTOMATIC_FLAG)
+            return
+        if len(values) != 3:
+            parser.error(f'argument {option_string}: expected "{AUTOMATIC_FLAG}" or 3 numbers (x y z)')
+        try:
+            translation = [float(value) for value in values]
+        except ValueError:
+            parser.error(f'argument {option_string}: expected "{AUTOMATIC_FLAG}" or 3 numbers (x y z), got {values}')
+        setattr(namespace, self.dest, translation)
+
+
 def main():
     """Parse the arguments and calls the workflow accordingly."""
     # Parse input arguments from the console
@@ -662,7 +678,7 @@ run_parser_workflow_group = run_parser.add_argument_group('WORKFLOW CONTROL OPTI
 run_parser_workflow_args = [
     (['-img', '--image'], {'action': 'store_true', 'help': project_init_help['image']}),
     (['-fit', '--fit'], {'action': 'store_true', 'help': project_init_help['fit']}),
-    (['-trans', '--translation'], {'nargs': '*', 'default': [0, 0, 0], 'help': project_init_help['translation']}),
+    (['-trans', '--translation'], {'nargs': '+', 'action': translation_action, 'metavar': 'auto|X Y Z', 'default': None, 'help': project_init_help['translation']}),
     (['-d', '--download'], {'action': 'store_true', 'help': workflow_help['download']}),
     (['-s', '--setup'], {'action': 'store_true', 'help': workflow_help['setup']}),
     (['-ds', '--dataset_path'], {'default': None, 'help': workflow_help['dataset_path']}),

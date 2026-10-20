@@ -1474,7 +1474,7 @@ class Project:
         forced_class_selections: Optional[dict] = None,
         image: bool = False,
         fit: bool = False,
-        translation: list[float] = [0, 0, 0],
+        translation: Optional[list[float] | str] = None,
         mercy: list[str] | bool = [],
         trust: list[str] | bool = [],
         faith: bool = False,
@@ -1557,9 +1557,11 @@ class Project:
             fit (bool):
                 Set if the trajectory is to be fitted (both rotation and translation) to minimize the RMSD to PROTEIN_AND_NUCLEIC_BACKBONE selection.
                 Value passed through console overrides the one in inputs file.
-            translation (list[float]):
-                Set the x y z translation for the imaging process.
+            translation (list[float]|str):
+                Set the x y z translation (nm) for the imaging process.
+                Use 'auto' to find a translation which keeps non-PBC atoms away from the box boundaries.
                 e.g. -trans 0.5 -1 0
+                Value passed through console overrides the one in inputs file.
             mercy (list[str]|bool):
                 Failures to be tolerated (or boolean to set all/none).
                 Value passed through console overrides the one in inputs file.
@@ -1710,7 +1712,6 @@ class Project:
         self._input_cg_selection = cg_selection
         self._input_dummy_selection = dummy_selection
         self._input_forced_class_selections = forced_class_selections
-        self.translation = translation
         self.pca_analysis_selection = pca_analysis_selection
         self.pca_fit_selection = pca_fit_selection
         self.rmsd_cutoff = rmsd_cutoff
@@ -1754,6 +1755,7 @@ class Project:
         self.filter_selection = filter_selection if filter_selection else self.inputs.get('filter_selection', filter_selection)
         self.image = image if image else self.inputs.get('image', image)
         self.fit = fit if fit else self.inputs.get('fit', fit)
+        self.translation = translation if translation else self.inputs.get('translation', AUTOMATIC_FLAG)
         self.mercy = mercy if mercy else self.inputs.get('mercy', mercy)
         self.trust = trust if trust else self.inputs.get('trust', trust)
         self.faith = faith if faith else self.inputs.get('faith', faith)

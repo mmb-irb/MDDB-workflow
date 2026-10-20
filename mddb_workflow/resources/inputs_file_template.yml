@@ -595,6 +595,18 @@ filter_selection:
 
 image:
 
+# Set the translation (x y z in nm) applied to the trajectory before imaging.
+# The goal is that non-PBC molecules are not split by the box boundaries in the first frame.
+# Use 'auto' to find a translation which places the box boundaries away from non-PBC atoms.
+# This has no effect if the trajectory is not to be imaged.
+# Equivalent to the "-trans" command line argument.
+#
+# Example:
+#
+# translation: [0.5, -1, 0]
+
+translation: auto
+
 # Set if the trajectory is to be fitted (both rotation and translation).
 # The fitting minimizes the RMSD of the protein and nucleic acid backbone.
 # Equivalent to the "-fit" command line argument.
