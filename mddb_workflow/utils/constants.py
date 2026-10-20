@@ -489,7 +489,7 @@ PROTEIN_RESIDUE_NAME_LETTERS = {
     'SERC': 'S',
     'THR': 'T',
     'THRN': 'T',
-    'THRC': 'R',
+    'THRC': 'T',
     'TRP': 'W',
     'TRPN': 'W',
     'TRPC': 'W',
