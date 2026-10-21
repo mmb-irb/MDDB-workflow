@@ -271,6 +271,7 @@ CORRECT_ELEMENTS = 'elements'
 REFERENCE_SEQUENCE_FLAG = 'refseq'
 STABLE_INTERACTIONS_FLAG = 'interact'
 LIGANDS_MATCH_FLAG = 'ligands'
+LIPIDS_MATCH_FLAG = 'lipids'
 CHAINS_ANALYSIS = 'chains'
 FAITH_BYPASS = 'faith'
 LARGE_AMINOACID_FLAG = 'largeaa'
@@ -278,7 +279,7 @@ LARGE_AMINOACID_FLAG = 'largeaa'
 # State all the available checkings, which may be trusted
 AVAILABLE_CHECKINGS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG, TRAJECTORY_INTEGRITY_FLAG, CROSS_PBC_FLAG]
 # State all critical process failures, which are to be lethal for the workflow unless mercy is given
-AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, CHAINS_ANALYSIS, LARGE_AMINOACID_FLAG]
+AVAILABLE_FAILURES = AVAILABLE_CHECKINGS + [CORRECT_ELEMENTS, REFERENCE_SEQUENCE_FLAG, STABLE_INTERACTIONS_FLAG, LIGANDS_MATCH_FLAG, LIPIDS_MATCH_FLAG, CHAINS_ANALYSIS, LARGE_AMINOACID_FLAG]
 
 # Set which tests are to be run when some input files are modified
 STRUCTURE_TESTS = [STABLE_BONDS_FLAG, COHERENT_BONDS_FLAG]
@@ -314,6 +315,7 @@ NICE_NAMES = {
     REFERENCE_SEQUENCE_FLAG: 'Reference sequence match',
     STABLE_INTERACTIONS_FLAG: 'Interactions are stable',
     LIGANDS_MATCH_FLAG: 'Ligands matched residues',
+    LIPIDS_MATCH_FLAG: 'Fatty residues matched to lipids',
     CHAINS_ANALYSIS: 'Chains analysis',
     LARGE_AMINOACID_FLAG: 'Aminoacid number of atoms check',
 }

@@ -147,6 +147,8 @@ class WorkflowInputs(InputsBaseModel):
     # Forced references may be a list of accessions or a per-chain mapping
     forced_references: Optional[Union[list[str], dict[str, str]]] = None
     ligands: Optional[list[Ligand]] = None
+    # Residue names to be treated as lipids although they are not found in lipid databases
+    forced_lipids: Optional[list[str]] = None
 
     # Simulation metadata
     framestep: Optional[float] = None

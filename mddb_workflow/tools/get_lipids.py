@@ -1,7 +1,7 @@
 import requests
 from functools import lru_cache
-from mddb_workflow.utils.auxiliar import warn, retry_request, RequestError, RateLimitError, get_retry_after
-from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION
+from mddb_workflow.utils.auxiliar import warn, retry_request, RequestError, RateLimitError, get_retry_after, InputError
+from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION, LIPIDS_MATCH_FLAG
 from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
@@ -10,6 +10,8 @@ from mddb_workflow.utils.type_hints import *
 def generate_lipid_references(
     inchikeys: dict[str, 'InChIKeyData'],
     cache: 'Cache',
+    input_forced_lipids: Optional[list[str]] = None,
+    mercy: list[str] = [],
     database: Optional['Database'] = None,
 ) -> dict[str, dict]:
     """Add lipid-specific database information to InChIKeyData objects.
@@ -19,16 +21,24 @@ def generate_lipid_references(
     quality checks on lipid classifications. InChI keys already in the MDDB
     database reuse its lipid data instead.
 
+    Residues with names in the forced lipids are treated as lipids although they are not in the databases.
+    Residues classified as fatty which are not in the databases nor forced make the workflow fail,
+    unless the lipids mercy flag is passed.
+
     Args:
         inchikeys: Dictionary mapping InChI keys to InChIKeyData objects (modified in-place).
         cache: Cache to store the MDDB database requests.
+        input_forced_lipids: Residue names to be treated as lipids.
+        mercy: Failures which do not kill the process.
         database: MDDB database handler to reuse existing references.
 
     Returns:
-        set: Set of InChI keys that were identified as lipids.
+        dict: Lipid references by InChI key.
 
     """
     lipid_references = {}
+    forced_lipids = set(input_forced_lipids or [])
+    not_matched_fatty = []
     # Check internet connection only once we need to request the lipid databases
     is_connected = None
 
@@ -36,6 +46,15 @@ def generate_lipid_references(
         clasi = mol_data.classification
         if len(clasi) == 1 and 'ion' in clasi:
             # Skip ions
+            continue
+        # Residues forced by the user are lipids with no database references
+        if set(mol_data.resnames) & forced_lipids:
+            lipid_references[inchikey] = {
+                'swisslipids': None,
+                'lipidmaps': None,
+                'forced': True,
+                'version': LIPID_REFERENCE_VERSION
+            }
             continue
         # Check if the lipid data is already in the MDDB database
         database_reference = get_database_inchikey_reference(inchikey, cache, database)
@@ -75,6 +94,13 @@ def generate_lipid_references(
                 warn(f'The InChIKey {inchikey} of {mol_data.molname} is '
                      f'classified as fatty but is not a lipid.\n'
                      f'Resindices: {str(mol_data.resindices)}')
+                not_matched_fatty.append((mol_data.molname, inchikey, mol_data.resindices))
+
+    if not_matched_fatty and LIPIDS_MATCH_FLAG not in mercy:
+        raise InputError('Some residues are classified as fatty but they are not found in SwissLipids or LIPID MAPS:\n\t'
+            + '\n\t'.join(f'{name} - {key} (residues {resindices})' for name, key, resindices in not_matched_fatty)
+            + '\n\tAdd their residue names to the "forced_lipids" input field to treat them as lipids'
+            + f' or use the flag "-m {LIPIDS_MATCH_FLAG}" to bypass this check.')
 
     return lipid_references
 
