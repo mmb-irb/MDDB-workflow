@@ -44,9 +44,10 @@ class TestMembraneMapping:
     - cg_test: coarse-grained system
     - cg_test_04: coarse-grained system with changing membranes
     - A01J7: united atoms
+    - A05SA: LNP-endosome fusion stalk, leaflets merge at the default LeafletFinder cutoff in the first frame
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A01J7'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A01J7', 'A05SA'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -83,7 +84,9 @@ class TestMembraneMapping:
             output_file
         )
         assert membrane_map['n_mems'] == 1
-        top_size = len(membrane_map['mems']['0']['leaflets']['top'])
-        bot_size = len(membrane_map['mems']['0']['leaflets']['bot'])
-        # Check the leaflets have similar size with 5% tolerance
-        assert abs(top_size - bot_size) / max(top_size, bot_size) < 0.20
+        # Compare number of lipids (one polar atom per lipid) instead of number of atoms
+        top_size = len(membrane_map['mems']['0']['polar_atoms']['top'])
+        bot_size = len(membrane_map['mems']['0']['polar_atoms']['bot'])
+        # Check the leaflets have similar size, the fusion stalk in A05SA makes its leaflets asymmetric
+        tolerance = 0.30 if test_accession == 'A05SA' else 0.20
+        assert abs(top_size - bot_size) / max(top_size, bot_size) < tolerance
