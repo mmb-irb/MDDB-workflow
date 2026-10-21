@@ -34,7 +34,7 @@ dependencies:
   # mordred compatible with new numpy versions
   - mordredcommunity 
   # Membrane proteins analysis
-  - bioconda::biobb_mem >=5.2.0
+  - bioconda::biobb_mem >=5.3.1
   - bioconda::chap_mddb
   # - bioconda::chap
   - requests # To check is molecules is in LIPID MAPS
