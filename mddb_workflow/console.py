@@ -339,8 +339,7 @@ def main():
     # In case the view tool was called
     elif subcommand == 'view':
         view_project(
-            structure_filepath=args.structure,
-            trajectory_filepath=args.trajectory,
+            input_filepaths=args.input_files,
             start=args.start,
             end=args.end,
             step=args.step,
@@ -870,8 +869,8 @@ view_parser = subparsers.add_parser("view",
     formatter_class=CustomHelpFormatter,
     parents=[common_parser])
 view_parser_args = [
-    (["structure"], {'nargs': '?', 'default': None, 'help': "Path to the structure file. The most processed structure in the project by default"}),
-    (["trajectory"], {'nargs': '?', 'default': None, 'help': "Path to the trajectory file. If the structure is passed alone then no trajectory is loaded"}),
+    (["input_files"], {'nargs': '*', 'metavar': 'FILE', 'help': "Paths to the structure and the trajectory files, in any order. " +
+        "The most processed structure and trajectory in the project by default. If the structure is passed alone then no trajectory is loaded"}),
 ]
 # Frame and selection options are shared with the dataset view command
 view_shared_args = [

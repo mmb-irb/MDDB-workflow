@@ -173,10 +173,38 @@ def get_project(directory: str) -> Project:
     return Project(directory=directory, input_md_directories=md_directories)
 
 
+def sort_input_files(input_filepaths: list[str]) -> tuple[File | None, File | None]:
+    """Find out which input file is the structure and which is the trajectory from their formats.
+
+    A single file is always the structure.
+    If both files could be either the structure or the trajectory (e.g. two pdb files) then the input order is kept.
+    """
+    if len(input_filepaths) > 2:
+        raise InputError(f'Up to 2 input files are expected (structure and trajectory) but {len(input_filepaths)} were passed')
+    input_files = [File(filepath) for filepath in input_filepaths]
+    for input_file in input_files:
+        if not input_file.exists:
+            raise InputError(f'File {input_file.path} does not exist')
+    if len(input_files) == 0: return None, None
+    supported_structure_formats = set(VMD_STRUCTURE_FORMATS) | CONVERTIBLE_TOPOLOGY_FORMATS
+    if len(input_files) == 1:
+        structure_file = input_files[0]
+        if structure_file.format not in supported_structure_formats and structure_file.format in vmd_supported_trajectory_formats:
+            raise InputError(f'{structure_file.path} is a trajectory. Pass also a structure, e.g. mwf view structure.pdb {structure_file.path}')
+        return structure_file, None
+    first_file, second_file = input_files
+    def is_valid(structure_file: File, trajectory_file: File) -> bool:
+        return structure_file.format in supported_structure_formats and trajectory_file.format in vmd_supported_trajectory_formats
+    if is_valid(first_file, second_file): return first_file, second_file
+    if is_valid(second_file, first_file): return second_file, first_file
+    raise InputError(f'Could not find out which file is the structure and which is the trajectory: {first_file.path}, {second_file.path}\n'
+        f'  Supported structure formats: {", ".join(sorted(supported_structure_formats))}\n'
+        f'  Supported trajectory formats: {", ".join(sorted(vmd_supported_trajectory_formats))}')
+
+
 def view_project(
     directory: str = '.',
-    structure_filepath: str | None = None,
-    trajectory_filepath: str | None = None,
+    input_filepaths: list[str] = [],
     start: int | None = None,
     end: int | None = None,
     step: int | None = None,
@@ -185,18 +213,15 @@ def view_project(
 ):
     """Open VMD with a structure and some frames of a trajectory.
 
-    If no structure is passed then the most processed structure and trajectory in the project directory are used.
+    Input files are the structure and the trajectory, in any order.
+    If no file is passed then the most processed structure and trajectory in the project directory are used.
     If only the structure is passed then it is loaded alone.
     If no frames are specified then the first 10 frames are loaded.
     If only some of start/end/step are specified then the end is the last frame.
     The end frame is not included, as in the subset command.
     If a selection is passed then the view is focused on it and it is also shown in CPK.
     """
-    structure_file = File(structure_filepath) if structure_filepath else None
-    trajectory_file = File(trajectory_filepath) if trajectory_filepath else None
-    for passed_file in [structure_file, trajectory_file]:
-        if passed_file and not passed_file.exists:
-            raise InputError(f'File {passed_file.path} does not exist')
+    structure_file, trajectory_file = sort_input_files(input_filepaths)
     # If only the structure is passed then it is loaded alone
     if not structure_file:
         project = get_project(directory)
