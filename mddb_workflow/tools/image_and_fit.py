@@ -13,6 +13,8 @@ from mddb_workflow.utils.auxiliar import MISSING_TOPOLOGY, InputError, warn
 from mddb_workflow.utils.constants import AUTOMATIC_FLAG
 from mddb_workflow.utils.gmx_spells import run_gromacs
 from mddb_workflow.utils.mdt_spells import rotate_boxes, iterate_xtc_frames
+from mddb_workflow.utils.mdt_spells import read_xtc_sample_frames, is_box_rotated
+from mddb_workflow.utils.mdt_spells import guess_translation_fitted, guess_rotation_fitted
 from mddb_workflow.analyses.mindist import find_frame_cross_contacts
 from mddb_workflow.utils.type_hints import *
 
@@ -109,6 +111,9 @@ def image_and_fit(
     center_selection = structure.invert_selection(pbc_selection)
     if not center_selection:
         warn(f'The default selection to center and fit (non PBC) is empty. These steps will be skipped.')
+    # Warn the user if the trajectory was already fitted, since it may be a problem for the imaging
+    if center_selection:
+        warn_broken_pbc(input_trajectory_file, structure, center_selection)
     # Convert both selections to a single ndx file which gromacs can read
     with open(INDEX_FILEPATH, 'w') as file:
         system_selection_ndx = system_selection.to_ndx(SYSTEM_SELECTION_NAME)
@@ -256,6 +261,30 @@ def image_and_fit(
     # Clean up the index file
     # if exists(INDEX_FILEPATH):
     #     remove(INDEX_FILEPATH)
+
+
+def warn_broken_pbc(trajectory_file: 'File', structure: 'Structure', selection: 'Selection'):
+    """Warn the user if the trajectory seems to be fitted already in rotation and periodic boundary conditions are thus broken.
+    Periodic boundary conditions are kept only if boxes were rotated along with the coordinates.
+    Note that some tools (e.g. Gromacs) do not rotate boxes when fitting.
+    Note that a translation (e.g. centering) does not break periodic boundary conditions.
+    Only a few frames are checked so this is just a guess.
+    """
+    frames = read_xtc_sample_frames(trajectory_file)
+    selected_atom_indices = set(selection.atom_indices)
+    residue_atom_indices = [ [ index for index in residue.atom_indices if index in selected_atom_indices ] for residue in structure.residues ]
+    residue_atom_indices = [ atom_indices for atom_indices in residue_atom_indices if atom_indices ]
+    translation_fitted = guess_translation_fitted(frames, selection.atom_indices)
+    rotation_fitted = guess_rotation_fitted(frames, residue_atom_indices)
+    print(f' The trajectory seems to be fitted in translation: {translation_fitted} | in rotation: {rotation_fitted}')
+    if not rotation_fitted: return
+    boxes = [ box for _, box in frames ]
+    if not all(box is not None and box.any() for box in boxes):
+        warn('The trajectory seems to be fitted already, but it has no box.\n'
+            ' Periodic boundary conditions are probably broken, so the imaging will probably fail.')
+    elif not any(is_box_rotated(box) for box in boxes):
+        warn('The trajectory seems to be fitted already, but its box is not rotated accordingly.\n'
+            ' Periodic boundary conditions are probably broken, so the imaging will probably fail.')
 
 
 def reset_structure(

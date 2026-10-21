@@ -461,6 +461,109 @@ def iterate_xtc_frames(xtc_filename : str):
             yield xyz[0], box[0]
 
 
+# Maximum value (nm) of box vector components which must be zero in a not rotated box
+# Note that the xtc precision is 0.001 nm
+ROTATED_BOX_TOLERANCE = 0.001
+
+
+def is_box_rotated(box_vectors: np.ndarray) -> bool:
+    """Check if a box is rotated, i.e. the first vector is not along the x axis or the second vector is not in the xy plane.
+    Most tools (e.g. Gromacs, MDtraj, VMD) expect boxes not rotated.
+    Note that boxes are rotated when the trajectory is fitted (see rotate_boxes).
+    """
+    return bool(np.abs(box_vectors[[0, 0, 1], [1, 2, 2]]).max() > ROTATED_BOX_TOLERANCE)
+
+
+# Thresholds to guess if a trajectory is fitted
+# These thresholds were set by looking at 40 fitted trajectories in the database, a few unfitted trajectories
+# and fitted trajectories which were rotated and translated on purpose
+# Maximum translation (nm) of the center of the selected atoms
+FITTED_MAX_TRANSLATION = 0.5
+# Maximum fraction of the RMSD between centered coordinates which is removed by rotating them
+# Note that a fitted trajectory still has some gain since its conformation changes
+FITTED_MAX_ROTATION_GAIN = 0.1
+# Fraction of residues which move the least, without any alignment, to be considered the region the trajectory was fitted to
+# Some trajectories are fitted to a part of the system only, so the rest of the system may rotate a bit
+FITTED_REGION_FRACTION = 0.1
+# Minimum width (nm) of the region, since the rotation of a small region is not reliable
+FITTED_REGION_MIN_WIDTH = 1
+# Maximum rotation (degrees) of the region
+FITTED_REGION_MAX_ROTATION = 2
+
+
+def read_xtc_sample_frames(trajectory_file: 'File') -> list[tuple[np.ndarray, Optional[np.ndarray]]]:
+    """Read the coordinates and the box of the first, middle and last frames of a xtc trajectory.
+    The box is None if the trajectory has no box.
+    """
+    if trajectory_file.format != 'xtc':
+        raise ValueError(f'Reading sample frames is only supported for xtc trajectories: {trajectory_file.path}')
+    frames = []
+    with mdt.formats.XTCTrajectoryFile(trajectory_file.path) as reader:
+        frames_count = len(reader)
+        for frame in sorted(set([0, frames_count // 2, frames_count - 1])):
+            reader.seek(frame)
+            xyz, _, _, box = reader.read(n_frames=1)
+            frames.append((xyz[0].astype(np.float64), None if box is None else box[0].astype(np.float64)))
+    return frames
+
+
+def guess_translation_fitted(frames: list[tuple[np.ndarray, Optional[np.ndarray]]], atom_indices: list[int]) -> bool:
+    """Guess if a trajectory is fitted (or centered) in translation, i.e. the center of the selected atoms barely moves.
+    The first frame is compared with the rest of frames.
+    """
+    if len(frames) < 3: return False
+    reference = frames[0][0][atom_indices]
+    for coordinates, _ in frames[1:]:
+        translation = np.linalg.norm(coordinates[atom_indices].mean(axis=0) - reference.mean(axis=0))
+        if translation > FITTED_MAX_TRANSLATION: return False
+    return True
+
+
+def guess_rotation_fitted(frames: list[tuple[np.ndarray, Optional[np.ndarray]]], residue_atom_indices: list[list[int]]) -> bool:
+    """Guess if a trajectory is fitted in rotation.
+    The first frame is compared with the rest of frames, ignoring the translation.
+
+    A trajectory is fitted in rotation if rotating the selected atoms barely improves their RMSD.
+    Note that the angle of the rotation is not reliable when the conformation changes a lot (e.g. flexible molecules).
+
+    A trajectory is also fitted in rotation if the region which moves the least is wide and it barely rotates.
+    This is for trajectories which are fitted to a part of the system only (e.g. the base of a spike).
+    """
+    if len(frames) < 3: return False
+    atom_indices = [ index for residue_indices in residue_atom_indices for index in residue_indices ]
+    reference = frames[0][0]
+    if all(get_rotation_gain(reference[atom_indices], coordinates[atom_indices]) < FITTED_MAX_ROTATION_GAIN
+        for coordinates, _ in frames[1:]): return True
+    # Find the region which moves the least
+    if len(residue_atom_indices) < 3: return False
+    def get_residue_centers(coordinates: np.ndarray) -> np.ndarray:
+        return np.array([ coordinates[residue_indices].mean(axis=0) for residue_indices in residue_atom_indices ])
+    reference_centers = get_residue_centers(reference)
+    displacements = np.max([ np.linalg.norm(get_residue_centers(coordinates) - reference_centers, axis=1)
+        for coordinates, _ in frames[1:] ], axis=0)
+    region_residues_count = max(3, int(len(residue_atom_indices) * FITTED_REGION_FRACTION))
+    region_residues = np.argsort(displacements)[:region_residues_count]
+    region = np.concatenate([ residue_atom_indices[residue] for residue in region_residues ])
+    # The width of the region is its spread along its second principal axis, so a line has no width
+    centered_region = reference[region] - reference[region].mean(axis=0)
+    spreads = np.sqrt(np.clip(np.linalg.eigvalsh(centered_region.T @ centered_region / len(region)), 0, None))
+    if spreads[1] < FITTED_REGION_MIN_WIDTH: return False
+    for coordinates, _ in frames[1:]:
+        rotation, _ = find_rotation(reference[region], coordinates[region])
+        angle = np.degrees(np.arccos(np.clip((np.trace(rotation) - 1) / 2, -1, 1)))
+        if angle > FITTED_REGION_MAX_ROTATION: return False
+    return True
+
+
+def get_rotation_gain(reference: np.ndarray, coordinates: np.ndarray) -> float:
+    """Get the fraction of the RMSD between centered coordinates which is removed by rotating them."""
+    centered_rmsd = np.sqrt((((coordinates - coordinates.mean(axis=0)) - (reference - reference.mean(axis=0))) ** 2).sum(axis=1).mean())
+    # Identical coordinates are not rotated
+    if centered_rmsd == 0: return 0
+    _, rotated_rmsd = find_rotation(coordinates, reference)
+    return 1 - rotated_rmsd / centered_rmsd
+
+
 # Maximum RMSD (nm) between fitted coordinates and original coordinates once rotated
 # Since the fit is a rigid transformation this should be only the xtc precision noise
 MAX_ROTATION_RESIDUAL = 0.02
