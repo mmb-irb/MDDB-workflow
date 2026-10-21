@@ -569,7 +569,11 @@ FATTY_RESIDUE_NAMES = {
     "DPPC", "DPPE", "DPPG", "DEPC", "DRPC", "DYPC", "DLPC", "DLIPC", "DOG", "DOPC",
     "DOPE", "DDOPC", "DOPS", "DSPC", "DAPC", "DMTAP", "SDG", "SDPE", "SOPC", "POPI",
     "SAPI", "SAPI24", "SAPI25", "SLPI", "CER", "CER180", "DHMDMAB", "SLiPC", "SM16",
-    "SM18", "TOCL", "TLCL_0H", "TMCL", "GM1", "DPPGK", "GB3", "BOG"
+    "SM18", "TOCL", "TLCL_0H", "TMCL", "GM1", "DPPGK", "GB3", "BOG",
+    # Martini 3 lipids of the LNP-endosome systems
+    "SAPC", "SDPC", "PLPC", "PLPE", "PDPE", "SAPE", "SDPI", "XSM", "OSM",
+    # Ionizable lipid DLin-MC3-DMA, neutral and protonated
+    "MC3", "MC3H"
 }
 STEROID_RESIDUE_NAMES = {"CHL", "CHL1", "CHOL", "DCHOL"}
 LIPIDS_RESIDUE_NAMES = FATTY_RESIDUE_NAMES.union(STEROID_RESIDUE_NAMES)

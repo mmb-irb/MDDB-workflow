@@ -1,8 +1,9 @@
 import numpy as np
 from collections import Counter
 from MDAnalysis.analysis.leaflet import LeafletFinder
+from MDAnalysis.lib.distances import capped_distance
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
-from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
+from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, STEROID_RESIDUE_NAMES
 from mddb_workflow.utils.type_hints import *
 
 MEMBRANE_MAPPING_VERSION = '0.3.0'
@@ -10,6 +11,8 @@ MEMBRANE_MAPPING_VERSION = '0.3.0'
 BILAYER = 'bilayer'
 VESICLE = 'vesicle'
 MICELLE = 'micelle'
+# Leaflet of vesicles for lipids between the outer and the inner leaflets
+MIDPLANE = 'midplane'
 # Minimum number of lipids in a leaflet, 24 lipids like in FATSLiM
 MIN_LEAFLET_LIPIDS = 24
 # A leaflet is flat when sqrt(smallest / largest eigenvalue) of its polar atom positions is below this
@@ -24,6 +27,10 @@ PARALLEL_NORMALS = 0.9
 MAX_BILAYER_SEPARATION = 80
 # Maximum distance between the centers of vesicle leaflets, as a fraction of the inner leaflet radius
 VESICLE_CENTER_TOLERANCE = 0.5
+# Lipids with atoms closer than this distance (Å) are in contact
+CONTACT_DISTANCE = 8
+# An unassigned lipid joins the leaflet it touches if it has this many times the contacts with the next leaflet
+CONTACT_DOMINANCE = 2
 
 
 def generate_membrane_mapping(
@@ -32,6 +39,7 @@ def generate_membrane_mapping(
     universe: 'Universe',
     cg_residues: list[int],
     output_file: 'File',
+    input_forced_lipids: Optional[list[str]] = None,
 ) -> dict:
     """Generate a list of residue numbers of membrane components from a given structure and topology file.
 
@@ -42,6 +50,8 @@ def generate_membrane_mapping(
         universe: MDAnalysis Universe object containing the structure and topology.
         cg_residues: List of residue indices for coarse-grained residues.
         output_file: Output JSON file to save membrane mapping.
+        input_forced_lipids: Residue names to be treated as lipids in coarse grained systems,
+            in addition to the known ones (all atom forced lipids are already in the lipid references).
 
     Returns:
         dict: A dictionary containing the membrane mapping.
@@ -49,7 +59,7 @@ def generate_membrane_mapping(
             - mems (dict): Dictionary where each key is a membrane index (str) and value contains:
               - type (str): Aggregate type: 'bilayer' (flat), 'vesicle' or 'micelle'.
               - leaflets (dict): Atom indices of each leaflet. Leaflet names are 'top' and 'bot' for bilayers,
-                'outer' and 'inner' for vesicles and 'outer' for micelles.
+                'outer', 'inner' and 'midplane' (lipids between both) for vesicles and 'outer' for micelles.
               - polar_atoms (dict): Polar atom indices (one per lipid) of each leaflet, with the same names.
             - no_mem_lipid (list): List of atom indices for lipids not assigned to any membrane.
             - version (str): Version of the membrane mapping format.
@@ -65,7 +75,7 @@ def generate_membrane_mapping(
     if not universe: raise RuntimeError('Missing universe')
     # Select only the lipids from the InChIKeyData
     if len(cg_residues) > 0:
-        headgroup_ag = coarse_grain_headgroups(universe)
+        headgroup_ag = coarse_grain_headgroups(universe, input_forced_lipids)
         membrane_map = find_leaflets(universe, headgroup_ag)
     else:
         lipid_map = {key: inchikeys[key] for key in lipid_references.keys()}
@@ -156,11 +166,11 @@ def guess_polar_atom(residue: 'Residue') -> int | None:
     return None
 
 
-def coarse_grain_headgroups(universe: 'Universe') -> dict:
+def coarse_grain_headgroups(universe: 'Universe', forced_lipids: Optional[list[str]] = None) -> dict:
     """Generate membrane mapping for coarse-grained systems using MDAnalysis LeafletFinder with P atoms as headgroups."""
     # Find all lipid residues in the system
     lipid_atoms = headgroup_ag = universe.atoms[[]]
-    for resname in LIPIDS_RESIDUE_NAMES:
+    for resname in set(LIPIDS_RESIDUE_NAMES) | set(forced_lipids or []):
         lipid = universe.select_atoms(f'resname {resname}')
         if len(lipid) > 0:
             lipid_atoms += lipid.atoms
@@ -169,8 +179,13 @@ def coarse_grain_headgroups(universe: 'Universe') -> dict:
         print("No coarse-grained lipid atoms found in the structure.")
         return None
     print(f"Found {len(lipid_atoms.residues)} lipid residues by name.")
-    # Use P atoms as headgroups for LeafletFinder
-    headgroup_ag = lipid_atoms.select_atoms('name P*')
+    # Use the phosphate bead as headgroup or, if there is not a single one (e.g. cholesterol), the first bead
+    # Martini lipid beads are ordered from the head to the tails
+    headgroup_indices = []
+    for residue in lipid_atoms.residues:
+        phosphates = residue.atoms.select_atoms('name P*')
+        headgroup_indices.append(phosphates[0].index if len(phosphates) == 1 else residue.atoms[0].index)
+    headgroup_ag = universe.atoms[headgroup_indices]
     return headgroup_ag
 
 
@@ -213,6 +228,8 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
     the leaflet normal when it is flat or on the radial direction from the leaflet center otherwise.
     Lipids in a real leaflet are oriented in the same direction, while a group with many lipids
     oriented in both directions is likely two leaflets merged by LeafletFinder.
+    Sterols are ignored for the orientation since they are short and they may be not oriented
+    (e.g. cholesterol in the core of lipid nanoparticles), unless there are only sterols.
     """
     positions = leaflet.positions
     center = pbc_center(positions, box)
@@ -230,6 +247,8 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
     tails /= np.maximum(np.linalg.norm(tails, axis=1), 1e-6)[:, None]
     reference = normal if flat else relative / np.maximum(radii, 1e-6)[:, None]
     cosines = (tails * reference).sum(axis=1)
+    not_sterols = ~np.isin(leaflet.resnames, list(STEROID_RESIDUE_NAMES))
+    if np.any(not_sterols): cosines = cosines[not_sterols]
     positive = np.mean(cosines > STRONG_ORIENTATION)
     negative = np.mean(cosines < -STRONG_ORIENTATION)
     return {
@@ -267,7 +286,8 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
         if len(candidates) == 0: continue
         inner = min(candidates, key=lambda desc: np.linalg.norm(minimum_image(desc['centroid'] - outer['centroid'], box)))
         used.update([id(outer), id(inner)])
-        aggregates.append((VESICLE, {'outer': outer['group'], 'inner': inner['group']}))
+        empty = outer['group'].universe.atoms[[]]
+        aggregates.append((VESICLE, {'outer': outer['group'], 'inner': inner['group'], MIDPLANE: empty}))
 
     flats = [desc for desc in coherent if desc['flat']]
     for first in flats:
@@ -304,8 +324,8 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     """Find leaflets using MDAnalysis LeafletFinder and classify them into amphiphilic aggregates.
 
     When some leaflets can not be classified (e.g. two leaflets too close at a fusion stalk are
-    merged by LeafletFinder) it is retried with the next smaller cutoff. The first cutoff where all
-    leaflets are classified is used or, if none, the one classifying the most lipids.
+    merged by LeafletFinder) only their lipids are retried with the next smaller cutoff,
+    so aggregates already classified with a larger cutoff are kept.
     """
     membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': MEMBRANE_MAPPING_VERSION}
     if not headgroup_ag:
@@ -314,21 +334,24 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     box = universe.dimensions[:3].copy() if universe.dimensions is not None else None
     if box is not None and not np.all(box > 0): box = None
     print(' Running MDAnalysis LeafletFinder')
-    best = None
-    for cutoff in cutoffs:
-        if best is not None:
-            print(f' {len(best[2])} leaflets could not be classified, retrying LeafletFinder with a {cutoff} Å cutoff')
-        leaflets, no_mem_lipids = split_leaflet_groups(universe, headgroup_ag, cutoff)
-        aggregates, unclassified = classify_leaflets(leaflets, box)
-        n_classified = sum(len(group) for _, groups in aggregates for group in groups.values())
-        if best is None or n_classified > best[3]:
-            best = (aggregates, no_mem_lipids, unclassified, n_classified)
+    aggregates = []
+    no_mem_lipids = []
+    pending_headgroups = headgroup_ag
+    for i, cutoff in enumerate(cutoffs):
+        if i > 0:
+            print(f' {len(unclassified)} leaflets could not be classified, retrying their lipids with a {cutoff} Å cutoff')
+        leaflets, small_group_lipids = split_leaflet_groups(universe, pending_headgroups, cutoff)
+        no_mem_lipids.extend(small_group_lipids)
+        found_aggregates, unclassified = classify_leaflets(leaflets, box)
+        aggregates.extend(found_aggregates)
         if len(unclassified) == 0: break
-    aggregates, no_mem_lipids, unclassified, _ = best
+        pending_headgroups = sum(unclassified[1:], unclassified[0])
+    dimensions = universe.dimensions if box is not None else None
     if len(unclassified) > 0:
         warn(f"Could not classify {len(unclassified)} leaflet(s) with {', '.join(str(len(group)) for group in unclassified)} lipids, they will be unassigned")
         for group in unclassified:
             no_mem_lipids.extend(group.residues.resindices)
+    no_mem_lipids = assign_lipids_by_contact(aggregates, no_mem_lipids, headgroup_ag, dimensions)
     membrane_map['n_mems'] = len(aggregates)
 
     for i, (aggregate_type, groups) in enumerate(aggregates):
@@ -348,6 +371,66 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     membrane_map['no_mem_lipid'] = no_mem_lipids
 
     return membrane_map
+
+
+def assign_lipids_by_contact(aggregates: list[tuple[str, dict]], lipid_resindices: list[int],
+        headgroup_ag: 'AtomGroup', dimensions: np.ndarray | None) -> list[int]:
+    """Add unassigned lipids to the leaflet they are in contact with.
+
+    Lipids out of LeafletFinder groups (e.g. sterols in the core of lipid nanoparticles) are added to a leaflet
+    when they have clearly more atom contacts with it than with any other leaflet. It is repeated until no more
+    lipids are added, so lipids only touching other added lipids (e.g. sterol clusters) are also added.
+    Lipids in contact with both leaflets of a vesicle alike (e.g. cholesterol between leaflets) are added to its
+    midplane leaflet. Lipids in contact with several leaflets of different aggregates or with none remain unassigned.
+    Leaflet groups are updated in place and the residue indices of lipids which remain unassigned are returned.
+    """
+    if len(aggregates) == 0 or len(lipid_resindices) == 0: return lipid_resindices
+    universe = headgroup_ag.universe
+    polar_atom_by_resindex = {atom.resindex: atom.index for atom in headgroup_ag}
+    remaining = [resindex for resindex in lipid_resindices if resindex in polar_atom_by_resindex]
+    leaflets = [(groups, name) for _, groups in aggregates for name in groups]
+    while len(remaining) > 0:
+        owners = np.full(len(universe.atoms), -1)
+        for leaflet_index, (groups, name) in enumerate(leaflets):
+            owners[groups[name].residues.atoms.indices] = leaflet_index
+        leaflet_atoms = universe.atoms[np.where(owners >= 0)[0]]
+        unassigned_atoms = universe.residues[remaining].atoms
+        pairs = capped_distance(unassigned_atoms.positions, leaflet_atoms.positions, CONTACT_DISTANCE,
+            box=dimensions, return_distances=False)
+        # Count atom contacts of every unassigned lipid with every leaflet
+        contacts = {}
+        for unassigned_index, leaflet_atom_index in pairs:
+            resindex = unassigned_atoms[unassigned_index].resindex
+            leaflet_index = owners[leaflet_atoms[leaflet_atom_index].index]
+            counts = contacts.setdefault(resindex, {})
+            counts[leaflet_index] = counts.get(leaflet_index, 0) + 1
+        # Polar atoms to add to each leaflet, as (leaflet groups, leaflet name) -> polar atom indices
+        additions = {}
+        still_remaining = []
+        for resindex in remaining:
+            ranking = sorted(contacts.get(resindex, {}).items(), key=lambda item: -item[1])
+            if len(ranking) == 0:
+                still_remaining.append(resindex)
+                continue
+            groups, name = leaflets[ranking[0][0]]
+            dominant = len(ranking) == 1 or ranking[0][1] >= CONTACT_DOMINANCE * ranking[1][1]
+            if not dominant:
+                # Lipids touching two leaflets of the same vesicle alike are in its midplane
+                second_groups, _ = leaflets[ranking[1][0]]
+                if second_groups is not groups or MIDPLANE not in groups:
+                    still_remaining.append(resindex)
+                    continue
+                name = MIDPLANE
+            additions.setdefault((id(groups), name), (groups, name, []))[2].append(polar_atom_by_resindex[resindex])
+        if len(additions) == 0: break
+        for groups, name, polar_atoms in additions.values():
+            merged = groups[name] + universe.atoms[polar_atoms]
+            groups[name] = merged[np.argsort(merged.indices)]
+        remaining = still_remaining
+    n_assigned = len(lipid_resindices) - len(remaining)
+    if n_assigned > 0:
+        print(f' Assigned {n_assigned} unassigned lipids to the leaflets they are in contact with')
+    return remaining + [resindex for resindex in lipid_resindices if resindex not in polar_atom_by_resindex]
 
 
 def get_bilayers(membrane_map: dict | None) -> list[dict]:
