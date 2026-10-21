@@ -110,7 +110,7 @@ def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
     cg_selection: 'Selection',
-    parallel: bool = False,
+    parallel: bool = True,
 ) -> dict[str, InChIKeyData]:
     """Generate a dictionary mapping InChI keys to residue information for non-standard residues.
 
@@ -124,7 +124,7 @@ def generate_inchikeys(
         universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
         cg_selection (Selection): Selection object for coarse-grained regions.
-        parallel (bool): Whether to use multiprocessing (default False). Set to True for parallel processing (higher memory).
+        parallel (bool): Whether to use multiprocessing (default True). Uses more memory, set to False to process residues serially.
 
     Returns:
         dict: A dictionary mapping InChI keys to InChIKeyData objects.
