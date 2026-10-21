@@ -1,7 +1,7 @@
 from mddb_workflow.mwf import Project, MD, input_files
 from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping, find_leaflets, BILAYER, VESICLE, MICELLE
 from mddb_workflow.utils.auxiliar import save_json
-from mddb_workflow.utils.mda_spells import get_mda_universe
+from mddb_workflow.utils.mda_spells import get_mda_universe, get_mda_universe_from_stopology
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 import MDAnalysis as mda
@@ -27,6 +27,10 @@ def generate_test_caches(cache_str: str, test_file: str, keep_refbonds: list = F
     save_json(cache.data, test_file, indent=None, separators=(',', ': '))
 
 
+# Expected aggregate type for the test accessions which are not flat bilayers
+EXPECTED_TYPES = {'A05SA': VESICLE, 'A05RV': MICELLE, 'A05Q3': VESICLE}
+
+
 def download_project(project: 'Project'):
     """Download the project files."""
     input_files['itopology'](project)
@@ -46,9 +50,11 @@ class TestMembraneMapping:
     - cg_test_04: coarse-grained system with changing membranes
     - A01J7: united atoms
     - A05SA: LNP-endosome fusion stalk vesicle, leaflets merge at the default LeafletFinder cutoff in the first frame
+    - A05RV: empty lipid nanoparticle micelle, no topology/charges
+    - A05Q3: LNP-endosome fusion stalk vesicle, no topology/charges
 
     """
-    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A01J7', 'A05SA'])
+    @pytest.fixture(scope='class', params=['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'cg_test', 'A01J7', 'A05SA', 'A05RV', 'A05Q3'])
     def test_accession(self, request):
         """Fixture to provide different test accessions."""
         return request.param
@@ -70,8 +76,11 @@ class TestMembraneMapping:
         structure_file = project.mds[0].input_structure_file
         if top.endswith('.top'):
             universe = mda.Universe(top, trajectory_file.absolute_path, topology_format='ITP')
-        elif top.endswith('.json'):
+        elif top.endswith('.json') and 'refbonds_task_output' in cache.data:
             universe = get_mda_universe(structure_file, trajectory_file, cache.data['refbonds_task_output'], charges=None)
+        elif top.endswith('.json'):
+            # Bonds are read from the standard topology, too big to be cached for large systems
+            universe = get_mda_universe_from_stopology(top, trajectory_file.absolute_path)
         else:
             universe = mda.Universe(top, trajectory_file.absolute_path)
         cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession in ['cg_test', 'A01J7'] else []
@@ -86,12 +95,15 @@ class TestMembraneMapping:
         )
         assert membrane_map['n_mems'] == 1
         membrane = membrane_map['mems']['0']
-        assert membrane['type'] == (VESICLE if test_accession == 'A05SA' else BILAYER)
+        assert membrane['type'] == EXPECTED_TYPES.get(test_accession, BILAYER)
         # Compare number of lipids (one polar atom per lipid) instead of number of atoms
         sizes = [len(polar_atoms) for polar_atoms in membrane['polar_atoms'].values()]
+        if membrane['type'] == MICELLE:
+            assert len(sizes) == 1
+            return
         assert len(sizes) == 2
-        # Check the leaflets have similar size, the fusion stalk in A05SA makes its leaflets asymmetric
-        tolerance = 0.30 if test_accession == 'A05SA' else 0.20
+        # Check the leaflets have similar size, the fusion stalk vesicles have asymmetric leaflets
+        tolerance = 0.30 if membrane['type'] == VESICLE else 0.20
         assert abs(sizes[0] - sizes[1]) / max(sizes) < tolerance
 
 
