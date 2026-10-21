@@ -1,4 +1,5 @@
 import numpy as np
+from collections import Counter
 from MDAnalysis.analysis.leaflet import LeafletFinder
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
@@ -58,7 +59,7 @@ def all_atom_headgroups(
     universe: 'Universe',
 ) -> dict:
     """Extract the headgroup atoms for all lipids in the system using the most charged atom.
-    In case of missing charges, it will try to guess the headgroup based on the residue name.
+    In case of missing charges, it will try to guess the headgroup from the atom elements and bonds.
     """
     if len(lipid_map) == 0:
         # no lipids found in the structure.
@@ -77,23 +78,17 @@ def all_atom_headgroups(
 
     # For better leaflet assignation we only use polar atoms
     if not hasattr(universe.atoms, 'charges'):
-        warn("Atom charges not found, guessing headgroups by name.")
+        warn("Atom charges not found, guessing headgroups by element.")
         polar_atoms = []
+        skipped = Counter()
         for residue in all_lipids.residues:
-            if residue.resname in ['CHL', 'CHL1']:
-                polar_atoms.append(residue.atoms.select_atoms('name O*').indices[0])
-            else:
-                # '(resname CHL and element O*) or (resname PA and name P*)'
-                PO_candidates = residue.atoms.select_atoms('name P*')
-                # Check if only bonded to oxygen atoms, if so, it is likely a phosphate group and we select the P atom as polar atom
-                if len(PO_candidates) == 1:
-                    bonded_atoms = np.unique(PO_candidates[0].bonds.to_indices().flatten())
-                    bond_elements = universe.atoms[bonded_atoms].elements
-                    if set(bond_elements) == {'O', 'P'}:
-                        polar_atoms.append(PO_candidates[0].index)
-                        continue
-                warn(f"Could not find polar atom for residue {residue.resname} {residue.resid}. Skipping analysis")
-                return None
+            polar_atom = guess_polar_atom(residue)
+            if polar_atom is None:
+                skipped[residue.resname] += 1
+                continue
+            polar_atoms.append(polar_atom)
+        if len(skipped) > 0:
+            warn(f"Could not find a unique polar atom for some lipids, they will not be used for leaflet assignment: {dict(skipped)}")
     else:
         print("Using atom charges to find polar atoms for leaflet assignment.")
         charges = abs(np.array([atom.charge for atom in universe.atoms]))
@@ -103,9 +98,39 @@ def all_atom_headgroups(
             res_ch = charges[res.atoms.ix]
             max_ch_idx = np.argmax(res_ch)
             polar_atoms.append(res.atoms[max_ch_idx].index)
-    polar_atoms = np.array(polar_atoms)
+    polar_atoms = np.array(polar_atoms, dtype=int)
     headgroup_ag = universe.atoms[polar_atoms]
     return headgroup_ag
+
+
+def guess_polar_atom(residue: 'Residue') -> int | None:
+    """Guess the headgroup atom of a lipid residue from elements and bonds when charges are missing.
+
+    Candidates are tried by priority: phosphate P (bonded only to O), N (e.g. amine or ammonium),
+    hydroxyl O (bonded to H, e.g. sterols) and finally any O.
+    The first kind with candidates must have exactly one, otherwise the headgroup is ambiguous and None is returned.
+    """
+    atoms = residue.atoms
+    elements = atoms.elements if hasattr(atoms, 'elements') else np.array([name[0] for name in atoms.names])
+    has_bonds = hasattr(atoms, 'bonds') and hasattr(atoms, 'elements')
+
+    def bonded_elements(atom) -> set[str]:
+        return {other.element for bond in atom.bonds for other in bond.atoms if other.index != atom.index}
+
+    phosphorus = atoms[elements == 'P']
+    oxygens = atoms[elements == 'O']
+    candidate_groups = [
+        # Check if only bonded to oxygen atoms, if so, it is likely a phosphate group
+        [atom for atom in phosphorus if not has_bonds or bonded_elements(atom) == {'O'}],
+        list(atoms[elements == 'N']),
+        [atom for atom in oxygens if has_bonds and 'H' in bonded_elements(atom)],
+        list(oxygens),
+    ]
+    for candidates in candidate_groups:
+        if len(candidates) == 0: continue
+        if len(candidates) == 1: return candidates[0].index
+        return None
+    return None
 
 
 def coarse_grain_headgroups(universe: 'Universe') -> dict:
@@ -126,14 +151,9 @@ def coarse_grain_headgroups(universe: 'Universe') -> dict:
     return headgroup_ag
 
 
-def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None) -> dict:
-    """Find leaflets using MDAnalysis LeafletFinder and generate membrane mapping."""
-    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': '0.2.0'}
-    if not headgroup_ag:
-        print("No headgroup atoms found, cannot assign leaflets.")
-        return membrane_map
-    print(' Running MDAnalysis LeafletFinder')
-    L = LeafletFinder(universe, headgroup_ag)
+def split_leaflet_groups(universe: 'Universe', headgroup_ag: 'AtomGroup', cutoff: float) -> tuple[list, list]:
+    """Run LeafletFinder and split its groups into leaflets and residue indices of unassigned lipids."""
+    L = LeafletFinder(universe, headgroup_ag, cutoff=cutoff)
     leaflets = []
     no_mem_lipids = []
     for group in L.groups():
@@ -142,6 +162,29 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None) -> dict:
             leaflets.append(group)
         else:
             no_mem_lipids.extend(group.residues.resindices)
+    return leaflets, no_mem_lipids
+
+
+def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
+    """Find leaflets using MDAnalysis LeafletFinder and generate membrane mapping.
+
+    Leaflets come in pairs, so an odd number of leaflets usually means that two leaflets
+    are too close in this frame (e.g. at a fusion stalk) and LeafletFinder merged them.
+    In that case it is retried with the next smaller cutoff.
+    """
+    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': '0.2.0'}
+    if not headgroup_ag:
+        print("No headgroup atoms found, cannot assign leaflets.")
+        return membrane_map
+    print(' Running MDAnalysis LeafletFinder')
+    leaflets, no_mem_lipids = split_leaflet_groups(universe, headgroup_ag, cutoffs[0])
+    for cutoff in cutoffs[1:]:
+        if len(leaflets) % 2 == 0: break
+        print(f' Found {len(leaflets)} leaflets, retrying LeafletFinder with a {cutoff} Å cutoff')
+        retry_leaflets, retry_no_mem_lipids = split_leaflet_groups(universe, headgroup_ag, cutoff)
+        # Keep the retry only if it pairs all leaflets, otherwise keep the default cutoff result
+        if len(retry_leaflets) % 2 == 0:
+            leaflets, no_mem_lipids = retry_leaflets, retry_no_mem_lipids
     n_mems = len(leaflets) // 2
     membrane_map['n_mems'] = n_mems
 

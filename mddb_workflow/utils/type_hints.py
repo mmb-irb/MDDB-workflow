@@ -17,4 +17,5 @@ if TYPE_CHECKING:
     from mddb_workflow.core.dataclass import InChIKeyData
     from mddb_workflow.utils.selections import Selection
     from mddb_workflow.mwf import Task, MD, Project
-    from MDAnalysis import Universe
+    from MDAnalysis import Universe, AtomGroup
+    from MDAnalysis.core.groups import Residue
