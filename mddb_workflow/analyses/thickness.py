@@ -1,6 +1,7 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_THICKNESS_FILENAME, THICKNESS_ANALYSIS_VERSION
+from mddb_workflow.tools.membrane_mapping import get_bilayers
 from mddb_workflow.utils.type_hints import *
 from lipyphilic.analysis.z_positions import ZPositions
 import numpy as np
@@ -37,15 +38,16 @@ def thickness(
     snapshots: int,
     frames_limit: int = 100):
     """Membrane thickness analysis."""
-    if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> No membranes found, skipping thickness analysis')
+    bilayers = get_bilayers(membrane_map)
+    if len(bilayers) == 0:
+        print('-> No flat bilayers found, skipping thickness analysis')
         return
 
     frame_step, frame_count = calculate_frame_step(snapshots, frames_limit)
     head_sel = []
-    for n in range(membrane_map['n_mems']):
-        head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
-        head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
+    for bilayer in bilayers:
+        head_sel.extend(bilayer['polar_atoms']['top'])
+        head_sel.extend(bilayer['polar_atoms']['bot'])
     head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
     print(' Running LiPyphilic ZPositions')

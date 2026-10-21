@@ -1,5 +1,6 @@
 from mddb_workflow.tools.nucleosomes import has_nucleosome
 from mddb_workflow.tools.multimerism import get_multimerism_keywords
+from mddb_workflow.tools.membrane_mapping import BILAYER, VESICLE
 from mddb_workflow.utils.type_hints import *
 
 # Set the keywords as constants
@@ -131,9 +132,9 @@ def get_system_keywords(
             keywords.append(LIGAND_ONLY_KEYWORD)
         # If there is only other then we issue no additional keyword
 
-    # Set if a membrane was found
-    membrane_count = membrane_map['n_mems']
-    has_membrane = membrane_count > 0
+    # Set if a membrane was found, micelles are amphiphilic aggregates but not membranes
+    # Mappings before version 0.3.0 have no type and only contain bilayers
+    has_membrane = any(mem.get('type', BILAYER) in [BILAYER, VESICLE] for mem in membrane_map['mems'].values())
     if has_membrane:
         keywords.append(MEMBRANE_KEYWORD)
 

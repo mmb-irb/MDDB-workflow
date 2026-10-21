@@ -1,6 +1,7 @@
 from biobb_mem.fatslim.fatslim_apl import fatslim_apl
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.constants import OUTPUT_APL_FILENAME
+from mddb_workflow.tools.membrane_mapping import get_bilayers
 from mddb_workflow.utils.type_hints import *
 from scipy.interpolate import griddata
 from contextlib import redirect_stdout
@@ -17,8 +18,9 @@ def area_per_lipid(
     output_directory: str,
 ):
     """Area per lipid analysis."""
-    if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('-> No membranes found, skipping area per lipid analysis')
+    bilayers = get_bilayers(membrane_map)
+    if len(bilayers) == 0:
+        print('-> No flat bilayers found, skipping area per lipid analysis')
         return
     if universe.select_atoms('protein').n_atoms == 0:
         print('-> Analysis not implemented yet without protein. Skipping channels analysis')
@@ -28,9 +30,9 @@ def area_per_lipid(
     output_analysis_filepath = f'{output_directory}/{OUTPUT_APL_FILENAME}'
 
     head_sel = []
-    for n in range(membrane_map['n_mems']):
-        head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['top'])
-        head_sel.extend(membrane_map['mems'][str(n)]['polar_atoms']['bot'])
+    for bilayer in bilayers:
+        head_sel.extend(bilayer['polar_atoms']['top'])
+        head_sel.extend(bilayer['polar_atoms']['bot'])
     head_sel_mda = 'index ' + " ".join(map(str, (head_sel)))
     # Run the analysis on the whole membrane
     prop = {

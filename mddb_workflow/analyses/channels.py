@@ -5,6 +5,7 @@ from mddb_workflow.tools.get_reduced_trajectory import get_reduced_trajectory
 from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.constants import OUTPUT_CHANNELS_FILENAME, CHANNELS_ANALYSIS_VERSION
+from mddb_workflow.tools.membrane_mapping import get_bilayers
 from mddb_workflow.utils.type_hints import *
 import json
 
@@ -50,8 +51,8 @@ def channels(
     frames_limit: int
 ):
     """Characterize channels in a membrane protein using CHAP."""
-    if membrane_map is None or membrane_map['n_mems'] == 0:
-        print('  -> No membranes found, skipping channels analysis')
+    if len(get_bilayers(membrane_map)) == 0:
+        print('  -> No flat bilayers found, skipping channels analysis')
         return
     if universe.select_atoms('protein').n_atoms == 0:
         print('  -> No protein found, skipping channels analysis')

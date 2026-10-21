@@ -5,6 +5,26 @@ from mddb_workflow.utils.auxiliar import save_json, load_json, warn
 from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES
 from mddb_workflow.utils.type_hints import *
 
+MEMBRANE_MAPPING_VERSION = '0.3.0'
+# Amphiphilic aggregate types
+BILAYER = 'bilayer'
+VESICLE = 'vesicle'
+MICELLE = 'micelle'
+# Minimum number of lipids in a leaflet, 24 lipids like in FATSLiM
+MIN_LEAFLET_LIPIDS = 24
+# A leaflet is flat when sqrt(smallest / largest eigenvalue) of its polar atom positions is below this
+FLATNESS_THRESHOLD = 0.3
+# Absolute cosine between the head to tail vector and the reference direction for a lipid to be clearly oriented
+STRONG_ORIENTATION = 0.5
+# Fraction of lipids clearly oriented against the majority from which a group is considered mixed (merged leaflets)
+MIXED_ORIENTATION = 0.25
+# Minimum absolute cosine between normals of the two leaflets of a bilayer
+PARALLEL_NORMALS = 0.9
+# Maximum distance (Å) between the centroids of the two leaflets of a bilayer along the normal
+MAX_BILAYER_SEPARATION = 80
+# Maximum distance between the centers of vesicle leaflets, as a fraction of the inner leaflet radius
+VESICLE_CENTER_TOLERANCE = 0.5
+
 
 def generate_membrane_mapping(
     inchikeys: dict[str, 'InChIKeyData'],
@@ -25,18 +45,21 @@ def generate_membrane_mapping(
 
     Returns:
         dict: A dictionary containing the membrane mapping.
-            - n_mems (int): Number of membranes detected.
+            - n_mems (int): Number of amphiphilic aggregates (membranes) detected.
             - mems (dict): Dictionary where each key is a membrane index (str) and value contains:
-              - leaflets (dict): Contains 'top' and 'bot' keys, each with a list of atom indices.
-              - polar_atoms (dict): Contains 'top' and 'bot' keys, each with a list of polar atom indices.
+              - type (str): Aggregate type: 'bilayer' (flat), 'vesicle' or 'micelle'.
+              - leaflets (dict): Atom indices of each leaflet. Leaflet names are 'top' and 'bot' for bilayers,
+                'outer' and 'inner' for vesicles and 'outer' for micelles.
+              - polar_atoms (dict): Polar atom indices (one per lipid) of each leaflet, with the same names.
             - no_mem_lipid (list): List of atom indices for lipids not assigned to any membrane.
+            - version (str): Version of the membrane mapping format.
 
     Notes:
         - The function identifies lipid and non-lipid residues based on InChI keys.
         - It classifies residues and checks for potential misclassifications.
         - Lipid residues are selected and neighboring lipids are found.
-        - Clusters of lipids are identified, and clusters with more than 30 lipids are considered as membranes.
-        - If debug is enabled, the function returns additional information including lipid residues, neighbors, counts, and clusters.
+        - Leaflets are clusters of at least 24 lipid polar atoms found by LeafletFinder.
+        - Leaflets are classified into aggregates from their shape and lipid orientation (see classify_leaflets).
 
     """
     if not universe: raise RuntimeError('Missing universe')
@@ -158,53 +181,166 @@ def split_leaflet_groups(universe: 'Universe', headgroup_ag: 'AtomGroup', cutoff
     no_mem_lipids = []
     for group in L.groups():
         # 24 lipids like in FATSLiM
-        if len(group) >= 24:
+        if len(group) >= MIN_LEAFLET_LIPIDS:
             leaflets.append(group)
         else:
             no_mem_lipids.extend(group.residues.resindices)
     return leaflets, no_mem_lipids
 
 
-def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
-    """Find leaflets using MDAnalysis LeafletFinder and generate membrane mapping.
+def pbc_center(positions: np.ndarray, box: np.ndarray | None) -> np.ndarray:
+    """Get the center of a set of positions in a periodic box using the circular mean of each dimension."""
+    center = positions.mean(axis=0)
+    if box is None: return center
+    for dim in range(3):
+        if box[dim] <= 0: continue
+        theta = positions[:, dim] / box[dim] * 2 * np.pi
+        center[dim] = (np.arctan2(-np.sin(theta).mean(), -np.cos(theta).mean()) + np.pi) / (2 * np.pi) * box[dim]
+    return center
 
-    Leaflets come in pairs, so an odd number of leaflets usually means that two leaflets
-    are too close in this frame (e.g. at a fusion stalk) and LeafletFinder merged them.
-    In that case it is retried with the next smaller cutoff.
+
+def minimum_image(vectors: np.ndarray, box: np.ndarray | None) -> np.ndarray:
+    """Apply the minimum image convention to vectors in an orthorhombic box."""
+    if box is None: return vectors
+    return vectors - box * np.round(vectors / box)
+
+
+def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
+    """Get the shape and lipid orientation of a LeafletFinder group of polar atoms.
+
+    The group is flat when its thinnest principal axis is much shorter than the longest one.
+    Lipid orientation is the head to tail vector (polar atom to residue center) projected on
+    the leaflet normal when it is flat or on the radial direction from the leaflet center otherwise.
+    Lipids in a real leaflet are oriented in the same direction, while a group with many lipids
+    oriented in both directions is likely two leaflets merged by LeafletFinder.
     """
-    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': '0.2.0'}
+    positions = leaflet.positions
+    center = pbc_center(positions, box)
+    relative = minimum_image(positions - center, box)
+    shift = relative.mean(axis=0)
+    relative -= shift
+    eigenvalues, eigenvectors = np.linalg.eigh(np.cov(relative.T))
+    flat = np.sqrt(max(eigenvalues[0], 0) / eigenvalues[2]) < FLATNESS_THRESHOLD
+    normal = eigenvectors[:, 0]
+    # Make the normal point to the positive side of its main axis so top and bottom are consistent
+    if normal[np.argmax(np.abs(normal))] < 0: normal = -normal
+    radii = np.linalg.norm(relative, axis=1)
+    residue_centers = np.array([atom.residue.atoms.positions.mean(axis=0) for atom in leaflet])
+    tails = minimum_image(residue_centers - positions, box)
+    tails /= np.maximum(np.linalg.norm(tails, axis=1), 1e-6)[:, None]
+    reference = normal if flat else relative / np.maximum(radii, 1e-6)[:, None]
+    cosines = (tails * reference).sum(axis=1)
+    positive = np.mean(cosines > STRONG_ORIENTATION)
+    negative = np.mean(cosines < -STRONG_ORIENTATION)
+    return {
+        'group': leaflet,
+        'flat': flat,
+        'centroid': center + shift,
+        'normal': normal,
+        'radius': radii.mean(),
+        'coherent': min(positive, negative) < MIXED_ORIENTATION,
+        # Flat: tails along (+1) or against (-1) the normal. Curved: tails outwards (+1) or inwards (-1)
+        'direction': 1 if positive > negative else -1,
+    }
+
+
+def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tuple[str, dict]], list]:
+    """Group leaflets into amphiphilic aggregates: flat bilayers, vesicles and micelles.
+
+    - Vesicle: a curved leaflet with tails inwards (outer) and a smaller concentric curved leaflet with tails outwards (inner).
+    - Bilayer: two flat leaflets with parallel normals whose tails face each other.
+    - Micelle: a single curved leaflet with tails inwards.
+
+    Returns the aggregates as (type, leaflets by name) and the leaflets which could not be classified.
+    """
+    descriptions = [describe_leaflet(leaflet, box) for leaflet in leaflets]
+    coherent = [desc for desc in descriptions if desc['coherent']]
+    unclassified = [desc['group'] for desc in descriptions if not desc['coherent']]
+    used = set()
+    aggregates = []
+
+    curved_in = [desc for desc in coherent if not desc['flat'] and desc['direction'] < 0]
+    curved_out = [desc for desc in coherent if not desc['flat'] and desc['direction'] > 0]
+    for outer in curved_in:
+        candidates = [inner for inner in curved_out if id(inner) not in used and inner['radius'] < outer['radius']
+            and np.linalg.norm(minimum_image(inner['centroid'] - outer['centroid'], box)) < VESICLE_CENTER_TOLERANCE * inner['radius']]
+        if len(candidates) == 0: continue
+        inner = min(candidates, key=lambda desc: np.linalg.norm(minimum_image(desc['centroid'] - outer['centroid'], box)))
+        used.update([id(outer), id(inner)])
+        aggregates.append((VESICLE, {'outer': outer['group'], 'inner': inner['group']}))
+
+    flats = [desc for desc in coherent if desc['flat']]
+    for first in flats:
+        if id(first) in used: continue
+        best, best_distance = None, None
+        for second in flats:
+            if second is first or id(second) in used: continue
+            if abs(np.dot(first['normal'], second['normal'])) < PARALLEL_NORMALS: continue
+            separation = minimum_image(second['centroid'] - first['centroid'], box)
+            distance = np.dot(separation, first['normal'])
+            # Tails of each leaflet must point towards the other leaflet
+            first_faces = np.sign(distance) == first['direction']
+            second_faces = np.sign(np.dot(-separation, second['normal'])) == second['direction']
+            if not (first_faces and second_faces) or abs(distance) > MAX_BILAYER_SEPARATION: continue
+            if best is None or abs(distance) < best_distance:
+                best, best_distance = second, abs(distance)
+        if best is None: continue
+        used.update([id(first), id(best)])
+        # The top leaflet is the one further along the normal
+        separation = minimum_image(best['centroid'] - first['centroid'], box)
+        top, bot = (best, first) if np.dot(separation, first['normal']) > 0 else (first, best)
+        aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group']}))
+
+    for desc in curved_in:
+        if id(desc) in used: continue
+        used.add(id(desc))
+        aggregates.append((MICELLE, {'outer': desc['group']}))
+
+    unclassified += [desc['group'] for desc in coherent if id(desc) not in used]
+    return aggregates, unclassified
+
+
+def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs: tuple[float, ...] = (15.0, 12.0, 10.0)) -> dict:
+    """Find leaflets using MDAnalysis LeafletFinder and classify them into amphiphilic aggregates.
+
+    When some leaflets can not be classified (e.g. two leaflets too close at a fusion stalk are
+    merged by LeafletFinder) it is retried with the next smaller cutoff. The first cutoff where all
+    leaflets are classified is used or, if none, the one classifying the most lipids.
+    """
+    membrane_map = {'n_mems': 0, 'mems': {}, 'no_mem_lipid': [], 'version': MEMBRANE_MAPPING_VERSION}
     if not headgroup_ag:
         print("No headgroup atoms found, cannot assign leaflets.")
         return membrane_map
+    box = universe.dimensions[:3].copy() if universe.dimensions is not None else None
+    if box is not None and not np.all(box > 0): box = None
     print(' Running MDAnalysis LeafletFinder')
-    leaflets, no_mem_lipids = split_leaflet_groups(universe, headgroup_ag, cutoffs[0])
-    for cutoff in cutoffs[1:]:
-        if len(leaflets) % 2 == 0: break
-        print(f' Found {len(leaflets)} leaflets, retrying LeafletFinder with a {cutoff} Å cutoff')
-        retry_leaflets, retry_no_mem_lipids = split_leaflet_groups(universe, headgroup_ag, cutoff)
-        # Keep the retry only if it pairs all leaflets, otherwise keep the default cutoff result
-        if len(retry_leaflets) % 2 == 0:
-            leaflets, no_mem_lipids = retry_leaflets, retry_no_mem_lipids
-    n_mems = len(leaflets) // 2
-    membrane_map['n_mems'] = n_mems
+    best = None
+    for cutoff in cutoffs:
+        if best is not None:
+            print(f' {len(best[2])} leaflets could not be classified, retrying LeafletFinder with a {cutoff} Å cutoff')
+        leaflets, no_mem_lipids = split_leaflet_groups(universe, headgroup_ag, cutoff)
+        aggregates, unclassified = classify_leaflets(leaflets, box)
+        n_classified = sum(len(group) for _, groups in aggregates for group in groups.values())
+        if best is None or n_classified > best[3]:
+            best = (aggregates, no_mem_lipids, unclassified, n_classified)
+        if len(unclassified) == 0: break
+    aggregates, no_mem_lipids, unclassified, _ = best
+    if len(unclassified) > 0:
+        warn(f"Could not classify {len(unclassified)} leaflet(s) with {', '.join(str(len(group)) for group in unclassified)} lipids, they will be unassigned")
+        for group in unclassified:
+            no_mem_lipids.extend(group.residues.resindices)
+    membrane_map['n_mems'] = len(aggregates)
 
-    for i in range(n_mems):
-        # Check in which leaflets each of the polar atoms is and save them
+    for i, (aggregate_type, groups) in enumerate(aggregates):
         memb_data = {
-            'leaflets': {
-                'bot': leaflets[i * 2].residues.atoms.indices.tolist(),
-                'top': leaflets[i * 2 + 1].residues.atoms.indices.tolist()
-            },
-            'polar_atoms': {
-                'bot': leaflets[i * 2].atoms.indices.tolist(),
-                'top': leaflets[i * 2 + 1].atoms.indices.tolist()
-            }
+            'type': aggregate_type,
+            'leaflets': {name: group.residues.atoms.indices.tolist() for name, group in groups.items()},
+            'polar_atoms': {name: group.atoms.indices.tolist() for name, group in groups.items()},
         }
         membrane_map['mems'][str(i)] = memb_data
         # Print leaflets stats
-        print(f"Membrane {i}:\n"
-              f"    - Top leaflet: {len(memb_data['polar_atoms']['top'])} lipids\n"
-              f"    - Bottom leaflet: {len(memb_data['polar_atoms']['bot'])} lipids")
+        print(f"Membrane {i} ({aggregate_type}):\n" + '\n'.join(
+            f"    - {name.capitalize()} leaflet: {len(group)} lipids" for name, group in groups.items()))
 
     if len(no_mem_lipids) > 0:
         print(f"Unassigned lipids: {len(no_mem_lipids)}.")
@@ -214,28 +350,31 @@ def find_leaflets(universe: 'Universe', headgroup_ag: list[int] | None, cutoffs:
     return membrane_map
 
 
-def display_membrane_mapping(mem_map: str, pdb: str):
-    """Display the membrane mapping using nglview."""
+def get_bilayers(membrane_map: dict | None) -> list[dict]:
+    """Get the flat bilayers of a membrane mapping. Mappings before version 0.3.0 only have bilayers and no type."""
+    if membrane_map is None: return []
+    return [mem for mem in membrane_map['mems'].values() if mem.get('type', BILAYER) == BILAYER]
+
+
+def display_membrane_mapping(mem_map: str, pdb: str, mem: str = '0'):
+    """Display the leaflets of a membrane from the membrane mapping using nglview."""
     try:
         import nglview as nv  # type: ignore
     except ImportError:
         raise ImportError("nglview is required for displaying membrane mapping. Please install it using 'pip install nglview'.")
 
     mem_map = load_json(mem_map)
-    top = f"@{','.join(map(str, mem_map['mems']['0']['leaflets']['top']))}"
-    bot = f"@{','.join(map(str, mem_map['mems']['0']['leaflets']['bot']))}"
+    membrane = mem_map['mems'][mem]
     no_mem = f"@{','.join(map(str, mem_map['no_mem_lipid']))}"
-    polar_top = f"@{','.join(map(str, mem_map['mems']['0']['polar_atoms']['top']))}"
-    polar_bot = f"@{','.join(map(str, mem_map['mems']['0']['polar_atoms']['bot']))}"
 
     view = nv.show_file(pdb)
     view.clear(0)
-    # view.clear(1)
     view.add_point(selection='not protein', color='green', scale=1.5)
-    view.add_point(selection=f'{top}', color='blue')
-    view.add_point(selection=f'{bot}', color='yellow')
+    leaflet_colors = [('blue', 'cyan'), ('yellow', 'orange')]
+    for (name, atoms), (color, polar_color) in zip(membrane['leaflets'].items(), leaflet_colors):
+        view.add_point(selection=f"@{','.join(map(str, atoms))}", color=color)
+        polar = f"@{','.join(map(str, membrane['polar_atoms'][name]))}"
+        view.add_ball_and_stick(selection=polar, color=polar_color, aspectRatio=4)
     view.add_point(selection=no_mem, color='red', scale=0.5)
     view.add_point(selection='protein', color='black', scale=0.5)
-    view.add_ball_and_stick(selection=polar_top, color='cyan', aspectRatio=4)
-    view.add_ball_and_stick(selection=polar_bot, color='orange', aspectRatio=4)
     return view
