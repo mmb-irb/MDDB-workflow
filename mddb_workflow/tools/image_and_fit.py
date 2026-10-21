@@ -289,7 +289,7 @@ def find_automatic_translation(trajectory_file: 'File', selection: 'Selection') 
     graph = coo_matrix((np.ones(len(pairs), dtype=bool), (pairs[:, 0], pairs[:, 1])), shape=(atom_count, atom_count))
     fragment_count, atom_fragments = connected_components(graph, directed=False)
     # Find contacts across the box boundaries and the periodic shift (in box vectors) which brings the second atom next to the first one
-    cross_pairs, _ = find_frame_cross_contacts(positions, box_vectors, AUTO_TRANSLATION_CUTOFF)
+    cross_pairs, _, _ = find_frame_cross_contacts(positions, box_vectors, AUTO_TRANSLATION_CUTOFF)
     # If there are no contacts across the box boundaries then nothing is split and there is no need to translate
     if len(cross_pairs) == 0:
         print('  No atoms are split by the box boundaries, no translation is needed')

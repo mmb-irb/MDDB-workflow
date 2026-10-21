@@ -42,6 +42,8 @@ class Register:
                 # DANI: Para quitarnos de encima warnings con el formato antiguo
                 if not warning.get('tag', None):
                     continue
+                # Old warnings have no description
+                warning.setdefault('description', None)
                 self.warnings.append(warning)
         # If the register file does not exist then create a new one
         else:
@@ -73,16 +75,25 @@ class Register:
         """Get current warnings filtered by tag."""
         return [warning for warning in self.warnings if warning['tag'] == tag]
 
-    def add_warning(self, tag: str, message: str):
+    def add_warning(self, tag: str, message: str, description: Optional[str] = None, data: dict = {}):
         """Add warnings with the right format and save the register.
         A flag is to be passed to handle further removal of warnings.
+        The message is a short title while the description holds further details.
+        Additional data (e.g. frames or atom selections) is saved next to the rest of warning fields.
         """
-        warn(message)
-        # If we already had this exact warning then do not repeat it
-        for warning in self.warnings:
-            if warning['tag'] == tag and warning['message'] == message: return
+        warn(message if description is None else f'{message}\n{description}')
+        warning = {'tag': tag, 'message': message, 'description': description}
+        repeated_keys = set(warning) & set(data)
+        if repeated_keys: raise ValueError(f'Warning data can not have the keys {", ".join(repeated_keys)}')
+        warning.update(data)
+        # If we already had this warning then replace it with the new one
+        # Note that the warnings list is not declared again (see remove_warnings)
+        for index, previous_warning in enumerate(self.warnings):
+            if previous_warning['tag'] == tag and previous_warning['message'] == message:
+                self.warnings[index] = warning
+                self.save()
+                return
         # Add a new warning
-        warning = {'tag': tag, 'message': message}
         self.warnings.append(warning)
         self.save()
 

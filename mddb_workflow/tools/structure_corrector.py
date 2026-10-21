@@ -208,8 +208,9 @@ def structure_corrector(
             if STABLE_BONDS_FLAG not in mercy:
                 raise TestFailure('Failed to find stable bonds')
             register.update_test(STABLE_BONDS_FLAG, False)
-            register.add_warning(STABLE_BONDS_FLAG, ('Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.\n'
-                'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.'))
+            register.add_warning(STABLE_BONDS_FLAG,
+                'Could not find a frame in the trajectory respecting all bonds if bonds were guessed according to atom coordinates and radius.',
+                'The main PDB structure is a default structure and it would be considered to have wrong bonds if they were predicted as previously stated.')
             return
         # Set also the stable bonds frame structure to mine its coordinates
         stable_bonds_frame_filename = get_pdb_frame(output_structure_file.path, input_trajectory_file.path, bonds_reference_frame)

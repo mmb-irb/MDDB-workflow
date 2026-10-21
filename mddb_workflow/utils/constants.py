@@ -162,6 +162,8 @@ TRAJECTORY_SAMPLE_FILENAME = 'trajectory_SAMPLE.xtc'
 # Auxiliar files
 REGISTER_FILENAME = '.register.json'
 CACHE_FILENAME = '.mwf_cache.json'
+# VMD script to see cross-PBC contacts, written when the cross-PBC test fails
+CROSS_PBC_VIEW_FILENAME = '.cross_pbc_contacts.tcl'
 
 # Files saving resorted bonds and charges when we have to resort atoms
 # Note that these files have priority when loading both bonds and charges
