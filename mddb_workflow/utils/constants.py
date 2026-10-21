@@ -166,6 +166,10 @@ CACHE_FILENAME = '.mwf_cache.json'
 CROSS_PBC_VIEW_FILENAME = '.cross_pbc_contacts.tcl'
 # VMD script to see the biggest RMSD jump, written when the trajectory integrity test fails
 TRAJECTORY_INTEGRITY_VIEW_FILENAME = '.trajectory_integrity_jump.tcl'
+# VMD script to see the wrong bonds, written when the stable bonds test fails
+STABLE_BONDS_VIEW_FILENAME = '.stable_bonds.tcl'
+# VMD script to see the atoms with a wrong number of bonds, written when the coherent bonds test fails
+COHERENT_BONDS_VIEW_FILENAME = '.coherent_bonds.tcl'
 
 # Files saving resorted bonds and charges when we have to resort atoms
 # Note that these files have priority when loading both bonds and charges

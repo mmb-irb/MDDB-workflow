@@ -63,7 +63,7 @@ def test_mercy():
 
     # Modify check_incoherent_bonds to force a trajectory integrity failure
     old_fn = Structure.check_incoherent_bonds
-    Structure.check_incoherent_bonds = lambda _: True
+    Structure.check_incoherent_bonds = lambda _: [0]
     cwd = pathlib.Path.cwd()
     os.chdir(test_fld)
     for mercy in [True, False]:

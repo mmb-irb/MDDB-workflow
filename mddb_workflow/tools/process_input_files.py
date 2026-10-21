@@ -394,6 +394,8 @@ def process_input_files(
         input_topology_file=filtered_topology_file,
         output_structure_file=corrected_structure_file,
         output_trajectory_file=corrected_trajectory_file,
+        final_structure_file=output_structure_file,
+        final_trajectory_file=output_trajectory_file,
         MD=self,
         pbc_selection=provisional_pbc_selection,
         cg_selection=provisional_cg_selection,
