@@ -164,6 +164,8 @@ REGISTER_FILENAME = '.register.json'
 CACHE_FILENAME = '.mwf_cache.json'
 # VMD script to see cross-PBC contacts, written when the cross-PBC test fails
 CROSS_PBC_VIEW_FILENAME = '.cross_pbc_contacts.tcl'
+# VMD script to see the biggest RMSD jump, written when the trajectory integrity test fails
+TRAJECTORY_INTEGRITY_VIEW_FILENAME = '.trajectory_integrity_jump.tcl'
 
 # Files saving resorted bonds and charges when we have to resort atoms
 # Note that these files have priority when loading both bonds and charges
@@ -257,6 +259,8 @@ FORBIDDEN_DIRECTORY_CHARACTERS = ['.', ',', ';', ':', 'º', '/']
 
 # Default parameters
 DEFAULT_RMSD_CUTOFF = 9
+# How much better two gaussians must fit the RMSD jumps than one for the trajectory integrity test to fail
+BIMODALITY_BIC_CUTOFF = 50
 DEFAULT_INTERACTION_CUTOFF = 0.1
 
 # Set register cache flags

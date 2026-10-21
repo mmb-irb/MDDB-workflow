@@ -1274,6 +1274,7 @@ class MD:
         self._trajectory_integrity = check_trajectory_integrity(
             input_structure_filename=self.structure_file.path,
             input_trajectory_filename=self.trajectory_file.path,
+            view_script_filename=self.pathify(TRAJECTORY_INTEGRITY_VIEW_FILENAME),
             structure=self.structure,
             pbc_selection=self.pbc_selection,
             mercy=self.project.mercy,
