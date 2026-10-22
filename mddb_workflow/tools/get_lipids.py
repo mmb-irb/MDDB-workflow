@@ -42,8 +42,6 @@ def generate_lipid_references(
     lipid_references = {}
     forced_lipids = set(input_forced_lipids or [])
     not_matched_fatty = []
-    # Check internet connection only once we need to request the lipid databases
-    is_connected = None
 
     for inchikey, mol_data in inchikeys.items():
         clasi = mol_data.classification
@@ -77,18 +75,11 @@ def generate_lipid_references(
         if database_reference:
             SL_data = database_reference.get('swisslipids')
             LM_data = database_reference.get('lipidmaps')
-        else:
-            if is_connected is None:
-                try:
-                    is_in_swisslipids('test')
-                    is_connected = True
-                except Exception as e:
-                    warn(f'There was a problem connecting to the SwissLipids database: {e}')
-                    is_connected = False
-            if is_connected:
-                # If we dont find it, we try without stereochemistry (only connection layer)
-                SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
-                LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
+        # Check internet connection only once we need to request the lipid databases
+        elif is_swisslipids_available():
+            # If we dont find it, we try without stereochemistry (only connection layer)
+            SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
+            LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
         lipid_references[inchikey] = {
             'category': category,
             'swisslipids': SL_data or None,
@@ -98,7 +89,8 @@ def generate_lipid_references(
 
         # QUALITY CHECKS
         # If the residue is a lipid, we check if it is classified as fatty/steroid
-        if all('fatty' not in classes for classes in clasi) and \
+        # InChI keys with no residues (e.g. when remaking database references) have no classification
+        if clasi and all('fatty' not in classes for classes in clasi) and \
             all('steroid' not in classes for classes in clasi):
             warn(f'The {mol_data.moltype} {mol_data.molname} is classified as {clasi}, '
                  f'but the InChIKey "{inchikey}" is from a lipid ({LIPID_CATEGORIES[category]}).')
@@ -175,6 +167,19 @@ def get_swisslipids_info(entity_id) -> dict:
     response = requests.get(url, headers=headers)
     check_lipid_response(response, 'SwissLipids', entity_id)
     return response.json()
+
+
+@lru_cache(maxsize=None)
+def is_swisslipids_available() -> bool:
+    """Check if SwissLipids answers.
+    This is checked only once per session so we do not request SwissLipids again for every lipid.
+    """
+    try:
+        is_in_swisslipids('test')
+        return True
+    except Exception as e:
+        warn(f'There was a problem connecting to the SwissLipids database: {e}')
+        return False
 
 
 @retry_request

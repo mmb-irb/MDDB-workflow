@@ -646,7 +646,7 @@ def main():
         for node_alias in nodes:
             # Iterate reference types
             for reference_type in types:
-                update_references(node_alias, reference_type, args.loader)
+                update_references(node_alias, reference_type, args.loader, args.force)
     # Update projects
     elif subcommand == 'uproj':
         # Set the final list of nodes
@@ -1028,6 +1028,8 @@ upref_parser.add_argument("-ld", "--loader", type=str,
     help=f"Set the path to the directory where the loader is installed, so the workflow can use it. "
         "If the loader is available then the new references will be automatically uploaded in batches. "
         "Note that using the loader makes the process more memory efficient and faster.")
+upref_parser.add_argument("-f", "--force", default=False, action='store_true',
+    help="Remake all references, also those already generated with the latest version.")
 
 
 # The update projects command

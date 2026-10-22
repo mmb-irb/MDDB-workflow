@@ -3,19 +3,40 @@ from os import mkdir, replace
 from os.path import exists
 from re import sub
 from time import time
+from rdkit import Chem
 
-from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError
+from mddb_workflow.utils.auxiliar import load_json, save_json, warn, InputError, RemoteServiceError
 from mddb_workflow.utils.constants import PROTEIN_REFERENCE_VERSION, PROTEIN_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import INCHI_REFERENCE_VERSION, INCHIKEY_REFERENCES_FILENAME
 from mddb_workflow.utils.constants import PDB_REFERENCE_VERSION, PDB_REFERENCES_FILENAME
-from mddb_workflow.utils.constants import CACHE_FILENAME
+from mddb_workflow.utils.constants import CACHE_FILENAME, LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
 from mddb_workflow.utils.database import Database, get_available_nodes
 from mddb_workflow.utils.loader import Loader
+from mddb_workflow.core.dataclass import InChIKeyData
 
 from mddb_workflow.tools.generate_map import get_uniprot_reference
 from mddb_workflow.tools.generate_pdb_references import get_pdb_reference
+from mddb_workflow.tools.get_inchi_keys import make_inchikey_reference
+from mddb_workflow.tools.get_lipids import generate_lipid_references, is_swisslipids_available
+from mddb_workflow.tools.get_ligands import generate_ligand_references
+
+
+def get_inchi_reference(inchi: str, cache: 'Cache') -> dict:
+    """Make the reference of an InChI from scratch with the lipid and ligand references of the workflow.
+    There are no residues behind the InChI, so ligands not matching any PubChem compound are allowed.
+    """
+    inchikey = Chem.InchiToInchiKey(inchi)
+    inchikeys = {inchikey: InChIKeyData(inchi=inchi)}
+    lipid_references = generate_lipid_references(inchikeys, cache)
+    # Lipids get no lipid database references if SwissLipids is not available, so fail instead
+    if inchikey in lipid_references and not is_swisslipids_available():
+        raise RemoteServiceError('SwissLipids is not available')
+    ligand_references = generate_ligand_references(None, cache, None, [], inchikeys,
+        mercy=[LIGANDS_MATCH_FLAG, LARGE_AMINOACID_FLAG])
+    return make_inchikey_reference(inchikey, inchi,
+        lipid_references.get(inchikey), ligand_references.get(inchikey))
 
 
 # Set the available reference types and their configurations
@@ -27,13 +48,13 @@ REFERENCE_TYPE_CONFIGURATIONS = {
         'maker': lambda uniprot_id, cache, database: get_uniprot_reference(uniprot_id),
         'output': PROTEIN_REFERENCES_FILENAME,
     },
-    # 'inchi': {
-    #     'version': INCHI_REFERENCE_VERSION,
-    #     'endpoint': 'inchikeys',
-    #     'id_key': 'inchi',
-    #     'maker': None, # DANI: Falta una función que solo requiera del inchi
-    #     'output': INCHIKEY_REFERENCES_FILENAME,
-    # },
+    'inchi': {
+        'version': INCHI_REFERENCE_VERSION,
+        'endpoint': 'inchikeys',
+        'id_key': 'inchi',
+        'maker': lambda inchi, cache, database: get_inchi_reference(inchi, cache),
+        'output': INCHIKEY_REFERENCES_FILENAME,
+    },
     'pdb': {
         'version': PDB_REFERENCE_VERSION,
         'endpoint': 'pdbs',
@@ -54,20 +75,21 @@ LOADER_BATCH = 100
 def update_references (
     node_url_or_alias : str,
     reference_type : str,
-    loader_directory : str | None = None):
+    loader_directory : str | None = None,
+    force : bool = False):
 
     # If all nodes are requested then simply call this same function with every node
     if node_url_or_alias == ALL_FLAG:
         # Get the available nodes
         available_nodes = get_available_nodes()
         for node_alias in available_nodes.keys():
-            update_references(node_alias, reference_type)
+            update_references(node_alias, reference_type, loader_directory, force)
         return
 
     # If all reference types are requested then simply call this same function with every type
     if reference_type == ALL_FLAG:
         for current_reference_type in REFERENCE_TYPE_CONFIGURATIONS.keys():
-            update_references(node_url_or_alias, current_reference_type)
+            update_references(node_url_or_alias, current_reference_type, loader_directory, force)
         return
 
     # Make sure the type is known
@@ -88,11 +110,12 @@ def update_references (
     references = database.get_all_refences_data(reference_config['endpoint'])
 
     # Get the references which are not updated according to this workflow latest versions
+    # If forced then all references are remade, even those with the latest version
     updated_version = Version(reference_config['version'])
     id_key = reference_config['id_key']
     outdated_reference_ids = [
         ref[id_key] for ref in references
-        if Version(ref.get('version', '0.0.0')) < updated_version
+        if force or Version(ref.get('version', '0.0.0')) < updated_version
     ]
     remote_outdated_count = len(outdated_reference_ids)
     print(f'  Found {remote_outdated_count} remote outdated references out of {len(references)}')

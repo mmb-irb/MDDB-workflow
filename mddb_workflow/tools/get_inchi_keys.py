@@ -294,6 +294,26 @@ def get_database_inchikey_reference(
     return reference
 
 
+def make_inchikey_reference(
+    inchikey: str,
+    inchi: str,
+    lipid_reference: Optional[dict],
+    ligand_reference: Optional[dict],
+) -> dict:
+    """Make the database reference of an InChI key from its lipid and ligand references."""
+    lipid_reference = lipid_reference or {}
+    reference = {
+        'inchikey': inchikey,
+        'inchi': inchi,
+        'swisslipids': lipid_reference.get('swisslipids'),
+        'lipidmaps': lipid_reference.get('lipidmaps'),
+        'ligand': ligand_reference,
+        'version': INCHI_REFERENCE_VERSION
+    }
+    # Sort dictionary entries for consistency when uploading to database
+    return {k: dict(sorted(v.items())) if type(v) is dict else v for k, v in reference.items()}
+
+
 def generate_inchi_references(
     inchikeys: dict[str, 'InChIKeyData'],
     lipid_references: dict[str, dict],
@@ -313,19 +333,8 @@ def generate_inchi_references(
         # If there is force ligands, the inchikey may have changed
         ref_inchikey = ligand_references.get(inchikey, {}).get('inchikey', inchikey)
         ref_inchi = ligand_references.get(inchikey, {}).get('inchi', res_data.inchi)
-        lipid_data = lipid_references.get(inchikey, {})
-        inchikey_references.append({
-            'inchikey': ref_inchikey,
-            'inchi': ref_inchi,
-            'swisslipids': lipid_data.get('swisslipids'),
-            'lipidmaps': lipid_data.get('lipidmaps'),
-            'ligand': ligand_references.get(inchikey, None),
-            'version': INCHI_REFERENCE_VERSION
-        })
-        # Sort dictionary entries for consistency when uploading to database
-        for k, v in inchikey_references[-1].items():
-            if type(v) is dict:
-                inchikey_references[-1][k] = dict(sorted(v.items()))
+        inchikey_references.append(make_inchikey_reference(ref_inchikey, ref_inchi,
+            lipid_references.get(inchikey), ligand_references.get(inchikey)))
 
         # Get residue indices from ligand forced selections if available
         resindices = ligand_references.get(inchikey, {}).get('resindices', list(map(int, res_data.resindices)))

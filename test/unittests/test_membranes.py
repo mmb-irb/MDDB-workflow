@@ -314,6 +314,10 @@ class TestLipidReferences:
         monkeypatch.setattr(get_lipids, 'get_database_inchikey_reference', lambda *args: None)
         monkeypatch.setattr(get_lipids, 'is_in_swisslipids', is_in_swisslipids)
         monkeypatch.setattr(get_lipids, 'is_in_LIPID_MAPS', is_in_LIPID_MAPS)
+        # The SwissLipids status is checked once per session, so check it again with the monkeypatched requests
+        get_lipids.is_swisslipids_available.cache_clear()
+        yield
+        get_lipids.is_swisslipids_available.cache_clear()
 
     def test_lipid_references(self):
         """Lipids are recognised from the structure and the databases are only requested for them."""
