@@ -138,20 +138,27 @@ def is_in_LIPID_MAPS(inchikey: str, only_first_layer: bool = False) -> dict:
     """Search the InChI keys in LIPID MAPS."""
     if not inchikey: raise RuntimeError('Empty inchikey')
     # https://www.lipidmaps.org/resources/rest
-    # Output item = physchem, is the only one that returns data for the inchi key
-    # for only the two first layers (main and atom connection)
     # To see InChIKey layers:
     # https://www.inchi-trust.org/about-the-inchi-standard/
     # Or https://www.rhea-db.org/help/inchi-inchikey#What_is_an_InChIKey_
+    # Output item = all only matches full InChI keys
+    # Output item = physchem is the only one that returns data for the first block of the key (atom connections)
+    context = 'physchem' if only_first_layer else 'all'
     key = inchikey[:14] if only_first_layer else inchikey
-    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/all/json"
+    url = f"https://www.lipidmaps.org/rest/compound/inchi_key/{key}/{context}/json"
     headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'}
     response = requests.get(url, headers=headers)
     check_lipid_response(response, 'LIPID MAPS', key)
     js = response.json()
     # LIPID MAPS answers an empty list when the InChI key is not found
     if js == []: return False
-    return js
+    if not only_first_layer: return js
+    # Several matches come as {'Row1': {...}, 'Row2': {...}} and a single match as the entry itself
+    rows = list(js.values()) if 'Row1' in js else [js]
+    # Prefer the entry with the same stereo layer (first two blocks), so only the protonation changes
+    row = next((row for row in rows if row['inchi_key'][:25] == inchikey[:25]), rows[0])
+    # Get the whole entry data with its full InChI key
+    return is_in_LIPID_MAPS(row['inchi_key'])
 
 
 def get_swisslipids_info(entity_id) -> dict:
