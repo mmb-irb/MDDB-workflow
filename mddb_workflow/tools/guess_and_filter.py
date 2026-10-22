@@ -94,3 +94,59 @@ def guess_and_filter_topology (
     # If the format is not recognized then we surrender
     else:
         raise ValueError(f'The "guess and filter" tool does not support {input_topology_file.format} format yet')
+
+
+def _select_water_and_counter_ions(pt_topology) -> tuple[set[int], list[int]]:
+    """Find water atoms and counter ion atoms in a pytraj topology.
+    Counter ions are single atom residues with a standard counter ion atom name.
+    Note that elements are not used, so this also works for coarse grained structures.
+    """
+    water_atoms = set()
+    counter_ion_atoms = []
+    for residue in pt_topology.residues:
+        if residue.name in STANDARD_SOLVENT_RESIDUE_NAMES:
+            water_atoms.update(range(residue.first, residue.last))
+        elif residue.n_atoms == 1:
+            atom_name = pt_topology.atom(residue.first).name
+            # Remove non-letter characters (e.g. '+' and '-' symbols)
+            simple_atom_name = ''.join(filter(str.isalpha, atom_name.upper()))
+            if simple_atom_name in STANDARD_COUNTER_ION_ATOM_NAMES:
+                counter_ion_atoms.append(residue.first)
+    return water_atoms, counter_ion_atoms
+
+
+# Given a structure file with more atoms than the trajectory, find an atom selection which matches the number
+# Try different typical atom selections and if none matches then surrender
+def guess_and_filter_structure (
+    input_structure_file : 'File',
+    output_structure_file : 'File',
+    target_atom_count : int,
+    verbose : bool = True) -> bool:
+    if not input_structure_file.is_pytraj_supported():
+        raise ValueError(f'The "guess and filter" tool does not support {input_structure_file.format} structures yet')
+    if verbose:
+        print(f'Trying to guess structure selection to match {target_atom_count} atoms')
+    structure = pt.load(input_structure_file.path)
+    pt_topology = structure.top
+    water_atoms, counter_ion_atoms = _select_water_and_counter_ions(pt_topology)
+    # Ions added after solvating (e.g. with Gromacs genion) replace water molecules so they come after the water
+    # Counter ions placed before the water (e.g. those of a lipid nanoparticle) are usually kept in dry trajectories
+    first_water_atom = min(water_atoms) if water_atoms else pt_topology.n_atoms
+    added_ion_atoms = { atom for atom in counter_ion_atoms if atom > first_water_atom }
+    excluded_selections = {
+        'No water': water_atoms,
+        'No water or counter ions': water_atoms.union(counter_ion_atoms),
+        'No water or ions added after the water': water_atoms.union(added_ion_atoms),
+    }
+    for selection_name, excluded_atoms in excluded_selections.items():
+        filtered_atoms_count = pt_topology.n_atoms - len(excluded_atoms)
+        if verbose: print(f' {selection_name} -> {filtered_atoms_count} atoms')
+        if filtered_atoms_count != target_atom_count: continue
+        if verbose: print('  Got it!')
+        kept_atoms = [ atom for atom in range(pt_topology.n_atoms) if atom not in excluded_atoms ]
+        # WARNING: If the output structure is a symlink it will try to overwrite the origin
+        # Remove it to avoid overwriting input data
+        if output_structure_file.is_symlink(): output_structure_file.remove()
+        pt.write_traj(output_structure_file.path, structure[pt.AtomMask(kept_atoms)], overwrite=True)
+        return True
+    return False

@@ -13,7 +13,7 @@ from mddb_workflow.utils.gmx_spells import count_xtc_frames, copy_xtc_frames
 from mddb_workflow.utils.arg_cksum import get_cksum_id
 from mddb_workflow.utils.type_hints import *
 
-from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION
+from mddb_workflow.tools.check_inputs import check_input_files, FIXED_TOPOLOGY_EXCEPTION, FIXED_STRUCTURE_EXCEPTION
 from mddb_workflow.tools.conversions import convert
 from mddb_workflow.tools.filter_atoms import filter_atoms
 from mddb_workflow.tools.image_and_fit import image_and_fit
@@ -143,6 +143,10 @@ def process_input_files(
         if input_structure_file == initial_topology_file:
             input_structure_file = fixed_topology
         initial_topology_file = fixed_topology
+    # The same may happen with the structure when there is no topology
+    fixed_structure = exceptions.get(FIXED_STRUCTURE_EXCEPTION, None)
+    if fixed_structure:
+        input_structure_file = fixed_structure
 
     # --- CONVERTING AND MERGING ------------------------------------------------------------
 
