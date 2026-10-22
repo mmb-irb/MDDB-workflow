@@ -1100,6 +1100,8 @@ class Dataset:
             glob_conditions = []
             for pattern in query_path:
                 if pattern and pattern != '*':
+                    # Stored paths have no trailing slash or leading './' so remove them from the pattern too
+                    pattern = os.path.normpath(pattern)
                     sql_pattern = pattern.replace('**/', '*').replace('**', '*')
                     glob_conditions.append("rel_path GLOB ?")
                     params.append(sql_pattern)
