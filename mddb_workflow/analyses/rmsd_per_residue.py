@@ -1,6 +1,6 @@
 import pytraj as pt
 
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 from mddb_workflow.utils.pyt_spells import get_reduced_pytraj_trajectory
 from mddb_workflow.utils.auxiliar import save_json
@@ -51,7 +51,7 @@ def rmsd_per_residue (
     # This happens with some random pdbs which pytraj considers to have 0 Mols
     # More info: https://github.com/Amber-MD/cpptraj/pull/820
     # IMPORTANT: This is critical for pytraj <= 2.0.5 but it makes the code fail for pytraj 2.0.6
-    if StrictVersion(pt.__version__) <= StrictVersion('2.0.5'):
+    if Version(pt.__version__) <= Version('2.0.5'):
         filtered_pt_trajectory.top.start_new_mol()
 
     # Run the analysis in pytraj
