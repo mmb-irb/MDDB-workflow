@@ -7,6 +7,9 @@ import time
 import multiprocessing
 import sqlite3
 from mddb_workflow.core.dataset import Dataset, State, DatabaseLock
+from mddb_workflow.utils.cache import Cache
+from mddb_workflow.utils.constants import CACHE_FILENAME
+from mddb_workflow.utils.file import File
 from pathlib import Path
 
 
@@ -573,3 +576,77 @@ def test_lock_dir_falls_back_to_tmp_for_read_only_dataset():
         finally:
             db_path.chmod(0o644)
             data_dir.chmod(0o755)
+
+
+def _make_project_with_md(tmpdir: Path) -> tuple[Dataset, Path, Path]:
+    """Create a dataset with one project and one MD registered."""
+    project_dir = tmpdir / "proj1"
+    md_dir = project_dir / "replica0"
+    md_dir.mkdir(parents=True)
+    ds = Dataset(dataset_path=str(tmpdir / "dataset.db"), create=True)
+    ds.add_entries([str(project_dir)], md_dirs="replica*", verbose=False)
+    return ds, project_dir, md_dir
+
+
+@pytest.mark.unit_int
+def test_lost_caches_keep_registered_uuids_when_adding_entries():
+    """Adding entries again after the caches were deleted keeps the registered UUIDs and MDs."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ds, project_dir, md_dir = _make_project_with_md(Path(tmpdir))
+        project_status = ds.get_status(project_dir)
+        md_status = ds.get_status(md_dir)
+        (project_dir / CACHE_FILENAME).unlink()
+        (md_dir / CACHE_FILENAME).unlink()
+
+        ds.add_entries([str(project_dir)], md_dirs="replica*", verbose=False)
+        assert ds.get_status(project_dir)['uuid'] == project_status['uuid']
+        assert ds.get_status(md_dir)['uuid'] == md_status['uuid']
+        assert ds.get_status(project_dir)['num_mds'] == 1
+        ds.close()
+
+
+@pytest.mark.unit_int
+def test_lost_caches_recover_registered_uuids_when_running_workflow():
+    """The workflow error handler recovers the registered UUIDs of regenerated caches."""
+    from mddb_workflow.mwf import ErrorHandling, Project
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ds, project_dir, md_dir = _make_project_with_md(Path(tmpdir))
+        project_uuid = ds.get_status(project_dir)['uuid']
+        md_uuid = ds.get_status(md_dir)['uuid']
+        (project_dir / CACHE_FILENAME).unlink()
+        (md_dir / CACHE_FILENAME).unlink()
+
+        # Caches are regenerated with new UUIDs before the dataset is known, as the workflow does
+        project_cache = Project.create_cache(str(project_dir))
+        assert project_cache.retrieve('uuid') != project_uuid
+        ErrorHandling(project_cache, dataset=ds)
+        assert project_cache.retrieve('uuid') == project_uuid
+
+        md_cache = Cache(File(str(md_dir / CACHE_FILENAME)), project_cache.retrieve('uuid'))
+        assert md_cache.retrieve('uuid') != md_uuid
+        ErrorHandling(md_cache, dataset=ds)
+        assert md_cache.retrieve('uuid') == md_uuid
+        assert md_cache.retrieve('project_uuid') == project_uuid
+
+        # The registered entries were not replaced
+        assert len(ds.query_table('projects')) == 1
+        assert ds.get_status(project_dir)['num_mds'] == 1
+        ds.close()
+
+
+@pytest.mark.unit_int
+def test_rel_path_collision_raises_and_keeps_registered_entry():
+    """Registering an already registered path with another UUID fails instead of replacing the entry."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ds, project_dir, md_dir = _make_project_with_md(Path(tmpdir))
+        project_uuid = ds.get_status(project_dir)['uuid']
+        rel_path = ds._abs_to_rel(project_dir)
+
+        with pytest.raises(ValueError, match='already registered'):
+            ds.update_status('another-uuid', state=State.NEW, message='', rel_path=rel_path)
+        with pytest.raises(ValueError, match='already registered'):
+            ds.update_status('another-md-uuid', state=State.NEW, message='',
+                             project_uuid=project_uuid, rel_path=ds._abs_to_rel(md_dir))
+        assert ds.get_status(project_dir)['uuid'] == project_uuid
+        assert ds.get_status(project_dir)['num_mds'] == 1
+        ds.close()

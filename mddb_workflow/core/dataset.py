@@ -443,6 +443,21 @@ class Dataset:
                     message=message,
                 )
 
+    def get_registered_uuids(self, rel_path: str, is_md: bool) -> tuple[str, str | None] | None:
+        """Get the UUID (and project UUID for MDs) registered in the database for a relative path.
+
+        Returns None if the path is not registered.
+        """
+        with self.locked_storage_file:
+            cur = self.conn.cursor()
+            if is_md:
+                cur.execute("SELECT uuid, project_uuid FROM mds WHERE rel_path=?", (rel_path,))
+                row = cur.fetchone()
+                return (row[0], row[1]) if row else None
+            cur.execute("SELECT uuid FROM projects WHERE rel_path=?", (rel_path,))
+            row = cur.fetchone()
+            return (row[0], None) if row else None
+
     def _read_uuid_from_cache(self, directory: str, make_uuid: bool = False, project_uuid: str = None) -> tuple[str, str | None]:
         """Read UUID and project_uuid from cache file in the given directory."""
         directory = Path(directory).resolve()
@@ -456,7 +471,16 @@ class Dataset:
             if uuid:
                 return uuid, project_uuid
         if make_uuid:
-            cache = Cache(File(str(cache_file)), project_uuid=project_uuid)
+            # If the cache was lost but the directory is already registered then keep its UUID
+            # Otherwise a new UUID would replace the registered entry and its MDs
+            registered = self.get_registered_uuids(self._abs_to_rel(directory), is_md=project_uuid is not None)
+            registered_uuid = None
+            if registered:
+                registered_uuid, registered_project_uuid = registered
+                if project_uuid is not None and registered_project_uuid != project_uuid:
+                    raise ValueError(f"MD {self._abs_to_rel(directory)} is registered under project UUID "
+                                     f"'{registered_project_uuid}' but its parent project has UUID '{project_uuid}'")
+            cache = Cache(File(str(cache_file)), project_uuid=project_uuid, uuid=registered_uuid)
             uuid = cache.retrieve('uuid')
             project_uuid = cache.retrieve('project_uuid')
             return uuid, project_uuid
@@ -631,19 +655,9 @@ class Dataset:
                     ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
                     if 'UNIQUE constraint failed: mds.rel_path' in str(e):
-                        # In case of rel_path collision, remove the existing entry and insert the new one
-                        # This is the same as saying we maintain the rel_path and updating the uuid
                         cur.execute("SELECT uuid FROM mds WHERE rel_path=?", (rel_path,))
-                        row = cur.fetchone()
-                        if row:
-                            existing_uuid = row[0]
-                            cur.execute("DELETE FROM mds WHERE uuid=?", (existing_uuid,))
-                            cur.execute('''
-                                INSERT INTO mds (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (uuid, project_uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
-                    else:
-                        raise
+                        raise ValueError(self._rel_path_collision_message('MD', rel_path, uuid, cur.fetchone()[0])) from e
+                    raise
             else:
                 # This is a project entry
                 if rel_path is None:
@@ -667,24 +681,25 @@ class Dataset:
                             rel_path=excluded.rel_path
                     ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
                 except sqlite3.IntegrityError as e:
-                    # Handling rel_path collision like for MDs
                     if 'UNIQUE constraint failed: projects.rel_path' in str(e):
-                        # Get the UUID of the existing project with this rel_path
                         cur.execute("SELECT uuid FROM projects WHERE rel_path=?", (rel_path,))
-                        row = cur.fetchone()
-                        if row:
-                            existing_uuid = row[0]
-                            # Replacing project automatically removes linked MD rows via ON DELETE CASCADE.
-                            cur.execute("DELETE FROM projects WHERE uuid=?", (existing_uuid,))
-                            cur.execute('''
-                                INSERT INTO projects (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified, num_mds)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-                            ''', (uuid, rel_path, state, message, process_id, slurm_job_id, last_modified))
-
-                    else:
-                        raise
+                        raise ValueError(self._rel_path_collision_message('Project', rel_path, uuid, cur.fetchone()[0])) from e
+                    raise
 
             self.conn.commit()
+
+    @staticmethod
+    def _rel_path_collision_message(scope: str, rel_path: str, uuid: str, registered_uuid: str) -> str:
+        """Explain why a path cannot be registered with a different UUID.
+
+        Replacing the registered entry would silently delete it (and, for projects, all its MDs).
+        """
+        return (
+            f"{scope} '{rel_path}' is already registered with UUID '{registered_uuid}' "
+            f"but its cache has UUID '{uuid}'. The registered entry is not replaced to avoid losing it. "
+            f"If the cache was regenerated, write the UUID '{registered_uuid}' back to its {CACHE_FILENAME}. "
+            f"If this is really a different {scope.lower()}, remove the old entry first with 'mwf ds remove'."
+        )
 
     def remove_entry(self, query_path: str | list[str], query_scope: str = "projects", verbose: bool = True):
         """Remove a single project or MD entry from the database by directory."""

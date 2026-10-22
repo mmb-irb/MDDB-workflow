@@ -2657,6 +2657,7 @@ class ErrorHandling:
         clear_register: bool = False,
     ):
         """Initialize the error handling."""
+        self.cache = cache
         self.uuids = {'uuid': cache.retrieve('uuid'),
                       'project_uuid': cache.retrieve('project_uuid')}
         self.is_md = True if self.uuids.get('project_uuid') else False
@@ -2671,8 +2672,18 @@ class ErrorHandling:
     def bind_dataset(self, dataset: Dataset | None):
         """Bind a dataset update function to the error handler."""
         if dataset:
+            rel_path = dataset._abs_to_rel(self.dir)
+            if not dataset.get_uuid_status(**self.uuids):
+                # The cache UUID is not registered, which happens when the cache was deleted and regenerated
+                # If this directory is already registered then recover its UUID instead of replacing the entry
+                registered = dataset.get_registered_uuids(rel_path, is_md=self.is_md)
+                if registered:
+                    uuid, project_uuid = registered
+                    self.cache.update('uuid', uuid)
+                    if self.is_md: self.cache.update('project_uuid', project_uuid)
+                    self.uuids = {'uuid': uuid, 'project_uuid': project_uuid}
             self.update_state = partial(dataset.update_status,
-                                        rel_path=dataset._abs_to_rel(self.dir),
+                                        rel_path=rel_path,
                                         **self.uuids)
             if not dataset.get_uuid_status(**self.uuids):
                 # If no status is available, add a new entry
