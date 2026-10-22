@@ -1,6 +1,7 @@
 from mddb_workflow.mwf import Project, MD, input_files
+from mddb_workflow.core.dataclass import InChIKeyData
 from mddb_workflow.tools.membrane_mapping import generate_membrane_mapping, find_leaflets, BILAYER, VESICLE, MICELLE, MIDPLANE
-from mddb_workflow.utils.auxiliar import save_json
+from mddb_workflow.utils.auxiliar import save_json, load_json
 from mddb_workflow.utils.mda_spells import get_mda_universe, get_mda_universe_from_stopology
 from mddb_workflow.utils.cache import Cache
 from mddb_workflow.utils.file import File
@@ -224,34 +225,140 @@ class TestAggregateClassification:
         assert membrane_map['mems']['0']['type'] == VESICLE
 
 
+# Molecules to test the lipid classification, with their expected LIPID MAPS category
+LIPIDS = {
+    'POPC': (r'CCCCCCCCCCCCCCCC(=O)OC[C@H](COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCC/C=C\CCCCCCCC', 'GP'),
+    'DSPC': ('CCCCCCCCCCCCCCCCCC(=O)OC[C@H](COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCCCCCCCCCCCC', 'GP'),
+    'cholesterol': ('CC(C)CCC[C@@H](C)[C@H]1CC[C@H]2[C@@H]3CC=C4C[C@@H](O)CC[C@]4(C)[C@H]3CC[C@]12C', 'ST'),
+    'palmitoyl sphingomyelin': ('CCCCCCCCCCCCC/C=C/[C@@H](O)[C@H](COP(=O)([O-])OCC[N+](C)(C)C)NC(=O)CCCCCCCCCCCCCCC', 'SP'),
+    'triglyceride': (r'CCCCCCCCCCCCCCCC(=O)OCC(OC(=O)CCCCCCC/C=C\CCCCCCCC)COC(=O)CCCCCCCCCCCCCCC', 'GL'),
+    'MC3': (r'CCCCC/C=C\C/C=C\CCCCCCCCC(CCCCCCCC/C=C\C/C=C\CCCCC)OC(=O)CCCN(C)C', 'FA'),
+    'MC3H': (r'CCCCC/C=C\C/C=C\CCCCCCCCC(CCCCCCCC/C=C\C/C=C\CCCCC)OC(=O)CCC[NH+](C)C', 'FA'),
+}
+NON_LIPIDS = {
+    'ibuprofen': 'CC(C)Cc1ccc(C(C)C(=O)O)cc1',
+    'alanine': 'C[C@H](N)C(=O)O',
+    'ATP': 'Nc1ncnc2c1ncn2[C@@H]1O[C@H](COP(=O)(O)OP(=O)(O)OP(=O)(O)O)[C@@H](O)[C@H]1O',
+    'glucose': 'OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O',
+    # Steroid hormones and drugs have no sterol side chain and they do not form membranes
+    'testosterone': 'C[C@]12CC[C@H]3[C@@H](CCC4=CC(=O)CC[C@@]43C)[C@@H]1CC[C@@H]2O',
+    # Too short chain for a fatty acyl
+    'octanoic acid': 'CCCCCCCC(=O)O',
+}
+
+
+def smiles_to_inchi(smiles: str) -> str:
+    """Get the InChI of a SMILES."""
+    from rdkit import Chem
+    return Chem.MolToInchi(Chem.MolFromSmiles(smiles))
+
+
+class TestLipidClassification:
+    """Lipid recognition from the structure with SMARTS of the LIPID MAPS categories."""
+
+    @pytest.mark.parametrize('name', LIPIDS)
+    def test_lipids(self, name):
+        from mddb_workflow.tools.lipid_classification import classify_lipid
+        smiles, category = LIPIDS[name]
+        assert classify_lipid(smiles_to_inchi(smiles)) == category
+
+    @pytest.mark.parametrize('name', NON_LIPIDS)
+    def test_non_lipids(self, name):
+        from mddb_workflow.tools.lipid_classification import classify_lipid
+        assert classify_lipid(smiles_to_inchi(NON_LIPIDS[name])) is None
+
+    def test_invalid_inchi(self):
+        from mddb_workflow.tools.lipid_classification import classify_lipid
+        assert classify_lipid('InChI=1S/test') is None
+
+    @pytest.mark.parametrize('test_accession', ['A01IP', 'A01J5', 'A02F9', 'OTRMG', 'A05SA', 'A05RV', 'A05Q3'])
+    def test_cached_lipid_references(self, test_accession, test_data_dir):
+        """The lipids of the membrane mapping test caches, found in lipid databases or forced, are recognised."""
+        from mddb_workflow.tools.lipid_classification import classify_lipid
+        # Read the cache file directly since the Cache rewrites it
+        cache_data = load_json(f'{test_data_dir}/input/caches/{test_accession}_memmap.json')
+        lipid_references = cache_data['lipmap_task_output']
+        for inchikey, data in cache_data['inchikeys_task_output'].items():
+            is_lipid = classify_lipid(data['inchi']) is not None
+            assert is_lipid == (inchikey in lipid_references), f'{inchikey} {data["resnames"]}'
+
+
+def inchikey_data(smiles: str, resname: str, classification: str, n_molecules: int = 1) -> tuple[str, InChIKeyData]:
+    """Get the InChI key and InChIKeyData of a molecule repeated in consecutive residues."""
+    from rdkit import Chem
+    mol = Chem.MolFromSmiles(smiles)
+    return Chem.MolToInchiKey(mol), InChIKeyData(inchi=Chem.MolToInchi(mol), resindices=list(range(n_molecules)),
+        resnames={resname}, molname=resname, classification={classification})
+
+
 class TestLipidReferences:
-    """Lipid references of residues classified as fatty which are not in lipid databases."""
+    """Lipid references of residues recognised as lipids, with the lipid databases monkeypatched."""
 
     @pytest.fixture(autouse=True)
-    def no_databases(self, monkeypatch):
-        """Make every residue missing in the MDDB, SwissLipids and LIPID MAPS databases."""
+    def databases(self, monkeypatch):
+        """Make every residue missing in the MDDB database and record the SwissLipids and LIPID MAPS requests.
+        Only POPC is found in SwissLipids.
+        """
         import mddb_workflow.tools.get_lipids as get_lipids
+        self.popc_key, _ = inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty')
+        self.requests = set()
+
+        def is_in_swisslipids(inchikey, only_first_layer=False):
+            self.requests.add(inchikey)
+            return {'entity_id': 'SLM:000000001'} if inchikey == self.popc_key else None
+
+        def is_in_LIPID_MAPS(inchikey, only_first_layer=False):
+            self.requests.add(inchikey)
+            return False
+
         monkeypatch.setattr(get_lipids, 'get_database_inchikey_reference', lambda *args: None)
-        monkeypatch.setattr(get_lipids, 'is_in_swisslipids', lambda *args, **kwargs: None)
-        monkeypatch.setattr(get_lipids, 'is_in_LIPID_MAPS', lambda *args, **kwargs: None)
+        monkeypatch.setattr(get_lipids, 'is_in_swisslipids', is_in_swisslipids)
+        monkeypatch.setattr(get_lipids, 'is_in_LIPID_MAPS', is_in_LIPID_MAPS)
 
-    @staticmethod
-    def fatty_inchikeys():
-        from mddb_workflow.core.dataclass import InChIKeyData
-        return {'NRLNQCOGCKAESA-KWXKLSQISA-O': InChIKeyData(
-            inchi='InChI=1S/test', resindices=[0, 1], resnames={'MC3H'}, molname='MC3H', classification={'fatty'})}
+    def test_lipid_references(self):
+        """Lipids are recognised from the structure and the databases are only requested for them."""
+        from mddb_workflow.tools.get_lipids import generate_lipid_references
+        inchikeys = dict([
+            inchikey_data(LIPIDS['POPC'][0], 'POPC', 'fatty', n_molecules=100),
+            inchikey_data(LIPIDS['MC3H'][0], 'MC3H', 'fatty', n_molecules=100),
+            inchikey_data(NON_LIPIDS['ibuprofen'], 'IBU', 'other'),
+        ])
+        popc_key, mc3h_key, ibuprofen_key = inchikeys
+        references = generate_lipid_references(inchikeys, cache=None)
+        assert set(references) == {popc_key, mc3h_key}
+        assert references[popc_key]['category'] == 'GP'
+        assert references[popc_key]['swisslipids'] == {'entity_id': 'SLM:000000001'}
+        # Synthetic lipids are lipids without database references
+        assert references[mc3h_key]['category'] == 'FA'
+        assert references[mc3h_key]['swisslipids'] is None and references[mc3h_key]['lipidmaps'] is None
+        # The connection test is not a lipid request
+        assert self.requests - {'test'} == {popc_key, mc3h_key}
 
-    def test_fatty_not_lipid_fails(self):
+    def test_fatty_not_lipid_warns(self):
+        """A few fatty residues which are not lipids (e.g. ligands with alkyl chains) are not lipids."""
+        from mddb_workflow.tools.get_lipids import generate_lipid_references
+        inchikeys = dict([inchikey_data(NON_LIPIDS['octanoic acid'], 'OCA', 'fatty', n_molecules=2)])
+        assert generate_lipid_references(inchikeys, cache=None) == {}
+        assert self.requests == set()
+
+    def test_abundant_fatty_not_lipid_fails(self):
+        """Fatty residues which are not lipids, but enough to be part of a membrane, make the workflow fail."""
         from mddb_workflow.tools.get_lipids import generate_lipid_references
         from mddb_workflow.utils.auxiliar import InputError
+        inchikeys = dict([inchikey_data(NON_LIPIDS['octanoic acid'], 'OCA', 'fatty', n_molecules=30)])
         with pytest.raises(InputError, match='forced_lipids'):
-            generate_lipid_references(self.fatty_inchikeys(), cache=None)
+            generate_lipid_references(inchikeys, cache=None)
 
-    def test_fatty_not_lipid_mercy(self):
+    def test_abundant_fatty_not_lipid_mercy(self):
         from mddb_workflow.tools.get_lipids import generate_lipid_references
-        assert generate_lipid_references(self.fatty_inchikeys(), cache=None, mercy=['lipids']) == {}
+        inchikeys = dict([inchikey_data(NON_LIPIDS['octanoic acid'], 'OCA', 'fatty', n_molecules=30)])
+        assert generate_lipid_references(inchikeys, cache=None, mercy=['lipids']) == {}
 
     def test_forced_lipids(self):
         from mddb_workflow.tools.get_lipids import generate_lipid_references
-        references = generate_lipid_references(self.fatty_inchikeys(), cache=None, input_forced_lipids=['MC3H'])
-        assert references['NRLNQCOGCKAESA-KWXKLSQISA-O']['forced'] is True
+        inchikeys = dict([inchikey_data(NON_LIPIDS['octanoic acid'], 'OCA', 'fatty', n_molecules=30)])
+        oca_key = next(iter(inchikeys))
+        references = generate_lipid_references(inchikeys, cache=None, input_forced_lipids=['OCA'])
+        assert references[oca_key]['forced'] is True
+        assert references[oca_key]['category'] is None
+        assert self.requests == set()

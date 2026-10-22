@@ -3,6 +3,8 @@ from functools import lru_cache
 from mddb_workflow.utils.auxiliar import warn, retry_request, RequestError, RateLimitError, get_retry_after, InputError
 from mddb_workflow.utils.constants import LIPID_REFERENCE_VERSION, LIPIDS_MATCH_FLAG
 from mddb_workflow.tools.get_inchi_keys import get_database_inchikey_reference
+from mddb_workflow.tools.lipid_classification import classify_lipid, LIPID_CATEGORIES
+from mddb_workflow.tools.membrane_mapping import MIN_LEAFLET_LIPIDS
 from mddb_workflow.utils.selections import Selection
 from mddb_workflow.utils.type_hints import *
 
@@ -14,26 +16,27 @@ def generate_lipid_references(
     mercy: list[str] = [],
     database: Optional['Database'] = None,
 ) -> dict[str, dict]:
-    """Add lipid-specific database information to InChIKeyData objects.
+    """Find the lipids among the InChI keys and get their references in lipid databases.
 
-    This function queries SwissLipids and LIPID MAPS databases for each InChI key
-    and adds the results directly to the InChIKeyData objects. It also performs
-    quality checks on lipid classifications. InChI keys already in the MDDB
-    database reuse its lipid data instead.
+    Lipids are recognised from their structure with SMARTS of the LIPID MAPS categories (see lipid_classification).
+    Then SwissLipids and LIPID MAPS are queried only for these lipids to get their references.
+    Lipids which are not in these databases (e.g. synthetic ionizable lipids) have no references.
+    InChI keys already in the MDDB database reuse its lipid data instead.
 
-    Residues with names in the forced lipids are treated as lipids although they are not in the databases.
-    Residues classified as fatty which are not in the databases nor forced make the workflow fail,
-    unless the lipids mercy flag is passed.
+    Residues with names in the forced lipids are treated as lipids although their structure is not recognised.
+    Residues classified as fatty whose structure is not recognised as a lipid are not lipids.
+    When there are enough of them to be part of a membrane, a missed lipid would break the membrane mapping
+    so the workflow fails, unless the lipids mercy flag is passed. Otherwise they are just warned.
 
     Args:
-        inchikeys: Dictionary mapping InChI keys to InChIKeyData objects (modified in-place).
+        inchikeys: Dictionary mapping InChI keys to InChIKeyData objects.
         cache: Cache to store the MDDB database requests.
         input_forced_lipids: Residue names to be treated as lipids.
         mercy: Failures which do not kill the process.
         database: MDDB database handler to reuse existing references.
 
     Returns:
-        dict: Lipid references by InChI key.
+        dict: Lipid references by InChI key with their LIPID MAPS category and database data.
 
     """
     lipid_references = {}
@@ -47,17 +50,30 @@ def generate_lipid_references(
         if len(clasi) == 1 and 'ion' in clasi:
             # Skip ions
             continue
+        category = classify_lipid(mol_data.inchi)
         # Residues forced by the user are lipids with no database references
         if set(mol_data.resnames) & forced_lipids:
             lipid_references[inchikey] = {
+                'category': category,
                 'swisslipids': None,
                 'lipidmaps': None,
                 'forced': True,
                 'version': LIPID_REFERENCE_VERSION
             }
             continue
+        if not category:
+            # If the structure is not a lipid, check the residue classification
+            if any('fatty' in classes for classes in clasi):
+                molecules = len(mol_data.resindices) // mol_data.frag_len
+                warn(f'The InChI key {inchikey} of {mol_data.molname} is classified as fatty '
+                     f'but its structure is not a lipid ({molecules} molecules).\n'
+                     f'Resindices: {str(mol_data.resindices)}')
+                if molecules >= MIN_LEAFLET_LIPIDS:
+                    not_matched_fatty.append((mol_data.molname, inchikey, molecules))
+            continue
         # Check if the lipid data is already in the MDDB database
         database_reference = get_database_inchikey_reference(inchikey, cache, database)
+        SL_data = LM_data = None
         if database_reference:
             SL_data = database_reference.get('swisslipids')
             LM_data = database_reference.get('lipidmaps')
@@ -69,36 +85,27 @@ def generate_lipid_references(
                 except Exception as e:
                     warn(f'There was a problem connecting to the SwissLipids database: {e}')
                     is_connected = False
-            if not is_connected: continue
-            # If we dont find it, we try without stereochemistry (only connection layer)
-            SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
-            LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
+            if is_connected:
+                # If we dont find it, we try without stereochemistry (only connection layer)
+                SL_data = is_in_swisslipids(inchikey) or is_in_swisslipids(inchikey, only_first_layer=True)
+                LM_data = is_in_LIPID_MAPS(inchikey) or is_in_LIPID_MAPS(inchikey, only_first_layer=True)
+        lipid_references[inchikey] = {
+            'category': category,
+            'swisslipids': SL_data or None,
+            'lipidmaps': LM_data or None,
+            'version': LIPID_REFERENCE_VERSION
+        }
 
-        # Add lipid database data to InChIKeyData
-        if SL_data or LM_data:
-            lipid_references[inchikey] = {
-                'swisslipids': SL_data,
-                'lipidmaps': LM_data,
-                'version': LIPID_REFERENCE_VERSION
-            }
-
-            # QUALITY CHECKS
-            # If the residue is a lipid, we check if it is classified as fatty/steroid
-            if all('fatty' not in classes for classes in clasi) and \
-                all('steroid' not in classes for classes in clasi):
-                warn(f'The {mol_data.moltype} {mol_data.molname} is classified as {clasi}, '
-                     f'but the InChIKey "{inchikey}" may be from a lipid.')
-        else:
-            # If the InChIKey is not in SwissLipids or LIPID MAPS, check classification
-            if any('fatty' in classes for classes in mol_data.classification):
-                warn(f'The InChIKey {inchikey} of {mol_data.molname} is '
-                     f'classified as fatty but is not a lipid.\n'
-                     f'Resindices: {str(mol_data.resindices)}')
-                not_matched_fatty.append((mol_data.molname, inchikey, mol_data.resindices))
+        # QUALITY CHECKS
+        # If the residue is a lipid, we check if it is classified as fatty/steroid
+        if all('fatty' not in classes for classes in clasi) and \
+            all('steroid' not in classes for classes in clasi):
+            warn(f'The {mol_data.moltype} {mol_data.molname} is classified as {clasi}, '
+                 f'but the InChIKey "{inchikey}" is from a lipid ({LIPID_CATEGORIES[category]}).')
 
     if not_matched_fatty and LIPIDS_MATCH_FLAG not in mercy:
-        raise InputError('Some residues are classified as fatty but they are not found in SwissLipids or LIPID MAPS:\n\t'
-            + '\n\t'.join(f'{name} - {key} (residues {resindices})' for name, key, resindices in not_matched_fatty)
+        raise InputError('Some residues are classified as fatty but their structure is not recognised as a lipid:\n\t'
+            + '\n\t'.join(f'{name} - {key} ({molecules} molecules)' for name, key, molecules in not_matched_fatty)
             + '\n\tAdd their residue names to the "forced_lipids" input field to treat them as lipids'
             + f' or use the flag "-m {LIPIDS_MATCH_FLAG}" to bypass this check.')
 
@@ -111,7 +118,7 @@ def get_lipids_selection(
     lipid_references: dict[str, dict],
     cg_selection: Optional['Selection'] = None,
 ) -> 'Selection':
-    """Select lipids using lipid references (InChI keys found in SwissLipids/LIPID MAPS) for all-atom regions.
+    """Select lipids using lipid references (InChI keys recognised as lipids) for all-atom regions.
     Coarse grained regions have no InChI keys, so here we rely on the residue classification.
     """
     aa_lipids_selection = Selection()
