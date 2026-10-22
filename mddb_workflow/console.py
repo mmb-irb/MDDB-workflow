@@ -511,6 +511,16 @@ def main():
                 query_message=args.query_message,
                 query_inputs=args.query_inputs
             )
+        elif args.dataset_subcommand == 'inputs' and not args.inputs_template:
+            # Without a template there is nothing to generate so we show the existing inputs files
+            if args.inputs_generator or args.overwrite:
+                ds_inputs.error("--inputs_generator and --overwrite require --inputs_template")
+            dataset.show_inputs_files(
+                query_path=args.query_path,
+                query_state=args.query_state,
+                query_message=args.query_message,
+                query_inputs=args.query_inputs
+            )
         elif args.dataset_subcommand == 'inputs':
             dataset.generate_inputs_yaml(
                 inputs_template_path=args.inputs_template,

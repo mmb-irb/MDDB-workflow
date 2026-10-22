@@ -871,6 +871,45 @@ class Dataset:
             found, value = _read_inputs_field(inputs_filepath, keys)
             print(f'{rel_path}: ' + (repr(value) if found else '(missing)'))
 
+    def show_inputs_files(self,
+            query_path: list[str] = ['*'],
+            query_state: list[str] = [],
+            query_message: list[str] = [],
+            query_inputs: list[tuple[str, str]] = None,
+        ):
+        """Print the whole content of the inputs files of the selected projects.
+
+        Args:
+            query_path (list[str]):
+                List of directory glob patterns to filter the projects from the dataset.
+            query_state (list[str]):
+                List of states to filter the projects from the dataset.
+            query_message (list[str]):
+                List of glob patterns to filter the projects by message field (e.g., 'URLError*').
+            query_inputs (list[tuple[str, str]]):
+                List of field and value pairs to filter the projects by their inputs file (e.g. [('pdb_ids', '1ABC')]).
+                Projects must match all pairs. Values are parsed as YAML.
+                If the field is a list, it is enough for the value to be one of its items.
+
+        """
+        query_path = _type_check_dir_list(query_path)
+        query_state = _type_check_dir_list(query_state)
+        query_message = _type_check_dir_list(query_message)
+        filtered_projects = self.query_table('projects', query_path, query_state, query_message, query_inputs)
+        if len(filtered_projects) == 0:
+            print(_no_projects_message(query_path, query_state, query_message, query_inputs))
+            return
+        for project_entry in filtered_projects:
+            project_dict = dict(zip(self.project_columns, project_entry))
+            rel_path = project_dict['rel_path']
+            inputs_filepath = self._find_inputs_file(rel_path)
+            if inputs_filepath is None:
+                print(f'{rel_path}: (no inputs file)')
+                continue
+            print(f'===== {inputs_filepath} =====')
+            with open(inputs_filepath, 'r') as f:
+                print(f.read())
+
     def show_logs(self,
             error: bool = False,
             n_projects: int = 50,
