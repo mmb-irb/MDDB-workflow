@@ -388,10 +388,13 @@ def check_trajectory_integrity (
         worst_fragment = all_fragments[worst_report['name']]
         # Frame after the biggest jump, starting at 0
         jump_frame = int(np.argmax(worst_report['jumps'])) + 1
+        # Show the two frames before the jump and the two frames after it, as long as they exist
+        last_frame = len(worst_report['jumps'])
+        shown_frames = list(range(max(jump_frame - 2, 0), min(jump_frame + 1, last_frame) + 1))
         jumping_atoms = find_jumping_atoms(input_structure_filename, input_trajectory_filename,
             worst_fragment, fragment_bond_pairs[worst_report['name']], jump_frame)
         write_view_script(view_script_filename, input_structure_filename, input_trajectory_filename,
-            jump_frame, worst_fragment, jumping_atoms)
+            jump_frame, shown_frames, worst_fragment, jumping_atoms)
         view_hint = f'To see the clearest jump run:\n  vmd -e {view_script_filename}'
 
         # Describe the worst fragment and its biggest jump in the warning
@@ -407,7 +410,7 @@ def check_trajectory_integrity (
         description += f'.\nIts biggest jump is between frames {jump_frame - 1} and {jump_frame}.'
         # Frames and atoms to be shown in the client
         data = {
-            'frames': [jump_frame - 1, jump_frame],
+            'frames': shown_frames,
             'selection': format_selection(structure, worst_fragment),
         }
 
@@ -481,12 +484,13 @@ def write_view_script(
     structure_filename : str,
     trajectory_filename : str,
     jump_frame : int,
+    shown_frames : list[int],
     fragment : 'Selection',
     jumping_atoms : 'Selection',
 ):
     """Write a VMD script to see a jump, from the previous frame to the jump frame.
 
-    Only these two frames are loaded.
+    Only the shown frames are loaded.
     The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK.
     """
     previous_frame = jump_frame - 1
@@ -495,7 +499,7 @@ def write_view_script(
         f'mol new {{{abspath(structure_filename)}}} type pdb waitfor all',
         # Frames from the structure file are removed so frame numbers match the trajectory
         'animate delete all',
-        f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {previous_frame} last {jump_frame} waitfor all',
+        f'mol addfile {{{abspath(trajectory_filename)}}} type xtc first {shown_frames[0]} last {shown_frames[-1]} waitfor all',
         'set main [molinfo top]',
         # Fragment
         'mol representation Licorice',
@@ -509,7 +513,7 @@ def write_view_script(
         f'mol selection {{{jumping_atoms.to_vmd()}}}',
         'mol addrep $main',
         # Center the view in the fragment before the jump and zoom in
-        'animate goto 0',
+        f'animate goto {shown_frames.index(previous_frame)}',
         f'set fragment [atomselect $main {{{fragment.to_vmd()}}}]',
         'proc get_size {atoms} {',
         '    lassign [measure minmax $atoms] lowest highest',
@@ -519,7 +523,8 @@ def write_view_script(
         'molinfo $main set center_matrix [list [transoffset [vecscale -1 [measure center $fragment]]]]',
         f'set zoom [expr {{[get_size [atomselect $main all]] / max([get_size $fragment], {MIN_FOCUS_SIZE})}}]',
         'if {$zoom > 1} { scale by $zoom }',
-        f'puts "Frames {previous_frame} and {jump_frame} are loaded as frames 0 and 1"',
+        f'puts "Frames {shown_frames[0]} to {shown_frames[-1]} are loaded as frames 0 to {len(shown_frames) - 1}"',
+        f'puts "The jump is between frames {shown_frames.index(previous_frame)} and {shown_frames.index(jump_frame)}"',
         'puts "The fragment is shown in yellow licorice and the atoms of the bonds which change the most in CPK"',
     ]
     with open(script_filename, 'w') as script_file:

@@ -396,7 +396,8 @@ def warn_broken_pbc(trajectory_file: 'File', structure: 'Structure', selection: 
     residue_atom_indices = [ atom_indices for atom_indices in residue_atom_indices if atom_indices ]
     translation_fitted = guess_translation_fitted(frames, selection.atom_indices)
     rotation_fitted = guess_rotation_fitted(frames, residue_atom_indices)
-    print(f' The trajectory seems to be fitted in translation: {translation_fitted} | in rotation: {rotation_fitted}')
+    fitted_moves = [ move for move, fitted in [('translation', translation_fitted), ('rotation', rotation_fitted)] if fitted ]
+    if fitted_moves: print(f' The trajectory seems to be fitted in {" and ".join(fitted_moves)}')
     if not rotation_fitted: return
     boxes = [ box for _, box in frames ]
     if not all(box is not None and box.any() for box in boxes):
@@ -413,7 +414,7 @@ def reset_structure(
     output_structure_filepath: str,
 ):
     """Get the first frame of a trajectory and use it to reset the structure."""
-    print(' Reseting structure after imaging step')
+    print(' Reseting structure')
     run_gromacs(f'trjconv -s {input_structure_filepath} \
         -f {input_trajectory_filepath} -o {output_structure_filepath} \
         -dump 0', user_input=SYSTEM_SELECTION_NAME)
