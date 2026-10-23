@@ -139,6 +139,12 @@ def build_lipids(heads: np.ndarray, tail_directions: np.ndarray, box: list[float
     return universe, universe.select_atoms('name P')
 
 
+def shift_and_wrap(universe: 'mda.Universe', shift: list[float]):
+    """Translate all atoms and put the residues back in the box, so lipids crossing the box boundary are whole."""
+    universe.atoms.translate(shift)
+    universe.atoms.wrap(compound='residues', center='cog')
+
+
 class TestAggregateClassification:
     """Classification of amphiphilic aggregates on synthetic systems."""
 
@@ -224,6 +230,22 @@ class TestAggregateClassification:
         assert membrane_map['n_mems'] == 1
         assert membrane_map['mems']['0']['type'] == VESICLE
 
+    @pytest.mark.parametrize('shift', [0, 30])
+    def test_bilayer_in_short_box(self, shift):
+        """Leaflets 40 Å apart in a 70 Å high box are 30 Å apart back to back through the box boundary.
+        The leaflets facing each other must be paired, also when the bilayer crosses the box boundary.
+        """
+        grid = np.array([[x, y] for x in np.arange(-56, 64, 8) for y in np.arange(-56, 64, 8)], dtype=float)
+        bot = np.column_stack([grid, np.full(len(grid), -20)])
+        top = np.column_stack([grid, np.full(len(grid), 20)])
+        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1))])
+        universe, headgroups = build_lipids(np.concatenate([bot, top]), directions, [120, 120, 70])
+        shift_and_wrap(universe, [0, 0, shift])
+        membrane_map = find_leaflets(universe, headgroups)
+        assert membrane_map['n_mems'] == 1
+        membrane = membrane_map['mems']['0']
+        assert membrane['type'] == BILAYER
+        assert set(membrane['polar_atoms']['top']) == set(headgroups[len(grid):].indices)
 
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
 LIPIDS = {

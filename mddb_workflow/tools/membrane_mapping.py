@@ -263,6 +263,30 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
     }
 
 
+def facing_separation(first: dict, second: dict, box: np.ndarray | None) -> np.ndarray | None:
+    """Get the separation from a flat leaflet to the closest periodic image of another one where their tails face each other.
+
+    In-plane components follow the minimum image convention. Along the normal, the closest image may be back to back
+    (e.g. leaflets 40 Å apart in a 70 Å high box are 30 Å apart through the box boundary), so the images of the box
+    axis closest to the normal are checked. None is returned if no image faces or they are too far apart.
+    """
+    separation = minimum_image(second['centroid'] - first['centroid'], box)
+    images = [separation]
+    if box is not None:
+        axis = np.argmax(np.abs(first['normal']))
+        images = [separation + shift * box[axis] * np.eye(3)[axis] for shift in (-1, 0, 1)]
+    best, best_distance = None, None
+    for image in images:
+        distance = np.dot(image, first['normal'])
+        # Tails of each leaflet must point towards the other leaflet
+        first_faces = np.sign(distance) == first['direction']
+        second_faces = np.sign(np.dot(-image, second['normal'])) == second['direction']
+        if not (first_faces and second_faces) or abs(distance) > MAX_BILAYER_SEPARATION: continue
+        if best is None or abs(distance) < best_distance:
+            best, best_distance = image, abs(distance)
+    return best
+
+
 def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tuple[str, dict]], list]:
     """Group leaflets into amphiphilic aggregates: flat bilayers, vesicles and micelles.
 
@@ -292,23 +316,19 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
     flats = [desc for desc in coherent if desc['flat']]
     for first in flats:
         if id(first) in used: continue
-        best, best_distance = None, None
+        best, best_distance, best_separation = None, None, None
         for second in flats:
             if second is first or id(second) in used: continue
             if abs(np.dot(first['normal'], second['normal'])) < PARALLEL_NORMALS: continue
-            separation = minimum_image(second['centroid'] - first['centroid'], box)
-            distance = np.dot(separation, first['normal'])
-            # Tails of each leaflet must point towards the other leaflet
-            first_faces = np.sign(distance) == first['direction']
-            second_faces = np.sign(np.dot(-separation, second['normal'])) == second['direction']
-            if not (first_faces and second_faces) or abs(distance) > MAX_BILAYER_SEPARATION: continue
-            if best is None or abs(distance) < best_distance:
-                best, best_distance = second, abs(distance)
+            separation = facing_separation(first, second, box)
+            if separation is None: continue
+            distance = abs(np.dot(separation, first['normal']))
+            if best is None or distance < best_distance:
+                best, best_distance, best_separation = second, distance, separation
         if best is None: continue
         used.update([id(first), id(best)])
         # The top leaflet is the one further along the normal
-        separation = minimum_image(best['centroid'] - first['centroid'], box)
-        top, bot = (best, first) if np.dot(separation, first['normal']) > 0 else (first, best)
+        top, bot = (best, first) if np.dot(best_separation, first['normal']) > 0 else (first, best)
         aggregates.append((BILAYER, {'top': top['group'], 'bot': bot['group']}))
 
     for desc in curved_in:
