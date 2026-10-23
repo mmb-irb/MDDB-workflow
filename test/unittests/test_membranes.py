@@ -274,6 +274,19 @@ class TestAggregateClassification:
         assert len(micelle['polar_atoms']['outer']) == len(lumen)
         assert membrane_map['no_mem_lipid'] == []
 
+    def test_rough_bilayer_patch_is_not_micelle(self):
+        """Leaflets of a small and rough bilayer patch are not flat, but their lipids are not oriented to the center either.
+        They must not be micelles.
+        """
+        grid = np.array([[x, y] for x in np.arange(-20, 28, 8) for y in np.arange(-20, 28, 8)], dtype=float)
+        roughness = np.where((grid[:, 0] + grid[:, 1]) % 16 == 0, 4.5, -4.5)
+        bot = np.column_stack([grid, roughness - 20])
+        top = np.column_stack([grid, roughness + 20])
+        directions = np.concatenate([np.tile([0, 0, 1], (len(grid), 1)), np.tile([0, 0, -1], (len(grid), 1))])
+        universe, headgroups = build_lipids(np.concatenate([bot, top]), directions, [150, 150, 150])
+        membrane_map = find_leaflets(universe, headgroups)
+        assert all(mem['type'] != MICELLE for mem in membrane_map['mems'].values())
+
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
 LIPIDS = {
     'POPC': (r'CCCCCCCCCCCCCCCC(=O)OC[C@H](COP(=O)([O-])OCC[N+](C)(C)C)OC(=O)CCCCCCC/C=C\CCCCCCCC', 'GP'),

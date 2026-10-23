@@ -21,6 +21,8 @@ FLATNESS_THRESHOLD = 0.3
 STRONG_ORIENTATION = 0.5
 # Fraction of lipids clearly oriented against the majority from which a group is considered mixed (merged leaflets)
 MIXED_ORIENTATION = 0.25
+# Minimum fraction of lipids clearly oriented in the same direction to decide the orientation of a leaflet
+CLEAR_ORIENTATION = 0.5
 # Minimum absolute cosine between normals of the two leaflets of a bilayer
 PARALLEL_NORMALS = 0.9
 # Maximum distance (Å) between the centroids of the two leaflets of a bilayer along the normal
@@ -230,6 +232,8 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
     the leaflet normal when it is flat or on the radial direction from the leaflet center otherwise.
     Lipids in a real leaflet are oriented in the same direction, while a group with many lipids
     oriented in both directions is likely two leaflets merged by LeafletFinder.
+    The direction is undecided (0) when not enough lipids are clearly oriented in the same direction
+    (e.g. small or rough bilayer patches which are not flat, whose tails are not radial).
     Sterols are ignored for the orientation since they are short and they may be not oriented
     (e.g. cholesterol in the core of lipid nanoparticles), unless there are only sterols.
     """
@@ -253,6 +257,8 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
     if np.any(not_sterols): cosines = cosines[not_sterols]
     positive = np.mean(cosines > STRONG_ORIENTATION)
     negative = np.mean(cosines < -STRONG_ORIENTATION)
+    direction = 0
+    if max(positive, negative) >= CLEAR_ORIENTATION: direction = 1 if positive > negative else -1
     return {
         'group': leaflet,
         'flat': flat,
@@ -260,8 +266,8 @@ def describe_leaflet(leaflet: 'AtomGroup', box: np.ndarray | None) -> dict:
         'normal': normal,
         'radius': radii.mean(),
         'coherent': min(positive, negative) < MIXED_ORIENTATION,
-        # Flat: tails along (+1) or against (-1) the normal. Curved: tails outwards (+1) or inwards (-1)
-        'direction': 1 if positive > negative else -1,
+        # Flat: tails along (+1) or against (-1) the normal. Curved: tails outwards (+1) or inwards (-1). Undecided: 0
+        'direction': direction,
     }
 
 
@@ -295,6 +301,7 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
     - Vesicle: a curved leaflet with tails inwards (outer) and a smaller concentric curved leaflet with tails outwards (inner).
     - Bilayer: two flat leaflets with parallel normals whose tails face each other.
 
+    Leaflets with an undecided lipid orientation are not classified.
     Returns the aggregates as (type, leaflets by name), the leaflets which could not be classified and the curved
     leaflets with tails inwards and no partner. These are micelles, unless their partner is found later (see find_leaflets).
     """
@@ -315,7 +322,7 @@ def classify_leaflets(leaflets: list, box: np.ndarray | None) -> tuple[list[tupl
         empty = outer['group'].universe.atoms[[]]
         aggregates.append((VESICLE, {'outer': outer['group'], 'inner': inner['group'], MIDPLANE: empty}))
 
-    flats = [desc for desc in coherent if desc['flat']]
+    flats = [desc for desc in coherent if desc['flat'] and desc['direction'] != 0]
     for first in flats:
         if id(first) in used: continue
         best, best_distance, best_separation = None, None, None
