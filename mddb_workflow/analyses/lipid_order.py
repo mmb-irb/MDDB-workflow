@@ -18,6 +18,7 @@ def lipid_order(
     output_directory: str,
     inchikey_map: list[dict],
     cg_residues: list[int],
+    ua_residues: list[int],
     snapshots: int,
     frames_limit: int = 100
 ):
@@ -37,10 +38,10 @@ def lipid_order(
         return
     frame_step, _ = calculate_frame_step(snapshots, frames_limit)
     # Choose the method according to the type of lipids present
-    if len(cg_residues) > 0:
+    if len(cg_residues) > 0 or len(ua_residues) > 0:
         # Check supported formats: https://vachalab.github.io/gorder-manual/other_structure.html
         if topology_file.format not in ['tpr', 'gro']:
-            warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection.')
+            warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection or ua_selection.')
             return {}
         # We will save one example residue used to extract the carbon chains
         lipids = []
@@ -48,9 +49,7 @@ def lipid_order(
             lipid_ag = universe.select_atoms(f'resname {resname}')
             if lipid_ag.n_atoms > 0:
                 lipids.append(lipid_ag.residues[0])
-        # Heuristic: if the residues have more than 40 atoms, assume United Atom.
-        is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids)
-        if is_united_atom:
+        if len(ua_residues) > 0:
             order_parameters_dict = ua_lipid_order(universe, topology_file, output_directory, frame_step, lipids)
         else:
             order_parameters_dict = cg_lipid_order(universe, topology_file, output_directory, frame_step, lipids)

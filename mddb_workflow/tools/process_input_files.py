@@ -212,7 +212,7 @@ def process_input_files(
     # Now we can set a provisional coarse grain selection
     # This selection is useful to avoid problems with CG atom elements
     # Since this is proviosonal we will make it silent
-    self._set_cg_selection(provisional_structure, verbose=False)
+    self._set_cg_selection(provisional_structure, skipped_trajectory_file, initial_topology_file, verbose=False)
     provisional_cg_selection = self.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
@@ -274,8 +274,8 @@ def process_input_files(
     provisional_structure = Structure.from_pdb_file(filtered_structure_file.path)
     # Again, set the coarse grain atoms
     # Since elements may be needed to guess PBC selection we must solve them right before
-    # Since this is proviosonal we will make it silent
-    self._set_cg_selection(provisional_structure, verbose=False)
+    # Logs are shown only here, since this structure is already filtered
+    self._set_cg_selection(provisional_structure, filtered_trajectory_file, filtered_topology_file, verbose=True)
     provisional_cg_selection = self.cg_selection
     for atom_index in provisional_cg_selection.atom_indices:
         provisional_structure.atoms[atom_index].element = CG_ATOM_ELEMENT
@@ -495,7 +495,7 @@ def process_input_files(
 
     # Set the final structure
     final_structure = Structure.from_pdb_file(output_structure_file.path)
-    self._set_cg_selection(final_structure, verbose=False)
+    self._set_cg_selection(final_structure, output_trajectory_file, output_topology_file, verbose=False)
     final_cg_selection = self.cg_selection
 
     # Make sure the CG selection is identical to the provisional selection

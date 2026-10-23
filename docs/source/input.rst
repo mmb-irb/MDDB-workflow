@@ -486,6 +486,18 @@ Default: ``auto``
 ~~~~~~~~~~~~~~~~
 
 Set those atoms which are not actual "atoms" but coarse grained (CG) beads.
+Use ``auto`` to guess them from the force fields, atom names, atoms per residue and bond lengths.
+
+.. warning::
+ EXPERIMENTAL INPUT
+
+``ua_selection``
+~~~~~~~~~~~~~~~~
+
+Set those atoms which belong to united atom (UA) residues, where carbons have their hydrogens absorbed (e.g. GROMOS, Berger lipids).
+Note that polar hydrogens may be still present.
+These residues are skipped where explicit hydrogens are needed (e.g. InChI keys).
+Use ``auto`` to guess them by looking for carbons with missing hydrogens.
 
 .. warning::
  EXPERIMENTAL INPUT

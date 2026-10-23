@@ -72,14 +72,16 @@ class TestMembraneMapping:
             universe = get_mda_universe(structure_file, trajectory_file, cache.data['refbonds_task_output'], charges=None)
         else:
             universe = mda.Universe(top, trajectory_file.absolute_path)
-        cg_selection = universe.select_atoms('resname DPPC').residues.resindices if test_accession in ['cg_test', 'A01J7'] else []
+        cg_residues = universe.select_atoms('resname DPPC').residues.resindices if test_accession == 'cg_test' else []
+        ua_residues = universe.select_atoms('resname DPPC').residues.resindices if test_accession == 'A01J7' else []
         output_file = File((test_dir / f'{test_accession}_membrane_mapping_output.json').as_posix())
         if output_file.exists: output_file.remove()
         membrane_map = generate_membrane_mapping(
             inchikeys,
             lipid_references,
             universe,
-            cg_selection,
+            cg_residues,
+            ua_residues,
             output_file
         )
         assert membrane_map['n_mems'] == 1

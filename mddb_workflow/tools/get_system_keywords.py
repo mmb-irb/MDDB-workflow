@@ -26,11 +26,19 @@ MEMBRANE_KEYWORD = 'membrane'
 LIGAND_KEYWORD = 'ligand'
 # More complex keywords
 NUCLEOSOME_KEYWORD = 'nucleosome'
-# Atomic vs Coarse Grain labels
+# Atomic vs United Atom vs Coarse Grain labels
 # Abreviations are added in the keyword to in case a user makes a query with them
 AA_KEYWORD = 'all-atom (aa)'
+UA_KEYWORD = 'united atom (ua)'
 CG_KEYWORD = 'coarse grained (cg)'
-HYBRID_KEYWORD = 'hybrid resolution' # DANI: "multiscale" me gusta mucho pero puede ser ambiguo
+# Hybrid labels saying which resolutions are combined
+# DANI: "multiscale" me gusta mucho pero puede ser ambiguo
+HYBRID_KEYWORDS = {
+    frozenset(['aa', 'ua']): 'hybrid resolution aa/ua',
+    frozenset(['aa', 'cg']): 'hybrid resolution aa/cg',
+    frozenset(['ua', 'cg']): 'hybrid resolution ua/cg',
+    frozenset(['aa', 'ua', 'cg']): 'hybrid resolution aa/ua/cg',
+}
 
 
 # Changes in the function can be tested with: pytest -k "TestRunAll and pmeta" -s
@@ -40,6 +48,7 @@ def get_system_keywords(
     lipids_selection: 'Selection',
     membrane_map: dict,
     cg_selection: 'Selection',
+    ua_selection: 'Selection',
     protein_map: list[dict],
     chain_contacts: dict,
 ) -> list[str]:
@@ -147,10 +156,17 @@ def get_system_keywords(
     # and protein-nucleic complexes according to chain contacts along the trajectory
     keywords += get_multimerism_keywords(structure, protein_map, chain_contacts)
 
-    # Set atomic vs coarse-grained keywords
-    if not cg_selection: keywords.append(AA_KEYWORD)
-    elif len(cg_selection) == structure.atom_count: keywords.append(CG_KEYWORD)
-    else: keywords.append(HYBRID_KEYWORD)
+    # Set atomic vs united atom vs coarse-grained keywords
+    # Atomistic water and ions are not taken in count, since they are also used in united atom systems
+    aa_selection = structure.select_all() - cg_selection - ua_selection - solvent_selection - ions_selection
+    resolutions = set()
+    if aa_selection: resolutions.add('aa')
+    if ua_selection: resolutions.add('ua')
+    if cg_selection: resolutions.add('cg')
+    if len(resolutions) > 1: keywords.append(HYBRID_KEYWORDS[frozenset(resolutions)])
+    elif 'cg' in resolutions: keywords.append(CG_KEYWORD)
+    elif 'ua' in resolutions: keywords.append(UA_KEYWORD)
+    else: keywords.append(AA_KEYWORD)
 
     # Display issued system keywords
     print('Issued system keywords: ' + ', '.join(keywords))

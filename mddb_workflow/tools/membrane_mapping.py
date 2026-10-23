@@ -10,6 +10,7 @@ def generate_membrane_mapping(
     lipid_references: dict[str, dict],
     universe: 'Universe',
     cg_residues: list[int],
+    ua_residues: list[int],
     output_file: 'File',
 ) -> dict:
     """Generate a list of residue numbers of membrane components from a given structure and topology file.
@@ -20,6 +21,7 @@ def generate_membrane_mapping(
         structure_file: File object representing the structure file (e.g., PDB, GRO).
         universe: MDAnalysis Universe object containing the structure and topology.
         cg_residues: List of residue indices for coarse-grained residues.
+        ua_residues: List of residue indices for united atom residues.
         output_file: Output JSON file to save membrane mapping.
 
     Returns:
@@ -39,8 +41,8 @@ def generate_membrane_mapping(
 
     """
     if not universe: raise RuntimeError('Missing universe')
-    # Select only the lipids from the InChIKeyData
-    if len(cg_residues) > 0:
+    # Coarse grain and united atom residues have no InChI keys so lipids are found by their residue names
+    if len(cg_residues) > 0 or len(ua_residues) > 0:
         headgroup_ag = coarse_grain_headgroups(universe)
         membrane_map = find_leaflets(universe, headgroup_ag)
     else:

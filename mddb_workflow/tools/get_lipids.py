@@ -83,17 +83,17 @@ def get_lipids_selection(
     structure: 'Structure',
     inchikey_map: list[dict],
     lipid_references: dict[str, dict],
-    cg_selection: Optional['Selection'] = None,
+    no_inchikey_selection: Optional['Selection'] = None,
 ) -> 'Selection':
     """Select lipids using lipid references (InChI keys found in SwissLipids/LIPID MAPS) for all-atom regions.
-    Coarse grained regions have no InChI keys, so here we rely on the residue classification.
+    Coarse grained and united atom regions have no InChI keys, so here we rely on the residue classification.
     """
     aa_lipids_selection = Selection()
     for inchikey_data in inchikey_map:
         if inchikey_data['generated_inchikey'] in lipid_references:
             aa_lipids_selection += structure.select_residue_indices(inchikey_data['residue_indices'])
-    cg_lipids_selection = structure.select_lipids() & cg_selection
-    return (aa_lipids_selection - cg_selection) + cg_lipids_selection
+    no_inchikey_lipids_selection = structure.select_lipids() & no_inchikey_selection
+    return (aa_lipids_selection - no_inchikey_selection) + no_inchikey_lipids_selection
 
 
 def check_lipid_response(response: 'requests.Response', service: str, key: str):

@@ -110,6 +110,7 @@ def generate_inchikeys(
     universe: 'MDAnalysis.Universe',
     structure: 'Structure',
     cg_selection: 'Selection',
+    ua_selection: 'Selection',
     parallel: bool = False,
 ) -> dict[str, InChIKeyData]:
     """Generate a dictionary mapping InChI keys to residue information for non-standard residues.
@@ -124,6 +125,7 @@ def generate_inchikeys(
         universe (Universe): The MDAnalysis Universe object containing the structure and topology.
         structure (Structure): The Structure object containing residues.
         cg_selection (Selection): Selection object for coarse-grained regions.
+        ua_selection (Selection): Selection object for united atom regions, which have no explicit hydrogens.
         parallel (bool): Whether to use multiprocessing (default False). Set to True for parallel processing (higher memory).
 
     Returns:
@@ -145,14 +147,15 @@ def generate_inchikeys(
     tasks = []
     residues = structure.residues
 
-    # Get coarse grain atom indices
-    coarse_gran_atom_indices = set(cg_selection.atom_indices)
+    # Get coarse grain and united atom indices
+    # United atoms are skipped since the conversion to RDKit requires all hydrogens to be explicit
+    coarse_gran_atom_indices = set(cg_selection.atom_indices) | set(ua_selection.atom_indices)
 
     # Fragment = residues that are bonded together
     fragments = universe.atoms.fragments
     for i, fragment in enumerate(fragments):
 
-        # If the fragment contains coarse grain regions then skip it
+        # If the fragment contains coarse grain or united atom regions then skip it
         fragment_atom_indices = set([int(index) for index in fragment.indices])
         if coarse_gran_atom_indices.intersection(fragment_atom_indices): continue
 

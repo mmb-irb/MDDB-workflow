@@ -53,6 +53,7 @@ def generate_topology (
     residue_map : dict,
     pbc_selection : 'Selection',
     cg_selection : 'Selection',
+    ua_selection : 'Selection',
     dummy_selection : 'Selection',
     output_directory : str,
 ):
@@ -205,6 +206,7 @@ def generate_topology (
     # Add the main selections
     if pbc_selection: selections['pbc'] = format_selection(structure, pbc_selection)
     if cg_selection: selections['cg'] = format_selection(structure, cg_selection)
+    if ua_selection: selections['ua'] = format_selection(structure, ua_selection)
     if dummy_selection: selections['dummy'] = format_selection(structure, dummy_selection)
 
     # Add residue classes as selections

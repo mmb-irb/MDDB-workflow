@@ -755,6 +755,7 @@ run_parser_selection_args = [
     (['-filt', '--filter_selection'], {'nargs': '?', 'default': False, 'const': True, 'help': project_init_help['filter_selection']}),
     (['-pbc', '--pbc_selection'], {'default': None, 'help': project_init_help['pbc_selection']}),
     (['-cg', '--cg_selection'], {'default': None, 'help': project_init_help['cg_selection']}),
+    (['-ua', '--ua_selection'], {'default': None, 'help': project_init_help['ua_selection']}),
     (['-pcafit', '--pca_fit_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_fit_selection']}),
     (['-pcana', '--pca_analysis_selection'], {'default': PROTEIN_AND_NUCLEIC_BACKBONE, 'help': project_init_help['pca_analysis_selection']}),
 ]
