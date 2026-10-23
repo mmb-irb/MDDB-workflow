@@ -1,6 +1,6 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, natural_sort_key, warn
-from mddb_workflow.utils.constants import LIPIDS_RESIDUE_NAMES, OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import OUTPUT_LIPID_ORDER_FILENAME, LIPID_ORDER_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_acyl_chain_atom_names, get_cg_acyl_chains
 from mddb_workflow.tools.membrane_mapping import get_bilayers
 from mddb_workflow.utils.type_hints import *
@@ -46,12 +46,9 @@ def lipid_order(
         if topology_file.format not in ['tpr', 'gro']:
             warn('Lipid order analysis requires a TPR o GRO topology file when using cg_selection.')
             return {}
-        # We will save one example residue used to extract the carbon chains
-        lipids = []
-        for resname in LIPIDS_RESIDUE_NAMES:
-            lipid_ag = universe.select_atoms(f'resname {resname}')
-            if lipid_ag.n_atoms > 0:
-                lipids.append(lipid_ag.residues[0])
+        # One example residue of every lipid in the bilayers, used to extract the carbon chains
+        bilayer_residues = universe.atoms[bilayer_atoms].residues
+        lipids = [bilayer_residues[bilayer_residues.resnames == resname][0] for resname in np.unique(bilayer_residues.resnames)]
         # Heuristic: if the residues have more than 40 atoms, assume United Atom.
         is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids)
         # gorder atom numbers start at 1
@@ -68,10 +65,10 @@ def lipid_order(
             residue_indices = [index for index in ref['residue_indices'] if index in bilayer_residues]
             if len(residue_indices) > 0: lipids.append({**ref, 'residue_indices': residue_indices})
         order_parameters_dict = aa_lipid_order(universe, snapshots, frame_step, lipids)
-    # Output can be empty due to hardcoded lipid residue names for CG/UA
+    # Output can be empty when CG/UA lipid tails do not follow the naming conventions
     if not order_parameters_dict:
         warn('Something went wrong with the lipid order analysis, no order parameters were calculated. '
-             'This can be due to no lipids being found with the hardcoded residue names. '
+             'This can be due to lipid tails whose atom names do not follow the naming conventions (e.g. C1A, C2A...). '
              'Please check the logs for warnings.')
         return
     # Save the data

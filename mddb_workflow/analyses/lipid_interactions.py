@@ -1,6 +1,6 @@
 from mddb_workflow.tools.get_reduced_trajectory import calculate_frame_step
 from mddb_workflow.utils.auxiliar import save_json, load_json, warn
-from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPIDS_RESIDUE_NAMES, LIPID_INTERACTIONS_ANALYSIS_VERSION
+from mddb_workflow.utils.constants import OUTPUT_LIPID_INTERACTIONS_FILENAME, LIPID_INTERACTIONS_ANALYSIS_VERSION
 from mddb_workflow.utils.mda_spells import get_head_tail_split, get_cg_head_tail_split, get_all_acyl_chains
 from mddb_workflow.utils.type_hints import *
 import numpy as np
@@ -30,7 +30,9 @@ def lipid_interactions(
 
     is_united_atom = False
     if len(cg_residues) > 0:
-        lipids = universe.select_atoms(f'resname {" ".join(LIPIDS_RESIDUE_NAMES)}')
+        # Lipids of all membranes and unassigned lipids, as found by the membrane mapping
+        lipid_atoms = [atom for mem in membrane_map['mems'].values() for atoms in mem['leaflets'].values() for atom in atoms]
+        lipids = universe.atoms[np.unique(lipid_atoms + membrane_map['no_mem_lipid'])]
         # Heuristic: if the residues have more than 40 atoms, assume United Atom.
         is_united_atom = any(residue.atoms.n_atoms > 40 for residue in lipids.residues)
     else:

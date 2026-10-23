@@ -528,9 +528,10 @@ class TestLipidOrder:
         self.bilayer_residues = list(range(2 * len(grid)))
         self.inchikey_map = [{'generated_inchikey': 'LIPID', 'is_lipid': True, 'residue_indices': list(range(len(heads)))}]
         self.calls = []
+        self.cg_lipids = []
         monkeypatch.setattr(lipid_order, 'aa_lipid_order', lambda universe, snapshots, frame_step, lipids: self.calls.append(lipids))
         monkeypatch.setattr(lipid_order, 'cg_lipid_order', lambda universe, topology_file, output_directory, frame_step, lipids, selection:
-            self.calls.append(selection))
+            self.calls.append(selection) or self.cg_lipids.extend(lipids))
         self.lipid_order = lipid_order.lipid_order
 
     def test_all_atom_bilayer_lipids(self):
@@ -546,10 +547,44 @@ class TestLipidOrder:
         # Atom numbers of the bilayer lipids, 3 atoms per lipid
         assert self.calls == [f'@membrane and atomnum 1-{3 * len(self.bilayer_residues)}']
 
+    def test_coarse_grain_lipid_examples(self):
+        """Tails of coarse grained lipids are read from one example residue of every lipid in the bilayers,
+        whatever their residue names, and not from lipids of other aggregates.
+        """
+        import types
+        n_bilayer = len(self.bilayer_residues)
+        self.universe.residues.resnames = ['LIP'] * (n_bilayer // 2) + ['XYZ'] * (n_bilayer - n_bilayer // 2) + \
+            ['MIC'] * (len(self.universe.residues) - n_bilayer)
+        topology_file = types.SimpleNamespace(format='tpr')
+        self.lipid_order(self.membrane_map, self.universe, topology_file, None, self.inchikey_map, [0], snapshots=1)
+        assert sorted(residue.resname for residue in self.cg_lipids) == ['LIP', 'XYZ']
+        assert all(residue.resindex in self.bilayer_residues for residue in self.cg_lipids)
+
     def test_no_bilayers(self):
         del self.membrane_map['mems']['0']
         self.lipid_order(self.membrane_map, self.universe, None, None, self.inchikey_map, [], snapshots=1)
         assert self.calls == []
+
+
+class TestLipidInteractions:
+
+    def test_coarse_grain_lipids_from_membrane_map(self, monkeypatch):
+        """Coarse grained lipids are the lipids of the membrane mapping, assigned or not, whatever their residue names."""
+        import mddb_workflow.analyses.lipid_interactions as lipid_interactions
+        heads = sphere_points(20)
+        lipids, headgroups = build_lipids(heads, -heads, [150, 150, 150])
+        membrane_map = find_leaflets(lipids, headgroups)
+        membrane_map['mems']['0']['leaflets']['outer'] = membrane_map['mems']['0']['leaflets']['outer'][3:]
+        membrane_map['no_mem_lipid'] = [0, 1, 2]
+        protein = mda.Universe.empty(1, n_residues=1, atom_resindex=[0], trajectory=True)
+        protein.add_TopologyAttr('names', ['BB'])
+        protein.add_TopologyAttr('resnames', ['ALA'])
+        universe = mda.Merge(lipids.atoms, protein.atoms)
+        calls = []
+        monkeypatch.setattr(lipid_interactions, 'cg_lipid_interactions', lambda universe, lipid_group, iterator: calls.append(lipid_group))
+        lipid_interactions.lipid_interactions(membrane_map, universe, None, [], [0], snapshots=1)
+        assert len(calls) == 1
+        assert len(calls[0].residues) == len(heads)
 
 
 # Molecules to test the lipid classification, with their expected LIPID MAPS category
